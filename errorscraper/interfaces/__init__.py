@@ -5,6 +5,7 @@ from .dataplugin import DataPlugin
 from .inbandcollectortask import InBandDataCollector
 from .inbanddataplugin import InBandDataPlugin
 from .plugin import PluginInterface
+from .regexanalyzer import RegexAnalyzer
 from .task import Task
 from .taskhook import TaskHook
 
@@ -18,4 +19,5 @@ __all__ = [
     "DataCollector",
     "PluginInterface",
     "TaskHook",
+    "RegexAnalyzer",
 ]
