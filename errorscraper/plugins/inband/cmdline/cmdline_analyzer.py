@@ -1,5 +1,3 @@
-# # Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
-
 from typing import Optional
 
 from errorscraper.enums import EventCategory, EventPriority, ExecutionStatus
