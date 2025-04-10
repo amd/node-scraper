@@ -1,0 +1,66 @@
+# # Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
+
+from typing import Optional
+
+from errorscraper.enums import EventCategory, EventPriority, ExecutionStatus
+from errorscraper.interfaces.dataanalyzertask import DataAnalyzer
+from errorscraper.models import TaskResult
+
+from .analyzer_args import CmdlineAnalyzerArgs
+from .cmdlinedata import CmdlineDataModel
+
+
+class CmdlineAnalyzer(DataAnalyzer[CmdlineDataModel, CmdlineAnalyzerArgs]):
+    """Check cmdline matches expected kernel cmdline"""
+
+    DATA_MODEL = CmdlineDataModel
+
+    def _compare_cmdline(self, cmdline: str, required_cmdline: list, banned_cmdline: list) -> bool:
+        # Check for missing required arguments
+        missing_required = [arg for arg in required_cmdline if arg not in cmdline]
+        found_banned = [arg for arg in banned_cmdline if arg in cmdline]
+
+        if len(missing_required) >= 1:
+            self._log_event(
+                category=EventCategory.OS,
+                description=f"Missing {len(missing_required)} required kernel cmdline arguments",
+                priority=EventPriority.ERROR,
+                data={"missing_required": missing_required},
+                console_log=True,
+            )
+
+        if len(found_banned) >= 1:
+            self._log_event(
+                category=EventCategory.OS,
+                description=f"Found {len(found_banned)} banned kernel cmdline arguments",
+                priority=EventPriority.ERROR,
+                data={"found_banned": found_banned},
+                console_log=True,
+            )
+
+        return not (missing_required or found_banned)
+
+    def analyze_data(
+        self, data: CmdlineDataModel, args: Optional[CmdlineAnalyzerArgs]
+    ) -> TaskResult:
+
+        if not args:
+            self.result.message = "Cmdline analysis args not provided"
+            self.result.status = ExecutionStatus.NOT_RAN
+            return self.result
+
+        # check if any of the cmdline defined in the list match the actual kernel cmdline
+        if self._compare_cmdline(data.cmdline, args.required_cmdline, args.banned_cmdline):
+            self.result.message = "Kernel cmdline matches expected"
+            self.result.status = ExecutionStatus.OK
+            return self.result
+
+        self.result.message = "Illegal kernel cmdline"
+        self.result.status = ExecutionStatus.ERROR
+        self._log_event(
+            category=EventCategory.OS,
+            description=self.result.message,
+            priority=EventPriority.CRITICAL,
+            console_log=True,
+        )
+        return self.result

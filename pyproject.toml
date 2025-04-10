@@ -22,6 +22,17 @@ dependencies = [
     "pytz"
 ]
 
+[project.optional-dependencies]
+dev = [
+    "build",
+    "black",
+    "pylint",
+    "coverage",
+    "twine",
+    "ruff",
+    "pre-commit",
+]
+
 [project.urls]
 homepage = "https://github.com/AMD-HPC/Scraper"
 documentation = "https://github.com/AMD-HPC/Scraper"
