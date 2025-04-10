@@ -1,0 +1,46 @@
+[project]
+name = "amd-error-scraper"
+version = "0.0.1"
+description = "A Tool for Automated Error Detection and Data Collection"
+authors = []
+readme = "README.md"
+requires-python = ">=3.10"
+
+keywords = [
+    "Automated Debug",
+    "Error Scraper",
+    "Error Detection",
+]
+
+classifiers = ["Private :: Do Not Upload", "Topic :: Software Development"]
+
+dependencies = [
+    "prettytable",
+    "pydantic~=2.8.2",
+    "paramiko<=3.2.0",
+    "requests",
+    "pytz"
+]
+
+[project.urls]
+homepage = "https://github.com/AMD-HPC/Scraper"
+documentation = "https://github.com/AMD-HPC/Scraper"
+repository = "https://github.com/AMD-HPC/Scraper"
+
+[build-system]
+requires = ["setuptools==70.3.0", "setuptools-scm==8.1.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ['errorscraper']
+
+
+[tool.black]
+line-length = 100
+target_version = ['py310']
+
+[tool.isort]
+profile = "black"
+
+[tool.ruff.lint]
+select = ["F", "B", "T20", "N"]

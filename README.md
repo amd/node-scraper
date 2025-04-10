@@ -1,2 +1,2 @@
 # Scraper
-External error-scraper source code remodeling
+Error scraper core framework
