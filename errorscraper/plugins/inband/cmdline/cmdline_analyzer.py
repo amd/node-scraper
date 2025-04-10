@@ -1,7 +1,7 @@
 from typing import Optional
 
 from errorscraper.enums import EventCategory, EventPriority, ExecutionStatus
-from errorscraper.interfaces.dataanalyzertask import DataAnalyzer
+from errorscraper.interfaces import DataAnalyzer
 from errorscraper.models import TaskResult
 
 from .analyzer_args import CmdlineAnalyzerArgs
@@ -39,7 +39,7 @@ class CmdlineAnalyzer(DataAnalyzer[CmdlineDataModel, CmdlineAnalyzerArgs]):
         return not (missing_required or found_banned)
 
     def analyze_data(
-        self, data: CmdlineDataModel, args: Optional[CmdlineAnalyzerArgs]
+        self, data: CmdlineDataModel, args: Optional[CmdlineAnalyzerArgs] = None
     ) -> TaskResult:
 
         if not args:

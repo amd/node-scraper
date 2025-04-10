@@ -1,7 +1,7 @@
 # Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
 
+from errorscraper.base import InBandDataCollector
 from errorscraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
-from errorscraper.interfaces.inbandcollectortask import InBandDataCollector
 from errorscraper.models import TaskResult
 
 from .biosdata import BiosDataModel

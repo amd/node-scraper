@@ -1,4 +1,4 @@
-from errorscraper.interfaces.inbanddataplugin import InBandDataPlugin
+from errorscraper.base import InBandDataPlugin
 
 from .dimm_collector import DimmCollector
 from .dimmdata import DimmDataModel

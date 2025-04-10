@@ -1,5 +1,5 @@
+from errorscraper.base import InBandDataCollector
 from errorscraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
-from errorscraper.interfaces.inbandcollectortask import InBandDataCollector
 from errorscraper.models import TaskResult
 
 from .cmdlinedata import CmdlineDataModel

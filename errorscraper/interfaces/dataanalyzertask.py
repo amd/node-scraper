@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import abc
+import inspect
 from functools import wraps
 from typing import Callable, Generic, Optional, Type
 
@@ -56,7 +57,7 @@ def analyze_decorator(func: Callable[..., TaskResult]) -> Callable[..., TaskResu
             except Exception as exception:
                 analyzer._log_event(
                     category=EventCategory.RUNTIME,
-                    description=f"Exception: {str(exception)}",
+                    description=f"Exception during data analysis: {str(exception)}",
                     data=get_exception_traceback(exception),
                     priority=EventPriority.CRITICAL,
                     console_log=True,
@@ -82,7 +83,7 @@ class DataAnalyzer(Task, abc.ABC, Generic[TDataModel, TAnalyzeArg]):
 
     def __init_subclass__(cls, **kwargs) -> None:
         super().__init_subclass__(**kwargs)
-        if cls.DATA_MODEL is None:
+        if not inspect.isabstract(cls) and cls.DATA_MODEL is None:
             raise TypeError(f"No data model set for {cls.__name__}")
 
         if hasattr(cls, "analyze_data"):

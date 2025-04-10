@@ -1,4 +1,4 @@
-from errorscraper.interfaces.inbanddataplugin import InBandDataPlugin
+from errorscraper.base import InBandDataPlugin
 
 from .analyzer_args import BiosAnalyzerArgs
 from .bios_analyzer import BiosAnalyzer

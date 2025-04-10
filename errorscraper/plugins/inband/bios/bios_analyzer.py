@@ -4,7 +4,7 @@ import re
 from typing import Optional
 
 from errorscraper.enums import EventCategory, EventPriority, ExecutionStatus
-from errorscraper.interfaces.dataanalyzertask import DataAnalyzer
+from errorscraper.interfaces import DataAnalyzer
 from errorscraper.models import TaskResult
 
 from .analyzer_args import BiosAnalyzerArgs
@@ -16,7 +16,9 @@ class BiosAnalyzer(DataAnalyzer[BiosDataModel, BiosAnalyzerArgs]):
 
     DATA_MODEL = BiosDataModel
 
-    def analyze_data(self, data: BiosDataModel, args: Optional[BiosAnalyzerArgs]) -> TaskResult:
+    def analyze_data(
+        self, data: BiosDataModel, args: Optional[BiosAnalyzerArgs] = None
+    ) -> TaskResult:
         """Checks the BIOS verison against the expected BIOS version, using
         either exact match or regex match. If no expected BIOS version is provided,
         the task will not run. If none of the `exp_bios_version` match the actual

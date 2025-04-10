@@ -1,6 +1,6 @@
 from typing import Optional
 
-from errorscraper.datamodel import DataModel
+from errorscraper.models import DataModel
 
 
 class DkmsDataModel(DataModel):

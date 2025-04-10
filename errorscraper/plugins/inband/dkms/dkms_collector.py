@@ -1,5 +1,5 @@
+from errorscraper.base import InBandDataCollector
 from errorscraper.enums import EventPriority, ExecutionStatus, OSFamily
-from errorscraper.interfaces import InBandDataCollector
 from errorscraper.models import TaskResult
 
 from .dkmsdata import DkmsDataModel

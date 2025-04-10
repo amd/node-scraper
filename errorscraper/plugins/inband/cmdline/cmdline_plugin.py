@@ -1,4 +1,4 @@
-from errorscraper.interfaces.inbanddataplugin import InBandDataPlugin
+from errorscraper.base import InBandDataPlugin
 
 from .analyzer_args import CmdlineAnalyzerArgs
 from .cmdline_analyzer import CmdlineAnalyzer
