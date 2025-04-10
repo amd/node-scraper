@@ -5,7 +5,7 @@ from .dimmdata import DimmDataModel
 
 
 class DimmPlugin(InBandDataPlugin[DimmDataModel, None, None]):
-    """Plugin for collection and analysis of BIOS data"""
+    """Plugin for collection and analysis of DIMM data"""
 
     DATA_MODEL = DimmDataModel
 

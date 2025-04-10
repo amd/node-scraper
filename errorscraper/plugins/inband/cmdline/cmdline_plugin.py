@@ -7,7 +7,7 @@ from .cmdlinedata import CmdlineDataModel
 
 
 class CmdlinePlugin(InBandDataPlugin[CmdlineDataModel, None, CmdlineAnalyzerArgs]):
-    """Plugin for collection and analysis of BIOS data"""
+    """Plugin for collection and analysis of linux cmdline data"""
 
     DATA_MODEL = CmdlineDataModel
 
