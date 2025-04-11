@@ -1,8 +1,8 @@
 from typing import Generic
 
 from errorscraper.connection.inband import InBandConnectionManager, SSHConnectionParams
+from errorscraper.generictypes import TAnalyzeArg, TCollectArg, TDataModel
 from errorscraper.interfaces import DataPlugin
-from errorscraper.types import TAnalyzeArg, TCollectArg, TDataModel
 
 
 class InBandDataPlugin(

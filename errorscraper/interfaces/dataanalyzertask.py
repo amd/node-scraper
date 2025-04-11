@@ -9,10 +9,10 @@ from typing import Callable, Generic, Optional, Type
 from pydantic import ValidationError
 
 from errorscraper.enums import EventCategory, EventPriority, ExecutionStatus
+from errorscraper.generictypes import TAnalyzeArg, TDataModel
 from errorscraper.interfaces.task import Task
 from errorscraper.models import TaskResult
 from errorscraper.models.datamodel import DataModel
-from errorscraper.types import TAnalyzeArg, TDataModel
 from errorscraper.typeutils import TypeUtils
 from errorscraper.utils import get_exception_traceback
 

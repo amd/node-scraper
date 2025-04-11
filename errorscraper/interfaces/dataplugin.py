@@ -2,11 +2,11 @@ import logging
 from typing import Generic, Optional, Type
 
 from errorscraper.enums import EventPriority, ExecutionStatus, SystemInteractionLevel
+from errorscraper.generictypes import TAnalyzeArg, TCollectArg, TDataModel
 from errorscraper.interfaces.dataanalyzertask import DataAnalyzer
 from errorscraper.interfaces.datacollectortask import DataCollector
 from errorscraper.interfaces.plugin import PluginInterface
 from errorscraper.models import DataPluginResult, PluginResult, SystemInfo, TaskResult
-from errorscraper.types import TAnalyzeArg, TCollectArg, TDataModel
 
 from .connectionmanager import TConnectArg, TConnectionManager
 from .task import SystemCompatibilityError
