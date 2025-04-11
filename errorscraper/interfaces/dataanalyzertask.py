@@ -22,7 +22,7 @@ def analyze_decorator(func: Callable[..., TaskResult]) -> Callable[..., TaskResu
     def wrapper(
         analyzer: "DataAnalyzer",
         data: DataModel,
-        args: Optional[TAnalyzeArg | dict],
+        args: Optional[TAnalyzeArg | dict] = None,
     ) -> TaskResult:
         analyzer.logger.info("Running data analyzer: %s", analyzer.__class__.__name__)
         analyzer.result = analyzer._init_result()
@@ -40,7 +40,7 @@ def analyze_decorator(func: Callable[..., TaskResult]) -> Callable[..., TaskResu
         else:
             try:
                 if isinstance(args, dict):
-                    arg_types = TypeUtils.get_types(func)
+                    arg_types = TypeUtils.get_func_arg_types(func)
                     analyze_arg_model = arg_types["args"]
                     args = analyze_arg_model(**args)
 
