@@ -9,10 +9,10 @@ from typing import Callable, Generic, Optional, Type
 from pydantic import ValidationError
 
 from errorscraper.enums import EventCategory, EventPriority, ExecutionStatus
+from errorscraper.generictypes import TAnalyzeArg, TDataModel
 from errorscraper.interfaces.task import Task
 from errorscraper.models import TaskResult
 from errorscraper.models.datamodel import DataModel
-from errorscraper.types import TAnalyzeArg, TDataModel
 from errorscraper.typeutils import TypeUtils
 from errorscraper.utils import get_exception_traceback
 
@@ -22,7 +22,7 @@ def analyze_decorator(func: Callable[..., TaskResult]) -> Callable[..., TaskResu
     def wrapper(
         analyzer: "DataAnalyzer",
         data: DataModel,
-        args: Optional[TAnalyzeArg | dict],
+        args: Optional[TAnalyzeArg | dict] = None,
     ) -> TaskResult:
         analyzer.logger.info("Running data analyzer: %s", analyzer.__class__.__name__)
         analyzer.result = analyzer._init_result()
@@ -40,7 +40,7 @@ def analyze_decorator(func: Callable[..., TaskResult]) -> Callable[..., TaskResu
         else:
             try:
                 if isinstance(args, dict):
-                    arg_types = TypeUtils.get_types(func)
+                    arg_types = TypeUtils.get_func_arg_types(func)
                     analyze_arg_model = arg_types["args"]
                     args = analyze_arg_model(**args)
 

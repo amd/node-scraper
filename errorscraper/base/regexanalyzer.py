@@ -3,9 +3,9 @@ import re
 from pydantic import BaseModel
 
 from errorscraper.enums import EventCategory, EventPriority
+from errorscraper.generictypes import TAnalyzeArg, TDataModel
 from errorscraper.interfaces.dataanalyzertask import DataAnalyzer
 from errorscraper.models.event import Event
-from errorscraper.types import TAnalyzeArg, TDataModel
 
 
 class ErrorRegex(BaseModel):

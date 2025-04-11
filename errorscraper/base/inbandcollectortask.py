@@ -4,10 +4,10 @@ from typing import Generic, Optional
 
 from errorscraper.connection.inband import InBandConnection
 from errorscraper.enums import EventPriority, OSFamily, SystemInteractionLevel
+from errorscraper.generictypes import TCollectArg, TDataModel
 from errorscraper.interfaces import DataCollector, TaskHook
 from errorscraper.interfaces.task import SystemCompatibilityError
 from errorscraper.models import SystemInfo
-from errorscraper.types import TCollectArg, TDataModel
 
 
 class InBandDataCollector(

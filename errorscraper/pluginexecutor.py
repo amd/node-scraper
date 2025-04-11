@@ -127,7 +127,8 @@ class PluginExecutor:
 
                     run_payload = copy.deepcopy(plugin_args)
 
-                    for arg in TypeUtils.get_types(plugin_class.run).keys():
+                    run_args = TypeUtils.get_func_arg_types(plugin_class.run)
+                    for arg in run_args.keys():
                         if arg in self.global_args:
                             run_payload[arg] = self.global_args[arg]
 

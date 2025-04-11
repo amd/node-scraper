@@ -13,9 +13,9 @@ from errorscraper.enums import (
     ExecutionStatus,
     SystemInteractionLevel,
 )
+from errorscraper.generictypes import TCollectArg, TDataModel
 from errorscraper.interfaces.task import SystemCompatibilityError, Task
 from errorscraper.models import DataModel, SystemInfo, TaskResult
-from errorscraper.types import TCollectArg, TDataModel
 from errorscraper.utils import get_exception_details, get_exception_traceback
 
 from .connectionmanager import TConnection
@@ -27,7 +27,7 @@ def collect_decorator(
 ) -> Callable[..., tuple[TaskResult, TDataModel | None]]:
     @wraps(func)
     def wrapper(
-        collector: "DataCollector", args: Optional[TCollectArg]
+        collector: "DataCollector", args: Optional[TCollectArg] = None
     ) -> tuple[TaskResult, TDataModel | None]:
         collector.logger.info("Running data collector: %s", collector.__class__.__name__)
         collector.result = collector._init_result()

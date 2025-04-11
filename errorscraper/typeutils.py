@@ -5,7 +5,7 @@ from typing import Any, Callable, Union, get_args, get_origin, get_type_hints
 class TypeUtils:
 
     @classmethod
-    def get_types(cls, func: Callable) -> dict:
+    def get_func_arg_types(cls, func: Callable) -> dict:
         type_map = {}
         for arg, type_hint in get_type_hints(func).items():
             type_map[arg] = cls.process_type(type_hint)
