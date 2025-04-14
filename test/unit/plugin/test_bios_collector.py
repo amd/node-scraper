@@ -29,12 +29,11 @@ def bios_collector(system_info):
     )
 
 
-@pytest.mark.skip(reason="no way of currently testing this")
 def test_task_body_windows(system_info, bios_collector):
     """Test the _task_body method on Windows."""
     system_info.os_family = OSFamily.WINDOWS
 
-    bios_collector._run_system_command = MagicMock(
+    bios_collector._run_sut_cmd = MagicMock(
         return_value=MagicMock(
             exit_code=0,
             stdout="\n\nSMBIOSBIOSVersion=R23ET70W (1.40 )\n\n\n\n",
@@ -43,7 +42,7 @@ def test_task_body_windows(system_info, bios_collector):
 
     exp_data = BiosDataModel(bios_version="R23ET70W (1.40 )")
 
-    bios_collector._log_event = MagicMock()
+    # bios_collector._log_event = MagicMock()
     res, data = bios_collector.collect_data()
     assert data == exp_data
 
@@ -52,7 +51,7 @@ def test_task_body_linux(system_info, bios_collector):
     """Test the _task_body method on Linux."""
     system_info.os_family = OSFamily.LINUX
 
-    bios_collector._run_system_command = MagicMock(
+    bios_collector._run_sut_cmd = MagicMock(
         return_value=MagicMock(
             exit_code=0,
             stdout="2.0.1",
@@ -61,17 +60,16 @@ def test_task_body_linux(system_info, bios_collector):
 
     exp_data = BiosDataModel(bios_version="2.0.1")
 
-    bios_collector._log_event = MagicMock()
+    # bios_collector._log_event = MagicMock()
     res, data = bios_collector.collect_data()
     assert data == exp_data
 
 
-@pytest.mark.skip(reason="no way of currently testing this")
 def test_task_body_error(system_info, bios_collector):
     """Test the _task_body method when an error occurs."""
     system_info.os_family = OSFamily.LINUX
 
-    bios_collector._run_system_command = MagicMock(
+    bios_collector._run_sut_cmd = MagicMock(
         return_value=MagicMock(
             exit_code=1,
             command="sh -c 'dmidecode -s bios-version'",
