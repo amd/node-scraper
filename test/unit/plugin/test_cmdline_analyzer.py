@@ -57,7 +57,6 @@ def test_required_missing(system_info, model_obj, config):
         required_cmdline=["this is required"], banned_cmdline=["banned_cmdline"]
     )
     res = analyzer.analyze_data(model_obj, args)
-    # assert res.status == ExecutionStatus.ERRORS_DETECTED
     assert res.status == ExecutionStatus.ERROR
 
     for event in res.events:
@@ -78,14 +77,11 @@ def test_banned_found(system_info, model_obj, config):
         assert event.priority in [EventPriority.CRITICAL, EventPriority.ERROR]
 
 
-def test_missing_data(system_info):
+def test_missing_data(system_info, model_obj):
     analyzer = CmdlineAnalyzer(system_info=system_info)
-    args = CmdlineAnalyzerArgs()
-    res = analyzer.analyze_data(args)  # pass no data
-    # NOTE: should this give OK?
-    assert res.status == ExecutionStatus.EXECUTION_FAILURE
-    # should this be 1?
-    assert len(res.events) == 1
+    res = analyzer.analyze_data(data=model_obj)  # pass no data
+    assert res.status == ExecutionStatus.NOT_RAN
+    assert len(res.events) == 0
 
 
 def test_banned_found_required_missing(system_info, model_obj, config):
