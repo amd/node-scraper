@@ -30,7 +30,7 @@ def analyze_decorator(func: Callable[..., TaskResult]) -> Callable[..., TaskResu
         if not isinstance(data, analyzer.DATA_MODEL):
             analyzer._log_event(
                 category=EventCategory.RUNTIME,
-                description="Analyzer passed inalid data",
+                description="Analyzer passed invalid data",
                 data={"data_type": type(data), "expected": analyzer.DATA_MODEL.__name__},
                 priority=EventPriority.CRITICAL,
                 console_log=True,

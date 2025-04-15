@@ -27,7 +27,7 @@ def test_run_windows(system_info, conn_mock):
         connection=conn_mock,
     )
 
-    collector._run_sut_command = MagicMock(
+    collector._run_sut_cmd = MagicMock(
         return_value=MagicMock(
             exit_code=0,
             stdout="8589934592\n8589934592\n17179869184\n",
@@ -36,12 +36,13 @@ def test_run_windows(system_info, conn_mock):
 
     result, data = collector.collect_data()
     assert data == DimmDataModel(dimms="32768.00GB @ 2 x 8192.00GB 1 x 16384.00GB ")
+    assert result.status == ExecutionStatus.OK
 
 
-def test_task_body_linux(collector, system_info):
+def test_run_linux(collector, system_info):
     system_info.os_family = OSFamily.LINUX
 
-    collector._run_sut_command = MagicMock(
+    collector._run_sut_cmd = MagicMock(
         return_value=MagicMock(
             exit_code=0,
             stdout="Size: 64 GB\nSize: 64 GB\nSize: 128 GB\n",
@@ -51,13 +52,13 @@ def test_task_body_linux(collector, system_info):
     result, data = collector.collect_data()
 
     assert result.status == ExecutionStatus.OK
-    assert data == DimmDataModel(dimms="256GB @ 2 x 64GB1 x 128GB")
+    assert data == DimmDataModel(dimms="256GB @ 2 x 64GB 1 x 128GB")
 
 
-def test_task_body_error(collector, system_info):
+def test_run_linux_error(collector, system_info):
     system_info.os_family = OSFamily.LINUX
 
-    collector._run_sut_command = MagicMock(
+    collector._run_sut_cmd = MagicMock(
         return_value=MagicMock(
             exit_code=1,
             stderr="Error occurred",

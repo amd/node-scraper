@@ -56,9 +56,9 @@ class DimmCollector(InBandDataCollector[DimmDataModel, None]):
                 topology["size"] = size
                 total_gb = topology.pop("total")
                 size = topology.pop("size")
-                dimm_str = str(total_gb) + size + " @ "
-                for k, v in topology.items():
-                    dimm_str += str(v) + " x " + k
+                dimm_str = str(total_gb) + size + " @"
+                for size, count in topology.items():
+                    dimm_str += f" {count} x {size}"
 
         if res.exit_code != 0:
             self._log_event(
