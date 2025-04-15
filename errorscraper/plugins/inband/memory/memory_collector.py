@@ -1,0 +1,62 @@
+import re
+
+from errorscraper.base import InBandDataCollector
+from errorscraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
+from errorscraper.models import TaskResult
+
+from .memorydata import MemoryDataModel
+
+
+class MemoryCollector(InBandDataCollector[MemoryDataModel, None]):
+    """Collect memory usage details"""
+
+    DATA_MODEL = MemoryDataModel
+
+    def collect_data(self, args=None) -> tuple[TaskResult, MemoryDataModel | None]:
+        """read memory usage data"""
+        mem_free, mem_total = None, None
+        if self.system_info.os_family == OSFamily.WINDOWS:
+            os_memory_cmd = self._run_sut_cmd(
+                "wmic OS get FreePhysicalMemory /Value; wmic ComputerSystem get TotalPhysicalMemory /Value"
+            )
+            if os_memory_cmd.exit_code == 0:
+                mem_free = re.search(r"FreePhysicalMemory=(\d+)", os_memory_cmd.stdout).group(
+                    1
+                )  # bytes
+                mem_total = re.search(r"TotalPhysicalMemory=(\d+)", os_memory_cmd.stdout).group(1)
+        else:
+            os_memory_cmd = self._run_sut_cmd("free -b")
+            if os_memory_cmd.exit_code == 0:
+                pattern = r"Mem:\s+(\d\.?\d*\w+)\s+\d\.?\d*\w+\s+(\d\.?\d*\w+)"
+                mem_free = re.search(pattern, os_memory_cmd.stdout).group(2)
+                mem_total = re.search(pattern, os_memory_cmd.stdout).group(1)
+
+        if os_memory_cmd.exit_code != 0:
+            self._log_event(
+                category=EventCategory.OS,
+                description="Error checking available and total memory",
+                data={
+                    "command": os_memory_cmd.command,
+                    "exit_code": os_memory_cmd.exit_code,
+                    "stderr": os_memory_cmd.stderr,
+                },
+                priority=EventPriority.ERROR,
+                console_log=True,
+            )
+
+        if mem_free and mem_total:
+            mem_data = MemoryDataModel(mem_free=mem_free, mem_total=mem_total)
+            self._log_event(
+                category=EventCategory.OS,
+                description="Free and total memory read",
+                data=mem_data.model_dump(),
+                priority=EventPriority.INFO,
+            )
+            self.result.message = f"Memory: {mem_data.model_dump()}"
+            self.result.status = ExecutionStatus.OK
+        else:
+            mem_data = None
+            self.result.message = "Memory usage data not available"
+            self.result.status = ExecutionStatus.ERROR
+
+        return self.result, mem_data

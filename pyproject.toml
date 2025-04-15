@@ -1,7 +1,7 @@
 [project]
-name = "amd-error-scraper"
+name = "amd-error-scraper-core"
 version = "0.0.1"
-description = "A Tool for Automated Error Detection and Data Collection"
+description = "A framework for automated error detection and data collection"
 authors = []
 readme = "README.md"
 requires-python = ">=3.10"
@@ -31,6 +31,7 @@ dev = [
     "twine",
     "ruff",
     "pre-commit",
+    "pytest"
 ]
 
 [project.urls]
@@ -54,4 +55,5 @@ target_version = ['py310']
 profile = "black"
 
 [tool.ruff.lint]
-select = ["F", "B", "T20", "N"]
+select = ["F", "B", "T20", "N", "W", "I", "E"]
+ignore = ["E501"]
