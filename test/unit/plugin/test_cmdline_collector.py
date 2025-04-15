@@ -6,23 +6,9 @@ from errorscraper.enums.eventpriority import EventPriority
 from errorscraper.enums.executionstatus import ExecutionStatus
 from errorscraper.enums.systeminteraction import SystemInteractionLevel
 from errorscraper.interfaces.task import SystemCompatibilityError
-from errorscraper.models.systeminfo import OSFamily, SystemInfo
+from errorscraper.models.systeminfo import OSFamily
 from errorscraper.plugins.inband.cmdline.cmdline_collector import CmdlineCollector
 from errorscraper.plugins.inband.cmdline.cmdlinedata import CmdlineDataModel
-
-
-@pytest.fixture
-def system_info():
-    return SystemInfo(
-        name="test_host",
-        platform="platform_id",
-        os_family=OSFamily.LINUX,
-    )
-
-
-@pytest.fixture
-def conn_mock():
-    return MagicMock()
 
 
 @pytest.fixture

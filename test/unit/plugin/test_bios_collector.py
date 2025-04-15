@@ -3,20 +3,11 @@ from unittest.mock import MagicMock
 import pytest
 
 from errorscraper.enums.eventcategory import EventCategory
-from errorscraper.enums.executionstatus import ExecutionStatus  # if used in TaskResult
+from errorscraper.enums.executionstatus import ExecutionStatus
 from errorscraper.enums.systeminteraction import SystemInteractionLevel
-from errorscraper.models.systeminfo import OSFamily, SystemInfo
+from errorscraper.models.systeminfo import OSFamily
 from errorscraper.plugins.inband.bios.bios_collector import BiosCollector
 from errorscraper.plugins.inband.bios.biosdata import BiosDataModel
-
-
-@pytest.fixture
-def system_info():
-    return SystemInfo(
-        name="test_host",
-        platform="platform_id",
-        os_family=OSFamily.LINUX,
-    )
 
 
 @pytest.fixture

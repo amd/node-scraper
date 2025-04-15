@@ -3,19 +3,9 @@ import pytest
 from errorscraper.enums.eventcategory import EventCategory
 from errorscraper.enums.eventpriority import EventPriority
 from errorscraper.enums.executionstatus import ExecutionStatus
-from errorscraper.models.systeminfo import OSFamily, SystemInfo
 from errorscraper.plugins.inband.cmdline.analyzer_args import CmdlineAnalyzerArgs
 from errorscraper.plugins.inband.cmdline.cmdline_analyzer import CmdlineAnalyzer
 from errorscraper.plugins.inband.cmdline.cmdlinedata import CmdlineDataModel
-
-
-@pytest.fixture
-def system_info():
-    return SystemInfo(
-        name="test_host",
-        platform="platform_id",
-        os_family=OSFamily.LINUX,
-    )
 
 
 @pytest.fixture

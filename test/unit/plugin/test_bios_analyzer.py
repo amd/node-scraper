@@ -3,7 +3,6 @@ import pytest
 from errorscraper.enums.eventcategory import EventCategory
 from errorscraper.enums.eventpriority import EventPriority
 from errorscraper.enums.executionstatus import ExecutionStatus
-from errorscraper.models.systeminfo import OSFamily, SystemInfo
 from errorscraper.plugins.inband.bios.analyzer_args import BiosAnalyzerArgs
 from errorscraper.plugins.inband.bios.bios_analyzer import BiosAnalyzer
 from errorscraper.plugins.inband.bios.biosdata import BiosDataModel
@@ -12,15 +11,6 @@ from errorscraper.plugins.inband.bios.biosdata import BiosDataModel
 @pytest.fixture
 def bios_model():
     return BiosDataModel(bios_version="RMP1004BS")
-
-
-@pytest.fixture
-def system_info():
-    return SystemInfo(
-        name="test_host",
-        platform="platform_id",
-        os_family=OSFamily.LINUX,
-    )
 
 
 def test_nominal_with_config(bios_model, system_info):
