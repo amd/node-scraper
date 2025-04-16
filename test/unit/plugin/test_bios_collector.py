@@ -11,8 +11,7 @@ from errorscraper.plugins.inband.bios.biosdata import BiosDataModel
 
 
 @pytest.fixture
-def bios_collector(system_info):
-    conn_mock = MagicMock()
+def bios_collector(system_info, conn_mock):
     return BiosCollector(
         system_info=system_info,
         system_interaction_level=SystemInteractionLevel.SURFACE,
