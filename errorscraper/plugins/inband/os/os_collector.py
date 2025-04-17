@@ -7,7 +7,7 @@ from errorscraper.models import TaskResult
 from .osdata import OsDataModel
 
 
-class OsCollector(InBandDataCollector):
+class OsCollector(InBandDataCollector[OsDataModel, None]):
     """Collect OS details"""
 
     DATA_MODEL = OsDataModel
@@ -41,7 +41,7 @@ class OsCollector(InBandDataCollector):
                 os_version = ""
         return os_version
 
-    def collect_data(self, **kwargs) -> tuple[TaskResult, OsDataModel | None]:
+    def collect_data(self, args=None) -> tuple[TaskResult, OsDataModel | None]:
         """read os data"""
         os_name = None
         if self.system_info.os_family == OSFamily.WINDOWS:
