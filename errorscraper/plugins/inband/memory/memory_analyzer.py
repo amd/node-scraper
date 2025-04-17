@@ -18,9 +18,7 @@ class MemoryAnalyzer(DataAnalyzer[MemoryDataModel, MemoryAnalyzerArgs]):
         self, data: MemoryDataModel, args: Optional[MemoryAnalyzerArgs] = None
     ) -> TaskResult:
         if not args:
-            self.result.message = "Expected memory arg not provided"
-            self.result.status = ExecutionStatus.NOT_RAN
-            return self.result
+            args = MemoryAnalyzerArgs()
 
         free_memory = convert_to_bytes(data.mem_free)
         total_memory = convert_to_bytes(data.mem_total)
