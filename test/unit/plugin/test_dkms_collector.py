@@ -22,8 +22,8 @@ def collector(system_info, conn_mock):
 def test_run_linux(collector):
     collector.system_info.os_family = OSFamily.LINUX
 
-    collector._run_sut_command = MagicMock()
-    collector._run_sut_command.side_effect = [
+    collector._run_sut_cmd = MagicMock()
+    collector._run_sut_cmd.side_effect = [
         MagicMock(
             exit_code=0,
             stdout=(

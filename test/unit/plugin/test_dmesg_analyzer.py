@@ -1,29 +1,9 @@
 import datetime
 
-import pytest
-
-from errorscraper.enums.eventpriority import EventPriority
 from errorscraper.enums.executionstatus import ExecutionStatus
 from errorscraper.plugins.inband.dmesg.analyzer_args import DmesgAnalyzerArgs
 from errorscraper.plugins.inband.dmesg.dmesg_analyzer import DmesgAnalyzer
 from errorscraper.plugins.inband.dmesg.dmesgdata import DmesgData
-
-
-@pytest.fixture
-def dmesg_data():
-    dmesg = (
-        "kern  :err   : 2024-10-07T10:17:15,145363-04:00 oom_kill_process\n"
-        "kern  :err   : 2024-10-07T10:17:15,145363-04:00 amdgpu: qcm fence wait loop timeout expired\n"
-        "kern  :err   : 2024-10-07T10:17:15,145363-04:00 unknown error\n"
-        "kern  :err   : 2024-10-07T10:17:15,145363-04:00 unknown error\n"
-        "kern  :err   : 2024-10-07T10:17:15,145363-04:00 unknown error\n"
-        "kern  :err   : 2024-10-07T10:17:15,145363-04:00 amdgpu: Fatal error during GPU init\n"
-        "kern  :crit   : 2024-10-07T10:17:15,145363-04:00 unknown crit\n"
-        "kern  :emerg   : 2024-10-07T10:17:15,145363-04:00 unknown emerg\n"
-        "kern  :alert   : 2024-10-07T10:17:15,145363-04:00 unknown alert\n"
-        "kern  :err   : 2024-10-07T10:17:15,145363-04:00 amdgpu: Failed to disallow cf state\n"
-    )
-    return DmesgData(dmesg_content=dmesg)
 
 
 def test_dmesg_filter():
@@ -71,74 +51,77 @@ def test_dmesg_filter():
     )
 
 
-def test_unknown_errors(dmesg_data, system_info):
+def test_unknown_errors(system_info):
+    dmesg_data = DmesgData(
+        dmesg_content=(
+            "kern  :err   : 2024-10-07T10:17:15,145363-04:00 oom_kill_process\n"
+            "kern  :err   : 2024-10-07T10:17:15,145363-04:00 amdgpu: qcm fence wait loop timeout expired\n"
+            "kern  :err   : 2024-10-07T10:17:15,145363-04:00 unknown error\n"
+            "kern  :err   : 2024-10-07T10:17:15,145363-04:00 unknown error\n"
+            "kern  :err   : 2024-10-07T10:17:15,145363-04:00 unknown error\n"
+            "kern  :err   : 2024-10-07T10:17:15,145363-04:00 amdgpu: Fatal error during GPU init\n"
+            "kern  :crit   : 2024-10-07T10:17:15,145363-04:00 unknown crit\n"
+            "kern  :emerg   : 2024-10-07T10:17:15,145363-04:00 unknown emerg\n"
+            "kern  :alert   : 2024-10-07T10:17:15,145363-04:00 unknown alert\n"
+            "kern  :err   : 2024-10-07T10:17:15,145363-04:00 amdgpu: Failed to disallow cf state\n"
+        )
+    )
+
     analyzer = DmesgAnalyzer(system_info=system_info)
 
-    # exp_res = [
-    #    {"match": "oom_kill_process", "desc": "Out of memory error", "count": 1},
-    #    {"match": "qcm fence wait loop timeout expired", "desc": "QCM fence timeout", "count": 1},
-    #    {
-    #        "match": "amdgpu: Failed to disallow cf state",
-    #        "desc": "Failed to disallow cf state",
-    #        "count": 1,
-    #    },
-    #    {
-    #        "match": ": Fatal error during GPU init",
-    #        "desc": "Fatal error during GPU init",
-    #        "count": 1,
-    #    },
-    #    {"match": "unknown error", "desc": "Unknown dmesg error", "count": 3},
-    #    {"match": "unknown crit", "desc": "Unknown dmesg error", "count": 1},
-    #    {"match": "unknown emerg", "desc": "Unknown dmesg error", "count": 1},
-    #    {"match": "unknown alert", "desc": "Unknown dmesg error", "count": 1},
-    # ]
+    exp_res = [
+        {"match": "oom_kill_process", "desc": "Out of memory error", "count": 1},
+        {"match": "qcm fence wait loop timeout expired", "desc": "QCM fence timeout", "count": 1},
+        {
+            "match": "amdgpu: Failed to disallow cf state",
+            "desc": "Failed to disallow cf state",
+            "count": 1,
+        },
+        {
+            "match": ": Fatal error during GPU init",
+            "desc": "Fatal error during GPU init",
+            "count": 1,
+        },
+        {"match": "unknown error", "desc": "Unknown dmesg error", "count": 3},
+        {"match": "unknown crit", "desc": "Unknown dmesg error", "count": 1},
+        {"match": "unknown emerg", "desc": "Unknown dmesg error", "count": 1},
+        {"match": "unknown alert", "desc": "Unknown dmesg error", "count": 1},
+    ]
 
-    res = analyzer.analyze_data({DmesgData: dmesg_data})
+    res = analyzer.analyze_data(dmesg_data)
 
-    assert res.status == ExecutionStatus.EXECUTION_FAILURE
-    assert len(res.events) == 1
-    for event in res.events:
-        assert event.description == "Analyzer passed invalid data"
+    assert res.status == ExecutionStatus.ERROR
+    assert len(res.events) == 8
 
-    # for i, event in enumerate(res.events):
-    #    assert event.description == exp_res[i]["desc"]
-    #    assert event.data["match_content"] == exp_res[i]["match"]
-    #    assert event.data["count"] == exp_res[i]["count"]
+    for i, event in enumerate(res.events):
+        assert event.description == exp_res[i]["desc"]
+        assert event.data["match_content"] == exp_res[i]["match"]
+        assert event.data["count"] == exp_res[i]["count"]
 
-
-def test_regex_match(dmesg_data, system_info):
-    analyzer = DmesgAnalyzer(system_info=system_info)
-
-    res = analyzer.analyze_data({DmesgData: dmesg_data})
-
-    assert res.status == ExecutionStatus.EXECUTION_FAILURE
-    # assert len(res.events) == len(DmesgAnalyzer.ERROR_REGEX)
-
-    # for i, event in enumerate(res.events):
-    #    assert event.priority == DmesgAnalyzer.ERROR_REGEX[i].event_priority
-    #    assert event.description == DmesgAnalyzer.ERROR_REGEX[i].message
+    res = analyzer.analyze_data(
+        dmesg_data, args=DmesgAnalyzerArgs(check_unknown_dmesg_errors=False)
+    )
+    assert res.status == ExecutionStatus.ERROR
+    assert len(res.events) == 4
 
 
-def test_page_fault(dmesg_data, system_info):
-    analyzer = DmesgAnalyzer(system_info=system_info)
+def test_exclude_category(system_info):
+    dmesg_data = DmesgData(
+        dmesg_content=(
+            "kern  :err   : 2024-10-07T10:17:15,145363-04:00 oom_kill_process\n"
+            "kern  :err   : 2024-10-07T10:17:15,145363-04:00 amdgpu: qcm fence wait loop timeout expired\n"
+            "kern  :err   : 2024-10-07T10:17:15,145363-04:00 amdgpu: Fatal error during GPU init\n"
+            "kern  :err   : 2024-10-07T10:17:15,145363-04:00 amdgpu 0000:c1:00.0: amdgpu: socket: 4, die: 0 1 correctable hardware errors detected in total in gfx block, no user action is needed.\n"
+            "kern  :err   : 2024-10-07T10:17:15,145363-04:00 amdgpu: Failed to disallow cf state\n"
+        )
+    )
 
-    res = analyzer.analyze_data({DmesgData: dmesg_data})
+    analyzer = DmesgAnalyzer(
+        system_info=system_info,
+    )
 
-    assert res.status == ExecutionStatus.EXECUTION_FAILURE
-    assert len(res.events) == 1
-
-    for event in res.events:
-        assert event.description == "Analyzer passed invalid data"
-        assert event.priority == EventPriority.CRITICAL
-
-
-def test_exclude_category(dmesg_data, system_info):
-    analyzer = DmesgAnalyzer(system_info=system_info)
-
-    args = DmesgAnalyzerArgs(exclude_category={"RAS"})
-    res = analyzer.analyze_data({DmesgData: dmesg_data}, args)
-
-    assert res.status == ExecutionStatus.EXECUTION_FAILURE
-    assert len(res.events) == 1
+    res = analyzer.analyze_data(dmesg_data, args=DmesgAnalyzerArgs(exclude_category={"RAS"}))
+    assert res.status == ExecutionStatus.ERROR
+    assert len(res.events) == 4
     for event in res.events:
         assert event.category != "RAS"
