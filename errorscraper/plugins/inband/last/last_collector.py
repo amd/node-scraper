@@ -70,7 +70,7 @@ class LastCollector(InBandDataCollector):
                 console_log=True,
             )
             self.result.message = "Failed to run last command"
-            self.result.status = ExecutionStatus.ERROR
+            self.result.status = ExecutionStatus.EXECUTION_FAILURE
             return self.result, None
 
         last_data_model = LastDataModel(last_data=last_data)
