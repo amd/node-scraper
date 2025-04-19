@@ -36,9 +36,9 @@ class OsAnalyzer(DataAnalyzer[OsDataModel, OsAnalyzerArgs]):
         Returns
         -------
         TaskResult
-            A TaskResult if no exp_os then TaskStatus.NOT_RAN
-            If OS name matches exp_os TaskStatus.OK
-            If OS name does not match exp_os TaskStatus.ERRORS_DETECTED due to CRITICAL event
+            A TaskResult if no exp_os then ExecutionStatus.NOT_RAN
+            If OS name matches exp_os ExecutionStatus.OK
+            If OS name does not match exp_os ExecutionStatus.ERRORS_DETECTED due to CRITICAL event
         """
         if not args or not args.exp_os:
             self.result.message = "Expected OS name not provided"

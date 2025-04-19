@@ -56,4 +56,4 @@ profile = "black"
 
 [tool.ruff.lint]
 select = ["F", "B", "T20", "N", "W", "I", "E"]
-ignore = ["E501"]
+ignore = ["E501", "N806"]
