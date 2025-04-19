@@ -1,0 +1,40 @@
+from typing import Optional
+
+from errorscraper.enums import EventCategory, EventPriority, ExecutionStatus
+from errorscraper.interfaces import DataAnalyzer
+from errorscraper.models import TaskResult
+
+from .analyzer_args import RocmAnalyzerArgs
+from .rocmdata import RocmDataModel
+
+
+class RocmAnalyzer(DataAnalyzer[RocmDataModel, RocmAnalyzerArgs]):
+    """Check ROCm matches expected versions"""
+
+    DATA_MODEL = RocmDataModel
+
+    def analyze_data(
+        self, data: RocmDataModel, args: Optional[RocmAnalyzerArgs] = None
+    ) -> TaskResult:
+        # skip check if data not provided in config
+        if not args or not args.exp_rocm:
+            self.result.message = "Expected ROCm not provided"
+            self.result.status = ExecutionStatus.NOT_RAN
+            return self.result
+
+        for rocm_version in args.exp_rocm:
+            if data.rocm_version == rocm_version:
+                self.result.message = "ROCm version matches expected"
+                self.result.status = ExecutionStatus.OK
+                return self.result
+
+        self.result.message = "ROCm version mismatch!"
+        self.result.status = ExecutionStatus.ERROR
+        self._log_event(
+            category=EventCategory.SW_DRIVER,
+            description=f"{self.result.message}",
+            data={"expected": args.exp_rocm, "actual": data.rocm_version},
+            priority=EventPriority.CRITICAL,
+            console_log=True,
+        )
+        return self.result
