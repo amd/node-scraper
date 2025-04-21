@@ -23,7 +23,7 @@ class InBandDataCollector(
         system_info: SystemInfo,
         connection: InBandConnection,
         logger: Optional[logging.Logger] = None,
-        system_interaction_level: SystemInteractionLevel = SystemInteractionLevel.STANDARD,
+        system_interaction_level: SystemInteractionLevel = SystemInteractionLevel.INTERACTIVE,
         max_event_priority_level: EventPriority | str = EventPriority.CRITICAL,
         parent: Optional[str] = None,
         task_hooks: Optional[list[TaskHook]] = None,

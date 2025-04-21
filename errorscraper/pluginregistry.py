@@ -34,7 +34,7 @@ class PluginRegistry:
                     and issubclass(x, base_class)
                     and not inspect.isabstract(x),
                 ):
-                    if hasattr(module, "is_valid") and not module.is_valid():
+                    if hasattr(plugin, "is_valid") and not plugin.is_valid():
                         continue
                     registry[plugin.__name__] = plugin
                 if ispkg:

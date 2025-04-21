@@ -1,26 +1,63 @@
+import inspect
 import types
-from typing import Any, Callable, Union, get_args, get_origin, get_type_hints
+from typing import Any, Union, get_args, get_origin
+
+from pydantic import BaseModel
 
 
 class TypeUtils:
 
     @classmethod
-    def get_func_arg_types(cls, func: Callable) -> dict:
+    def get_func_arg_types(cls, target, class_type=None) -> dict[str, Any]:
+        if (
+            class_type
+            and class_type.__orig_bases__
+            and len(class_type.__orig_bases__) > 0
+        ):
+            gen_base = class_type.__orig_bases__[0]
+            class_org = get_origin(gen_base)
+            args = get_args(gen_base)
+
+            gen_map = dict(zip(class_org.__parameters__, args, strict=False))
+        else:
+            gen_map = {}
+
         type_map = {}
-        for arg, type_hint in get_type_hints(func).items():
-            type_map[arg] = cls.process_type(type_hint)
+        skip_args = ["self"]
+        for arg, param in inspect.signature(target).parameters.items():
+            if arg in skip_args:
+                continue
+            arg_types = cls.process_type(param.annotation)
+            for i, typ in enumerate(arg_types):
+                if typ in gen_map:
+                    arg_types[i] = gen_map[typ]
+            type_map[arg] = arg_types
 
         return type_map
 
     @classmethod
-    def process_type(cls, input_type: Any) -> Any:
-        if get_origin(input_type) in [Union, types.UnionType]:
+    def process_type(cls, input_type: Any) -> list[Any]:
+        origin = get_origin(input_type)
+        if origin is None:
+            return [input_type]
+        if origin in [Union, types.UnionType]:
             input_types = [arg for arg in input_type.__args__ if arg != types.NoneType]
-            if len(input_types) == 1:
-                input_types = input_types[0]
+            for i, t in enumerate(input_types):
+                origin = get_origin(t)
+                if origin is not None:
+                    input_types[i] = origin
             return input_types
         else:
-            return input_type
+            return [origin]
+
+    @classmethod
+    def get_model_types(cls, model: type[BaseModel]) -> dict[str, Any]:
+        type_map = {}
+        for name, field in model.model_fields.items():
+            field_types = cls.process_type(field.annotation)
+            type_map[name] = field_types
+
+        return type_map
 
     @classmethod
     def find_annotation_in_container(
