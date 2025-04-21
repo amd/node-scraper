@@ -14,7 +14,7 @@ from errorscraper.plugins.inband.bios.biosdata import BiosDataModel
 def bios_collector(system_info, conn_mock):
     return BiosCollector(
         system_info=system_info,
-        system_interaction_level=SystemInteractionLevel.SURFACE,
+        system_interaction_level=SystemInteractionLevel.PASSIVE,
         connection=conn_mock,
     )
 

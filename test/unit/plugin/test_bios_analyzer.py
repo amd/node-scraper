@@ -86,7 +86,7 @@ def test_invalid_regex(system_info):
     args = BiosAnalyzerArgs(exp_bios_version=[r"R[MP\d{4}B{S"], regex_match=True)
     res = analyzer.analyze_data(model, args)
     assert res.status == ExecutionStatus.ERROR
-    assert len(res.events) == 1
+    assert len(res.events) == 2
     assert res.events[0].category == EventCategory.BIOS.value
     assert res.events[0].priority == EventPriority.ERROR
     assert "Invalid regex pattern" in res.events[0].description

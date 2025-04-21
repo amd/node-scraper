@@ -12,7 +12,7 @@ from errorscraper.plugins.inband.os.osdata import OsDataModel
 def collector(system_info, conn_mock):
     return OsCollector(
         system_info=system_info,
-        system_interaction_level=SystemInteractionLevel.SURFACE,
+        system_interaction_level=SystemInteractionLevel.PASSIVE,
         connection=conn_mock,
     )
 
@@ -73,7 +73,7 @@ def test_os_collector_windows(system_info, conn_mock):
     system_info.os_family = OSFamily.WINDOWS
     collector = OsCollector(
         system_info=system_info,
-        system_interaction_level=SystemInteractionLevel.SURFACE,
+        system_interaction_level=SystemInteractionLevel.PASSIVE,
         connection=conn_mock,
     )
 

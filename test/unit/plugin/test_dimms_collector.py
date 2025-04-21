@@ -14,7 +14,7 @@ from errorscraper.plugins.inband.dimm.dimmdata import DimmDataModel
 def collector(system_info, conn_mock):
     return DimmCollector(
         system_info=system_info,
-        system_interaction_level=SystemInteractionLevel.SURFACE,
+        system_interaction_level=SystemInteractionLevel.PASSIVE,
         connection=conn_mock,
     )
 
@@ -23,7 +23,7 @@ def test_run_windows(system_info, conn_mock):
     system_info.os_family = OSFamily.WINDOWS
     collector = DimmCollector(
         system_info=system_info,
-        system_interaction_level=SystemInteractionLevel.SURFACE,
+        system_interaction_level=SystemInteractionLevel.PASSIVE,
         connection=conn_mock,
     )
 

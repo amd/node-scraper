@@ -12,7 +12,7 @@ from errorscraper.plugins.inband.kernel.kerneldata import KernelDataModel
 def collector(system_info, conn_mock):
     return KernelCollector(
         system_info=system_info,
-        system_interaction_level=SystemInteractionLevel.SURFACE,
+        system_interaction_level=SystemInteractionLevel.PASSIVE,
         connection=conn_mock,
     )
 

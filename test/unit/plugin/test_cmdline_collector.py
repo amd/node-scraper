@@ -15,7 +15,7 @@ from errorscraper.plugins.inband.cmdline.cmdlinedata import CmdlineDataModel
 def collector(system_info, conn_mock):
     return CmdlineCollector(
         system_info=system_info,
-        system_interaction_level=SystemInteractionLevel.SURFACE,
+        system_interaction_level=SystemInteractionLevel.PASSIVE,
         connection=conn_mock,
     )
 
@@ -43,7 +43,7 @@ def test_run_windows(system_info, conn_mock):
     with pytest.raises(SystemCompatibilityError) as e:
         CmdlineCollector(
             system_info=system_info,
-            system_interaction_level=SystemInteractionLevel.SURFACE,
+            system_interaction_level=SystemInteractionLevel.PASSIVE,
             connection=conn_mock,
         )
     assert str(e.value) == "WINDOWS OS family is not supported"

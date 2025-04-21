@@ -13,7 +13,7 @@ from errorscraper.plugins.inband.memory.memorydata import MemoryDataModel
 def collector(system_info, conn_mock):
     return MemoryCollector(
         system_info=system_info,
-        system_interaction_level=SystemInteractionLevel.SURFACE,
+        system_interaction_level=SystemInteractionLevel.PASSIVE,
         connection=conn_mock,
     )
 

@@ -46,7 +46,7 @@ def test_dmesg_collection(system_info, conn_mock):
     system_info.os_family = OSFamily.LINUX
     collector = DmesgCollector(
         system_info=system_info,
-        system_interaction_level=SystemInteractionLevel.STANDARD,
+        system_interaction_level=SystemInteractionLevel.INTERACTIVE,
         connection=conn_mock,
     )
 
@@ -84,7 +84,7 @@ def test_bad_exit_code(conn_mock, system_info):
 
     collector = DmesgCollector(
         system_info=system_info,
-        system_interaction_level=SystemInteractionLevel.STANDARD,
+        system_interaction_level=SystemInteractionLevel.INTERACTIVE,
         connection=conn_mock,
     )
 
@@ -99,7 +99,7 @@ def test_run_dmesg_windows(conn_mock, system_info):
     with pytest.raises(SystemCompatibilityError, match="WINDOWS OS family is not supported"):
         DmesgCollector(
             system_info=system_info,
-            system_interaction_level=SystemInteractionLevel.STANDARD,
+            system_interaction_level=SystemInteractionLevel.INTERACTIVE,
             connection=conn_mock,
         )
 
