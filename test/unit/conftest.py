@@ -1,0 +1,19 @@
+from unittest.mock import MagicMock
+
+import pytest
+
+from errorscraper.models.systeminfo import OSFamily, SystemInfo
+
+
+@pytest.fixture
+def system_info():
+    return SystemInfo(
+        name="test_host",
+        platform="platform_id",
+        os_family=OSFamily.LINUX,
+    )
+
+
+@pytest.fixture
+def conn_mock():
+    return MagicMock()
