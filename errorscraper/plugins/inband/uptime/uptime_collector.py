@@ -7,7 +7,7 @@ from errorscraper.models import TaskResult
 from .uptimedata import UptimeDataModel
 
 
-class UptimeCollector(InBandDataCollector):
+class UptimeCollector(InBandDataCollector[UptimeDataModel, None]):
     """Collect last boot time and uptime from uptime command"""
 
     DATA_MODEL = UptimeDataModel

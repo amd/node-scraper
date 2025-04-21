@@ -6,7 +6,7 @@ from errorscraper.models import TaskResult
 from .authlogdata import AuthLogDataModel
 
 
-class AuthLogCollector(InBandDataCollector[AuthLogDataModel]):
+class AuthLogCollector(InBandDataCollector[AuthLogDataModel, None]):
     """Collect authentication/security related history in the respective log files
 
     Debian/Ubuntu: /var/log/auth.log

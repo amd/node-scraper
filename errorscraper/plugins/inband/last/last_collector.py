@@ -7,7 +7,7 @@ from errorscraper.models import TaskResult
 from .lastdata import LastData, LastDataModel
 
 
-class LastCollector(InBandDataCollector):
+class LastCollector(InBandDataCollector[LastDataModel, None]):
     """
     Collect data from last command with options:
 
