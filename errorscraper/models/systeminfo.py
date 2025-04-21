@@ -5,7 +5,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-from errorscraper.enums import OSFamily
+from errorscraper.enums import OSFamily, SystemLocation
 
 
 class SystemInfo(BaseModel):
@@ -16,3 +16,4 @@ class SystemInfo(BaseModel):
     sku: Optional[str] = None
     platform: Optional[str] = None
     metadata: Optional[dict] = Field(default_factory=dict)
+    location: Optional[SystemLocation] = SystemLocation.LOCAL

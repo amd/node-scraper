@@ -68,6 +68,7 @@ class PluginExecutor:
         self.logger.info("System Name: %s", self.system_info.name)
         self.logger.info("System SKU: %s", self.system_info.sku)
         self.logger.info("System Platform: %s", self.system_info.platform)
+        self.logger.info("System location: %s", self.system_info.location)
 
         self.log_path = None
 
@@ -127,9 +128,11 @@ class PluginExecutor:
 
                     run_payload = copy.deepcopy(plugin_args)
 
-                    run_args = TypeUtils.get_func_arg_types(plugin_class.run)
+                    run_args = TypeUtils.get_func_arg_types(plugin_class.run, plugin_class)
                     for arg in run_args.keys():
-                        if arg in self.global_args:
+                        if arg == "preserve_connection":
+                            run_payload[arg] = True
+                        elif arg in self.global_args:
                             run_payload[arg] = self.global_args[arg]
 
                         # TODO

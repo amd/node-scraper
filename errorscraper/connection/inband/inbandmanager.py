@@ -41,7 +41,6 @@ class InBandConnectionManager(ConnectionManager[InBandConnection, SSHConnectionP
             connection_args,
             **kwargs,
         )
-        self.system_location: SystemLocation = SystemLocation.LOCAL
 
     def _check_os_family(self):
         if not self.connection:
@@ -64,14 +63,11 @@ class InBandConnectionManager(ConnectionManager[InBandConnection, SSHConnectionP
     def connect(
         self,
     ) -> TaskResult:
-        if not self.connection_args:
-            self.system_location = SystemLocation.LOCAL
+        if self.system_info.location == SystemLocation.LOCAL:
             self.logger.info("Using local shell")
             self.connection = LocalShell()
             self._check_os_family()
             return self.result
-
-        self.system_location = SystemLocation.REMOTE
 
         if not self.connection_args or not isinstance(self.connection_args, SSHConnectionParams):
             self._log_event(

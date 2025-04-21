@@ -65,7 +65,7 @@ def analyze_decorator(func: Callable[..., TaskResult]) -> Callable[..., TaskResu
                 analyzer.result.status = ExecutionStatus.EXECUTION_FAILURE
 
         result = analyzer.result
-        result.finalize()
+        result.finalize(analyzer.logger)
 
         analyzer._run_hooks(result)
 

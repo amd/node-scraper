@@ -90,7 +90,7 @@ class DataPlugin(
     def collect(
         self,
         max_event_priority_level: EventPriority | str = EventPriority.CRITICAL,
-        system_interaction_level: SystemInteractionLevel | str = SystemInteractionLevel.STANDARD,
+        system_interaction_level: SystemInteractionLevel | str = SystemInteractionLevel.INTERACTIVE,
         preserve_connection: bool = False,
         collection_args: Optional[TCollectArg | dict] = None,
     ) -> TaskResult:
@@ -207,12 +207,27 @@ class DataPlugin(
         collection: bool = True,
         analysis: bool = True,
         max_event_priority_level: EventPriority | str = EventPriority.CRITICAL,
-        system_interaction_level: SystemInteractionLevel | str = SystemInteractionLevel.STANDARD,
+        system_interaction_level: SystemInteractionLevel | str = SystemInteractionLevel.INTERACTIVE,
         preserve_connection: bool = False,
         data: Optional[str | dict | TDataModel] = None,
         collection_args: Optional[TCollectArg | dict] = None,
         analysis_args: Optional[TAnalyzeArg | dict] = None,
     ) -> PluginResult:
+        """Run plugin
+
+        Args:
+            collection (bool, optional): Enable data collection. Defaults to True.
+            analysis (bool, optional): Enable data analysis. Defaults to True.
+            max_event_priority_level (EventPriority | str, optional): Max priority level to assign to events. Defaults to EventPriority.CRITICAL.
+            system_interaction_level (SystemInteractionLevel | str, optional): System interaction level. Defaults to SystemInteractionLevel.INTERACTIVE.
+            preserve_connection (bool, optional): Whether to close the connection when data collection is complete. Defaults to False.
+            data (Optional[str  |  dict  |  TDataModel], optional): Input data. Defaults to None.
+            collection_args (Optional[TCollectArg  |  dict], optional): Arguments for data collection. Defaults to None.
+            analysis_args (Optional[TAnalyzeArg  |  dict], optional): Arguments for data analysis. Defaults to None.
+
+        Returns:
+            PluginResult: Plugin result
+        """
         self.logger.info("Running plugin %s", self.__class__.__name__)
         if collection:
             self.collect(

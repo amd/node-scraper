@@ -57,7 +57,7 @@ def collect_decorator(
         if data is None and not result.status:
             result.status = ExecutionStatus.EXECUTION_FAILURE
 
-        result.finalize()
+        result.finalize(collector.logger)
 
         collector._run_hooks(result, data=data)
 
@@ -84,7 +84,7 @@ class DataCollector(Task, abc.ABC, Generic[TConnection, TDataModel, TCollectArg]
         system_info: SystemInfo,
         connection: TConnection,
         logger: Optional[logging.Logger] = None,
-        system_interaction_level: SystemInteractionLevel | str = SystemInteractionLevel.STANDARD,
+        system_interaction_level: SystemInteractionLevel | str = SystemInteractionLevel.INTERACTIVE,
         max_event_priority_level: EventPriority | str = EventPriority.CRITICAL,
         parent: Optional[str] = None,
         task_hooks: Optional[list[TaskHook]] = None,
