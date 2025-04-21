@@ -16,11 +16,6 @@ def model_obj():
 
 
 @pytest.fixture
-def data_library(model_obj):
-    return {CmdlineDataModel: model_obj}
-
-
-@pytest.fixture
 def config():
     return {
         "required_cmdline": [

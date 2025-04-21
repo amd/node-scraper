@@ -11,16 +11,6 @@ def model_obj():
     return MemoryDataModel(mem_free="2160459761152", mem_total="2164113772544")
 
 
-# @pytest.fixture
-# def data_library(model_obj):
-#    return {MemoryDataModel: model_obj}
-
-
-@pytest.fixture
-def config():
-    return {"ratio": 0.66, "memory_threshold": "30Gi"}
-
-
 @pytest.fixture
 def analyzer(system_info, model_obj):
     return MemoryAnalyzer(system_info=system_info, data_model=model_obj)
@@ -39,15 +29,14 @@ def test_too_much_memory_usage(analyzer, model_obj):
     assert result.status == ExecutionStatus.ERROR
 
 
-def test_config_provided(analyzer, model_obj, config):
-    args = MemoryAnalyzerArgs(ratio=config["ratio"], memory_threshold=config["memory_threshold"])
+def test_config_provided(analyzer, model_obj):
+    args = MemoryAnalyzerArgs(ratio=0.66, memory_threshold="30Gi")
     result = analyzer.analyze_data(model_obj, args)
     assert result.status == ExecutionStatus.OK
 
 
 def test_windows_like_memory(analyzer):
     model = MemoryDataModel(mem_free="751720910848", mem_total="1013310287872")
-    # data_library = {MemoryDataModel: model}
     result = analyzer.analyze_data(model)
     assert result.status == ExecutionStatus.ERROR
     assert "Memory usage is more than the maximum allowed used memory!" in result.message

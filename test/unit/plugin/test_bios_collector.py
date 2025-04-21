@@ -32,7 +32,6 @@ def test_task_body_windows(system_info, bios_collector):
 
     exp_data = BiosDataModel(bios_version="R23ET70W (1.40 )")
 
-    # bios_collector._log_event = MagicMock()
     res, data = bios_collector.collect_data()
     assert data == exp_data
 
@@ -50,7 +49,6 @@ def test_task_body_linux(system_info, bios_collector):
 
     exp_data = BiosDataModel(bios_version="2.0.1")
 
-    # bios_collector._log_event = MagicMock()
     res, data = bios_collector.collect_data()
     assert data == exp_data
 
@@ -67,7 +65,7 @@ def test_task_body_error(system_info, bios_collector):
     )
 
     res, data = bios_collector.collect_data()
-    assert res.status == ExecutionStatus.ERROR  # or another appropriate status constant
+    assert res.status == ExecutionStatus.ERROR
     assert data is None
     assert res.events[0].category == EventCategory.OS.value
     assert res.events[0].description == "Error checking BIOS version"

@@ -1,4 +1,3 @@
-import copy
 
 import pytest
 
@@ -6,8 +5,6 @@ from errorscraper.enums.eventcategory import EventCategory
 from errorscraper.enums.eventpriority import EventPriority
 from errorscraper.enums.executionstatus import ExecutionStatus
 from errorscraper.plugins.inband.kernel.analyzer_args import KernelAnalyzerArgs
-
-# from errorscraper.models.systeminfo import SystemInfo, SKU, OSFamily
 from errorscraper.plugins.inband.kernel.kernel_analyzer import KernelAnalyzer
 from errorscraper.plugins.inband.kernel.kerneldata import KernelDataModel
 
@@ -15,11 +12,6 @@ from errorscraper.plugins.inband.kernel.kerneldata import KernelDataModel
 @pytest.fixture
 def model_obj():
     return KernelDataModel(kernel_version="5.13.0-30-generic")
-
-
-@pytest.fixture
-def data_library(model_obj):
-    return {KernelDataModel: model_obj}
 
 
 @pytest.fixture
@@ -65,17 +57,16 @@ def test_no_config_data(system_info, model_obj):
     assert len(result.events) == 0
 
 
-def test_invalid_kernel(system_info, data_library, config):
+def test_invalid_kernel(system_info, model_obj, config):
     args = KernelAnalyzerArgs(exp_kernel=config["kernel_name"])
-    bad_data_library = copy.deepcopy(data_library)
-    bad_data_library[KernelDataModel] = KernelDataModel(kernel_version="some_invalid")
+    model_obj.kernel_version="some_invalid"
 
     analyzer = KernelAnalyzer(system_info)
-    result = analyzer.analyze_data(bad_data_library, args=args)
+    result = analyzer.analyze_data(model_obj, args=args)
 
-    assert result.status == ExecutionStatus.EXECUTION_FAILURE
-    assert "Invalid data input" in result.message
-    # assert any(event.priority == EventPriority.CRITICAL and event.category == EventCategory.OS.value for event in result.events)
+    assert result.status == ExecutionStatus.ERROR
+    assert "Kernel mismatch" in result.message
+    assert any(event.priority == EventPriority.CRITICAL and event.category == EventCategory.OS.value for event in result.events)
 
 
 def test_unexpected_kernel(system_info, model_obj):
