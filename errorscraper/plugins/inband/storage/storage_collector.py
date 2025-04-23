@@ -12,7 +12,7 @@ class StorageCollector(InBandDataCollector[StorageDataModel, None]):
 
     DATA_MODEL = StorageDataModel
 
-    def collect_data(self, args=None) -> tuple[TaskResult, StorageDataModel | None]:
+    def collect_data(self, args: None = None) -> tuple[TaskResult, StorageDataModel | None]:
         """read storage usage data"""
         storage_data = {}
         if self.system_info.os_family == OSFamily.WINDOWS:

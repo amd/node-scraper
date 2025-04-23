@@ -4,14 +4,15 @@ import logging
 from typing import Callable, Generic, Optional, Type
 
 from errorscraper.constants import DEFAULT_LOGGER
-from errorscraper.hooks.filesystemloghook import FileSystemLogHook
 from errorscraper.models import PluginResult, SystemInfo
+from errorscraper.taskresulthooks.filesystemloghook import FileSystemLogHook
 
 from .connectionmanager import TConnectArg, TConnectionManager
-from .taskhook import TaskHook
+from .taskresulthook import TaskResultHook
 
 
 class PluginInterface(abc.ABC, Generic[TConnectionManager, TConnectArg]):
+    """Base plugin interface"""
 
     CONNECTION_TYPE: Optional[Type[TConnectionManager]] = None
 
@@ -21,11 +22,22 @@ class PluginInterface(abc.ABC, Generic[TConnectionManager, TConnectArg]):
         logger: Optional[logging.Logger] = None,
         connection_manager: Optional[TConnectionManager] = None,
         connection_args: Optional[TConnectArg | dict] = None,
-        task_hooks: Optional[list[TaskHook]] = None,
+        task_result_hooks: Optional[list[TaskResultHook]] = None,
         log_path: Optional[str] = None,
         queue_callback: Optional[Callable] = None,
         **kwargs,
     ):
+        """Initialize plugin
+
+        Args:
+            system_info (Optional[SystemInfo], optional): system info object. Defaults to None.
+            logger (Optional[logging.Logger], optional): python logger instance. Defaults to None.
+            connection_manager (Optional[TConnectionManager], optional): connection manager instance. Defaults to None.
+            connection_args (Optional[TConnectArg  |  dict], optional): connection args. Defaults to None.
+            task_result_hooks (Optional[list[TaskResultHook]], optional): list of task result hooks. Defaults to None.
+            log_path (Optional[str], optional): path for file system logs. Defaults to None.
+            queue_callback (Optional[Callable], optional): function to add additional plugins to plugin executor queue. Defaults to None.
+        """
         if logger is None:
             logger = logging.getLogger(DEFAULT_LOGGER)
         self.logger = logger
@@ -34,16 +46,17 @@ class PluginInterface(abc.ABC, Generic[TConnectionManager, TConnectArg]):
             system_info = SystemInfo()
         self.system_info = system_info
 
-        if not task_hooks:
-            task_hooks = []
-        self.task_hooks = task_hooks
+        if not task_result_hooks:
+            task_result_hooks = []
+        self.task_result_hooks = task_result_hooks
 
         if log_path:
-            for hook in self.task_hooks:
+            for hook in self.task_result_hooks:
                 if isinstance(hook, FileSystemLogHook):
                     break
             else:
-                self.task_hooks.append(FileSystemLogHook(log_base_path=log_path))
+                self.task_result_hooks.append(FileSystemLogHook(log_base_path=log_path))
+
         self.log_path = log_path
 
         self.queue_callback = queue_callback
@@ -56,15 +69,25 @@ class PluginInterface(abc.ABC, Generic[TConnectionManager, TConnectArg]):
                 logger=logger,
                 connection_args=connection_args,
                 parent=self.__class__.__name__,
-                task_hooks=self.task_hooks,
+                task_result_hooks=self.task_result_hooks,
             )
 
     @classmethod
-    def is_valid(cls):
+    def is_valid(cls) -> bool:
+        """Check if plugin class is valid and can be instantiated
+
+        Returns:
+            bool: class validity
+        """
         if inspect.isabstract(cls):
             return False
         return True
 
     @abc.abstractmethod
     def run(self, **kwargs) -> PluginResult:
+        """Plugin run function
+
+        Returns:
+            PluginResult: plugin result object
+        """
         pass

@@ -19,7 +19,7 @@ from errorscraper.models import DataModel, SystemInfo, TaskResult
 from errorscraper.utils import get_exception_details, get_exception_traceback
 
 from .connectionmanager import TConnection
-from .taskhook import TaskHook
+from .taskresulthook import TaskResultHook
 
 
 def collect_decorator(
@@ -87,7 +87,7 @@ class DataCollector(Task, abc.ABC, Generic[TConnection, TDataModel, TCollectArg]
         system_interaction_level: SystemInteractionLevel | str = SystemInteractionLevel.INTERACTIVE,
         max_event_priority_level: EventPriority | str = EventPriority.CRITICAL,
         parent: Optional[str] = None,
-        task_hooks: Optional[list[TaskHook]] = None,
+        task_result_hooks: Optional[list[TaskResultHook]] = None,
         **kwargs,
     ):
         """data collector init function
@@ -104,7 +104,7 @@ class DataCollector(Task, abc.ABC, Generic[TConnection, TDataModel, TCollectArg]
             logger=logger,
             max_event_priority_level=max_event_priority_level,
             parent=parent,
-            task_hooks=task_hooks,
+            task_result_hooks=task_result_hooks,
         )
 
         if isinstance(system_interaction_level, str):
