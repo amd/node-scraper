@@ -3,7 +3,7 @@ import abc
 from errorscraper.models import TaskResult
 
 
-class TaskHook(abc.ABC):
+class TaskResultHook(abc.ABC):
 
     @abc.abstractmethod
     def process_result(self, task_result: TaskResult, **kwargs):

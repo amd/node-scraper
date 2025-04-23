@@ -2,29 +2,12 @@ import abc
 import copy
 import datetime
 import logging
-from typing import Optional, Type
+from typing import Optional
 
 from errorscraper.enums import EventCategory, EventPriority
 from errorscraper.models import Event, SystemInfo, TaskResult
-from errorscraper.utils import get_subclass
 
-from .taskhook import TaskHook
-
-
-def get_task_class(
-    task_name: str, task_classes: Optional[list[Type["Task"]]] = None
-) -> Type["Task"] | None:
-    """get a task class given a class name
-
-    Args:
-        task_name (str): task name
-        task_classes (Optional[list[Type[Task]]], optional): list of all task classes to look through. Defaults to None.
-
-    Returns:
-        Type[Task] | None: Task class, None if no class found
-    """
-
-    return get_subclass(task_name, Task, task_classes)
+from .taskresulthook import TaskResultHook
 
 
 class SystemCompatibilityError(Exception):
@@ -33,7 +16,7 @@ class SystemCompatibilityError(Exception):
     pass
 
 
-class Task(abc.ABC):  # noqa B204
+class Task(abc.ABC):
     """Parent class for all tasks"""
 
     TASK_TYPE: str
@@ -44,7 +27,7 @@ class Task(abc.ABC):  # noqa B204
         logger: Optional[logging.Logger] = None,
         max_event_priority_level: EventPriority | str = EventPriority.CRITICAL,
         parent: Optional[str] = None,
-        task_hooks: Optional[list[TaskHook]] = None,
+        task_result_hooks: Optional[list[TaskResultHook]] = None,
         **kwargs,
     ):
         if logger is None:
@@ -53,9 +36,9 @@ class Task(abc.ABC):  # noqa B204
         self.logger = logger
         self.max_event_priority_level = max_event_priority_level
         self.parent = parent
-        if not task_hooks:
-            task_hooks = []
-        self.task_hooks = task_hooks
+        if not task_result_hooks:
+            task_result_hooks = []
+        self.task_result_hooks = task_result_hooks
         self.result: TaskResult = self._init_result()
 
     @property
@@ -147,5 +130,5 @@ class Task(abc.ABC):  # noqa B204
         return result
 
     def _run_hooks(self, result, **kwargs):
-        for hook in self.task_hooks:
+        for hook in self.task_result_hooks:
             hook.process_result(result, **kwargs)

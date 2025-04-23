@@ -17,7 +17,7 @@ class FileModel(BaseModel):
 
     @field_validator("file_contents", mode="before")
     @classmethod
-    def file_contents_conformer(cls, value) -> bytes:
+    def file_contents_conformer(cls, value: io.BytesIO | str | bytes) -> bytes:
         if isinstance(value, io.BytesIO):
             return value.getvalue()
         if isinstance(value, str):

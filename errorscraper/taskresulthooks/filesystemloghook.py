@@ -3,12 +3,12 @@ import os
 from typing import Optional
 
 from errorscraper.connection.inband import FileArtifact
-from errorscraper.interfaces.taskhook import TaskHook
+from errorscraper.interfaces.taskresulthook import TaskResultHook
 from errorscraper.models import DataModel, TaskResult
 from errorscraper.utils import get_unique_filename, pascal_to_snake
 
 
-class FileSystemLogHook(TaskHook):
+class FileSystemLogHook(TaskResultHook):
 
     def __init__(self, log_base_path=None, **kwargs) -> None:
         if log_base_path is None:
@@ -16,7 +16,7 @@ class FileSystemLogHook(TaskHook):
 
         self.log_base_path = log_base_path
 
-    def process_result(self, task_result: TaskResult, data: Optional[DataModel] = None):
+    def process_result(self, task_result: TaskResult, data: Optional[DataModel] = None, **kwargs):
         """post process task result
 
         Args:

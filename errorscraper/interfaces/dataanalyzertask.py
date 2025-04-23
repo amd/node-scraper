@@ -41,7 +41,7 @@ def analyze_decorator(func: Callable[..., TaskResult]) -> Callable[..., TaskResu
             try:
                 if isinstance(args, dict):
                     arg_types = TypeUtils.get_func_arg_types(func)
-                    analyze_arg_model = arg_types["args"]
+                    analyze_arg_model = arg_types["args"].type_classes[0]
                     args = analyze_arg_model(**args)
 
                 func(analyzer, data, args)
