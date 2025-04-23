@@ -30,10 +30,10 @@ def test_single_string_exp_bios_version(bios_model, system_info):
 
 
 def test_no_config(bios_model, system_info):
-   analyzer = BiosAnalyzer(system_info=system_info)
-   res = analyzer.analyze_data(bios_model)  # No args passed
-   assert res.status == ExecutionStatus.NOT_RAN
-   assert len(res.events) == 0
+    analyzer = BiosAnalyzer(system_info=system_info)
+    res = analyzer.analyze_data(bios_model)  # No args passed
+    assert res.status == ExecutionStatus.NOT_RAN
+    assert len(res.events) == 0
 
 
 def test_invalid_bios(system_info):

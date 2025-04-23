@@ -1,0 +1,18 @@
+# workflow to validate code formatting using pre-commit hooks
+name: Code Quality Check
+
+on: [pull_request]
+
+jobs:
+  pre-commit:
+    runs-on: [ self-hosted ]
+    container: python:3.10
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: pre-commit/action@v3.0.1
+
+      - name: Print message on failure
+        if: failure()
+        run: |
+          echo "### :x: Pre-commit hooks failed. Please check logs for changes needed" >> $GITHUB_STEP_SUMMARY

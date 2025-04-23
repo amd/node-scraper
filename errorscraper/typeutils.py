@@ -9,11 +9,7 @@ class TypeUtils:
 
     @classmethod
     def get_func_arg_types(cls, target, class_type=None) -> dict[str, Any]:
-        if (
-            class_type
-            and class_type.__orig_bases__
-            and len(class_type.__orig_bases__) > 0
-        ):
+        if class_type and class_type.__orig_bases__ and len(class_type.__orig_bases__) > 0:
             gen_base = class_type.__orig_bases__[0]
             class_org = get_origin(gen_base)
             args = get_args(gen_base)
