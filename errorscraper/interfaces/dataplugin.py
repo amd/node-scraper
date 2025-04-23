@@ -10,7 +10,7 @@ from errorscraper.models import DataPluginResult, PluginResult, SystemInfo, Task
 
 from .connectionmanager import TConnectArg, TConnectionManager
 from .task import SystemCompatibilityError
-from .taskhook import TaskHook
+from .taskresulthook import TaskResultHook
 
 
 class DataPlugin(
@@ -32,14 +32,19 @@ class DataPlugin(
         logger: Optional[logging.Logger] = None,
         connection_manager: Optional[TConnectionManager] = None,
         connection_args: Optional[TConnectArg | dict] = None,
-        task_hooks: Optional[list[TaskHook]] = None,
+        task_result_hooks: Optional[list[TaskResultHook]] = None,
         log_path: Optional[str] = None,
         **kwargs,
     ):
         super().__init__(
-            system_info, logger, connection_manager, connection_args, task_hooks, log_path, **kwargs
+            system_info,
+            logger,
+            connection_manager,
+            connection_args,
+            task_result_hooks,
+            log_path,
+            **kwargs,
         )
-
         self._validate_class_var()
         self.collection_result: TaskResult = TaskResult(
             status=ExecutionStatus.NOT_RAN,
@@ -66,7 +71,12 @@ class DataPlugin(
             raise TypeError("CONNECTION_TYPE must be defined for collector")
 
     @classmethod
-    def is_valid(cls):
+    def is_valid(cls) -> bool:
+        """Check that all required class variables are set
+
+        Returns:
+            bool: bool indicating validity
+        """
         try:
             cls._validate_class_var()
         except TypeError:
@@ -76,6 +86,11 @@ class DataPlugin(
 
     @property
     def data(self) -> TDataModel | None:
+        """Retrieve data model
+
+        Returns:
+            TDataModel | None: data model
+        """
         return self._data
 
     @data.setter
@@ -94,6 +109,17 @@ class DataPlugin(
         preserve_connection: bool = False,
         collection_args: Optional[TCollectArg | dict] = None,
     ) -> TaskResult:
+        """Run data collector task
+
+        Args:
+            max_event_priority_level (EventPriority | str, optional): priority limit for events. Defaults to EventPriority.CRITICAL.
+            system_interaction_level (SystemInteractionLevel | str, optional): system interaction level. Defaults to SystemInteractionLevel.INTERACTIVE.
+            preserve_connection (bool, optional): whether we should close the connection after data collection. Defaults to False.
+            collection_args (Optional[TCollectArg  |  dict], optional): args for data collection. Defaults to None.
+
+        Returns:
+            TaskResult: task result for data collection
+        """
         if not self.COLLECTOR:
             self.collection_result = TaskResult(
                 parent=self.__class__.__name__,
@@ -117,7 +143,7 @@ class DataPlugin(
                     system_info=self.system_info,
                     logger=self.logger,
                     parent=self.__class__.__name__,
-                    task_hooks=self.task_hooks,
+                    task_result_hooks=self.task_result_hooks,
                 )
 
             if (
@@ -142,7 +168,7 @@ class DataPlugin(
                     connection=self.connection_manager.connection,
                     max_event_priority_level=max_event_priority_level,
                     parent=self.__class__.__name__,
-                    task_hooks=self.task_hooks,
+                    task_result_hooks=self.task_result_hooks,
                 )
                 self.collection_result, self._data = collection_task.collect_data(collection_args)
 
@@ -172,6 +198,16 @@ class DataPlugin(
         analysis_args: Optional[TAnalyzeArg | dict] = None,
         data: Optional[str | dict | TDataModel] = None,
     ) -> TaskResult:
+        """Run data analyzer task
+
+        Args:
+            max_event_priority_level (EventPriority | str, optional): priority limit for events. Defaults to EventPriority.CRITICAL.
+            analysis_args (Optional[TAnalyzeArg  |  dict], optional): args for data analysis. Defaults to None.
+            data (Optional[str  |  dict  |  TDataModel], optional): data to analyze. Defaults to None.
+
+        Returns:
+            TaskResult: result of data analysis
+        """
         if self.ANALYZER is None:
             self.analysis_result = TaskResult(
                 status=ExecutionStatus.NOT_RAN,
@@ -197,14 +233,14 @@ class DataPlugin(
             logger=self.logger,
             max_event_priority_level=max_event_priority_level,
             parent=self.__class__.__name__,
-            task_hooks=self.task_hooks,
+            task_result_hooks=self.task_result_hooks,
         )
         self.analysis_result = analyzer_task.analyze_data(self.data, analysis_args)
         return self.analysis_result
 
     def run(
         self,
-        collection: bool = True,
+        collection: bool,
         analysis: bool = True,
         max_event_priority_level: EventPriority | str = EventPriority.CRITICAL,
         system_interaction_level: SystemInteractionLevel | str = SystemInteractionLevel.INTERACTIVE,
@@ -244,8 +280,27 @@ class DataPlugin(
                 data=data,
             )
 
+        status = max(self.collection_result.status, self.analysis_result.status)
+
+        message = ""
+        if status == ExecutionStatus.NOT_RAN:
+            message = "Plugin tasks not ran"
+        elif status in [
+            ExecutionStatus.ERROR,
+            ExecutionStatus.EXECUTION_FAILURE,
+            ExecutionStatus.WARNING,
+        ]:
+            if self.analysis_result.status > self.collection_result.status:
+                message = self.analysis_result.message
+            else:
+                message = self.collection_result.message
+        else:
+            message = "Plugin tasks completed successfully"
+
         return PluginResult(
             status=max(self.collection_result.status, self.analysis_result.status),
+            source=self.__class__.__name__,
+            message=message,
             result_data=DataPluginResult(
                 system_data=self.data,
                 collection_result=self.collection_result,

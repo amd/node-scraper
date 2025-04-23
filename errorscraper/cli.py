@@ -1,11 +1,12 @@
 import argparse
+import datetime
 import json
 import logging
 import os
 import platform
 import sys
 import types
-from typing import Callable, Optional
+from typing import Callable, Optional, Type
 
 from pydantic import BaseModel
 
@@ -17,63 +18,94 @@ from errorscraper.pluginregistry import PluginRegistry
 from errorscraper.typeutils import TypeUtils
 
 
-def build_dynamic_arg_parser(
-    parser: argparse.ArgumentParser,
-    func: Callable,
-    class_type=type[object],
-) -> dict:
-    skip_args = ["self", "preserve_connection", "max_event_priority_level"]
-    type_map = TypeUtils.get_func_arg_types(func, class_type)
+class DynamicParserBuilder:
+    def __init__(self, parser: argparse.ArgumentParser):
+        self.parser = parser
 
-    model_type_map = {}
+    def add_func_args(self, func: Callable, class_type: Optional[Type[object]] = None) -> dict:
+        skip_args = ["self", "preserve_connection", "max_event_priority_level"]
+        type_map = TypeUtils.get_func_arg_types(func, class_type)
 
-    for arg, arg_types in type_map.items():
-        if arg in skip_args:
-            continue
+        model_type_map = {}
 
-        cli_arg_type = str
-        for arg_type in arg_types:
-            if arg_type == types.NoneType:
-                # handle case where generic type has been set to None
-                break
+        for arg, arg_data in type_map.items():
+            if arg in skip_args:
+                continue
 
-            if (
-                isinstance(arg_type, type)
-                and issubclass(arg_type, BaseModel)
-                and not issubclass(arg_type, DataModel)
-            ):
-                model_args = build_model_arg_parser(parser, arg_type)
+            type_class_map = {
+                type_class.type_class: type_class for type_class in arg_data.type_classes
+            }
+
+            # handle case where generic type has been set to None
+            if types.NoneType in type_class_map and len(arg_data.type_classes) == 1:
+                continue
+
+            model_arg = self.get_model_arg(type_class_map)
+
+            # only add cli args for top level model args
+            if model_arg:
+                model_args = self.build_model_arg_parser(model_arg, arg_data.required)
                 for model_arg in model_args:
                     model_type_map[model_arg] = arg
-                break
+            else:
+                self.add_argument(type_class_map, arg.replace("_", "-"), arg_data.required)
 
-            cli_arg_type = get_cli_arg_type(arg_type)
+        return model_type_map
 
+    @classmethod
+    def get_model_arg(cls, type_class_map: dict) -> Type[BaseModel] | None:
+        return next(
+            (
+                type_class
+                for type_class in type_class_map
+                if (
+                    isinstance(type_class, type)
+                    and issubclass(type_class, BaseModel)
+                    and not issubclass(type_class, DataModel)
+                )
+            ),
+            None,
+        )
+
+    def add_argument(
+        self,
+        type_class_map: dict,
+        arg_name: str,
+        required: bool,
+    ) -> None:
+        if list in type_class_map:
+            type_class = type_class_map[list]
+            self.parser.add_argument(
+                f"--{arg_name}",
+                nargs="*",
+                type=type_class.inner_type if type_class.inner_type else str,
+                required=required,
+            )
+        elif bool in type_class_map:
+            self.parser.add_argument(f"--{arg_name}", type=bool_arg, required=required)
+        elif float in type_class_map:
+            self.parser.add_argument(f"--{arg_name}", type=float, required=required)
+        elif int in type_class_map:
+            self.parser.add_argument(f"--{arg_name}", type=int, required=required)
+        elif dict in type_class_map or self.get_model_arg(type_class_map):
+            self.parser.add_argument(f"--{arg_name}", type=dict_arg, required=required)
         else:
-            parser.add_argument(f"--{arg.replace('_', '-')}", type=cli_arg_type)
+            self.parser.add_argument(f"--{arg_name}", type=str, required=required)
 
-    return model_type_map
+    def build_model_arg_parser(self, model: type[BaseModel], required: bool) -> list[str]:
+        type_map = TypeUtils.get_model_types(model)
 
+        for attr, attr_data in type_map.items():
+            type_class_map = {
+                type_class.type_class: type_class for type_class in attr_data.type_classes
+            }
 
-def build_model_arg_parser(parser: argparse.ArgumentParser, model: type[BaseModel]) -> list[str]:
-    type_map = TypeUtils.get_model_types(model)
-    for arg, arg_types in type_map.items():
-        cli_arg_type = str
-        for arg_type in arg_types:
-            if arg_type == types.NoneType:
-                # handle case where generic type has been set to None
-                break
-            cli_arg_type = get_cli_arg_type(arg_type)
-        parser.add_argument(f"--{arg.replace('_', '-')}", type=cli_arg_type)
-    return list(type_map.keys())
+            if types.NoneType in type_class_map and len(attr_data.type_classes) == 1:
+                continue
 
+            self.add_argument(type_class_map, attr.replace("_", "-"), required)
 
-def get_cli_arg_type(arg_type):
-    if arg_type is bool:
-        return bool_arg
-    if arg_type in [str, float, int]:
-        return arg_type
-    return str
+        return list(type_map.keys())
 
 
 def log_path_arg(log_path: str) -> str | None:
@@ -84,6 +116,13 @@ def log_path_arg(log_path: str) -> str | None:
 
 def bool_arg(input: str) -> bool:
     return input.lower() in ["true", "1", "yes"]
+
+
+def dict_arg(input: str) -> dict:
+    try:
+        return json.loads(input)
+    except Exception as e:
+        raise argparse.ArgumentTypeError("Invalid json input for arg") from e
 
 
 def system_config_arg(config_path: str) -> SystemInfo:
@@ -224,9 +263,8 @@ def build_parser(
             help=f"Run {plugin_name} plugin",
         )
         try:
-            model_type_map = build_dynamic_arg_parser(
-                plugin_subparser, plugin_class.run, plugin_class
-            )
+            parser_builder = DynamicParserBuilder(plugin_subparser)
+            model_type_map = parser_builder.add_func_args(plugin_class.run, plugin_class)
         except Exception as e:
             print(f"Exception building arg parsers for {plugin_name}: {str(e)}")  # noqa: T201
         plugin_subparser_map[plugin_name] = (plugin_subparser, model_type_map)
@@ -312,7 +350,19 @@ def main(arg_input: Optional[list[str]] = None):
                     plugin_arg_map[cur_plugin].append(arg)
 
     parsed_args = parser.parse_args(top_level_args)
-    logger = setup_logger(parsed_args.log_level, parsed_args.log_path)
+
+    if parsed_args.log_path:
+        log_path = os.path.join(
+            parsed_args.log_path,
+            f"scraper_logs_{datetime.datetime.now().strftime('%Y_%m_%d-%I_%M_%S_%p')}",
+        )
+        os.makedirs(log_path)
+    else:
+        log_path = None
+
+    logger = setup_logger(parsed_args.log_level, log_path)
+    if log_path:
+        logger.info("Log path: %s", log_path)
 
     parsed_plugin_args = {}
     for plugin, plugin_args in plugin_arg_map.items():
@@ -358,6 +408,7 @@ def main(arg_input: Optional[list[str]] = None):
         plugin_configs=plugin_configs,
         connections=parsed_args.connection_config,
         system_info=system_info,
+        log_path=log_path,
     )
 
     plugin_executor.run_queue()

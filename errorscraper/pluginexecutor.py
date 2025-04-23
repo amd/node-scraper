@@ -1,4 +1,3 @@
-# Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
 from __future__ import annotations
 
 import copy
@@ -25,6 +24,7 @@ class PluginExecutor:
         system_info: Optional[SystemInfo] = None,
         logger: Optional[logging.Logger] = None,
         plugin_registry: Optional[PluginRegistry] = None,
+        log_path: Optional[str] = None,
     ):
 
         if logger is None:
@@ -49,6 +49,8 @@ class PluginExecutor:
 
         self.plugin_results = []
 
+        self.log_path = log_path
+
         if connections:
             for connection, connection_args in connections.items():
                 if connection not in self.plugin_registry.connection_managers:
@@ -69,8 +71,6 @@ class PluginExecutor:
         self.logger.info("System SKU: %s", self.system_info.sku)
         self.logger.info("System Platform: %s", self.system_info.platform)
         self.logger.info("System location: %s", self.system_info.location)
-
-        self.log_path = None
 
     def _merge_configs(self, plugin_configs: list[PluginConfig]) -> PluginConfig:
         merged_config = PluginConfig()
@@ -94,6 +94,7 @@ class PluginExecutor:
                     "system_info": self.system_info,
                     "logger": self.logger,
                     "queue_callback": self.plugin_queue.append,
+                    "log_path": self.log_path,
                 }
 
                 if plugin_class.CONNECTION_TYPE:
