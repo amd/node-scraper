@@ -70,9 +70,14 @@ class InBandConnectionManager(ConnectionManager[InBandConnection, SSHConnectionP
             return self.result
 
         if not self.connection_args or not isinstance(self.connection_args, SSHConnectionParams):
+            if not self.connection_args:
+                message = "No SSH credentials provided"
+            else:
+                message = "Invalide SSH creddentials provided"
+
             self._log_event(
                 category=EventCategory.RUNTIME,
-                description="No SSH credentials provided",
+                description=message,
                 priority=EventPriority.CRITICAL,
                 console_log=True,
             )

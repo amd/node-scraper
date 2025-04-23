@@ -183,7 +183,7 @@ def build_parser(
     parser.add_argument(
         "--sys-location",
         type=system_location_arg,
-        choices=[e.name for e in SystemLocation],
+        choices=[e for e in SystemLocation],
         default="LOCAL",
         help="Location of target system",
     )
@@ -191,7 +191,7 @@ def build_parser(
     parser.add_argument(
         "--sys-interaction-level",
         type=system_interaction_arg,
-        choices=[e.name for e in SystemInteractionLevel],
+        choices=[e for e in SystemInteractionLevel],
         default="INTERACTIVE",
         help="Specify system interaction level, used to determine the type of actions that plugins can perform",
     )
