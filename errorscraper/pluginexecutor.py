@@ -8,7 +8,7 @@ from typing import Optional, Type
 from pydantic import BaseModel
 
 from errorscraper.constants import DEFAULT_LOGGER
-from errorscraper.interfaces.connectionmanager import ConnectionManager
+from errorscraper.interfaces import ConnectionManager, PluginResultCollator
 from errorscraper.models import PluginConfig, SystemInfo
 from errorscraper.pluginregistry import PluginRegistry
 from errorscraper.typeutils import TypeUtils
@@ -25,6 +25,7 @@ class PluginExecutor:
         logger: Optional[logging.Logger] = None,
         plugin_registry: Optional[PluginRegistry] = None,
         log_path: Optional[str] = None,
+        result_collators: Optional[list[Type[PluginResultCollator]]] = None,
     ):
 
         if logger is None:
@@ -50,6 +51,8 @@ class PluginExecutor:
         self.plugin_results = []
 
         self.log_path = log_path
+
+        self.result_collators = result_collators
 
         if connections:
             for connection, connection_args in connections.items():
@@ -138,7 +141,7 @@ class PluginExecutor:
 
                         # TODO
                         # enable global substitution in collection and analysis args
-
+                    self.logger.info("-" * 50)
                     self.plugin_results.append(plugin_inst.run(**run_payload))
                 except Exception as e:
                     self.logger.exception(
@@ -150,3 +153,14 @@ class PluginExecutor:
             self.logger.info("Closing connections")
             for connection_manager in self.connection_library.values():
                 connection_manager.disconnect()
+
+            if self.result_collators:
+                for collator in self.result_collators:
+                    collator_inst = collator(logger=self.logger, log_path=self.log_path)
+                    collator_inst.collate_results(
+                        self.plugin_results,
+                        [
+                            connection_manager.result
+                            for connection_manager in self.connection_library.values()
+                        ],
+                    )
