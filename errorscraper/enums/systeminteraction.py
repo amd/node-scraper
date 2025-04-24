@@ -10,7 +10,7 @@ class SystemInteractionLevel(IntEnum):
     INTERACTIVE = 1  # enable actions that may modify state of the SUT
     DISRUPTIVE = 2  # enable actions that can interfere with driver or other core components
 
-    def __lt__(self, other) -> bool:
+    def __lt__(self, other: "SystemInteractionLevel") -> bool:
         if self.__class__ is other.__class__:
             return self.value < other.value
         return NotImplemented

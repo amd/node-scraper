@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from errorscraper.enums import EventCategory, EventPriority, ExecutionStatus
 from errorscraper.models import SystemInfo, TaskResult
+from errorscraper.typeutils import TypeUtils
 from errorscraper.utils import get_exception_traceback
 
 from .task import Task
@@ -78,6 +79,14 @@ class ConnectionManager(Task, Generic[TConnection, TConnectArg]):
             task_result_hooks=task_result_hooks,
             **kwargs,
         )
+
+        if isinstance(connection_args, dict):
+            generic_map = TypeUtils.get_generic_map(self.__class__)
+            connection_arg_model = generic_map.get(TConnectArg)
+            if not connection_arg_model:
+                raise ValueError("No model defined for connection args")
+
+            connection_args = connection_arg_model(**connection_args)
 
         self.connection_args = connection_args
         self.connection: TConnection | None = None
