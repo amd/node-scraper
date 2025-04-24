@@ -24,7 +24,7 @@ class FileModel(BaseModel):
             return value.encode("utf-8")
         return value
 
-    def log_model(self, log_path: str):
+    def log_model(self, log_path: str) -> None:
         """Log data model to a file
 
         Args:
@@ -34,7 +34,7 @@ class FileModel(BaseModel):
         with open(log_name, "wb") as log_file:
             log_file.write(self.file_contents)
 
-    def file_contents_str(self):
+    def file_contents_str(self) -> None:
         return self.file_contents.decode("utf-8")
 
 
@@ -60,7 +60,7 @@ class DataModel(BaseModel):
         with open(log_name, "w", encoding="utf-8") as log_file:
             log_file.write(self.model_dump_json(indent=2, exclude=exlude_fields))
 
-    def merge_data(self, input_data: "DataModel"):
+    def merge_data(self, input_data: "DataModel") -> None:
         """Merge data into current data"""
         pass
 

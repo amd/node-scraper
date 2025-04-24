@@ -13,7 +13,7 @@ class ExecutionStatus(enum.Enum):
     ERROR = 40
     EXECUTION_FAILURE = 50
 
-    def __lt__(self, other) -> bool:
+    def __lt__(self, other: 'ExecutionStatus') -> bool:
         if self.__class__ is other.__class__:
             return self.value < other.value
         return NotImplemented

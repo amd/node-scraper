@@ -11,7 +11,7 @@ class EventPriority(IntEnum):
     ERROR = 3
     CRITICAL = 4
 
-    def __lt__(self, other) -> bool:
+    def __lt__(self, other: 'EventPriority') -> bool:
         if self.__class__ is other.__class__:
             return self.value < other.value
         return NotImplemented

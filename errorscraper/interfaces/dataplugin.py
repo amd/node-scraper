@@ -240,7 +240,7 @@ class DataPlugin(
 
     def run(
         self,
-        collection: bool,
+        collection: bool = True,
         analysis: bool = True,
         max_event_priority_level: EventPriority | str = EventPriority.CRITICAL,
         system_interaction_level: SystemInteractionLevel | str = SystemInteractionLevel.INTERACTIVE,

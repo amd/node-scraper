@@ -2,7 +2,7 @@ import abc
 import copy
 import datetime
 import logging
-from typing import Optional
+from typing import Any, Optional
 
 from errorscraper.enums import EventCategory, EventPriority
 from errorscraper.models import Event, SystemInfo, TaskResult
@@ -28,7 +28,7 @@ class Task(abc.ABC):
         max_event_priority_level: EventPriority | str = EventPriority.CRITICAL,
         parent: Optional[str] = None,
         task_result_hooks: Optional[list[TaskResultHook]] = None,
-        **kwargs,
+        **kwargs: dict[str, Any],
     ):
         if logger is None:
             logger = logging.getLogger(self.__class__.__name__)
@@ -57,7 +57,7 @@ class Task(abc.ABC):
         elif isinstance(input_value, EventPriority):
             value: EventPriority = input_value
         else:
-            raise ValueError(f"Invalid type for max_event_priority_level: {type(value)}")
+            raise ValueError(f"Invalid type for max_event_priority_level: {type(input_value)}")
 
         self._max_event_priority_level = value
 
@@ -110,7 +110,7 @@ class Task(abc.ABC):
         priority: EventPriority,
         data: Optional[dict] = None,
         timestamp: Optional[datetime.datetime] = None,
-        console_log=False,
+        console_log: bool = False,
     ):
         event = self._build_event(
             category=category,
