@@ -15,6 +15,7 @@ from errorscraper.enums import SystemInteractionLevel, SystemLocation
 from errorscraper.models import DataModel, PluginConfig, SystemInfo
 from errorscraper.pluginexecutor import PluginExecutor
 from errorscraper.pluginregistry import PluginRegistry
+from errorscraper.resultcollators.tablesummary import TableSummary
 from errorscraper.typeutils import TypeUtils
 
 
@@ -286,7 +287,7 @@ def setup_logger(log_level: str, log_path: str | None) -> logging.Logger:
     logging.basicConfig(
         force=True,
         level=log_level,
-        format="%(asctime)25s %(levelname)10s %(name)25s [%(message)s]",
+        format="%(asctime)25s %(levelname)10s %(name)25s | %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S %Z",
         handlers=handlers,
         encoding="utf-8",
@@ -409,6 +410,7 @@ def main(arg_input: Optional[list[str]] = None):
         connections=parsed_args.connection_config,
         system_info=system_info,
         log_path=log_path,
+        result_collators=[TableSummary],
     )
 
     plugin_executor.run_queue()
