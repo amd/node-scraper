@@ -1,3 +1,4 @@
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -17,3 +18,8 @@ def system_info():
 @pytest.fixture
 def conn_mock():
     return MagicMock()
+
+
+@pytest.fixture
+def fixtures_path():
+    return Path(__file__).parent / "plugin/fixtures"

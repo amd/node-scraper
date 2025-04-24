@@ -1,0 +1,21 @@
+{
+  "arch_rel": "NAME=\"Arch Linux\"\nPRETTY_NAME=\"Arch Linux\"\nID=arch\nID_LIKE=arch\nVERSION_ID=20241124.0.282387",
+  "arch_package": "acl 2.3.2-1\nargon2 20190702-6\nattr 2.5.2-1",
+
+  "deb_rel": "PRETTY_NAME=\"Debian GNU/Linux 12 (bookworm)\"\nID=debian\nID_LIKE=debian\nVERSION_ID=\"12\"",
+  "debian_package": "adduser 3.134\napt 2.6.1\nbase-files 12.4+deb12u8\nbash 5.2.15-2+b7",
+
+  "ubuntu_rel": "DISTRIB_DESCRIPTION=\"Ubuntu 22.04.4 LTS\"\nPRETTY_NAME=\"Ubuntu 22.04.4 LTS\"\nID=ubuntu\nID_LIKE=debian\nVERSION_ID=\"22.04\"",
+  "ubuntu_package": "alternatives.x86_64 1.30-1.fc41\naudit-libs.x86_64 4.0.2-1.fc41\nauthselect.x86_64 1.5.0-8.fc41\nauthselect-libs.x86_64 1.5.0-8.fc41",
+
+  "centos_rel": "CentOS Linux release 8.4.2105\nPRETTY_NAME=\"CentOS Linux 8\"\nID=centos\nID_LIKE=\"rhel fedora\"\nVERSION_ID=\"8\"",
+  "centos_package": "acl.x86_64 2.2.53-1.el8\naudit-libs.x86_64 3.0-0.17.20191104git1c2f876.el8\nbind-export-libs.x86_64 32:9.11.26-3.el8",
+
+  "fedora_rel": "Fedora Linux release 41 (Container Image)\nPRETTY_NAME=\"Fedora Linux 41 (Container Image)\"\nID=fedora\nID_LIKE=fedora\nVERSION_ID=41",
+  "fedora_package": "alternatives.x86_64 1.31-1.fc41\naudit-libs.x86_64 4.0.3-1.fc41\nbzip2.x86_64 1.0.8-19.fc41",
+
+  "ol8_rel": "Oracle Linux Server release 8.8\nPRETTY_NAME=\"Oracle Linux Server 8.8\"\nID=ol\nID_LIKE=\"rhel fedora\"\nVERSION_ID=\"8.8\"",
+  "ol8_package": "NetworkManager.x86_64 1:1.40.16-15.0.1.el8_9\nNetworkManager-tui.x86_64 1:1.40.16-15.0.1.el8_9",
+
+  "windows_package": "Name Version\nMicrosoft Policy Platform 68.1.9086.1017"
+}
