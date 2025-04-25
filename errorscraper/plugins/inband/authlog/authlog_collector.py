@@ -77,15 +77,6 @@ class AuthLogCollector(InBandDataCollector[AuthLogDataModel, None]):
             # neither auth.log nor secure log exists
             else:
                 self._handle_command_failure(command_artifact=secure_log_exists, log_name=None)
-                self._log_event(
-                    category=EventCategory.OS,
-                    description="Error running last command",
-                    data={"command": res.command, "exit_code": res.exit_code},
-                    priority=EventPriority.ERROR,
-                    console_log=True,
-                )
-                self.result.message = "Failed to run last command"
-                self.result.status = ExecutionStatus.EXECUTION_FAILURE
                 return self.result, None
 
         log_data = AuthLogDataModel(log_content=log_content)
