@@ -13,7 +13,6 @@ from errorscraper.generictypes import TAnalyzeArg, TDataModel
 from errorscraper.interfaces.task import Task
 from errorscraper.models import TaskResult
 from errorscraper.models.datamodel import DataModel
-from errorscraper.typeutils import TypeUtils
 from errorscraper.utils import get_exception_traceback
 
 
@@ -40,9 +39,10 @@ def analyze_decorator(func: Callable[..., TaskResult]) -> Callable[..., TaskResu
         else:
             try:
                 if isinstance(args, dict):
-                    arg_types = TypeUtils.get_func_arg_types(func)
-                    analyze_arg_model = arg_types["args"]
-                    args = analyze_arg_model(**args)
+                    # using Pydatinc model class
+                    model_cls = func.__annotations__.get("args")
+                    if isinstance(model_cls, type):
+                        args = model_cls(**args)
 
                 func(analyzer, data, args)
             except ValidationError as exception:
