@@ -147,26 +147,6 @@ def json_arg(json_path: str) -> dict:
     return data
 
 
-def system_location_arg(system_location: str) -> SystemLocation:
-    try:
-        location = getattr(SystemLocation, system_location)
-    except Exception as e:
-        raise argparse.ArgumentTypeError("Invalid input for system location") from e
-
-    return location
-
-
-def system_interaction_arg(system_interaction: str) -> SystemInteractionLevel:
-    try:
-        interaction_level = getattr(SystemInteractionLevel, system_interaction)
-    except Exception as e:
-        raise argparse.ArgumentTypeError(
-            f"Invalid input for system interaction level: {system_interaction}"
-        ) from e
-
-    return interaction_level
-
-
 def build_parser(
     plugin_reg: PluginRegistry,
 ) -> tuple[argparse.ArgumentParser, dict[str, tuple[argparse.ArgumentParser, dict]]]:
@@ -183,16 +163,16 @@ def build_parser(
 
     parser.add_argument(
         "--sys-location",
-        type=system_location_arg,
-        choices=[e for e in SystemLocation],
+        type=str.upper,
+        choices=[e.name for e in SystemLocation],
         default="LOCAL",
         help="Location of target system",
     )
 
     parser.add_argument(
         "--sys-interaction-level",
-        type=system_interaction_arg,
-        choices=[e for e in SystemInteractionLevel],
+        type=str.upper,
+        choices=[e.name for e in SystemInteractionLevel],
         default="INTERACTIVE",
         help="Specify system interaction level, used to determine the type of actions that plugins can perform",
     )
@@ -316,7 +296,12 @@ def get_system_info(args) -> SystemInfo:
         system_info.platform = args.sys_platform
 
     if args.sys_location:
-        system_info.location = args.sys_location
+        try:
+            location = getattr(SystemLocation, args.sys_location)
+        except Exception as e:
+            raise argparse.ArgumentTypeError("Invalid input for system location") from e
+
+        system_info.location = location
 
     return system_info
 
@@ -352,6 +337,13 @@ def main(arg_input: Optional[list[str]] = None):
 
     parsed_args = parser.parse_args(top_level_args)
 
+    try:
+        system_interaction_level = getattr(
+            SystemInteractionLevel, parsed_args.sys_interaction_level
+        )
+    except Exception as e:
+        raise argparse.ArgumentTypeError("Invalid input for system interaction level") from e
+
     if parsed_args.log_path:
         log_path = os.path.join(
             parsed_args.log_path,
@@ -374,9 +366,9 @@ def main(arg_input: Optional[list[str]] = None):
 
     system_info = get_system_info(parsed_args)
 
-    base_config = PluginConfig()
+    base_config = PluginConfig(result_collators={str(TableSummary.__name__): {}})
 
-    base_config.global_args["system_interaction_level"] = parsed_args.sys_interaction_level
+    base_config.global_args["system_interaction_level"] = system_interaction_level
 
     plugin_configs = [base_config]
 
@@ -410,7 +402,6 @@ def main(arg_input: Optional[list[str]] = None):
         connections=parsed_args.connection_config,
         system_info=system_info,
         log_path=log_path,
-        result_collators=[TableSummary],
     )
 
     plugin_executor.run_queue()
