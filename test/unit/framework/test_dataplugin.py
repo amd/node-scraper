@@ -24,6 +24,9 @@ class StandardDataModel(DataModel):
 
 
 class MockConnectionManager(ConnectionManager):
+    # Class variable to store the mock connector
+    mock_connector = None
+
     def __init__(
         self, system_info=None, logger=None, parent=None, task_hooks=None, connection_args=None
     ):
@@ -34,7 +37,12 @@ class MockConnectionManager(ConnectionManager):
             task_hooks=task_hooks,
             connection_args=connection_args,
         )
-        self.connection = MagicMock()
+        # Use the class variable if available, otherwise create a new MagicMock
+        self.connection = (
+            MockConnectionManager.mock_connector
+            if MockConnectionManager.mock_connector
+            else MagicMock()
+        )
         self.result = TaskResult(status=ExecutionStatus.OK)
 
     def connect(self):
@@ -74,6 +82,15 @@ def system_info():
 @pytest.fixture
 def logger():
     return logging.getLogger("test_logger")
+
+
+@pytest.fixture(autouse=True)
+def setup_mock_connector(conn_mock):
+    # Set the class variable to the conn_mock fixture
+    MockConnectionManager.mock_connector = conn_mock
+    yield
+    # Reset after the test
+    MockConnectionManager.mock_connector = None
 
 
 @pytest.fixture
@@ -133,7 +150,7 @@ class TestDataPluginCore:
         assert isinstance(plugin.data, StandardDataModel)
         assert plugin.data.value == "string_value"
 
-    def test_collect_creates_connection_manager(self, plugin):
+    def test_collect_creates_connection_manager(self, plugin, conn_mock):
         assert plugin.connection_manager is None
 
         with patch.object(BaseDataCollector, "collect_data") as mock_collect:
@@ -142,6 +159,7 @@ class TestDataPluginCore:
 
             assert plugin.connection_manager is not None
             assert isinstance(plugin.connection_manager, MockConnectionManager)
+            assert plugin.connection_manager.connection is conn_mock
             mock_collect.assert_called_once()
             assert result.status == ExecutionStatus.OK
 
