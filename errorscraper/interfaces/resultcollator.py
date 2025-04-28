@@ -13,7 +13,6 @@ class PluginResultCollator(abc.ABC):
         self,
         logger: Optional[logging.Logger] = None,
         log_path: Optional[str] = None,
-        **kwargs,
     ):
         if logger is None:
             logger = logging.getLogger(DEFAULT_LOGGER)

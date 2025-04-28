@@ -6,23 +6,33 @@ from typing import Optional
 
 import errorscraper.connection as internal_connections
 import errorscraper.plugins as internal_plugins
-from errorscraper.interfaces.connectionmanager import ConnectionManager
-from errorscraper.interfaces.plugin import PluginInterface
+import errorscraper.resultcollators as internal_collators
+from errorscraper.interfaces import (
+    ConnectionManager,
+    PluginInterface,
+    PluginResultCollator,
+)
 
 
 class PluginRegistry:
 
     def __init__(self, plugin_pkg: Optional[list[types.ModuleType]] = None) -> None:
-        self.plugin_pkg = [internal_plugins, internal_connections]
+        self.plugin_pkg = [internal_plugins, internal_connections, internal_collators]
         if plugin_pkg:
             self.plugin_pkg += plugin_pkg
 
-        self.plugins: dict[str, type[PluginInterface]] = self.load_plugins(PluginInterface)
-        self.connection_managers: dict[str, type[ConnectionManager]] = self.load_plugins(
-            ConnectionManager
+        self.plugins: dict[str, type[PluginInterface]] = PluginRegistry.load_plugins(
+            PluginInterface, self.plugin_pkg
+        )
+        self.connection_managers: dict[str, type[ConnectionManager]] = PluginRegistry.load_plugins(
+            ConnectionManager, self.plugin_pkg
+        )
+        self.result_collators: dict[str, type[PluginResultCollator]] = PluginRegistry.load_plugins(
+            PluginResultCollator, self.plugin_pkg
         )
 
-    def load_plugins(self, base_class):
+    @staticmethod
+    def load_plugins(base_class, search_modules):
         registry = {}
 
         def _recurse_pkg(pkg: types.ModuleType, base_class):
@@ -40,6 +50,6 @@ class PluginRegistry:
                 if ispkg:
                     _recurse_pkg(module, base_class)
 
-        for pkg in self.plugin_pkg:
+        for pkg in search_modules:
             _recurse_pkg(pkg, base_class)
         return registry

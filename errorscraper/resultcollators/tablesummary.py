@@ -42,4 +42,4 @@ class TableSummary(PluginResultCollator):
             tables += f"\n\n{table}"
 
         if tables:
-            self.logger.info(tables + "\n")
+            self.logger.info("%s\n", tables)

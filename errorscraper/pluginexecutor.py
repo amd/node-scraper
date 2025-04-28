@@ -8,7 +8,7 @@ from typing import Optional, Type
 from pydantic import BaseModel
 
 from errorscraper.constants import DEFAULT_LOGGER
-from errorscraper.interfaces import ConnectionManager, PluginResultCollator
+from errorscraper.interfaces import ConnectionManager
 from errorscraper.models import PluginConfig, SystemInfo
 from errorscraper.pluginregistry import PluginRegistry
 from errorscraper.typeutils import TypeUtils
@@ -25,7 +25,6 @@ class PluginExecutor:
         logger: Optional[logging.Logger] = None,
         plugin_registry: Optional[PluginRegistry] = None,
         log_path: Optional[str] = None,
-        result_collators: Optional[list[Type[PluginResultCollator]]] = None,
     ):
 
         if logger is None:
@@ -46,13 +45,13 @@ class PluginExecutor:
 
         self.plugin_queue = deque(plugin_config.plugins.items())
 
+        self.result_collators = plugin_config.result_collators
+
         self.connection_library: dict[type[ConnectionManager], ConnectionManager] = {}
 
         self.plugin_results = []
 
         self.log_path = log_path
-
-        self.result_collators = result_collators
 
         if connections:
             for connection, connection_args in connections.items():
@@ -80,6 +79,7 @@ class PluginExecutor:
         for config in plugin_configs:
             merged_config.global_args.update(config.global_args)
             merged_config.plugins.update(config.plugins)
+            merged_config.result_collators.update(config.result_collators)
 
         return merged_config
 
@@ -155,12 +155,22 @@ class PluginExecutor:
                 connection_manager.disconnect()
 
             if self.result_collators:
-                for collator in self.result_collators:
-                    collator_inst = collator(logger=self.logger, log_path=self.log_path)
+                self.logger.info("Running result collators")
+                for collator, collator_args in self.result_collators.items():
+                    collator_class = self.plugin_registry.result_collators.get(collator)
+                    if collator_class is None:
+                        self.logger.warning(
+                            "No result collator found in registry for name: %s", collator
+                        )
+                        continue
+
+                    self.logger.info("Running %s result collator", collator)
+                    collator_inst = collator_class(logger=self.logger, log_path=self.log_path)
                     collator_inst.collate_results(
                         self.plugin_results,
                         [
                             connection_manager.result
                             for connection_manager in self.connection_library.values()
                         ],
+                        **collator_args,
                     )
