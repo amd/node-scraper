@@ -40,7 +40,7 @@ class LocalShell(InBandConnection):
             exit_code=res.returncode,
         )
 
-    def read_file(self, filename: str, encoding: str ="utf-8", strip: bool = True) -> FileArtifact:
+    def read_file(self, filename: str, encoding: str = "utf-8", strip: bool = True) -> FileArtifact:
         """Read a local file into a FileArtifact
 
         Args:

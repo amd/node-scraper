@@ -51,7 +51,7 @@ def analyze_decorator(func: Callable[..., TaskResult]) -> Callable[..., TaskResu
                     )
                     if not analyze_arg_model:
                         raise ValueError("No model defined for analysis args")
-                    args = analyze_arg_model(**args) # type: ignore
+                    args = analyze_arg_model(**args)  # type: ignore
 
                 func(analyzer, data, args)
             except ValidationError as exception:
