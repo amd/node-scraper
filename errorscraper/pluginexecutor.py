@@ -1,4 +1,3 @@
-# Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
 from __future__ import annotations
 
 import copy
@@ -9,7 +8,7 @@ from typing import Optional, Type
 from pydantic import BaseModel
 
 from errorscraper.constants import DEFAULT_LOGGER
-from errorscraper.interfaces.connectionmanager import ConnectionManager
+from errorscraper.interfaces import ConnectionManager
 from errorscraper.models import PluginConfig, SystemInfo
 from errorscraper.pluginregistry import PluginRegistry
 from errorscraper.typeutils import TypeUtils
@@ -25,6 +24,7 @@ class PluginExecutor:
         system_info: Optional[SystemInfo] = None,
         logger: Optional[logging.Logger] = None,
         plugin_registry: Optional[PluginRegistry] = None,
+        log_path: Optional[str] = None,
     ):
 
         if logger is None:
@@ -45,9 +45,13 @@ class PluginExecutor:
 
         self.plugin_queue = deque(plugin_config.plugins.items())
 
+        self.result_collators = plugin_config.result_collators
+
         self.connection_library: dict[type[ConnectionManager], ConnectionManager] = {}
 
         self.plugin_results = []
+
+        self.log_path = log_path
 
         if connections:
             for connection, connection_args in connections.items():
@@ -70,13 +74,12 @@ class PluginExecutor:
         self.logger.info("System Platform: %s", self.system_info.platform)
         self.logger.info("System location: %s", self.system_info.location)
 
-        self.log_path = None
-
     def _merge_configs(self, plugin_configs: list[PluginConfig]) -> PluginConfig:
         merged_config = PluginConfig()
         for config in plugin_configs:
             merged_config.global_args.update(config.global_args)
             merged_config.plugins.update(config.plugins)
+            merged_config.result_collators.update(config.result_collators)
 
         return merged_config
 
@@ -94,6 +97,7 @@ class PluginExecutor:
                     "system_info": self.system_info,
                     "logger": self.logger,
                     "queue_callback": self.plugin_queue.append,
+                    "log_path": self.log_path,
                 }
 
                 if plugin_class.CONNECTION_TYPE:
@@ -137,7 +141,7 @@ class PluginExecutor:
 
                         # TODO
                         # enable global substitution in collection and analysis args
-
+                    self.logger.info("-" * 50)
                     self.plugin_results.append(plugin_inst.run(**run_payload))
                 except Exception as e:
                     self.logger.exception(
@@ -149,3 +153,24 @@ class PluginExecutor:
             self.logger.info("Closing connections")
             for connection_manager in self.connection_library.values():
                 connection_manager.disconnect()
+
+            if self.result_collators:
+                self.logger.info("Running result collators")
+                for collator, collator_args in self.result_collators.items():
+                    collator_class = self.plugin_registry.result_collators.get(collator)
+                    if collator_class is None:
+                        self.logger.warning(
+                            "No result collator found in registry for name: %s", collator
+                        )
+                        continue
+
+                    self.logger.info("Running %s result collator", collator)
+                    collator_inst = collator_class(logger=self.logger, log_path=self.log_path)
+                    collator_inst.collate_results(
+                        self.plugin_results,
+                        [
+                            connection_manager.result
+                            for connection_manager in self.connection_library.values()
+                        ],
+                        **collator_args,
+                    )

@@ -4,15 +4,16 @@ from __future__ import annotations
 import abc
 import inspect
 from functools import wraps
-from typing import Callable, Generic, Optional, Type
+from typing import Any, Callable, Generic, Optional, Type
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from errorscraper.enums import EventCategory, EventPriority, ExecutionStatus
 from errorscraper.generictypes import TAnalyzeArg, TDataModel
 from errorscraper.interfaces.task import Task
 from errorscraper.models import TaskResult
 from errorscraper.models.datamodel import DataModel
+from errorscraper.typeutils import TypeUtils
 from errorscraper.utils import get_exception_traceback
 
 
@@ -39,10 +40,18 @@ def analyze_decorator(func: Callable[..., TaskResult]) -> Callable[..., TaskResu
         else:
             try:
                 if isinstance(args, dict):
-                    # using Pydatinc model class
-                    model_cls = func.__annotations__.get("args")
-                    if isinstance(model_cls, type):
-                        args = model_cls(**args)
+                    arg_types = TypeUtils.get_func_arg_types(func)
+                    analyze_arg_model = next(
+                        (
+                            type_class.type_class
+                            for type_class in arg_types["args"].type_classes
+                            if issubclass(type_class.type_class, BaseModel)
+                        ),
+                        None,
+                    )
+                    if not analyze_arg_model:
+                        raise ValueError("No model defined for analysis args")
+                    args = analyze_arg_model(**args)  # type: ignore
 
                 func(analyzer, data, args)
             except ValidationError as exception:
@@ -81,7 +90,7 @@ class DataAnalyzer(Task, abc.ABC, Generic[TDataModel, TAnalyzeArg]):
 
     DATA_MODEL: Type[TDataModel]
 
-    def __init_subclass__(cls, **kwargs) -> None:
+    def __init_subclass__(cls, **kwargs: dict[str, Any]) -> None:
         super().__init_subclass__(**kwargs)
         if not inspect.isabstract(cls) and cls.DATA_MODEL is None:
             raise TypeError(f"No data model set for {cls.__name__}")
