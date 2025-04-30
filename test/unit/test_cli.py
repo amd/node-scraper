@@ -20,15 +20,18 @@ def test_log_path_arg():
         ("true", True),
         ("TRUE", True),
         ("True", True),
-        ("yes", True),
-        ("1", True),
         ("false", False),
-        ("0", False),
-        ("no", False),
+        ("False", False),
+        ("FALSE", False),
     ],
 )
 def test_bool_arg(arg_input, exp_output):
     assert cli.bool_arg(arg_input) == exp_output
+
+
+def test_bool_arg_exception():
+    with pytest.raises(argparse.ArgumentTypeError):
+        cli.bool_arg("invalid")
 
 
 def test_dict_arg():

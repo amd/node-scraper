@@ -110,7 +110,9 @@ class DynamicParserBuilder:
                 required=required,
             )
         elif bool in type_class_map:
-            self.parser.add_argument(f"--{arg_name}", type=bool_arg, required=required)
+            self.parser.add_argument(
+                f"--{arg_name}", type=bool_arg, required=required, choices=[True, False]
+            )
         elif float in type_class_map:
             self.parser.add_argument(f"--{arg_name}", type=float, required=required)
         elif int in type_class_map:
@@ -168,7 +170,11 @@ def bool_arg(str_input: str) -> bool:
     Returns:
         bool: bool value for string
     """
-    return str_input.lower() in ["true", "1", "yes"]
+    if str_input.lower() == "true":
+        return True
+    elif str_input.lower() == "false":
+        return False
+    raise argparse.ArgumentTypeError("Invalid input, boolean value (True or False) expected")
 
 
 def dict_arg(str_input: str) -> dict:
