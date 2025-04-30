@@ -19,6 +19,8 @@ from errorscraper.pluginregistry import PluginRegistry
 from errorscraper.resultcollators.tablesummary import TableSummary
 from errorscraper.typeutils import TypeUtils
 
+META_VAR_MAP = {int: "INT", bool: "BOOL", dict: "JSON_STRING", float: "FLOAT", str: "STRING"}
+
 
 class DynamicParserBuilder:
     """Dynamically build an argparse parser based on function type annotations or pydantic model types"""
@@ -49,8 +51,8 @@ class DynamicParserBuilder:
                 type_class.type_class: type_class for type_class in arg_data.type_classes
             }
 
-            # handle case where generic type has been set to None
-            if types.NoneType in type_class_map and len(arg_data.type_classes) == 1:
+            # skip args where generic type has been set to None
+            if types.NoneType in type_class_map:
                 continue
 
             model_arg = self.get_model_arg(type_class_map)
@@ -108,19 +110,35 @@ class DynamicParserBuilder:
                 nargs="*",
                 type=type_class.inner_type if type_class.inner_type else str,
                 required=required,
+                metavar=META_VAR_MAP.get(type_class.inner_type, "STRING"),
             )
         elif bool in type_class_map:
             self.parser.add_argument(
-                f"--{arg_name}", type=bool_arg, required=required, choices=[True, False]
+                f"--{arg_name}",
+                type=bool_arg,
+                required=required,
+                choices=[True, False],
             )
         elif float in type_class_map:
-            self.parser.add_argument(f"--{arg_name}", type=float, required=required)
+            self.parser.add_argument(
+                f"--{arg_name}", type=float, required=required, metavar=META_VAR_MAP[float]
+            )
         elif int in type_class_map:
-            self.parser.add_argument(f"--{arg_name}", type=int, required=required)
+            self.parser.add_argument(
+                f"--{arg_name}", type=int, required=required, metavar=META_VAR_MAP[int]
+            )
+        elif str in type_class_map:
+            self.parser.add_argument(
+                f"--{arg_name}", type=str, required=required, metavar=META_VAR_MAP[str]
+            )
         elif dict in type_class_map or self.get_model_arg(type_class_map):
-            self.parser.add_argument(f"--{arg_name}", type=dict_arg, required=required)
+            self.parser.add_argument(
+                f"--{arg_name}", type=dict_arg, required=required, metavar=META_VAR_MAP[dict]
+            )
         else:
-            self.parser.add_argument(f"--{arg_name}", type=str, required=required)
+            self.parser.add_argument(
+                f"--{arg_name}", type=str, required=required, metavar=META_VAR_MAP[str]
+            )
 
     def build_model_arg_parser(self, model: type[BaseModel], required: bool) -> list[str]:
         """Add args to a parser based on attributes of a pydantic model
@@ -262,9 +280,7 @@ def build_parser(
     )
 
     parser.add_argument(
-        "--sys-name",
-        default=platform.node(),
-        help="System name",
+        "--sys-name", default=platform.node(), help="System name", metavar=META_VAR_MAP[str]
     )
 
     parser.add_argument(
@@ -288,6 +304,7 @@ def build_parser(
         type=str.upper,
         required=False,
         help="Manually specify SKU of system",
+        metavar=META_VAR_MAP[str],
     )
 
     parser.add_argument(
@@ -295,6 +312,7 @@ def build_parser(
         type=str,
         required=False,
         help="Specify system platform",
+        metavar=META_VAR_MAP[str],
     )
 
     parser.add_argument(
@@ -302,6 +320,7 @@ def build_parser(
         type=ModelArgHandler(PluginConfig).process_file_arg,
         required=False,
         help="Path to plugin config json",
+        metavar=META_VAR_MAP[str],
     )
 
     parser.add_argument(
@@ -309,6 +328,7 @@ def build_parser(
         type=ModelArgHandler(SystemInfo).process_file_arg,
         required=False,
         help="Path to system config json",
+        metavar=META_VAR_MAP[str],
     )
 
     parser.add_argument(
@@ -316,13 +336,15 @@ def build_parser(
         type=json_arg,
         required=False,
         help="Path to system config json",
+        metavar=META_VAR_MAP[str],
     )
 
     parser.add_argument(
         "--log-path",
         default=".",
         type=log_path_arg,
-        help="Specifies local path for error scraper logs",
+        help="Specifies local path for error scraper logs, use 'None' to disable logging",
+        metavar=META_VAR_MAP[str],
     )
 
     parser.add_argument(
