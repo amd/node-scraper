@@ -41,7 +41,7 @@ class MockConnectionManager(ConnectionManager):
         return self.result
 
     def disconnect(self):
-        return TaskResult(status=ExecutionStatus.OK)
+        pass
 
 
 class BaseDataCollector(DataCollector):
