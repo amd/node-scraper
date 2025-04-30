@@ -1,4 +1,3 @@
-import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -8,19 +7,11 @@ from errorscraper.interfaces.connectionmanager import ConnectionManager
 from errorscraper.interfaces.dataanalyzertask import DataAnalyzer
 from errorscraper.interfaces.datacollectortask import DataCollector
 from errorscraper.interfaces.dataplugin import DataPlugin
-from errorscraper.models import DataModel, SystemInfo, TaskResult
+from errorscraper.models import DataModel, TaskResult
 
 
 class StandardDataModel(DataModel):
     value: str = "test"
-
-    @classmethod
-    def import_model(cls, model_input):
-        if isinstance(model_input, dict):
-            return cls(**model_input)
-        elif isinstance(model_input, str):
-            return cls(value=model_input)
-        return cls()
 
 
 class MockConnectionManager(ConnectionManager):
@@ -72,16 +63,6 @@ class CoreDataPlugin(DataPlugin):
     CONNECTION_TYPE = MockConnectionManager
     COLLECTOR = BaseDataCollector
     ANALYZER = StandardAnalyzer
-
-
-@pytest.fixture
-def system_info():
-    return SystemInfo(name="TestSystem")
-
-
-@pytest.fixture
-def logger():
-    return logging.getLogger("test_logger")
 
 
 @pytest.fixture(autouse=True)
@@ -144,11 +125,6 @@ class TestDataPluginCore:
         plugin.data = {"value": "dict_value"}
         assert isinstance(plugin.data, StandardDataModel)
         assert plugin.data.value == "dict_value"
-
-        # Test setting with string
-        plugin.data = "string_value"
-        assert isinstance(plugin.data, StandardDataModel)
-        assert plugin.data.value == "string_value"
 
     def test_collect_creates_connection_manager(self, plugin, conn_mock):
         assert plugin.connection_manager is None
@@ -299,3 +275,41 @@ class TestDataPluginCore:
             mock_analyze.assert_called_once_with(
                 max_event_priority_level=EventPriority.ERROR, analysis_args=analysis_args, data=data
             )
+
+    def test_collect_preserve_connection(self, plugin_with_conn):
+        """Test the behavior of preserve_connection parameter in collect method."""
+        # Test with preserve_connection=True
+        with patch.object(BaseDataCollector, "collect_data") as mock_collect:
+            with patch.object(MockConnectionManager, "disconnect") as mock_disconnect:
+                mock_collect.return_value = (
+                    TaskResult(status=ExecutionStatus.OK),
+                    StandardDataModel(),
+                )
+
+                # Call collect with preserve_connection=True
+                result = plugin_with_conn.collect(preserve_connection=True)
+
+                # Verify collect_data was called and result is OK
+                mock_collect.assert_called_once()
+                assert result.status == ExecutionStatus.OK
+
+                # Verify disconnect was NOT called when preserve_connection=True
+                mock_disconnect.assert_not_called()
+
+        # Test with preserve_connection=False (default)
+        with patch.object(BaseDataCollector, "collect_data") as mock_collect:
+            with patch.object(MockConnectionManager, "disconnect") as mock_disconnect:
+                mock_collect.return_value = (
+                    TaskResult(status=ExecutionStatus.OK),
+                    StandardDataModel(),
+                )
+
+                # Call collect with preserve_connection=False (default)
+                result = plugin_with_conn.collect(preserve_connection=False)
+
+                # Verify collect_data was called and result is OK
+                mock_collect.assert_called_once()
+                assert result.status == ExecutionStatus.OK
+
+                # Verify disconnect WAS called when preserve_connection=False
+                mock_disconnect.assert_called_once()

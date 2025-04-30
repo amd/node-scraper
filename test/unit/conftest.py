@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -23,3 +24,8 @@ def conn_mock():
 @pytest.fixture
 def fixtures_path():
     return Path(__file__).parent / "plugin/fixtures"
+
+
+@pytest.fixture
+def logger():
+    return logging.getLogger("test_logger")
