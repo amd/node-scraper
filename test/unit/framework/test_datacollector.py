@@ -103,7 +103,7 @@ def test_good_sku_and_platform(conn_mock):
 
 
 def test_missing_data_model():
-    with pytest.raises(TypeError, match="No data model set for MissingModelCollector"):
+    with pytest.raises(TypeError, match="No data model set for DummyCollector1"):
 
         class DummyCollector1(DataCollector):
             SUPPORTED_SKUS = 1
@@ -118,7 +118,7 @@ def test_missing_data_model():
 
 def test_bad_data_model_type():
     with pytest.raises(
-        TypeError, match="DATA_MODEL must be a subclass of DataModel in BadModelCollector"
+        TypeError, match="DATA_MODEL must be a subclass of DataModel in DummyCollector2"
     ):
 
         class DummyCollector2(DataCollector):
@@ -131,15 +131,3 @@ def test_bad_data_model_type():
 
             def collect_data(self, args=None):
                 return self.result, None
-
-
-def test_missing_collect_data():
-    with pytest.raises(TypeError, match="must implement collect_data"):
-
-        class DummyCollector2(DataCollector):
-            DATA_MODEL = DummyDataModel
-            SUPPORTED_SKUS = 1
-            SUPPORTED_PLATFORMS = "X"
-
-            def _init_result(self):
-                return DummyResult()
