@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import platform
+import signal
 import sys
 import types
 from typing import Callable, Generic, Optional, Type
@@ -539,9 +540,15 @@ def process_args(
     return (top_level_args, plugin_arg_map)
 
 
+def _on_sigint(signum, frame):
+    raise KeyboardInterrupt
+
+
 def main(arg_input: Optional[list[str]] = None):
     if arg_input is None:
         arg_input = sys.argv[1:]
+
+    signal.signal(signal.SIGINT, _on_sigint)
     plugin_reg = PluginRegistry()
     parser, plugin_subparser_map = build_parser(plugin_reg)
 
@@ -579,7 +586,11 @@ def main(arg_input: Optional[list[str]] = None):
         log_path=log_path,
     )
 
-    plugin_executor.run_queue()
+    try:
+        plugin_executor.run_queue()
+    except KeyboardInterrupt:
+        logger.info("Received Ctrl+C. Shutting down...")
+        sys.exit(0)
 
 
 if __name__ == "__main__":
