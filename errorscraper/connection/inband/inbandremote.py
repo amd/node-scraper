@@ -1,6 +1,6 @@
-# Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
 import os
 import socket
+from typing import Type
 
 import paramiko
 from paramiko.ssh_exception import (
@@ -20,13 +20,15 @@ class SSHConnectionError(Exception):
 class RemoteShell(InBandConnection):
     """Utility class for running shell commands"""
 
+    host_key_policy: Type[paramiko.MissingHostKeyPolicy] = paramiko.RejectPolicy
+
     def __init__(
         self,
         ssh_params: SSHConnectionParams,
     ) -> None:
         self.ssh_params = ssh_params
         self.client = paramiko.SSHClient()
-        self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        self.client.set_missing_host_key_policy(self.host_key_policy())
 
     def connect_ssh(self):
         try:
@@ -48,18 +50,18 @@ class RemoteShell(InBandConnection):
             )
         except socket.timeout:
             raise SSHConnectionError("SSH Request timeout") from socket.timeout
-        except socket.gaierror:
-            raise SSHConnectionError("Hostname could not be resolved") from socket.gaierror
-        except AuthenticationException:
-            raise SSHConnectionError(" SSH Authentication failed") from AuthenticationException
-        except BadHostKeyException:
-            raise SSHConnectionError("Unable to verify server's host key") from BadHostKeyException
-        except ConnectionResetError:
-            raise SSHConnectionError("Connection reset by peer") from ConnectionResetError
-        except SSHException:
-            raise SSHConnectionError("Unable to establish SSH connection") from SSHException
-        except EOFError:
-            raise SSHConnectionError("EOFError during SSH connection") from EOFError
+        except socket.gaierror as e:
+            raise SSHConnectionError("Hostname could not be resolved") from e
+        except AuthenticationException as e:
+            raise SSHConnectionError("SSH Authentication failed") from e
+        except BadHostKeyException as e:
+            raise SSHConnectionError("Unable to verify server's host key") from e
+        except ConnectionResetError as e:
+            raise SSHConnectionError("Connection reset by peer") from e
+        except SSHException as e:
+            raise SSHConnectionError("Unable to establish SSH connection") from e
+        except EOFError as e:
+            raise SSHConnectionError("EOFError during SSH connection") from e
         except Exception as e:
             raise e
 
@@ -85,7 +87,7 @@ class RemoteShell(InBandConnection):
             contents = remote_file.read().decode(encoding=encoding, errors="ignore")
 
         return FileArtifact(
-            filename=os.path.interfacesname(filename),
+            filename=os.path.basename(filename),
             contents=contents.strip() if strip else contents,
         )
 

@@ -14,8 +14,8 @@ def package_analyzer(system_info):
 
 
 @pytest.fixture
-def package_data(fixtures_path):
-    with (fixtures_path / "package_example_data.json").open() as fid:
+def package_data(plugin_fixtures_path):
+    with (plugin_fixtures_path / "package_example_data.json").open() as fid:
         return json.load(fid)
 
 

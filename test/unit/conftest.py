@@ -22,10 +22,15 @@ def conn_mock():
 
 
 @pytest.fixture
-def fixtures_path():
+def plugin_fixtures_path():
     return Path(__file__).parent / "plugin/fixtures"
 
 
 @pytest.fixture
+
 def logger():
     return logging.getLogger("test_logger")
+
+def framework_fixtures_path():
+    return Path(__file__).parent / "fixtures"
+
