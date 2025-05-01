@@ -11,10 +11,11 @@ from pydantic import BaseModel
 
 from errorscraper.enums import EventCategory, EventPriority, ExecutionStatus
 from errorscraper.models import SystemInfo, TaskResult
+from errorscraper.typeutils import TypeUtils
 from errorscraper.utils import get_exception_traceback
 
 from .task import Task
-from .taskhook import TaskHook
+from .taskresulthook import TaskResultHook
 
 
 def connect_decorator(func: Callable[..., TaskResult]) -> Callable[..., TaskResult]:
@@ -66,7 +67,7 @@ class ConnectionManager(Task, Generic[TConnection, TConnectArg]):
         logger: Optional[logging.Logger] = None,
         max_event_priority_level: EventPriority | str = EventPriority.CRITICAL,
         parent: Optional[str] = None,
-        task_hooks: list[TaskHook] | types.NoneType = None,
+        task_result_hooks: list[TaskResultHook] | types.NoneType = None,
         connection_args: Optional[TConnectArg | dict] = None,
         **kwargs,
     ):
@@ -75,9 +76,17 @@ class ConnectionManager(Task, Generic[TConnection, TConnectArg]):
             logger=logger,
             max_event_priority_level=max_event_priority_level,
             parent="CONNECTION" if not parent else parent,
-            task_hooks=task_hooks,
+            task_result_hooks=task_result_hooks,
             **kwargs,
         )
+
+        if isinstance(connection_args, dict):
+            generic_map = TypeUtils.get_generic_map(self.__class__)
+            connection_arg_model = generic_map.get(TConnectArg)
+            if not connection_arg_model:
+                raise ValueError("No model defined for connection args")
+
+            connection_args = connection_arg_model(**connection_args)
 
         self.connection_args = connection_args
         self.connection: TConnection | None = None

@@ -10,7 +10,7 @@ from errorscraper.enums import (
     SystemLocation,
 )
 from errorscraper.interfaces.connectionmanager import ConnectionManager
-from errorscraper.interfaces.taskhook import TaskHook
+from errorscraper.interfaces.taskresulthook import TaskResultHook
 from errorscraper.models import SystemInfo, TaskResult
 from errorscraper.utils import get_exception_traceback
 
@@ -28,7 +28,7 @@ class InBandConnectionManager(ConnectionManager[InBandConnection, SSHConnectionP
         logger: Logger | None = None,
         max_event_priority_level: EventPriority | str = EventPriority.CRITICAL,
         parent: str | None = None,
-        task_hooks: list[TaskHook] | None = None,
+        task_result_hooks: list[TaskResultHook] | None = None,
         connection_args: SSHConnectionParams | None = None,
         **kwargs,
     ):
@@ -37,7 +37,7 @@ class InBandConnectionManager(ConnectionManager[InBandConnection, SSHConnectionP
             logger,
             max_event_priority_level,
             parent,
-            task_hooks,
+            task_result_hooks,
             connection_args,
             **kwargs,
         )
@@ -70,9 +70,14 @@ class InBandConnectionManager(ConnectionManager[InBandConnection, SSHConnectionP
             return self.result
 
         if not self.connection_args or not isinstance(self.connection_args, SSHConnectionParams):
+            if not self.connection_args:
+                message = "No SSH credentials provided"
+            else:
+                message = "Invalide SSH creddentials provided"
+
             self._log_event(
                 category=EventCategory.RUNTIME,
-                description="No SSH credentials provided",
+                description=message,
                 priority=EventPriority.CRITICAL,
                 console_log=True,
             )

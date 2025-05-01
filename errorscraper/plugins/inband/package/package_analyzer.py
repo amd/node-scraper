@@ -99,6 +99,7 @@ class PackageAnalyzer(DataAnalyzer[PackageDataModel, PackageAnalyzerArgs]):
         self, package_data: dict[str, str], exp_packge_data: dict[str, str | None]
     ):
         for exp_key, exp_value in exp_packge_data.items():
+            self.logger.info(exp_key)
             version = package_data.get(exp_key)
             if exp_value is None:
                 # allow any version when expected version is None

@@ -3,8 +3,9 @@ from .dataanalyzertask import DataAnalyzer
 from .datacollectortask import DataCollector
 from .dataplugin import DataPlugin
 from .plugin import PluginInterface
+from .resultcollator import PluginResultCollator
 from .task import Task
-from .taskhook import TaskHook
+from .taskresulthook import TaskResultHook
 
 __all__ = [
     "ConnectionManager",
@@ -13,5 +14,6 @@ __all__ = [
     "DataAnalyzer",
     "DataCollector",
     "PluginInterface",
-    "TaskHook",
+    "TaskResultHook",
+    "PluginResultCollator",
 ]

@@ -70,7 +70,7 @@ class TaskResult(BaseModel):
 
         return "|".join(summary_list)
 
-    def _update_status(self):
+    def _update_status(self) -> None:
         """Update overall status based on event priority"""
         self.status = ExecutionStatus.OK
         for event in self.events:
@@ -80,7 +80,7 @@ class TaskResult(BaseModel):
             elif event.priority == EventPriority.WARNING:
                 self.status = ExecutionStatus.WARNING
 
-    def finalize(self, logger: Optional[logging.Logger] = None):
+    def finalize(self, logger: Optional[logging.Logger] = None) -> None:
         self.end_time = datetime.datetime.now()
 
         if self.status == ExecutionStatus.UNSET:
