@@ -1,11 +1,10 @@
-# Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
 import logging
 from typing import Generic, Optional
 
 from errorscraper.connection.inband import InBandConnection
 from errorscraper.enums import EventPriority, OSFamily, SystemInteractionLevel
 from errorscraper.generictypes import TCollectArg, TDataModel
-from errorscraper.interfaces import DataCollector, TaskHook
+from errorscraper.interfaces import DataCollector, TaskResultHook
 from errorscraper.interfaces.task import SystemCompatibilityError
 from errorscraper.models import SystemInfo
 
@@ -26,7 +25,7 @@ class InBandDataCollector(
         system_interaction_level: SystemInteractionLevel = SystemInteractionLevel.INTERACTIVE,
         max_event_priority_level: EventPriority | str = EventPriority.CRITICAL,
         parent: Optional[str] = None,
-        task_hooks: Optional[list[TaskHook]] = None,
+        task_result_hooks: Optional[list[TaskResultHook]] = None,
         **kwargs,
     ):
         super().__init__(
@@ -36,7 +35,7 @@ class InBandDataCollector(
             logger=logger,
             connection=connection,
             parent=parent,
-            task_hooks=task_hooks,
+            task_result_hooks=task_result_hooks,
         )
         if self.system_info.os_family not in self.SUPPORTED_OS_FAMILY:
             raise SystemCompatibilityError(

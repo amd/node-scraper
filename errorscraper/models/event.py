@@ -48,7 +48,7 @@ class Event(BaseModel):
         if timestamp.tzinfo is None or timestamp.tzinfo.utcoffset(timestamp) is None:
             raise ValueError("datetime must be timezone aware")
 
-        if timestamp.utcoffset().total_seconds() != 0:
+        if timestamp.utcoffset() is not None and timestamp.utcoffset().total_seconds() != 0:
             timestamp = timestamp.astimezone(datetime.timezone.utc)
 
         return timestamp

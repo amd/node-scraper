@@ -48,6 +48,7 @@ class BiosAnalyzer(DataAnalyzer[BiosDataModel, BiosAnalyzerArgs]):
             return self.result
 
         for bios_version in args.exp_bios_version:
+            self.logger.info(bios_version)
             if args.regex_match:
                 try:
                     bios_regex = re.compile(bios_version)

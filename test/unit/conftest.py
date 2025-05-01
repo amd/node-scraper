@@ -18,7 +18,7 @@ def conn_mock():
 
 
 @pytest.fixture
-def fixtures_path():
+def plugin_fixtures_path():
     return Path(__file__).parent / "plugin/fixtures"
 
 
@@ -29,3 +29,8 @@ class DummyDataModel(DataModel):
 @pytest.fixture
 def dummy_data_model():
     return DummyDataModel
+
+
+@pytest.fixture
+def framework_fixtures_path():
+    return Path(__file__).parent / "fixtures"

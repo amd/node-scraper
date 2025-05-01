@@ -10,4 +10,6 @@ class PluginResult(BaseModel):
     """Object for result of a task"""
 
     status: ExecutionStatus
+    source: str
+    message: Optional[str] = None
     result_data: Optional[BaseModel] = None

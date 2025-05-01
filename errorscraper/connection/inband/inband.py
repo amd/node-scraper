@@ -39,7 +39,7 @@ class InBandConnection(abc.ABC):
         """
 
     @abc.abstractmethod
-    def read_file(self, filename: str, encoding="utf-8", strip: bool = True) -> FileArtifact:
+    def read_file(self, filename: str, encoding: str = "utf-8", strip: bool = True) -> FileArtifact:
         """Read a file into a FileArtifact
 
         Args:
