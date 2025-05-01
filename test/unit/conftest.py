@@ -31,5 +31,6 @@ def logger():
     return logging.getLogger("test_logger")
 
 
+@pytest.fixture
 def framework_fixtures_path():
     return Path(__file__).parent / "fixtures"
