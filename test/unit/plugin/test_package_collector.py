@@ -10,8 +10,8 @@ from errorscraper.plugins.inband.package.package_collector import PackageCollect
 
 
 @pytest.fixture
-def command_results(fixtures_path):
-    with (fixtures_path / "package_commands.json").open() as fid:
+def command_results(plugin_fixtures_path):
+    with (plugin_fixtures_path / "package_commands.json").open() as fid:
         return json.load(fid)
 
 

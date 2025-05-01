@@ -26,11 +26,6 @@ def conn_mock():
     return MagicMock()
 
 
-@pytest.fixture
-def fixtures_path():
-    return Path(__file__).parent / "plugin" / "fixtures"
-
-
 class DummyDataModel(DataModel):
     foo: int
 
@@ -78,3 +73,13 @@ def mock_analyzer():
             return self.result
 
     return MockAnalyzer
+
+
+@pytest.fixture
+def fixtures_path():
+    return Path(__file__).parent / "plugin" / "fixtures"
+
+
+@pytest.fixture
+def framework_fixtures_path():
+    return Path(__file__).parent / "fixtures"

@@ -6,24 +6,38 @@ import os
 import platform
 import sys
 import types
-from typing import Callable, Optional, Type
+from typing import Callable, Generic, Optional, Type
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from errorscraper.constants import DEFAULT_LOGGER
 from errorscraper.enums import SystemInteractionLevel, SystemLocation
+from errorscraper.generictypes import TModelType
 from errorscraper.models import DataModel, PluginConfig, SystemInfo
 from errorscraper.pluginexecutor import PluginExecutor
 from errorscraper.pluginregistry import PluginRegistry
 from errorscraper.resultcollators.tablesummary import TableSummary
 from errorscraper.typeutils import TypeUtils
 
+META_VAR_MAP = {int: "INT", bool: "BOOL", dict: "JSON_STRING", float: "FLOAT", str: "STRING"}
+
 
 class DynamicParserBuilder:
+    """Dynamically build an argparse parser based on function type annotations or pydantic model types"""
+
     def __init__(self, parser: argparse.ArgumentParser):
         self.parser = parser
 
     def add_func_args(self, func: Callable, class_type: Optional[Type[object]] = None) -> dict:
+        """Add parser argument based on arguments in a function signature
+
+        Args:
+            func (Callable): function to analyze
+            class_type (Optional[Type[object]], optional): Class which function belongs to. Defaults to None.
+
+        Returns:
+            dict: dictionary containing mapping of parser args which were added from pydantic model args in the function
+        """
         skip_args = ["self", "preserve_connection", "max_event_priority_level"]
         type_map = TypeUtils.get_func_arg_types(func, class_type)
 
@@ -37,8 +51,8 @@ class DynamicParserBuilder:
                 type_class.type_class: type_class for type_class in arg_data.type_classes
             }
 
-            # handle case where generic type has been set to None
-            if types.NoneType in type_class_map and len(arg_data.type_classes) == 1:
+            # skip args where generic type has been set to None
+            if types.NoneType in type_class_map:
                 continue
 
             model_arg = self.get_model_arg(type_class_map)
@@ -55,6 +69,14 @@ class DynamicParserBuilder:
 
     @classmethod
     def get_model_arg(cls, type_class_map: dict) -> Type[BaseModel] | None:
+        """Get the first type which is a pydantic model from a type class map
+
+        Args:
+            type_class_map (dict): mapping of type classes
+
+        Returns:
+            Type[BaseModel] | None: pydantic model type
+        """
         return next(
             (
                 type_class
@@ -74,6 +96,13 @@ class DynamicParserBuilder:
         arg_name: str,
         required: bool,
     ) -> None:
+        """Add an argument to a parser with an appropriate type
+
+        Args:
+            type_class_map (dict): type classes for the arg
+            arg_name (str): argument name
+            required (bool): whether or not the arg is required
+        """
         if list in type_class_map:
             type_class = type_class_map[list]
             self.parser.add_argument(
@@ -81,19 +110,46 @@ class DynamicParserBuilder:
                 nargs="*",
                 type=type_class.inner_type if type_class.inner_type else str,
                 required=required,
+                metavar=META_VAR_MAP.get(type_class.inner_type, "STRING"),
             )
         elif bool in type_class_map:
-            self.parser.add_argument(f"--{arg_name}", type=bool_arg, required=required)
+            self.parser.add_argument(
+                f"--{arg_name}",
+                type=bool_arg,
+                required=required,
+                choices=[True, False],
+            )
         elif float in type_class_map:
-            self.parser.add_argument(f"--{arg_name}", type=float, required=required)
+            self.parser.add_argument(
+                f"--{arg_name}", type=float, required=required, metavar=META_VAR_MAP[float]
+            )
         elif int in type_class_map:
-            self.parser.add_argument(f"--{arg_name}", type=int, required=required)
+            self.parser.add_argument(
+                f"--{arg_name}", type=int, required=required, metavar=META_VAR_MAP[int]
+            )
+        elif str in type_class_map:
+            self.parser.add_argument(
+                f"--{arg_name}", type=str, required=required, metavar=META_VAR_MAP[str]
+            )
         elif dict in type_class_map or self.get_model_arg(type_class_map):
-            self.parser.add_argument(f"--{arg_name}", type=dict_arg, required=required)
+            self.parser.add_argument(
+                f"--{arg_name}", type=dict_arg, required=required, metavar=META_VAR_MAP[dict]
+            )
         else:
-            self.parser.add_argument(f"--{arg_name}", type=str, required=required)
+            self.parser.add_argument(
+                f"--{arg_name}", type=str, required=required, metavar=META_VAR_MAP[str]
+            )
 
     def build_model_arg_parser(self, model: type[BaseModel], required: bool) -> list[str]:
+        """Add args to a parser based on attributes of a pydantic model
+
+        Args:
+            model (type[BaseModel]): input model
+            required (bool): whether the args from the model are required
+
+        Returns:
+            list[str]: list of model attributes that were added as args to the parser
+        """
         type_map = TypeUtils.get_model_types(model)
 
         for attr, attr_data in type_map.items():
@@ -110,55 +166,121 @@ class DynamicParserBuilder:
 
 
 def log_path_arg(log_path: str) -> str | None:
+    """Type function for a log path arg, allows 'none' to be specified to disable logging
+
+    Args:
+        log_path (str): log path string
+
+    Returns:
+        str | None: log path or None
+    """
     if log_path.lower() == "none":
         return None
     return log_path
 
 
-def bool_arg(input: str) -> bool:
-    return input.lower() in ["true", "1", "yes"]
+def bool_arg(str_input: str) -> bool:
+    """Converts a string arg input into a bool
+
+    Args:
+        str_input (str): string input
+
+    Returns:
+        bool: bool value for string
+    """
+    if str_input.lower() == "true":
+        return True
+    elif str_input.lower() == "false":
+        return False
+    raise argparse.ArgumentTypeError("Invalid input, boolean value (True or False) expected")
 
 
-def dict_arg(input: str) -> dict:
+def dict_arg(str_input: str) -> dict:
+    """converts a json string into a dict
+
+    Args:
+        str_input (str): input string
+
+    Raises:
+        argparse.ArgumentTypeError: it error was seen when loading string into json dict
+
+    Returns:
+        dict: dict representation of the json string
+    """
     try:
-        return json.loads(input)
-    except Exception as e:
+        return json.loads(str_input)
+    except json.JSONDecodeError as e:
         raise argparse.ArgumentTypeError("Invalid json input for arg") from e
 
 
-def system_config_arg(config_path: str) -> SystemInfo:
-    with open(config_path, "r", encoding="utf-8") as input_file:
-        data = json.load(input_file)
+class ModelArgHandler(Generic[TModelType]):
+    """Class to handle loading json files into pydantic models"""
 
-    return SystemInfo(**data)
+    def __init__(self, model: Type[TModelType]) -> types.NoneType:
+        self.model = model
 
+    def process_file_arg(self, file_path: str) -> TModelType:
+        """load a json file into a pydantic model
 
-def plugin_config_arg(config_path: str) -> PluginConfig:
-    with open(config_path, "r", encoding="utf-8") as input_file:
-        data = json.load(input_file)
+        Args:
+            file_path (str): json file path
 
-    return PluginConfig(**data)
+        Raises:
+            argparse.ArgumentTypeError: If validation errors were seen when building model
+
+        Returns:
+            TModelType: model instance
+        """
+        data = json_arg(file_path)
+        try:
+            return self.model(**data)
+        except ValidationError as e:
+            raise argparse.ArgumentTypeError(
+                f"Validation errors when processing {file_path}: {e.errors()}"
+            ) from e
 
 
 def json_arg(json_path: str) -> dict:
-    with open(json_path, "r", encoding="utf-8") as input_file:
-        data = json.load(input_file)
+    """loads a json file into a dict
 
-    return data
+    Args:
+        json_path (str): path to json file
+
+    Raises:
+        argparse.ArgumentTypeError: If file does not exist or could not be decoded
+
+    Returns:
+        dict: output dict
+    """
+    try:
+        with open(json_path, "r", encoding="utf-8") as input_file:
+            data = json.load(input_file)
+        return data
+    except json.JSONDecodeError as e:
+        raise argparse.ArgumentTypeError(f"File {json_path} contains invalid JSON") from e
+    except FileNotFoundError as e:
+        raise argparse.ArgumentTypeError(f"Unable to find file: {json_path}") from e
 
 
 def build_parser(
     plugin_reg: PluginRegistry,
 ) -> tuple[argparse.ArgumentParser, dict[str, tuple[argparse.ArgumentParser, dict]]]:
+    """Build an argument parser
+
+    Args:
+        plugin_reg (PluginRegistry): registry of plugins
+
+    Returns:
+        tuple[argparse.ArgumentParser, dict[str, tuple[argparse.ArgumentParser, dict]]]: tuple containing main
+        parser and subparsers for each plugin module
+    """
     parser = argparse.ArgumentParser(
         description="Error scraper CLI",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
 
     parser.add_argument(
-        "--sys-name",
-        default=platform.node(),
-        help="System name",
+        "--sys-name", default=platform.node(), help="System name", metavar=META_VAR_MAP[str]
     )
 
     parser.add_argument(
@@ -182,6 +304,7 @@ def build_parser(
         type=str.upper,
         required=False,
         help="Manually specify SKU of system",
+        metavar=META_VAR_MAP[str],
     )
 
     parser.add_argument(
@@ -189,20 +312,23 @@ def build_parser(
         type=str,
         required=False,
         help="Specify system platform",
+        metavar=META_VAR_MAP[str],
     )
 
     parser.add_argument(
         "--plugin-config",
-        type=plugin_config_arg,
+        type=ModelArgHandler(PluginConfig).process_file_arg,
         required=False,
         help="Path to plugin config json",
+        metavar=META_VAR_MAP[str],
     )
 
     parser.add_argument(
         "--system-config",
-        type=system_config_arg,
+        type=ModelArgHandler(SystemInfo).process_file_arg,
         required=False,
         help="Path to system config json",
+        metavar=META_VAR_MAP[str],
     )
 
     parser.add_argument(
@@ -210,13 +336,15 @@ def build_parser(
         type=json_arg,
         required=False,
         help="Path to system config json",
+        metavar=META_VAR_MAP[str],
     )
 
     parser.add_argument(
         "--log-path",
         default=".",
         type=log_path_arg,
-        help="Specifies local path for error scraper logs",
+        help="Specifies local path for error scraper logs, use 'None' to disable logging",
+        metavar=META_VAR_MAP[str],
     )
 
     parser.add_argument(
@@ -254,6 +382,15 @@ def build_parser(
 
 
 def setup_logger(log_level: str, log_path: str | None) -> logging.Logger:
+    """set up root logger when using the CLI
+
+    Args:
+        log_level (str): log level to use
+        log_path (str | None): optional path to filesystem log location
+
+    Returns:
+        logging.Logger: logger intstance
+    """
     log_level = getattr(logging, log_level, "INFO")
 
     handlers = [logging.StreamHandler(stream=sys.stdout)]
@@ -280,7 +417,19 @@ def setup_logger(log_level: str, log_path: str | None) -> logging.Logger:
     return logger
 
 
-def get_system_info(args) -> SystemInfo:
+def get_system_info(args: argparse.Namespace) -> SystemInfo:
+    """build system info object using args
+
+    Args:
+        args (argparse.Namespace): parsed args
+
+    Raises:
+        argparse.ArgumentTypeError: if system location arg is invalid
+
+    Returns:
+        SystemInfo: system info instance
+    """
+
     if args.system_config:
         system_info = args.system_config
     else:
@@ -306,22 +455,75 @@ def get_system_info(args) -> SystemInfo:
     return system_info
 
 
-def main(arg_input: Optional[list[str]] = None):
-    if arg_input is None:
-        arg_input = sys.argv[1:]
-    plugin_reg = PluginRegistry()
-    parser, plugin_subparser_map = build_parser(plugin_reg)
-    top_level_args = arg_input
+def get_plugin_configs(
+    top_level_args: argparse.Namespace,
+    parsed_plugin_args: dict[str, argparse.Namespace],
+    plugin_subparser_map: dict[str, tuple[argparse.ArgumentParser, dict]],
+) -> list[PluginConfig]:
+    try:
+        system_interaction_level = getattr(
+            SystemInteractionLevel, top_level_args.sys_interaction_level
+        )
+    except Exception as e:
+        raise argparse.ArgumentTypeError("Invalid input for system interaction level") from e
+
+    base_config = PluginConfig(result_collators={str(TableSummary.__name__): {}})
+
+    base_config.global_args["system_interaction_level"] = system_interaction_level
+
+    plugin_configs = [base_config]
+
+    if top_level_args.plugin_config:
+        plugin_configs.append(top_level_args.plugin_config)
+
+    if parsed_plugin_args:
+        plugin_input_config = PluginConfig()
+
+        for plugin, plugin_args in parsed_plugin_args.items():
+            config = {}
+            model_type_map = plugin_subparser_map[plugin][1]
+            for arg, val in vars(plugin_args).items():
+                if val is None:
+                    continue
+                if arg in model_type_map:
+                    model = model_type_map[arg]
+                    if model in config:
+                        config[model][arg] = val
+                    else:
+                        config[model] = {arg: val}
+                else:
+                    config[arg] = val
+            plugin_input_config.plugins[plugin] = config
+
+        plugin_configs.append(plugin_input_config)
+
+    return plugin_configs
+
+
+def process_args(
+    raw_arg_input: list[str], plugin_names: list[str]
+) -> tuple[list[str], dict[str, list[str]]]:
+    """separate top level args from plugin args
+
+    Args:
+        raw_arg_input (list[str]): list of all arg input
+        plugin_names (list[str]): list of plugin names
+
+    Returns:
+        tuple[list[str], dict[str, list[str]]]: tuple of top level args
+        and dict of plugin name to plugin args
+    """
+    top_level_args = raw_arg_input
 
     try:
-        plugin_arg_index = arg_input.index("run-plugins")
+        plugin_arg_index = raw_arg_input.index("run-plugins")
     except ValueError:
         plugin_arg_index = -1
 
     plugin_arg_map = {}
-    if plugin_arg_index != -1 and plugin_arg_index != len(arg_input) - 1:
-        top_level_args = arg_input[: plugin_arg_index + 1]
-        plugin_args = arg_input[plugin_arg_index + 1 :]
+    if plugin_arg_index != -1 and plugin_arg_index != len(raw_arg_input) - 1:
+        top_level_args = raw_arg_input[: plugin_arg_index + 1]
+        plugin_args = raw_arg_input[plugin_arg_index + 1 :]
 
         # handle help case
         if plugin_args == ["-h"]:
@@ -329,20 +531,23 @@ def main(arg_input: Optional[list[str]] = None):
         else:
             cur_plugin = None
             for arg in plugin_args:
-                if arg in plugin_subparser_map.keys():
+                if arg in plugin_names:
                     plugin_arg_map[arg] = []
                     cur_plugin = arg
                 elif cur_plugin:
                     plugin_arg_map[cur_plugin].append(arg)
+    return (top_level_args, plugin_arg_map)
+
+
+def main(arg_input: Optional[list[str]] = None):
+    if arg_input is None:
+        arg_input = sys.argv[1:]
+    plugin_reg = PluginRegistry()
+    parser, plugin_subparser_map = build_parser(plugin_reg)
+
+    top_level_args, plugin_arg_map = process_args(arg_input, list(plugin_subparser_map.keys()))
 
     parsed_args = parser.parse_args(top_level_args)
-
-    try:
-        system_interaction_level = getattr(
-            SystemInteractionLevel, parsed_args.sys_interaction_level
-        )
-    except Exception as e:
-        raise argparse.ArgumentTypeError("Invalid input for system interaction level") from e
 
     if parsed_args.log_path:
         log_path = os.path.join(
@@ -366,39 +571,9 @@ def main(arg_input: Optional[list[str]] = None):
 
     system_info = get_system_info(parsed_args)
 
-    base_config = PluginConfig(result_collators={str(TableSummary.__name__): {}})
-
-    base_config.global_args["system_interaction_level"] = system_interaction_level
-
-    plugin_configs = [base_config]
-
-    if parsed_args.plugin_config:
-        plugin_configs.append(parsed_args.plugin_config)
-
-    if parsed_plugin_args:
-        plugin_input_config = PluginConfig()
-
-        for plugin, plugin_args in parsed_plugin_args.items():
-            config = {}
-            model_type_map = plugin_subparser_map[plugin][1]
-            for arg, val in vars(plugin_args).items():
-                if val is None:
-                    continue
-                if arg in model_type_map:
-                    model = model_type_map[arg]
-                    if model in config:
-                        config[model][arg] = val
-                    else:
-                        config[model] = {arg: val}
-                else:
-                    config[arg] = val
-            plugin_input_config.plugins[plugin] = config
-
-        plugin_configs.append(plugin_input_config)
-
     plugin_executor = PluginExecutor(
         logger=logger,
-        plugin_configs=plugin_configs,
+        plugin_configs=get_plugin_configs(parsed_args, parsed_plugin_args, plugin_subparser_map),
         connections=parsed_args.connection_config,
         system_info=system_info,
         log_path=log_path,
