@@ -126,18 +126,39 @@ class TestDataPluginCore:
         assert isinstance(plugin.data, StandardDataModel)
         assert plugin.data.value == "dict_value"
 
-    def test_collect_creates_connection_manager(self, plugin, conn_mock):
+    def test_collect_creates_connection_manager(self, plugin, conn_mock, system_info, logger):
         assert plugin.connection_manager is None
 
-        with patch.object(BaseDataCollector, "collect_data") as mock_collect:
-            mock_collect.return_value = (TaskResult(status=ExecutionStatus.OK), StandardDataModel())
-            result = plugin.collect()
+        # Create a mock connection manager that will be returned by the mocked CONNECTION_TYPE
+        mock_conn_manager = MagicMock(spec=MockConnectionManager)
+        mock_conn_manager.connection = conn_mock
+        mock_conn_manager.result = TaskResult(status=ExecutionStatus.OK)
 
-            assert plugin.connection_manager is not None
-            assert isinstance(plugin.connection_manager, MockConnectionManager)
-            assert plugin.connection_manager.connection is conn_mock
-            mock_collect.assert_called_once()
-            assert result.status == ExecutionStatus.OK
+        # Create a mock CONNECTION_TYPE that returns our mock_conn_manager
+        mock_connection_type = MagicMock(return_value=mock_conn_manager)
+
+        # Patch CoreDataPlugin.CONNECTION_TYPE to use our mock_connection_type
+        with patch.object(CoreDataPlugin, "CONNECTION_TYPE", mock_connection_type):
+            # Patch the collect_data method
+            with patch.object(BaseDataCollector, "collect_data") as mock_collect:
+                mock_collect.return_value = (
+                    TaskResult(status=ExecutionStatus.OK),
+                    StandardDataModel(),
+                )
+
+                # Call collect which should create a connection manager
+                result = plugin.collect()
+
+                # Verify the connection manager was created
+                assert plugin.connection_manager is mock_conn_manager
+                mock_connection_type.assert_called_once_with(
+                    system_info=plugin.system_info,
+                    logger=plugin.logger,
+                    parent=plugin.__class__.__name__,
+                    task_result_hooks=plugin.task_result_hooks,
+                )
+                mock_collect.assert_called_once()
+                assert result.status == ExecutionStatus.OK
 
     def test_collect_with_connection_manager(self, plugin_with_conn):
         with patch.object(BaseDataCollector, "collect_data") as mock_collect:
