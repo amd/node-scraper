@@ -27,10 +27,9 @@ def plugin_fixtures_path():
 
 
 @pytest.fixture
-
 def logger():
     return logging.getLogger("test_logger")
 
+
 def framework_fixtures_path():
     return Path(__file__).parent / "fixtures"
-
