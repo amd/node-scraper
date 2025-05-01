@@ -76,7 +76,7 @@ def mock_analyzer():
 
 
 @pytest.fixture
-def fixtures_path():
+def plugin_fixtures_path():
     return Path(__file__).parent / "plugin" / "fixtures"
 
 
