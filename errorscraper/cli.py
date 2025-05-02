@@ -539,10 +539,6 @@ def process_args(
     return (top_level_args, plugin_arg_map)
 
 
-def _on_sigint(signum, frame):
-    raise KeyboardInterrupt
-
-
 def main(arg_input: Optional[list[str]] = None):
     if arg_input is None:
         arg_input = sys.argv[1:]
