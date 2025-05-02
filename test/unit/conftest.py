@@ -14,11 +14,7 @@ from errorscraper.models.systeminfo import OSFamily, SystemInfo
 
 @pytest.fixture
 def system_info():
-    return SystemInfo(
-        name="test_host",
-        platform="platform_id",
-        os_family=OSFamily.LINUX,
-    )
+    return SystemInfo(name="test_host", platform="X", os_family=OSFamily.LINUX, sku="GOOD")
 
 
 @pytest.fixture
