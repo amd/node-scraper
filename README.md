@@ -3,16 +3,14 @@ Error scraper is a tool which performs automated data collection and analysis fo
 
 ## Installation
 ### Install From Source
-Error Scraper requires Python 3.10+ for installation. After cloning this repository, call dev-setup.sh script with 'source', this script creates an editable install of error scraper in a python virtual environment and also configure the pre-commit hooks for the project.
-
-Linux users:
+Error Scraper requires Python 3.10+ for installation. After cloning this repository, call dev-setup.sh script with 'source'. This script creates an editable install of Error Scraper in a python virtual environment and also configures the pre-commit hooks for the project.
 
 ```sh
 source dev-setup.sh
 ```
 
 ## CLI Usage
-The error scraper CLI can be used to run error scraper plugins on a target system. The following CLI options are available:
+The Error Scraper CLI can be used to run Error Scraper plugins on a target system. The following CLI options are available:
 
 ```sh
 usage: error-scraper [-h] [--sys-name STRING] [--sys-location {LOCAL,REMOTE}] [--sys-interaction-level {PASSIVE,INTERACTIVE,DISRUPTIVE}]
@@ -43,16 +41,16 @@ options:
                         Path to system config json (default: None)
   --connection-config STRING
                         Path to system config json (default: None)
-  --log-path STRING     Specifies local path for error scraper logs, use 'None' to disable logging (default: .)
+  --log-path STRING     Specifies local path for Scraper logs, use 'None' to disable logging (default: .)
   --log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}
                         Change python log level (default: INFO)
 
 ```
 
-The plugins which will be run can be specified to two ways, using a plugin config JSON file or using the 'run-plugins' sub command. These two options are not mutually exclusive and both can be used together.
+The plugins to run can be specified in two ways, using a plugin JSON config file or using the 'run-plugins' sub command. These two options are not mutually exclusive and can be used together.
 
 ### Plugin Configs
-A plugin JSON config should follow the structure of the plugin config model defined here. Globals is a dictionary of global key value paris, values in globals will be passed to any plugin which supports that particular key. The plugins field should consist of a dictionary of plugin names to plugin arguments sub-dictionaries. Lastly, the result_collators attribute is used to defined and result collator classes that will be run on the plugin results. By default, the CLI will add the TableSummary result collator which prints a summary of the plugin result in a tabular form to the console.
+A plugin JSON config should follow the structure of the plugin config model defined here. The globals field is a dictionary of global key-value pairs; values in globals will be passed to any plugin that supports the corresponding key. The plugins field should be a dictionary mapping plugin names to sub-dictionaries of plugin arguments. Lastly, the result_collators attribute is used to define result collator classes that will be run on the plugin results. By default, the CLI adds the TableSummary result collator, which prints a summary of each plugin’s results in a tabular format to the console.
 
 ```json
 {
@@ -108,4 +106,10 @@ Run plugins without specifying args (plugin defaults will be used)
 
 ```sh
 error-scraper run-plugins BiosPlugin RocmPlugin
+```
+
+Use plugin configs and 'run-plugins'
+
+```sh
+error-scraper run-plugins BiosPlugin
 ```
