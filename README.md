@@ -1,5 +1,5 @@
 # Error Scraper
-Error scraper is a tool which performs automated data collection and analysis for the purposes of system debug.
+Error Scraper is a tool which performs automated data collection and analysis for the purposes of system debug.
 
 ## Installation
 ### Install From Source
