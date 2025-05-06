@@ -73,7 +73,7 @@ A plugin JSON config should follow the structure of the plugin config model defi
 ```
 
 ### 'run-plugins' sub command
-The plugins to run and their associated arguments can also be specified directly on the CLI using the 'run-plugins' sub command. Using this subcommand you can specify a plugin name and then the arguments for that particular plugin. Multiple plugins can be specified at once.
+The plugins to run and their associated arguments can also be specified directly on the CLI using the 'run-plugins' sub-command. Using this sub-command you can specify a plugin name followed by the arguments for that particular plugin. Multiple plugins can be specified at once.
 
 You can view the available arguments for a particular plugin by running `error-scraper run-plugins <plugin-name> -h`:
 ```sh
