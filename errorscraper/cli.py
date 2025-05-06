@@ -542,6 +542,7 @@ def process_args(
 def main(arg_input: Optional[list[str]] = None):
     if arg_input is None:
         arg_input = sys.argv[1:]
+
     plugin_reg = PluginRegistry()
     parser, plugin_subparser_map = build_parser(plugin_reg)
 
@@ -579,7 +580,11 @@ def main(arg_input: Optional[list[str]] = None):
         log_path=log_path,
     )
 
-    plugin_executor.run_queue()
+    try:
+        plugin_executor.run_queue()
+    except KeyboardInterrupt:
+        logger.info("Received Ctrl+C. Shutting down...")
+        sys.exit(130)
 
 
 if __name__ == "__main__":
