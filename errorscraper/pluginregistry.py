@@ -16,8 +16,16 @@ from errorscraper.interfaces import (
 
 class PluginRegistry:
 
-    def __init__(self, plugin_pkg: Optional[list[types.ModuleType]] = None) -> None:
-        self.plugin_pkg = [internal_plugins, internal_connections, internal_collators]
+    def __init__(
+        self,
+        plugin_pkg: Optional[list[types.ModuleType]] = None,
+        load_internal_plugins: bool = True,
+    ) -> None:
+        if load_internal_plugins:
+            self.plugin_pkg = [internal_plugins, internal_connections, internal_collators]
+        else:
+            self.plugin_pkg = []
+
         if plugin_pkg:
             self.plugin_pkg += plugin_pkg
 
