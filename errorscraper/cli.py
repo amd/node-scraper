@@ -11,7 +11,7 @@ from typing import Callable, Generic, Optional, Type
 from pydantic import BaseModel, ValidationError
 
 from errorscraper.constants import DEFAULT_LOGGER
-from errorscraper.enums import SystemInteractionLevel, SystemLocation
+from errorscraper.enums import ExecutionStatus, SystemInteractionLevel, SystemLocation
 from errorscraper.generictypes import TModelType
 from errorscraper.models import DataModel, PluginConfig, SystemInfo
 from errorscraper.pluginexecutor import PluginExecutor
@@ -581,7 +581,11 @@ def main(arg_input: Optional[list[str]] = None):
     )
 
     try:
-        plugin_executor.run_queue()
+        results = plugin_executor.run_queue()
+        if any(result.status > ExecutionStatus.WARNING for result in results):
+            sys.exit(1)
+        else:
+            sys.exit(0)
     except KeyboardInterrupt:
         logger.info("Received Ctrl+C. Shutting down...")
         sys.exit(130)

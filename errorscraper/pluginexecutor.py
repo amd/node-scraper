@@ -8,8 +8,9 @@ from typing import Optional, Type
 from pydantic import BaseModel
 
 from errorscraper.constants import DEFAULT_LOGGER
-from errorscraper.interfaces import ConnectionManager
+from errorscraper.interfaces import ConnectionManager, DataPlugin
 from errorscraper.models import PluginConfig, SystemInfo
+from errorscraper.models.pluginresult import PluginResult
 from errorscraper.pluginregistry import PluginRegistry
 from errorscraper.typeutils import TypeUtils
 
@@ -39,17 +40,9 @@ class PluginExecutor:
             system_info = SystemInfo()
         self.system_info = system_info
 
-        plugin_config = self._merge_configs(plugin_configs)
-
-        self.global_args: dict = plugin_config.global_args
-
-        self.plugin_queue = deque(plugin_config.plugins.items())
-
-        self.result_collators = plugin_config.result_collators
+        self.plugin_config = self._merge_configs(plugin_configs)
 
         self.connection_library: dict[type[ConnectionManager], ConnectionManager] = {}
-
-        self.plugin_results = []
 
         self.log_path = log_path
 
@@ -74,7 +67,8 @@ class PluginExecutor:
         self.logger.info("System Platform: %s", self.system_info.platform)
         self.logger.info("System location: %s", self.system_info.location)
 
-    def _merge_configs(self, plugin_configs: list[PluginConfig]) -> PluginConfig:
+    @classmethod
+    def _merge_configs(cls, plugin_configs: list[PluginConfig]) -> PluginConfig:
         merged_config = PluginConfig()
         for config in plugin_configs:
             merged_config.global_args.update(config.global_args)
@@ -83,10 +77,12 @@ class PluginExecutor:
 
         return merged_config
 
-    def run_queue(self):
+    def run_queue(self) -> list[PluginResult]:
+        plugin_results = []
+        plugin_queue = deque(self.plugin_config.plugins.items())
         try:
-            while len(self.plugin_queue) > 0:
-                plugin_name, plugin_args = self.plugin_queue.popleft()
+            while len(plugin_queue) > 0:
+                plugin_name, plugin_args = plugin_queue.popleft()
                 if plugin_name not in self.plugin_registry.plugins:
                     self.logger.error("Unable to find registered plugin for name %s", plugin_name)
                     continue
@@ -96,7 +92,7 @@ class PluginExecutor:
                 init_payload = {
                     "system_info": self.system_info,
                     "logger": self.logger,
-                    "queue_callback": self.plugin_queue.append,
+                    "queue_callback": plugin_queue.append,
                     "log_path": self.log_path,
                 }
 
@@ -134,15 +130,15 @@ class PluginExecutor:
 
                     run_args = TypeUtils.get_func_arg_types(plugin_class.run, plugin_class)
                     for arg in run_args.keys():
-                        if arg == "preserve_connection":
+                        if arg == "preserve_connection" and issubclass(plugin_class, DataPlugin):
                             run_payload[arg] = True
-                        elif arg in self.global_args:
-                            run_payload[arg] = self.global_args[arg]
+                        elif arg in self.plugin_config.global_args:
+                            run_payload[arg] = self.plugin_config.global_args[arg]
 
                         # TODO
                         # enable global substitution in collection and analysis args
                     self.logger.info("-" * 50)
-                    self.plugin_results.append(plugin_inst.run(**run_payload))
+                    plugin_results.append(plugin_inst.run(**run_payload))
                 except Exception as e:
                     self.logger.exception(
                         "Unexpected exception when running plugin %s: %s", plugin_name, e
@@ -154,9 +150,9 @@ class PluginExecutor:
             for connection_manager in self.connection_library.values():
                 connection_manager.disconnect()
 
-            if self.result_collators:
+            if self.plugin_config.result_collators:
                 self.logger.info("Running result collators")
-                for collator, collator_args in self.result_collators.items():
+                for collator, collator_args in self.plugin_config.result_collators.items():
                     collator_class = self.plugin_registry.result_collators.get(collator)
                     if collator_class is None:
                         self.logger.warning(
@@ -167,10 +163,12 @@ class PluginExecutor:
                     self.logger.info("Running %s result collator", collator)
                     collator_inst = collator_class(logger=self.logger, log_path=self.log_path)
                     collator_inst.collate_results(
-                        self.plugin_results,
+                        plugin_results,
                         [
                             connection_manager.result
                             for connection_manager in self.connection_library.values()
                         ],
                         **collator_args,
                     )
+
+        return plugin_results
