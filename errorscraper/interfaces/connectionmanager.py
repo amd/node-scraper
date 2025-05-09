@@ -53,7 +53,7 @@ def connect_decorator(func: Callable[..., TaskResult]) -> Callable[..., TaskResu
 
 TConnection = TypeVar("TConnection")
 TConnectionManager = TypeVar("TConnectionManager", bound="ConnectionManager")
-TConnectArg = TypeVar("TConnectArg", bound="BaseModel")
+TConnectArg = TypeVar("TConnectArg", bound="Optional[BaseModel]")
 
 
 class ConnectionManager(Task, Generic[TConnection, TConnectArg]):
