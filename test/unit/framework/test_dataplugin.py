@@ -1,9 +1,9 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+from common.shared_utils import MockConnectionManager
 
 from errorscraper.enums import EventPriority, ExecutionStatus, SystemInteractionLevel
-from errorscraper.interfaces.connectionmanager import ConnectionManager
 from errorscraper.interfaces.dataanalyzertask import DataAnalyzer
 from errorscraper.interfaces.datacollectortask import DataCollector
 from errorscraper.interfaces.dataplugin import DataPlugin
@@ -12,36 +12,6 @@ from errorscraper.models import DataModel, TaskResult
 
 class StandardDataModel(DataModel):
     value: str = "test"
-
-
-class MockConnectionManager(ConnectionManager):
-    # Class variable to store the mock connector
-    mock_connector = None
-
-    def __init__(
-        self, system_info=None, logger=None, parent=None, task_hooks=None, connection_args=None
-    ):
-        super().__init__(
-            system_info=system_info,
-            logger=logger,
-            parent=parent,
-            task_hooks=task_hooks,
-            connection_args=connection_args,
-        )
-        # Use the class variable if available, otherwise create a new MagicMock
-        self.connection = (
-            MockConnectionManager.mock_connector
-            if MockConnectionManager.mock_connector
-            else MagicMock()
-        )
-        self.result = TaskResult(status=ExecutionStatus.OK)
-
-    def connect(self):
-        self.result.status = ExecutionStatus.OK
-        return self.result
-
-    def disconnect(self):
-        pass
 
 
 class BaseDataCollector(DataCollector):
