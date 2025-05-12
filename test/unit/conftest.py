@@ -6,7 +6,7 @@ import pytest
 from pydantic import BaseModel
 
 from errorscraper.enums.executionstatus import ExecutionStatus
-from errorscraper.interfaces.dataanalyzertask import DataAnalyzer
+from errorscraper.interfaces import DataAnalyzer
 from errorscraper.models import TaskResult
 from errorscraper.models.datamodel import DataModel
 from errorscraper.models.systeminfo import OSFamily, SystemInfo
@@ -83,4 +83,4 @@ def logger():
 
 @pytest.fixture
 def framework_fixtures_path():
-    return Path(__file__).parent / "fixtures"
+    return Path(__file__).parent / "framework" / "fixtures"

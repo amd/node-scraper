@@ -7,9 +7,9 @@ from errorscraper.enums import ExecutionStatus
 
 
 class PluginResult(BaseModel):
-    """Object for result of a task"""
+    """Object for result of a plugin"""
 
     status: ExecutionStatus
     source: str
     message: Optional[str] = None
-    result_data: Optional[BaseModel] = None
+    result_data: Optional[dict | BaseModel] = None

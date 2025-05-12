@@ -83,6 +83,15 @@ class PluginInterface(abc.ABC, Generic[TConnectionManager, TConnectArg]):
             return False
         return True
 
+    def _update_queue(self, queue_item: tuple) -> None:
+        """call queue_callback to add additional item to plugin queue if run using plugin executor
+
+        Args:
+            queue_item (dict): plugin config item to add to queue
+        """
+        if self.queue_callback:
+            self.queue_callback(queue_item)
+
     @abc.abstractmethod
     def run(self, **kwargs) -> PluginResult:
         """Plugin run function
