@@ -35,13 +35,18 @@ class MockConnectionManager(ConnectionManager):
     mock_connector = None
 
     def __init__(
-        self, system_info=None, logger=None, parent=None, task_hooks=None, connection_args=None
+        self,
+        system_info=None,
+        logger=None,
+        parent=None,
+        task_result_hooks=None,
+        connection_args=None,
     ):
         super().__init__(
             system_info=system_info,
             logger=logger,
             parent=parent,
-            task_hooks=task_hooks,
+            task_result_hooks=task_result_hooks,
             connection_args=connection_args,
         )
         # Use the class variable if available, otherwise create a new MagicMock
