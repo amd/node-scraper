@@ -23,7 +23,6 @@
 # SOFTWARE.
 #
 ###############################################################################
-# Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
 from typing import Optional
 
 from pydantic import BaseModel

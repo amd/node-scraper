@@ -23,7 +23,6 @@
 # SOFTWARE.
 #
 ###############################################################################
-# Copyright (C) 2024 Advanced Micro Devices, Inc. All rights reserved.
 import datetime
 import logging
 from typing import Optional
