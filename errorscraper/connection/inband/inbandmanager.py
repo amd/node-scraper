@@ -41,7 +41,7 @@ from errorscraper.utils import get_exception_traceback
 
 from .inband import InBandConnection
 from .inbandlocal import LocalShell
-from .inbandremote import RemoteShell
+from .inbandremote import RemoteShell, SSHConnectionError
 from .sshparams import SSHConnectionParams
 
 
@@ -114,6 +114,13 @@ class InBandConnectionManager(ConnectionManager[InBandConnection, SSHConnectionP
             self.connection = RemoteShell(self.connection_args)
             self.connection.connect_ssh()
             self._check_os_family()
+        except SSHConnectionError as exception:
+            self._log_event(
+                category=EventCategory.SSH,
+                description=f"{str(exception)}",
+                priority=EventPriority.CRITICAL,
+                console_log=True,
+            )
         except Exception as exception:
             self._log_event(
                 category=EventCategory.SSH,

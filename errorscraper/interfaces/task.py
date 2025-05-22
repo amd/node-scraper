@@ -29,6 +29,7 @@ import datetime
 import logging
 from typing import Any, Optional
 
+from errorscraper.constants import DEFAULT_LOGGER
 from errorscraper.enums import EventCategory, EventPriority
 from errorscraper.models import Event, SystemInfo, TaskResult
 
@@ -56,7 +57,7 @@ class Task(abc.ABC):
         **kwargs: dict[str, Any],
     ):
         if logger is None:
-            logger = logging.getLogger(self.__class__.__name__)
+            logger = logging.getLogger(DEFAULT_LOGGER)
         self.system_info = system_info
         self.logger = logger
         self.max_event_priority_level = max_event_priority_level

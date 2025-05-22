@@ -99,7 +99,7 @@ class ConnectionManager(Task, Generic[TConnection, TConnectArg]):
             system_info=system_info,
             logger=logger,
             max_event_priority_level=max_event_priority_level,
-            parent="CONNECTION" if not parent else parent,
+            parent="connection" if not parent else parent,
             task_result_hooks=task_result_hooks,
             **kwargs,
         )

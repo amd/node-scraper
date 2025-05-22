@@ -506,16 +506,18 @@ def translate_io_bytes_to_str(file_data: dict[str, io.BytesIO]) -> dict[str, str
     return log_files_data
 
 
-def pascal_to_snake(input: str) -> str:
+def pascal_to_snake(input_str: str) -> str:
     """Convert PascalCase to snake_case
 
     Args:
-        input (str): string to convert
+        input_str (str): string to convert
 
     Returns:
         str: converted string
     """
-    return ("_").join(re.split("(?<=.)(?=[A-Z])", input)).lower()
+    if input_str.isupper():
+        return input_str.lower()
+    return ("_").join(re.split("(?<=.)(?=[A-Z])", input_str)).lower()
 
 
 def bytes_to_human_readable(input_bytes: int) -> str:
