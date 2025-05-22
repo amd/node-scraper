@@ -37,6 +37,7 @@ from errorscraper.interfaces import ConnectionManager, DataPlugin
 from errorscraper.models import PluginConfig, SystemInfo
 from errorscraper.models.pluginresult import PluginResult
 from errorscraper.pluginregistry import PluginRegistry
+from errorscraper.taskresulthooks import FileSystemLogHook
 from errorscraper.typeutils import TypeUtils
 
 
@@ -71,6 +72,10 @@ class PluginExecutor:
 
         self.log_path = log_path
 
+        self.connection_result_hooks = []
+        if log_path:
+            self.connection_result_hooks.append(FileSystemLogHook(log_base_path=log_path))
+
         if connections:
             for connection, connection_args in connections.items():
                 if connection not in self.plugin_registry.connection_managers:
@@ -85,6 +90,7 @@ class PluginExecutor:
                     system_info=self.system_info,
                     logger=self.logger,
                     connection_args=connection_args,
+                    task_result_hooks=self.connection_result_hooks,
                 )
 
         self.logger.info("System Name: %s", self.system_info.name)
@@ -140,7 +146,9 @@ class PluginExecutor:
                         )
                         self.connection_library[connection_manager_class] = (
                             connection_manager_class(
-                                system_info=self.system_info, logger=self.logger
+                                system_info=self.system_info,
+                                logger=self.logger,
+                                task_result_hooks=self.connection_result_hooks,
                             )
                         )
 
