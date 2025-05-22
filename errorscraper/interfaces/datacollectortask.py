@@ -29,7 +29,7 @@ import logging
 from functools import wraps
 from typing import Callable, ClassVar, Generic, Optional, Type
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from errorscraper.enums import (
     EventCategory,
@@ -40,6 +40,7 @@ from errorscraper.enums import (
 from errorscraper.generictypes import TCollectArg, TDataModel
 from errorscraper.interfaces.task import SystemCompatibilityError, Task
 from errorscraper.models import DataModel, SystemInfo, TaskResult
+from errorscraper.typeutils import TypeUtils
 from errorscraper.utils import get_exception_details, get_exception_traceback
 
 from .connectionmanager import TConnection
@@ -56,6 +57,19 @@ def collect_decorator(
         collector.logger.info("Running data collector: %s", collector.__class__.__name__)
         collector.result = collector._init_result()
         try:
+            if isinstance(args, dict):
+                arg_types = TypeUtils.get_func_arg_types(func)
+                collection_arg_model = next(
+                    (
+                        type_class.type_class
+                        for type_class in arg_types["args"].type_classes
+                        if issubclass(type_class.type_class, BaseModel)
+                    ),
+                    None,
+                )
+                if not collection_arg_model:
+                    raise ValueError("No model defined for analysis args")
+                args = collection_arg_model(**args)  # type: ignore
             result, data = func(collector, args)
         except Exception as exception:
             if isinstance(exception, ValidationError):
