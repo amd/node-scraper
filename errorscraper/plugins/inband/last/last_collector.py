@@ -47,7 +47,7 @@ class LastCollector(InBandDataCollector[LastDataModel, None]):
 
     SUPPORTED_OS_FAMILY: set[OSFamily] = {OSFamily.LINUX}
 
-    LAST_CMD = "last -Fiwd"
+    LAST_CMD = "last -Fiwd -n 50"
 
     def collect_data(self, args=None) -> tuple[TaskResult, LastDataModel | None]:
         """Read last data"""

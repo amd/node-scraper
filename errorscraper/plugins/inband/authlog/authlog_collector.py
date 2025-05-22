@@ -74,7 +74,9 @@ class AuthLogCollector(InBandDataCollector[AuthLogDataModel, None]):
         )
 
         if auth_log_exists.exit_code == 0:
-            res = self._run_sut_cmd(f"cat {self.AUTH_LOG_PATH}", sudo=True, log_artifact=False)
+            res = self._run_sut_cmd(
+                f"tail -n 200 {self.AUTH_LOG_PATH}", sudo=True, log_artifact=False
+            )
             log_name = self.AUTH_LOG_PATH
             if res.exit_code == 0:
                 log_content = res.stdout
@@ -90,7 +92,7 @@ class AuthLogCollector(InBandDataCollector[AuthLogDataModel, None]):
 
             if secure_log_exists.exit_code == 0:
                 res = self._run_sut_cmd(
-                    f"cat {self.SECURE_LOG_PATH}", sudo=True, log_artifact=False
+                    f"tail -n 200 {self.SECURE_LOG_PATH}", sudo=True, log_artifact=False
                 )
                 log_name = self.SECURE_LOG_PATH
                 if res.exit_code == 0:

@@ -23,3 +23,6 @@
 # SOFTWARE.
 #
 ###############################################################################
+from .filesystemloghook import FileSystemLogHook
+
+__all__ = ["FileSystemLogHook"]
