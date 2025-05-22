@@ -84,7 +84,7 @@ class RemoteShell(InBandConnection):
         except ConnectionResetError as e:
             raise SSHConnectionError("Connection reset by peer") from e
         except SSHException as e:
-            raise SSHConnectionError("Unable to establish SSH connection") from e
+            raise SSHConnectionError(f"Unable to establish SSH connection: {str(e)}") from e
         except EOFError as e:
             raise SSHConnectionError("EOFError during SSH connection") from e
         except Exception as e:
