@@ -14,15 +14,17 @@ The Error Scraper CLI can be used to run Error Scraper plugins on a target syste
 
 ```sh
 usage: error-scraper [-h] [--sys-name STRING] [--sys-location {LOCAL,REMOTE}] [--sys-interaction-level {PASSIVE,INTERACTIVE,DISRUPTIVE}]
-                     [--sys-sku STRING] [--sys-platform STRING] [--plugin-config STRING] [--system-config STRING]
-                     [--connection-config STRING] [--log-path STRING] [--log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}]
-                     {run-plugins} ...
+                     [--sys-sku STRING] [--sys-platform STRING] [--plugin-config STRING] [--system-config STRING] [--connection-config STRING]
+                     [--log-path STRING] [--log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}]
+                     {run-plugins,gen-plugin-config} ...
 
 Error scraper CLI
 
 positional arguments:
-  {run-plugins}         Subcommands
+  {run-plugins,gen-plugin-config}
+                        Subcommands
     run-plugins         Run a series of plugins
+    gen-plugin-config   Generate a config for a plugin or list of plugins
 
 options:
   -h, --help            show this help message and exit
@@ -30,8 +32,7 @@ options:
   --sys-location {LOCAL,REMOTE}
                         Location of target system (default: LOCAL)
   --sys-interaction-level {PASSIVE,INTERACTIVE,DISRUPTIVE}
-                        Specify system interaction level, used to determine the type of actions that plugins can perform (default:
-                        INTERACTIVE)
+                        Specify system interaction level, used to determine the type of actions that plugins can perform (default: INTERACTIVE)
   --sys-sku STRING      Manually specify SKU of system (default: None)
   --sys-platform STRING
                         Specify system platform (default: None)
@@ -41,7 +42,7 @@ options:
                         Path to system config json (default: None)
   --connection-config STRING
                         Path to system config json (default: None)
-  --log-path STRING     Specifies local path for Scraper logs, use 'None' to disable logging (default: .)
+  --log-path STRING     Specifies local path for error scraper logs, use 'None' to disable logging (default: .)
   --log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}
                         Change python log level (default: INFO)
 
@@ -68,6 +69,41 @@ A plugin JSON config should follow the structure of the plugin config model defi
         }
     }
 }
+```
+
+### 'gen-plugin-config' sub command
+The 'gen-plugin-config' sub command can be used to generate a plugin config JSON file for a plugin or list of plugins that can then be customized. Plugin arguments which have default values will be prepopulated in the JSON file, arguments without default values will have a value of 'null'.
+
+#### 'gen-plugin-config' Examples
+
+Generate a config for the DmesgPlugin:
+```sh
+error-scraper gen-plugin-config DmesgPlugin
+```
+
+This would produce the following config:
+
+```json
+
+{
+  "global_args": {},
+  "plugins": {
+    "DmesgPlugin": {
+      "collection": true,
+      "analysis": true,
+      "system_interaction_level": "INTERACTIVE",
+      "data": null,
+      "analysis_args": {
+        "analysis_range_start": null,
+        "analysis_range_end": null,
+        "check_unknown_dmesg_errors": true,
+        "exclude_category": null
+      }
+    }
+  },
+  "result_collators": {}
+}
+
 ```
 
 ### 'run-plugins' sub command

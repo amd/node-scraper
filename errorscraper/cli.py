@@ -31,13 +31,15 @@ import os
 import platform
 import sys
 import types
-from typing import Callable, Generic, Optional, Type
+from typing import Generic, Optional, Type
 
 from pydantic import BaseModel, ValidationError
 
+from errorscraper.configbuilder import ConfigBuilder
 from errorscraper.constants import DEFAULT_LOGGER
 from errorscraper.enums import ExecutionStatus, SystemInteractionLevel, SystemLocation
 from errorscraper.generictypes import TModelType
+from errorscraper.interfaces.plugin import PluginInterface
 from errorscraper.models import DataModel, PluginConfig, SystemInfo
 from errorscraper.pluginexecutor import PluginExecutor
 from errorscraper.pluginregistry import PluginRegistry
@@ -50,21 +52,14 @@ META_VAR_MAP = {int: "INT", bool: "BOOL", dict: "JSON_STRING", float: "FLOAT", s
 class DynamicParserBuilder:
     """Dynamically build an argparse parser based on function type annotations or pydantic model types"""
 
-    def __init__(self, parser: argparse.ArgumentParser):
+    def __init__(self, parser: argparse.ArgumentParser, plugin_class: Type[PluginInterface]):
         self.parser = parser
+        self.plugin_class = plugin_class
 
-    def add_func_args(self, func: Callable, class_type: Optional[Type[object]] = None) -> dict:
-        """Add parser argument based on arguments in a function signature
-
-        Args:
-            func (Callable): function to analyze
-            class_type (Optional[Type[object]], optional): Class which function belongs to. Defaults to None.
-
-        Returns:
-            dict: dictionary containing mapping of parser args which were added from pydantic model args in the function
-        """
+    def build_plugin_parser(self) -> dict:
+        """Add parser argument based on arguments in a plugin run function signature"""
         skip_args = ["self", "preserve_connection", "max_event_priority_level"]
-        type_map = TypeUtils.get_func_arg_types(func, class_type)
+        type_map = TypeUtils.get_func_arg_types(self.plugin_class.run, self.plugin_class)
 
         model_type_map = {}
 
@@ -386,6 +381,30 @@ def build_parser(
         help="Run a series of plugins",
     )
 
+    config_builder_parser = subparsers.add_parser(
+        "gen-plugin-config",
+        help="Generate a config for a plugin or list of plugins",
+    )
+
+    config_builder_parser.add_argument(
+        "plugins",
+        nargs="+",
+        choices=list(plugin_reg.plugins.keys()),
+        help="Plugins to generate config for",
+    )
+
+    config_builder_parser.add_argument(
+        "--output-path",
+        default=os.getcwd(),
+        help="Directory to store config",
+    )
+
+    config_builder_parser.add_argument(
+        "--config-name",
+        default="plugin_config.json",
+        help="Name of config file",
+    )
+
     plugin_subparsers = run_plugin_parser.add_subparsers(
         dest="plugin_name", help="Available plugins"
     )
@@ -397,8 +416,8 @@ def build_parser(
             help=f"Run {plugin_name} plugin",
         )
         try:
-            parser_builder = DynamicParserBuilder(plugin_subparser)
-            model_type_map = parser_builder.add_func_args(plugin_class.run, plugin_class)
+            parser_builder = DynamicParserBuilder(plugin_subparser, plugin_class)
+            model_type_map = parser_builder.build_plugin_parser()
         except Exception as e:
             print(f"Exception building arg parsers for {plugin_name}: {str(e)}")  # noqa: T201
         plugin_subparser_map[plugin_name] = (plugin_subparser, model_type_map)
@@ -406,7 +425,7 @@ def build_parser(
     return parser, plugin_subparser_map
 
 
-def setup_logger(log_level: str, log_path: str | None) -> logging.Logger:
+def setup_logger(log_level: str = "INFO", log_path: str | None = None) -> logging.Logger:
     """set up root logger when using the CLI
 
     Args:
@@ -575,7 +594,7 @@ def main(arg_input: Optional[list[str]] = None):
 
     parsed_args = parser.parse_args(top_level_args)
 
-    if parsed_args.log_path:
+    if parsed_args.log_path and parsed_args.subcmd != "gen-plugin-config":
         log_path = os.path.join(
             parsed_args.log_path,
             f"scraper_logs_{datetime.datetime.now().strftime('%Y_%m_%d-%I_%M_%S_%p')}",
@@ -587,6 +606,21 @@ def main(arg_input: Optional[list[str]] = None):
     logger = setup_logger(parsed_args.log_level, log_path)
     if log_path:
         logger.info("Log path: %s", log_path)
+
+    if parsed_args.subcmd == "gen-plugin-config":
+        try:
+            logger.info("Building config for plugins: %s", parsed_args.plugins)
+            config_builder = ConfigBuilder(plugin_registry=plugin_reg)
+            config = config_builder.gen_config(parsed_args.plugins)
+            output_path = os.path.join(parsed_args.output_path, parsed_args.config_name)
+            with open(output_path, "w", encoding="utf-8") as out_file:
+                out_file.write(config.model_dump_json(indent=2))
+
+            logger.info("Config saved to: %s", output_path)
+            sys.exit(0)
+        except Exception:
+            logger.exception("Exception when building config")
+            sys.exit(1)
 
     parsed_plugin_args = {}
     for plugin, plugin_args in plugin_arg_map.items():

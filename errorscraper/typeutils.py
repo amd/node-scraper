@@ -38,6 +38,7 @@ class TypeClass(BaseModel):
 class TypeData(BaseModel):
     type_classes: list[TypeClass] = Field(default_factory=list)
     required: bool = False
+    default: Any = None
 
 
 class TypeUtils:
@@ -80,6 +81,8 @@ class TypeUtils:
             type_data.type_classes = type_classes
             if param.default is inspect.Parameter.empty:
                 type_data.required = True
+            else:
+                type_data.default = param.default
 
             type_map[arg] = type_data
 
@@ -131,7 +134,9 @@ class TypeUtils:
         type_map = {}
         for name, field in model.model_fields.items():
             type_map[name] = TypeData(
-                type_classes=cls.process_type(field.annotation), required=field.is_required()
+                type_classes=cls.process_type(field.annotation),
+                required=field.is_required(),
+                default=field.default,
             )
 
         return type_map
