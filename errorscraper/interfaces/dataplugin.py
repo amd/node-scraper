@@ -316,9 +316,15 @@ class DataPlugin(
             ExecutionStatus.WARNING,
         ]:
             if self.analysis_result.status > self.collection_result.status:
-                message = self.analysis_result.message
+                if self.analysis_result.status == ExecutionStatus.WARNING:
+                    message = f"Analysis warning: {self.analysis_result.message}"
+                else:
+                    message = f"Analysis error: {self.analysis_result.message}"
             else:
-                message = self.collection_result.message
+                if self.collection_result.status == ExecutionStatus.WARNING:
+                    message = f"Collection warning: {self.collection_result.message}"
+                else:
+                    message = f"Collection error: {self.collection_result.message}"
         else:
             message = "Plugin tasks completed successfully"
 
