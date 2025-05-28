@@ -1,0 +1,17 @@
+{
+    "name": "SystemConfig",
+    "desc": "Read configuration of system",
+    "global_args": {},
+    "plugins": {
+        "BiosPlugin": {},
+        "DimmPlugin": {},
+        "DkmsPlugin": {},
+        "KernelPlugin": {},
+        "MemoryPlugin": {},
+        "OsPlugin": {},
+        "RocmPlugin": {},
+        "StoragePlugin": {},
+        "UptimePlugin": {}
+    },
+    "result_collators": {}
+}
