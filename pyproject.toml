@@ -46,8 +46,11 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 include = ['errorscraper']
 
+[tool.setuptools]
+include-package-data = true
+
 [project.scripts]
-error-scraper = "errorscraper.cli:main"
+error-scraper = "errorscraper.cli:cli_entry"
 
 [tool.black]
 line-length = 100

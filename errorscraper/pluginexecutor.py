@@ -66,7 +66,7 @@ class PluginExecutor:
             system_info = SystemInfo()
         self.system_info = system_info
 
-        self.plugin_config = self._merge_configs(plugin_configs)
+        self.plugin_config = self.merge_configs(plugin_configs)
 
         self.connection_library: dict[type[ConnectionManager], ConnectionManager] = {}
 
@@ -98,8 +98,8 @@ class PluginExecutor:
         self.logger.info("System Platform: %s", self.system_info.platform)
         self.logger.info("System location: %s", self.system_info.location)
 
-    @classmethod
-    def _merge_configs(cls, plugin_configs: list[PluginConfig]) -> PluginConfig:
+    @staticmethod
+    def merge_configs(plugin_configs: list[PluginConfig]) -> PluginConfig:
         merged_config = PluginConfig()
         for config in plugin_configs:
             merged_config.global_args.update(config.global_args)

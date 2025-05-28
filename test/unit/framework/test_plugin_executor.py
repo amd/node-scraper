@@ -90,7 +90,7 @@ def plugin_registry():
     ],
 )
 def test_config_merge(input_configs: list[PluginConfig], output_config: PluginConfig):
-    assert PluginExecutor._merge_configs(input_configs) == output_config
+    assert PluginExecutor.merge_configs(input_configs) == output_config
 
 
 def test_plugin_queue(plugin_registry):
