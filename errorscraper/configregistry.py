@@ -55,12 +55,12 @@ class ConfigRegistry:
 
         for config_file in config_path.glob("*.json"):
             with open(config_file, "r", encoding="utf-8") as in_file:
-                file_data = json.load(in_file)
                 try:
+                    file_data = json.load(in_file)
                     config_model = PluginConfig(**file_data)
                     if config_model.name:
                         self.configs[config_model.name] = config_model
                     else:
                         self.configs[config_file.name] = config_model
-                except ValidationError:
+                except (ValidationError, json.JSONDecodeError):
                     pass

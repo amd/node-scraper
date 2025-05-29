@@ -28,6 +28,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+from framework.common.shared_utils import MockConnectionManager, TestPluginA
 from pydantic import BaseModel
 
 from errorscraper.enums.executionstatus import ExecutionStatus
@@ -35,6 +36,7 @@ from errorscraper.interfaces import DataAnalyzer
 from errorscraper.models import TaskResult
 from errorscraper.models.datamodel import DataModel
 from errorscraper.models.systeminfo import OSFamily, SystemInfo
+from errorscraper.pluginregistry import PluginRegistry
 
 
 @pytest.fixture
@@ -109,3 +111,11 @@ def logger():
 @pytest.fixture
 def framework_fixtures_path():
     return Path(__file__).parent / "framework" / "fixtures"
+
+
+@pytest.fixture
+def plugin_registry():
+    registry = PluginRegistry()
+    registry.plugins = {"TestPluginA": TestPluginA}
+    registry.connection_managers = {"MockConnectionManager": MockConnectionManager}
+    return registry

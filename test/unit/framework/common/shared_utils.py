@@ -23,11 +23,14 @@
 # SOFTWARE.
 #
 ###############################################################################
+from typing import Optional
 from unittest.mock import MagicMock
 
+from pydantic import BaseModel
+
 from errorscraper.enums import ExecutionStatus
-from errorscraper.interfaces import ConnectionManager
-from errorscraper.models import TaskResult
+from errorscraper.interfaces import ConnectionManager, PluginInterface
+from errorscraper.models import PluginResult, TaskResult
 
 
 class MockConnectionManager(ConnectionManager):
@@ -63,3 +66,23 @@ class MockConnectionManager(ConnectionManager):
 
     def disconnect(self):
         pass
+
+
+class TestModelArg(BaseModel):
+    model_attr: int = 123
+
+
+class TestPluginA(PluginInterface[MockConnectionManager, None]):
+
+    CONNECTION_TYPE = MockConnectionManager
+
+    def run(
+        self,
+        test_bool_arg: bool = True,
+        test_str_arg: str = "test",
+        test_model_arg: Optional[TestModelArg] = None,
+    ):
+        return PluginResult(
+            source="testA",
+            status=ExecutionStatus.ERROR,
+        )

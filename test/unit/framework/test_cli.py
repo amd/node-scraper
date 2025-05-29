@@ -24,12 +24,14 @@
 #
 ###############################################################################
 import argparse
+import logging
 import os
 
 import pytest
 from pydantic import BaseModel
 
 from errorscraper.cli import cli, inputargtypes
+from errorscraper.configregistry import ConfigRegistry
 from errorscraper.enums import SystemInteractionLevel, SystemLocation
 from errorscraper.models import PluginConfig, SystemInfo
 
@@ -192,3 +194,22 @@ def test_get_plugin_configs():
             },
         ),
     ]
+
+
+def test_config_builder(plugin_registry):
+
+    config = cli.build_config(
+        config_reg=ConfigRegistry(config_path=os.path.join(os.path.dirname(__file__), "fixtures")),
+        plugin_reg=plugin_registry,
+        logger=logging.getLogger(),
+        plugins=["TestPluginA"],
+        built_in_configs=["ExampleConfig"],
+    )
+    assert config.plugins == {
+        "TestPluginA": {
+            "test_bool_arg": True,
+            "test_str_arg": "test",
+            "test_model_arg": {"model_attr": 123},
+        },
+        "ExamplePlugin": {},
+    }

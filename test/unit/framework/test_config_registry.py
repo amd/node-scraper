@@ -24,18 +24,26 @@
 #
 ###############################################################################
 
-from errorscraper.configbuilder import ConfigBuilder
+import os
+
+from errorscraper.configregistry import ConfigRegistry
+from errorscraper.models import PluginConfig
 
 
-def test_config_builder(plugin_registry):
-    config_builder = ConfigBuilder(plugin_registry)
+def test_config_registry():
+    config_registry = ConfigRegistry(
+        config_path=os.path.join(os.path.dirname(__file__), "fixtures")
+    )
 
-    config = config_builder.gen_config(["TestPluginA"])
-
-    assert config.plugins == {
-        "TestPluginA": {
-            "test_bool_arg": True,
-            "test_str_arg": "test",
-            "test_model_arg": {"model_attr": 123},
-        }
+    assert config_registry.configs == {
+        "ExampleConfig": PluginConfig(
+            global_args={},
+            plugins={"ExamplePlugin": {}},
+            result_collators={},
+            name="ExampleConfig",
+            desc="This is an example",
+        ),
+        "example.json": PluginConfig(
+            global_args={}, plugins={}, result_collators={}, name=None, desc=None
+        ),
     }

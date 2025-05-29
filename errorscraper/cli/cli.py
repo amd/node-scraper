@@ -372,6 +372,43 @@ def process_args(
     return (top_level_args, plugin_arg_map)
 
 
+def build_config(
+    config_reg: ConfigRegistry,
+    plugin_reg: PluginRegistry,
+    logger: logging.Logger,
+    plugins: Optional[list[str]] = None,
+    built_in_configs: Optional[list[str]] = None,
+) -> PluginConfig:
+    """build a plugin config
+
+    Args:
+        config_reg (ConfigRegistry): config registry instance
+        plugin_reg (PluginRegistry): plugin registry instance
+        logger (logging.Logger): logger instance
+        plugins (Optional[list[str]], optional): list of plugin names to include. Defaults to None.
+        built_in_configs (Optional[list[str]], optional): list of built in config names to include. Defaults to None.
+
+    Returns:
+        PluginConfig: plugin config obf
+    """
+    configs = []
+    if plugins:
+        logger.info("Building config for plugins: %s", plugins)
+        config_builder = ConfigBuilder(plugin_registry=plugin_reg)
+        configs.append(config_builder.gen_config(plugins))
+
+    if built_in_configs:
+        logger.info("Retrieving built in configs: %s", built_in_configs)
+        for config in built_in_configs:
+            if config not in config_reg.configs:
+                logger.warning("No built in config found for name: %s", config)
+            else:
+                configs.append(config_reg.configs[config])
+
+    config = PluginExecutor.merge_configs(configs)
+    return config
+
+
 def main(arg_input: Optional[list[str]] = None):
     if arg_input is None:
         arg_input = sys.argv[1:]
@@ -418,21 +455,10 @@ def main(arg_input: Optional[list[str]] = None):
 
     if parsed_args.subcmd == "gen-plugin-config":
         try:
-            configs = []
-            if parsed_args.plugins:
-                logger.info("Building config for plugins: %s", parsed_args.plugins)
-                config_builder = ConfigBuilder(plugin_registry=plugin_reg)
-                configs.append(config_builder.gen_config(parsed_args.plugins))
+            config = build_config(
+                config_reg, plugin_reg, logger, parsed_args.plugins, parsed_args.built_in_configs
+            )
 
-            if parsed_args.built_in_configs:
-                logger.info("Retrieving built in configs: %s", parsed_args.built_in_configs)
-                for config in parsed_args.built_in_configs:
-                    if config not in config_reg.configs:
-                        logger.warning("No built in config found for name: %s", config)
-                    else:
-                        configs.append(config_reg.configs[config])
-
-            config = PluginExecutor.merge_configs(configs)
             config.name = parsed_args.config_name.split(".")[0]
             config.desc = "Auto generated config"
             output_path = os.path.join(parsed_args.output_path, parsed_args.config_name)
