@@ -1,11 +1,13 @@
 {
-    "name": "SystemConfig",
-    "desc": "Read configuration of system",
+    "name": "NodeStatus",
+    "desc": "Check configuration and status of the node",
     "global_args": {},
     "plugins": {
         "BiosPlugin": {},
+        "CmdlinePlugin": {},
         "DimmPlugin": {},
         "DkmsPlugin": {},
+        "DmesgPlugin": {},
         "KernelPlugin": {},
         "MemoryPlugin": {},
         "OsPlugin": {},

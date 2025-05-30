@@ -31,7 +31,7 @@ import platform
 import sys
 from typing import Optional
 
-from errorscraper.cli.constants import META_VAR_MAP
+from errorscraper.cli.constants import DEFAULT_CONFIG, META_VAR_MAP
 from errorscraper.cli.dynamicparserbuilder import DynamicParserBuilder
 from errorscraper.cli.inputargtypes import ModelArgHandler, json_arg, log_path_arg
 from errorscraper.configbuilder import ConfigBuilder
@@ -102,7 +102,7 @@ def build_parser(
         "--plugin-configs",
         type=str,
         nargs="*",
-        help="built-in config names or paths to plugin config JSONs",
+        help=f"built-in config names or paths to plugin config JSONs.\nAvailable built-in configs: {', '.join(config_reg.configs.keys())}",
         metavar=META_VAR_MAP[str],
     )
 
@@ -144,20 +144,26 @@ def build_parser(
         help="Run a series of plugins",
     )
 
-    config_builder_parser = subparsers.add_parser(
-        "gen-plugin-config",
-        help="Generate a config for a plugin or list of plugins",
-    )
-
     describe_parser = subparsers.add_parser(
         "describe",
-        help="Display details on plugins and configs",
+        help="Display details on a built-in config or plugin",
     )
 
     describe_parser.add_argument(
-        "--built-in-config",
-        choices=list(config_reg.configs.keys()),
-        help="Display details on a built-in config",
+        "type",
+        choices=["config", "plugin"],
+        help="Type of object to describe (config or plugin)",
+    )
+
+    describe_parser.add_argument(
+        "name",
+        nargs="?",
+        help="Name of the config or plugin to describe",
+    )
+
+    config_builder_parser = subparsers.add_parser(
+        "gen-plugin-config",
+        help="Generate a config for a plugin or list of plugins",
     )
 
     config_builder_parser.add_argument(
@@ -281,15 +287,14 @@ def get_system_info(args: argparse.Namespace) -> SystemInfo:
 
 
 def get_plugin_configs(
-    top_level_args: argparse.Namespace,
+    plugin_configs: list[str],
+    system_interaction_level: SystemInteractionLevel,
     built_in_configs: dict[str, PluginConfig],
     parsed_plugin_args: dict[str, argparse.Namespace],
     plugin_subparser_map: dict[str, tuple[argparse.ArgumentParser, dict]],
 ) -> list[PluginConfig]:
     try:
-        system_interaction_level = getattr(
-            SystemInteractionLevel, top_level_args.sys_interaction_level
-        )
+        system_interaction_level = getattr(SystemInteractionLevel, system_interaction_level)
     except Exception as e:
         raise argparse.ArgumentTypeError("Invalid input for system interaction level") from e
 
@@ -299,8 +304,8 @@ def get_plugin_configs(
 
     plugin_configs = [base_config]
 
-    if top_level_args.plugin_configs:
-        for config in top_level_args.plugin_configs:
+    if plugin_configs:
+        for config in plugin_configs:
             if os.path.exists(config):
                 plugin_configs.append(ModelArgHandler(PluginConfig).process_file_arg(config))
             elif config in built_in_configs:
@@ -434,21 +439,36 @@ def main(arg_input: Optional[list[str]] = None):
         logger.info("Log path: %s", log_path)
 
     if parsed_args.subcmd == "describe":
-        if parsed_args.list_configs:
-            for config_name in config_reg.configs:
-                print(config_name)  # noqa: T201
+        if not parsed_args.name:
+            if parsed_args.type == "config":
+                print("Available built-in configs:")  # noqa: T201
+                for name in config_reg.configs:
+                    print(f"  {name}")  # noqa: T201
+            elif parsed_args.type == "plugin":
+                print("Available plugins:")  # noqa: T201
+                for name in plugin_reg.plugins:
+                    print(f"  {name}")  # noqa: T201
+            print(f"\nUsage: describe {parsed_args.type} <name>")  # noqa: T201
+            sys.exit(0)
 
-        if parsed_args.config:
-            if parsed_args.config not in config_reg.configs:
-                logger.error("No config found for name: %s", parsed_args.config)
+        if parsed_args.type == "config":
+            if parsed_args.name not in config_reg.configs:
+                logger.error("No config found for name: %s", parsed_args.name)
                 sys.exit(1)
-
-            config_model = config_reg.configs[parsed_args.config]
-            print(f"Config Name: {parsed_args.config}")  # noqa: T201
-            print(f"Description: {config_model.desc}")  # noqa: T201
+            config_model = config_reg.configs[parsed_args.name]
+            print(f"Config Name: {parsed_args.name}")  # noqa: T201
+            print(f"Description: {getattr(config_model, 'desc', '')}")  # noqa: T201
             print("Plugins:")  # noqa: T201
-            for plugin in config_model.plugins:
+            for plugin in getattr(config_model, "plugins", []):
                 print(f"\t{plugin}")  # noqa: T201
+
+        elif parsed_args.type == "plugin":
+            if parsed_args.name not in plugin_reg.plugins:
+                logger.error("No plugin found for name: %s", parsed_args.name)
+                sys.exit(1)
+            plugin_class = plugin_reg.plugins[parsed_args.name]
+            print(f"Plugin Name: {parsed_args.name}")  # noqa: T201
+            print(f"Description: {getattr(plugin_class, '__doc__', '')}")  # noqa: T201
 
         sys.exit(0)
 
@@ -477,12 +497,22 @@ def main(arg_input: Optional[list[str]] = None):
         except Exception:
             logger.exception("Exception parsing args for plugin: %s", plugin)
 
+    if not plugin_subparser_map and not parsed_args.plugin_configs:
+        logger.info("No plugins config args specified, running default config: %s", DEFAULT_CONFIG)
+        plugin_configs = [DEFAULT_CONFIG]
+    else:
+        plugin_configs = parsed_args.plugin_configs or []
+
     system_info = get_system_info(parsed_args)
 
     plugin_executor = PluginExecutor(
         logger=logger,
         plugin_configs=get_plugin_configs(
-            parsed_args, config_reg.configs, parsed_plugin_args, plugin_subparser_map
+            plugin_configs=plugin_configs,
+            system_interaction_level=parsed_args.sys_interaction_level,
+            built_in_configs=config_reg.configs,
+            parsed_plugin_args=parsed_plugin_args,
+            plugin_subparser_map=plugin_subparser_map,
         ),
         connections=parsed_args.connection_config,
         system_info=system_info,
