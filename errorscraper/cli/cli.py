@@ -287,12 +287,28 @@ def get_system_info(args: argparse.Namespace) -> SystemInfo:
 
 
 def get_plugin_configs(
-    plugin_configs: list[str],
+    plugin_config_input: list[str],
     system_interaction_level: SystemInteractionLevel,
     built_in_configs: dict[str, PluginConfig],
     parsed_plugin_args: dict[str, argparse.Namespace],
     plugin_subparser_map: dict[str, tuple[argparse.ArgumentParser, dict]],
 ) -> list[PluginConfig]:
+    """Build list of plugin configs based on input args
+
+    Args:
+        plugin_config_input (list[str]): list of plugin config inputs, can be paths to JSON files or built-in config names
+        system_interaction_level (SystemInteractionLevel): system interaction level, used to determine the type of actions that plugins can perform
+        built_in_configs (dict[str, PluginConfig]): built-in plugin configs, mapping from config name to PluginConfig instance
+        parsed_plugin_args (dict[str, argparse.Namespace]): parsed plugin arguments, mapping from plugin name to parsed args
+        plugin_subparser_map (dict[str, tuple[argparse.ArgumentParser, dict]]): plugin subparser map, mapping from plugin name to tuple of parser and model type map
+
+    Raises:
+        argparse.ArgumentTypeError: if system interaction level is invalid
+        argparse.ArgumentTypeError: if no plugin config found for a given input
+
+    Returns:
+        list[PluginConfig]: list of PluginConfig instances based on input args
+    """
     try:
         system_interaction_level = getattr(SystemInteractionLevel, system_interaction_level)
     except Exception as e:
@@ -304,8 +320,8 @@ def get_plugin_configs(
 
     plugin_configs = [base_config]
 
-    if plugin_configs:
-        for config in plugin_configs:
+    if plugin_config_input:
+        for config in plugin_config_input:
             if os.path.exists(config):
                 plugin_configs.append(ModelArgHandler(PluginConfig).process_file_arg(config))
             elif config in built_in_configs:
@@ -414,6 +430,11 @@ def build_config(
 
 
 def main(arg_input: Optional[list[str]] = None):
+    """Main entry point for the CLI
+
+    Args:
+        arg_input (Optional[list[str]], optional): list of args to parse. Defaults to None.
+    """
     if arg_input is None:
         arg_input = sys.argv[1:]
 
@@ -497,7 +518,7 @@ def main(arg_input: Optional[list[str]] = None):
         except Exception:
             logger.exception("Exception parsing args for plugin: %s", plugin)
 
-    if not plugin_subparser_map and not parsed_args.plugin_configs:
+    if not parsed_plugin_args and not parsed_args.plugin_configs:
         logger.info("No plugins config args specified, running default config: %s", DEFAULT_CONFIG)
         plugin_configs = [DEFAULT_CONFIG]
     else:
@@ -508,7 +529,7 @@ def main(arg_input: Optional[list[str]] = None):
     plugin_executor = PluginExecutor(
         logger=logger,
         plugin_configs=get_plugin_configs(
-            plugin_configs=plugin_configs,
+            plugin_config_input=plugin_configs,
             system_interaction_level=parsed_args.sys_interaction_level,
             built_in_configs=config_reg.configs,
             parsed_plugin_args=parsed_plugin_args,
