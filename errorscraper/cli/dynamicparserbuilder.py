@@ -29,12 +29,11 @@ from typing import Type
 
 from pydantic import BaseModel
 
+from errorscraper.cli.constants import META_VAR_MAP
+from errorscraper.cli.inputargtypes import bool_arg, dict_arg
 from errorscraper.interfaces.plugin import PluginInterface
 from errorscraper.models import DataModel
 from errorscraper.typeutils import TypeUtils
-
-from .constants import META_VAR_MAP
-from .inputargtypes import bool_arg, dict_arg
 
 
 class DynamicParserBuilder:

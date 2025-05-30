@@ -31,6 +31,9 @@ import platform
 import sys
 from typing import Optional
 
+from errorscraper.cli.constants import META_VAR_MAP
+from errorscraper.cli.dynamicparserbuilder import DynamicParserBuilder
+from errorscraper.cli.inputargtypes import ModelArgHandler, json_arg, log_path_arg
 from errorscraper.configbuilder import ConfigBuilder
 from errorscraper.configregistry import ConfigRegistry
 from errorscraper.constants import DEFAULT_LOGGER
@@ -39,10 +42,6 @@ from errorscraper.models import PluginConfig, SystemInfo
 from errorscraper.pluginexecutor import PluginExecutor
 from errorscraper.pluginregistry import PluginRegistry
 from errorscraper.resultcollators.tablesummary import TableSummary
-
-from .constants import META_VAR_MAP
-from .dynamicparserbuilder import DynamicParserBuilder
-from .inputargtypes import ModelArgHandler, json_arg, log_path_arg
 
 
 def build_parser(
