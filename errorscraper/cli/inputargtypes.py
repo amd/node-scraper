@@ -70,7 +70,7 @@ def dict_arg(str_input: str) -> dict:
         str_input (str): input string
 
     Raises:
-        argparse.ArgumentTypeError: it error was seen when loading string into json dict
+        argparse.ArgumentTypeError: if error was seen when loading string into json dict
 
     Returns:
         dict: dict representation of the json string
