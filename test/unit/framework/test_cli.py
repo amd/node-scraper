@@ -157,7 +157,7 @@ def test_get_plugin_configs():
     with pytest.raises(argparse.ArgumentTypeError):
         cli.get_plugin_configs(
             system_interaction_level="INVALID",
-            plugin_configs=[],
+            plugin_config_input=[],
             built_in_configs={},
             parsed_plugin_args={},
             plugin_subparser_map={},
@@ -165,7 +165,7 @@ def test_get_plugin_configs():
 
     plugin_configs = cli.get_plugin_configs(
         system_interaction_level="PASSIVE",
-        plugin_configs=[],
+        plugin_config_input=[],
         built_in_configs={},
         parsed_plugin_args={
             "TestPlugin1": argparse.Namespace(arg1="test123"),
