@@ -37,21 +37,21 @@ from typing import Optional, Type, TypeVar
 import pytz
 
 TIMEZONE_MAP = {
-    "CT": "America/Chicago",  # For austin / plano
+    "CT": "America/Chicago",
     "CDT": "America/Chicago",
     "CST": "America/Chicago",
-    "ET": "America/Toronto",  # For markham
+    "ET": "America/Toronto",
     "EDT": "America/Toronto",
     "EST": "America/Toronto",
-    "PT": "America/Los_Angeles",  # For vancouver and santa clara
+    "PT": "America/Los_Angeles",
     "PST": "America/Los_Angeles",
     "PDT": "America/Los_Angeles",
-    "MT": "America/Edmonton",  # Calgary and Ft collins
+    "MT": "America/Edmonton",
     "MST": "America/Edmonton",
     "MDT": "America/Edmonton",
-    "UTC": "UTC",  # UTC
-    "GMT": "Europe/London",  # EU
-    "GMT+8": "Asia/Shanghai",  # China
+    "UTC": "UTC",
+    "GMT": "Europe/London",
+    "GMT+8": "Asia/Shanghai",
 }
 
 

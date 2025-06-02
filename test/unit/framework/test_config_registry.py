@@ -23,16 +23,27 @@
 # SOFTWARE.
 #
 ###############################################################################
-from typing import Optional
 
-from pydantic import BaseModel, Field
+import os
+
+from errorscraper.configregistry import ConfigRegistry
+from errorscraper.models import PluginConfig
 
 
-class PluginConfig(BaseModel):
-    """Model for preset configuration of plugins and result collators"""
+def test_config_registry():
+    config_registry = ConfigRegistry(
+        config_path=os.path.join(os.path.dirname(__file__), "fixtures")
+    )
 
-    global_args: dict = Field(default_factory=dict)
-    plugins: dict[str, dict] = Field(default_factory=dict)
-    result_collators: dict[str, dict] = Field(default_factory=dict)
-    name: Optional[str] = None
-    desc: Optional[str] = None
+    assert config_registry.configs == {
+        "ExampleConfig": PluginConfig(
+            global_args={},
+            plugins={"ExamplePlugin": {}},
+            result_collators={},
+            name="ExampleConfig",
+            desc="This is an example",
+        ),
+        "example.json": PluginConfig(
+            global_args={}, plugins={}, result_collators={}, name=None, desc=None
+        ),
+    }

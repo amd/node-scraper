@@ -25,265 +25,28 @@
 ###############################################################################
 import argparse
 import datetime
-import json
 import logging
 import os
 import platform
 import sys
-import types
-from typing import Generic, Optional, Type
+from typing import Optional
 
-from pydantic import BaseModel, ValidationError
-
+from errorscraper.cli.constants import DEFAULT_CONFIG, META_VAR_MAP
+from errorscraper.cli.dynamicparserbuilder import DynamicParserBuilder
+from errorscraper.cli.inputargtypes import ModelArgHandler, json_arg, log_path_arg
 from errorscraper.configbuilder import ConfigBuilder
+from errorscraper.configregistry import ConfigRegistry
 from errorscraper.constants import DEFAULT_LOGGER
 from errorscraper.enums import ExecutionStatus, SystemInteractionLevel, SystemLocation
-from errorscraper.generictypes import TModelType
-from errorscraper.interfaces.plugin import PluginInterface
-from errorscraper.models import DataModel, PluginConfig, SystemInfo
+from errorscraper.models import PluginConfig, SystemInfo
 from errorscraper.pluginexecutor import PluginExecutor
 from errorscraper.pluginregistry import PluginRegistry
 from errorscraper.resultcollators.tablesummary import TableSummary
-from errorscraper.typeutils import TypeUtils
-
-META_VAR_MAP = {int: "INT", bool: "BOOL", dict: "JSON_STRING", float: "FLOAT", str: "STRING"}
-
-
-class DynamicParserBuilder:
-    """Dynamically build an argparse parser based on function type annotations or pydantic model types"""
-
-    def __init__(self, parser: argparse.ArgumentParser, plugin_class: Type[PluginInterface]):
-        self.parser = parser
-        self.plugin_class = plugin_class
-
-    def build_plugin_parser(self) -> dict:
-        """Add parser argument based on arguments in a plugin run function signature"""
-        skip_args = ["self", "preserve_connection", "max_event_priority_level"]
-        type_map = TypeUtils.get_func_arg_types(self.plugin_class.run, self.plugin_class)
-
-        model_type_map = {}
-
-        for arg, arg_data in type_map.items():
-            if arg in skip_args:
-                continue
-
-            type_class_map = {
-                type_class.type_class: type_class for type_class in arg_data.type_classes
-            }
-
-            # skip args where generic type has been set to None
-            if types.NoneType in type_class_map:
-                continue
-
-            model_arg = self.get_model_arg(type_class_map)
-
-            # only add cli args for top level model args
-            if model_arg:
-                model_args = self.build_model_arg_parser(model_arg, arg_data.required)
-                for model_arg in model_args:
-                    model_type_map[model_arg] = arg
-            else:
-                self.add_argument(type_class_map, arg.replace("_", "-"), arg_data.required)
-
-        return model_type_map
-
-    @classmethod
-    def get_model_arg(cls, type_class_map: dict) -> Type[BaseModel] | None:
-        """Get the first type which is a pydantic model from a type class map
-
-        Args:
-            type_class_map (dict): mapping of type classes
-
-        Returns:
-            Type[BaseModel] | None: pydantic model type
-        """
-        return next(
-            (
-                type_class
-                for type_class in type_class_map
-                if (
-                    isinstance(type_class, type)
-                    and issubclass(type_class, BaseModel)
-                    and not issubclass(type_class, DataModel)
-                )
-            ),
-            None,
-        )
-
-    def add_argument(
-        self,
-        type_class_map: dict,
-        arg_name: str,
-        required: bool,
-    ) -> None:
-        """Add an argument to a parser with an appropriate type
-
-        Args:
-            type_class_map (dict): type classes for the arg
-            arg_name (str): argument name
-            required (bool): whether or not the arg is required
-        """
-        if list in type_class_map:
-            type_class = type_class_map[list]
-            self.parser.add_argument(
-                f"--{arg_name}",
-                nargs="*",
-                type=type_class.inner_type if type_class.inner_type else str,
-                required=required,
-                metavar=META_VAR_MAP.get(type_class.inner_type, "STRING"),
-            )
-        elif bool in type_class_map:
-            self.parser.add_argument(
-                f"--{arg_name}",
-                type=bool_arg,
-                required=required,
-                choices=[True, False],
-            )
-        elif float in type_class_map:
-            self.parser.add_argument(
-                f"--{arg_name}", type=float, required=required, metavar=META_VAR_MAP[float]
-            )
-        elif int in type_class_map:
-            self.parser.add_argument(
-                f"--{arg_name}", type=int, required=required, metavar=META_VAR_MAP[int]
-            )
-        elif str in type_class_map:
-            self.parser.add_argument(
-                f"--{arg_name}", type=str, required=required, metavar=META_VAR_MAP[str]
-            )
-        elif dict in type_class_map or self.get_model_arg(type_class_map):
-            self.parser.add_argument(
-                f"--{arg_name}", type=dict_arg, required=required, metavar=META_VAR_MAP[dict]
-            )
-        else:
-            self.parser.add_argument(
-                f"--{arg_name}", type=str, required=required, metavar=META_VAR_MAP[str]
-            )
-
-    def build_model_arg_parser(self, model: type[BaseModel], required: bool) -> list[str]:
-        """Add args to a parser based on attributes of a pydantic model
-
-        Args:
-            model (type[BaseModel]): input model
-            required (bool): whether the args from the model are required
-
-        Returns:
-            list[str]: list of model attributes that were added as args to the parser
-        """
-        type_map = TypeUtils.get_model_types(model)
-
-        for attr, attr_data in type_map.items():
-            type_class_map = {
-                type_class.type_class: type_class for type_class in attr_data.type_classes
-            }
-
-            if types.NoneType in type_class_map and len(attr_data.type_classes) == 1:
-                continue
-
-            self.add_argument(type_class_map, attr.replace("_", "-"), required)
-
-        return list(type_map.keys())
-
-
-def log_path_arg(log_path: str) -> str | None:
-    """Type function for a log path arg, allows 'none' to be specified to disable logging
-
-    Args:
-        log_path (str): log path string
-
-    Returns:
-        str | None: log path or None
-    """
-    if log_path.lower() == "none":
-        return None
-    return log_path
-
-
-def bool_arg(str_input: str) -> bool:
-    """Converts a string arg input into a bool
-
-    Args:
-        str_input (str): string input
-
-    Returns:
-        bool: bool value for string
-    """
-    if str_input.lower() == "true":
-        return True
-    elif str_input.lower() == "false":
-        return False
-    raise argparse.ArgumentTypeError("Invalid input, boolean value (True or False) expected")
-
-
-def dict_arg(str_input: str) -> dict:
-    """converts a json string into a dict
-
-    Args:
-        str_input (str): input string
-
-    Raises:
-        argparse.ArgumentTypeError: it error was seen when loading string into json dict
-
-    Returns:
-        dict: dict representation of the json string
-    """
-    try:
-        return json.loads(str_input)
-    except json.JSONDecodeError as e:
-        raise argparse.ArgumentTypeError("Invalid json input for arg") from e
-
-
-class ModelArgHandler(Generic[TModelType]):
-    """Class to handle loading json files into pydantic models"""
-
-    def __init__(self, model: Type[TModelType]) -> types.NoneType:
-        self.model = model
-
-    def process_file_arg(self, file_path: str) -> TModelType:
-        """load a json file into a pydantic model
-
-        Args:
-            file_path (str): json file path
-
-        Raises:
-            argparse.ArgumentTypeError: If validation errors were seen when building model
-
-        Returns:
-            TModelType: model instance
-        """
-        data = json_arg(file_path)
-        try:
-            return self.model(**data)
-        except ValidationError as e:
-            raise argparse.ArgumentTypeError(
-                f"Validation errors when processing {file_path}: {e.errors()}"
-            ) from e
-
-
-def json_arg(json_path: str) -> dict:
-    """loads a json file into a dict
-
-    Args:
-        json_path (str): path to json file
-
-    Raises:
-        argparse.ArgumentTypeError: If file does not exist or could not be decoded
-
-    Returns:
-        dict: output dict
-    """
-    try:
-        with open(json_path, "r", encoding="utf-8") as input_file:
-            data = json.load(input_file)
-        return data
-    except json.JSONDecodeError as e:
-        raise argparse.ArgumentTypeError(f"File {json_path} contains invalid JSON") from e
-    except FileNotFoundError as e:
-        raise argparse.ArgumentTypeError(f"Unable to find file: {json_path}") from e
 
 
 def build_parser(
     plugin_reg: PluginRegistry,
+    config_reg: ConfigRegistry,
 ) -> tuple[argparse.ArgumentParser, dict[str, tuple[argparse.ArgumentParser, dict]]]:
     """Build an argument parser
 
@@ -336,10 +99,10 @@ def build_parser(
     )
 
     parser.add_argument(
-        "--plugin-config",
-        type=ModelArgHandler(PluginConfig).process_file_arg,
-        required=False,
-        help="Path to plugin config json",
+        "--plugin-configs",
+        type=str,
+        nargs="*",
+        help=f"built-in config names or paths to plugin config JSONs.\nAvailable built-in configs: {', '.join(config_reg.configs.keys())}",
         metavar=META_VAR_MAP[str],
     )
 
@@ -355,7 +118,7 @@ def build_parser(
         "--connection-config",
         type=json_arg,
         required=False,
-        help="Path to system config json",
+        help="Path to connection config json",
         metavar=META_VAR_MAP[str],
     )
 
@@ -381,16 +144,40 @@ def build_parser(
         help="Run a series of plugins",
     )
 
+    describe_parser = subparsers.add_parser(
+        "describe",
+        help="Display details on a built-in config or plugin",
+    )
+
+    describe_parser.add_argument(
+        "type",
+        choices=["config", "plugin"],
+        help="Type of object to describe (config or plugin)",
+    )
+
+    describe_parser.add_argument(
+        "name",
+        nargs="?",
+        help="Name of the config or plugin to describe",
+    )
+
     config_builder_parser = subparsers.add_parser(
         "gen-plugin-config",
         help="Generate a config for a plugin or list of plugins",
     )
 
     config_builder_parser.add_argument(
-        "plugins",
-        nargs="+",
+        "--plugins",
+        nargs="*",
         choices=list(plugin_reg.plugins.keys()),
         help="Plugins to generate config for",
+    )
+
+    config_builder_parser.add_argument(
+        "--built-in-configs",
+        nargs="*",
+        choices=list(config_reg.configs.keys()),
+        help="Built in config names",
     )
 
     config_builder_parser.add_argument(
@@ -500,14 +287,30 @@ def get_system_info(args: argparse.Namespace) -> SystemInfo:
 
 
 def get_plugin_configs(
-    top_level_args: argparse.Namespace,
+    plugin_config_input: list[str],
+    system_interaction_level: SystemInteractionLevel,
+    built_in_configs: dict[str, PluginConfig],
     parsed_plugin_args: dict[str, argparse.Namespace],
     plugin_subparser_map: dict[str, tuple[argparse.ArgumentParser, dict]],
 ) -> list[PluginConfig]:
+    """Build list of plugin configs based on input args
+
+    Args:
+        plugin_config_input (list[str]): list of plugin config inputs, can be paths to JSON files or built-in config names
+        system_interaction_level (SystemInteractionLevel): system interaction level, used to determine the type of actions that plugins can perform
+        built_in_configs (dict[str, PluginConfig]): built-in plugin configs, mapping from config name to PluginConfig instance
+        parsed_plugin_args (dict[str, argparse.Namespace]): parsed plugin arguments, mapping from plugin name to parsed args
+        plugin_subparser_map (dict[str, tuple[argparse.ArgumentParser, dict]]): plugin subparser map, mapping from plugin name to tuple of parser and model type map
+
+    Raises:
+        argparse.ArgumentTypeError: if system interaction level is invalid
+        argparse.ArgumentTypeError: if no plugin config found for a given input
+
+    Returns:
+        list[PluginConfig]: list of PluginConfig instances based on input args
+    """
     try:
-        system_interaction_level = getattr(
-            SystemInteractionLevel, top_level_args.sys_interaction_level
-        )
+        system_interaction_level = getattr(SystemInteractionLevel, system_interaction_level)
     except Exception as e:
         raise argparse.ArgumentTypeError("Invalid input for system interaction level") from e
 
@@ -517,8 +320,14 @@ def get_plugin_configs(
 
     plugin_configs = [base_config]
 
-    if top_level_args.plugin_config:
-        plugin_configs.append(top_level_args.plugin_config)
+    if plugin_config_input:
+        for config in plugin_config_input:
+            if os.path.exists(config):
+                plugin_configs.append(ModelArgHandler(PluginConfig).process_file_arg(config))
+            elif config in built_in_configs:
+                plugin_configs.append(built_in_configs[config])
+            else:
+                raise argparse.ArgumentTypeError(f"No plugin config found for: {config}")
 
     if parsed_plugin_args:
         plugin_input_config = PluginConfig()
@@ -583,18 +392,61 @@ def process_args(
     return (top_level_args, plugin_arg_map)
 
 
+def build_config(
+    config_reg: ConfigRegistry,
+    plugin_reg: PluginRegistry,
+    logger: logging.Logger,
+    plugins: Optional[list[str]] = None,
+    built_in_configs: Optional[list[str]] = None,
+) -> PluginConfig:
+    """build a plugin config
+
+    Args:
+        config_reg (ConfigRegistry): config registry instance
+        plugin_reg (PluginRegistry): plugin registry instance
+        logger (logging.Logger): logger instance
+        plugins (Optional[list[str]], optional): list of plugin names to include. Defaults to None.
+        built_in_configs (Optional[list[str]], optional): list of built in config names to include. Defaults to None.
+
+    Returns:
+        PluginConfig: plugin config obf
+    """
+    configs = []
+    if plugins:
+        logger.info("Building config for plugins: %s", plugins)
+        config_builder = ConfigBuilder(plugin_registry=plugin_reg)
+        configs.append(config_builder.gen_config(plugins))
+
+    if built_in_configs:
+        logger.info("Retrieving built in configs: %s", built_in_configs)
+        for config in built_in_configs:
+            if config not in config_reg.configs:
+                logger.warning("No built in config found for name: %s", config)
+            else:
+                configs.append(config_reg.configs[config])
+
+    config = PluginExecutor.merge_configs(configs)
+    return config
+
+
 def main(arg_input: Optional[list[str]] = None):
+    """Main entry point for the CLI
+
+    Args:
+        arg_input (Optional[list[str]], optional): list of args to parse. Defaults to None.
+    """
     if arg_input is None:
         arg_input = sys.argv[1:]
 
     plugin_reg = PluginRegistry()
-    parser, plugin_subparser_map = build_parser(plugin_reg)
+    config_reg = ConfigRegistry()
+    parser, plugin_subparser_map = build_parser(plugin_reg, config_reg)
 
     top_level_args, plugin_arg_map = process_args(arg_input, list(plugin_subparser_map.keys()))
 
     parsed_args = parser.parse_args(top_level_args)
 
-    if parsed_args.log_path and parsed_args.subcmd != "gen-plugin-config":
+    if parsed_args.log_path and parsed_args.subcmd not in ["gen-plugin-config", "describe"]:
         log_path = os.path.join(
             parsed_args.log_path,
             f"scraper_logs_{datetime.datetime.now().strftime('%Y_%m_%d-%I_%M_%S_%p')}",
@@ -607,11 +459,48 @@ def main(arg_input: Optional[list[str]] = None):
     if log_path:
         logger.info("Log path: %s", log_path)
 
+    if parsed_args.subcmd == "describe":
+        if not parsed_args.name:
+            if parsed_args.type == "config":
+                print("Available built-in configs:")  # noqa: T201
+                for name in config_reg.configs:
+                    print(f"  {name}")  # noqa: T201
+            elif parsed_args.type == "plugin":
+                print("Available plugins:")  # noqa: T201
+                for name in plugin_reg.plugins:
+                    print(f"  {name}")  # noqa: T201
+            print(f"\nUsage: describe {parsed_args.type} <name>")  # noqa: T201
+            sys.exit(0)
+
+        if parsed_args.type == "config":
+            if parsed_args.name not in config_reg.configs:
+                logger.error("No config found for name: %s", parsed_args.name)
+                sys.exit(1)
+            config_model = config_reg.configs[parsed_args.name]
+            print(f"Config Name: {parsed_args.name}")  # noqa: T201
+            print(f"Description: {getattr(config_model, 'desc', '')}")  # noqa: T201
+            print("Plugins:")  # noqa: T201
+            for plugin in getattr(config_model, "plugins", []):
+                print(f"\t{plugin}")  # noqa: T201
+
+        elif parsed_args.type == "plugin":
+            if parsed_args.name not in plugin_reg.plugins:
+                logger.error("No plugin found for name: %s", parsed_args.name)
+                sys.exit(1)
+            plugin_class = plugin_reg.plugins[parsed_args.name]
+            print(f"Plugin Name: {parsed_args.name}")  # noqa: T201
+            print(f"Description: {getattr(plugin_class, '__doc__', '')}")  # noqa: T201
+
+        sys.exit(0)
+
     if parsed_args.subcmd == "gen-plugin-config":
         try:
-            logger.info("Building config for plugins: %s", parsed_args.plugins)
-            config_builder = ConfigBuilder(plugin_registry=plugin_reg)
-            config = config_builder.gen_config(parsed_args.plugins)
+            config = build_config(
+                config_reg, plugin_reg, logger, parsed_args.plugins, parsed_args.built_in_configs
+            )
+
+            config.name = parsed_args.config_name.split(".")[0]
+            config.desc = "Auto generated config"
             output_path = os.path.join(parsed_args.output_path, parsed_args.config_name)
             with open(output_path, "w", encoding="utf-8") as out_file:
                 out_file.write(config.model_dump_json(indent=2))
@@ -629,11 +518,23 @@ def main(arg_input: Optional[list[str]] = None):
         except Exception:
             logger.exception("Exception parsing args for plugin: %s", plugin)
 
+    if not parsed_plugin_args and not parsed_args.plugin_configs:
+        logger.info("No plugins config args specified, running default config: %s", DEFAULT_CONFIG)
+        plugin_configs = [DEFAULT_CONFIG]
+    else:
+        plugin_configs = parsed_args.plugin_configs or []
+
     system_info = get_system_info(parsed_args)
 
     plugin_executor = PluginExecutor(
         logger=logger,
-        plugin_configs=get_plugin_configs(parsed_args, parsed_plugin_args, plugin_subparser_map),
+        plugin_configs=get_plugin_configs(
+            plugin_config_input=plugin_configs,
+            system_interaction_level=parsed_args.sys_interaction_level,
+            built_in_configs=config_reg.configs,
+            parsed_plugin_args=parsed_plugin_args,
+            plugin_subparser_map=plugin_subparser_map,
+        ),
         connections=parsed_args.connection_config,
         system_info=system_info,
         log_path=log_path,

@@ -16,15 +16,16 @@ The Error Scraper CLI can be used to run Error Scraper plugins on a target syste
 usage: error-scraper [-h] [--sys-name STRING] [--sys-location {LOCAL,REMOTE}] [--sys-interaction-level {PASSIVE,INTERACTIVE,DISRUPTIVE}]
                      [--sys-sku STRING] [--sys-platform STRING] [--plugin-config STRING] [--system-config STRING] [--connection-config STRING]
                      [--log-path STRING] [--log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}]
-                     {run-plugins,gen-plugin-config} ...
+                     {run-plugins,gen-plugin-config,describe} ...
 
 Error scraper CLI
 
 positional arguments:
-  {run-plugins,gen-plugin-config}
+  {run-plugins,gen-plugin-config,describe}
                         Subcommands
     run-plugins         Run a series of plugins
     gen-plugin-config   Generate a config for a plugin or list of plugins
+    describe            Display details on a built-in config or plugin
 
 options:
   -h, --help            show this help message and exit
@@ -41,7 +42,7 @@ options:
   --system-config STRING
                         Path to system config json (default: None)
   --connection-config STRING
-                        Path to system config json (default: None)
+                        Path to connection config json (default: None)
   --log-path STRING     Specifies local path for error scraper logs, use 'None' to disable logging (default: .)
   --log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}
                         Change python log level (default: INFO)
@@ -49,6 +50,34 @@ options:
 ```
 
 The plugins to run can be specified in two ways, using a plugin JSON config file or using the 'run-plugins' sub command. These two options are not mutually exclusive and can be used together.
+
+---
+
+### Describing Built-in Configs and Plugins
+
+You can use the `describe` subcommand to display details about built-in configs or plugins.
+
+#### List all built-in configs:
+```sh
+error-scraper describe config
+```
+
+#### Show details for a specific built-in config:
+```sh
+error-scraper describe config <config-name>
+```
+
+#### List all available plugins:
+```sh
+error-scraper describe plugin
+```
+
+#### Show details for a specific plugin:
+```sh
+error-scraper describe plugin <plugin-name>
+```
+
+---
 
 ### Plugin Configs
 A plugin JSON config should follow the structure of the plugin config model defined here. The globals field is a dictionary of global key-value pairs; values in globals will be passed to any plugin that supports the corresponding key. The plugins field should be a dictionary mapping plugin names to sub-dictionaries of plugin arguments. Lastly, the result_collators attribute is used to define result collator classes that will be run on the plugin results. By default, the CLI adds the TableSummary result collator, which prints a summary of each plugin’s results in a tabular format to the console.
@@ -84,7 +113,6 @@ error-scraper gen-plugin-config DmesgPlugin
 This would produce the following config:
 
 ```json
-
 {
   "global_args": {},
   "plugins": {
@@ -103,7 +131,6 @@ This would produce the following config:
   },
   "result_collators": {}
 }
-
 ```
 
 ### 'run-plugins' sub command
@@ -136,7 +163,6 @@ Run multiple plugins
 ```sh
 error-scraper run-plugins BiosPlugin --exp-bios-version TestBios123 RocmPlugin --exp-rocm TestRocm123
 ```
-
 
 Run plugins without specifying args (plugin defaults will be used)
 

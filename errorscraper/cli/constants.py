@@ -23,16 +23,5 @@
 # SOFTWARE.
 #
 ###############################################################################
-from typing import Optional
-
-from pydantic import BaseModel, Field
-
-
-class PluginConfig(BaseModel):
-    """Model for preset configuration of plugins and result collators"""
-
-    global_args: dict = Field(default_factory=dict)
-    plugins: dict[str, dict] = Field(default_factory=dict)
-    result_collators: dict[str, dict] = Field(default_factory=dict)
-    name: Optional[str] = None
-    desc: Optional[str] = None
+META_VAR_MAP = {int: "INT", bool: "BOOL", dict: "JSON_STRING", float: "FLOAT", str: "STRING"}
+DEFAULT_CONFIG = "NodeStatus"

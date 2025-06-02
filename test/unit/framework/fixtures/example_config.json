@@ -1,0 +1,9 @@
+{
+    "name": "ExampleConfig",
+    "desc": "This is an example",
+    "global_args": {},
+    "plugins": {
+        "ExamplePlugin": {}
+    },
+    "result_collators": {}
+}

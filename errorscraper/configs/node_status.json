@@ -1,0 +1,19 @@
+{
+    "name": "NodeStatus",
+    "desc": "Check configuration and status of the node",
+    "global_args": {},
+    "plugins": {
+        "BiosPlugin": {},
+        "CmdlinePlugin": {},
+        "DimmPlugin": {},
+        "DkmsPlugin": {},
+        "DmesgPlugin": {},
+        "KernelPlugin": {},
+        "MemoryPlugin": {},
+        "OsPlugin": {},
+        "RocmPlugin": {},
+        "StoragePlugin": {},
+        "UptimePlugin": {}
+    },
+    "result_collators": {}
+}

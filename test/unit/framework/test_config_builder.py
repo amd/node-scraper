@@ -23,45 +23,8 @@
 # SOFTWARE.
 #
 ###############################################################################
-from typing import Optional
-
-import pytest
-from common.shared_utils import MockConnectionManager
-from pydantic import BaseModel
 
 from errorscraper.configbuilder import ConfigBuilder
-from errorscraper.enums import ExecutionStatus
-from errorscraper.interfaces import PluginInterface
-from errorscraper.models import PluginResult
-from errorscraper.pluginregistry import PluginRegistry
-
-
-class TestModelArg(BaseModel):
-    model_attr: int = 123
-
-
-class TestPluginA(PluginInterface[MockConnectionManager, None]):
-
-    CONNECTION_TYPE = MockConnectionManager
-
-    def run(
-        self,
-        test_bool_arg: bool = True,
-        test_str_arg: str = "test",
-        test_model_arg: Optional[TestModelArg] = None,
-    ):
-        return PluginResult(
-            source="testA",
-            status=ExecutionStatus.ERROR,
-        )
-
-
-@pytest.fixture
-def plugin_registry():
-    registry = PluginRegistry()
-    registry.plugins = {"TestPluginA": TestPluginA}
-    registry.connection_managers = {"MockConnectionManager": MockConnectionManager}
-    return registry
 
 
 def test_config_builder(plugin_registry):
