@@ -44,7 +44,14 @@ class ProcessCollector(InBandDataCollector[ProcessDataModel, ProcessCollectorArg
     def collect_data(
         self, args: Optional[ProcessCollectorArgs] = None
     ) -> tuple[TaskResult, ProcessDataModel | None]:
-        """Read process data"""
+        """Collect process data from the system.
+
+        Args:
+            args (Optional[ProcessCollectorArgs], optional): process collection arguments. Defaults to None.
+
+        Returns:
+            tuple[TaskResult, ProcessDataModel | None]: tuple containing the task result and the collected process data model or None if no data was collected.
+        """
         if args is None:
             args = ProcessCollectorArgs()
 

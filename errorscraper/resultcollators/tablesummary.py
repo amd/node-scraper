@@ -33,6 +33,13 @@ class TableSummary(PluginResultCollator):
     def collate_results(
         self, plugin_results: list[PluginResult], connection_results: list[TaskResult], **kwargs
     ):
+        """Collate the results into a summary table
+
+        Args:
+            plugin_results (list[PluginResult]): list of plugin results to collate
+            connection_results (list[TaskResult]): list of connection results to collate
+        """
+
         def gen_str_table(headers: list[str], rows: list[str]):
             column_widths = [len(header) for header in headers]
             for row in rows:

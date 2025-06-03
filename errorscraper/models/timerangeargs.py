@@ -30,5 +30,9 @@ from pydantic import BaseModel
 
 
 class TimeRangeAnalyisArgs(BaseModel):
+    """
+    Model for time range analysis arguments.
+    """
+
     analysis_range_start: Optional[datetime.datetime] = None
     analysis_range_end: Optional[datetime.datetime] = None

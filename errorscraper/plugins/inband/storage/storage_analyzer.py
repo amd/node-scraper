@@ -42,12 +42,14 @@ class StorageAnalyzer(DataAnalyzer[StorageDataModel, StorageAnalyzerArgs]):
     def analyze_data(
         self, data: StorageDataModel, args: Optional[StorageAnalyzerArgs] = None
     ) -> TaskResult:
-        """
-        Check that at least one of the storage devices on the system (e.g. /dev/sda, dev/nvme0n1 or C:) has enough free space.
-        If none of the devices have enough free space, log an event with the storage info of the largest device by total size.
+        """Analyze the storage data to check if there is enough free space
+
         Args:
-            min_required_free_space (str): Minimum required free space on at least one of the storage devices
-             for the system to be considered healthy. Can be passed with any storage unit (e.g. 2TB, 200Gi)
+            data (StorageDataModel): storage data to analyze
+            args (Optional[StorageAnalyzerArgs], optional): storage analysis arguments. Defaults to None.
+
+        Returns:
+            TaskResult: Result of the storage analysis containing the status and message.
         """
         if args is None:
             args = StorageAnalyzerArgs()

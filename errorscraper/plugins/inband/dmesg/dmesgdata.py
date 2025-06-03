@@ -67,6 +67,11 @@ class DmesgData(DataModel):
         return ("\n").join(new_lines)
 
     def merge_data(self, input_data: "DmesgData"):
+        """Merge dmesg data with new input data
+
+        Args:
+            input_data (DmesgData): input dmesg data to merge with current dmesg data
+        """
         new_lines = self.get_new_dmesg_lines(input_data.dmesg_content, self.dmesg_content)
         merged_data = input_data.dmesg_content.strip() + f"\n{new_lines.strip()}"
         self.dmesg_content = merged_data

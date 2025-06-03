@@ -31,11 +31,15 @@ from pydantic import BaseModel, Field
 
 
 class TypeClass(BaseModel):
+    """Class to hold type class information"""
+
     type_class: Any
     inner_type: Optional[Any] = None
 
 
 class TypeData(BaseModel):
+    """Class to hold type data information"""
+
     type_classes: list[TypeClass] = Field(default_factory=list)
     required: bool = False
     default: Any = None
@@ -45,6 +49,14 @@ class TypeUtils:
 
     @classmethod
     def get_generic_map(cls, class_type: Type[Any]) -> dict:
+        """Get a map of generic type parameters to their actual types for a class
+
+        Args:
+            class_type (Type[Any]): class to check for generic types
+
+        Returns:
+            dict: map of generic type parameters to their actual types
+        """
         if class_type.__orig_bases__ and len(class_type.__orig_bases__) > 0:
             gen_base = class_type.__orig_bases__[0]
             class_org = get_origin(gen_base)
@@ -59,6 +71,15 @@ class TypeUtils:
     def get_func_arg_types(
         cls, target: Callable, class_type: Optional[Type[Any]] = None
     ) -> dict[str, TypeData]:
+        """Get argument type details for a function
+
+        Args:
+            target (Callable): function to check types
+            class_type (Optional[Type[Any]], optional): class that the function belongs to, if any. Defaults to None.
+
+        Returns:
+            dict[str, TypeData]: map of argument names to TypeData objects containing type information
+        """
 
         generic_map = {}
 
@@ -90,6 +111,14 @@ class TypeUtils:
 
     @classmethod
     def process_type(cls, input_type: type[Any]) -> list[TypeClass]:
+        """Process a type to extract its class and any inner types
+
+        Args:
+            input_type (type[Any]): type to process
+
+        Returns:
+            list[TypeClass]: list of TypeClass objects containing type class and inner type information
+        """
         origin = get_origin(input_type)
         if origin is None:
             return [TypeClass(type_class=input_type)]

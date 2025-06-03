@@ -40,7 +40,12 @@ class BiosCollector(InBandDataCollector[BiosDataModel, None]):
         self,
         args=None,
     ) -> tuple[TaskResult, BiosDataModel | None]:
-        """read bios data"""
+        """Collect BIOS version information from the system.
+
+        Returns:
+            tuple[TaskResult, BiosDataModel | None]: tuple containing the task result and an instance of BiosDataModel
+            or None if the BIOS version could not be determined.
+        """
         bios = None
 
         if self.system_info.os_family == OSFamily.WINDOWS:

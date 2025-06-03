@@ -128,4 +128,12 @@ class DataAnalyzer(Task, abc.ABC, Generic[TDataModel, TAnalyzeArg]):
         data: TDataModel,
         args: Optional[TAnalyzeArg | dict],
     ) -> TaskResult:
-        """Analyze data"""
+        """Analyze the provided data and return a TaskResult
+
+        Args:
+            data (TDataModel): data to analyze
+            args (Optional[TAnalyzeArg  |  dict]): Optional arguments for analysis, can be a model or dict
+
+        Returns:
+            TaskResult: Task result containing the analysis outcome
+        """

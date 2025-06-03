@@ -42,7 +42,16 @@ class DkmsAnalyzer(DataAnalyzer[DkmsDataModel, DkmsAnalyzerArgs]):
     def analyze_data(
         self, data: DkmsDataModel, args: Optional[DkmsAnalyzerArgs] = None
     ) -> TaskResult:
-        """ """
+        """
+        Analyze the provided DKMS data against the expected status and version.
+
+        Args:
+            data (DkmsDataModel): Dkms data to analyze.
+            args (Optional[DkmsAnalyzerArgs], optional): Dkms analysis arguments. Defaults to None.
+
+        Returns:
+            TaskResult: The result of the analysis containing status and message.
+        """
         # Check if the required data is provided
         if not args:
             self.result.message = "DKMS analysis args not provided"

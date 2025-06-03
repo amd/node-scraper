@@ -36,7 +36,18 @@ class RocmDataModel(DataModel):
     @field_validator("rocm_version")
     @classmethod
     def validate_rocm_version(cls, rocm_version: str) -> str:
+        """
+        Validate the ROCm version format.
 
+        Args:
+            rocm_version (str): The ROCm version string to validate.
+
+        Raises:
+            ValueError: If the ROCm version does not match the expected format.
+
+        Returns:
+            str: The validated ROCm version string.
+        """
         if not bool(
             re.match(
                 r"^(\d+(?:\.\d+){0,3})-(\d+)$",

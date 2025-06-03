@@ -42,7 +42,7 @@ class FileSystemLogHook(TaskResultHook):
         self.log_base_path = log_base_path
 
     def process_result(self, task_result: TaskResult, data: Optional[DataModel] = None, **kwargs):
-        """post process task result
+        """log task result to the filesystem
 
         Args:
             task_result (TaskResult): input task result

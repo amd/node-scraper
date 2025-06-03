@@ -41,6 +41,16 @@ class RocmAnalyzer(DataAnalyzer[RocmDataModel, RocmAnalyzerArgs]):
     def analyze_data(
         self, data: RocmDataModel, args: Optional[RocmAnalyzerArgs] = None
     ) -> TaskResult:
+        """
+        Analyze the provided ROCm data against expected versions.
+
+        Args:
+            data (RocmDataModel): ROCm data to analyze
+            args (Optional[RocmAnalyzerArgs], optional): ROCm analysis arguments. Defaults to None.
+
+        Returns:
+            TaskResult: Result of the analysis containing status and message.
+        """
         # skip check if data not provided in config
         if not args or not args.exp_rocm:
             self.result.message = "Expected ROCm not provided"

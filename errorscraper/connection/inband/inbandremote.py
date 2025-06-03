@@ -56,6 +56,7 @@ class RemoteShell(InBandConnection):
         self.client.set_missing_host_key_policy(self.host_key_policy())
 
     def connect_ssh(self):
+        """Connect to the remote host via SSH"""
         try:
             self.client.connect(
                 hostname=str(self.ssh_params.hostname),

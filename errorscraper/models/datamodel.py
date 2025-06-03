@@ -64,6 +64,8 @@ class FileModel(BaseModel):
 
 
 class DataModel(BaseModel):
+    """Base class for data model, used to define structure of data collected from the system"""
+
     def log_model(self, log_path: str):
         """Log data model to a file
 

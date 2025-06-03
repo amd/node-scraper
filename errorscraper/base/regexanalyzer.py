@@ -51,11 +51,21 @@ class RegexEvent(Event):
 
 
 class RegexAnalyzer(DataAnalyzer[TDataModel, TAnalyzeArg]):
-    """Parent class for all regex based error detectors."""
+    """Parent class for all regex based data analyzers."""
 
     def _build_regex_event(
         self, regex_obj: ErrorRegex, match: str | list[str], source: str
     ) -> RegexEvent:
+        """Build a RegexEvent object from a regex match and source.
+
+        Args:
+            regex_obj (ErrorRegex): regex object containing the regex pattern, message, category, and priorit
+            match (str | list[str]): matched content from the regex
+            source (str): descriptor for the content where the match was found
+
+        Returns:
+            RegexEvent: an instance of RegexEvent containing the match details
+        """
         return RegexEvent(
             description=regex_obj.message,
             category=regex_obj.event_category,

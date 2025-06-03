@@ -38,7 +38,12 @@ class MemoryCollector(InBandDataCollector[MemoryDataModel, None]):
     DATA_MODEL = MemoryDataModel
 
     def collect_data(self, args=None) -> tuple[TaskResult, MemoryDataModel | None]:
-        """read memory usage data"""
+        """
+        Collects memory usage details from the system.
+
+        Returns:
+            tuple[TaskResult, MemoryDataModel | None]: tuple containing the task result and memory data model or None if data is not available.
+        """
         mem_free, mem_total = None, None
         if self.system_info.os_family == OSFamily.WINDOWS:
             os_memory_cmd = self._run_sut_cmd(

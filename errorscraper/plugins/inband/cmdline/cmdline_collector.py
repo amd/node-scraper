@@ -41,6 +41,12 @@ class CmdlineCollector(InBandDataCollector[CmdlineDataModel, None]):
         self,
         args=None,
     ) -> tuple[TaskResult, CmdlineDataModel | None]:
+        """
+        Collects the cmdline data from the system.
+
+        Returns:
+            tuple[TaskResult, CmdlineDataModel | None]: tuple containing the task result and the cmdline data model if successful, otherwise None.
+        """
         res = self._run_sut_cmd("cat /proc/cmdline")
         cmdline_data = None
         if res.exit_code == 0:

@@ -39,7 +39,12 @@ class KernelCollector(InBandDataCollector[KernelDataModel, None]):
         self,
         args=None,
     ) -> tuple[TaskResult, KernelDataModel | None]:
-        """read kernel data"""
+        """
+        Collect kernel version data.
+
+        Returns:
+            tuple[TaskResult, KernelDataModel | None]: tuple containing the task result and kernel data model or None if not found.
+        """
         kernel = None
         if self.system_info.os_family == OSFamily.WINDOWS:
             res = self._run_sut_cmd("wmic os get Version /Value")

@@ -27,6 +27,7 @@ import logging
 from typing import Generic, Optional
 
 from errorscraper.connection.inband import InBandConnection
+from errorscraper.connection.inband.inband import CommandArtifact, FileArtifact
 from errorscraper.enums import EventPriority, OSFamily, SystemInteractionLevel
 from errorscraper.generictypes import TCollectArg, TDataModel
 from errorscraper.interfaces import DataCollector, TaskResultHook
@@ -74,7 +75,20 @@ class InBandDataCollector(
         timeout: int = 300,
         strip: bool = True,
         log_artifact: bool = True,
-    ):
+    ) -> CommandArtifact:
+        """
+        Run a command on the SUT and return the result.
+
+        Args:
+            command (str): command to run on the SUT.
+            sudo (bool, optional): whether to run the command with sudo. Defaults to False.
+            timeout (int, optional): command timeout in seconds. Defaults to 300.
+            strip (bool, optional): whether output should be stripped. Defaults to True.
+            log_artifact (bool, optional): whether we should log the command result. Defaults to True.
+
+        Returns:
+            CommandArtifact: The result of the command execution, which includes stdout, stderr, and exit code.
+        """
         command_res = self.connection.run_command(
             command=command, sudo=sudo, timeout=timeout, strip=strip
         )
@@ -85,7 +99,19 @@ class InBandDataCollector(
 
     def _read_sut_file(
         self, filename: str, encoding="utf-8", strip: bool = True, log_artifact=True
-    ):
+    ) -> FileArtifact:
+        """
+        Read a file from the SUT and return its content.
+
+        Args:
+            filename (str): path to the file on the SUT.
+            encoding (str, optional): encoding to use when reading the file. Defaults to "utf-8".
+            strip (bool, optional): whether the file contents should be stripped. Defaults to True.
+            log_artifact (bool, optional): whether we should log the contents of the file. Defaults to True.
+
+        Returns:
+            FileArtifact: The content of the file read from the SUT, which includes the file name and content
+        """
         file_res = self.connection.read_file(filename=filename, encoding=encoding, strip=strip)
         if log_artifact:
             self.result.artifacts.append(file_res)

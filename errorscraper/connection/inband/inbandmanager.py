@@ -68,6 +68,11 @@ class InBandConnectionManager(ConnectionManager[InBandConnection, SSHConnectionP
         )
 
     def _check_os_family(self):
+        """Check the OS family of the system under test (SUT)
+
+        Raises:
+            RuntimeError: If the connection is not initialized
+        """
         if not self.connection:
             raise RuntimeError("Connection not initialized")
 
@@ -88,6 +93,11 @@ class InBandConnectionManager(ConnectionManager[InBandConnection, SSHConnectionP
     def connect(
         self,
     ) -> TaskResult:
+        """Connect to the system under test (SUT) using in-band connection
+
+        Returns:
+            TaskResult: The result of the connection attempt
+        """
         if self.system_info.location == SystemLocation.LOCAL:
             self.logger.info("Using local shell")
             self.connection = LocalShell()
@@ -132,6 +142,7 @@ class InBandConnectionManager(ConnectionManager[InBandConnection, SSHConnectionP
         return self.result
 
     def disconnect(self):
+        """Disconnect in-band connection"""
         super().disconnect()
         if isinstance(self.connection, RemoteShell):
             self.connection.client.close()

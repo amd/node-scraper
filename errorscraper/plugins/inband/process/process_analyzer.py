@@ -41,6 +41,17 @@ class ProcessAnalyzer(DataAnalyzer[ProcessDataModel, ProcessAnalyzerArgs]):
     def analyze_data(
         self, data: ProcessDataModel, args: Optional[ProcessAnalyzerArgs] = None
     ) -> TaskResult:
+        """
+        Analyze the process data to check if the number of KFD processes and CPU usage
+        are within the allowed limits.
+
+        Args:
+            data (ProcessDataModel): The process data to analyze.
+            args (Optional[ProcessAnalyzerArgs], optional): The process analysis arguments. Defaults to None.
+
+        Returns:
+            TaskResult: The result of the analysis, containing any events logged during the process.
+        """
         if not args:
             args = ProcessAnalyzerArgs()
 

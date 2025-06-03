@@ -39,31 +39,14 @@ class OsAnalyzer(DataAnalyzer[OsDataModel, OsAnalyzerArgs]):
     DATA_MODEL = OsDataModel
 
     def analyze_data(self, data: OsDataModel, args: Optional[OsAnalyzerArgs] = None) -> TaskResult:
-        """Analyze the OS name found in the data library
+        """Analyze the OS data against expected OS names.
 
-        Parameters
-        ----------
-        data_library : dict[Type[DataModel], DataModel]
-            A dictionary containing the data models. Must contain a key type[OsDataModel] which contains
-            the value OsDataModel object
-        exp_os : str | list, optional
-            Expected OS(s) to test against
-            If a string is input it will be transformed into a list see list case for more details.
-            If a list is input each element will be tested against the OS name found in the data library
-              if the element in `exp_os` is a match to the OS name in the data library the test will pass
-              otherwise the test will fail by raising a CRITICAL event
-            , by default None
-        exact_match : bool, optional
-            If true `exp_os` must be equal to `.os_name` in data model.
-            If False `exp_os must be a sub-string of `.os_name` in data model
-            By default True
+        Args:
+            data (OsDataModel): Operating System data to analyze.
+            args (Optional[OsAnalyzerArgs], optional): OS analysis arguments. Defaults to None.
 
-        Returns
-        -------
-        TaskResult
-            A TaskResult if no exp_os then ExecutionStatus.NOT_RAN
-            If OS name matches exp_os ExecutionStatus.OK
-            If OS name does not match exp_os ExecutionStatus.ERRORS_DETECTED due to CRITICAL event
+        Returns:
+            TaskResult: Result of the analysis containing status and message.
         """
         if not args or not args.exp_os:
             self.result.message = "Expected OS name not provided"

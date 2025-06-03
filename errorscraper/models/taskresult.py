@@ -105,6 +105,12 @@ class TaskResult(BaseModel):
                 self.status = ExecutionStatus.WARNING
 
     def finalize(self, logger: Optional[logging.Logger] = None) -> None:
+        """Finalize the task result by setting end time, updating status, and logging
+        the result.
+
+        Args:
+            logger (Optional[logging.Logger], optional): python logger instance. Defaults to None.
+        """
         self.end_time = datetime.datetime.now()
 
         if self.status == ExecutionStatus.UNSET:

@@ -62,6 +62,11 @@ class DmesgCollector(InBandDataCollector[DmesgData, None]):
         self,
         args=None,
     ) -> tuple[TaskResult, DmesgData | None]:
+        """Collect dmesg data from the system
+
+        Returns:
+            tuple[TaskResult, DmesgData | None]: tuple containing the result of the task and the dmesg data if available
+        """
         dmesg_content = self._get_dmesg_content()
 
         if dmesg_content:

@@ -38,7 +38,11 @@ class RocmCollector(InBandDataCollector[RocmDataModel, None]):
     DATA_MODEL = RocmDataModel
 
     def collect_data(self, args=None) -> tuple[TaskResult, RocmDataModel | None]:
-        """read ROCm version data"""
+        """Collect ROCm version data from the system.
+
+        Returns:
+            tuple[TaskResult, RocmDataModel | None]: tuple containing the task result and ROCm data model if available.
+        """
         res = self._run_sut_cmd("cat /opt/rocm/.info/version")
         if res.exit_code == 0:
             rocm_data = RocmDataModel(rocm_version=res.stdout)

@@ -37,8 +37,12 @@ class OsCollector(InBandDataCollector[OsDataModel, None]):
 
     DATA_MODEL = OsDataModel
 
-    def collect_version(self):
-        """Collect OS version"""
+    def collect_version(self) -> str:
+        """Collect OS version.
+
+        Returns:
+            str: OS version string, empty string if not found.
+        """
         if self.system_info.os_family == OSFamily.WINDOWS:
             res = self._run_sut_cmd("wmic os get Version /value")
             if res.exit_code == 0:
@@ -67,7 +71,11 @@ class OsCollector(InBandDataCollector[OsDataModel, None]):
         return os_version
 
     def collect_data(self, args=None) -> tuple[TaskResult, OsDataModel | None]:
-        """read os data"""
+        """Collect OS name and version.
+
+        Returns:
+            tuple[TaskResult, OsDataModel | None]: tuple containing the task result and OS data model or None if not found.
+        """
         os_name = None
         if self.system_info.os_family == OSFamily.WINDOWS:
             res = self._run_sut_cmd("wmic os get Caption /Value")

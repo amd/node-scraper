@@ -37,10 +37,10 @@ class DkmsAnalyzerArgs(BaseModel):
         """support str or list input for dkms_status
 
         Args:
-            dkms_status (str | list): _description_
+            dkms_status (str | list): dkms status to check
 
         Returns:
-            list: _description_
+            list: list of dkms status
         """
         if isinstance(dkms_status, str):
             dkms_status = [dkms_status]
@@ -53,10 +53,10 @@ class DkmsAnalyzerArgs(BaseModel):
         """support str or list input for dkms_version
 
         Args:
-            dkms_version (str | list): _description_
+            dkms_version (str | list): dkms version to check
 
         Returns:
-            list: _description_
+            list: list of dkms version
         """
         if isinstance(dkms_version, str):
             dkms_version = [dkms_version]

@@ -27,4 +27,8 @@ from pydantic import BaseModel, Field
 
 
 class ConnectionConfig(BaseModel):
+    """
+    Model that defines the structure for connection configurations.
+    """
+
     connection: dict[str, dict] = Field(default_factory=dict)

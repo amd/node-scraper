@@ -46,6 +46,12 @@ class PluginRegistry:
         plugin_pkg: Optional[list[types.ModuleType]] = None,
         load_internal_plugins: bool = True,
     ) -> None:
+        """Initialize the PluginRegistry with optional plugin packages.
+
+        Args:
+            plugin_pkg (Optional[list[types.ModuleType]], optional): The module to search for plugins in. Defaults to None.
+            load_internal_plugins (bool, optional): Whether internal plugin should be loaded. Defaults to True.
+        """
         if load_internal_plugins:
             self.plugin_pkg = [internal_plugins, internal_connections, internal_collators]
         else:
@@ -65,10 +71,22 @@ class PluginRegistry:
         )
 
     @staticmethod
-    def load_plugins(base_class, search_modules):
+    def load_plugins(
+        base_class: type,
+        search_modules: list[types.ModuleType],
+    ) -> dict[str, type]:
+        """Load plugins from the specified modules that are subclasses of the given base class.
+
+        Args:
+            base_class (type): The base class that the plugins should inherit from.
+            search_modules (list[types.ModuleType]): List of modules to search for plugins.
+
+        Returns:
+            dict[str, type]: A dictionary mapping plugin names to their classes.
+        """
         registry = {}
 
-        def _recurse_pkg(pkg: types.ModuleType, base_class):
+        def _recurse_pkg(pkg: types.ModuleType, base_class: type) -> None:
             for _, module_name, ispkg in pkgutil.iter_modules(pkg.__path__, pkg.__name__ + "."):
                 module = importlib.import_module(module_name)
                 for _, plugin in inspect.getmembers(

@@ -360,6 +360,15 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
         data: DmesgData,
         args: Optional[DmesgAnalyzerArgs] = None,
     ) -> TaskResult:
+        """Analyze dmesg data for errors
+
+        Args:
+            data (DmesgData): dmesg data to analyze
+            args (Optional[DmesgAnalyzerArgs], optional): dmesg analysis arguments. Defaults to None.
+
+        Returns:
+            TaskResult: The result of the analysis containing status and message.
+        """
 
         if not args:
             args = DmesgAnalyzerArgs()

@@ -47,20 +47,15 @@ class PackageAnalyzer(DataAnalyzer[PackageDataModel, PackageAnalyzerArgs]):
     ) -> bool:
         """Searches the package values for the key and value search patterns
 
-        Parameters
-        ----------
-        package_data : dict[str, str]
-            A dictionary of package names and versions
-        key_search : re.Pattern[str]
-            A compiled regex pattern to search for the package name
-        value_search : re.Pattern[str] | None
-            A compiled regex pattern to search for the package version, if None then any version is accepted
+        Args:
+            package_data (dict[str, str]): a dictionary of package names and versions
+            key_search (re.Pattern[str]): a compiled regex pattern to search for the package name
+            value_search (re.Pattern[str] | None): a compiled regex pattern to search for the package version, if None then any version is accepted
 
-        Returns
-        -------
-        bool
-            A boolean indicating if the value was found
+        Returns:
+            bool: A boolean indicating if the value was found
         """
+
         value_found = False
         for name, version in package_data.items():
             key_search_res = key_search.search(name)
@@ -86,6 +81,12 @@ class PackageAnalyzer(DataAnalyzer[PackageDataModel, PackageAnalyzerArgs]):
     def package_regex_search(
         self, package_data: dict[str, str], exp_packge_data: dict[str, str | None]
     ):
+        """Searches the package data for the expected package and version using regex
+
+        Args:
+            package_data (dict[str, str]): a dictionary of package names and versions
+            exp_packge_data (dict[str, str  |  None]): a dictionary of expected package names and versions
+        """
         for exp_key, exp_value in exp_packge_data.items():
             try:
                 if exp_value is not None:
@@ -123,6 +124,12 @@ class PackageAnalyzer(DataAnalyzer[PackageDataModel, PackageAnalyzerArgs]):
     def package_exact_match(
         self, package_data: dict[str, str], exp_packge_data: dict[str, str | None]
     ):
+        """Checks the package data for the expected package and version using exact match
+
+        Args:
+            package_data (dict[str, str]): a dictionary of package names and versions
+            exp_packge_data (dict[str, str  |  None]): a dictionary of expected package names and versions
+        """
         for exp_key, exp_value in exp_packge_data.items():
             self.logger.info(exp_key)
             version = package_data.get(exp_key)
@@ -157,7 +164,15 @@ class PackageAnalyzer(DataAnalyzer[PackageDataModel, PackageAnalyzerArgs]):
     def analyze_data(
         self, data: PackageDataModel, args: Optional[PackageAnalyzerArgs] = None
     ) -> TaskResult:
-        """Analyze the packages and their versions"""
+        """Analyze the package data against the expected package version data
+
+        Args:
+            data (PackageDataModel): package data to analyze
+            args (Optional[PackageAnalyzerArgs], optional): package analysis arguments. Defaults to None.
+
+        Returns:
+            TaskResult: the result of the analysis containing status and message
+        """
         if not args or not args.exp_package_ver:
             self.result.message = "Expected Package Version Data not provided"
             self.result.status = ExecutionStatus.NOT_RAN

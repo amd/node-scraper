@@ -42,7 +42,11 @@ class UptimeCollector(InBandDataCollector[UptimeDataModel, None]):
     UPTIME_CMD = "uptime"
 
     def collect_data(self, args=None) -> tuple[TaskResult, UptimeDataModel | None]:
-        """Read uptime data"""
+        """Collect uptime data from the system.
+
+        Returns:
+            tuple[TaskResult, UptimeDataModel | None]: tuple containing the task result and uptime data model or None if failed.
+        """
 
         uptime_pattern = re.compile(
             r"(?P<current_time>\d{2}:\d{2}:\d{2})\s+" r"up\s+(?P<uptime>.+?),\s+\d+\s+users?"

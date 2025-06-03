@@ -43,6 +43,12 @@ class PackageCollector(InBandDataCollector[PackageDataModel, None]):
     DATA_MODEL = PackageDataModel
 
     def _detect_package_manager(self) -> Callable | None:
+        """Detect the package manager based on the OS release information.
+
+        Returns:
+            Callable | None: A callable function that dumps the packages for the detected package manager,
+            or None if the package manager is not supported.
+        """
         package_manger_map: dict[str, Callable] = {
             "debian": self._debian_package_dump,
             "redhat": self._dump_fedora_centos_rhel_packages,
@@ -60,6 +66,11 @@ class PackageCollector(InBandDataCollector[PackageDataModel, None]):
         return None
 
     def _windows_package_dump(self) -> dict[str, str]:
+        """Dump installed packages on Windows using wmic
+
+        Returns:
+            dict[str, str]: A dictionary with package names as keys and their versions as values.
+        """
         MIN_SPLIT_LENGTH = 2
         res = self._run_sut_cmd("wmic product get name,version")
         packages = {}
@@ -80,6 +91,11 @@ class PackageCollector(InBandDataCollector[PackageDataModel, None]):
         return packages
 
     def _debian_package_dump(self) -> dict[str, str]:
+        """Dump installed packages on Debian-based systems using dpkg-query
+
+        Returns:
+            dict[str, str]: A dictionary with package names as keys and their versions as values.
+        """
         MIN_SPLIT_LENGTH = 2
         MAX_SPLIT_LENGTH = 3
         res = self._run_sut_cmd("dpkg-query -W")
@@ -99,6 +115,11 @@ class PackageCollector(InBandDataCollector[PackageDataModel, None]):
         return packages
 
     def _dump_fedora_centos_rhel_packages(self) -> dict[str, str]:
+        """Dump installed packages on Fedora, CentOS, or RHEL using dnf
+
+        Returns:
+            dict[str, str]: A dictionary with package names as keys and their versions as values.
+        """
         MIN_SPLIT_LENGTH = 2
         MAX_SPLIT_LENGTH = 3
         res = self._run_sut_cmd("dnf list --installed")
@@ -117,6 +138,11 @@ class PackageCollector(InBandDataCollector[PackageDataModel, None]):
         return packages
 
     def _dump_arch_packages(self) -> dict[str, str]:
+        """Dump installed packages on Arch Linux using pacman
+
+        Returns:
+            dict[str, str]: A dictionary with package names as keys and their versions as values.
+        """
         EXPECTED_SPLIT_LENGTH = 2
         res: CommandArtifact = self._run_sut_cmd("pacman -Q")
         packages = {}
@@ -132,6 +158,12 @@ class PackageCollector(InBandDataCollector[PackageDataModel, None]):
         return packages
 
     def _handle_command_failure(self, command_artifact: CommandArtifact):
+        """Handle command failure by logging the error and updating the result.
+        This method logs the error details and updates the result with a failure status.
+
+        Args:
+            command_artifact (CommandArtifact): The command artifact containing the command output and error details.
+        """
         self._log_event(
             category=EventCategory.OS,
             description=f"Error running command: {command_artifact.command}",
@@ -147,15 +179,9 @@ class PackageCollector(InBandDataCollector[PackageDataModel, None]):
     def collect_data(self, args=None) -> tuple[TaskResult, PackageDataModel | None]:
         """Collect package information from the system.
 
-        Package information includes all of the installed packages and their versions.
-        For windows it will be collected using wmic and for linux it will be collected
-        using the package manager of the system. The data is formatted into a dictionary
-        with the package name as the key and the version as the value.
-
-        Returns
-        -------
-        tuple[TaskResult, PackageDataModel | None]
-            The task result and the package data model
+        Returns:
+            tuple[TaskResult, PackageDataModel | None]: tuple containing the task result and a PackageDataModel instance
+            with the collected package information, or None if there was an error.
         """
         packages = {}
         # Windows

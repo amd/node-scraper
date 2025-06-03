@@ -39,7 +39,7 @@ class DimmCollector(InBandDataCollector[DimmDataModel, None]):
         self,
         args=None,
     ) -> tuple[TaskResult, DimmDataModel | None]:
-        """read DIMM data"""
+        """Collect data on installed DIMMs"""
         dimm_str = None
         if self.system_info.os_family == OSFamily.WINDOWS:
             res = self._run_sut_cmd("wmic memorychip get Capacity")

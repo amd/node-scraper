@@ -41,7 +41,12 @@ class DkmsCollector(InBandDataCollector[DkmsDataModel, None]):
         self,
         args=None,
     ) -> tuple[TaskResult, DkmsDataModel | None]:
-        """Read dkms status and version"""
+        """
+        Collect DKMS status and version information.
+
+        Returns:
+            tuple[TaskResult, DkmsDataModel | None]: tuple containing the task result and DKMS data model if available.
+        """
 
         dkms_data = DkmsDataModel()
         dkms_status = self._run_sut_cmd("dkms status")

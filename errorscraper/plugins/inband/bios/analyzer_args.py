@@ -36,10 +36,10 @@ class BiosAnalyzerArgs(BaseModel):
         """support str or list input for exp_bios_version
 
         Args:
-            exp_bios_version (str | list): _description_
+            exp_bios_version (str | list): expected BIOS version(s) to match against
 
         Returns:
-            list: _description_
+            list: a list of expected BIOS versions
         """
         if isinstance(exp_bios_version, str):
             exp_bios_version = [exp_bios_version]

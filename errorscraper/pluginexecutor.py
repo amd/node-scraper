@@ -109,6 +109,11 @@ class PluginExecutor:
         return merged_config
 
     def run_queue(self) -> list[PluginResult]:
+        """Run the plugin queue and return results
+
+        Returns:
+            list[PluginResult]: List of results from running the plugins in the queue
+        """
         plugin_results = []
         plugin_queue = deque(self.plugin_config.plugins.items())
         try:

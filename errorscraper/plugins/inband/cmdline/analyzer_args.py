@@ -36,10 +36,10 @@ class CmdlineAnalyzerArgs(BaseModel):
         """support str or list input for required_cmdline
 
         Args:
-            required_cmdline (str | list): _description_
+            required_cmdline (str | list): required command line arguments
 
         Returns:
-            list: _description_
+            list: list of required command line arguments
         """
         if isinstance(required_cmdline, str):
             required_cmdline = [required_cmdline]
@@ -52,10 +52,10 @@ class CmdlineAnalyzerArgs(BaseModel):
         """support str or list input for banned_cmdline
 
         Args:
-            banned_cmdline (str | list): _description_
+            banned_cmdline (str | list): banned command line arguments
 
         Returns:
-            list: _description_
+            list: a list of banned command line arguments
         """
         if isinstance(banned_cmdline, str):
             banned_cmdline = [banned_cmdline]

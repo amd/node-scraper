@@ -42,6 +42,15 @@ class KernelAnalyzer(DataAnalyzer[KernelDataModel, KernelAnalyzerArgs]):
     def analyze_data(
         self, data: KernelDataModel, args: Optional[KernelAnalyzerArgs] = None
     ) -> TaskResult:
+        """Analyze the kernel data against expected versions.
+
+        Args:
+            data (KernelDataModel): Kernel data to analyze.
+            args (Optional[KernelAnalyzerArgs], optional): Kernel analysis arguments. Defaults to None.
+
+        Returns:
+            TaskResult: Result of the analysis containing status and message.
+        """
         if not args:
             self.result.message = "Expected kernel not provided"
             self.result.status = ExecutionStatus.NOT_RAN

@@ -34,7 +34,7 @@ class EventCategory(AutoNameStrEnum):
     - SSH
         SSH-related errors, e.g. connection refused, timeout, etc.
     - RAS
-        Any RAS events that are customer-visible, including from memory, IO, compute, platform, etc.
+        Any RAS events including from memory, IO, compute, platform, etc.
     - IO
         IO-related SoC or platform IO component, e.g. PCIe, XGMI, HUBs, DF, CXL, USB, USR, NICs
         Does not include IO errors which are customer-visible via RAS
@@ -46,7 +46,7 @@ class EventCategory(AutoNameStrEnum):
         Platform-specific errors which do not fall under other categories (e.g. BMC, SMC, UBB)
         Does not include specific platform events which point to another category
     - APPLICATION
-        End user application errors/failures/outputs, e.g. internal tools give back non-zero return code
+        End user application errors/failures/outputs
     - MEMORY
         Memory-related SoC or platform component, e.g. HBM, UMC, DRAM, SRAM, DDR, etc.
         Does not include anything customer-visible via RAS
@@ -54,7 +54,6 @@ class EventCategory(AutoNameStrEnum):
         SSD/HDD/storage media hardware events, filesystem events
     - COMPUTE
         Events from any of the following AMD IP: GFX, CPU, SDMA, VCN
-        Does not include anything customer-visible via RAS
     - FW
         FW Timeouts, internal FW problems, FW version mismatches
     - SW_DRIVER
