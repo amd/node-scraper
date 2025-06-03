@@ -17,7 +17,7 @@ classifiers = ["Private :: Do Not Upload", "Topic :: Software Development"]
 dependencies = [
     "prettytable",
     "pydantic~=2.8.2",
-    "paramiko<=3.2.0",
+    "paramiko==3.5.1",
     "requests",
     "pytz"
 ]
