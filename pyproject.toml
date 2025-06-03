@@ -31,7 +31,8 @@ dev = [
     "twine",
     "ruff",
     "pre-commit",
-    "pytest"
+    "pytest",
+    "pytest-cov"
 ]
 
 [project.urls]

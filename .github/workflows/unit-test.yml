@@ -11,15 +11,34 @@ permissions:
 
 jobs:
   run_tests:
-
     runs-on: [ self-hosted ]
     container: python:3.10
 
     steps:
     - uses: actions/checkout@v3
+
     - name: Install package
       run: |
         ./dev-setup.sh
-    - name: Run unit tests
+
+    - name: Install xmllint
       run: |
-        pytest -s test/unit
+        apt-get update
+        apt-get install -y libxml2-utils bc
+
+
+    - name: Run unit tests with coverage
+      id: extract_coverage
+      run: |
+        pytest test/unit -s --cov=errorscraper --cov-report=xml --cov-report=term --cov-fail-under=70 --maxfail=1 --disable-warnings -v
+
+    - name: Print coverage
+      run: |
+        total_coverage=$(xmllint --xpath "string(//coverage/@line-rate)" coverage.xml)
+        total_coverage_percentage=$(echo "$total_coverage * 100" | bc)
+        echo "Total Coverage: $total_coverage_percentage%"
+        echo "coverage_percentage=$total_coverage_percentage" >> $GITHUB_ENV
+
+    - name: Display total coverage in Summary
+      run: |
+        echo "Total Coverage: ${{ env.coverage_percentage }}" >> $GITHUB_STEP_SUMMARY
