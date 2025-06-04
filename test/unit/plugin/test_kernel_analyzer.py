@@ -25,12 +25,12 @@
 ###############################################################################
 import pytest
 
-from errorscraper.enums.eventcategory import EventCategory
-from errorscraper.enums.eventpriority import EventPriority
-from errorscraper.enums.executionstatus import ExecutionStatus
-from errorscraper.plugins.inband.kernel.analyzer_args import KernelAnalyzerArgs
-from errorscraper.plugins.inband.kernel.kernel_analyzer import KernelAnalyzer
-from errorscraper.plugins.inband.kernel.kerneldata import KernelDataModel
+from nodescraper.enums.eventcategory import EventCategory
+from nodescraper.enums.eventpriority import EventPriority
+from nodescraper.enums.executionstatus import ExecutionStatus
+from nodescraper.plugins.inband.kernel.analyzer_args import KernelAnalyzerArgs
+from nodescraper.plugins.inband.kernel.kernel_analyzer import KernelAnalyzer
+from nodescraper.plugins.inband.kernel.kerneldata import KernelDataModel
 
 
 @pytest.fixture

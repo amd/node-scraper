@@ -27,12 +27,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from errorscraper.enums.eventcategory import EventCategory
-from errorscraper.enums.executionstatus import ExecutionStatus
-from errorscraper.enums.systeminteraction import SystemInteractionLevel
-from errorscraper.models.systeminfo import OSFamily
-from errorscraper.plugins.inband.dimm.dimm_collector import DimmCollector
-from errorscraper.plugins.inband.dimm.dimmdata import DimmDataModel
+from nodescraper.enums.eventcategory import EventCategory
+from nodescraper.enums.executionstatus import ExecutionStatus
+from nodescraper.enums.systeminteraction import SystemInteractionLevel
+from nodescraper.models.systeminfo import OSFamily
+from nodescraper.plugins.inband.dimm.dimm_collector import DimmCollector
+from nodescraper.plugins.inband.dimm.dimmdata import DimmDataModel
 
 
 @pytest.fixture

@@ -27,12 +27,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from errorscraper.enums.eventcategory import EventCategory
-from errorscraper.enums.executionstatus import ExecutionStatus
-from errorscraper.enums.systeminteraction import SystemInteractionLevel
-from errorscraper.models.systeminfo import OSFamily
-from errorscraper.plugins.inband.bios.bios_collector import BiosCollector
-from errorscraper.plugins.inband.bios.biosdata import BiosDataModel
+from nodescraper.enums.eventcategory import EventCategory
+from nodescraper.enums.executionstatus import ExecutionStatus
+from nodescraper.enums.systeminteraction import SystemInteractionLevel
+from nodescraper.models.systeminfo import OSFamily
+from nodescraper.plugins.inband.bios.bios_collector import BiosCollector
+from nodescraper.plugins.inband.bios.biosdata import BiosDataModel
 
 
 @pytest.fixture

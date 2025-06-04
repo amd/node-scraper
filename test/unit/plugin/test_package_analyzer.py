@@ -27,10 +27,10 @@ import json
 
 import pytest
 
-from errorscraper.enums.executionstatus import ExecutionStatus
-from errorscraper.plugins.inband.package.analyzer_args import PackageAnalyzerArgs
-from errorscraper.plugins.inband.package.package_analyzer import PackageAnalyzer
-from errorscraper.plugins.inband.package.packagedata import PackageDataModel
+from nodescraper.enums.executionstatus import ExecutionStatus
+from nodescraper.plugins.inband.package.analyzer_args import PackageAnalyzerArgs
+from nodescraper.plugins.inband.package.package_analyzer import PackageAnalyzer
+from nodescraper.plugins.inband.package.packagedata import PackageDataModel
 
 
 @pytest.fixture

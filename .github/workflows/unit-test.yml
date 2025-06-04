@@ -30,7 +30,7 @@ jobs:
     - name: Run unit tests with coverage
       id: extract_coverage
       run: |
-        pytest test/unit -s --cov=errorscraper --cov-report=xml --cov-report=term --cov-fail-under=70 --maxfail=1 --disable-warnings -v
+        pytest test/unit -s --cov=nodescraper --cov-report=xml --cov-report=term --cov-fail-under=70 --maxfail=1 --disable-warnings -v
 
     - name: Print coverage
       run: |

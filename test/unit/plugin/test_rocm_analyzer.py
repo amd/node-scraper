@@ -27,12 +27,12 @@ import copy
 
 import pytest
 
-from errorscraper.enums.eventcategory import EventCategory
-from errorscraper.enums.eventpriority import EventPriority
-from errorscraper.enums.executionstatus import ExecutionStatus
-from errorscraper.plugins.inband.rocm.analyzer_args import RocmAnalyzerArgs
-from errorscraper.plugins.inband.rocm.rocm_analyzer import RocmAnalyzer
-from errorscraper.plugins.inband.rocm.rocmdata import RocmDataModel
+from nodescraper.enums.eventcategory import EventCategory
+from nodescraper.enums.eventpriority import EventPriority
+from nodescraper.enums.executionstatus import ExecutionStatus
+from nodescraper.plugins.inband.rocm.analyzer_args import RocmAnalyzerArgs
+from nodescraper.plugins.inband.rocm.rocm_analyzer import RocmAnalyzer
+from nodescraper.plugins.inband.rocm.rocmdata import RocmDataModel
 
 
 @pytest.fixture

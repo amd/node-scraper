@@ -28,11 +28,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 from common.shared_utils import MockConnectionManager
 
-from errorscraper.enums import EventPriority, ExecutionStatus, SystemInteractionLevel
-from errorscraper.interfaces.dataanalyzertask import DataAnalyzer
-from errorscraper.interfaces.datacollectortask import DataCollector
-from errorscraper.interfaces.dataplugin import DataPlugin
-from errorscraper.models import DataModel, TaskResult
+from nodescraper.enums import EventPriority, ExecutionStatus, SystemInteractionLevel
+from nodescraper.interfaces.dataanalyzertask import DataAnalyzer
+from nodescraper.interfaces.datacollectortask import DataCollector
+from nodescraper.interfaces.dataplugin import DataPlugin
+from nodescraper.models import DataModel, TaskResult
 
 
 class StandardDataModel(DataModel):

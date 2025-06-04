@@ -28,9 +28,9 @@ from unittest.mock import MagicMock
 
 from pydantic import BaseModel
 
-from errorscraper.enums import ExecutionStatus
-from errorscraper.interfaces import ConnectionManager, PluginInterface
-from errorscraper.models import PluginResult, TaskResult
+from nodescraper.enums import ExecutionStatus
+from nodescraper.interfaces import ConnectionManager, PluginInterface
+from nodescraper.models import PluginResult, TaskResult
 
 
 class MockConnectionManager(ConnectionManager):

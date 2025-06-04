@@ -26,11 +26,11 @@
 import pytest
 from common.shared_utils import MockConnectionManager
 
-from errorscraper.enums import ExecutionStatus
-from errorscraper.interfaces import PluginInterface
-from errorscraper.models import PluginConfig, PluginResult
-from errorscraper.pluginexecutor import PluginExecutor
-from errorscraper.pluginregistry import PluginRegistry
+from nodescraper.enums import ExecutionStatus
+from nodescraper.interfaces import PluginInterface
+from nodescraper.models import PluginConfig, PluginResult
+from nodescraper.pluginexecutor import PluginExecutor
+from nodescraper.pluginregistry import PluginRegistry
 
 
 class TestPluginA(PluginInterface[MockConnectionManager, None]):

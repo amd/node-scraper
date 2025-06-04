@@ -25,13 +25,13 @@
 ###############################################################################
 import pytest
 
-from errorscraper.enums.eventcategory import EventCategory
-from errorscraper.enums.eventpriority import EventPriority
-from errorscraper.enums.executionstatus import ExecutionStatus
-from errorscraper.models.systeminfo import OSFamily
-from errorscraper.plugins.inband.storage.analyzer_args import StorageAnalyzerArgs
-from errorscraper.plugins.inband.storage.storage_analyzer import StorageAnalyzer
-from errorscraper.plugins.inband.storage.storagedata import (
+from nodescraper.enums.eventcategory import EventCategory
+from nodescraper.enums.eventpriority import EventPriority
+from nodescraper.enums.executionstatus import ExecutionStatus
+from nodescraper.models.systeminfo import OSFamily
+from nodescraper.plugins.inband.storage.analyzer_args import StorageAnalyzerArgs
+from nodescraper.plugins.inband.storage.storage_analyzer import StorageAnalyzer
+from nodescraper.plugins.inband.storage.storagedata import (
     DeviceStorageData,
     StorageDataModel,
 )

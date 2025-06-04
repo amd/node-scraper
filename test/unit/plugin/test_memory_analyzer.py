@@ -25,10 +25,10 @@
 ###############################################################################
 import pytest
 
-from errorscraper.enums.executionstatus import ExecutionStatus
-from errorscraper.plugins.inband.memory.analyzer_args import MemoryAnalyzerArgs
-from errorscraper.plugins.inband.memory.memory_analyzer import MemoryAnalyzer
-from errorscraper.plugins.inband.memory.memorydata import MemoryDataModel
+from nodescraper.enums.executionstatus import ExecutionStatus
+from nodescraper.plugins.inband.memory.analyzer_args import MemoryAnalyzerArgs
+from nodescraper.plugins.inband.memory.memory_analyzer import MemoryAnalyzer
+from nodescraper.plugins.inband.memory.memorydata import MemoryDataModel
 
 
 @pytest.fixture

@@ -25,10 +25,10 @@
 ###############################################################################
 import datetime
 
-from errorscraper.enums.executionstatus import ExecutionStatus
-from errorscraper.plugins.inband.dmesg.analyzer_args import DmesgAnalyzerArgs
-from errorscraper.plugins.inband.dmesg.dmesg_analyzer import DmesgAnalyzer
-from errorscraper.plugins.inband.dmesg.dmesgdata import DmesgData
+from nodescraper.enums.executionstatus import ExecutionStatus
+from nodescraper.plugins.inband.dmesg.analyzer_args import DmesgAnalyzerArgs
+from nodescraper.plugins.inband.dmesg.dmesg_analyzer import DmesgAnalyzer
+from nodescraper.plugins.inband.dmesg.dmesgdata import DmesgData
 
 
 def test_dmesg_filter():

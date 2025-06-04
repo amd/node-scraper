@@ -1,19 +1,19 @@
-# Error Scraper
-Error Scraper is a tool which performs automated data collection and analysis for the purposes of system debug.
+# Node Scraper
+Node Scraper is a tool which performs automated data collection and analysis for the purposes of system debug.
 
 ## Installation
 ### Install From Source
-Error Scraper requires Python 3.10+ for installation. After cloning this repository, call dev-setup.sh script with 'source'. This script creates an editable install of Error Scraper in a python virtual environment and also configures the pre-commit hooks for the project.
+Node Scraper requires Python 3.10+ for installation. After cloning this repository, call dev-setup.sh script with 'source'. This script creates an editable install of Node Scraper in a python virtual environment and also configures the pre-commit hooks for the project.
 
 ```sh
 source dev-setup.sh
 ```
 
 ## CLI Usage
-The Error Scraper CLI can be used to run Error Scraper plugins on a target system. The following CLI options are available:
+The Node Scraper CLI can be used to run Node Scraper plugins on a target system. The following CLI options are available:
 
 ```sh
-usage: error-scraper [-h] [--sys-name STRING] [--sys-location {LOCAL,REMOTE}] [--sys-interaction-level {PASSIVE,INTERACTIVE,DISRUPTIVE}]
+usage: node-scraper [-h] [--sys-name STRING] [--sys-location {LOCAL,REMOTE}] [--sys-interaction-level {PASSIVE,INTERACTIVE,DISRUPTIVE}]
                      [--sys-sku STRING] [--sys-platform STRING] [--plugin-config STRING] [--system-config STRING] [--connection-config STRING]
                      [--log-path STRING] [--log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}]
                      {run-plugins,gen-plugin-config,describe} ...
@@ -43,7 +43,7 @@ options:
                         Path to system config json (default: None)
   --connection-config STRING
                         Path to connection config json (default: None)
-  --log-path STRING     Specifies local path for error scraper logs, use 'None' to disable logging (default: .)
+  --log-path STRING     Specifies local path for node scraper logs, use 'None' to disable logging (default: .)
   --log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}
                         Change python log level (default: INFO)
 
@@ -59,22 +59,22 @@ You can use the `describe` subcommand to display details about built-in configs 
 
 #### List all built-in configs:
 ```sh
-error-scraper describe config
+node-scraper describe config
 ```
 
 #### Show details for a specific built-in config:
 ```sh
-error-scraper describe config <config-name>
+node-scraper describe config <config-name>
 ```
 
 #### List all available plugins:
 ```sh
-error-scraper describe plugin
+node-scraper describe plugin
 ```
 
 #### Show details for a specific plugin:
 ```sh
-error-scraper describe plugin <plugin-name>
+node-scraper describe plugin <plugin-name>
 ```
 
 ---
@@ -107,7 +107,7 @@ The 'gen-plugin-config' sub command can be used to generate a plugin config JSON
 
 Generate a config for the DmesgPlugin:
 ```sh
-error-scraper gen-plugin-config DmesgPlugin
+node-scraper gen-plugin-config DmesgPlugin
 ```
 
 This would produce the following config:
@@ -136,9 +136,9 @@ This would produce the following config:
 ### 'run-plugins' sub command
 The plugins to run and their associated arguments can also be specified directly on the CLI using the 'run-plugins' sub-command. Using this sub-command you can specify a plugin name followed by the arguments for that particular plugin. Multiple plugins can be specified at once.
 
-You can view the available arguments for a particular plugin by running `error-scraper run-plugins <plugin-name> -h`:
+You can view the available arguments for a particular plugin by running `node-scraper run-plugins <plugin-name> -h`:
 ```sh
-usage: error-scraper run-plugins BiosPlugin [-h] [--collection {True,False}] [--analysis {True,False}] [--system-interaction-level STRING]
+usage: node-scraper run-plugins BiosPlugin [-h] [--collection {True,False}] [--analysis {True,False}] [--system-interaction-level STRING]
                                             [--data STRING] [--exp-bios-version [STRING ...]] [--regex-match {True,False}]
 
 options:
@@ -156,22 +156,22 @@ options:
 
 Run a single plugin
 ```sh
-error-scraper run-plugins BiosPlugin --exp-bios-version TestBios123
+node-scraper run-plugins BiosPlugin --exp-bios-version TestBios123
 ```
 
 Run multiple plugins
 ```sh
-error-scraper run-plugins BiosPlugin --exp-bios-version TestBios123 RocmPlugin --exp-rocm TestRocm123
+node-scraper run-plugins BiosPlugin --exp-bios-version TestBios123 RocmPlugin --exp-rocm TestRocm123
 ```
 
 Run plugins without specifying args (plugin defaults will be used)
 
 ```sh
-error-scraper run-plugins BiosPlugin RocmPlugin
+node-scraper run-plugins BiosPlugin RocmPlugin
 ```
 
 Use plugin configs and 'run-plugins'
 
 ```sh
-error-scraper run-plugins BiosPlugin
+node-scraper run-plugins BiosPlugin
 ```

@@ -28,12 +28,12 @@ from typing import Optional, Tuple
 
 import pytest
 
-from errorscraper.enums import ExecutionStatus, SystemInteractionLevel
-from errorscraper.interfaces.datacollectortask import DataCollector
-from errorscraper.interfaces.task import SystemCompatibilityError
-from errorscraper.models import TaskResult
-from errorscraper.models.datamodel import DataModel
-from errorscraper.models.systeminfo import SystemInfo
+from nodescraper.enums import ExecutionStatus, SystemInteractionLevel
+from nodescraper.interfaces.datacollectortask import DataCollector
+from nodescraper.interfaces.task import SystemCompatibilityError
+from nodescraper.models import TaskResult
+from nodescraper.models.datamodel import DataModel
+from nodescraper.models.systeminfo import SystemInfo
 
 
 class DummyDataModel(DataModel):

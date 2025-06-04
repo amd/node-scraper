@@ -25,12 +25,12 @@
 ###############################################################################
 import pytest
 
-from errorscraper.enums.eventcategory import EventCategory
-from errorscraper.enums.eventpriority import EventPriority
-from errorscraper.enums.executionstatus import ExecutionStatus
-from errorscraper.plugins.inband.os.analyzer_args import OsAnalyzerArgs
-from errorscraper.plugins.inband.os.os_analyzer import OsAnalyzer
-from errorscraper.plugins.inband.os.osdata import OsDataModel
+from nodescraper.enums.eventcategory import EventCategory
+from nodescraper.enums.eventpriority import EventPriority
+from nodescraper.enums.executionstatus import ExecutionStatus
+from nodescraper.plugins.inband.os.analyzer_args import OsAnalyzerArgs
+from nodescraper.plugins.inband.os.os_analyzer import OsAnalyzer
+from nodescraper.plugins.inband.os.osdata import OsDataModel
 
 PLATFORM = "platform_id"
 

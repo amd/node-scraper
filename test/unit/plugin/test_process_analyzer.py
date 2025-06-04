@@ -27,12 +27,12 @@ import copy
 
 import pytest
 
-from errorscraper.enums.eventcategory import EventCategory
-from errorscraper.enums.eventpriority import EventPriority
-from errorscraper.enums.executionstatus import ExecutionStatus
-from errorscraper.plugins.inband.process.analyzer_args import ProcessAnalyzerArgs
-from errorscraper.plugins.inband.process.process_analyzer import ProcessAnalyzer
-from errorscraper.plugins.inband.process.processdata import ProcessDataModel
+from nodescraper.enums.eventcategory import EventCategory
+from nodescraper.enums.eventpriority import EventPriority
+from nodescraper.enums.executionstatus import ExecutionStatus
+from nodescraper.plugins.inband.process.analyzer_args import ProcessAnalyzerArgs
+from nodescraper.plugins.inband.process.process_analyzer import ProcessAnalyzer
+from nodescraper.plugins.inband.process.processdata import ProcessDataModel
 
 
 @pytest.fixture

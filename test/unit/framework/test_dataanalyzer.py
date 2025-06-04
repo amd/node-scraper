@@ -23,9 +23,9 @@
 # SOFTWARE.
 #
 ###############################################################################
-from errorscraper.enums.eventpriority import EventPriority
-from errorscraper.enums.executionstatus import ExecutionStatus
-from errorscraper.interfaces.dataanalyzertask import analyze_decorator
+from nodescraper.enums.eventpriority import EventPriority
+from nodescraper.enums.executionstatus import ExecutionStatus
+from nodescraper.interfaces.dataanalyzertask import analyze_decorator
 
 
 def test_invalid_data(mock_analyzer, dummy_data_model, system_info):

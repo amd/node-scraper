@@ -26,8 +26,8 @@
 
 import os
 
-from errorscraper.configregistry import ConfigRegistry
-from errorscraper.models import PluginConfig
+from nodescraper.configregistry import ConfigRegistry
+from nodescraper.models import PluginConfig
 
 
 def test_config_registry():

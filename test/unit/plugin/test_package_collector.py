@@ -27,11 +27,11 @@ import json
 
 import pytest
 
-from errorscraper.connection.inband.inband import CommandArtifact
-from errorscraper.enums.executionstatus import ExecutionStatus
-from errorscraper.enums.systeminteraction import SystemInteractionLevel
-from errorscraper.models.systeminfo import OSFamily
-from errorscraper.plugins.inband.package.package_collector import PackageCollector
+from nodescraper.connection.inband.inband import CommandArtifact
+from nodescraper.enums.executionstatus import ExecutionStatus
+from nodescraper.enums.systeminteraction import SystemInteractionLevel
+from nodescraper.models.systeminfo import OSFamily
+from nodescraper.plugins.inband.package.package_collector import PackageCollector
 
 
 @pytest.fixture

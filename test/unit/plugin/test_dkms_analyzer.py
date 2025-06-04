@@ -25,11 +25,11 @@
 ###############################################################################
 import pytest
 
-from errorscraper.enums.eventpriority import EventPriority
-from errorscraper.enums.executionstatus import ExecutionStatus
-from errorscraper.plugins.inband.dkms.analyzer_args import DkmsAnalyzerArgs
-from errorscraper.plugins.inband.dkms.dkms_analyzer import DkmsAnalyzer
-from errorscraper.plugins.inband.dkms.dkmsdata import DkmsDataModel
+from nodescraper.enums.eventpriority import EventPriority
+from nodescraper.enums.executionstatus import ExecutionStatus
+from nodescraper.plugins.inband.dkms.analyzer_args import DkmsAnalyzerArgs
+from nodescraper.plugins.inband.dkms.dkms_analyzer import DkmsAnalyzer
+from nodescraper.plugins.inband.dkms.dkmsdata import DkmsDataModel
 
 
 @pytest.fixture

@@ -27,7 +27,7 @@ from typing import Generic, Optional, TypeVar
 
 from pydantic import BaseModel
 
-from errorscraper.typeutils import TypeClass, TypeData, TypeUtils
+from nodescraper.typeutils import TypeClass, TypeData, TypeUtils
 
 T = TypeVar("T")
 

@@ -25,12 +25,12 @@
 ###############################################################################
 import pytest
 
-from errorscraper.connection.inband.inband import CommandArtifact
-from errorscraper.enums.executionstatus import ExecutionStatus
-from errorscraper.enums.systeminteraction import SystemInteractionLevel
-from errorscraper.models.systeminfo import OSFamily
-from errorscraper.plugins.inband.kernel.kernel_collector import KernelCollector
-from errorscraper.plugins.inband.kernel.kerneldata import KernelDataModel
+from nodescraper.connection.inband.inband import CommandArtifact
+from nodescraper.enums.executionstatus import ExecutionStatus
+from nodescraper.enums.systeminteraction import SystemInteractionLevel
+from nodescraper.models.systeminfo import OSFamily
+from nodescraper.plugins.inband.kernel.kernel_collector import KernelCollector
+from nodescraper.plugins.inband.kernel.kerneldata import KernelDataModel
 
 
 @pytest.fixture

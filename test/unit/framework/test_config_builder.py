@@ -24,7 +24,7 @@
 #
 ###############################################################################
 
-from errorscraper.configbuilder import ConfigBuilder
+from nodescraper.configbuilder import ConfigBuilder
 
 
 def test_config_builder(plugin_registry):

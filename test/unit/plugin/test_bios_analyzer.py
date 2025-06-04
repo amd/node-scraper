@@ -25,12 +25,12 @@
 ###############################################################################
 import pytest
 
-from errorscraper.enums.eventcategory import EventCategory
-from errorscraper.enums.eventpriority import EventPriority
-from errorscraper.enums.executionstatus import ExecutionStatus
-from errorscraper.plugins.inband.bios.analyzer_args import BiosAnalyzerArgs
-from errorscraper.plugins.inband.bios.bios_analyzer import BiosAnalyzer
-from errorscraper.plugins.inband.bios.biosdata import BiosDataModel
+from nodescraper.enums.eventcategory import EventCategory
+from nodescraper.enums.eventpriority import EventPriority
+from nodescraper.enums.executionstatus import ExecutionStatus
+from nodescraper.plugins.inband.bios.analyzer_args import BiosAnalyzerArgs
+from nodescraper.plugins.inband.bios.bios_analyzer import BiosAnalyzer
+from nodescraper.plugins.inband.bios.biosdata import BiosDataModel
 
 
 @pytest.fixture

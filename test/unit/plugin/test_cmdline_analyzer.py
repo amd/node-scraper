@@ -25,12 +25,12 @@
 ###############################################################################
 import pytest
 
-from errorscraper.enums.eventcategory import EventCategory
-from errorscraper.enums.eventpriority import EventPriority
-from errorscraper.enums.executionstatus import ExecutionStatus
-from errorscraper.plugins.inband.cmdline.analyzer_args import CmdlineAnalyzerArgs
-from errorscraper.plugins.inband.cmdline.cmdline_analyzer import CmdlineAnalyzer
-from errorscraper.plugins.inband.cmdline.cmdlinedata import CmdlineDataModel
+from nodescraper.enums.eventcategory import EventCategory
+from nodescraper.enums.eventpriority import EventPriority
+from nodescraper.enums.executionstatus import ExecutionStatus
+from nodescraper.plugins.inband.cmdline.analyzer_args import CmdlineAnalyzerArgs
+from nodescraper.plugins.inband.cmdline.cmdline_analyzer import CmdlineAnalyzer
+from nodescraper.plugins.inband.cmdline.cmdlinedata import CmdlineDataModel
 
 
 @pytest.fixture

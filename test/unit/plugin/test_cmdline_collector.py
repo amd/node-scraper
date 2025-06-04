@@ -27,13 +27,13 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from errorscraper.enums.eventpriority import EventPriority
-from errorscraper.enums.executionstatus import ExecutionStatus
-from errorscraper.enums.systeminteraction import SystemInteractionLevel
-from errorscraper.interfaces.task import SystemCompatibilityError
-from errorscraper.models.systeminfo import OSFamily
-from errorscraper.plugins.inband.cmdline.cmdline_collector import CmdlineCollector
-from errorscraper.plugins.inband.cmdline.cmdlinedata import CmdlineDataModel
+from nodescraper.enums.eventpriority import EventPriority
+from nodescraper.enums.executionstatus import ExecutionStatus
+from nodescraper.enums.systeminteraction import SystemInteractionLevel
+from nodescraper.interfaces.task import SystemCompatibilityError
+from nodescraper.models.systeminfo import OSFamily
+from nodescraper.plugins.inband.cmdline.cmdline_collector import CmdlineCollector
+from nodescraper.plugins.inband.cmdline.cmdlinedata import CmdlineDataModel
 
 
 @pytest.fixture

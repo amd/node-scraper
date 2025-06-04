@@ -31,12 +31,12 @@ import pytest
 from framework.common.shared_utils import MockConnectionManager, TestPluginA
 from pydantic import BaseModel
 
-from errorscraper.enums.executionstatus import ExecutionStatus
-from errorscraper.interfaces import DataAnalyzer
-from errorscraper.models import TaskResult
-from errorscraper.models.datamodel import DataModel
-from errorscraper.models.systeminfo import OSFamily, SystemInfo
-from errorscraper.pluginregistry import PluginRegistry
+from nodescraper.enums.executionstatus import ExecutionStatus
+from nodescraper.interfaces import DataAnalyzer
+from nodescraper.models import TaskResult
+from nodescraper.models.datamodel import DataModel
+from nodescraper.models.systeminfo import OSFamily, SystemInfo
+from nodescraper.pluginregistry import PluginRegistry
 
 
 @pytest.fixture

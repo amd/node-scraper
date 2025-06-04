@@ -30,10 +30,10 @@ import os
 import pytest
 from pydantic import BaseModel
 
-from errorscraper.cli import cli, inputargtypes
-from errorscraper.configregistry import ConfigRegistry
-from errorscraper.enums import SystemInteractionLevel, SystemLocation
-from errorscraper.models import PluginConfig, SystemInfo
+from nodescraper.cli import cli, inputargtypes
+from nodescraper.configregistry import ConfigRegistry
+from nodescraper.enums import SystemInteractionLevel, SystemLocation
+from nodescraper.models import PluginConfig, SystemInfo
 
 
 def test_log_path_arg():

@@ -25,12 +25,12 @@
 ###############################################################################
 import pytest
 
-from errorscraper.connection.inband.inband import CommandArtifact
-from errorscraper.enums.executionstatus import ExecutionStatus
-from errorscraper.enums.systeminteraction import SystemInteractionLevel
-from errorscraper.models.systeminfo import OSFamily
-from errorscraper.plugins.inband.uptime.uptime_collector import UptimeCollector
-from errorscraper.plugins.inband.uptime.uptimedata import UptimeDataModel
+from nodescraper.connection.inband.inband import CommandArtifact
+from nodescraper.enums.executionstatus import ExecutionStatus
+from nodescraper.enums.systeminteraction import SystemInteractionLevel
+from nodescraper.models.systeminfo import OSFamily
+from nodescraper.plugins.inband.uptime.uptime_collector import UptimeCollector
+from nodescraper.plugins.inband.uptime.uptimedata import UptimeDataModel
 
 
 @pytest.fixture

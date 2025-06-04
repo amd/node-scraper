@@ -1,23 +1,19 @@
 [project]
-name = "amd-error-scraper-core"
+name = "node-scraper"
 version = "0.0.1"
 description = "A framework for automated error detection and data collection"
 authors = []
 readme = "README.md"
 requires-python = ">=3.10"
 
-keywords = [
-    "Automated Debug",
-    "Error Scraper",
-    "Error Detection",
-]
+keywords = []
 
-classifiers = ["Private :: Do Not Upload", "Topic :: Software Development"]
+classifiers = ["Topic :: Software Development"]
 
 dependencies = [
     "prettytable",
-    "pydantic~=2.8.2",
-    "paramiko==3.5.1",
+    "pydantic>=2.8.2",
+    "paramiko~=3.5.1",
     "requests",
     "pytz"
 ]
@@ -45,13 +41,13 @@ requires = ["setuptools==70.3.0", "setuptools-scm==8.1.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ['errorscraper']
+include = ['nodescraper']
 
 [tool.setuptools]
 include-package-data = true
 
 [project.scripts]
-error-scraper = "errorscraper.cli:cli_entry"
+node-scraper = "nodescraper.cli:cli_entry"
 
 [tool.black]
 line-length = 100

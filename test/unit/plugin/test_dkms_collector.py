@@ -27,12 +27,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from errorscraper.enums.executionstatus import ExecutionStatus
-from errorscraper.enums.systeminteraction import SystemInteractionLevel
-from errorscraper.interfaces.task import SystemCompatibilityError
-from errorscraper.models.systeminfo import OSFamily
-from errorscraper.plugins.inband.dkms.dkms_collector import DkmsCollector
-from errorscraper.plugins.inband.dkms.dkmsdata import DkmsDataModel
+from nodescraper.enums.executionstatus import ExecutionStatus
+from nodescraper.enums.systeminteraction import SystemInteractionLevel
+from nodescraper.interfaces.task import SystemCompatibilityError
+from nodescraper.models.systeminfo import OSFamily
+from nodescraper.plugins.inband.dkms.dkms_collector import DkmsCollector
+from nodescraper.plugins.inband.dkms.dkmsdata import DkmsDataModel
 
 
 @pytest.fixture
