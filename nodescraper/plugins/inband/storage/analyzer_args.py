@@ -23,8 +23,11 @@
 # SOFTWARE.
 #
 ###############################################################################
+from typing import Optional
+
 from pydantic import BaseModel
 
 
 class StorageAnalyzerArgs(BaseModel):
-    min_required_free_space: str = "50G"
+    min_required_free_space_abs: Optional[str] = None
+    min_required_free_space_prct: int = 10

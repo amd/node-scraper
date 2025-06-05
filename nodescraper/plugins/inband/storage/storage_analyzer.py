@@ -54,41 +54,52 @@ class StorageAnalyzer(DataAnalyzer[StorageDataModel, StorageAnalyzerArgs]):
         if args is None:
             args = StorageAnalyzerArgs()
 
-        min_free = convert_to_bytes(args.min_required_free_space)
         if not data.storage_data:
             self.result.message = "No storage data available"
             self.result.status = ExecutionStatus.NOT_RAN
             return self.result
 
         for device_name, device_data in data.storage_data.items():
-            free = convert_to_bytes(str(device_data.free))
-            if free > min_free:
+            condition = False
+            if args.min_required_free_space_abs:
+                min_free_abs = convert_to_bytes(args.min_required_free_space_abs)
+                free_abs = convert_to_bytes(str(device_data.free))
+                if free_abs and free_abs > min_free_abs:
+                    condition = True
+            else:
+                condition = True
+
+            free_prct = 100 - device_data.percent
+            condition = condition and (free_prct < args.min_required_free_space_prct)
+
+            if condition:
                 self.result.message = f"'{device_name}' has {bytes_to_human_readable(device_data.free)} available, {device_data.percent}% used"
                 self.result.status = ExecutionStatus.OK
                 break
-        else:
-            self.result.message = "Not enough disk storage!"
-            self.result.status = ExecutionStatus.ERROR
-            # find the device with the largest total storage, and its free space
-            largest_device = max(
-                data.storage_data,
-                key=lambda x: convert_to_bytes(str(data.storage_data[x].total)),
-            )
-            largest_free = data.storage_data[largest_device].free
-            largest_percent = data.storage_data[largest_device].percent
-            event_data = {
-                "largest_device": {
-                    "device": largest_device,
-                    "total": data.storage_data[largest_device].total,
-                    "free": largest_free,
-                    "percent": largest_percent,
-                },
-            }
-            self._log_event(
-                category=EventCategory.STORAGE,
-                description=f"{self.result.message} {largest_percent}% used on {largest_device}",
-                data=event_data,
-                priority=EventPriority.CRITICAL,
-                console_log=True,
-            )
+            else:
+                self.result.message = "Not enough disk storage!"
+                self.result.status = ExecutionStatus.ERROR
+                # find the device with the largest total storage, and its free space
+                largest_device = max(
+                    data.storage_data,
+                    key=lambda x: convert_to_bytes(str(data.storage_data[x].total)),
+                )
+                largest_free = data.storage_data[largest_device].free
+                largest_percent = data.storage_data[largest_device].percent
+                largest_used = data.storage_data[largest_device].used
+                event_data = {
+                    "largest_device": {
+                        "device": largest_device,
+                        "total": data.storage_data[largest_device].total,
+                        "free": largest_free,
+                        "percent": largest_percent,
+                    },
+                }
+                self._log_event(
+                    category=EventCategory.STORAGE,
+                    description=f"{self.result.message} {bytes_to_human_readable(largest_used)} and {largest_percent}%,  used on {largest_device}",
+                    data=event_data,
+                    priority=EventPriority.CRITICAL,
+                    console_log=True,
+                )
         return self.result

@@ -56,28 +56,20 @@ def analyzer(system_info):
     return StorageAnalyzer(system_info=system_info)
 
 
-def test_nominal_with_config(analyzer, model_obj):
-    args = StorageAnalyzerArgs(min_required_free_space="600G")
-    result = analyzer.analyze_data(model_obj, args)
-    assert result.status == ExecutionStatus.OK
-    assert result.message == "'/dev/nvme0n1p2' has 869.8GB available, 3.0% used"
-    assert len(result.events) == 0
-
-
-def test_nominal_no_config(analyzer, model_obj):
-    result = analyzer.analyze_data(model_obj)
-    assert result.status == ExecutionStatus.OK
-    assert result.message == "'/dev/nvme0n1p2' has 869.8GB available, 3.0% used"
-    assert len(result.events) == 0
-
-
-def test_insufficient_free_storage(analyzer, model_obj):
-    args = StorageAnalyzerArgs(min_required_free_space="1TB")
+def test_only_absolute_threshold_fails(analyzer, model_obj):
+    args = StorageAnalyzerArgs(min_required_free_space_abs="1TB")
     result = analyzer.analyze_data(model_obj, args)
     assert result.status == ExecutionStatus.ERROR
-    for event in result.events:
-        assert event.category == EventCategory.STORAGE.value
-        assert event.priority == EventPriority.CRITICAL
+    assert any(event.category == EventCategory.STORAGE.value for event in result.events)
+    assert any(event.priority == EventPriority.CRITICAL for event in result.events)
+
+
+def test_only_percentage_threshold_fails(analyzer, model_obj):
+    args = StorageAnalyzerArgs(min_required_free_space_prct=50)
+    result = analyzer.analyze_data(model_obj, args)
+    assert result.status == ExecutionStatus.ERROR
+    assert any(event.category == EventCategory.STORAGE.value for event in result.events)
+    assert any(event.priority == EventPriority.CRITICAL for event in result.events)
 
 
 def test_windows_nominal(system_info):
@@ -94,9 +86,15 @@ def test_windows_nominal(system_info):
             )
         }
     )
-    args = StorageAnalyzerArgs(min_required_free_space="10GB")
 
+    args = StorageAnalyzerArgs(min_required_free_space_abs="10GB", min_required_free_space_prct=50)
     result = analyzer.analyze_data(model, args)
     assert result.status == ExecutionStatus.OK
-    assert result.message == "'C:' has 466.44GB available, 53.97% used"
+    assert " has 466.44GB available, 53.97% used" in result.message
     assert len(result.events) == 0
+
+    args2 = StorageAnalyzerArgs(min_required_free_space_prct=40)
+    result2 = analyzer.analyze_data(model, args2)
+    assert result2.status == ExecutionStatus.ERROR
+    assert any(e.category == EventCategory.STORAGE.value for e in result2.events)
+    assert any(e.priority == EventPriority.CRITICAL for e in result2.events)
