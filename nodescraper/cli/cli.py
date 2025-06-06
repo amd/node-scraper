@@ -25,6 +25,7 @@
 ###############################################################################
 import argparse
 import datetime
+import json
 import logging
 import os
 import platform
@@ -429,6 +430,107 @@ def build_config(
     return config
 
 
+def parse_describe(
+    parsed_args: argparse.Namespace,
+    plugin_reg: PluginRegistry,
+    config_reg: ConfigRegistry,
+    logger: logging.Logger,
+):
+    """parse 'describe' cmd line argument
+
+    Args:
+        parsed_args (argparse.Namespace): parsed cmd line arguments
+        plugin_reg (PluginRegistry): plugin registry instance
+        config_reg (ConfigRegistry): config registry instance
+        logger (logging.Logger): logger instance
+    """
+    if not parsed_args.name:
+        if parsed_args.type == "config":
+            print("Available built-in configs:")  # noqa: T201
+            for name in config_reg.configs:
+                print(f"  {name}")  # noqa: T201
+        elif parsed_args.type == "plugin":
+            print("Available plugins:")  # noqa: T201
+            for name in plugin_reg.plugins:
+                print(f"  {name}")  # noqa: T201
+        print(f"\nUsage: describe {parsed_args.type} <name>")  # noqa: T201
+        sys.exit(0)
+
+    if parsed_args.type == "config":
+        if parsed_args.name not in config_reg.configs:
+            logger.error("No config found for name: %s", parsed_args.name)
+            sys.exit(1)
+        config_model = config_reg.configs[parsed_args.name]
+        print(f"Config Name: {parsed_args.name}")  # noqa: T201
+        print(f"Description: {getattr(config_model, 'desc', '')}")  # noqa: T201
+        print("Plugins:")  # noqa: T201
+        for plugin in getattr(config_model, "plugins", []):
+            print(f"\t{plugin}")  # noqa: T201
+
+    elif parsed_args.type == "plugin":
+        if parsed_args.name not in plugin_reg.plugins:
+            logger.error("No plugin found for name: %s", parsed_args.name)
+            sys.exit(1)
+        plugin_class = plugin_reg.plugins[parsed_args.name]
+        print(f"Plugin Name: {parsed_args.name}")  # noqa: T201
+        print(f"Description: {getattr(plugin_class, '__doc__', '')}")  # noqa: T201
+
+    sys.exit(0)
+
+
+def parse_gen_plugin_config(
+    parsed_args: argparse.Namespace,
+    plugin_reg: PluginRegistry,
+    config_reg: ConfigRegistry,
+    logger: logging.Logger,
+):
+    """parse 'gen_plugin_config' cmd line argument
+
+    Args:
+        parsed_args (argparse.Namespace): parsed cmd line arguments
+        plugin_reg (PluginRegistry): plugin registry instance
+        config_reg (ConfigRegistry): config registry instance
+        logger (logging.Logger): logger instance
+    """
+    try:
+        config = build_config(
+            config_reg, plugin_reg, logger, parsed_args.plugins, parsed_args.built_in_configs
+        )
+
+        config.name = parsed_args.config_name.split(".")[0]
+        config.desc = "Auto generated config"
+        output_path = os.path.join(parsed_args.output_path, parsed_args.config_name)
+        with open(output_path, "w", encoding="utf-8") as out_file:
+            out_file.write(config.model_dump_json(indent=2))
+
+        logger.info("Config saved to: %s", output_path)
+        sys.exit(0)
+    except Exception:
+        logger.exception("Exception when building config")
+        sys.exit(1)
+
+
+def log_system_info(log_path: str, system_info: SystemInfo, logger: logging.Logger):
+    """dump system info object to json log
+
+    Args:
+        log_path (str): path to log folder
+        system_info (SystemInfo): system object instance
+    """
+    if log_path:
+        try:
+            with open(
+                os.path.join(log_path, "system_info.json"), "w", encoding="utf-8"
+            ) as log_file:
+                json.dump(
+                    system_info.model_dump(mode="json", exclude_none=True),
+                    log_file,
+                    indent=2,
+                )
+        except Exception as exp:
+            logger.error(exp)
+
+
 def main(arg_input: Optional[list[str]] = None):
     """Main entry point for the CLI
 
@@ -460,56 +562,10 @@ def main(arg_input: Optional[list[str]] = None):
         logger.info("Log path: %s", log_path)
 
     if parsed_args.subcmd == "describe":
-        if not parsed_args.name:
-            if parsed_args.type == "config":
-                print("Available built-in configs:")  # noqa: T201
-                for name in config_reg.configs:
-                    print(f"  {name}")  # noqa: T201
-            elif parsed_args.type == "plugin":
-                print("Available plugins:")  # noqa: T201
-                for name in plugin_reg.plugins:
-                    print(f"  {name}")  # noqa: T201
-            print(f"\nUsage: describe {parsed_args.type} <name>")  # noqa: T201
-            sys.exit(0)
-
-        if parsed_args.type == "config":
-            if parsed_args.name not in config_reg.configs:
-                logger.error("No config found for name: %s", parsed_args.name)
-                sys.exit(1)
-            config_model = config_reg.configs[parsed_args.name]
-            print(f"Config Name: {parsed_args.name}")  # noqa: T201
-            print(f"Description: {getattr(config_model, 'desc', '')}")  # noqa: T201
-            print("Plugins:")  # noqa: T201
-            for plugin in getattr(config_model, "plugins", []):
-                print(f"\t{plugin}")  # noqa: T201
-
-        elif parsed_args.type == "plugin":
-            if parsed_args.name not in plugin_reg.plugins:
-                logger.error("No plugin found for name: %s", parsed_args.name)
-                sys.exit(1)
-            plugin_class = plugin_reg.plugins[parsed_args.name]
-            print(f"Plugin Name: {parsed_args.name}")  # noqa: T201
-            print(f"Description: {getattr(plugin_class, '__doc__', '')}")  # noqa: T201
-
-        sys.exit(0)
+        parse_describe(parsed_args, plugin_reg, config_reg, logger)
 
     if parsed_args.subcmd == "gen-plugin-config":
-        try:
-            config = build_config(
-                config_reg, plugin_reg, logger, parsed_args.plugins, parsed_args.built_in_configs
-            )
-
-            config.name = parsed_args.config_name.split(".")[0]
-            config.desc = "Auto generated config"
-            output_path = os.path.join(parsed_args.output_path, parsed_args.config_name)
-            with open(output_path, "w", encoding="utf-8") as out_file:
-                out_file.write(config.model_dump_json(indent=2))
-
-            logger.info("Config saved to: %s", output_path)
-            sys.exit(0)
-        except Exception:
-            logger.exception("Exception when building config")
-            sys.exit(1)
+        parse_gen_plugin_config(parsed_args, plugin_reg, config_reg, logger)
 
     parsed_plugin_args = {}
     for plugin, plugin_args in plugin_arg_map.items():
@@ -525,6 +581,7 @@ def main(arg_input: Optional[list[str]] = None):
         plugin_configs = parsed_args.plugin_configs or []
 
     system_info = get_system_info(parsed_args)
+    log_system_info(log_path, system_info, logger)
 
     plugin_executor = PluginExecutor(
         logger=logger,
