@@ -35,12 +35,12 @@ from nodescraper.plugins.inband.bios.biosdata import BiosDataModel
 
 @pytest.fixture
 def bios_model():
-    return BiosDataModel(bios_version="RMP1004BS")
+    return BiosDataModel(bios_version="TESTBIOS")
 
 
 def test_nominal_with_config(bios_model, system_info):
     analyzer = BiosAnalyzer(system_info=system_info)
-    args = BiosAnalyzerArgs(exp_bios_version=["RMP1004BS"])
+    args = BiosAnalyzerArgs(exp_bios_version=["TESTBIOS"])
     res = analyzer.analyze_data(bios_model, args)
     assert res.status == ExecutionStatus.OK
     assert len(res.events) == 0
@@ -48,7 +48,7 @@ def test_nominal_with_config(bios_model, system_info):
 
 def test_single_string_exp_bios_version(bios_model, system_info):
     analyzer = BiosAnalyzer(system_info=system_info)
-    args = BiosAnalyzerArgs(exp_bios_version="RMP1004BS")  # string instead of list
+    args = BiosAnalyzerArgs(exp_bios_version="TESTBIOS")  # string instead of list
     res = analyzer.analyze_data(bios_model, args)
     assert res.status == ExecutionStatus.OK
     assert len(res.events) == 0
@@ -64,7 +64,7 @@ def test_no_config(bios_model, system_info):
 def test_invalid_bios(system_info):
     model = BiosDataModel(bios_version="some_invalid_bios")
     analyzer = BiosAnalyzer(system_info=system_info)
-    args = BiosAnalyzerArgs(exp_bios_version=["RMP1004BS"])
+    args = BiosAnalyzerArgs(exp_bios_version=["TESTBIOS"])
     res = analyzer.analyze_data(model, args)
     assert res.status == ExecutionStatus.ERROR
     assert len(res.events) == 1
@@ -73,7 +73,7 @@ def test_invalid_bios(system_info):
 
 
 def test_unexpected_bios(system_info):
-    model = BiosDataModel(bios_version="RMP1004BS")
+    model = BiosDataModel(bios_version="TESTBIOS")
     analyzer = BiosAnalyzer(system_info=system_info)
     args = BiosAnalyzerArgs(exp_bios_version=["some_other_bios"])
     res = analyzer.analyze_data(model, args)
@@ -84,18 +84,18 @@ def test_unexpected_bios(system_info):
 
 
 def test_bios_regex_match(system_info):
-    model = BiosDataModel(bios_version="RMP1004BS")
+    model = BiosDataModel(bios_version="TEST1234BIOS")
     analyzer = BiosAnalyzer(system_info=system_info)
-    args = BiosAnalyzerArgs(exp_bios_version=[r"RMP\d{4}BS"], regex_match=True)
+    args = BiosAnalyzerArgs(exp_bios_version=[r"TEST\d{4}BIOS"], regex_match=True)
     res = analyzer.analyze_data(model, args)
     assert res.status == ExecutionStatus.OK
     assert len(res.events) == 0
 
 
 def test_bios_regex_no_match(system_info):
-    model = BiosDataModel(bios_version="RMP1004BS")
+    model = BiosDataModel(bios_version="TEST1234BIOS")
     analyzer = BiosAnalyzer(system_info=system_info)
-    args = BiosAnalyzerArgs(exp_bios_version=[r"RMP\d{3}BS"], regex_match=True)
+    args = BiosAnalyzerArgs(exp_bios_version=[r"TEST\d{3}BIOS"], regex_match=True)
     res = analyzer.analyze_data(model, args)
     assert res.status == ExecutionStatus.ERROR
     assert len(res.events) == 1
@@ -103,11 +103,10 @@ def test_bios_regex_no_match(system_info):
     assert res.events[0].priority == EventPriority.ERROR
 
 
-# Which node do we run on, whats the bios_version?
 def test_invalid_regex(system_info):
-    model = BiosDataModel(bios_version="RMP1004BS")
+    model = BiosDataModel(bios_version="TEST1234BIOS")
     analyzer = BiosAnalyzer(system_info=system_info)
-    args = BiosAnalyzerArgs(exp_bios_version=[r"R[MP\d{4}B{S"], regex_match=True)
+    args = BiosAnalyzerArgs(exp_bios_version=[r"TE[S\d{4}B{S"], regex_match=True)
     res = analyzer.analyze_data(model, args)
     assert res.status == ExecutionStatus.ERROR
     assert len(res.events) == 2

@@ -51,11 +51,11 @@ def test_task_body_windows(system_info, bios_collector):
     bios_collector._run_sut_cmd = MagicMock(
         return_value=MagicMock(
             exit_code=0,
-            stdout="\n\nSMBIOSBIOSVersion=R23ET70W (1.40 )\n\n\n\n",
+            stdout="\n\nSMBIOSBIOSVersion=TESTBIOS (1.40 )\n\n\n\n",
         )
     )
 
-    exp_data = BiosDataModel(bios_version="R23ET70W (1.40 )")
+    exp_data = BiosDataModel(bios_version="TESTBIOS (1.40 )")
 
     res, data = bios_collector.collect_data()
     assert data == exp_data

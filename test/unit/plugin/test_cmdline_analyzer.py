@@ -36,7 +36,7 @@ from nodescraper.plugins.inband.cmdline.cmdlinedata import CmdlineDataModel
 @pytest.fixture
 def model_obj():
     return CmdlineDataModel(
-        cmdline="BOOT_IMAGE=/boot/vmlinuz-5.18.2-mi300-build-140423-ubuntu-22.04+ root=UUID=90d7083e-0eb6-4675-ab9a-c8df4d753a29 ro panic=0 nowatchdog msr.allow_writes=on nokaslr amdgpu.noretry=1 pci=realloc=off numa_balancing=disable console=ttyS1,115200"
+        cmdline="BOOT_IMAGE=/boot/testimage-1234 root=UUID=1234 ro panic=0 nowatchdog msr.allow_writes=on nokaslr amdgpu.noretry=1 pci=realloc=off numa_balancing=disable console=ttyS1,115200"
     )
 
 
@@ -44,7 +44,7 @@ def model_obj():
 def config():
     return {
         "required_cmdline": [
-            "BOOT_IMAGE=/boot/vmlinuz-5.18.2-mi300-build-140423-ubuntu-22.04+",
+            "BOOT_IMAGE=/boot/testimage-1234",
             "ro",
         ],
         "banned_cmdline": ["example"],
@@ -78,7 +78,7 @@ def test_banned_found(system_info, model_obj, config):
     analyzer = CmdlineAnalyzer(system_info=system_info)
     args = CmdlineAnalyzerArgs(
         required_cmdline=config["required_cmdline"],
-        banned_cmdline=["root=UUID=90d7083e-0eb6-4675-ab9a-c8df4d753a29"],
+        banned_cmdline=["root=UUID=1234"],
     )
     res = analyzer.analyze_data(model_obj, args)
     assert res.status == ExecutionStatus.ERROR
@@ -98,7 +98,7 @@ def test_banned_found_required_missing(system_info, model_obj, config):
     analyzer = CmdlineAnalyzer(system_info=system_info)
     args = CmdlineAnalyzerArgs(
         required_cmdline=config["required_cmdline"],
-        banned_cmdline=["root=UUID=90d7083e-0eb6-4675-ab9a-c8df4d753a29"],
+        banned_cmdline=["root=UUID=1234"],
     )
     res = analyzer.analyze_data(model_obj, args)
     assert res.status == ExecutionStatus.ERROR
