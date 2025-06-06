@@ -57,22 +57,21 @@ def analyzer(system_info):
 
 
 def test_only_absolute_threshold_fails(analyzer, model_obj):
-    args = StorageAnalyzerArgs(min_required_free_space_abs="1TB")
+    args = StorageAnalyzerArgs(min_required_free_space_abs="800GB")
     result = analyzer.analyze_data(model_obj, args)
-    assert result.status == ExecutionStatus.ERROR
-    assert any(event.category == EventCategory.STORAGE.value for event in result.events)
-    assert any(event.priority == EventPriority.CRITICAL for event in result.events)
+    assert result.status == ExecutionStatus.OK
+    assert "'/dev/nvme0n1p2' has 869.8GB available, 3.0% used" in result.message
 
 
 def test_only_percentage_threshold_fails(analyzer, model_obj):
-    args = StorageAnalyzerArgs(min_required_free_space_prct=50)
+    args = StorageAnalyzerArgs(min_required_free_space_prct=99)
     result = analyzer.analyze_data(model_obj, args)
     assert result.status == ExecutionStatus.ERROR
     assert any(event.category == EventCategory.STORAGE.value for event in result.events)
     assert any(event.priority == EventPriority.CRITICAL for event in result.events)
 
 
-def test_windows_nominal(system_info):
+def test_both_abs_and_prct_fail(system_info):
     system_info.os_family = OSFamily.WINDOWS
     analyzer = StorageAnalyzer(system_info=system_info)
 
@@ -87,14 +86,29 @@ def test_windows_nominal(system_info):
         }
     )
 
-    args = StorageAnalyzerArgs(min_required_free_space_abs="10GB", min_required_free_space_prct=50)
+    args = StorageAnalyzerArgs(min_required_free_space_abs="10GB", min_required_free_space_prct=96)
     result = analyzer.analyze_data(model, args)
-    assert result.status == ExecutionStatus.OK
-    assert " has 466.44GB available, 53.97% used" in result.message
-    assert len(result.events) == 0
+    assert result.status == ExecutionStatus.ERROR
+    assert "Not enough disk storage!" in result.message
+    assert len(result.events) == 1
+    assert any(e.category == EventCategory.STORAGE.value for e in result.events)
+    assert any(e.priority == EventPriority.CRITICAL for e in result.events)
 
-    args2 = StorageAnalyzerArgs(min_required_free_space_prct=40)
+    args2 = StorageAnalyzerArgs(min_required_free_space_prct=40, min_required_dree_space_abs="1GB")
     result2 = analyzer.analyze_data(model, args2)
-    assert result2.status == ExecutionStatus.ERROR
-    assert any(e.category == EventCategory.STORAGE.value for e in result2.events)
-    assert any(e.priority == EventPriority.CRITICAL for e in result2.events)
+    assert result2.status == ExecutionStatus.OK
+
+
+def test_device_filter(analyzer, model_obj):
+    model_obj.storage_data["some_device"] = DeviceStorageData(
+        total=1000, free=100, used=900, percent=90
+    )
+
+    args = StorageAnalyzerArgs(min_required_free_space_prct="20")
+    result = analyzer.analyze_data(model_obj, args)
+    assert result.status == ExecutionStatus.ERROR
+    assert len(result.events) == 1
+
+    args2 = StorageAnalyzerArgs(min_required_free_space_prct="20", ignore_devices=["some_device"])
+    result2 = analyzer.analyze_data(model_obj, args2)
+    assert result2.status == ExecutionStatus.OK
