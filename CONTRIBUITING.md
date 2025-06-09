@@ -1,19 +1,19 @@
-# Contribute to Scraper
+# Contribute to Node Scraper
 
 AMD values and encourages contributions to our code and documentation. If you want to contribute
 to our repository, first review the following guidance.
 
 ## Development workflow
 
-Scraper uses GitHub to host code, collaborate, and manage version control. We use pull requests (PRs)
+Node Scraper uses GitHub to host code, collaborate, and manage version control. We use pull requests (PRs)
 for all changes within our repository. We use
-[GitHub issues](https://github.com/<placeholder>/issues) to track known issues, such as
+[GitHub issues](https://github.com/amd/node-scraper/issues) to track known issues, such as
 bugs.
 
 ### Issue tracking
 
 Before filing a new issue, search the
-[existing issues](https://github.com/<placeholder>/issues) to make sure your issue isn't
+[existing issues](https://github.com/amd/node-scraper/issues) to make sure your issue isn't
 already listed.
 
 General issue guidelines:
@@ -33,12 +33,12 @@ General issue guidelines:
 ### Pull requests
 
 When you create a pull request, you should target the default branch.  Our repository uses the
-**develop** branch as the default integration branch.
+**development** branch as the default integration branch.
 
 When creating a PR, use the following process.
 
 * Identify the issue you want to fix
-* Target the default branch (usually the **develop** branch) for integration
+* Target the default branch (usually the **development** branch) for integration
 * Ensure your code builds successfully
 * Do not break existing test cases
 * New functionality is only merged with new unit tests
@@ -52,12 +52,8 @@ When creating a PR, use the following process.
 > By creating a PR, you agree to allow your contribution to be licensed under the
 > terms of the LICENSE.txt file.
 
-### New feature development
-
-Use the [GitHub Discussion forum](https://github.com/<placeholder>/discussions)
-
 ### Documentation
 
-Submit Scraper documentation changes to our
-[documentation](https://github.com/<placeholder>). You must update
+Submit Node Scraper documentation changes to our
+[documentation](https://github.com/amd/node-scraper/development/README.md). You must update
 documentation related to any new feature or API contribution.
