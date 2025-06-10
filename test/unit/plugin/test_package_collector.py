@@ -62,171 +62,163 @@ def run_assertions(res, data, key, expected_version):
 
 def test_collector_arch(collector, conn_mock, command_results):
     conn_mock.run_command.side_effect = [
+        CommandArtifact(command="", exit_code=0, stdout=command_results["arch_rel"], stderr=""),
         CommandArtifact(
-            command="cat /etc/*release", exit_code=0, stdout=command_results["arch_rel"], stderr=""
-        ),
-        CommandArtifact(
-            command="yum list --installed",
+            command="",
             exit_code=0,
             stdout=command_results["arch_package"],
             stderr="",
         ),
     ]
     res, data = collector.collect_data()
-    run_assertions(res, data, "argon2", "20190702-6")
+    run_assertions(res, data, "test-arch-package-a", "1.11-1")
 
 
 def test_collector_debian(collector, conn_mock, command_results):
     conn_mock.run_command.side_effect = [
+        CommandArtifact(command="", exit_code=0, stdout=command_results["deb_rel"], stderr=""),
         CommandArtifact(
-            command="cat /etc/*release", exit_code=0, stdout=command_results["deb_rel"], stderr=""
-        ),
-        CommandArtifact(
-            command="dpkg -l", exit_code=0, stdout=command_results["debian_package"], stderr=""
+            command="", exit_code=0, stdout=command_results["debian_package"], stderr=""
         ),
     ]
     res, data = collector.collect_data()
-    run_assertions(res, data, "base-files", "12.4+deb12u8")
+    run_assertions(res, data, "test-deb-package-a.x86_64", "3.11-1")
 
 
 def test_collector_ubuntu(collector, conn_mock, command_results):
     conn_mock.run_command.side_effect = [
         CommandArtifact(
-            command="cat /etc/*release",
+            command="",
             exit_code=0,
             stdout=command_results["ubuntu_rel"],
             stderr="",
         ),
         CommandArtifact(
-            command="yum list --installed",
+            command="",
             exit_code=0,
             stdout=command_results["ubuntu_package"],
             stderr="",
         ),
     ]
     res, data = collector.collect_data()
-    run_assertions(res, data, "authselect-libs.x86_64", "1.5.0-8.fc41")
+    run_assertions(res, data, "test-ubuntu-package-a.x86_64", "5.11-1")
 
 
 def test_collector_centos(collector, conn_mock, command_results):
     conn_mock.run_command.side_effect = [
         CommandArtifact(
-            command="cat /etc/*release",
+            command="",
             exit_code=0,
             stdout=command_results["centos_rel"],
             stderr="",
         ),
         CommandArtifact(
-            command="yum list --installed",
+            command="",
             exit_code=0,
             stdout=command_results["centos_package"],
             stderr="",
         ),
     ]
     res, data = collector.collect_data()
-    run_assertions(res, data, "bind-export-libs.x86_64", "32:9.11.26-3.el8")
+    run_assertions(res, data, "test-centos-package-a.x86_64", "7.11-1")
 
 
 def test_collector_fedora(collector, conn_mock, command_results):
     conn_mock.run_command.side_effect = [
         CommandArtifact(
-            command="cat /etc/*release",
+            command="",
             exit_code=0,
             stdout=command_results["fedora_rel"],
             stderr="",
         ),
         CommandArtifact(
-            command="yum list --installed",
+            command="",
             exit_code=0,
             stdout=command_results["fedora_package"],
             stderr="",
         ),
     ]
     res, data = collector.collect_data()
-    run_assertions(res, data, "bzip2.x86_64", "1.0.8-19.fc41")
+    run_assertions(res, data, "test-fed-package-a.x86_64", "9.11-1")
 
 
 def test_collector_ol8(collector, conn_mock, command_results):
     conn_mock.run_command.side_effect = [
+        CommandArtifact(command="", exit_code=0, stdout=command_results["ol8_rel"], stderr=""),
         CommandArtifact(
-            command="cat /etc/*release", exit_code=0, stdout=command_results["ol8_rel"], stderr=""
-        ),
-        CommandArtifact(
-            command="yum list --installed",
+            command="",
             exit_code=0,
             stdout=command_results["ol8_package"],
             stderr="",
         ),
     ]
     res, data = collector.collect_data()
-    run_assertions(res, data, "NetworkManager-tui.x86_64", "1:1.40.16-15.0.1.el8_9")
+    run_assertions(res, data, "test-ocl-package-a.x86_64", "11.11-1")
 
 
 def test_windows(collector, conn_mock, command_results):
     collector.system_info.os_family = OSFamily.WINDOWS
     conn_mock.run_command.side_effect = [
         CommandArtifact(
-            command="wmic product get name, version",
+            command="",
             exit_code=0,
             stdout=command_results["windows_package"],
             stderr="",
         )
     ]
     res, data = collector.collect_data()
-    run_assertions(res, data, "Microsoft Policy Platform", "68.1.9086.1017")
+    run_assertions(res, data, "Test Windows Package", "11.1.11.1111")
 
 
 def test_unknown_os(collector):
     collector.system_info.os_family = OSFamily.UNKNOWN
-    res, data = collector.collect_data()
+    res, _ = collector.collect_data()
     assert res.status == ExecutionStatus.NOT_RAN
     assert res.message == "Unsupported OS"
 
 
 def test_unknown_distro(collector, conn_mock, command_results):
     conn_mock.run_command.side_effect = [
-        CommandArtifact(command="cat /etc/*release", exit_code=0, stdout="help", stderr=""),
+        CommandArtifact(command="", exit_code=0, stdout="help", stderr=""),
         CommandArtifact(
-            command="yum list --installed",
+            command="",
             exit_code=0,
             stdout=command_results["ol8_package"],
             stderr="",
         ),
     ]
-    res, data = collector.collect_data()
+    res, _ = collector.collect_data()
     assert res.status == ExecutionStatus.NOT_RAN
 
 
 def test_bad_exit_code(collector, conn_mock, command_results):
     conn_mock.run_command.side_effect = [
+        CommandArtifact(command="", exit_code=1, stdout=command_results["ol8_rel"], stderr=""),
         CommandArtifact(
-            command="cat /etc/*release", exit_code=1, stdout=command_results["ol8_rel"], stderr=""
-        ),
-        CommandArtifact(
-            command="yum list --installed",
+            command="",
             exit_code=1,
             stdout=command_results["ol8_package"],
             stderr="",
         ),
     ]
-    res, data = collector.collect_data()
+    res, _ = collector.collect_data()
     assert res.status == ExecutionStatus.EXECUTION_FAILURE
 
 
 def test_bad_splits_ubuntu(collector, conn_mock, command_results):
     conn_mock.run_command.side_effect = [
         CommandArtifact(
-            command="cat /etc/*release",
+            command="",
             exit_code=0,
             stdout=command_results["ubuntu_rel"],
             stderr="",
         ),
         CommandArtifact(
-            command="yum list --installed",
+            command="",
             exit_code=0,
             stdout="something: 1.0.0 something something\n",
             stderr="",
         ),
     ]
-    res, data = collector.collect_data()
+    res, _ = collector.collect_data()
     assert res.status == ExecutionStatus.OK

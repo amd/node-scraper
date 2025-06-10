@@ -96,7 +96,7 @@ def test_os_collector_linux(
 
 def test_os_collector_windows(system_info, conn_mock):
     system_info.os_family = OSFamily.WINDOWS
-    collector = OsCollector(
+    collector_inst = OsCollector(
         system_info=system_info,
         system_interaction_level=SystemInteractionLevel.PASSIVE,
         connection=conn_mock,
@@ -114,8 +114,8 @@ def test_os_collector_windows(system_info, conn_mock):
         ),
     ]
 
-    result, data = collector.collect_data()
-    assert collector.result.status == ExecutionStatus.OK
+    _, data = collector_inst.collect_data()
+    assert collector_inst.result.status == ExecutionStatus.OK
     assert data == OsDataModel(os_name="Microsoft Windows 11 Enterprise", os_version="10.0.22621")
 
 
@@ -126,5 +126,5 @@ def test_os_collector_error(collector, conn_mock, system_info):
         CommandArtifact(exit_code=1, stdout="Ubuntu 22.04.4 LTS", stderr="", command="cmd2"),
     ]
 
-    result, data = collector.collect_data()
+    _, data = collector.collect_data()
     assert data is None
