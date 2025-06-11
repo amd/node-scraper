@@ -52,8 +52,60 @@ def model_obj():
 
 
 @pytest.fixture
+def multiple_dev():
+    return StorageDataModel(
+        storage_data={
+            "dev1": DeviceStorageData(total=100, free=90, used=10, percent=10),
+            "dev2": DeviceStorageData(total=100, free=5, used=95, percent=95),
+        }
+    )
+
+
+@pytest.fixture
 def analyzer(system_info):
     return StorageAnalyzer(system_info=system_info)
+
+
+def test_filter_exact_match(analyzer):
+    assert analyzer._matches_device_filter("foo", ["foo", "bar"], regex_match=False)
+    assert not analyzer._matches_device_filter("baz", ["foo", "bar"], regex_match=False)
+
+
+def test_filter_regex_match(analyzer):
+    assert analyzer._matches_device_filter("disk0", [r"disk\d"], regex_match=True)
+    assert not analyzer._matches_device_filter("diskA", [r"disk\d"], regex_match=True)
+
+
+def test_filter_invalid_regex(analyzer, monkeypatch):
+    calls = []
+    monkeypatch.setattr(analyzer, "_log_event", lambda **kw: calls.append(kw))
+    assert not analyzer._matches_device_filter("somestring", ["[invalid"], regex_match=True)
+    assert len(calls) == 1
+    event = calls[0]
+    assert event["category"] == EventCategory.STORAGE
+    assert event["priority"] == EventPriority.ERROR
+    assert "Invalid regex pattern" in event["description"]
+
+
+def test_check_devices_only(analyzer, multiple_dev):
+    args = StorageAnalyzerArgs(min_required_free_space_prct=50, check_devices=["dev1"])
+    res = analyzer.analyze_data(multiple_dev, args)
+    assert res.status == ExecutionStatus.OK
+
+
+def test_ignore_devices(analyzer, multiple_dev):
+    args = StorageAnalyzerArgs(min_required_free_space_prct=50, ignore_devices=["dev2"])
+    res = analyzer.analyze_data(multiple_dev, args)
+    assert res.status == ExecutionStatus.OK
+
+
+def test_check_overrides_ignore(analyzer, multiple_dev):
+    args = StorageAnalyzerArgs(
+        min_required_free_space_prct=50, check_devices=["dev2"], ignore_devices=["dev2", "dev1"]
+    )
+    res = analyzer.analyze_data(multiple_dev, args)
+    assert res.status == ExecutionStatus.ERROR
+    assert any(e.category == EventCategory.STORAGE.value for e in res.events)
 
 
 def test_only_absolute_threshold_fails(analyzer, model_obj):

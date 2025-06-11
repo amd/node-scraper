@@ -100,14 +100,14 @@ class StorageAnalyzer(DataAnalyzer[StorageDataModel, StorageAnalyzerArgs]):
         passing_devices = []
         failing_devices = []
         for device_name, device_data in data.storage_data.items():
-            if args.check_devices and not self._matches_device_filter(
-                device_name, args.check_devices, args.regex_match
-            ):
-                continue
-            elif args.ignore_devices and self._matches_device_filter(
-                device_name, args.ignore_devices, args.regex_match
-            ):
-                continue
+            if args.check_devices:
+                if not self._matches_device_filter(
+                    device_name, args.check_devices, args.regex_match
+                ):
+                    continue
+            elif args.ignore_devices:
+                if self._matches_device_filter(device_name, args.ignore_devices, args.regex_match):
+                    continue
 
             condition = False
             if args.min_required_free_space_abs:
