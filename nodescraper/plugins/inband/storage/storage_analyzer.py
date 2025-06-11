@@ -23,6 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
+import re
 from typing import Optional
 
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
@@ -38,6 +39,36 @@ class StorageAnalyzer(DataAnalyzer[StorageDataModel, StorageAnalyzerArgs]):
     """Check storage usage"""
 
     DATA_MODEL = StorageDataModel
+
+    def _matches_device_filter(
+        self, device_name: str, exp_devices: list[str], regex_match: bool
+    ) -> bool:
+        """Check if the device name matches any of the expected devices""
+
+        Args:
+            device_name (str): device name to check
+            exp_devices (list[str]): list of expected devices to match against
+            regex_match (bool): if True, use regex matching; otherwise, use exact match
+
+        Returns:
+            bool: True if the device name matches any of the expected devices, False otherwise
+        """
+        for exp_device in exp_devices:
+            if regex_match:
+                try:
+                    device_regex = re.compile(exp_device)
+                except re.error:
+                    self._log_event(
+                        category=EventCategory.STORAGE,
+                        description=f"Invalid regex pattern: {exp_device}",
+                        priority=EventPriority.ERROR,
+                    )
+                    continue
+                if device_regex.match(device_name):
+                    return True
+            elif device_name == exp_device:
+                return True
+        return False
 
     def analyze_data(
         self, data: StorageDataModel, args: Optional[StorageAnalyzerArgs] = None
@@ -71,11 +102,15 @@ class StorageAnalyzer(DataAnalyzer[StorageDataModel, StorageAnalyzerArgs]):
         passing_devices = []
         failing_devices = []
         for device_name, device_data in data.storage_data.items():
-            if args.check_devices:
-                if device_name not in args.check_devices:
-                    continue
-            elif args.ignore_devices and device_name in args.ignore_devices:
+            if args.check_devices and not self._matches_device_filter(
+                device_name, args.check_devices, args.regex_match
+            ):
                 continue
+            elif args.ignore_devices and self._matches_device_filter(
+                device_name, args.ignore_devices, args.regex_match
+            ):
+                continue
+
             condition = False
             if args.min_required_free_space_abs:
                 min_free_abs = convert_to_bytes(args.min_required_free_space_abs)
