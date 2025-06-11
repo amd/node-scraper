@@ -51,24 +51,30 @@ class StorageAnalyzer(DataAnalyzer[StorageDataModel, StorageAnalyzerArgs]):
         Returns:
             TaskResult: Result of the storage analysis containing the status and message.
         """
-        if args is None:
-            args = StorageAnalyzerArgs()
-            if (
-                args.min_required_free_space_abs is None
-                and args.min_required_free_space_prct is None
-            ):
-                args.min_required_free_space_prct = 10
-                self.logger.warning(
-                    "No defaults provided for storage analyzer arguments. Setting min_required_free_space_prct=10"
-                )
+        if args and (
+            args.min_required_free_space_abs is None and args.min_required_free_space_prct is None
+        ):
+            args.min_required_free_space_prct = 10
+            self.logger.warning(
+                "No defaults provided for storage analyzer arguments. Setting min_required_free_space_prct=10"
+            )
+        else:
+            args = StorageAnalyzerArgs(min_required_free_space_prct=10)
 
         if not data.storage_data:
             self.result.message = "No storage data available"
             self.result.status = ExecutionStatus.NOT_RAN
             return self.result
 
+        self.result.status = ExecutionStatus.OK
+        fail = False
+        passing_devices = []
+        failing_devices = []
         for device_name, device_data in data.storage_data.items():
-            if args.ignore_devices and device_name in args.ignore_devices:
+            if args.check_devices:
+                if device_name not in args.check_devices:
+                    continue
+            elif args.ignore_devices and device_name in args.ignore_devices:
                 continue
             condition = False
             if args.min_required_free_space_abs:
@@ -84,11 +90,14 @@ class StorageAnalyzer(DataAnalyzer[StorageDataModel, StorageAnalyzerArgs]):
                 condition = condition and (free_prct > args.min_required_free_space_prct)
 
             if condition:
-                self.result.message = f"'{device_name}' has {bytes_to_human_readable(device_data.free)} available, {device_data.percent}% used"
-                self.result.status = ExecutionStatus.OK
+                passing_devices.append(
+                    f"'{device_name}' has {bytes_to_human_readable(device_data.free)} available, {device_data.percent}% used"
+                )
             else:
-                self.result.message = "Not enough disk storage!"
-                self.result.status = ExecutionStatus.ERROR
+                fail = True
+                device = convert_to_bytes(str(device_data.total))
+                prct = device_data.percent
+                failing_devices.append(f"{device_name}")
                 event_data = {
                     "offending_device": {
                         "device": device_name,
@@ -97,8 +106,6 @@ class StorageAnalyzer(DataAnalyzer[StorageDataModel, StorageAnalyzerArgs]):
                         "percent": device_data.percent,
                     },
                 }
-                device = convert_to_bytes(str(device_data.total))
-                prct = device_data.percent
                 self._log_event(
                     category=EventCategory.STORAGE,
                     description=f"{self.result.message} {bytes_to_human_readable(device)} and {prct}%,  used on {device_name}",
@@ -106,4 +113,9 @@ class StorageAnalyzer(DataAnalyzer[StorageDataModel, StorageAnalyzerArgs]):
                     priority=EventPriority.CRITICAL,
                     console_log=True,
                 )
+        if fail:
+            self.result.message = f"Insufficient disk space on " f"[{', '.join(failing_devices)}]"
+            self.result.status = ExecutionStatus.ERROR
+        else:
+            self.result.message = ",".join(passing_devices)
         return self.result

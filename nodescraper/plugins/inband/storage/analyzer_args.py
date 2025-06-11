@@ -32,3 +32,4 @@ class StorageAnalyzerArgs(BaseModel):
     min_required_free_space_abs: Optional[str] = None
     min_required_free_space_prct: Optional[int] = None
     ignore_devices: Optional[list] = []
+    check_devices: Optional[list] = []
