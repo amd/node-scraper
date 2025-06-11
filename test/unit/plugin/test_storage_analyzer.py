@@ -89,7 +89,7 @@ def test_both_abs_and_prct_fail(system_info):
     args = StorageAnalyzerArgs(min_required_free_space_abs="10GB", min_required_free_space_prct=96)
     result = analyzer.analyze_data(model, args)
     assert result.status == ExecutionStatus.ERROR
-    assert "Not enough disk storage!" in result.message
+    assert "Insufficient disk space" in result.message
     assert len(result.events) == 1
     assert any(e.category == EventCategory.STORAGE.value for e in result.events)
     assert any(e.priority == EventPriority.CRITICAL for e in result.events)
@@ -109,6 +109,8 @@ def test_device_filter(analyzer, model_obj):
     assert result.status == ExecutionStatus.ERROR
     assert len(result.events) == 1
 
-    args2 = StorageAnalyzerArgs(min_required_free_space_prct="20", ignore_devices=["some_device"])
+    args2 = StorageAnalyzerArgs(
+        min_required_free_space_prct="20", ignore_devices=["some_device"], regex_match=True
+    )
     result2 = analyzer.analyze_data(model_obj, args2)
     assert result2.status == ExecutionStatus.OK

@@ -82,15 +82,13 @@ class StorageAnalyzer(DataAnalyzer[StorageDataModel, StorageAnalyzerArgs]):
         Returns:
             TaskResult: Result of the storage analysis containing the status and message.
         """
-        if args and (
-            args.min_required_free_space_abs is None and args.min_required_free_space_prct is None
-        ):
+        if args is None:
+            args = StorageAnalyzerArgs(min_required_free_space_prct=10)
+        elif args.min_required_free_space_abs is None and args.min_required_free_space_prct is None:
             args.min_required_free_space_prct = 10
             self.logger.warning(
-                "No defaults provided for storage analyzer arguments. Setting min_required_free_space_prct=10"
+                "No thresholds provided for storage analyzer arguments; defaulting to 10% free"
             )
-        else:
-            args = StorageAnalyzerArgs(min_required_free_space_prct=10)
 
         if not data.storage_data:
             self.result.message = "No storage data available"
