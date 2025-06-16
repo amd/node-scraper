@@ -40,7 +40,7 @@ class TableSummary(PluginResultCollator):
             connection_results (list[TaskResult]): list of connection results to collate
         """
 
-        def gen_str_table(headers: list[str], rows: list[str]):
+        def gen_str_table(headers: list[str], rows: list[list[str | None]]):
             column_widths = [len(header) for header in headers]
             for row in rows:
                 for i, cell in enumerate(row):
@@ -67,8 +67,10 @@ class TableSummary(PluginResultCollator):
 
         if plugin_results:
             rows = []
-            for result in plugin_results:
-                rows.append([result.source, result.status.name, result.message])
+            for plugin_result in plugin_results:
+                rows.append(
+                    [plugin_result.source, plugin_result.status.name, plugin_result.message]
+                )
 
             table = gen_str_table(["Plugin", "Status", "Message"], rows)
             tables += f"\n\n{table}"

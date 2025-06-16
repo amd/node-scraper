@@ -51,7 +51,7 @@ class Event(BaseModel):
         default_factory=lambda: datetime.datetime.now(datetime.timezone.utc)
     )
     reporter: str = "ERROR_SCRAPER"
-    category: str
+    category: str | Enum
     description: str
     data: dict = Field(default_factory=dict)
     priority: EventPriority
