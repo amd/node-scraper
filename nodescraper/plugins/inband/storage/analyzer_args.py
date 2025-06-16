@@ -23,8 +23,14 @@
 # SOFTWARE.
 #
 ###############################################################################
-from pydantic import BaseModel
+from typing import Optional
+
+from pydantic import BaseModel, Field
 
 
 class StorageAnalyzerArgs(BaseModel):
-    min_required_free_space: str = "50G"
+    min_required_free_space_abs: Optional[str] = None
+    min_required_free_space_prct: Optional[int] = None
+    ignore_devices: Optional[list[str]] = Field(default_factory=list)
+    check_devices: Optional[list[str]] = Field(default_factory=list)
+    regex_match: bool = False
