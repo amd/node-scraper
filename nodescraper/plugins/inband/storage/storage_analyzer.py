@@ -96,7 +96,6 @@ class StorageAnalyzer(DataAnalyzer[StorageDataModel, StorageAnalyzerArgs]):
             return self.result
 
         self.result.status = ExecutionStatus.OK
-        fail = False
         passing_devices = []
         failing_devices = []
         for device_name, device_data in data.storage_data.items():
@@ -123,14 +122,11 @@ class StorageAnalyzer(DataAnalyzer[StorageDataModel, StorageAnalyzerArgs]):
                 condition = condition and (free_prct > args.min_required_free_space_prct)
 
             if condition:
-                passing_devices.append(
-                    f"'{device_name}' has {bytes_to_human_readable(device_data.free)} available, {device_data.percent}% used"
-                )
+                passing_devices.append(device_name)
             else:
-                fail = True
                 device = convert_to_bytes(str(device_data.total))
                 prct = device_data.percent
-                failing_devices.append(f"{device_name}")
+                failing_devices.append(device_name)
                 event_data = {
                     "offending_device": {
                         "device": device_name,
@@ -141,14 +137,16 @@ class StorageAnalyzer(DataAnalyzer[StorageDataModel, StorageAnalyzerArgs]):
                 }
                 self._log_event(
                     category=EventCategory.STORAGE,
-                    description=f"{self.result.message} {bytes_to_human_readable(device)} and {prct}%,  used on {device_name}",
+                    description=f"Insufficient disk space: {bytes_to_human_readable(device)} and {prct}%,  used on {device_name}",
                     data=event_data,
                     priority=EventPriority.CRITICAL,
                     console_log=True,
                 )
-        if fail:
+        if failing_devices:
             self.result.message = f"Insufficient disk space on " f"[{', '.join(failing_devices)}]"
             self.result.status = ExecutionStatus.ERROR
         else:
-            self.result.message = ",".join(passing_devices)
+            self.result.message = (
+                f"Sufficient disk space available on " f"[{', '.join(passing_devices)}]"
+            )
         return self.result

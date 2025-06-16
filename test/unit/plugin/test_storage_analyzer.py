@@ -112,7 +112,7 @@ def test_only_absolute_threshold_fails(analyzer, model_obj):
     args = StorageAnalyzerArgs(min_required_free_space_abs="800GB")
     result = analyzer.analyze_data(model_obj, args)
     assert result.status == ExecutionStatus.OK
-    assert "'/dev/nvme0n1p2' has 869.8GB available, 3.0% used" in result.message
+    assert "Sufficient disk space available on [/dev/nvme0n1p2]" in result.message
 
 
 def test_only_percentage_threshold_fails(analyzer, model_obj):
