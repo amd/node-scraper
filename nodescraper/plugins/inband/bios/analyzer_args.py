@@ -30,6 +30,8 @@ class BiosAnalyzerArgs(BaseModel):
     exp_bios_version: list[str] = Field(default_factory=list)
     regex_match: bool = False
 
+    model_config = {"extra": "forbid"}
+
     @field_validator("exp_bios_version", mode="before")
     @classmethod
     def validate_exp_bios_version(cls, exp_bios_version: str | list) -> list:
