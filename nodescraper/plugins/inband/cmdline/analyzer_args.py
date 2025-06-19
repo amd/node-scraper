@@ -30,6 +30,8 @@ class CmdlineAnalyzerArgs(BaseModel):
     required_cmdline: str | list = Field(default_factory=list)
     banned_cmdline: str | list = Field(default_factory=list)
 
+    model_config = {"extra": "forbid"}
+
     @field_validator("required_cmdline", mode="before")
     @classmethod
     def validate_required_cmdline(cls, required_cmdline: str | list) -> list:

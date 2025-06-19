@@ -146,7 +146,7 @@ def test_both_abs_and_prct_fail(system_info):
     assert any(e.category == EventCategory.STORAGE.value for e in result.events)
     assert any(e.priority == EventPriority.CRITICAL for e in result.events)
 
-    args2 = StorageAnalyzerArgs(min_required_free_space_prct=40, min_required_dree_space_abs="1GB")
+    args2 = StorageAnalyzerArgs(min_required_free_space_prct=40, min_required_free_space_abs="1GB")
     result2 = analyzer.analyze_data(model, args2)
     assert result2.status == ExecutionStatus.OK
 

@@ -33,6 +33,15 @@ from nodescraper.enums import EventPriority, ExecutionStatus
 
 from .event import Event
 
+STATUS_LOG_LEVEL_MAP = {
+    ExecutionStatus.UNSET: logging.INFO,
+    ExecutionStatus.NOT_RAN: logging.INFO,
+    ExecutionStatus.OK: logging.INFO,
+    ExecutionStatus.WARNING: logging.WARNING,
+    ExecutionStatus.ERROR: logging.ERROR,
+    ExecutionStatus.EXECUTION_FAILURE: logging.CRITICAL,
+}
+
 
 class TaskResult(BaseModel):
     """Object for result of a task"""
@@ -133,4 +142,9 @@ class TaskResult(BaseModel):
             self.message += f" ({event_summary})"
 
         if logger:
-            logger.log(self.status.value, "(%s) %s", self.__class__.__name__, self.message)
+            logger.log(
+                STATUS_LOG_LEVEL_MAP.get(self.status, logging.INFO),
+                "(%s) %s",
+                self.parent,
+                self.message,
+            )

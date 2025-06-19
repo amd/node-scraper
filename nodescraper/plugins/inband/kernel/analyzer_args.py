@@ -30,6 +30,8 @@ class KernelAnalyzerArgs(BaseModel):
     exp_kernel: str | list = Field(default_factory=list)
     regex_match: bool = False
 
+    model_config = {"extra": "forbid"}
+
     @field_validator("exp_kernel", mode="before")
     @classmethod
     def validate_exp_kernel(cls, exp_kernel: str | list) -> list:

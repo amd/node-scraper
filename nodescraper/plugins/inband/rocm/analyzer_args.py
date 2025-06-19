@@ -29,6 +29,8 @@ from pydantic import BaseModel, Field, field_validator
 class RocmAnalyzerArgs(BaseModel):
     exp_rocm: str | list = Field(default_factory=list)
 
+    model_config = {"extra": "forbid"}
+
     @field_validator("exp_rocm", mode="before")
     @classmethod
     def validate_exp_rocm(cls, exp_rocm: str | list) -> list:
