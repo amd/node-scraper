@@ -59,8 +59,14 @@ class TableSummary(PluginResultCollator):
         tables = ""
         if connection_results:
             rows = []
-            for result in connection_results:
-                rows.append([result.task, result.status.name, result.message])
+            for connection_result in connection_results:
+                rows.append(
+                    [
+                        connection_result.task,
+                        connection_result.status.name,
+                        connection_result.message,
+                    ]
+                )
 
             table = gen_str_table(["Connection", "Status", "Message"], rows)
             tables += f"\n\n{table}"
