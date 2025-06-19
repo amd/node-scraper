@@ -510,7 +510,7 @@ def parse_gen_plugin_config(
         sys.exit(1)
 
 
-def log_system_info(log_path: str, system_info: SystemInfo, logger: logging.Logger):
+def log_system_info(log_path: str | None, system_info: SystemInfo, logger: logging.Logger):
     """dump system info object to json log
 
     Args:
@@ -544,54 +544,61 @@ def main(arg_input: Optional[list[str]] = None):
     config_reg = ConfigRegistry()
     parser, plugin_subparser_map = build_parser(plugin_reg, config_reg)
 
-    top_level_args, plugin_arg_map = process_args(arg_input, list(plugin_subparser_map.keys()))
+    try:
+        top_level_args, plugin_arg_map = process_args(arg_input, list(plugin_subparser_map.keys()))
 
-    parsed_args = parser.parse_args(top_level_args)
+        parsed_args = parser.parse_args(top_level_args)
 
-    if parsed_args.log_path and parsed_args.subcmd not in ["gen-plugin-config", "describe"]:
-        log_path = os.path.join(
-            parsed_args.log_path,
-            f"scraper_logs_{datetime.datetime.now().strftime('%Y_%m_%d-%I_%M_%S_%p')}",
-        )
-        os.makedirs(log_path)
-    else:
-        log_path = None
+        if parsed_args.log_path and parsed_args.subcmd not in ["gen-plugin-config", "describe"]:
+            log_path = os.path.join(
+                parsed_args.log_path,
+                f"scraper_logs_{datetime.datetime.now().strftime('%Y_%m_%d-%I_%M_%S_%p')}",
+            )
+            os.makedirs(log_path)
+        else:
+            log_path = None
 
-    logger = setup_logger(parsed_args.log_level, log_path)
-    if log_path:
-        logger.info("Log path: %s", log_path)
+        logger = setup_logger(parsed_args.log_level, log_path)
+        if log_path:
+            logger.info("Log path: %s", log_path)
 
-    if parsed_args.subcmd == "describe":
-        parse_describe(parsed_args, plugin_reg, config_reg, logger)
+        if parsed_args.subcmd == "describe":
+            parse_describe(parsed_args, plugin_reg, config_reg, logger)
 
-    if parsed_args.subcmd == "gen-plugin-config":
-        parse_gen_plugin_config(parsed_args, plugin_reg, config_reg, logger)
+        if parsed_args.subcmd == "gen-plugin-config":
+            parse_gen_plugin_config(parsed_args, plugin_reg, config_reg, logger)
 
-    parsed_plugin_args = {}
-    for plugin, plugin_args in plugin_arg_map.items():
-        try:
-            parsed_plugin_args[plugin] = plugin_subparser_map[plugin][0].parse_args(plugin_args)
-        except Exception:
-            logger.exception("Exception parsing args for plugin: %s", plugin)
+        parsed_plugin_args = {}
+        for plugin, plugin_args in plugin_arg_map.items():
+            try:
+                parsed_plugin_args[plugin] = plugin_subparser_map[plugin][0].parse_args(plugin_args)
+            except Exception as e:
+                logger.error("%s exception parsing args for plugin: %s", str(e), plugin)
 
-    if not parsed_plugin_args and not parsed_args.plugin_configs:
-        logger.info("No plugins config args specified, running default config: %s", DEFAULT_CONFIG)
-        plugin_configs = [DEFAULT_CONFIG]
-    else:
-        plugin_configs = parsed_args.plugin_configs or []
+        if not parsed_plugin_args and not parsed_args.plugin_configs:
+            logger.info(
+                "No plugins config args specified, running default config: %s", DEFAULT_CONFIG
+            )
+            plugin_configs = [DEFAULT_CONFIG]
+        else:
+            plugin_configs = parsed_args.plugin_configs or []
 
-    system_info = get_system_info(parsed_args)
-    log_system_info(log_path, system_info, logger)
-
-    plugin_executor = PluginExecutor(
-        logger=logger,
-        plugin_configs=get_plugin_configs(
+        plugin_config_inst_list = get_plugin_configs(
             plugin_config_input=plugin_configs,
             system_interaction_level=parsed_args.sys_interaction_level,
             built_in_configs=config_reg.configs,
             parsed_plugin_args=parsed_plugin_args,
             plugin_subparser_map=plugin_subparser_map,
-        ),
+        )
+
+        system_info = get_system_info(parsed_args)
+        log_system_info(log_path, system_info, logger)
+    except Exception as e:
+        parser.error(str(e))
+
+    plugin_executor = PluginExecutor(
+        logger=logger,
+        plugin_configs=plugin_config_inst_list,
         connections=parsed_args.connection_config,
         system_info=system_info,
         log_path=log_path,
