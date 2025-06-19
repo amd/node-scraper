@@ -197,7 +197,7 @@ A plugin config can be used to compare the system data against the config specif
 ```sh
 node-scraper --plugin-configs plugin_config.json
 ```
-Here is an example of a comprehansive plugin config that specifies analyzer args for each plugin:
+Here is an example of a comprehensive plugin config that specifies analyzer args for each plugin:
 ```json
 {
   "global_args": {},
