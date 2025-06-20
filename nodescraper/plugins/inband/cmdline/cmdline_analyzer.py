@@ -23,7 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
-from typing import Any, Optional
+from typing import Optional
 
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
 from nodescraper.interfaces import DataAnalyzer
@@ -38,15 +38,13 @@ class CmdlineAnalyzer(DataAnalyzer[CmdlineDataModel, CmdlineAnalyzerArgs]):
 
     DATA_MODEL = CmdlineDataModel
 
-    def _compare_cmdline(
-        self, cmdline: str, required_cmdline: str | list[Any], banned_cmdline: str | list[Any]
-    ) -> bool:
+    def _compare_cmdline(self, cmdline: str, required_cmdline: list, banned_cmdline: list) -> bool:
         """Compare the kernel cmdline against required and banned cmdline arguments.
 
         Args:
             cmdline (str): Kernel command line arguments as a string.
-            required_cmdline (str) | (list): required kernel cmdline arguments that must be present.
-            banned_cmdline (str) | (list): banned kernel cmdline arguments that must not be present.
+            required_cmdline (list): required kernel cmdline arguments that must be present.
+            banned_cmdline (list): banned kernel cmdline arguments that must not be present.
 
         Returns:
             bool: True if the cmdline matches the required arguments and does not contain banned arguments,
