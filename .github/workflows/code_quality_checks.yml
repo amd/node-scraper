@@ -6,9 +6,6 @@ permissions:
 
 on: [pull_request]
 
-permissions:
-  contents: read
-
 jobs:
   pre-commit:
     runs-on: [ self-hosted ]
