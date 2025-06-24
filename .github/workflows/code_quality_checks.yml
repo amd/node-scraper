@@ -1,6 +1,9 @@
 # workflow to validate code formatting using pre-commit hooks
 name: Code Quality Check
 
+permissions:
+  contents: read
+
 on: [pull_request]
 
 jobs:

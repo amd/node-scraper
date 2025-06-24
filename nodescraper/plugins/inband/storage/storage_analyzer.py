@@ -23,6 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
+import re
 from typing import Optional
 
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
@@ -39,6 +40,36 @@ class StorageAnalyzer(DataAnalyzer[StorageDataModel, StorageAnalyzerArgs]):
 
     DATA_MODEL = StorageDataModel
 
+    def _matches_device_filter(
+        self, device_name: str, exp_devices: list[str], regex_match: bool
+    ) -> bool:
+        """Check if the device name matches any of the expected devices""
+
+        Args:
+            device_name (str): device name to check
+            exp_devices (list[str]): list of expected devices to match against
+            regex_match (bool): if True, use regex matching; otherwise, use exact match
+
+        Returns:
+            bool: True if the device name matches any of the expected devices, False otherwise
+        """
+        for exp_device in exp_devices:
+            if regex_match:
+                try:
+                    device_regex = re.compile(exp_device)
+                except re.error:
+                    self._log_event(
+                        category=EventCategory.STORAGE,
+                        description=f"Invalid regex pattern: {exp_device}",
+                        priority=EventPriority.ERROR,
+                    )
+                    continue
+                if device_regex.match(device_name):
+                    return True
+            elif device_name == exp_device:
+                return True
+        return False
+
     def analyze_data(
         self, data: StorageDataModel, args: Optional[StorageAnalyzerArgs] = None
     ) -> TaskResult:
@@ -52,43 +83,70 @@ class StorageAnalyzer(DataAnalyzer[StorageDataModel, StorageAnalyzerArgs]):
             TaskResult: Result of the storage analysis containing the status and message.
         """
         if args is None:
-            args = StorageAnalyzerArgs()
+            args = StorageAnalyzerArgs(min_required_free_space_prct=10)
+        elif args.min_required_free_space_abs is None and args.min_required_free_space_prct is None:
+            args.min_required_free_space_prct = 10
+            self.logger.warning(
+                "No thresholds provided for storage analyzer arguments; defaulting to 10% free"
+            )
 
-        min_free = convert_to_bytes(args.min_required_free_space)
         if not data.storage_data:
             self.result.message = "No storage data available"
             self.result.status = ExecutionStatus.NOT_RAN
             return self.result
 
+        self.result.status = ExecutionStatus.OK
+        passing_devices = []
+        failing_devices = []
         for device_name, device_data in data.storage_data.items():
-            free = convert_to_bytes(str(device_data.free))
-            if free > min_free:
-                self.result.message = f"'{device_name}' has {bytes_to_human_readable(device_data.free)} available, {device_data.percent}% used"
-                self.result.status = ExecutionStatus.OK
-                break
-        else:
-            self.result.message = "Not enough disk storage!"
+            if args.check_devices:
+                if not self._matches_device_filter(
+                    device_name, args.check_devices, args.regex_match
+                ):
+                    continue
+            elif args.ignore_devices:
+                if self._matches_device_filter(device_name, args.ignore_devices, args.regex_match):
+                    continue
+
+            condition = False
+            if args.min_required_free_space_abs:
+                min_free_abs = convert_to_bytes(args.min_required_free_space_abs)
+                free_abs = convert_to_bytes(str(device_data.free))
+                if free_abs and free_abs > min_free_abs:
+                    condition = True
+            else:
+                condition = True
+
+            if args.min_required_free_space_prct:
+                free_prct = 100 - device_data.percent
+                condition = condition and (free_prct > args.min_required_free_space_prct)
+
+            if condition:
+                passing_devices.append(device_name)
+            else:
+                device = convert_to_bytes(str(device_data.total))
+                prct = device_data.percent
+                failing_devices.append(device_name)
+                event_data = {
+                    "offending_device": {
+                        "device": device_name,
+                        "total": device_data.total,
+                        "free": device_data.free,
+                        "percent": device_data.percent,
+                    },
+                }
+                self._log_event(
+                    category=EventCategory.STORAGE,
+                    description=f"Insufficient disk space: {bytes_to_human_readable(device)} and {prct}%,  used on {device_name}",
+                    data=event_data,
+                    priority=EventPriority.CRITICAL,
+                    console_log=True,
+                )
+        if failing_devices:
+            self.result.message = f"Insufficient disk space on " f"[{', '.join(failing_devices)}]"
             self.result.status = ExecutionStatus.ERROR
-            # find the device with the largest total storage, and its free space
-            largest_device = max(
-                data.storage_data,
-                key=lambda x: convert_to_bytes(str(data.storage_data[x].total)),
-            )
-            largest_free = data.storage_data[largest_device].free
-            largest_percent = data.storage_data[largest_device].percent
-            event_data = {
-                "largest_device": {
-                    "device": largest_device,
-                    "total": data.storage_data[largest_device].total,
-                    "free": largest_free,
-                    "percent": largest_percent,
-                },
-            }
-            self._log_event(
-                category=EventCategory.STORAGE,
-                description=f"{self.result.message} {largest_percent}% used on {largest_device}",
-                data=event_data,
-                priority=EventPriority.CRITICAL,
-                console_log=True,
+        else:
+            self.result.message = (
+                f"Sufficient disk space available on " f"[{', '.join(passing_devices)}]"
             )
         return self.result

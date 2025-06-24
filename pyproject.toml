@@ -11,7 +11,6 @@ keywords = []
 classifiers = ["Topic :: Software Development"]
 
 dependencies = [
-    "prettytable",
     "pydantic>=2.8.2",
     "paramiko~=3.5.1",
     "requests",
@@ -32,9 +31,9 @@ dev = [
 ]
 
 [project.urls]
-homepage = "https://github.com/AMD-HPC/Scraper"
-documentation = "https://github.com/AMD-HPC/Scraper"
-repository = "https://github.com/AMD-HPC/Scraper"
+homepage = "https://github.com/amd/node-scraper"
+documentation = "https://github.com/amd/node-scraper"
+repository = "https://github.com/amd/node-scraper"
 
 [build-system]
 requires = ["setuptools==70.3.0", "setuptools-scm==8.1.0"]

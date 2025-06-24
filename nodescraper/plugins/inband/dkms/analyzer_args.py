@@ -23,6 +23,8 @@
 # SOFTWARE.
 #
 ###############################################################################
+from typing import Any
+
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -30,6 +32,12 @@ class DkmsAnalyzerArgs(BaseModel):
     dkms_status: str | list = Field(default_factory=list)
     dkms_version: str | list = Field(default_factory=list)
     regex_match: bool = False
+
+    model_config = {"extra": "forbid"}
+
+    def model_post_init(self, __context: Any) -> None:
+        if not self.dkms_status and not self.dkms_version:
+            raise ValueError("At least one of dkms_status or dkms_version must be provided")
 
     @field_validator("dkms_status", mode="before")
     @classmethod

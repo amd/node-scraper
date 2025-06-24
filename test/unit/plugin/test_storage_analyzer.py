@@ -52,35 +52,78 @@ def model_obj():
 
 
 @pytest.fixture
+def multiple_dev():
+    return StorageDataModel(
+        storage_data={
+            "dev1": DeviceStorageData(total=100, free=90, used=10, percent=10),
+            "dev2": DeviceStorageData(total=100, free=5, used=95, percent=95),
+        }
+    )
+
+
+@pytest.fixture
 def analyzer(system_info):
     return StorageAnalyzer(system_info=system_info)
 
 
-def test_nominal_with_config(analyzer, model_obj):
-    args = StorageAnalyzerArgs(min_required_free_space="600G")
+def test_filter_exact_match(analyzer):
+    assert analyzer._matches_device_filter("foo", ["foo", "bar"], regex_match=False)
+    assert not analyzer._matches_device_filter("baz", ["foo", "bar"], regex_match=False)
+
+
+def test_filter_regex_match(analyzer):
+    assert analyzer._matches_device_filter("disk0", [r"disk\d"], regex_match=True)
+    assert not analyzer._matches_device_filter("diskA", [r"disk\d"], regex_match=True)
+
+
+def test_filter_invalid_regex(analyzer, monkeypatch):
+    calls = []
+    monkeypatch.setattr(analyzer, "_log_event", lambda **kw: calls.append(kw))
+    assert not analyzer._matches_device_filter("somestring", ["[invalid"], regex_match=True)
+    assert len(calls) == 1
+    event = calls[0]
+    assert event["category"] == EventCategory.STORAGE
+    assert event["priority"] == EventPriority.ERROR
+    assert "Invalid regex pattern" in event["description"]
+
+
+def test_check_devices_only(analyzer, multiple_dev):
+    args = StorageAnalyzerArgs(min_required_free_space_prct=50, check_devices=["dev1"])
+    res = analyzer.analyze_data(multiple_dev, args)
+    assert res.status == ExecutionStatus.OK
+
+
+def test_ignore_devices(analyzer, multiple_dev):
+    args = StorageAnalyzerArgs(min_required_free_space_prct=50, ignore_devices=["dev2"])
+    res = analyzer.analyze_data(multiple_dev, args)
+    assert res.status == ExecutionStatus.OK
+
+
+def test_check_overrides_ignore(analyzer, multiple_dev):
+    args = StorageAnalyzerArgs(
+        min_required_free_space_prct=50, check_devices=["dev2"], ignore_devices=["dev2", "dev1"]
+    )
+    res = analyzer.analyze_data(multiple_dev, args)
+    assert res.status == ExecutionStatus.ERROR
+    assert any(e.category == EventCategory.STORAGE.value for e in res.events)
+
+
+def test_only_absolute_threshold_fails(analyzer, model_obj):
+    args = StorageAnalyzerArgs(min_required_free_space_abs="800GB")
     result = analyzer.analyze_data(model_obj, args)
     assert result.status == ExecutionStatus.OK
-    assert result.message == "'/dev/nvme0n1p2' has 869.8GB available, 3.0% used"
-    assert len(result.events) == 0
+    assert "Sufficient disk space available on [/dev/nvme0n1p2]" in result.message
 
 
-def test_nominal_no_config(analyzer, model_obj):
-    result = analyzer.analyze_data(model_obj)
-    assert result.status == ExecutionStatus.OK
-    assert result.message == "'/dev/nvme0n1p2' has 869.8GB available, 3.0% used"
-    assert len(result.events) == 0
-
-
-def test_insufficient_free_storage(analyzer, model_obj):
-    args = StorageAnalyzerArgs(min_required_free_space="1TB")
+def test_only_percentage_threshold_fails(analyzer, model_obj):
+    args = StorageAnalyzerArgs(min_required_free_space_prct=99)
     result = analyzer.analyze_data(model_obj, args)
     assert result.status == ExecutionStatus.ERROR
-    for event in result.events:
-        assert event.category == EventCategory.STORAGE.value
-        assert event.priority == EventPriority.CRITICAL
+    assert any(event.category == EventCategory.STORAGE.value for event in result.events)
+    assert any(event.priority == EventPriority.CRITICAL for event in result.events)
 
 
-def test_windows_nominal(system_info):
+def test_both_abs_and_prct_fail(system_info):
     system_info.os_family = OSFamily.WINDOWS
     analyzer = StorageAnalyzer(system_info=system_info)
 
@@ -94,9 +137,32 @@ def test_windows_nominal(system_info):
             )
         }
     )
-    args = StorageAnalyzerArgs(min_required_free_space="10GB")
 
+    args = StorageAnalyzerArgs(min_required_free_space_abs="10GB", min_required_free_space_prct=96)
     result = analyzer.analyze_data(model, args)
-    assert result.status == ExecutionStatus.OK
-    assert result.message == "'C:' has 466.44GB available, 53.97% used"
-    assert len(result.events) == 0
+    assert result.status == ExecutionStatus.ERROR
+    assert "Insufficient disk space" in result.message
+    assert len(result.events) == 1
+    assert any(e.category == EventCategory.STORAGE.value for e in result.events)
+    assert any(e.priority == EventPriority.CRITICAL for e in result.events)
+
+    args2 = StorageAnalyzerArgs(min_required_free_space_prct=40, min_required_free_space_abs="1GB")
+    result2 = analyzer.analyze_data(model, args2)
+    assert result2.status == ExecutionStatus.OK
+
+
+def test_device_filter(analyzer, model_obj):
+    model_obj.storage_data["some_device"] = DeviceStorageData(
+        total=1000, free=100, used=900, percent=90
+    )
+
+    args = StorageAnalyzerArgs(min_required_free_space_prct="20")
+    result = analyzer.analyze_data(model_obj, args)
+    assert result.status == ExecutionStatus.ERROR
+    assert len(result.events) == 1
+
+    args2 = StorageAnalyzerArgs(
+        min_required_free_space_prct="20", ignore_devices=["some_device"], regex_match=True
+    )
+    result2 = analyzer.analyze_data(model_obj, args2)
+    assert result2.status == ExecutionStatus.OK
