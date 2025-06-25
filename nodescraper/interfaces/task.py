@@ -81,7 +81,7 @@ class Task(abc.ABC):
         if isinstance(input_value, str):
             value: EventPriority = getattr(EventPriority, input_value)
         elif isinstance(input_value, EventPriority):
-            value: EventPriority = input_value
+            value: EventPriority = input_value  # type:ignore
         else:
             raise ValueError(f"Invalid type for max_event_priority_level: {type(input_value)}")
 

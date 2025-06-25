@@ -27,8 +27,8 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class CmdlineAnalyzerArgs(BaseModel):
-    required_cmdline: str | list = Field(default_factory=list)
-    banned_cmdline: str | list = Field(default_factory=list)
+    required_cmdline: list = Field(default_factory=list)
+    banned_cmdline: list = Field(default_factory=list)
 
     model_config = {"extra": "forbid"}
 
