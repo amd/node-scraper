@@ -138,6 +138,13 @@ def build_parser(
         help="Change python log level",
     )
 
+    parser.add_argument(
+        "--gen-reference-config",
+        dest="reference_config",
+        action="store_true",
+        help="Generate reference config based on node data",
+    )
+
     subparsers = parser.add_subparsers(dest="subcmd", help="Subcommands")
 
     run_plugin_parser = subparsers.add_parser(
@@ -531,6 +538,36 @@ def log_system_info(log_path: str, system_info: SystemInfo, logger: logging.Logg
             logger.error(exp)
 
 
+def generate_reference_config(results, plugin_reg, logger):
+    plugin_config = PluginConfig()
+    plugins = {}
+    for obj in results:
+        # print("PLUGING: %s", obj.source)
+        # print("RESULT DATA %s", obj.result_data)
+        # print(obj.result_data.system_data)
+        data_model = obj.result_data.system_data
+
+        plugin = plugin_reg.plugins.get(obj.result_data.collection_result.parent)
+        if not plugin.ANALYZER_ARGS:
+            logger.warning(
+                "Plugin: %s does not support reference creation config. No analyzer args defined.",
+                obj.source,
+            )
+            continue
+
+        args = None
+        try:
+            args = plugin.ANALYZER_ARGS.set_data(data_model)
+        except NotImplementedError as nperr:
+            logger.info(nperr)
+            continue
+        args.set_data(data_model)
+        plugins[obj.source] = {"analysis_args": {}}
+        plugins[obj.source]["analysis_args"] = args.model_dump()
+    plugin_config.plugins = plugins
+    # print(plugin_config)
+
+
 def main(arg_input: Optional[list[str]] = None):
     """Main entry point for the CLI
 
@@ -599,6 +636,8 @@ def main(arg_input: Optional[list[str]] = None):
 
     try:
         results = plugin_executor.run_queue()
+        if parsed_args.reference_config:
+            generate_reference_config(results, plugin_reg, logger)
         if any(result.status > ExecutionStatus.WARNING for result in results):
             sys.exit(1)
         else:

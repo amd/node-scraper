@@ -25,9 +25,14 @@
 ###############################################################################
 from typing import Optional
 
-from nodescraper.models import TimeRangeAnalyisArgs
+from nodescraper.interfaces.analyzerargs import AnalyzerArgs
+from nodescraper.models import TimeRangeAnalysisArgs
 
 
-class DmesgAnalyzerArgs(TimeRangeAnalyisArgs):
+class DmesgAnalyzerArgs(TimeRangeAnalysisArgs, AnalyzerArgs):
     check_unknown_dmesg_errors: Optional[bool] = True
     exclude_category: Optional[set[str]] = None
+
+    @classmethod
+    def set_data(cls, datamodel) -> "TimeRangeAnalysisArgs":
+        raise NotImplementedError("Dmesg does not support reference config creation")

@@ -23,10 +23,12 @@
 # SOFTWARE.
 #
 ###############################################################################
-from pydantic import BaseModel, Field, field_validator
+from pydantic import Field, field_validator
+
+from nodescraper.interfaces.analyzerargs import AnalyzerArgs
 
 
-class OsAnalyzerArgs(BaseModel):
+class OsAnalyzerArgs(AnalyzerArgs):
     exp_os: str | list = Field(default_factory=list)
     exact_match: bool = True
 
@@ -45,3 +47,7 @@ class OsAnalyzerArgs(BaseModel):
             exp_os = [exp_os]
 
         return exp_os
+
+    @classmethod
+    def set_data(cls, datamodel) -> "OsAnalyzerArgs":
+        return cls(exp_os=datamodel.os_version)

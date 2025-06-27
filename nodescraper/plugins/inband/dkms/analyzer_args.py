@@ -23,10 +23,12 @@
 # SOFTWARE.
 #
 ###############################################################################
-from pydantic import BaseModel, Field, field_validator
+from pydantic import Field, field_validator
+
+from nodescraper.interfaces.analyzerargs import AnalyzerArgs
 
 
-class DkmsAnalyzerArgs(BaseModel):
+class DkmsAnalyzerArgs(AnalyzerArgs):
     dkms_status: str | list = Field(default_factory=list)
     dkms_version: str | list = Field(default_factory=list)
     regex_match: bool = False
@@ -62,3 +64,7 @@ class DkmsAnalyzerArgs(BaseModel):
             dkms_version = [dkms_version]
 
         return dkms_version
+
+    @classmethod
+    def set_data(cls, datamodel) -> "DkmsAnalyzerArgs":
+        return cls(dkms_status=datamodel.status, dkms_version=datamodel.version)

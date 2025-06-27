@@ -23,10 +23,12 @@
 # SOFTWARE.
 #
 ###############################################################################
-from pydantic import BaseModel, Field, field_validator
+from pydantic import Field, field_validator
+
+from nodescraper.interfaces.analyzerargs import AnalyzerArgs
 
 
-class BiosAnalyzerArgs(BaseModel):
+class BiosAnalyzerArgs(AnalyzerArgs):
     exp_bios_version: list[str] = Field(default_factory=list)
     regex_match: bool = False
 
@@ -45,3 +47,7 @@ class BiosAnalyzerArgs(BaseModel):
             exp_bios_version = [exp_bios_version]
 
         return exp_bios_version
+
+    @classmethod
+    def set_data(cls, datamodel) -> "BiosAnalyzerArgs":
+        return cls(exp_bios_version=datamodel.bios_version)

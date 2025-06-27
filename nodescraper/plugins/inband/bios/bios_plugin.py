@@ -39,3 +39,5 @@ class BiosPlugin(InBandDataPlugin[BiosDataModel, None, BiosAnalyzerArgs]):
     COLLECTOR = BiosCollector
 
     ANALYZER = BiosAnalyzer
+
+    ANALYZER_ARGS = BiosAnalyzerArgs

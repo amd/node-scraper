@@ -23,10 +23,12 @@
 # SOFTWARE.
 #
 ###############################################################################
-from pydantic import BaseModel, Field, field_validator
+from pydantic import Field, field_validator
+
+from nodescraper.interfaces.analyzerargs import AnalyzerArgs
 
 
-class CmdlineAnalyzerArgs(BaseModel):
+class CmdlineAnalyzerArgs(AnalyzerArgs):
     required_cmdline: str | list = Field(default_factory=list)
     banned_cmdline: str | list = Field(default_factory=list)
 
@@ -61,3 +63,7 @@ class CmdlineAnalyzerArgs(BaseModel):
             banned_cmdline = [banned_cmdline]
 
         return banned_cmdline
+
+    @classmethod
+    def set_data(cls, datamodel) -> "CmdlineAnalyzerArgs":
+        return cls(cmdline=datamodel.cmdline)

@@ -23,17 +23,31 @@
 # SOFTWARE.
 #
 ###############################################################################
-from nodescraper.base import InBandDataPlugin
+from abc import ABC, abstractmethod
 
-from .dimm_collector import DimmCollector
-from .dimmdata import DimmDataModel
+from pydantic import BaseModel
+
+from nodescraper.models.datamodel import DataModel
 
 
-class DimmPlugin(InBandDataPlugin[DimmDataModel, None, None]):
-    """Plugin for collection and analysis of DIMM data"""
+class AnalyzerArgs(BaseModel, ABC):
+    data_model: DataModel | None = None
 
-    DATA_MODEL = DimmDataModel
+    def __init__(self, **data):
+        super().__init__(**data)
 
-    COLLECTOR = DimmCollector
+    @classmethod
+    def set_analyzer_args(cls, datamodel):
+        """
 
-    ANALYZER_ARGS = None
+        Args:
+
+        Returns:
+        """
+        return cls(data_model=datamodel)
+
+    @abstractmethod
+    def set_data(self, datamodel):
+        raise NotImplementedError(
+            "Setting analyzer args from datamodel is not implemented for class: %s", self.__name__
+        )
