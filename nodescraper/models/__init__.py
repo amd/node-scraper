@@ -30,7 +30,7 @@ from .pluginconfig import PluginConfig
 from .pluginresult import PluginResult
 from .systeminfo import SystemInfo
 from .taskresult import TaskResult
-from .timerangeargs import TimeRangeAnalyisArgs
+from .timerangeargs import TimeRangeAnalysisArgs
 
 __all__ = [
     "DataModel",
@@ -40,5 +40,5 @@ __all__ = [
     "PluginResult",
     "DataPluginResult",
     "PluginConfig",
-    "TimeRangeAnalyisArgs",
+    "TimeRangeAnalysisArgs",
 ]

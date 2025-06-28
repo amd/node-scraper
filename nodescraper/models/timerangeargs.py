@@ -29,7 +29,7 @@ from typing import Optional
 from pydantic import BaseModel
 
 
-class TimeRangeAnalyisArgs(BaseModel):
+class TimeRangeAnalysisArgs(BaseModel):
     """
     Model for time range analysis arguments.
     """

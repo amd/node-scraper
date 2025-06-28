@@ -550,7 +550,7 @@ def generate_reference_config(results, plugin_reg, logger):
         plugin = plugin_reg.plugins.get(obj.result_data.collection_result.parent)
         if not plugin.ANALYZER_ARGS:
             logger.warning(
-                "Plugin: %s does not support reference creation config. No analyzer args defined.",
+                "Plugin: %s does not support reference config creation. No analyzer args defined.",
                 obj.source,
             )
             continue

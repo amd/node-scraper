@@ -23,6 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
+from .analyzerargs import AnalyzerArgs
 from .connectionmanager import ConnectionManager
 from .dataanalyzertask import DataAnalyzer
 from .datacollectortask import DataCollector
@@ -33,6 +34,7 @@ from .task import Task
 from .taskresulthook import TaskResultHook
 
 __all__ = [
+    "AnalyzerArgs",
     "ConnectionManager",
     "Task",
     "DataPlugin",

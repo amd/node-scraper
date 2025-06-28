@@ -40,4 +40,4 @@ class DmesgPlugin(InBandDataPlugin[DmesgData, None, DmesgAnalyzerArgs]):
 
     ANALYZER = DmesgAnalyzer
 
-    ANALYZER_ARGS = DmesgAnalyzerArgs
+    ANALYZER_ARGS = None

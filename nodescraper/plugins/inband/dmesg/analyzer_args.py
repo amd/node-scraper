@@ -25,11 +25,10 @@
 ###############################################################################
 from typing import Optional
 
-from nodescraper.interfaces.analyzerargs import AnalyzerArgs
 from nodescraper.models import TimeRangeAnalysisArgs
 
 
-class DmesgAnalyzerArgs(TimeRangeAnalysisArgs, AnalyzerArgs):
+class DmesgAnalyzerArgs(TimeRangeAnalysisArgs):
     check_unknown_dmesg_errors: Optional[bool] = True
     exclude_category: Optional[set[str]] = None
 

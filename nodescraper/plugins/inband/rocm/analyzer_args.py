@@ -44,3 +44,7 @@ class RocmAnalyzerArgs(BaseModel):
             exp_rocm = [exp_rocm]
 
         return exp_rocm
+
+    @classmethod
+    def set_data(cls, datamodel) -> "RocmAnalyzerArgs":
+        return cls(exp_rocm=datamodel.rocm_version)

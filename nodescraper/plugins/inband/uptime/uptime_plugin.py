@@ -35,3 +35,5 @@ class UptimePlugin(InBandDataPlugin[UptimeDataModel, None, None]):
     DATA_MODEL = UptimeDataModel
 
     COLLECTOR = UptimeCollector
+
+    ANALYZER_ARGS = None

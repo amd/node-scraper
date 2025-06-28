@@ -23,10 +23,12 @@
 # SOFTWARE.
 #
 ###############################################################################
-from pydantic import BaseModel, Field, field_validator
+from pydantic import Field, field_validator
+
+from nodescraper.interfaces import AnalyzerArgs
 
 
-class KernelAnalyzerArgs(BaseModel):
+class KernelAnalyzerArgs(AnalyzerArgs):
     exp_kernel: str | list = Field(default_factory=list)
     regex_match: bool = False
 
@@ -45,3 +47,7 @@ class KernelAnalyzerArgs(BaseModel):
             exp_kernel = [exp_kernel]
 
         return exp_kernel
+
+    @classmethod
+    def set_data(cls, datamodel) -> "KernelAnalyzerArgs":
+        return cls(exp_kernel=datamodel.kernel_version)

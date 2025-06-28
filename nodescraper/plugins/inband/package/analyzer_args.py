@@ -23,9 +23,15 @@
 # SOFTWARE.
 #
 ###############################################################################
-from pydantic import BaseModel, Field
+from pydantic import Field
+
+from nodescraper.interfaces import AnalyzerArgs
 
 
-class PackageAnalyzerArgs(BaseModel):
+class PackageAnalyzerArgs(AnalyzerArgs):
     exp_package_ver: dict[str, str | None] = Field(default_factory=dict)
     regex_match: bool = True
+
+    @classmethod
+    def set_data(cls, datamodel) -> "PackageAnalyzerArgs":
+        return cls(exp_package_ver=datamodel.version_info)
