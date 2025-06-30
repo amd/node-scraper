@@ -29,8 +29,8 @@ from nodescraper.interfaces import AnalyzerArgs
 
 class ProcessAnalyzerArgs(AnalyzerArgs):
     max_kfd_processes: int = 0
-    max_cpu_usage: int = 20
+    max_cpu_usage: float = 20.0
 
     @classmethod
     def build_from_model(cls, datamodel) -> "ProcessAnalyzerArgs":
-        return cls(max_kfd_processes=datamodel.kfd_process, max_cupu_usage=datamodel.cpu_usage)
+        return cls(max_kfd_processes=datamodel.kfd_process, max_cpu_usage=datamodel.cpu_usage)

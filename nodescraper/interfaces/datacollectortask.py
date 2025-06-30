@@ -41,7 +41,7 @@ from nodescraper.generictypes import TCollectArg, TDataModel
 from nodescraper.interfaces.task import SystemCompatibilityError, Task
 from nodescraper.models import DataModel, SystemInfo, TaskResult
 from nodescraper.typeutils import TypeUtils
-from nodescraper.utils import get_exception_details, get_exception_traceback
+from nodescraper.utils import get_exception_traceback
 
 from .connectionmanager import TConnection
 from .taskresulthook import TaskResultHook
@@ -76,7 +76,7 @@ def collect_decorator(
                 collector._log_event(
                     category=EventCategory.RUNTIME,
                     description="Pydantic validation error",
-                    data=get_exception_details(exception),
+                    data={"errors": exception.errors(include_url=False)},
                     priority=EventPriority.CRITICAL,
                     console_log=True,
                 )

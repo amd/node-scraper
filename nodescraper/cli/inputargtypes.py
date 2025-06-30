@@ -104,7 +104,7 @@ class ModelArgHandler(Generic[TModelType]):
             return self.model(**data)
         except ValidationError as e:
             raise argparse.ArgumentTypeError(
-                f"Validation errors when processing {file_path}: {e.errors()}"
+                f"Validation errors when processing {file_path}: {e.errors(include_url=False)}"
             ) from e
 
 

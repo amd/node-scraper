@@ -95,7 +95,7 @@ def test_missing_data(system_info, model_obj, config):
 
 def test_invalid_data(system_info, model_obj, config):
     analyzer = DkmsAnalyzer(system_info=system_info)
-    args = DkmsAnalyzerArgs(dkms_status=config["status"], invalid=config["invalid"])
+    args = DkmsAnalyzerArgs(dkms_status=config["status"], dkms_version=config["invalid"])
     result = analyzer.analyze_data(data=model_obj, args=args)
 
     assert result.status == ExecutionStatus.ERROR

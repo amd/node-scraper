@@ -26,7 +26,7 @@
 from abc import ABC, abstractmethod
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 
 from nodescraper.models.datamodel import DataModel
 
@@ -34,7 +34,8 @@ from nodescraper.models.datamodel import DataModel
 class AnalyzerArgs(BaseModel, ABC):
     data_model: Optional["DataModel"] = Field(default=None)
     # model_config = {"exclude_none": True}
-    model_config = ConfigDict(exclude_node=True)
+    # model_config = ConfigDict(exclude_noe=True)
+    model_config = {"extra": "forbid", "exclude_node": True}
 
     @classmethod
     @abstractmethod

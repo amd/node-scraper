@@ -67,8 +67,8 @@ class DkmsAnalyzer(DataAnalyzer[DkmsDataModel, DkmsAnalyzerArgs]):
         error_state = False
 
         for check, accepted_values in check_map.items():
+            actual_value = getattr(data, check)
             for accepted_value in accepted_values:
-                actual_value = getattr(data, check)
                 if args.regex_match:
                     try:
                         regex_data = re.compile(accepted_value)
