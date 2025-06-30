@@ -32,5 +32,5 @@ class ProcessAnalyzerArgs(AnalyzerArgs):
     max_cpu_usage: int = 20
 
     @classmethod
-    def set_data(cls, datamodel) -> "ProcessAnalyzerArgs":
+    def build_from_model(cls, datamodel) -> "ProcessAnalyzerArgs":
         return cls(max_kfd_processes=datamodel.kfd_process, max_cupu_usage=datamodel.cpu_usage)

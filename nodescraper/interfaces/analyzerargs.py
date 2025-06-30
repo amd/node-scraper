@@ -24,30 +24,21 @@
 #
 ###############################################################################
 from abc import ABC, abstractmethod
+from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 from nodescraper.models.datamodel import DataModel
 
 
 class AnalyzerArgs(BaseModel, ABC):
-    data_model: DataModel | None = None
-
-    def __init__(self, **data):
-        super().__init__(**data)
+    data_model: Optional["DataModel"] = Field(default=None)
+    # model_config = {"exclude_none": True}
+    model_config = ConfigDict(exclude_node=True)
 
     @classmethod
-    def set_analyzer_args(cls, datamodel):
-        """
-
-        Args:
-
-        Returns:
-        """
-        return cls(data_model=datamodel)
-
     @abstractmethod
-    def set_data(self, datamodel):
+    def build_from_model(cls, datamodel):
         raise NotImplementedError(
-            "Setting analyzer args from datamodel is not implemented for class: %s", self.__name__
+            "Setting analyzer args from datamodel is not implemented for class: %s", cls.__name__
         )

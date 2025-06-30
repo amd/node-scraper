@@ -66,5 +66,5 @@ class DkmsAnalyzerArgs(AnalyzerArgs):
         return dkms_version
 
     @classmethod
-    def set_data(cls, datamodel) -> "DkmsAnalyzerArgs":
+    def build_from_model(cls, datamodel) -> "DkmsAnalyzerArgs":
         return cls(dkms_status=datamodel.status, dkms_version=datamodel.version)

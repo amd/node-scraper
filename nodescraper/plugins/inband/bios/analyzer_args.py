@@ -49,5 +49,5 @@ class BiosAnalyzerArgs(AnalyzerArgs):
         return exp_bios_version
 
     @classmethod
-    def set_data(cls, datamodel) -> "BiosAnalyzerArgs":
+    def build_from_model(cls, datamodel) -> "BiosAnalyzerArgs":
         return cls(exp_bios_version=datamodel.bios_version)

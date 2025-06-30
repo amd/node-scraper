@@ -49,5 +49,5 @@ class OsAnalyzerArgs(AnalyzerArgs):
         return exp_os
 
     @classmethod
-    def set_data(cls, datamodel) -> "OsAnalyzerArgs":
+    def build_from_model(cls, datamodel) -> "OsAnalyzerArgs":
         return cls(exp_os=datamodel.os_version)

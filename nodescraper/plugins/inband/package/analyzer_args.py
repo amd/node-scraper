@@ -33,5 +33,5 @@ class PackageAnalyzerArgs(AnalyzerArgs):
     regex_match: bool = True
 
     @classmethod
-    def set_data(cls, datamodel) -> "PackageAnalyzerArgs":
+    def build_from_model(cls, datamodel) -> "PackageAnalyzerArgs":
         return cls(exp_package_ver=datamodel.version_info)

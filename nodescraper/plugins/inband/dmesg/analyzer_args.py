@@ -33,5 +33,5 @@ class DmesgAnalyzerArgs(TimeRangeAnalysisArgs):
     exclude_category: Optional[set[str]] = None
 
     @classmethod
-    def set_data(cls, datamodel) -> "TimeRangeAnalysisArgs":
+    def build_from_model(cls, datamodel) -> "TimeRangeAnalysisArgs":
         raise NotImplementedError("Dmesg does not support reference config creation")

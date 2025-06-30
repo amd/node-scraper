@@ -65,5 +65,5 @@ class CmdlineAnalyzerArgs(AnalyzerArgs):
         return banned_cmdline
 
     @classmethod
-    def set_data(cls, datamodel) -> "CmdlineAnalyzerArgs":
+    def build_from_model(cls, datamodel) -> "CmdlineAnalyzerArgs":
         return cls(cmdline=datamodel.cmdline)

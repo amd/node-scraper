@@ -49,5 +49,5 @@ class KernelAnalyzerArgs(AnalyzerArgs):
         return exp_kernel
 
     @classmethod
-    def set_data(cls, datamodel) -> "KernelAnalyzerArgs":
+    def build_from_model(cls, datamodel) -> "KernelAnalyzerArgs":
         return cls(exp_kernel=datamodel.kernel_version)

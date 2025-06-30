@@ -559,11 +559,11 @@ def generate_reference_config(results, plugin_reg, logger, path):
 
         args = None
         try:
-            args = plugin.ANALYZER_ARGS.set_data(data_model)
+            args = plugin.ANALYZER_ARGS.build_from_model(data_model)
         except NotImplementedError as nperr:
             logger.info(nperr)
             continue
-        args.set_data(data_model)
+        args.build_from_model(data_model)
         plugins[obj.source] = {"analysis_args": {}}
         plugins[obj.source]["analysis_args"] = args.model_dump()
     plugin_config.plugins = plugins
