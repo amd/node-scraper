@@ -35,7 +35,7 @@ class AnalyzerArgs(BaseModel, ABC):
     data_model: Optional["DataModel"] = Field(default=None)
     # model_config = {"exclude_none": True}
     # model_config = ConfigDict(exclude_noe=True)
-    model_config = {"extra": "forbid", "exclude_node": True}
+    model_config = {"extra": "forbid", "exclude_none": True}
 
     @classmethod
     @abstractmethod

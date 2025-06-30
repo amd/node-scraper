@@ -541,12 +541,8 @@ def log_system_info(log_path: str | None, system_info: SystemInfo, logger: loggi
 
 def generate_reference_config(results, plugin_reg, logger, path):
     plugin_config = PluginConfig()
-    # print(plugin_config)
     plugins = {}
     for obj in results:
-        # print("PLUGING: %s", obj.source)
-        # print("RESULT DATA %s", obj.result_data)
-        # print(obj.result_data.system_data)
         data_model = obj.result_data.system_data
 
         plugin = plugin_reg.plugins.get(obj.result_data.collection_result.parent)
@@ -565,7 +561,7 @@ def generate_reference_config(results, plugin_reg, logger, path):
             continue
         args.build_from_model(data_model)
         plugins[obj.source] = {"analysis_args": {}}
-        plugins[obj.source]["analysis_args"] = args.model_dump()
+        plugins[obj.source]["analysis_args"] = args.model_dump(exclude_none=True)
     plugin_config.plugins = plugins
 
     if not path:
