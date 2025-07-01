@@ -25,11 +25,11 @@
 ###############################################################################
 import argparse
 import datetime
+import json
 import logging
 import os
 import platform
 import sys
-from pathlib import Path
 from typing import Optional
 
 from nodescraper.cli.constants import DEFAULT_CONFIG, META_VAR_MAP
@@ -376,10 +376,21 @@ def main(arg_input: Optional[list[str]] = None):
 
     try:
         results = plugin_executor.run_queue()
+
         if parsed_args.reference_config:
-            generate_reference_config(
-                results, plugin_reg, logger, path=Path.cwd() / "reference_config.json"
-            )
+            ref_config = generate_reference_config(results, plugin_reg, logger)
+            path = os.path.join(os.getcwd(), "reference_config.json")
+            try:
+                with open(path, "w") as f:
+                    json.dump(
+                        ref_config.model_dump(mode="json", exclude_none=True),
+                        f,
+                        indent=2,
+                    )
+                    logger.info("Reference config written to: %s", path)
+            except Exception as exp:
+                logger.error(exp)
+
         if any(result.status > ExecutionStatus.WARNING for result in results):
             sys.exit(1)
         else:

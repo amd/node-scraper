@@ -17,10 +17,10 @@ def test_build_from_model(dummy_data_model):
 
     a2 = MyArgs()
     dumped = a2.model_dump()  # noqa: F841
-    # assert "data_model" not in dumped
+    assert "data_model" not in dumped
 
     json_str = a2.model_dump_json()  # noqa: F841
-    # assert '"data_model"' not in json_str
+    assert '"data_model"' not in json_str
 
 
 def test_base_build_from_model_not_implemented():

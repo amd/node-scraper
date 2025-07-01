@@ -283,7 +283,7 @@ def log_system_info(log_path: str | None, system_info: SystemInfo, logger: loggi
             logger.error(exp)
 
 
-def generate_reference_config(results, plugin_reg, logger, path):
+def generate_reference_config(results, plugin_reg, logger):
     plugin_config = PluginConfig()
     plugins = {}
     for obj in results:
@@ -308,15 +308,4 @@ def generate_reference_config(results, plugin_reg, logger, path):
         plugins[obj.source]["analysis_args"] = args.model_dump(exclude_none=True)
     plugin_config.plugins = plugins
 
-    if not path:
-        path = os.path.join(os.getcwd(), "reference_config.json")
-    try:
-        with open(path, "w") as f:
-            json.dump(
-                plugin_config.model_dump(mode="json", exclude_none=True),
-                f,
-                indent=2,
-            )
-            logger.info("Reference config written to: %s", path)
-    except Exception as exp:
-        logger.error(exp)
+    return plugin_config

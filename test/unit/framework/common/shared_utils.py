@@ -31,6 +31,7 @@ from pydantic import BaseModel
 from nodescraper.enums import ExecutionStatus
 from nodescraper.interfaces import ConnectionManager, PluginInterface
 from nodescraper.models import PluginResult, TaskResult
+from nodescraper.models.datamodel import DataModel
 
 
 class MockConnectionManager(ConnectionManager):
@@ -71,10 +72,19 @@ class MockConnectionManager(ConnectionManager):
 class TestModelArg(BaseModel):
     model_attr: int = 123
 
+    @classmethod
+    def build_from_model(cls, model):
+        return cls()
+
+
+class DummyDataModel(DataModel):
+    some_version: str = None
+
 
 class TestPluginA(PluginInterface[MockConnectionManager, None]):
 
     CONNECTION_TYPE = MockConnectionManager
+    ANALYZER_ARGS = TestModelArg
 
     def run(
         self,
