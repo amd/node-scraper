@@ -25,6 +25,7 @@
 ###############################################################################
 import datetime
 
+from nodescraper.enums.eventpriority import EventPriority
 from nodescraper.enums.executionstatus import ExecutionStatus
 from nodescraper.plugins.inband.dmesg.analyzer_args import DmesgAnalyzerArgs
 from nodescraper.plugins.inband.dmesg.dmesg_analyzer import DmesgAnalyzer
@@ -150,3 +151,56 @@ def test_exclude_category(system_info):
     assert len(res.events) == 4
     for event in res.events:
         assert event.category != "RAS"
+
+
+def test_page_fault(system_info):
+    dmesg_data = DmesgData(
+        dmesg_content=(
+            "kern  :err   : 2025-01-01T00:00:00,000000+00:00 amdgpu 0000:03:00.0: amdgpu: [mmhub0] no-retry page fault (src_id:0 ring:0 vmid:0 pasid:0, for process pid 0 thread pid 0)\n"
+            "kern  :err   : 2025-01-01T00:00:01,000000+00:00 amdgpu 0000:03:00.0: amdgpu:   test example 123\n"
+            "kern  :err   : 2025-01-01T00:00:02,000000+00:00 amdgpu 0000:03:00.0: amdgpu:   test example 123\n"
+            "kern  :err   : 2025-01-01T00:00:03,000000+00:00 amdgpu 0000:03:00.0: amdgpu: VM_L2_PROTECTION_FAULT_STATUS:0x00000000\n"
+            "kern  :err   : 2025-01-01T00:00:04,000000+00:00 amdgpu 0000:03:00.0: amdgpu: 	 Faulty UTCL2 client ID: ABC123 (0x000)\n"
+            "kern  :err   : 2025-01-01T00:00:05,000000+00:00 amdgpu 0000:03:00.0: amdgpu: 	 MORE_FAULTS: 0x0\n"
+            "kern  :err   : 2025-01-01T00:00:06,000000+00:00 amdgpu 0000:03:00.0: amdgpu: 	 WALKER_ERROR: 0x0\n"
+            "kern  :err   : 2025-01-01T00:00:07,000000+00:00 amdgpu 0000:03:00.0: amdgpu: 	 PERMISSION_FAULTS: 0x0\n"
+            "kern  :err   : 2025-01-01T00:00:08,000000+00:00 amdgpu 0000:03:00.0: amdgpu: 	 MAPPING_ERROR: 0x0\n"
+            "kern  :err   : 2025-01-01T00:00:09,000000+00:00 amdgpu 0000:03:00.0: amdgpu: 	 RW: 0x0\n"
+            "kern  :info  : 2025-01-01T00:00:10,000000+00:00 TEST TEST\n"
+            "kern  :err   : 2025-01-01T00:00:11,000000+00:00 amdgpu 0000:03:00.0: amdgpu: [gfxhub0] retry page fault (src_id:0 ring:0 vmid:0 pasid:0, for process pid 0 thread pid 0)\n"
+            "kern  :err   : 2025-01-01T00:00:12,000000+00:00 amdgpu 0000:03:00.0: amdgpu:   test example 123\n"
+            "kern  :err   : 2025-01-01T00:00:13,000000+00:00 amdgpu 0000:03:00.0: amdgpu:   test example 123\n"
+            "kern  :err   : 2025-01-01T00:00:14,000000+00:00 amdgpu 0000:03:00.0: amdgpu: VM_L2_PROTECTION_FAULT_STATUS:0x00000000\n"
+            "kern  :err   : 2025-01-01T00:00:15,000000+00:00 amdgpu 0000:03:00.0: amdgpu: 	 Faulty UTCL2 client ID: ABC123 (0x000)\n"
+            "kern  :err   : 2025-01-01T00:00:16,000000+00:00 amdgpu 0000:03:00.0: amdgpu: 	 MORE_FAULTS: 0x0\n"
+            "kern  :err   : 2025-01-01T00:00:17,000000+00:00 amdgpu 0000:03:00.0: amdgpu: 	 WALKER_ERROR: 0x0\n"
+            "kern  :err   : 2025-01-01T00:00:18,000000+00:00 amdgpu 0000:03:00.0: amdgpu: 	 PERMISSION_FAULTS: 0x0\n"
+            "kern  :err   : 2025-01-01T00:00:19,000000+00:00 amdgpu 0000:03:00.0: amdgpu: 	 MAPPING_ERROR: 0x0\n"
+            "kern  :err   : 2025-01-01T00:00:20,000000+00:00 amdgpu 0000:03:00.0: amdgpu: 	 RW: 0x0\n"
+            "kern  :info  : 2025-01-01T00:00:21,000000+00:00 TEST TEST\n"
+            "kern  :err   : 2025-01-01T00:00:22,000000+00:00 amdgpu 0003:02:00.0: amdgpu:  [gfxhub0] retry page fault (swpekfwpo\n"
+            "kern  :info  : 2025-01-01T00:00:23,000000+00:00 TEST TEST\n"
+            "kern  :err   : 2025-01-01T00:00:24,000000+00:00 amdgpu 0000:f5:00.0: amdgpu: [mmhub0] no-retry page fault (src_id:0 ring:0 vmid:0 pasid:0, for process pid 0 thread pid 0)\n"
+            "kern  :err   : 2025-01-01T00:00:25,000000+00:00 amdgpu 0000:f5:00.0: amdgpu:   test example 123\n"
+            "kern  :err   : 2025-01-01T00:00:26,000000+00:00 amdgpu 0000:f5:00.0: amdgpu:   test example 123\n"
+            "kern  :err   : 2025-01-01T00:00:27,000000+00:00 amdgpu 0000:f5:00.0: amdgpu:   test example 123\n"
+            "kern  :err   : 2025-01-01T00:00:28,000000+00:00 amdgpu 0000:f5:00.0: amdgpu: VM_L2_PROTECTION_FAULT_STATUS:0x00000000\n"
+            "kern  :err   : 2025-01-01T00:00:29,000000+00:00 amdgpu 0000:f5:00.0: amdgpu: 	 Faulty UTCL2 client ID: ABC123 (0x000)\n"
+            "kern  :err   : 2025-01-01T00:00:30,000000+00:00 amdgpu 0000:f5:00.0: amdgpu: 	 MORE_FAULTS: 0x0\n"
+            "kern  :err   : 2025-01-01T00:00:31,000000+00:00 amdgpu 0000:f5:00.0: amdgpu: 	 WALKER_ERROR: 0x0\n"
+            "kern  :err   : 2025-01-01T00:00:32,000000+00:00 amdgpu 0000:f5:00.0: amdgpu: 	 PERMISSION_FAULTS: 0x0\n"
+            "kern  :err   : 2025-01-01T00:00:33,000000+00:00 amdgpu 0000:f5:00.0: amdgpu: 	 MAPPING_ERROR: 0x0\n"
+            "kern  :err   : 2025-01-01T00:00:34,000000+00:00 amdgpu 0000:f5:00.0: amdgpu: 	 RW: 0x0\n"
+        )
+    )
+
+    analyzer = DmesgAnalyzer(
+        system_info=system_info,
+    )
+
+    res = analyzer.analyze_data(dmesg_data)
+    assert res.status == ExecutionStatus.ERROR
+    assert len(res.events) == 4
+    for event in res.events:
+        assert event.priority == EventPriority.ERROR
+        assert event.description == "amdgpu Page Fault"
