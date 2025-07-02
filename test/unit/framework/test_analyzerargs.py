@@ -18,7 +18,7 @@ def test_build_from_model(dummy_data_model):
     assert isinstance(args, MyArgs)
     assert args.args_foo == dummy.foo
     dump = args.model_dump(mode="json", exclude_none=True)
-    assert dump == "{'args_foo' : 1}"
+    assert dump == {"args_foo": 1}
 
 
 def test_base_build_from_model_not_implemented():

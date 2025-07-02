@@ -75,4 +75,4 @@ class CmdlineAnalyzerArgs(AnalyzerArgs):
         Returns:
             CmdlineAnalyzerArgs: instance of analyzer args class
         """
-        return cls(required_cmdline=datamodel.cmdline, banned_cmdline=datamodel.cmdline)
+        return cls(required_cmdline=datamodel.cmdline)
