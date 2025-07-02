@@ -26,6 +26,7 @@
 from pydantic import Field, field_validator
 
 from nodescraper.interfaces import AnalyzerArgs
+from nodescraper.plugins.inband.os.osdata import OsDataModel
 
 
 class BiosAnalyzerArgs(AnalyzerArgs):
@@ -49,5 +50,13 @@ class BiosAnalyzerArgs(AnalyzerArgs):
         return exp_bios_version
 
     @classmethod
-    def build_from_model(cls, datamodel) -> "BiosAnalyzerArgs":
+    def build_from_model(cls, datamodel: OsDataModel) -> "BiosAnalyzerArgs":
+        """build analyzer args from data model
+
+        Args:
+            datamodel (BiosDataModel): data model for plugin
+
+        Returns:
+            BiosAnalyzerArgs: instance of analyzer args class
+        """
         return cls(exp_bios_version=datamodel.bios_version)

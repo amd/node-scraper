@@ -25,6 +25,8 @@
 ###############################################################################
 from pydantic import BaseModel, Field, field_validator
 
+from nodescraper.plugins.inband.rocm.rocmdata import RocmDataModel
+
 
 class RocmAnalyzerArgs(BaseModel):
     exp_rocm: str | list = Field(default_factory=list)
@@ -46,5 +48,13 @@ class RocmAnalyzerArgs(BaseModel):
         return exp_rocm
 
     @classmethod
-    def build_from_model(cls, datamodel) -> "RocmAnalyzerArgs":
+    def build_from_model(cls, datamodel: RocmDataModel) -> "RocmAnalyzerArgs":
+        """build analyzer args from data model
+
+        Args:
+            datamodel (RocmDataModel): data model for plugin
+
+        Returns:
+            RocmAnalyzerArgs: instance of analyzer args class
+        """
         return cls(exp_rocm=datamodel.rocm_version)

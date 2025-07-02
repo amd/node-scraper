@@ -25,6 +25,7 @@
 ###############################################################################
 
 from nodescraper.interfaces import AnalyzerArgs
+from nodescraper.plugins.inband.process.processdata import ProcessDataModel
 
 
 class ProcessAnalyzerArgs(AnalyzerArgs):
@@ -32,5 +33,13 @@ class ProcessAnalyzerArgs(AnalyzerArgs):
     max_cpu_usage: float = 20.0
 
     @classmethod
-    def build_from_model(cls, datamodel) -> "ProcessAnalyzerArgs":
+    def build_from_model(cls, datamodel: ProcessDataModel) -> "ProcessAnalyzerArgs":
+        """build analyzer args from data model
+
+        Args:
+            datamodel (ProcessDataModel): data model for plugin
+
+        Returns:
+            ProcessAnalyzerArgs: instance of analyzer args class
+        """
         return cls(max_kfd_processes=datamodel.kfd_process, max_cpu_usage=datamodel.cpu_usage)

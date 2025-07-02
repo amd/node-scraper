@@ -26,6 +26,7 @@
 from pydantic import Field, field_validator
 
 from nodescraper.interfaces import AnalyzerArgs
+from nodescraper.plugins.inband.cmdline.cmdlinedata import CmdlineDataModel
 
 
 class CmdlineAnalyzerArgs(AnalyzerArgs):
@@ -65,5 +66,13 @@ class CmdlineAnalyzerArgs(AnalyzerArgs):
         return banned_cmdline
 
     @classmethod
-    def build_from_model(cls, datamodel) -> "CmdlineAnalyzerArgs":
+    def build_from_model(cls, datamodel: CmdlineDataModel) -> "CmdlineAnalyzerArgs":
+        """build analyzer args from data model
+
+        Args:
+            datamodel (CmdlineDataModel): data model for plugin
+
+        Returns:
+            CmdlineAnalyzerArgs: instance of analyzer args class
+        """
         return cls(required_cmdline=datamodel.cmdline, banned_cmdline=datamodel.cmdline)

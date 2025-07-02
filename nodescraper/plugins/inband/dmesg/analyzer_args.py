@@ -26,6 +26,7 @@
 from typing import Optional
 
 from nodescraper.models import TimeRangeAnalysisArgs
+from nodescraper.plugins.inband.dmesg.dmesgdata import DmesgData
 
 
 class DmesgAnalyzerArgs(TimeRangeAnalysisArgs):
@@ -33,5 +34,16 @@ class DmesgAnalyzerArgs(TimeRangeAnalysisArgs):
     exclude_category: Optional[set[str]] = None
 
     @classmethod
-    def build_from_model(cls, datamodel) -> "TimeRangeAnalysisArgs":
+    def build_from_model(cls, datamodel: DmesgData) -> "TimeRangeAnalysisArgs":
+        """build analyzer args from data model
+
+        Args:
+            datamodel (DmesgDataModel): data model for plugin
+
+        Raises:
+            NotImplementedError: does not implement abstract function
+
+        Returns:
+            TimeRangeAnalysisArgs: instance of analyzer args class
+        """
         raise NotImplementedError("Dmesg does not support reference config creation")

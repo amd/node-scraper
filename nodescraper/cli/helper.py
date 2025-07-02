@@ -34,7 +34,7 @@ from nodescraper.cli.inputargtypes import ModelArgHandler
 from nodescraper.configbuilder import ConfigBuilder
 from nodescraper.configregistry import ConfigRegistry
 from nodescraper.enums import SystemInteractionLevel, SystemLocation
-from nodescraper.models import PluginConfig, SystemInfo
+from nodescraper.models import PluginConfig, PluginResult, SystemInfo
 from nodescraper.pluginexecutor import PluginExecutor
 from nodescraper.pluginregistry import PluginRegistry
 from nodescraper.resultcollators.tablesummary import TableSummary
@@ -283,7 +283,19 @@ def log_system_info(log_path: str | None, system_info: SystemInfo, logger: loggi
             logger.error(exp)
 
 
-def generate_reference_config(results, plugin_reg, logger):
+def generate_reference_config(
+    results: list[PluginResult], plugin_reg: PluginRegistry, logger: logging.Logger
+) -> PluginConfig:
+    """Generate reference config from plugin results
+
+    Args:
+        results (list[PluginResult]): list of plugin results
+        plugin_reg (PluginRegistry): registry containing all registered plugins
+        logger (logging.Logger): logger
+
+    Returns:
+        PluginConfig: holds model that defines final reference config
+    """
     plugin_config = PluginConfig()
     plugins = {}
     for obj in results:

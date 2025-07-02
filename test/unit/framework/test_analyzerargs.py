@@ -4,23 +4,21 @@ from nodescraper.interfaces.analyzerargs import AnalyzerArgs
 
 
 class MyArgs(AnalyzerArgs):
+    args_foo: int
+
     @classmethod
     def build_from_model(cls, datamodel):
-        return cls(data_model=datamodel)
+        return cls(args_foo=datamodel.foo)
 
 
 def test_build_from_model(dummy_data_model):
     dummy = dummy_data_model(foo=1)
-    args = MyArgs.build_from_model(dummy)
+    args = MyArgs(args_foo=1)
+    args = args.build_from_model(dummy)
     assert isinstance(args, MyArgs)
-    assert args.data_model == dummy
-
-    a2 = MyArgs()
-    dumped = a2.model_dump()  # noqa: F841
-    assert "data_model" not in dumped
-
-    json_str = a2.model_dump_json()  # noqa: F841
-    assert '"data_model"' not in json_str
+    assert args.args_foo == dummy.foo
+    dump = args.model_dump(mode="json", exclude_none=True)
+    assert dump == "{'args_foo' : 1}"
 
 
 def test_base_build_from_model_not_implemented():

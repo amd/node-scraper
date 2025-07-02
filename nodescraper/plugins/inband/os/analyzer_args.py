@@ -26,6 +26,7 @@
 from pydantic import Field, field_validator
 
 from nodescraper.interfaces import AnalyzerArgs
+from nodescraper.plugins.inband.os.osdata import OsDataModel
 
 
 class OsAnalyzerArgs(AnalyzerArgs):
@@ -49,5 +50,13 @@ class OsAnalyzerArgs(AnalyzerArgs):
         return exp_os
 
     @classmethod
-    def build_from_model(cls, datamodel) -> "OsAnalyzerArgs":
+    def build_from_model(cls, datamodel: OsDataModel) -> "OsAnalyzerArgs":
+        """build analyzer args from data model
+
+        Args:
+            datamodel (OsDataModel): data model for plugin
+
+        Returns:
+            OsAnalyzerArgs: instance of analyzer args class
+        """
         return cls(exp_os=datamodel.os_version)

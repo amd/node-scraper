@@ -26,6 +26,7 @@
 from pydantic import Field
 
 from nodescraper.interfaces import AnalyzerArgs
+from nodescraper.plugins.inband.package.packagedata import PackageDataModel
 
 
 class PackageAnalyzerArgs(AnalyzerArgs):
@@ -33,5 +34,5 @@ class PackageAnalyzerArgs(AnalyzerArgs):
     regex_match: bool = True
 
     @classmethod
-    def build_from_model(cls, datamodel) -> "PackageAnalyzerArgs":
+    def build_from_model(cls, datamodel: PackageDataModel) -> "PackageAnalyzerArgs":
         return cls(exp_package_ver=datamodel.version_info)

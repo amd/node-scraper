@@ -28,6 +28,7 @@ from typing import Any
 from pydantic import Field, field_validator
 
 from nodescraper.interfaces import AnalyzerArgs
+from nodescraper.plugins.inband.dkms.dkmsdata import DkmsDataModel
 
 
 class DkmsAnalyzerArgs(AnalyzerArgs):
@@ -72,5 +73,13 @@ class DkmsAnalyzerArgs(AnalyzerArgs):
         return dkms_version
 
     @classmethod
-    def build_from_model(cls, datamodel) -> "DkmsAnalyzerArgs":
+    def build_from_model(cls, datamodel: DkmsDataModel) -> "DkmsAnalyzerArgs":
+        """build analyzer args from data model
+
+        Args:
+            datamodel (DkmsDataModel): data model for plugin
+
+        Returns:
+            DkmsAnalyzerArgs: instance of analyzer args class
+        """
         return cls(dkms_status=datamodel.status, dkms_version=datamodel.version)
