@@ -28,13 +28,14 @@ import json
 import logging
 import os
 import sys
-from typing import Optional
+from pathlib import Path
+from typing import Optional, Tuple
 
 from nodescraper.cli.inputargtypes import ModelArgHandler
 from nodescraper.configbuilder import ConfigBuilder
 from nodescraper.configregistry import ConfigRegistry
 from nodescraper.enums import SystemInteractionLevel, SystemLocation
-from nodescraper.models import PluginConfig, PluginResult, SystemInfo
+from nodescraper.models import PluginConfig, PluginResult, SystemInfo, TaskResult
 from nodescraper.pluginexecutor import PluginExecutor
 from nodescraper.pluginregistry import PluginRegistry
 from nodescraper.resultcollators.tablesummary import TableSummary
@@ -321,3 +322,62 @@ def generate_reference_config(
     plugin_config.plugins = plugins
 
     return plugin_config
+
+
+def generate_reference_config_from_logs(path, plugin_reg, logger):
+    found = find_datamodel_and_result(path)
+    plugin_config = PluginConfig()
+    plugins = {}
+    for dm, res in found:
+        result_path = Path(res)
+        res_payload = json.loads(result_path.read_text(encoding="utf-8"))
+        task_res = TaskResult(**res_payload)
+        # print(json.dumps(res_payload, indent=2))
+        # print(task_res.parent)
+        dm_path = Path(dm)
+        dm_payload = json.loads(dm_path.read_text(encoding="utf-8"))
+        plugin = plugin_reg.plugins.get(task_res.parent)
+        data_model = plugin.DATA_MODEL.model_validate(dm_payload)
+
+        if not plugin.ANALYZER_ARGS:
+            logger.warning(
+                "Plugin: %s does not support reference config creation. No analyzer args defined.",
+                task_res.parent,
+            )
+            continue
+
+        args = None
+
+        try:
+            args = plugin.ANALYZER_ARGS.build_from_model(data_model)
+        except NotImplementedError as nperr:
+            logger.info(nperr)
+            continue
+        plugins[task_res.parent] = {"analysis_args": {}}
+        plugins[task_res.parent]["analysis_args"] = args.model_dump(exclude_none=True)
+
+        # print("Datamodel:", dm)
+        # print("Result:   ", res)
+    plugin_config.plugins = plugins
+    return plugin_config
+
+
+def find_datamodel_and_result(base_path: str) -> list[Tuple[str, str]]:
+    """ """
+    tuple_list: list[Tuple[str, str, str]] = []
+    for root, _, files in os.walk(base_path):
+        if "collector" in os.path.basename(root).lower():
+            datamodel_path = None
+            result_path = None
+
+            for fname in files:
+                low = fname.lower()
+                if low.endswith("datamodel.json"):
+                    datamodel_path = os.path.join(root, fname)
+                elif low == "result.json":
+                    result_path = os.path.join(root, fname)
+
+            if datamodel_path and result_path:
+                tuple_list.append((datamodel_path, result_path))
+
+    return tuple_list

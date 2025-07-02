@@ -27,7 +27,7 @@ import datetime
 import logging
 from typing import Optional
 
-from pydantic import BaseModel, Field, field_serializer
+from pydantic import BaseModel, Field, field_serializer, field_validator
 
 from nodescraper.enums import EventPriority, ExecutionStatus
 
@@ -64,6 +64,18 @@ class TaskResult(BaseModel):
             str: status name string
         """
         return status.name
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def _coerce_status(cls, v):
+        if isinstance(v, ExecutionStatus):
+            return v
+        if isinstance(v, str):
+            try:
+                return ExecutionStatus[v]
+            except KeyError as err:
+                raise ValueError(f"Unknown status name: {v!r}") from err
+        return v
 
     @property
     def duration(self) -> str | None:
