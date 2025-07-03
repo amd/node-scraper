@@ -39,3 +39,5 @@ class KernelPlugin(InBandDataPlugin[KernelDataModel, None, KernelAnalyzerArgs]):
     COLLECTOR = KernelCollector
 
     ANALYZER = KernelAnalyzer
+
+    ANALYZER_ARGS = KernelAnalyzerArgs

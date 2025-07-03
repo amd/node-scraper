@@ -39,3 +39,5 @@ class DkmsPlugin(InBandDataPlugin[DkmsDataModel, None, DkmsAnalyzerArgs]):
     COLLECTOR = DkmsCollector
 
     ANALYZER = DkmsAnalyzer
+
+    ANALYZER_ARGS = DkmsAnalyzerArgs

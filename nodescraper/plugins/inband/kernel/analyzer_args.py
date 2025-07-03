@@ -23,14 +23,15 @@
 # SOFTWARE.
 #
 ###############################################################################
-from pydantic import BaseModel, Field, field_validator
+from pydantic import Field, field_validator
+
+from nodescraper.models import AnalyzerArgs
+from nodescraper.plugins.inband.kernel.kerneldata import KernelDataModel
 
 
-class KernelAnalyzerArgs(BaseModel):
+class KernelAnalyzerArgs(AnalyzerArgs):
     exp_kernel: str | list = Field(default_factory=list)
     regex_match: bool = False
-
-    model_config = {"extra": "forbid"}
 
     @field_validator("exp_kernel", mode="before")
     @classmethod
@@ -47,3 +48,15 @@ class KernelAnalyzerArgs(BaseModel):
             exp_kernel = [exp_kernel]
 
         return exp_kernel
+
+    @classmethod
+    def build_from_model(cls, datamodel: KernelDataModel) -> "KernelAnalyzerArgs":
+        """build analyzer args from data model
+
+        Args:
+            datamodel (KernelDataModel): data model for plugin
+
+        Returns:
+            KernelAnalyzerArgs: instance of analyzer args class
+        """
+        return cls(exp_kernel=datamodel.kernel_version)

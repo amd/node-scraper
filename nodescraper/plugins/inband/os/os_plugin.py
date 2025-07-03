@@ -39,3 +39,5 @@ class OsPlugin(InBandDataPlugin[OsDataModel, None, OsAnalyzerArgs]):
     COLLECTOR = OsCollector
 
     ANALYZER = OsAnalyzer
+
+    ANALYZER_ARGS = OsAnalyzerArgs

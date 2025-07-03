@@ -39,3 +39,5 @@ class RocmPlugin(InBandDataPlugin[RocmDataModel, None, RocmAnalyzerArgs]):
     COLLECTOR = RocmCollector
 
     ANALYZER = RocmAnalyzer
+
+    ANALYZER_ARGS = RocmAnalyzerArgs

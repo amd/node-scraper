@@ -39,3 +39,5 @@ class PackagePlugin(InBandDataPlugin[PackageDataModel, None, PackageAnalyzerArgs
     COLLECTOR = PackageCollector
 
     ANALYZER = PackageAnalyzer
+
+    ANALYZER_ARGS = PackageAnalyzerArgs
