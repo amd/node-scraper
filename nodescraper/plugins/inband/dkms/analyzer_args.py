@@ -27,7 +27,7 @@ from typing import Any
 
 from pydantic import Field, field_validator
 
-from nodescraper.interfaces import AnalyzerArgs
+from nodescraper.models import AnalyzerArgs
 from nodescraper.plugins.inband.dkms.dkmsdata import DkmsDataModel
 
 

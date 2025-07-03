@@ -301,7 +301,7 @@ def generate_reference_config(
     for obj in results:
         data_model = obj.result_data.system_data
 
-        plugin = plugin_reg.plugins.get(obj.result_data.collection_result.parent)
+        plugin = plugin_reg.plugins.get(obj.source)
         if not plugin.ANALYZER_ARGS:
             logger.warning(
                 "Plugin: %s does not support reference config creation. No analyzer args defined.",
@@ -315,7 +315,6 @@ def generate_reference_config(
         except NotImplementedError as nperr:
             logger.info(nperr)
             continue
-        args.build_from_model(data_model)
         plugins[obj.source] = {"analysis_args": {}}
         plugins[obj.source]["analysis_args"] = args.model_dump(exclude_none=True)
     plugin_config.plugins = plugins

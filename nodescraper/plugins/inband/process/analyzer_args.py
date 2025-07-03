@@ -24,7 +24,7 @@
 #
 ###############################################################################
 
-from nodescraper.interfaces import AnalyzerArgs
+from nodescraper.models import AnalyzerArgs
 from nodescraper.plugins.inband.process.processdata import ProcessDataModel
 
 

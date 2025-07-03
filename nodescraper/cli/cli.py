@@ -148,7 +148,7 @@ def build_parser(
         "--gen-reference-config",
         dest="reference_config",
         action="store_true",
-        help="Path to store generated reference config. Defaults to ./reference_config.json.",
+        help="Generate reference config. File will be written to ./reference_config.json.",
     )
 
     subparsers = parser.add_subparsers(dest="subcmd", help="Subcommands")

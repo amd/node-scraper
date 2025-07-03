@@ -1,6 +1,6 @@
 import pytest
 
-from nodescraper.interfaces.analyzerargs import AnalyzerArgs
+from nodescraper.models import AnalyzerArgs
 
 
 class MyArgs(AnalyzerArgs):
@@ -24,12 +24,3 @@ def test_build_from_model(dummy_data_model):
 def test_base_build_from_model_not_implemented():
     with pytest.raises(NotImplementedError):
         AnalyzerArgs.build_from_model("anything")
-
-
-def test_cannot_instantiate_subclass_without_build_from_model():
-    with pytest.raises(TypeError):
-
-        class BadArgs(AnalyzerArgs):
-            pass
-
-        BadArgs(data_model=None)

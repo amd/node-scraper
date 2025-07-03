@@ -23,20 +23,16 @@
 # SOFTWARE.
 #
 ###############################################################################
-from abc import ABC, abstractmethod
-from typing import Optional
+from abc import ABC
 
-from pydantic import BaseModel, Field
-
-from nodescraper.models.datamodel import DataModel
+from pydantic import BaseModel
 
 
 class AnalyzerArgs(BaseModel, ABC):
-    data_model: Optional["DataModel"] = Field(default=None)
+    # data_model: Optional["DataModel"] = Field(default=None)
     model_config = {"extra": "forbid", "exclude_none": True}
 
     @classmethod
-    @abstractmethod
     def build_from_model(cls, datamodel):
         raise NotImplementedError(
             "Setting analyzer args from datamodel is not implemented for class: %s", cls.__name__
