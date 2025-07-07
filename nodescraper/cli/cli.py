@@ -156,7 +156,7 @@ def build_parser(
         "--gen-reference-config-from-logs",
         dest="reference_config_from_logs",
         type=log_path_arg,
-        help="Generate reference config from previous run. Writes to ./reference_config.json.",
+        help="Generate reference config from previous run logfiles. Writes to ./reference_config.json.",
     )
 
     subparsers = parser.add_subparsers(dest="subcmd", help="Subcommands")

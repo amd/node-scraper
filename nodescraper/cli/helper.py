@@ -323,7 +323,19 @@ def generate_reference_config(
     return plugin_config
 
 
-def generate_reference_config_from_logs(path, plugin_reg, logger):
+def generate_reference_config_from_logs(
+    path: str, plugin_reg: PluginRegistry, logger: logging.Logger
+) -> PluginConfig:
+    """Parse previous log files and generate plugin config with populated analyzer args
+
+    Args:
+        path (str): path to log files
+        plugin_reg (PluginRegistry): plugin registry instance
+        logger (logging.Logger): logger instance
+
+    Returns:
+        PluginConfig: instance of plugin config
+    """
     found = find_datamodel_and_result(path)
     plugin_config = PluginConfig()
     plugins = {}
@@ -331,8 +343,6 @@ def generate_reference_config_from_logs(path, plugin_reg, logger):
         result_path = Path(res)
         res_payload = json.loads(result_path.read_text(encoding="utf-8"))
         task_res = TaskResult(**res_payload)
-        # print(json.dumps(res_payload, indent=2))
-        # print(task_res.parent)
         dm_path = Path(dm)
         dm_payload = json.loads(dm_path.read_text(encoding="utf-8"))
         plugin = plugin_reg.plugins.get(task_res.parent)
@@ -355,14 +365,19 @@ def generate_reference_config_from_logs(path, plugin_reg, logger):
         plugins[task_res.parent] = {"analysis_args": {}}
         plugins[task_res.parent]["analysis_args"] = args.model_dump(exclude_none=True)
 
-        # print("Datamodel:", dm)
-        # print("Result:   ", res)
     plugin_config.plugins = plugins
     return plugin_config
 
 
 def find_datamodel_and_result(base_path: str) -> list[Tuple[str, str]]:
-    """ """
+    """Get datamodel and result files
+
+    Args:
+        base_path (str): location of previous run logs
+
+    Returns:
+        list[Tuple[str, str]]: tuple of datamodel and result json files
+    """
     tuple_list: list[Tuple[str, str, str]] = []
     for root, _, files in os.walk(base_path):
         if "collector" in os.path.basename(root).lower():
