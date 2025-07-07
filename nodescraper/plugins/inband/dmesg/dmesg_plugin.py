@@ -39,5 +39,3 @@ class DmesgPlugin(InBandDataPlugin[DmesgData, None, DmesgAnalyzerArgs]):
     COLLECTOR = DmesgCollector
 
     ANALYZER = DmesgAnalyzer
-
-    ANALYZER_ARGS = None

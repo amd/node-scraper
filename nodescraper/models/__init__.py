@@ -23,6 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
+from .analyzerargs import AnalyzerArgs
 from .datamodel import DataModel
 from .datapluginresult import DataPluginResult
 from .event import Event
@@ -33,6 +34,7 @@ from .taskresult import TaskResult
 from .timerangeargs import TimeRangeAnalysisArgs
 
 __all__ = [
+    "AnalyzerArgs",
     "DataModel",
     "TaskResult",
     "Event",

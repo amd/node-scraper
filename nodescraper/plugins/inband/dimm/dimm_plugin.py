@@ -35,5 +35,3 @@ class DimmPlugin(InBandDataPlugin[DimmDataModel, None, None]):
     DATA_MODEL = DimmDataModel
 
     COLLECTOR = DimmCollector
-
-    ANALYZER_ARGS = None

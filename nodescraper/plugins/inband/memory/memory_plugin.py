@@ -39,5 +39,3 @@ class MemoryPlugin(InBandDataPlugin[MemoryDataModel, None, MemoryAnalyzerArgs]):
     COLLECTOR = MemoryCollector
 
     ANALYZER = MemoryAnalyzer
-
-    ANALYZER_ARGS = None
