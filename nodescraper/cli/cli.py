@@ -551,9 +551,10 @@ def main(arg_input: Optional[list[str]] = None):
         system_info = get_system_info(parsed_args)
 
         if parsed_args.log_path and parsed_args.subcmd not in ["gen-plugin-config", "describe"]:
+            sname = system_info.name.lower().replace("-", "_").replace(".", "_")
             log_path = os.path.join(
                 parsed_args.log_path,
-                f"scraper_logs_{system_info.name}_{datetime.datetime.now().strftime('%Y_%m_%d-%I_%M_%S_%p')}",
+                f"scraper_logs_{sname}_{datetime.datetime.now().strftime('%Y_%m_%d-%I_%M_%S_%p')}",
             )
             os.makedirs(log_path)
         else:
