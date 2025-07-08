@@ -50,10 +50,10 @@ def test_generate_reference_config(plugin_registry):
             source="TestPluginA",
             message="Plugin tasks completed successfully",
             result_data=DataPluginResult(
-                system_data=DummyDataModel(some_version="M17"),
+                system_data=DummyDataModel(some_version="17"),
                 collection_result=TaskResult(
                     status=ExecutionStatus.OK,
-                    message="BIOS: M17",
+                    message="BIOS: 17",
                     task="BiosCollector",
                     parent="TestPluginA",
                     artifacts=[],
@@ -64,7 +64,7 @@ def test_generate_reference_config(plugin_registry):
 
     ref_config = cli.generate_reference_config(results, plugin_registry, logging.getLogger())
     dump = ref_config.dict()
-    assert dump["plugins"] == {"TestPluginA": {"analysis_args": {"model_attr": 123}}}
+    assert dump["plugins"] == {"TestPluginA": {"analysis_args": {"model_attr": 17}}}
 
 
 def test_get_plugin_configs():
