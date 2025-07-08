@@ -23,12 +23,10 @@
 # SOFTWARE.
 #
 ###############################################################################
-from abc import ABC
-
 from pydantic import BaseModel
 
 
-class AnalyzerArgs(BaseModel, ABC):
+class AnalyzerArgs(BaseModel):
     model_config = {"extra": "forbid", "exclude_none": True}
 
     @classmethod

@@ -13,8 +13,8 @@ class MyArgs(AnalyzerArgs):
 
 def test_build_from_model(dummy_data_model):
     dummy = dummy_data_model(foo=1)
-    args = MyArgs(args_foo=1)
-    args = args.build_from_model(dummy)
+    # args = args.build_from_model(dummy)
+    args = MyArgs.build_from_model(dummy)
     assert isinstance(args, MyArgs)
     assert args.args_foo == dummy.foo
     dump = args.model_dump(mode="json", exclude_none=True)
