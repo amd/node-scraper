@@ -42,3 +42,5 @@ class ProcessPlugin(InBandDataPlugin[ProcessDataModel, ProcessCollectorArgs, Pro
     ANALYZER = ProcessAnalyzer
 
     ANALYZER_ARGS = ProcessAnalyzerArgs
+
+    COLLECTOR_ARGS = ProcessCollectorArgs

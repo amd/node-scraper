@@ -24,6 +24,7 @@
 #
 ###############################################################################
 from .analyzerargs import AnalyzerArgs
+from .collectorargs import CollectorArgs
 from .datamodel import DataModel
 from .datapluginresult import DataPluginResult
 from .event import Event
@@ -35,6 +36,7 @@ from .timerangeargs import TimeRangeAnalysisArgs
 
 __all__ = [
     "AnalyzerArgs",
+    "CollectorArgs",
     "DataModel",
     "TaskResult",
     "Event",

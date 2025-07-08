@@ -23,22 +23,10 @@
 # SOFTWARE.
 #
 ###############################################################################
+from abc import ABC
+
 from pydantic import BaseModel
 
 
-class AnalyzerArgs(BaseModel):
+class CollectorArgs(BaseModel, ABC):
     model_config = {"extra": "forbid", "exclude_none": True}
-
-    @classmethod
-    def build_from_model(cls, datamodel):
-        """Build analyzer args instance from data model object
-
-        Args:
-            datamodel (TDataModel): data model to use for creating analyzer args
-
-        Raises:
-            NotImplementedError: Not implemented error
-        """
-        raise NotImplementedError(
-            "Setting analyzer args from datamodel is not implemented for class: %s", cls.__name__
-        )

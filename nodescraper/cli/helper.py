@@ -34,7 +34,7 @@ from typing import Optional, Tuple
 from nodescraper.cli.inputargtypes import ModelArgHandler
 from nodescraper.configbuilder import ConfigBuilder
 from nodescraper.configregistry import ConfigRegistry
-from nodescraper.enums import SystemInteractionLevel, SystemLocation
+from nodescraper.enums import ExecutionStatus, SystemInteractionLevel, SystemLocation
 from nodescraper.models import PluginConfig, PluginResult, SystemInfo, TaskResult
 from nodescraper.pluginexecutor import PluginExecutor
 from nodescraper.pluginregistry import PluginRegistry
@@ -300,12 +300,23 @@ def generate_reference_config(
     plugin_config = PluginConfig()
     plugins = {}
     for obj in results:
+        if obj.result_data.collection_result.status != ExecutionStatus.OK:
+            logger.warning(
+                "Plugin: %s result status is %, skipping",
+                obj.source,
+                obj.result_data.collection_result.status,
+            )
+            continue
+
         data_model = obj.result_data.system_data
+        if data_model is None:
+            logger.warning("Plugin: %s data model not found: %s, skipping", obj.source)
+            continue
 
         plugin = plugin_reg.plugins.get(obj.source)
         if not plugin.ANALYZER_ARGS:
             logger.warning(
-                "Plugin: %s does not support reference config creation. No analyzer args defined.",
+                "Plugin: %s does not support reference config creation. No analyzer args defined, skipping.",
                 obj.source,
             )
             continue
