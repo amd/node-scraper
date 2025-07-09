@@ -31,7 +31,13 @@ from nodescraper.generictypes import TAnalyzeArg, TCollectArg, TDataModel
 from nodescraper.interfaces.dataanalyzertask import DataAnalyzer
 from nodescraper.interfaces.datacollectortask import DataCollector
 from nodescraper.interfaces.plugin import PluginInterface
-from nodescraper.models import DataPluginResult, PluginResult, SystemInfo, TaskResult
+from nodescraper.models import (
+    AnalyzerArgs,
+    DataPluginResult,
+    PluginResult,
+    SystemInfo,
+    TaskResult,
+)
 
 from .connectionmanager import TConnectArg, TConnectionManager
 from .task import SystemCompatibilityError
@@ -50,6 +56,8 @@ class DataPlugin(
     COLLECTOR: Optional[Type[DataCollector]] = None
 
     ANALYZER: Optional[Type[DataAnalyzer]] = None
+
+    ANALYZER_ARGS: Optional[Type[AnalyzerArgs]] = None
 
     def __init__(
         self,

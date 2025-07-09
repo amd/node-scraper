@@ -23,23 +23,22 @@
 # SOFTWARE.
 #
 ###############################################################################
-
-from nodescraper.models import AnalyzerArgs
-from nodescraper.plugins.inband.process.processdata import ProcessDataModel
+from pydantic import BaseModel
 
 
-class ProcessAnalyzerArgs(AnalyzerArgs):
-    max_kfd_processes: int = 0
-    max_cpu_usage: float = 20.0
+class AnalyzerArgs(BaseModel):
+    model_config = {"extra": "forbid", "exclude_none": True}
 
     @classmethod
-    def build_from_model(cls, datamodel: ProcessDataModel) -> "ProcessAnalyzerArgs":
-        """build analyzer args from data model
+    def build_from_model(cls, datamodel):
+        """Build analyzer args instance from data model object
 
         Args:
-            datamodel (ProcessDataModel): data model for plugin
+            datamodel (TDataModel): data model to use for creating analyzer args
 
-        Returns:
-            ProcessAnalyzerArgs: instance of analyzer args class
+        Raises:
+            NotImplementedError: Not implemented error
         """
-        return cls(max_kfd_processes=datamodel.kfd_process, max_cpu_usage=datamodel.cpu_usage)
+        raise NotImplementedError(
+            "Setting analyzer args from datamodel is not implemented for class: %s", cls.__name__
+        )

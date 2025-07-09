@@ -28,12 +28,16 @@ import logging
 import os
 
 import pytest
+from common.shared_utils import DummyDataModel
 from pydantic import BaseModel
 
 from nodescraper.cli import cli, inputargtypes
+from nodescraper.cli.helper import build_config
 from nodescraper.configregistry import ConfigRegistry
-from nodescraper.enums import SystemInteractionLevel, SystemLocation
-from nodescraper.models import PluginConfig, SystemInfo
+from nodescraper.enums import ExecutionStatus, SystemInteractionLevel, SystemLocation
+from nodescraper.models import PluginConfig, SystemInfo, TaskResult
+from nodescraper.models.datapluginresult import DataPluginResult
+from nodescraper.models.pluginresult import PluginResult
 
 
 def test_log_path_arg():
@@ -200,7 +204,7 @@ def test_get_plugin_configs():
 
 def test_config_builder(plugin_registry):
 
-    config = cli.build_config(
+    config = build_config(
         config_reg=ConfigRegistry(config_path=os.path.join(os.path.dirname(__file__), "fixtures")),
         plugin_reg=plugin_registry,
         logger=logging.getLogger(),
@@ -215,3 +219,27 @@ def test_config_builder(plugin_registry):
         },
         "ExamplePlugin": {},
     }
+
+
+def test_generate_reference_config(plugin_registry):
+    results = [
+        PluginResult(
+            status=ExecutionStatus.OK,
+            source="TestPluginA",
+            message="Plugin tasks completed successfully",
+            result_data=DataPluginResult(
+                system_data=DummyDataModel(some_version="17"),
+                collection_result=TaskResult(
+                    status=ExecutionStatus.OK,
+                    message="BIOS: 17",
+                    task="BiosCollector",
+                    parent="TestPluginA",
+                    artifacts=[],
+                ),
+            ),
+        )
+    ]
+
+    ref_config = cli.generate_reference_config(results, plugin_registry, logging.getLogger())
+    dump = ref_config.dict()
+    assert dump["plugins"] == {"TestPluginA": {"analysis_args": {"model_attr": 17}}}
