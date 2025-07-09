@@ -23,10 +23,26 @@
 # SOFTWARE.
 #
 ###############################################################################
-from pydantic import BaseModel
+
+from nodescraper.models import AnalyzerArgs
+from nodescraper.plugins.inband.kernel_module.kernel_module_data import (
+    KernelModuleDataModel,
+)
 
 
-class ProcessCollectorArgs(BaseModel):
-    top_n_process: int = 10
+class KernelModuleAnalyzerArgs(AnalyzerArgs):
+    modules: dict = {}
+    modules_filter: list[str] = ["amd", "Amd"]
+    regex_match: bool = False
 
-    model_config = {"extra": "forbid"}
+    @classmethod
+    def build_from_model(cls, datamodel: KernelModuleDataModel) -> "KernelModuleAnalyzerArgs":
+        """build analyzer args from data model
+
+        Args:
+            datamodel (KernelModuleDataModel): data model for plugin
+
+        Returns:
+            KernelModuleAnalyzerArgs: instance of analyzer args class
+        """
+        return cls(modules=datamodel.modules)

@@ -23,10 +23,21 @@
 # SOFTWARE.
 #
 ###############################################################################
-from pydantic import BaseModel
+from nodescraper.base import InBandDataPlugin
+
+from .analyzer_args import KernelModuleAnalyzerArgs
+from .kernel_module_analyzer import KernelModuleAnalyzer
+from .kernel_module_collector import KernelModuleCollector
+from .kernel_module_data import KernelModuleDataModel
 
 
-class ProcessCollectorArgs(BaseModel):
-    top_n_process: int = 10
+class KernelModulePlugin(InBandDataPlugin[KernelModuleDataModel, None, KernelModuleAnalyzerArgs]):
+    """Plugin for collection and analysis of kernel data"""
 
-    model_config = {"extra": "forbid"}
+    DATA_MODEL = KernelModuleDataModel
+
+    COLLECTOR = KernelModuleCollector
+
+    ANALYZER = KernelModuleAnalyzer
+
+    ANALYZER_ARGS = KernelModuleAnalyzerArgs
