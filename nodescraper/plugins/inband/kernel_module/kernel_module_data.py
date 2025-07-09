@@ -23,21 +23,9 @@
 # SOFTWARE.
 #
 ###############################################################################
-import os
 
 from nodescraper.models import DataModel
-from nodescraper.utils import get_unique_filename
 
 
 class KernelModuleDataModel(DataModel):
     kernel_modules: dict
-
-    def log_model(self, log_path: str):
-        """Log data model to a file
-
-        Args:
-            log_path (str): log path
-        """
-        log_name = os.path.join(log_path, get_unique_filename(log_path, "kernel_modules.log"))
-        with open(log_name, "w", encoding="utf-8") as log_file:
-            log_file.write(self.kernel_modules)
