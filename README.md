@@ -34,7 +34,7 @@ positional arguments:
 
 options:
   -h, --help            show this help message and exit
-  --sys-name STRING     System name (default: TheraC58)
+  --sys-name STRING     System name (default: <my_system_name>)
   --sys-location {LOCAL,REMOTE}
                         Location of target system (default: LOCAL)
   --sys-interaction-level {PASSIVE,INTERACTIVE,DISRUPTIVE}
