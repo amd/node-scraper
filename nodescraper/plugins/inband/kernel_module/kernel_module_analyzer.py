@@ -23,9 +23,10 @@
 # SOFTWARE.
 #
 ###############################################################################
+import re
 from typing import Optional
 
-from nodescraper.enums import ExecutionStatus
+from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
 from nodescraper.interfaces import DataAnalyzer
 from nodescraper.models import TaskResult
 
@@ -38,55 +39,63 @@ class KernelModuleAnalyzer(DataAnalyzer[KernelModuleDataModel, KernelModuleAnaly
 
     DATA_MODEL = KernelModuleDataModel
 
+    def filter_modules_by_pattern(
+        self, modules: dict[str, dict], patterns: list[str]
+    ) -> dict[str, dict]:
+        pattern_regex = re.compile("|".join(patterns), re.IGNORECASE)
+
+        return {name: data for name, data in modules.items() if pattern_regex.search(name)}
+
+    def filter_modules_by_name(
+        self, modules: dict[str, dict], names: list[str] = None
+    ) -> dict[str, dict]:
+
+        if not names:
+            return {name: data for name, data in modules.items()}
+
+        return {name: data for name, data in modules.items() if name in names}
+
     def analyze_data(
         self, data: KernelModuleDataModel, args: Optional[KernelModuleAnalyzerArgs] = None
     ) -> TaskResult:
-        """Analyze the kernel data against expected versions.
+        """Analyze the kernel modules and associated parameters.
 
         Args:
             data (KernelModuleDataModel): KernelModule data to analyze.
-            args (Optional[KernelModuleAnalyzerArgs], optional): KernelModule analysis arguments. Defaults to None.
+            args (Optional[KernelModuleAnalyzerArgs], optional): KernelModule analyzer args.
 
         Returns:
             TaskResult: Result of the analysis containing status and message.
         """
         if not args:
-            self.result.message = "Expected kernel not provided"
-            self.result.status = ExecutionStatus.NOT_RAN
-            return self.result
+            args = KernelModuleAnalyzerArgs()
 
-        self.result = None
-
-        """
-        for kernel in args.exp_kernel:
-            if args.regex_match:
-                try:
-                    regex_data = re.compile(kernel)
-                except re.error:
-                    self._log_event(
-                        category=EventCategory.RUNTIME,
-                        description="KernelModule regex is invalid",
-                        data={"regex": kernel},
-                        priority=EventPriority.ERROR,
-                    )
-                    continue
-                if regex_data.match(data.kernel_version):
-                    self.result.message = "KernelModule matches expected"
-                    self.result.status = ExecutionStatus.OK
-                    return self.result
-            elif data.kernel_version == kernel:
-                self.result.message = "KernelModule matches expected"
-                self.result.status = ExecutionStatus.OK
+        self.result.message = "Kernel modules analyzed"
+        self.result.status = ExecutionStatus.OK
+        filtered_modules = {}
+        if args.regex_match:
+            try:
+                filtered_modules = self.filter_modules_by_pattern(
+                    data.kernel_modules, args.modules_filter
+                )
+            except re.error:
+                self._log_event(
+                    category=EventCategory.RUNTIME,
+                    description="KernelModule regex is invalid",
+                    data=data,
+                    priority=EventPriority.ERROR,
+                )
+                self.result.message = "Kernel modules failed to match regex"
+                self.result.status = ExecutionStatus.ERROR
                 return self.result
 
-        self.result.message = "KernelModule mismatch!"
-        self.result.status = ExecutionStatus.ERROR
+        else:
+            filtered_modules = self.filter_modules_by_name(data.kernel_modules, args.modules_filter)
+
         self._log_event(
-            category=EventCategory.OS,
-            description=f"{self.result.message}",
-            data={"expected": args.exp_kernel, "actual": data.kernel_version},
-            priority=EventPriority.CRITICAL,
-            console_log=True,
+            category=EventCategory.RUNTIME,
+            description="KernelModules analyzed",
+            data=filtered_modules,
+            priority=EventPriority.INFO,
         )
-        """
         return self.result

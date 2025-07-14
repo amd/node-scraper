@@ -44,11 +44,6 @@ class KernelModuleCollector(InBandDataCollector[KernelModuleDataModel, None]):
                 continue
             name, size, instances, deps, state, offset = parts[:6]
             modules[name] = {
-                "size": int(size),
-                "instances": int(instances),
-                "dependencies": [] if deps == "-" else deps.split(","),
-                "state": state,
-                "offset": offset,
                 "parameters": {},
             }
         return modules

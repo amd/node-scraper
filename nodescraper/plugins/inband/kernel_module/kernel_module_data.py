@@ -29,3 +29,5 @@ from nodescraper.models import DataModel
 
 class KernelModuleDataModel(DataModel):
     kernel_modules: dict
+    modules_filter: list[str] = ["amd"]
+    regex_match: bool = True

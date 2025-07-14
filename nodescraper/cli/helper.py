@@ -302,7 +302,7 @@ def generate_reference_config(
     for obj in results:
         if obj.result_data.collection_result.status != ExecutionStatus.OK:
             logger.warning(
-                "Plugin: %s result status is %, skipping",
+                "Plugin: %s result status is %s, skipping",
                 obj.source,
                 obj.result_data.collection_result.status,
             )

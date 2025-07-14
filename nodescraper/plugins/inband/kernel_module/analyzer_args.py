@@ -31,9 +31,9 @@ from nodescraper.plugins.inband.kernel_module.kernel_module_data import (
 
 
 class KernelModuleAnalyzerArgs(AnalyzerArgs):
-    modules: dict = {}
-    modules_filter: list[str] = ["amd", "Amd"]
-    regex_match: bool = False
+    kernel_modules: dict[str, dict] = {}
+    modules_filter: list[str] = ["amd"]
+    regex_match: bool = True
 
     @classmethod
     def build_from_model(cls, datamodel: KernelModuleDataModel) -> "KernelModuleAnalyzerArgs":
@@ -45,4 +45,8 @@ class KernelModuleAnalyzerArgs(AnalyzerArgs):
         Returns:
             KernelModuleAnalyzerArgs: instance of analyzer args class
         """
-        return cls(modules=datamodel.modules)
+        return cls(
+            kernel_modules=datamodel.kernel_modules,
+            modules_filter=datamodel.modules_filter,
+            regex_match=datamodel.regex_match,
+        )
