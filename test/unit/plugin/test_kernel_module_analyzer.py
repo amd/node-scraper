@@ -31,7 +31,6 @@ def data_model(sample_modules):
 
 @pytest.fixture
 def analyzer(system_info):
-    # ensure no SystemCompatibilityError
     system_info.os_family = OSFamily.LINUX
     return KernelModuleAnalyzer(system_info=system_info)
 
@@ -49,7 +48,6 @@ def test_filter_modules_by_pattern_strict(sample_modules, analyzer):
 
 
 def test_filter_modules_by_pattern_unmatched(sample_modules, analyzer):
-    # pattern "foo" never matches
     matched, unmatched = analyzer.filter_modules_by_pattern(sample_modules, ["foo"])
     assert matched == {}
     assert unmatched == ["foo"]
@@ -88,7 +86,6 @@ def test_analyze_data_regex_success(data_model, analyzer):
     assert result.status == ExecutionStatus.OK
     ev = result.events[0]
     assert ev.description == "KernelModules analyzed"
-    # only TESTmod should have been kept
     fm = ev.data["filtered_modules"]
     assert set(fm) == {"TESTmod"}
 
