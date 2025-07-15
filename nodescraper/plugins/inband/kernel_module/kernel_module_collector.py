@@ -40,9 +40,9 @@ class KernelModuleCollector(InBandDataCollector[KernelModuleDataModel, None]):
         modules = {}
         for line in output.strip().splitlines():
             parts = line.split()
-            if len(parts) < 6:
+            if not parts:
                 continue
-            name, size, instances, deps, state, offset = parts[:6]
+            name = parts[0]
             modules[name] = {
                 "parameters": {},
             }
@@ -89,26 +89,18 @@ class KernelModuleCollector(InBandDataCollector[KernelModuleDataModel, None]):
             tuple[TaskResult, KernelModuleDataModel | None]: tuple containing the task result and kernel data model or None if not found.
         """
         kernel_modules = {}
+        km_data: KernelModuleDataModel | None = None
         if self.system_info.os_family == OSFamily.WINDOWS:
             res = self._run_sut_cmd("wmic os get Version /Value")
             if res.exit_code == 0:
-                kernel_modules = [line for line in res.stdout.splitlines() if "Version=" in line][
-                    0
-                ].split("=")[1]
+                for line in res.stdout.splitlines():
+                    if line.startswith("Version="):
+                        version = line.split("=", 1)[1]
+                        kernel_modules = {version: {"parameters": {}}}
+                        break
+
         else:
             kernel_modules, res = self.collect_all_module_info()
-            """
-            for mod, info in kernel_modules.items():
-                print(f"Module: {mod}")
-                for key, val in info.items():
-                    if key == "parameters":
-                        print("  Parameters:")
-                        for pname, pval in val.items():
-                            print(f"    {pname} = {pval}")
-                    else:
-                        print(f"  {key}: {val}")
-                print()
-            """
 
         if not kernel_modules:
             self._log_event(

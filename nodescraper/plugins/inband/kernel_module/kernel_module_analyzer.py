@@ -40,20 +40,62 @@ class KernelModuleAnalyzer(DataAnalyzer[KernelModuleDataModel, KernelModuleAnaly
     DATA_MODEL = KernelModuleDataModel
 
     def filter_modules_by_pattern(
-        self, modules: dict[str, dict], patterns: list[str]
-    ) -> dict[str, dict]:
-        pattern_regex = re.compile("|".join(patterns), re.IGNORECASE)
+        self, modules: dict[str, dict], patterns: list[str] = None
+    ) -> tuple[dict[str, dict], list[str]]:
+        if patterns is None:
+            return modules, []
 
-        return {name: data for name, data in modules.items() if pattern_regex.search(name)}
+        matched_modules = {}
+        unmatched_patterns = []
 
-    def filter_modules_by_name(
-        self, modules: dict[str, dict], names: list[str] = None
-    ) -> dict[str, dict]:
+        pattern_match_flags = {p: False for p in patterns}
 
-        if not names:
-            return {name: data for name, data in modules.items()}
+        for mod_name in modules:
+            for p in patterns:
+                if re.search(p, mod_name, re.IGNORECASE):
+                    matched_modules[mod_name] = modules[mod_name]
+                    pattern_match_flags[p] = True
+                    break
 
-        return {name: data for name, data in modules.items() if name in names}
+        unmatched_patterns = [p for p, matched in pattern_match_flags.items() if not matched]
+
+        return matched_modules, unmatched_patterns
+
+    def filter_modules_by_name_and_param(
+        self, modules: dict[str, dict], to_match: dict[str, dict]
+    ) -> tuple[dict[str, dict], dict[str, dict]]:
+        if not to_match:
+            return modules, {}
+
+        filtered = {}
+        unmatched = {}
+
+        for mod_name, expected_data in to_match.items():
+            expected_params = expected_data.get("parameters", {})
+            actual_data = modules.get(mod_name)
+
+            if not actual_data:
+                # Module completely missing
+                unmatched[mod_name] = expected_data
+                continue
+
+            actual_params = actual_data.get("parameters", {})
+            param_mismatches = {}
+
+            for param, expected_val in expected_params.items():
+                actual_val = actual_params.get(param)
+                if actual_val != expected_val:
+                    param_mismatches[param] = {
+                        "expected": expected_val,
+                        "actual": actual_val if actual_val is not None else "<missing>",
+                    }
+
+            if param_mismatches:
+                unmatched[mod_name] = {"parameters": param_mismatches}
+            else:
+                filtered[mod_name] = actual_data
+
+        return filtered, unmatched
 
     def analyze_data(
         self, data: KernelModuleDataModel, args: Optional[KernelModuleAnalyzerArgs] = None
@@ -70,32 +112,74 @@ class KernelModuleAnalyzer(DataAnalyzer[KernelModuleDataModel, KernelModuleAnaly
         if not args:
             args = KernelModuleAnalyzerArgs()
 
-        self.result.message = "Kernel modules analyzed"
         self.result.status = ExecutionStatus.OK
-        filtered_modules = {}
+
         if args.regex_match:
             try:
-                filtered_modules = self.filter_modules_by_pattern(
-                    data.kernel_modules, args.modules_filter
+                filtered_modules, unmatched_pattern = self.filter_modules_by_pattern(
+                    data.kernel_modules, args.regex_filter
                 )
             except re.error:
                 self._log_event(
                     category=EventCategory.RUNTIME,
                     description="KernelModule regex is invalid",
-                    data=data,
+                    data={"regex_filters": {args.regex_filter}},
                     priority=EventPriority.ERROR,
                 )
                 self.result.message = "Kernel modules failed to match regex"
                 self.result.status = ExecutionStatus.ERROR
                 return self.result
 
-        else:
-            filtered_modules = self.filter_modules_by_name(data.kernel_modules, args.modules_filter)
+            if unmatched_pattern:
+                self._log_event(
+                    category=EventCategory.RUNTIME,
+                    description="KernelModules did not match all patterns",
+                    data={"unmatched_pattern: ": unmatched_pattern},
+                    priority=EventPriority.INFO,
+                )
+                self.result.message = "Kernel modules failed to match every pattern"
+                self.result.status = ExecutionStatus.ERROR
+                return self.result
 
-        self._log_event(
-            category=EventCategory.RUNTIME,
-            description="KernelModules analyzed",
-            data=filtered_modules,
-            priority=EventPriority.INFO,
-        )
-        return self.result
+            self._log_event(
+                category=EventCategory.RUNTIME,
+                description="KernelModules analyzed",
+                data={"filtered_modules": filtered_modules},
+                priority=EventPriority.INFO,
+            )
+            return self.result
+
+        elif args.kernel_modules:
+            filtered_modules, not_matched = self.filter_modules_by_name_and_param(
+                data.kernel_modules, args.kernel_modules
+            )
+
+            # no modules matched
+            if not filtered_modules and not_matched:
+                self._log_event(
+                    category=EventCategory.RUNTIME,
+                    description="KernelModules: no modules matched",
+                    data=args.kernel_modules,
+                    priority=EventPriority.ERROR,
+                )
+                self.result.message = "Kernel modules not matched"
+                self.result.status = ExecutionStatus.ERROR
+                return self.result
+            # some modules matched
+            elif filtered_modules and not_matched:
+
+                self._log_event(
+                    category=EventCategory.RUNTIME,
+                    description="KernelModules: not all modules matched",
+                    data=not_matched,
+                    priority=EventPriority.ERROR,
+                )
+                self.result.message = "Kernel modules not matched"
+                self.result.status = ExecutionStatus.ERROR
+                return self.result
+            # all modules matched
+            else:
+                self.result.message = "Kernel modules matched"
+                return self.result
+
+            return self.result

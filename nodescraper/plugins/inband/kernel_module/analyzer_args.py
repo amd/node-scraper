@@ -23,6 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
+import re
 
 from nodescraper.models import AnalyzerArgs
 from nodescraper.plugins.inband.kernel_module.kernel_module_data import (
@@ -32,7 +33,8 @@ from nodescraper.plugins.inband.kernel_module.kernel_module_data import (
 
 class KernelModuleAnalyzerArgs(AnalyzerArgs):
     kernel_modules: dict[str, dict] = {}
-    modules_filter: list[str] = ["amd"]
+
+    regex_filter: list[str] = ["amd"]
     regex_match: bool = True
 
     @classmethod
@@ -45,8 +47,16 @@ class KernelModuleAnalyzerArgs(AnalyzerArgs):
         Returns:
             KernelModuleAnalyzerArgs: instance of analyzer args class
         """
+
+        pattern_regex = re.compile("|".join(datamodel.regex_filter), re.IGNORECASE)
+        filtered_mods = {
+            name: data
+            for name, data in datamodel.kernel_modules.items()
+            if pattern_regex.search(name)
+        }
+
         return cls(
-            kernel_modules=datamodel.kernel_modules,
-            modules_filter=datamodel.modules_filter,
+            kernel_modules=filtered_mods,
+            regex_filter=datamodel.regex_filter,
             regex_match=datamodel.regex_match,
         )
