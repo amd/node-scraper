@@ -42,6 +42,16 @@ class KernelModuleAnalyzer(DataAnalyzer[KernelModuleDataModel, KernelModuleAnaly
     def filter_modules_by_pattern(
         self, modules: dict[str, dict], patterns: list[str] = None
     ) -> tuple[dict[str, dict], list[str]]:
+        """Filter modules by pattern
+
+        Args:
+            modules (dict[str, dict]): modules to be filtered
+            patterns (list[str], optional): pattern to us. Defaults to None.
+
+        Returns:
+            tuple[dict[str, dict], list[str]]: tuple - dict of modules filtered,
+            list of unmatched pattern
+        """
         if patterns is None:
             return modules, []
 
@@ -64,6 +74,16 @@ class KernelModuleAnalyzer(DataAnalyzer[KernelModuleDataModel, KernelModuleAnaly
     def filter_modules_by_name_and_param(
         self, modules: dict[str, dict], to_match: dict[str, dict]
     ) -> tuple[dict[str, dict], dict[str, dict]]:
+        """Filter modules by name, param and value
+
+        Args:
+            modules (dict[str, dict]): modules to be filtered
+            to_match (dict[str, dict]): modules to match
+
+        Returns:
+            tuple[dict[str, dict], dict[str, dict]]: tuple - dict of modules filtered,
+            dict of modules unmatched
+        """
         if not to_match:
             return modules, {}
 
@@ -75,7 +95,6 @@ class KernelModuleAnalyzer(DataAnalyzer[KernelModuleDataModel, KernelModuleAnaly
             actual_data = modules.get(mod_name)
 
             if not actual_data:
-                # Module completely missing
                 unmatched[mod_name] = expected_data
                 continue
 

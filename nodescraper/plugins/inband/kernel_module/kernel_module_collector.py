@@ -24,6 +24,7 @@
 #
 ###############################################################################
 from nodescraper.base import InBandDataCollector
+from nodescraper.connection.inband.inband import CommandArtifact
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.models import TaskResult
 
@@ -35,8 +36,15 @@ class KernelModuleCollector(InBandDataCollector[KernelModuleDataModel, None]):
 
     DATA_MODEL = KernelModuleDataModel
 
-    def parse_proc_modules(self, output):
-        """Parses the output of /proc/modules into a dictionary."""
+    def parse_proc_modules(self, output: dict) -> dict:
+        """Parse command output and return dict of modules
+
+        Args:
+            output (dict): sut cmd output
+
+        Returns:
+            dict: parsed modules
+        """
         modules = {}
         for line in output.strip().splitlines():
             parts = line.split()
@@ -48,8 +56,15 @@ class KernelModuleCollector(InBandDataCollector[KernelModuleDataModel, None]):
             }
         return modules
 
-    def get_module_parameters(self, module_name):
-        """Fetches parameter names and values for a given kernel module using _run_sut_cmd."""
+    def get_module_parameters(self, module_name: str) -> dict:
+        """Fetches parameter names and values for a given kernel module using _run_sut_cmd
+
+        Args:
+            module_name (str): name of module to fetch params for
+
+        Returns:
+            dict: param dict of module
+        """
         param_dict = {}
         param_dir = f"/sys/module/{module_name}/parameters"
 
@@ -66,7 +81,15 @@ class KernelModuleCollector(InBandDataCollector[KernelModuleDataModel, None]):
 
         return param_dict
 
-    def collect_all_module_info(self):
+    def collect_all_module_info(self) -> tuple[dict, CommandArtifact]:
+        """Get all modules and its associated params and values
+
+        Raises:
+            RuntimeError: error for failing to get modules
+
+        Returns:
+            tuple[dict, CommandArtifact]: modules found and exit code
+        """
         res = self._run_sut_cmd("cat /proc/modules")
         if res.exit_code != 0:
             raise RuntimeError("Failed to read /proc/modules")
@@ -78,10 +101,7 @@ class KernelModuleCollector(InBandDataCollector[KernelModuleDataModel, None]):
 
         return modules, res
 
-    def collect_data(
-        self,
-        args=None,
-    ) -> tuple[TaskResult, KernelModuleDataModel | None]:
+    def collect_data(self, args=None) -> tuple[TaskResult, KernelModuleDataModel | None]:
         """
         Collect kernel modules data.
 

@@ -39,7 +39,7 @@ class KernelModuleAnalyzerArgs(AnalyzerArgs):
 
     @classmethod
     def build_from_model(cls, datamodel: KernelModuleDataModel) -> "KernelModuleAnalyzerArgs":
-        """build analyzer args from data model
+        """build analyzer args from data model and filter by datamodel.regex_filter
 
         Args:
             datamodel (KernelModuleDataModel): data model for plugin
