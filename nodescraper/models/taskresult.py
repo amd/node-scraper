@@ -25,7 +25,7 @@
 ###############################################################################
 import datetime
 import logging
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field, field_serializer, field_validator
 
@@ -67,7 +67,18 @@ class TaskResult(BaseModel):
 
     @field_validator("status", mode="before")
     @classmethod
-    def _coerce_status(cls, v):
+    def validate_status(cls, v: Any):
+        """Validator to ensure `status` is a valid ExecutionStatus enum.
+
+        Args:
+            v (Any): The input value to validate (can be str or ExecutionStatus).
+
+        Returns:
+            ExecutionStatus: The validated enum value.
+
+        Raises:
+            ValueError: If the string is not a valid enum name.
+        """
         if isinstance(v, ExecutionStatus):
             return v
         if isinstance(v, str):

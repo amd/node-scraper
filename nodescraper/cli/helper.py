@@ -31,6 +31,8 @@ import sys
 from pathlib import Path
 from typing import Optional, Tuple
 
+from pydantic import BaseModel
+
 from nodescraper.cli.inputargtypes import ModelArgHandler
 from nodescraper.configbuilder import ConfigBuilder
 from nodescraper.configregistry import ConfigRegistry
@@ -284,6 +286,33 @@ def log_system_info(log_path: str | None, system_info: SystemInfo, logger: loggi
             logger.error(exp)
 
 
+def extract_analyzer_args_from_model(
+    plugin_cls: type, data_model: BaseModel, logger: logging.Logger
+) -> Optional[BaseModel]:
+    """Extract analyzer args from a plugin and a data model.
+
+    Args:
+        plugin_cls (type): The plugin class from registry.
+        data_model (BaseModel): System data model.
+        logger (logging.Logger): logger.
+
+    Returns:
+        Optional[BaseModel]: Instance of analyzer args model or None if unavailable.
+    """
+    if not hasattr(plugin_cls, "ANALYZER_ARGS") or not plugin_cls.ANALYZER_ARGS:
+        logger.warning(
+            "Plugin: %s does not support reference config creation. No analyzer args defined.",
+            getattr(plugin_cls, "__name__", str(plugin_cls)),
+        )
+        return None
+
+    try:
+        return plugin_cls.ANALYZER_ARGS.build_from_model(data_model)
+    except NotImplementedError as e:
+        logger.info("%s: %s", plugin_cls.__name__, str(e))
+        return None
+
+
 def generate_reference_config(
     results: list[PluginResult], plugin_reg: PluginRegistry, logger: logging.Logger
 ) -> PluginConfig:
@@ -314,18 +343,9 @@ def generate_reference_config(
             continue
 
         plugin = plugin_reg.plugins.get(obj.source)
-        if not plugin.ANALYZER_ARGS:
-            logger.warning(
-                "Plugin: %s does not support reference config creation. No analyzer args defined, skipping.",
-                obj.source,
-            )
-            continue
 
-        args = None
-        try:
-            args = plugin.ANALYZER_ARGS.build_from_model(data_model)
-        except NotImplementedError as nperr:
-            logger.info(nperr)
+        args = extract_analyzer_args_from_model(plugin, data_model, logger)
+        if not args:
             continue
         plugins[obj.source] = {"analysis_args": {}}
         plugins[obj.source]["analysis_args"] = args.model_dump(exclude_none=True)
@@ -357,24 +377,20 @@ def generate_reference_config_from_logs(
         dm_path = Path(dm)
         dm_payload = json.loads(dm_path.read_text(encoding="utf-8"))
         plugin = plugin_reg.plugins.get(task_res.parent)
-        data_model = plugin.DATA_MODEL.model_validate(dm_payload)
-
-        if not plugin.ANALYZER_ARGS:
+        if not plugin:
             logger.warning(
-                "Plugin: %s does not support reference config creation. No analyzer args defined.",
+                "Plugin %s not found in the plugin registry: %s.",
                 task_res.parent,
             )
             continue
 
-        args = None
+        data_model = plugin.DATA_MODEL.model_validate(dm_payload)
 
-        try:
-            args = plugin.ANALYZER_ARGS.build_from_model(data_model)
-        except NotImplementedError as nperr:
-            logger.info(nperr)
+        args = extract_analyzer_args_from_model(plugin, data_model, logger)
+        if not args:
             continue
-        plugins[task_res.parent] = {"analysis_args": {}}
-        plugins[task_res.parent]["analysis_args"] = args.model_dump(exclude_none=True)
+
+        plugins[task_res.parent] = {"analysis_args": args.model_dump(exclude_none=True)}
 
     plugin_config.plugins = plugins
     return plugin_config
