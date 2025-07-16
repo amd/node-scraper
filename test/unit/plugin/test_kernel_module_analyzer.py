@@ -110,7 +110,7 @@ def test_analyze_data_name_only_success(data_model, analyzer):
     )
     result = analyzer.analyze_data(data_model, args)
     assert result.status == ExecutionStatus.OK
-    assert result.message == "Kernel modules matched"
+    assert result.message == "task completed successfully"
     assert result.events == []
 
 

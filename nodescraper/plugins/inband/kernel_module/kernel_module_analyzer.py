@@ -196,10 +196,6 @@ class KernelModuleAnalyzer(DataAnalyzer[KernelModuleDataModel, KernelModuleAnaly
                 self.result.message = "Kernel modules not matched"
                 self.result.status = ExecutionStatus.ERROR
                 return self.result
-            # all modules matched
-            else:
-                self.result.message = "Kernel modules matched"
-                return self.result
         else:
             self.result.message = "Kernel modules and regex_match failed"
             self.result.status = ExecutionStatus.ERROR
