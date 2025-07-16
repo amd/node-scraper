@@ -17,10 +17,10 @@ The Node Scraper CLI can be used to run Node Scraper plugins on a target system.
 options are available:
 
 ```sh
-usage: node-scraper [-h] [--sys-name STRING] [--sys-location {LOCAL,REMOTE}]
-                    [--sys-interaction-level {PASSIVE,INTERACTIVE,DISRUPTIVE}] [--sys-sku STRING] [--sys-platform STRING]
-                    [--plugin-configs [STRING ...]] [--system-config STRING] [--connection-config STRING] [--log-path STRING]
-                    [--log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}] [--gen-reference-config]
+usage: node-scraper [-h] [--sys-name STRING] [--sys-location {LOCAL,REMOTE}] [--sys-interaction-level {PASSIVE,INTERACTIVE,DISRUPTIVE}]
+                    [--sys-sku STRING] [--sys-platform STRING] [--plugin-configs [STRING ...]] [--system-config STRING]
+                    [--connection-config STRING] [--log-path STRING] [--log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}]
+                    [--gen-reference-config]
                     {run-plugins,describe,gen-plugin-config} ...
 
 node scraper CLI
@@ -38,14 +38,12 @@ options:
   --sys-location {LOCAL,REMOTE}
                         Location of target system (default: LOCAL)
   --sys-interaction-level {PASSIVE,INTERACTIVE,DISRUPTIVE}
-                        Specify system interaction level, used to determine the type of actions that plugins can perform (default:
-                        INTERACTIVE)
+                        Specify system interaction level, used to determine the type of actions that plugins can perform (default: INTERACTIVE)
   --sys-sku STRING      Manually specify SKU of system (default: None)
   --sys-platform STRING
                         Specify system platform (default: None)
   --plugin-configs [STRING ...]
-                        built-in config names or paths to plugin config JSONs. Available built-in configs: NodeStatus (default:
-                        None)
+                        built-in config names or paths to plugin config JSONs. Available built-in configs: NodeStatus (default: None)
   --system-config STRING
                         Path to system config json (default: None)
   --connection-config STRING
@@ -54,7 +52,8 @@ options:
   --log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}
                         Change python log level (default: INFO)
   --gen-reference-config
-                        Generate reference config. File will be written to ./reference_config.json. (default: False)
+                        Generate reference config from system. Writes to ./reference_config.json. (default: False)
+
 
 ```
 
@@ -254,8 +253,8 @@ Here is an example of a comprehensive plugin config that specifies analyzer args
 ```
 
 2. **'gen-reference-config' command**
-This command can be used generate a reference config that is populated with current system
-configurations. The plugins that use analyzer args, where applied, will be populated with system
+This command can be used to generate a reference config that is populated with current system
+configurations. Plugins that use analyzer args (where applicable) will be populated with system
 data.
 Sample command:
 ```sh
@@ -286,8 +285,16 @@ This will generate the following config:
   },
   "result_collators": {}
 ```
-This can be later used on a different platform for comparison, using the steps at #2:
+This config can later be used on a different platform for comparison, using the steps at #2:
 ```sh
 node-scraper --plugin-configs reference_config.json
 
 ```
+
+An alternate way to generate a reference config is by using log files from a previous run. The
+example below uses log files from 'scraper_logs_<path>/':
+```sh
+node-scraper gen-plugin-config --gen-reference-config-from-logs scraper_logs_<path>/ --output-path custom_output_dir
+```
+This will generate a reference config that includes plugins with logged results in
+'scraper_log_<path>' and save the new config to 'custom_output_dir/reference_config.json'.

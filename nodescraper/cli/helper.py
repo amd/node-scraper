@@ -28,13 +28,16 @@ import json
 import logging
 import os
 import sys
-from typing import Optional
+from pathlib import Path
+from typing import Optional, Tuple
+
+from pydantic import BaseModel
 
 from nodescraper.cli.inputargtypes import ModelArgHandler
 from nodescraper.configbuilder import ConfigBuilder
 from nodescraper.configregistry import ConfigRegistry
 from nodescraper.enums import ExecutionStatus, SystemInteractionLevel, SystemLocation
-from nodescraper.models import PluginConfig, PluginResult, SystemInfo
+from nodescraper.models import PluginConfig, PluginResult, SystemInfo, TaskResult
 from nodescraper.pluginexecutor import PluginExecutor
 from nodescraper.pluginregistry import PluginRegistry
 from nodescraper.resultcollators.tablesummary import TableSummary
@@ -283,6 +286,33 @@ def log_system_info(log_path: str | None, system_info: SystemInfo, logger: loggi
             logger.error(exp)
 
 
+def extract_analyzer_args_from_model(
+    plugin_cls: type, data_model: BaseModel, logger: logging.Logger
+) -> Optional[BaseModel]:
+    """Extract analyzer args from a plugin and a data model.
+
+    Args:
+        plugin_cls (type): The plugin class from registry.
+        data_model (BaseModel): System data model.
+        logger (logging.Logger): logger.
+
+    Returns:
+        Optional[BaseModel]: Instance of analyzer args model or None if unavailable.
+    """
+    if not hasattr(plugin_cls, "ANALYZER_ARGS") or not plugin_cls.ANALYZER_ARGS:
+        logger.warning(
+            "Plugin: %s does not support reference config creation. No analyzer args defined.",
+            getattr(plugin_cls, "__name__", str(plugin_cls)),
+        )
+        return None
+
+    try:
+        return plugin_cls.ANALYZER_ARGS.build_from_model(data_model)
+    except NotImplementedError as e:
+        logger.info("%s: %s", plugin_cls.__name__, str(e))
+        return None
+
+
 def generate_reference_config(
     results: list[PluginResult], plugin_reg: PluginRegistry, logger: logging.Logger
 ) -> PluginConfig:
@@ -313,21 +343,82 @@ def generate_reference_config(
             continue
 
         plugin = plugin_reg.plugins.get(obj.source)
-        if not plugin.ANALYZER_ARGS:
-            logger.warning(
-                "Plugin: %s does not support reference config creation. No analyzer args defined, skipping.",
-                obj.source,
-            )
-            continue
 
-        args = None
-        try:
-            args = plugin.ANALYZER_ARGS.build_from_model(data_model)
-        except NotImplementedError as nperr:
-            logger.info(nperr)
+        args = extract_analyzer_args_from_model(plugin, data_model, logger)
+        if not args:
             continue
         plugins[obj.source] = {"analysis_args": {}}
         plugins[obj.source]["analysis_args"] = args.model_dump(exclude_none=True)
     plugin_config.plugins = plugins
 
     return plugin_config
+
+
+def generate_reference_config_from_logs(
+    path: str, plugin_reg: PluginRegistry, logger: logging.Logger
+) -> PluginConfig:
+    """Parse previous log files and generate plugin config with populated analyzer args
+
+    Args:
+        path (str): path to log files
+        plugin_reg (PluginRegistry): plugin registry instance
+        logger (logging.Logger): logger instance
+
+    Returns:
+        PluginConfig: instance of plugin config
+    """
+    found = find_datamodel_and_result(path)
+    plugin_config = PluginConfig()
+    plugins = {}
+    for dm, res in found:
+        result_path = Path(res)
+        res_payload = json.loads(result_path.read_text(encoding="utf-8"))
+        task_res = TaskResult(**res_payload)
+        dm_path = Path(dm)
+        dm_payload = json.loads(dm_path.read_text(encoding="utf-8"))
+        plugin = plugin_reg.plugins.get(task_res.parent)
+        if not plugin:
+            logger.warning(
+                "Plugin %s not found in the plugin registry: %s.",
+                task_res.parent,
+            )
+            continue
+
+        data_model = plugin.DATA_MODEL.model_validate(dm_payload)
+
+        args = extract_analyzer_args_from_model(plugin, data_model, logger)
+        if not args:
+            continue
+
+        plugins[task_res.parent] = {"analysis_args": args.model_dump(exclude_none=True)}
+
+    plugin_config.plugins = plugins
+    return plugin_config
+
+
+def find_datamodel_and_result(base_path: str) -> list[Tuple[str, str]]:
+    """Get datamodel and result files
+
+    Args:
+        base_path (str): location of previous run logs
+
+    Returns:
+        list[Tuple[str, str]]: tuple of datamodel and result json files
+    """
+    tuple_list: list[Tuple[str, str, str]] = []
+    for root, _, files in os.walk(base_path):
+        if "collector" in os.path.basename(root).lower():
+            datamodel_path = None
+            result_path = None
+
+            for fname in files:
+                low = fname.lower()
+                if low.endswith("datamodel.json"):
+                    datamodel_path = os.path.join(root, fname)
+                elif low == "result.json":
+                    result_path = os.path.join(root, fname)
+
+            if datamodel_path and result_path:
+                tuple_list.append((datamodel_path, result_path))
+
+    return tuple_list

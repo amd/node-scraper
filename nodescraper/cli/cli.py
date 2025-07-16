@@ -36,6 +36,7 @@ from nodescraper.cli.constants import DEFAULT_CONFIG, META_VAR_MAP
 from nodescraper.cli.dynamicparserbuilder import DynamicParserBuilder
 from nodescraper.cli.helper import (
     generate_reference_config,
+    generate_reference_config_from_logs,
     get_plugin_configs,
     get_system_info,
     log_system_info,
@@ -148,7 +149,7 @@ def build_parser(
         "--gen-reference-config",
         dest="reference_config",
         action="store_true",
-        help="Generate reference config. File will be written to ./reference_config.json.",
+        help="Generate reference config from system. Writes to ./reference_config.json.",
     )
 
     subparsers = parser.add_subparsers(dest="subcmd", help="Subcommands")
@@ -178,6 +179,13 @@ def build_parser(
     config_builder_parser = subparsers.add_parser(
         "gen-plugin-config",
         help="Generate a config for a plugin or list of plugins",
+    )
+
+    config_builder_parser.add_argument(
+        "--gen-reference-config-from-logs",
+        dest="reference_config_from_logs",
+        type=log_path_arg,
+        help="Generate reference config from previous run logfiles. Writes to --output-path/reference_config.json if provided, otherwise ./reference_config.json.",
     )
 
     config_builder_parser.add_argument(
@@ -338,6 +346,27 @@ def main(arg_input: Optional[list[str]] = None):
             parse_describe(parsed_args, plugin_reg, config_reg, logger)
 
         if parsed_args.subcmd == "gen-plugin-config":
+
+            if parsed_args.reference_config_from_logs:
+                ref_config = generate_reference_config_from_logs(
+                    parsed_args.reference_config_from_logs, plugin_reg, logger
+                )
+                output_path = os.getcwd()
+                if parsed_args.output_path:
+                    output_path = parsed_args.output_path
+                path = os.path.join(output_path, "reference_config.json")
+                try:
+                    with open(path, "w") as f:
+                        json.dump(
+                            ref_config.model_dump(mode="json", exclude_none=True),
+                            f,
+                            indent=2,
+                        )
+                        logger.info("Reference config written to: %s", path)
+                except Exception as exp:
+                    logger.error(exp)
+                sys.exit(0)
+
             parse_gen_plugin_config(parsed_args, plugin_reg, config_reg, logger)
 
         parsed_plugin_args = {}

@@ -1,0 +1,178 @@
+###############################################################################
+#
+# MIT License
+#
+# Copyright (c) 2025 Advanced Micro Devices, Inc.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+#
+###############################################################################
+import argparse
+import json
+import logging
+import os
+from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
+from common.shared_utils import DummyDataModel
+from pydantic import BaseModel
+
+from nodescraper.cli import cli
+from nodescraper.cli.helper import build_config, find_datamodel_and_result
+from nodescraper.configregistry import ConfigRegistry
+from nodescraper.enums import ExecutionStatus, SystemInteractionLevel
+from nodescraper.models import PluginConfig, TaskResult
+from nodescraper.models.datapluginresult import DataPluginResult
+from nodescraper.models.pluginresult import PluginResult
+
+
+def test_generate_reference_config(plugin_registry):
+    results = [
+        PluginResult(
+            status=ExecutionStatus.OK,
+            source="TestPluginA",
+            message="Plugin tasks completed successfully",
+            result_data=DataPluginResult(
+                system_data=DummyDataModel(some_version="17"),
+                collection_result=TaskResult(
+                    status=ExecutionStatus.OK,
+                    message="BIOS: 17",
+                    task="BiosCollector",
+                    parent="TestPluginA",
+                    artifacts=[],
+                ),
+            ),
+        )
+    ]
+
+    ref_config = cli.generate_reference_config(results, plugin_registry, logging.getLogger())
+    dump = ref_config.dict()
+    assert dump["plugins"] == {"TestPluginA": {"analysis_args": {"model_attr": 17}}}
+
+
+def test_get_plugin_configs():
+    with pytest.raises(argparse.ArgumentTypeError):
+        cli.get_plugin_configs(
+            system_interaction_level="INVALID",
+            plugin_config_input=[],
+            built_in_configs={},
+            parsed_plugin_args={},
+            plugin_subparser_map={},
+        )
+
+    plugin_configs = cli.get_plugin_configs(
+        system_interaction_level="PASSIVE",
+        plugin_config_input=[],
+        built_in_configs={},
+        parsed_plugin_args={
+            "TestPlugin1": argparse.Namespace(arg1="test123"),
+            "TestPlugin2": argparse.Namespace(arg2="testabc", model_arg1="123", model_arg2="abc"),
+        },
+        plugin_subparser_map={
+            "TestPlugin1": (argparse.ArgumentParser(), {}),
+            "TestPlugin2": (
+                argparse.ArgumentParser(),
+                {"model_arg1": "my_model", "model_arg2": "my_model"},
+            ),
+        },
+    )
+
+    assert plugin_configs == [
+        PluginConfig(
+            global_args={"system_interaction_level": SystemInteractionLevel.PASSIVE},
+            plugins={},
+            result_collators={"TableSummary": {}},
+        ),
+        PluginConfig(
+            plugins={
+                "TestPlugin1": {"arg1": "test123"},
+                "TestPlugin2": {
+                    "arg2": "testabc",
+                    "my_model": {"model_arg1": "123", "model_arg2": "abc"},
+                },
+            },
+        ),
+    ]
+
+
+def test_config_builder(plugin_registry):
+
+    config = build_config(
+        config_reg=ConfigRegistry(config_path=os.path.join(os.path.dirname(__file__), "fixtures")),
+        plugin_reg=plugin_registry,
+        logger=logging.getLogger(),
+        plugins=["TestPluginA"],
+        built_in_configs=["ExampleConfig"],
+    )
+    assert config.plugins == {
+        "TestPluginA": {
+            "test_bool_arg": True,
+            "test_str_arg": "test",
+            "test_model_arg": {"model_attr": 123},
+        },
+        "ExamplePlugin": {},
+    }
+
+
+def test_find_datamodel_and_result_with_fixture(framework_fixtures_path):
+    base_dir = framework_fixtures_path / "log_dir"
+    assert (base_dir / "collector/biosdatamodel.json").exists()
+    assert (base_dir / "collector/result.json").exists()
+
+    pairs = find_datamodel_and_result(str(base_dir))
+    assert len(pairs) == 1
+
+    datamodel_path, result_path = pairs[0]
+    dm = Path(datamodel_path)
+    rt = Path(result_path)
+
+    assert dm.parent == base_dir / "collector"
+    assert rt.parent == base_dir / "collector"
+
+    assert dm.name == "biosdatamodel.json"
+    assert rt.name == "result.json"
+
+
+def test_generate_reference_config_from_logs(framework_fixtures_path):
+    logger = logging.getLogger()
+    res_payload = json.loads(
+        (framework_fixtures_path / "log_dir/collector/result.json").read_text(encoding="utf-8")
+    )
+    parent = res_payload["parent"]
+
+    class FakeDataModel:
+        @classmethod
+        def model_validate(cls, payload):
+            return payload
+
+    class FakeArgs(BaseModel):
+        @classmethod
+        def build_from_model(cls, datamodel):
+            return cls()
+
+    plugin_reg = SimpleNamespace(
+        plugins={parent: SimpleNamespace(DATA_MODEL=FakeDataModel, ANALYZER_ARGS=FakeArgs)}
+    )
+
+    cfg = cli.generate_reference_config_from_logs(str(framework_fixtures_path), plugin_reg, logger)
+
+    assert isinstance(cfg, PluginConfig)
+    assert set(cfg.plugins) == {parent}
+    assert cfg.plugins[parent]["analysis_args"] == {}

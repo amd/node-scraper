@@ -1,0 +1,8 @@
+{
+  "status": "OK",
+  "message": "BIOS: M17",
+  "task": "BiosCollector",
+  "parent": "BiosPlugin",
+  "start_time": "2025-07-07T11:11:08.186472",
+  "end_time": "2025-07-07T11:11:08.329110"
+}
