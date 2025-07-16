@@ -161,7 +161,7 @@ class KernelModuleAnalyzer(DataAnalyzer[KernelModuleDataModel, KernelModuleAnaly
                 return self.result
 
             self._log_event(
-                category=EventCategory.RUNTIME,
+                category=EventCategory.OS,
                 description="KernelModules analyzed",
                 data={"filtered_modules": filtered_modules},
                 priority=EventPriority.INFO,
@@ -200,5 +200,7 @@ class KernelModuleAnalyzer(DataAnalyzer[KernelModuleDataModel, KernelModuleAnaly
             else:
                 self.result.message = "Kernel modules matched"
                 return self.result
-
+        else:
+            self.result.message = "Kernel modules and regex_match failed"
+            self.result.status = ExecutionStatus.ERROR
             return self.result

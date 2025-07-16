@@ -62,15 +62,8 @@ def test_collect_all_module_info_success(linux_collector):
         make_artifact("ls /sys/module/modX/parameters", 0, ""),
     ]
     linux_collector._run_sut_cmd = lambda cmd, seq=seq: seq.pop(0)
-    modules, artifact = linux_collector.collect_all_module_info()
-    assert isinstance(artifact, SimpleNamespace)
+    modules = linux_collector.collect_all_module_info()
     assert modules == {"modX": {"parameters": {}}}
-
-
-def test_collect_all_module_info_failure(linux_collector):
-    linux_collector._run_sut_cmd = lambda cmd: make_artifact(cmd, 1, "")
-    with pytest.raises(RuntimeError):
-        linux_collector.collect_all_module_info()
 
 
 def test_collect_data_linux_success(linux_collector):
@@ -87,7 +80,7 @@ def test_collect_data_linux_success(linux_collector):
     evt = result.events[-1]
     assert evt.category == "KERNEL_READ"
     assert evt.priority == EventPriority.INFO.value
-    assert result.message == "Kernel modules collected"
+    assert result.message == "1 kernel modules collected"
     assert data.kernel_modules == {"m1": {"parameters": {}}}
 
 
@@ -98,7 +91,7 @@ def test_collect_data_linux_error(linux_collector):
     linux_collector._run_sut_cmd = bad
 
     result, data = linux_collector.collect_data()
-    assert result.status == ExecutionStatus.EXECUTION_FAILURE
+    assert result.status == ExecutionStatus.ERROR
     assert data is None
     evt = result.events[0]
     assert evt.category == EventCategory.RUNTIME.value or evt.category == EventCategory.OS.value
@@ -113,7 +106,7 @@ def test_collect_data_windows_success(win_collector):
     assert result.status == ExecutionStatus.OK
     assert isinstance(data, KernelModuleDataModel)
     assert data.kernel_modules == {"10.0.19041": {"parameters": {}}}
-    assert result.message == "Kernel modules collected"
+    assert result.message == "1 kernel modules collected"
 
 
 def test_collect_data_windows_not_found(win_collector):
@@ -121,6 +114,3 @@ def test_collect_data_windows_not_found(win_collector):
     result, data = win_collector.collect_data()
     assert result.status == ExecutionStatus.ERROR
     assert data is None
-    evt = result.events[0]
-    assert evt.category == EventCategory.OS.value
-    assert "Error checking kernel modules" in evt.description

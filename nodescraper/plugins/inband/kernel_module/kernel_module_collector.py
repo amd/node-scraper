@@ -90,16 +90,33 @@ class KernelModuleCollector(InBandDataCollector[KernelModuleDataModel, None]):
         Returns:
             tuple[dict, CommandArtifact]: modules found and exit code
         """
+        modules = {}
         res = self._run_sut_cmd("cat /proc/modules")
         if res.exit_code != 0:
-            raise RuntimeError("Failed to read /proc/modules")
+            self._log_event(
+                category=EventCategory.OS,
+                description="Failed to read /proc/modules",
+                data={"command": res.command, "exit_code": res.exit_code},
+                priority=EventPriority.ERROR,
+                console_log=True,
+            )
+            return modules
 
         modules = self.parse_proc_modules(res.stdout)
 
         for mod in modules:
             modules[mod]["parameters"] = self.get_module_parameters(mod)
 
-        return modules, res
+        if not modules:
+            self._log_event(
+                category=EventCategory.OS,
+                description="Error checking kernel modules",
+                data={"command": res.command, "exit_code": res.exit_code},
+                priority=EventPriority.ERROR,
+                console_log=True,
+            )
+
+        return modules
 
     def collect_data(self, args=None) -> tuple[TaskResult, KernelModuleDataModel | None]:
         """
@@ -120,16 +137,7 @@ class KernelModuleCollector(InBandDataCollector[KernelModuleDataModel, None]):
                         break
 
         else:
-            kernel_modules, res = self.collect_all_module_info()
-
-        if not kernel_modules:
-            self._log_event(
-                category=EventCategory.OS,
-                description="Error checking kernel modules",
-                data={"command": res.command, "exit_code": res.exit_code},
-                priority=EventPriority.ERROR,
-                console_log=True,
-            )
+            kernel_modules = self.collect_all_module_info()
 
         if kernel_modules:
             km_data = KernelModuleDataModel(kernel_modules=kernel_modules)
@@ -142,10 +150,7 @@ class KernelModuleCollector(InBandDataCollector[KernelModuleDataModel, None]):
             self.result.message = f"{len(km_data.kernel_modules)} kernel modules collected"
             self.result.status = ExecutionStatus.OK
         else:
-            kernel_modules = None
+            self.result.message = "Kernel modules not found"
+            self.result.status = ExecutionStatus.ERROR
 
-        self.result.message = (
-            "Kernel modules collected" if kernel_modules else "Kernel modules not found"
-        )
-        self.result.status = ExecutionStatus.OK if kernel_modules else ExecutionStatus.ERROR
         return self.result, km_data
