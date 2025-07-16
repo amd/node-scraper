@@ -25,9 +25,20 @@
 ###############################################################################
 
 from nodescraper.models import CollectorArgs
+from nodescraper.plugins.inband.process.processdata import ProcessDataModel
 
 
 class ProcessCollectorArgs(CollectorArgs):
     top_n_process: int = 10
 
-    model_config = {"extra": "forbid"}
+    @classmethod
+    def build_from_model(cls, datamodel: ProcessDataModel) -> "ProcessCollectorArgs":
+        """build analyzer args from data model
+
+        Args:
+            datamodel (BiosDataModel): data model for plugin
+
+        Returns:
+            ProcessCollectorArgs: instance of analyzer args class
+        """
+        return cls(top_n_process=datamodel.kfd_process)

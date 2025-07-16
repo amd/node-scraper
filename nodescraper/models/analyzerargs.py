@@ -31,7 +31,7 @@ class AnalyzerArgs(BaseModel):
 
     @classmethod
     def build_from_model(cls, datamodel):
-        """Build analyzer args instance from data model object
+        """Build collector args instance from data model object
 
         Args:
             datamodel (TDataModel): data model to use for creating analyzer args
@@ -40,5 +40,5 @@ class AnalyzerArgs(BaseModel):
             NotImplementedError: Not implemented error
         """
         raise NotImplementedError(
-            "Setting analyzer args from datamodel is not implemented for class: %s", cls.__name__
+            "Setting collector args from datamodel is not implemented for class: %s", cls.__name__
         )
