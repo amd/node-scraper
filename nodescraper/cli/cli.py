@@ -185,7 +185,7 @@ def build_parser(
         "--gen-reference-config-from-logs",
         dest="reference_config_from_logs",
         type=log_path_arg,
-        help="Generate reference config from previous run logfiles. Writes to ./reference_config.json.",
+        help="Generate reference config from previous run logfiles. Writes to --output-path/reference_config.json if provided, otherwise ./reference_config.json.",
     )
 
     config_builder_parser.add_argument(
