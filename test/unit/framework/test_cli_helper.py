@@ -24,6 +24,7 @@
 #
 ###############################################################################
 import argparse
+import csv
 import json
 import logging
 import os
@@ -35,7 +36,13 @@ from common.shared_utils import DummyDataModel
 from pydantic import BaseModel
 
 from nodescraper.cli import cli
-from nodescraper.cli.helper import build_config, find_datamodel_and_result
+from nodescraper.cli.helper import (
+    build_config,
+    dump_results_to_csv,
+    dump_to_csv,
+    find_datamodel_and_result,
+    generate_summary,
+)
 from nodescraper.configregistry import ConfigRegistry
 from nodescraper.enums import ExecutionStatus, SystemInteractionLevel
 from nodescraper.models import PluginConfig, TaskResult
@@ -176,3 +183,77 @@ def test_generate_reference_config_from_logs(framework_fixtures_path):
     assert isinstance(cfg, PluginConfig)
     assert set(cfg.plugins) == {parent}
     assert cfg.plugins[parent]["analysis_args"] == {}
+
+
+def test_dump_to_csv(tmp_path):
+    logger = logging.getLogger()
+    data = [
+        {
+            "nodename": "node1",
+            "plugin": "TestPlugin",
+            "status": "OK",
+            "timestamp": "2025_07_16-12_00_00_PM",
+            "message": "Success",
+        }
+    ]
+    filename = tmp_path / "test.csv"
+    fieldnames = list(data[0].keys())
+
+    dump_to_csv(data, str(filename), fieldnames, logger)
+
+    with open(filename, newline="") as f:
+        reader = list(csv.DictReader(f))
+        assert reader == data
+
+
+def test_dump_results_to_csv(tmp_path, caplog):
+    logger = logging.getLogger()
+
+    result = PluginResult(
+        source="TestPlugin", status=ExecutionStatus.OK, message="some message", result_data={}
+    )
+
+    dump_results_to_csv([result], "node123", str(tmp_path), "2025_07_16-01_00_00_PM", logger)
+
+    out_file = tmp_path / "errorscraper.csv"
+    assert out_file.exists()
+
+    with open(out_file, newline="") as f:
+        reader = list(csv.DictReader(f))
+        assert reader[0]["nodename"] == "node123"
+        assert reader[0]["plugin"] == "TestPlugin"
+        assert reader[0]["status"] == "OK"
+        assert reader[0]["message"] == "some message"
+
+
+def test_generate_summary(tmp_path):
+    logger = logging.getLogger()
+
+    subdir = tmp_path / "sub"
+    subdir.mkdir()
+
+    errorscraper_path = subdir / "errorscraper.csv"
+    with open(errorscraper_path, "w", newline="") as f:
+        writer = csv.DictWriter(
+            f, fieldnames=["nodename", "plugin", "status", "timestamp", "message"]
+        )
+        writer.writeheader()
+        writer.writerow(
+            {
+                "nodename": "nodeX",
+                "plugin": "PluginA",
+                "status": "OK",
+                "timestamp": "2025_07_16-01_00_00_PM",
+                "message": "some message",
+            }
+        )
+
+    generate_summary(str(tmp_path), logger)
+
+    summary_path = tmp_path / "summary.csv"
+    assert summary_path.exists()
+
+    with open(summary_path, newline="") as f:
+        rows = list(csv.DictReader(f))
+        assert len(rows) == 1
+        assert rows[0]["plugin"] == "PluginA"

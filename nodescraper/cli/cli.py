@@ -35,8 +35,10 @@ from typing import Optional
 from nodescraper.cli.constants import DEFAULT_CONFIG, META_VAR_MAP
 from nodescraper.cli.dynamicparserbuilder import DynamicParserBuilder
 from nodescraper.cli.helper import (
+    dump_results_to_csv,
     generate_reference_config,
     generate_reference_config_from_logs,
+    generate_summary,
     get_plugin_configs,
     get_system_info,
     log_system_info,
@@ -153,6 +155,18 @@ def build_parser(
     )
 
     subparsers = parser.add_subparsers(dest="subcmd", help="Subcommands")
+
+    summary_parser = subparsers.add_parser(
+        "summary",
+        help="Generates summary csv file",
+    )
+
+    summary_parser.add_argument(
+        "--summary_path",
+        dest="summary_path",
+        type=log_path_arg,
+        help="Path to node-scraper results. Generates summary csv file in summary.csv.",
+    )
 
     run_plugin_parser = subparsers.add_parser(
         "run-plugins",
@@ -327,12 +341,13 @@ def main(arg_input: Optional[list[str]] = None):
 
         parsed_args = parser.parse_args(top_level_args)
         system_info = get_system_info(parsed_args)
+        sname = system_info.name.lower().replace("-", "_").replace(".", "_")
+        timestamp = datetime.datetime.now().strftime("%Y_%m_%d-%I_%M_%S_%p")
 
         if parsed_args.log_path and parsed_args.subcmd not in ["gen-plugin-config", "describe"]:
-            sname = system_info.name.lower().replace("-", "_").replace(".", "_")
             log_path = os.path.join(
                 parsed_args.log_path,
-                f"scraper_logs_{sname}_{datetime.datetime.now().strftime('%Y_%m_%d-%I_%M_%S_%p')}",
+                f"scraper_logs_{sname}_{timestamp}",
             )
             os.makedirs(log_path)
         else:
@@ -341,6 +356,10 @@ def main(arg_input: Optional[list[str]] = None):
         logger = setup_logger(parsed_args.log_level, log_path)
         if log_path:
             logger.info("Log path: %s", log_path)
+
+        if parsed_args.subcmd == "summary":
+            generate_summary(parsed_args.summary_path, logger)
+            sys.exit(0)
 
         if parsed_args.subcmd == "describe":
             parse_describe(parsed_args, plugin_reg, config_reg, logger)
@@ -406,6 +425,8 @@ def main(arg_input: Optional[list[str]] = None):
 
     try:
         results = plugin_executor.run_queue()
+
+        dump_results_to_csv(results, sname, log_path, timestamp, logger)
 
         if parsed_args.reference_config:
             ref_config = generate_reference_config(results, plugin_reg, logger)
