@@ -55,7 +55,9 @@ class BiosCollector(InBandDataCollector[BiosDataModel, None]):
                     0
                 ].split("=")[1]
         else:
-            res = self._run_sut_cmd("sh -c 'dmidecode -s bios-version'", sudo=True)
+            res = self._run_sut_cmd(
+                "sh -c 'cat /sys/devices/virtual/dmi/id/bios_version'", sudo=False
+            )
             if res.exit_code == 0:
                 bios = res.stdout
 
