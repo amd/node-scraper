@@ -33,7 +33,9 @@ from typing import Optional, Type
 from pydantic import BaseModel
 
 from nodescraper.constants import DEFAULT_LOGGER
-from nodescraper.interfaces import ConnectionManager, DataPlugin
+from nodescraper.enums.eventpriority import EventPriority
+from nodescraper.enums.systeminteraction import SystemInteractionLevel
+from nodescraper.interfaces import ConnectionManager, DataPlugin, PluginInterface
 from nodescraper.models import PluginConfig, SystemInfo
 from nodescraper.models.pluginresult import PluginResult
 from nodescraper.pluginregistry import PluginRegistry
@@ -167,14 +169,29 @@ class PluginExecutor:
                     run_payload = copy.deepcopy(plugin_args)
 
                     run_args = TypeUtils.get_func_arg_types(plugin_class.run, plugin_class)
+
+                    enum_fields = {
+                        "max_event_priority_level": EventPriority,
+                        "system_interaction_level": SystemInteractionLevel,
+                    }
+
                     for arg in run_args.keys():
                         if arg == "preserve_connection" and issubclass(plugin_class, DataPlugin):
                             run_payload[arg] = True
                         elif arg in self.plugin_config.global_args:
                             run_payload[arg] = self.plugin_config.global_args[arg]
+                    try:
+                        self.apply_global_args_to_plugin(
+                            plugin_inst, plugin_class, self.plugin_config.global_args, enum_fields
+                        )
+                    except ValueError as ve:
+                        self.logger.error(
+                            "Invalid global_args for plugin %s: %s. Skipping plugin.",
+                            plugin_name,
+                            str(ve),
+                        )
+                        continue
 
-                        # TODO
-                        # enable global substitution in collection and analysis args
                     self.logger.info("-" * 50)
                     plugin_results.append(plugin_inst.run(**run_payload))
                 except Exception as e:
@@ -210,3 +227,68 @@ class PluginExecutor:
                     )
 
         return plugin_results
+
+    def apply_global_args_to_plugin(
+        self, plugin_inst: PluginInterface, plugin_class: type, global_args: dict, enum_fields: dict
+    ) -> None:
+        """
+        Applies global arguments to the plugin instance, including standard attributes
+        and merging Pydantic model arguments (collection_args, analysis_args).
+
+        Args:
+            plugin_inst: The plugin instance to update.
+            plugin_class: The plugin class (needed for model instantiation).
+            global_args: Dict of global argument overrides.
+        """
+
+        simple_keys = [
+            "collection",
+            "analysis",
+            "max_event_priority_level",
+            "system_interaction_level",
+            "preserve_connection",
+            "data",
+        ]
+
+        for key in simple_keys:
+            if key in global_args:
+                value = global_args[key]
+
+                if key in enum_fields:
+                    enum_type = enum_fields[key]
+                    if isinstance(value, str):
+                        try:
+                            value = enum_type[value.upper()]
+                        except KeyError as kerr:
+                            raise ValueError(
+                                f"Invalid enum name '{value}' for {enum_type.__name__}"
+                            ) from kerr
+                    elif isinstance(value, int):
+                        try:
+                            value = enum_type(value)
+                        except ValueError as verr:
+                            raise ValueError(
+                                f"Invalid enum value '{value}' for {enum_type.__name__}"
+                            ) from verr
+
+                setattr(plugin_inst, key, value)
+
+        if "collection_args" in global_args:
+            update_data = global_args["collection_args"]
+            existing = getattr(plugin_inst, "COLLECTION_ARGS", None)
+            model_class = getattr(plugin_class, "COLLECTOR_ARGS", None)
+
+            if isinstance(existing, BaseModel):
+                plugin_inst.COLLECTION_ARGS = existing.model_copy(update=update_data)
+            elif model_class and issubclass(model_class, BaseModel):
+                plugin_inst.COLLECTION_ARGS = model_class.model_validate(update_data)
+
+        if "analysis_args" in global_args:
+            update_data = global_args["analysis_args"]
+            existing = getattr(plugin_inst, "ANALYSIS_ARGS", None)
+            model_class = getattr(plugin_class, "ANALYZER_ARGS", None)
+
+            if isinstance(existing, BaseModel):
+                plugin_inst.ANALYSIS_ARGS = existing.model_copy(update=update_data)
+            elif model_class and issubclass(model_class, BaseModel):
+                plugin_inst.ANALYSIS_ARGS = model_class.model_validate(update_data)

@@ -24,29 +24,40 @@
 #
 ###############################################################################
 import pytest
-from common.shared_utils import MockConnectionManager
+from common.shared_utils import DummyDataModel, MockConnectionManager
+from pydantic import BaseModel
 
 from nodescraper.enums import ExecutionStatus
+from nodescraper.enums.eventpriority import EventPriority
+from nodescraper.enums.systeminteraction import SystemInteractionLevel
 from nodescraper.interfaces import PluginInterface
 from nodescraper.models import PluginConfig, PluginResult
 from nodescraper.pluginexecutor import PluginExecutor
 from nodescraper.pluginregistry import PluginRegistry
 
 
-class TestPluginA(PluginInterface[MockConnectionManager, None]):
+class DummyArgs(BaseModel):
+    foo: str = "bar"
+    regex_match: bool = True
 
+
+class TestPluginA(PluginInterface[MockConnectionManager, None]):
     CONNECTION_TYPE = MockConnectionManager
+    COLLECTION_ARGS = DummyArgs(foo="initial")
+    ANALYSIS_ARGS = DummyArgs(foo="initial")
+    collection = False
+    analysis = False
+    preserve_connection = False
+    data = DummyDataModel(some_version="1")
+    max_event_priority_level = EventPriority.INFO
+    system_interaction_level = SystemInteractionLevel.PASSIVE
 
     def run(self):
         self._update_queue(("TestPluginB", {}))
-        return PluginResult(
-            source="testA",
-            status=ExecutionStatus.ERROR,
-        )
+        return PluginResult(source="testA", status=ExecutionStatus.ERROR)
 
 
 class TestPluginB(PluginInterface[MockConnectionManager, None]):
-
     CONNECTION_TYPE = MockConnectionManager
 
     def run(self, test_arg=None):
@@ -67,10 +78,7 @@ def plugin_registry():
     "input_configs, output_config",
     [
         (
-            [
-                PluginConfig(plugins={"Plugin1": {}}),
-                PluginConfig(plugins={"Plugin2": {}}),
-            ],
+            [PluginConfig(plugins={"Plugin1": {}}), PluginConfig(plugins={"Plugin2": {}})],
             PluginConfig(plugins={"Plugin1": {}, "Plugin2": {}}),
         ),
         (
@@ -109,7 +117,8 @@ def test_plugin_queue(plugin_registry):
 
 def test_queue_callback(plugin_registry):
     executor = PluginExecutor(
-        plugin_configs=[PluginConfig(plugins={"TestPluginA": {}})], plugin_registry=plugin_registry
+        plugin_configs=[PluginConfig(plugins={"TestPluginA": {}})],
+        plugin_registry=plugin_registry,
     )
 
     results = executor.run_queue()
@@ -119,3 +128,33 @@ def test_queue_callback(plugin_registry):
     assert results[0].status == ExecutionStatus.ERROR
     assert results[1].source == "testB"
     assert results[1].status == ExecutionStatus.OK
+
+
+def test_apply_global_args_to_plugin():
+    plugin = TestPluginA()
+    global_args = {
+        "collection": True,
+        "analysis": True,
+        "preserve_connection": True,
+        "data": {"some_version": "1"},
+        "max_event_priority_level": 4,
+        "system_interaction_level": "INTERACTIVE",
+        "collection_args": {"foo": "collected", "regex_match": False},
+        "analysis_args": {"foo": "analyzed", "regex_match": False},
+    }
+    enum_fields = {
+        "max_event_priority_level": EventPriority,
+        "system_interaction_level": SystemInteractionLevel,
+    }
+
+    executor = PluginExecutor(plugin_configs=[])
+    executor.apply_global_args_to_plugin(plugin, TestPluginA, global_args, enum_fields)
+
+    assert plugin.collection is True
+    assert plugin.analysis is True
+    assert plugin.preserve_connection is True
+    assert plugin.data["some_version"] == "1"
+    assert plugin.max_event_priority_level == EventPriority.CRITICAL
+    assert plugin.system_interaction_level == SystemInteractionLevel.INTERACTIVE
+    assert plugin.COLLECTION_ARGS.foo == "collected"
+    assert plugin.ANALYSIS_ARGS.foo == "analyzed"
