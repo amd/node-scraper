@@ -38,7 +38,6 @@ from nodescraper.models import (
     SystemInfo,
     TaskResult,
 )
-from nodescraper.utils import normalize_enum
 
 from .connectionmanager import TConnectArg, TConnectionManager
 from .task import SystemCompatibilityError
@@ -163,10 +162,6 @@ class DataPlugin(
             return self.collection_result
 
         try:
-            max_event_priority_level = normalize_enum(max_event_priority_level, EventPriority)
-            system_interaction_level = normalize_enum(
-                system_interaction_level, SystemInteractionLevel
-            )
             if not self.connection_manager:
                 if not self.CONNECTION_TYPE:
                     self.collection_result = TaskResult(
@@ -247,8 +242,6 @@ class DataPlugin(
             TaskResult: result of data analysis
         """
 
-        max_event_priority_level = normalize_enum(max_event_priority_level, EventPriority)
-
         if self.ANALYZER is None:
             self.analysis_result = TaskResult(
                 status=ExecutionStatus.NOT_RAN,
@@ -306,8 +299,6 @@ class DataPlugin(
             PluginResult: Plugin result
         """
         self.logger.info("Running plugin %s", self.__class__.__name__)
-        max_event_priority_level = normalize_enum(max_event_priority_level, EventPriority)
-        system_interaction_level = normalize_enum(system_interaction_level, SystemInteractionLevel)
         if collection:
             self.collect(
                 max_event_priority_level=max_event_priority_level,

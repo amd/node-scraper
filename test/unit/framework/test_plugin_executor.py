@@ -43,14 +43,15 @@ class DummyArgs(BaseModel):
 
 class TestPluginA(PluginInterface[MockConnectionManager, None]):
     CONNECTION_TYPE = MockConnectionManager
-    COLLECTION_ARGS = DummyArgs(foo="initial")
-    ANALYSIS_ARGS = DummyArgs(foo="initial")
+    COLLECTOR_ARGS = DummyArgs(foo="initial")
+    ANALYZER_ARGS = DummyArgs(foo="initial")
     collection = False
     analysis = False
     preserve_connection = False
     data = DummyDataModel(some_version="1")
     max_event_priority_level = EventPriority.INFO
     system_interaction_level = SystemInteractionLevel.PASSIVE
+    collection_args = None
 
     def run(self):
         self._update_queue(("TestPluginB", {}))
@@ -139,22 +140,26 @@ def test_apply_global_args_to_plugin():
         "data": {"some_version": "1"},
         "max_event_priority_level": 4,
         "system_interaction_level": "INTERACTIVE",
-        "collection_args": {"foo": "collected", "regex_match": False},
-        "analysis_args": {"foo": "analyzed", "regex_match": False},
-    }
-    enum_fields = {
-        "max_event_priority_level": EventPriority,
-        "system_interaction_level": SystemInteractionLevel,
+        "collection_args": {"foo": "collected", "regex_match": False, "not_in_model": "skip_this"},
+        "analysis_args": {"foo": "analyzed", "regex_match": False, "ignore_this": True},
     }
 
     executor = PluginExecutor(plugin_configs=[])
-    executor.apply_global_args_to_plugin(plugin, TestPluginA, global_args, enum_fields)
+    run_payload = executor.apply_global_args_to_plugin(plugin, TestPluginA, global_args)
 
-    assert plugin.collection is True
-    assert plugin.analysis is True
-    assert plugin.preserve_connection is True
-    assert plugin.data["some_version"] == "1"
-    assert plugin.max_event_priority_level == EventPriority.CRITICAL
-    assert plugin.system_interaction_level == SystemInteractionLevel.INTERACTIVE
-    assert plugin.COLLECTION_ARGS.foo == "collected"
-    assert plugin.ANALYSIS_ARGS.foo == "analyzed"
+    assert run_payload["collection"] is True
+    assert run_payload["analysis"] is True
+    assert run_payload["preserve_connection"] is True
+    assert run_payload["data"]["some_version"] == "1"
+    assert run_payload["max_event_priority_level"] == 4
+    assert run_payload["system_interaction_level"] == "INTERACTIVE"
+
+    # Safely check filtered args
+    assert run_payload.get("collection_args") == {
+        "foo": "collected",
+        "regex_match": False,
+    }
+    assert run_payload.get("analysis_args") == {
+        "foo": "analyzed",
+        "regex_match": False,
+    }

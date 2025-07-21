@@ -169,13 +169,3 @@ def bytes_to_human_readable(input_bytes: int) -> str:
 
     gb = round(mb / 1000, 2)
     return f"{gb}GB"
-
-
-def normalize_enum(value, enum_type):
-    if isinstance(value, enum_type):
-        return value
-    elif isinstance(value, int):
-        return enum_type(value)
-    elif isinstance(value, str):
-        return enum_type[value.upper()]
-    raise ValueError(f"Invalid value '{value}' for enum {enum_type.__name__}")
