@@ -28,17 +28,3 @@ from pydantic import BaseModel
 
 class CollectorArgs(BaseModel):
     model_config = {"extra": "forbid", "exclude_none": True}
-
-    @classmethod
-    def build_from_model(cls, datamodel):
-        """Build collector args instance from data model object
-
-        Args:
-            datamodel (TDataModel): data model to use for creating collector args
-
-        Raises:
-            NotImplementedError: Not implemented error
-        """
-        raise NotImplementedError(
-            "Setting collector args from datamodel is not implemented for class: %s", cls.__name__
-        )
