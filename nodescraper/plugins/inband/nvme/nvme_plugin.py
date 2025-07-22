@@ -29,7 +29,7 @@ from .nvme_collector import NvmeCollector
 from .nvmedata import NvmeDataModel
 
 
-class NvmePlugin(InBandDataPlugin[NvmeDataModel, None]):
+class NvmePlugin(InBandDataPlugin[NvmeDataModel, None, None]):
     """Plugin for collection and analysis of nvme data"""
 
     DATA_MODEL = NvmeDataModel

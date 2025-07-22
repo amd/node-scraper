@@ -23,8 +23,10 @@
 # SOFTWARE.
 #
 ###############################################################################
+from typing import Any
+
 from nodescraper.models import DataModel
 
 
 class NvmeDataModel(DataModel):
-    data: dict
+    data: dict[str, Any]

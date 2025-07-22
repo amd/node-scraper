@@ -23,6 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
+from pydantic import ValidationError
 
 from nodescraper.base import InBandDataCollector
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
@@ -61,34 +62,46 @@ class NvmeCollector(InBandDataCollector[NvmeDataModel, None]):
             "nvme smart-log /dev/nvme0",
             "nvme error-log /dev/nvme0 --log-entries=256",
             "nvme id-ctrl /dev/nvme0",
-            "nvme id-ns /dev/nvme0",
+            "nvme id-ns /dev/nvme0n1",
             "nvme fw-log /dev/nvme0",
             "nvme self-test-log /dev/nvme0",
-            "nvme telemetry-log /dev/nvme0",
+            "nvme get-log /dev/nvme0 --log-id=6 --log-len=512",
         ]
 
         for cmd in commands:
-            res = self._run_sut_cmd(cmd)
+            res = self._run_sut_cmd(cmd, sudo=True)
             if res.exit_code == 0:
                 data[cmd] = res.stdout
             else:
                 self._log_event(
                     category=EventCategory.SW_DRIVER,
-                    description="Failed to execute NVMe command",
+                    description=f"Failed to execute NVMe command: '{cmd}'",
                     data={"command": cmd, "exit_code": res.exit_code},
                     priority=EventPriority.ERROR,
                     console_log=True,
                 )
 
+        nvme_data = None
         if data:
-            nvme_data = NvmeDataModel(nvme_data=data)
-            self._log_event(
-                category=EventCategory.SW_DRIVER,
-                description="Collected NVMe data",
-                data=nvme_data.model_dump(),
-                priority=EventPriority.INFO,
-            )
-            self.result.message = "NVMe data successfully collected"
+            try:
+                nvme_data = NvmeDataModel(nvme_data=data)
+            except ValidationError as e:
+                self._log_event(
+                    category=EventCategory.SW_DRIVER,
+                    description="Validation error while building NvmeDataModel",
+                    data={"error": str(e)},
+                    priority=EventPriority.CRITICAL,
+                )
+                self.result.message = "NVMe data invalid format"
+                self.result.status = ExecutionStatus.ERROR
+            # nvme_data = NvmeDataModel(nvme_data=data)
+            # self._log_event(
+            #    category=EventCategory.SW_DRIVER,
+            #    description="Collected NVMe data",
+            #    data=nvme_data.model_dump(),
+            #    priority=EventPriority.INFO,
+            # )
+            # self.result.message = "NVMe data successfully collected"
         else:
             nvme_data = None
             self._log_event(
