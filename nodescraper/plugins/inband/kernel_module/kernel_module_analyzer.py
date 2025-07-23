@@ -130,10 +130,15 @@ class KernelModuleAnalyzer(DataAnalyzer[KernelModuleDataModel, KernelModuleAnaly
         """
         if not args:
             args = KernelModuleAnalyzerArgs()
+        else:
+            if args.regex_filter and args.kernel_modules:
+                self.logger.warning(
+                    "Both regex_filter and kernel_modules provided in analyzer args. kernel_modules will be ignored"
+                )
 
         self.result.status = ExecutionStatus.OK
 
-        if args.regex_match:
+        if args.regex_filter:
             try:
                 filtered_modules, unmatched_pattern = self.filter_modules_by_pattern(
                     data.kernel_modules, args.regex_filter
@@ -197,6 +202,6 @@ class KernelModuleAnalyzer(DataAnalyzer[KernelModuleDataModel, KernelModuleAnaly
                 self.result.status = ExecutionStatus.ERROR
                 return self.result
         else:
-            self.result.message = "Kernel modules and regex_match failed"
+            self.result.message = "Kernel modules and regex_filter failed"
             self.result.status = ExecutionStatus.ERROR
             return self.result

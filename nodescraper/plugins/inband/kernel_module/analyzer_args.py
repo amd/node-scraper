@@ -24,7 +24,6 @@
 #
 ###############################################################################
 import re
-from typing import ClassVar
 
 from nodescraper.models import AnalyzerArgs
 from nodescraper.plugins.inband.kernel_module.kernel_module_data import (
@@ -34,11 +33,7 @@ from nodescraper.plugins.inband.kernel_module.kernel_module_data import (
 
 class KernelModuleAnalyzerArgs(AnalyzerArgs):
     kernel_modules: dict[str, dict] = {}
-
-    DEFAULT_REGEX_FILTER: ClassVar[list[str]] = ["amd"]
-    DEFAULT_REGEX_MATCH: ClassVar[bool] = True
-    regex_filter: list[str] = DEFAULT_REGEX_FILTER
-    regex_match: bool = DEFAULT_REGEX_MATCH
+    regex_filter: list[str] = ["amd"]
 
     @classmethod
     def build_from_model(cls, datamodel: KernelModuleDataModel) -> "KernelModuleAnalyzerArgs":
@@ -51,7 +46,7 @@ class KernelModuleAnalyzerArgs(AnalyzerArgs):
             KernelModuleAnalyzerArgs: instance of analyzer args class
         """
 
-        pattern_regex = re.compile("|".join(cls.DEFAULT_REGEX_FILTER), re.IGNORECASE)
+        pattern_regex = re.compile("amd", re.IGNORECASE)
         filtered_mods = {
             name: data
             for name, data in datamodel.kernel_modules.items()
@@ -60,6 +55,5 @@ class KernelModuleAnalyzerArgs(AnalyzerArgs):
 
         return cls(
             kernel_modules=filtered_mods,
-            regex_filter=cls.DEFAULT_REGEX_FILTER,
-            regex_match=cls.DEFAULT_REGEX_MATCH,
+            regex_filter=[],
         )
