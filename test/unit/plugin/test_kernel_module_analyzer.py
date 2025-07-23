@@ -81,7 +81,7 @@ def test_analyze_data_default(data_model, analyzer):
 
 
 def test_analyze_data_regex_success(data_model, analyzer):
-    args = KernelModuleAnalyzerArgs(regex_match=True, regex_filter=["^TESTmod$"])
+    args = KernelModuleAnalyzerArgs(regex_filter=["^TESTmod$"])
     result = analyzer.analyze_data(data_model, args)
     assert result.status == ExecutionStatus.OK
     ev = result.events[0]
@@ -91,44 +91,21 @@ def test_analyze_data_regex_success(data_model, analyzer):
 
 
 def test_analyze_data_regex_invalid_pattern(data_model, analyzer):
-    args = KernelModuleAnalyzerArgs(regex_match=True, regex_filter=["*invalid"])
+    args = KernelModuleAnalyzerArgs(regex_filter=["*invalid"])
     result = analyzer.analyze_data(data_model, args)
     assert result.status in (ExecutionStatus.ERROR, ExecutionStatus.EXECUTION_FAILURE)
     assert any(EventCategory.RUNTIME.value in ev.category for ev in result.events)
 
 
 def test_analyze_data_regex_unmatched_patterns(data_model, analyzer):
-    args = KernelModuleAnalyzerArgs(regex_match=True, regex_filter=["modA", "nope"])
+    args = KernelModuleAnalyzerArgs(regex_filter=["modA", "nope"])
     result = analyzer.analyze_data(data_model, args)
     assert result.status == ExecutionStatus.ERROR
     assert any(ev.description == "KernelModules did not match all patterns" for ev in result.events)
 
 
 def test_analyze_data_name_only_success(data_model, analyzer):
-    args = KernelModuleAnalyzerArgs(
-        regex_match=False, kernel_modules={"modA": {"parameters": {"p": 1}}}
-    )
+    args = KernelModuleAnalyzerArgs(kernel_modules={"modA": {"parameters": {"p": 1}}})
     result = analyzer.analyze_data(data_model, args)
     assert result.status == ExecutionStatus.OK
     assert result.message == "task completed successfully"
-    assert result.events == []
-
-
-def test_analyze_data_name_only_no_match(data_model, analyzer):
-    args = KernelModuleAnalyzerArgs(regex_match=False, kernel_modules={"XYZ": {"parameters": {}}})
-    result = analyzer.analyze_data(data_model, args)
-    assert result.status == ExecutionStatus.ERROR
-    assert any("no modules matched" in ev.description.lower() for ev in result.events)
-
-
-def test_analyze_data_name_only_partial_match(data_model, analyzer):
-    args = KernelModuleAnalyzerArgs(
-        regex_match=False,
-        kernel_modules={
-            "modA": {"parameters": {"p": 1}},
-            "otherMod": {"parameters": {"wrong": 0}},
-        },
-    )
-    result = analyzer.analyze_data(data_model, args)
-    assert result.status == ExecutionStatus.ERROR
-    assert any("not all modules matched" in ev.description.lower() for ev in result.events)
