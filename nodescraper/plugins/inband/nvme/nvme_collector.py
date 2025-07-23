@@ -81,7 +81,6 @@ class NvmeCollector(InBandDataCollector[NvmeDataModel, None]):
                     console_log=True,
                 )
 
-        nvme_data = None
         if data:
             try:
                 nvme_data = NvmeDataModel(nvme_data=data)
@@ -94,14 +93,14 @@ class NvmeCollector(InBandDataCollector[NvmeDataModel, None]):
                 )
                 self.result.message = "NVMe data invalid format"
                 self.result.status = ExecutionStatus.ERROR
-            # nvme_data = NvmeDataModel(nvme_data=data)
-            # self._log_event(
-            #    category=EventCategory.SW_DRIVER,
-            #    description="Collected NVMe data",
-            #    data=nvme_data.model_dump(),
-            #    priority=EventPriority.INFO,
-            # )
-            # self.result.message = "NVMe data successfully collected"
+
+            self._log_event(
+                category=EventCategory.SW_DRIVER,
+                description="Collected NVMe data",
+                data=nvme_data.model_dump(),
+                priority=EventPriority.INFO,
+            )
+            self.result.message = "NVMe data successfully collected"
         else:
             nvme_data = None
             self._log_event(
