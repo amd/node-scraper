@@ -313,33 +313,6 @@ def extract_analyzer_args_from_model(
         return None
 
 
-def extract_collector_args_from_model(
-    plugin_cls: type, data_model: BaseModel, logger: logging.Logger
-) -> Optional[BaseModel]:
-    """Extract collector args from a plugin and a data model.
-
-    Args:
-        plugin_cls (type): The plugin class from registry.
-        data_model (BaseModel): System data model.
-        logger (logging.Logger): logger.
-
-    Returns:
-        Optional[BaseModel]: Instance of collector args model or None if unavailable.
-    """
-    if not hasattr(plugin_cls, "COLLECTOR_ARGS") or not plugin_cls.COLLECTOR_ARGS:
-        logger.warning(
-            "Plugin: %s does not support reference config creation. No collector args defined.",
-            getattr(plugin_cls, "__name__", str(plugin_cls)),
-        )
-        return None
-
-    try:
-        return plugin_cls.COLLECTOR_ARGS.build_from_model(data_model)
-    except NotImplementedError as e:
-        logger.info("%s: %s", plugin_cls.__name__, str(e))
-        return None
-
-
 def generate_reference_config(
     results: list[PluginResult], plugin_reg: PluginRegistry, logger: logging.Logger
 ) -> PluginConfig:
@@ -378,9 +351,6 @@ def generate_reference_config(
         if a_args:
             plugins[obj.source]["analysis_args"] = a_args.model_dump(exclude_none=True)
 
-        c_args = extract_collector_args_from_model(plugin, data_model, logger)
-        if c_args:
-            plugins[obj.source]["collector_args"] = c_args.model_dump(exclude_none=True)
     plugin_config.plugins = plugins
 
     return plugin_config

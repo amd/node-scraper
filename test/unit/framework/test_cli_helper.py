@@ -39,7 +39,6 @@ from pydantic import BaseModel
 from nodescraper.cli import cli
 from nodescraper.cli.helper import (
     build_config,
-    extract_collector_args_from_model,
     find_datamodel_and_result,
 )
 from nodescraper.configregistry import ConfigRegistry
@@ -182,59 +181,3 @@ def test_generate_reference_config_from_logs(framework_fixtures_path):
     assert isinstance(cfg, PluginConfig)
     assert set(cfg.plugins) == {parent}
     assert cfg.plugins[parent]["analysis_args"] == {}
-
-
-def test_no_collector_args_defined(caplog):
-    class NoArgsPlugin:
-        pass
-
-    caplog.set_level(logging.WARNING)
-    res = extract_collector_args_from_model(
-        NoArgsPlugin, DummyDataModel(foo=1), logging.getLogger()
-    )
-    assert res is None
-    assert "does not support reference config creation" in caplog.text
-
-
-def test_collector_args_none(caplog):
-    class NoneArgsPlugin:
-        COLLECTOR_ARGS = None
-
-    caplog.set_level(logging.WARNING)
-    res = extract_collector_args_from_model(
-        NoneArgsPlugin, DummyDataModel(foo=1), logging.getLogger()
-    )
-    assert res is None
-    assert "does not support reference config creation" in caplog.text
-
-
-def test_successful_build_from_model():
-    class MyArgs(BaseModel):
-        a: int
-
-        @classmethod
-        def build_from_model(cls, dm):
-            return cls(a=dm.foo)
-
-    class GoodPlugin:
-        COLLECTOR_ARGS = MyArgs
-
-    dm = DummyDataModel(foo=42)
-    args = extract_collector_args_from_model(GoodPlugin, dm, logging.getLogger())
-    assert isinstance(args, MyArgs)
-    assert args.a == 42
-
-
-def test_build_from_model_not_implemented(caplog):
-    class BadArgs(BaseModel):
-        @classmethod
-        def build_from_model(cls, dm):
-            raise NotImplementedError("not implemented")
-
-    class BadPlugin:
-        COLLECTOR_ARGS = BadArgs
-
-    caplog.set_level(logging.INFO)
-    res = extract_collector_args_from_model(BadPlugin, DummyDataModel(foo=7), logging.getLogger())
-    assert res is None
-    assert "not implemented" in caplog.text
