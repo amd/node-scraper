@@ -75,11 +75,19 @@ class LocalShell(InBandConnection):
         Returns:
             FileArtifact: file artifact
         """
-        contents = ""
-        with open(filename, "r", encoding=encoding) as local_file:
-            contents = local_file.read().strip()
+
+        if encoding is None:
+            # Read as binary
+            with open(filename, "rb") as f:
+                contents = f.read()
+        else:
+            # Read as text
+            with open(filename, "r", encoding=encoding) as f:
+                contents = f.read()
+                if strip:
+                    contents = contents.strip()
 
         return FileArtifact(
             filename=os.path.basename(filename),
-            contents=contents.strip() if strip else contents,
+            contents=contents,
         )

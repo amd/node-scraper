@@ -26,6 +26,7 @@
 import abc
 import io
 import os
+from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -45,27 +46,42 @@ class FileArtifact(BaseModel):
     filename: str
     contents: bytes = Field(exclude=True)
 
-    @field_validator("file_contents", mode="before")
-    @classmethod
-    def file_contents_conformer(cls, value) -> bytes:
+    @staticmethod
+    def coerce_contents(value: io.BytesIO | str | bytes) -> bytes:
         if isinstance(value, io.BytesIO):
             return value.getvalue()
         if isinstance(value, str):
             return value.encode("utf-8")
         return value
 
-    def log_model(self, log_path: str):
-        """Log data model to a file
+    @field_validator("contents", mode="before")
+    @classmethod
+    def contents_conformer(cls, value):
+        return cls.coerce_contents(value)
+
+    def log_model(self, log_path: str, encoding: Optional[str] = None) -> None:
+        """Log the file contents to disk.
 
         Args:
-            log_path (str): log path
+            log_path (str): path to write the file
+            encoding (str | None): if None, writes as binary
         """
         log_name = os.path.join(log_path, self.filename)
-        with open(log_name, "wb") as log_file:
-            log_file.write(self.file_contents)
+        contents = self.coerce_contents(self.contents)
 
-    def file_contents_str(self):
-        return self.file_contents.decode("utf-8")
+        if encoding is None:
+            with open(log_name, "wb") as f:
+                f.write(contents)
+        else:
+            with open(log_name, "w", encoding=encoding) as f:
+                f.write(contents.decode(encoding))
+
+    def contents_str(self) -> str:
+        """Safe string representation of contents (for logs)."""
+        try:
+            return self.contents.decode("utf-8")
+        except UnicodeDecodeError:
+            return f"<binary data: {len(self.contents)} bytes>"
 
 
 class InBandConnection(abc.ABC):

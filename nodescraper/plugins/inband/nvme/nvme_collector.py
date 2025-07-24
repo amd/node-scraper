@@ -58,7 +58,7 @@ class NvmeCollector(InBandDataCollector[NvmeDataModel, None]):
             self.result.status = ExecutionStatus.NOT_RAN
             return self.result, None
 
-        f_name = "telemtry_log"
+        f_name = "telemetry_log"
         commands = [
             "nvme smart-log /dev/nvme0",
             "nvme error-log /dev/nvme0 --log-entries=256",
@@ -73,11 +73,8 @@ class NvmeCollector(InBandDataCollector[NvmeDataModel, None]):
         for cmd in commands:
             res = self._run_sut_cmd(cmd, sudo=True)
             if "--output-file" in cmd:
-                f_artifact = self.ib_interface.read_file(f_name, encoding=None, strip=False)
-                self._log_file_artifact(
-                    f_artifact.filename,
-                    f_artifact.contents,
-                )
+                # should we do something with the returned FileArtifact?
+                _ = self._read_sut_file(filename=f_name, encoding=None)
 
             if res.exit_code == 0:
                 data[cmd] = res.stdout
