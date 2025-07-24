@@ -55,7 +55,7 @@ class NvmeCollector(InBandDataCollector[NvmeDataModel, None]):
                 priority=EventPriority.WARNING,
             )
             self.result.message = "NVMe data collection skipped on Windows"
-            self.result.status = ExecutionStatus.SKIPPED
+            self.result.status = ExecutionStatus.NOT_RAN
             return self.result, None
 
         commands = [
