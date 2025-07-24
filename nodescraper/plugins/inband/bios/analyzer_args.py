@@ -23,14 +23,15 @@
 # SOFTWARE.
 #
 ###############################################################################
-from pydantic import BaseModel, Field, field_validator
+from pydantic import Field, field_validator
+
+from nodescraper.models import AnalyzerArgs
+from nodescraper.plugins.inband.os.osdata import OsDataModel
 
 
-class BiosAnalyzerArgs(BaseModel):
+class BiosAnalyzerArgs(AnalyzerArgs):
     exp_bios_version: list[str] = Field(default_factory=list)
     regex_match: bool = False
-
-    model_config = {"extra": "forbid"}
 
     @field_validator("exp_bios_version", mode="before")
     @classmethod
@@ -47,3 +48,15 @@ class BiosAnalyzerArgs(BaseModel):
             exp_bios_version = [exp_bios_version]
 
         return exp_bios_version
+
+    @classmethod
+    def build_from_model(cls, datamodel: OsDataModel) -> "BiosAnalyzerArgs":
+        """build analyzer args from data model
+
+        Args:
+            datamodel (BiosDataModel): data model for plugin
+
+        Returns:
+            BiosAnalyzerArgs: instance of analyzer args class
+        """
+        return cls(exp_bios_version=datamodel.bios_version)

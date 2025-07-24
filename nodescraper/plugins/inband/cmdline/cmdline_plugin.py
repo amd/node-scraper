@@ -39,3 +39,5 @@ class CmdlinePlugin(InBandDataPlugin[CmdlineDataModel, None, CmdlineAnalyzerArgs
     COLLECTOR = CmdlineCollector
 
     ANALYZER = CmdlineAnalyzer
+
+    ANALYZER_ARGS = CmdlineAnalyzerArgs

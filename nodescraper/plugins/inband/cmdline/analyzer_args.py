@@ -23,14 +23,15 @@
 # SOFTWARE.
 #
 ###############################################################################
-from pydantic import BaseModel, Field, field_validator
+from pydantic import Field, field_validator
+
+from nodescraper.models import AnalyzerArgs
+from nodescraper.plugins.inband.cmdline.cmdlinedata import CmdlineDataModel
 
 
-class CmdlineAnalyzerArgs(BaseModel):
-    required_cmdline: list = Field(default_factory=list)
-    banned_cmdline: list = Field(default_factory=list)
-
-    model_config = {"extra": "forbid"}
+class CmdlineAnalyzerArgs(AnalyzerArgs):
+    required_cmdline: str | list = Field(default_factory=list)
+    banned_cmdline: str | list = Field(default_factory=list)
 
     @field_validator("required_cmdline", mode="before")
     @classmethod
@@ -63,3 +64,15 @@ class CmdlineAnalyzerArgs(BaseModel):
             banned_cmdline = [banned_cmdline]
 
         return banned_cmdline
+
+    @classmethod
+    def build_from_model(cls, datamodel: CmdlineDataModel) -> "CmdlineAnalyzerArgs":
+        """build analyzer args from data model
+
+        Args:
+            datamodel (CmdlineDataModel): data model for plugin
+
+        Returns:
+            CmdlineAnalyzerArgs: instance of analyzer args class
+        """
+        return cls(required_cmdline=datamodel.cmdline)

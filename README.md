@@ -17,8 +17,10 @@ The Node Scraper CLI can be used to run Node Scraper plugins on a target system.
 options are available:
 
 ```sh
-usage: node-scraper [-h] [--sys-name STRING] [--sys-location {LOCAL,REMOTE}] [--sys-interaction-level {PASSIVE,INTERACTIVE,DISRUPTIVE}] [--sys-sku STRING] [--sys-platform STRING] [--plugin-configs [STRING ...]]
-                    [--system-config STRING] [--connection-config STRING] [--log-path STRING] [--log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}]
+usage: node-scraper [-h] [--sys-name STRING] [--sys-location {LOCAL,REMOTE}] [--sys-interaction-level {PASSIVE,INTERACTIVE,DISRUPTIVE}]
+                    [--sys-sku STRING] [--sys-platform STRING] [--plugin-configs [STRING ...]] [--system-config STRING]
+                    [--connection-config STRING] [--log-path STRING] [--log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}]
+                    [--gen-reference-config]
                     {run-plugins,describe,gen-plugin-config} ...
 
 node scraper CLI
@@ -32,7 +34,7 @@ positional arguments:
 
 options:
   -h, --help            show this help message and exit
-  --sys-name STRING     System name (default: TheraC55)
+  --sys-name STRING     System name (default: <my_system_name>)
   --sys-location {LOCAL,REMOTE}
                         Location of target system (default: LOCAL)
   --sys-interaction-level {PASSIVE,INTERACTIVE,DISRUPTIVE}
@@ -49,73 +51,93 @@ options:
   --log-path STRING     Specifies local path for node scraper logs, use 'None' to disable logging (default: .)
   --log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}
                         Change python log level (default: INFO)
+  --gen-reference-config
+                        Generate reference config from system. Writes to ./reference_config.json. (default: False)
+
 
 ```
 
-The plugins to run can be specified in two ways, using a plugin JSON config file or using the
+### Subcommmands
+
+Plugins to run can be specified in two ways, using a plugin JSON config file or using the
 'run-plugins' sub command. These two options are not mutually exclusive and can be used together.
 
----
 
-### Describing Built-in Configs and Plugins
+1. **'describe' subcommand**
 
 You can use the `describe` subcommand to display details about built-in configs or plugins.
-
-#### List all built-in configs:
+List all built-in configs:
 ```sh
 node-scraper describe config
 ```
 
-#### Show details for a specific built-in config:
+Show details for a specific built-in config
 ```sh
 node-scraper describe config <config-name>
 ```
 
-#### List all available plugins:
+List all available plugins**
 ```sh
 node-scraper describe plugin
 ```
 
-#### Show details for a specific plugin:
+Show details for a specific plugin
 ```sh
 node-scraper describe plugin <plugin-name>
 ```
 
----
+2. **'run-plugins' sub command**
+The plugins to run and their associated arguments can also be specified directly on the CLI using
+the 'run-plugins' sub-command. Using this sub-command you can specify a plugin name followed by
+the arguments for that particular plugin. Multiple plugins can be specified at once.
 
-### Plugin Configs
-A plugin JSON config should follow the structure of the plugin config model defined here.
-The globals field is a dictionary of global key-value pairs; values in globals will be passed to
-any plugin that supports the corresponding key. The plugins field should be a dictionary mapping
-plugin names to sub-dictionaries of plugin arguments. Lastly, the result_collators attribute is
-used to define result collator classes that will be run on the plugin results. By default, the CLI
-adds the TableSummary result collator, which prints a summary of each plugin’s results in a
-tabular format to the console.
+You can view the available arguments for a particular plugin by running
+`node-scraper run-plugins <plugin-name> -h`:
+```sh
+usage: node-scraper run-plugins BiosPlugin [-h] [--collection {True,False}] [--analysis {True,False}] [--system-interaction-level STRING]
+                                            [--data STRING] [--exp-bios-version [STRING ...]] [--regex-match {True,False}]
 
-```json
-{
-    "globals_args": {},
-    "plugins": {
-        "BiosPlugin": {
-            "analysis_args": {
-                "exp_bios_version": "TestBios123"
-            }
-        },
-        "RocmPlugin": {
-            "analysis_args": {
-                "exp_rocm_version": "TestRocm123"
-            }
-        }
-    }
-}
+options:
+  -h, --help            show this help message and exit
+  --collection {True,False}
+  --analysis {True,False}
+  --system-interaction-level STRING
+  --data STRING
+  --exp-bios-version [STRING ...]
+  --regex-match {True,False}
+
 ```
 
-### 'gen-plugin-config' sub command
+Examples
+
+Run a single plugin
+```sh
+node-scraper run-plugins BiosPlugin --exp-bios-version TestBios123
+```
+
+Run multiple plugins
+```sh
+node-scraper run-plugins BiosPlugin --exp-bios-version TestBios123 RocmPlugin --exp-rocm TestRocm123
+```
+
+Run plugins without specifying args (plugin defaults will be used)
+
+```sh
+node-scraper run-plugins BiosPlugin RocmPlugin
+```
+
+Use plugin configs and 'run-plugins'
+
+```sh
+node-scraper run-plugins BiosPlugin
+```
+
+3. **'gen-plugin-config' sub command**
 The 'gen-plugin-config' sub command can be used to generate a plugin config JSON file for a plugin
 or list of plugins that can then be customized. Plugin arguments which have default values will be
 prepopulated in the JSON file, arguments without default values will have a value of 'null'.
 
-#### 'gen-plugin-config' Examples
+Examples
 
 Generate a config for the DmesgPlugin:
 ```sh
@@ -145,54 +167,34 @@ This would produce the following config:
 }
 ```
 
-### 'run-plugins' sub command
-The plugins to run and their associated arguments can also be specified directly on the CLI using
-the 'run-plugins' sub-command. Using this sub-command you can specify a plugin name followed by
-the arguments for that particular plugin. Multiple plugins can be specified at once.
+### Plugin Configs
+A plugin JSON config should follow the structure of the plugin config model defined here.
+The globals field is a dictionary of global key-value pairs; values in globals will be passed to
+any plugin that supports the corresponding key. The plugins field should be a dictionary mapping
+plugin names to sub-dictionaries of plugin arguments. Lastly, the result_collators attribute is
+used to define result collator classes that will be run on the plugin results. By default, the CLI
+adds the TableSummary result collator, which prints a summary of each plugin’s results in a
+tabular format to the console.
 
-You can view the available arguments for a particular plugin by running
-`node-scraper run-plugins <plugin-name> -h`:
-```sh
-usage: node-scraper run-plugins BiosPlugin [-h] [--collection {True,False}] [--analysis {True,False}] [--system-interaction-level STRING]
-                                            [--data STRING] [--exp-bios-version [STRING ...]] [--regex-match {True,False}]
-
-options:
-  -h, --help            show this help message and exit
-  --collection {True,False}
-  --analysis {True,False}
-  --system-interaction-level STRING
-  --data STRING
-  --exp-bios-version [STRING ...]
-  --regex-match {True,False}
-
+```json
+{
+    "globals_args": {},
+    "plugins": {
+        "BiosPlugin": {
+            "analysis_args": {
+                "exp_bios_version": "TestBios123"
+            }
+        },
+        "RocmPlugin": {
+            "analysis_args": {
+                "exp_rocm_version": "TestRocm123"
+            }
+        }
+    }
+}
 ```
 
-#### 'run-plugins' Examples
-
-Run a single plugin
-```sh
-node-scraper run-plugins BiosPlugin --exp-bios-version TestBios123
-```
-
-Run multiple plugins
-```sh
-node-scraper run-plugins BiosPlugin --exp-bios-version TestBios123 RocmPlugin --exp-rocm TestRocm123
-```
-
-Run plugins without specifying args (plugin defaults will be used)
-
-```sh
-node-scraper run-plugins BiosPlugin RocmPlugin
-```
-
-Use plugin configs and 'run-plugins'
-
-```sh
-node-scraper run-plugins BiosPlugin
-```
-
-
-### '--plugin-configs' example
+1. **'--plugin-configs' command**
 A plugin config can be used to compare the system data against the config specifications:
 ```sh
 node-scraper --plugin-configs plugin_config.json
@@ -249,3 +251,50 @@ Here is an example of a comprehensive plugin config that specifies analyzer args
   "desc": "My golden config"
 }
 ```
+
+2. **'gen-reference-config' command**
+This command can be used to generate a reference config that is populated with current system
+configurations. Plugins that use analyzer args (where applicable) will be populated with system
+data.
+Sample command:
+```sh
+node-scraper --gen-reference-config run-plugins BiosPlugin OsPlugin
+
+```
+This will generate the following config:
+```json
+{
+  "global_args": {},
+  "plugins": {
+    "BiosPlugin": {
+      "analysis_args": {
+        "exp_bios_version": [
+          "M17"
+        ],
+        "regex_match": false
+      }
+    },
+    "OsPlugin": {
+      "analysis_args": {
+        "exp_os": [
+          "8.10"
+        ],
+        "exact_match": true
+      }
+    }
+  },
+  "result_collators": {}
+```
+This config can later be used on a different platform for comparison, using the steps at #2:
+```sh
+node-scraper --plugin-configs reference_config.json
+
+```
+
+An alternate way to generate a reference config is by using log files from a previous run. The
+example below uses log files from 'scraper_logs_<path>/':
+```sh
+node-scraper gen-plugin-config --gen-reference-config-from-logs scraper_logs_<path>/ --output-path custom_output_dir
+```
+This will generate a reference config that includes plugins with logged results in
+'scraper_log_<path>' and save the new config to 'custom_output_dir/reference_config.json'.

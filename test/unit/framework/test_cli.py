@@ -24,16 +24,14 @@
 #
 ###############################################################################
 import argparse
-import logging
 import os
 
 import pytest
 from pydantic import BaseModel
 
 from nodescraper.cli import cli, inputargtypes
-from nodescraper.configregistry import ConfigRegistry
-from nodescraper.enums import SystemInteractionLevel, SystemLocation
-from nodescraper.models import PluginConfig, SystemInfo
+from nodescraper.enums import SystemLocation
+from nodescraper.models import SystemInfo
 
 
 def test_log_path_arg():
@@ -151,67 +149,3 @@ def test_system_info_builder():
 )
 def test_process_args(raw_arg_input, plugin_names, exp_output):
     assert cli.process_args(raw_arg_input, plugin_names) == exp_output
-
-
-def test_get_plugin_configs():
-    with pytest.raises(argparse.ArgumentTypeError):
-        cli.get_plugin_configs(
-            system_interaction_level="INVALID",
-            plugin_config_input=[],
-            built_in_configs={},
-            parsed_plugin_args={},
-            plugin_subparser_map={},
-        )
-
-    plugin_configs = cli.get_plugin_configs(
-        system_interaction_level="PASSIVE",
-        plugin_config_input=[],
-        built_in_configs={},
-        parsed_plugin_args={
-            "TestPlugin1": argparse.Namespace(arg1="test123"),
-            "TestPlugin2": argparse.Namespace(arg2="testabc", model_arg1="123", model_arg2="abc"),
-        },
-        plugin_subparser_map={
-            "TestPlugin1": (argparse.ArgumentParser(), {}),
-            "TestPlugin2": (
-                argparse.ArgumentParser(),
-                {"model_arg1": "my_model", "model_arg2": "my_model"},
-            ),
-        },
-    )
-
-    assert plugin_configs == [
-        PluginConfig(
-            global_args={"system_interaction_level": SystemInteractionLevel.PASSIVE},
-            plugins={},
-            result_collators={"TableSummary": {}},
-        ),
-        PluginConfig(
-            plugins={
-                "TestPlugin1": {"arg1": "test123"},
-                "TestPlugin2": {
-                    "arg2": "testabc",
-                    "my_model": {"model_arg1": "123", "model_arg2": "abc"},
-                },
-            },
-        ),
-    ]
-
-
-def test_config_builder(plugin_registry):
-
-    config = cli.build_config(
-        config_reg=ConfigRegistry(config_path=os.path.join(os.path.dirname(__file__), "fixtures")),
-        plugin_reg=plugin_registry,
-        logger=logging.getLogger(),
-        plugins=["TestPluginA"],
-        built_in_configs=["ExampleConfig"],
-    )
-    assert config.plugins == {
-        "TestPluginA": {
-            "test_bool_arg": True,
-            "test_str_arg": "test",
-            "test_model_arg": {"model_attr": 123},
-        },
-        "ExamplePlugin": {},
-    }

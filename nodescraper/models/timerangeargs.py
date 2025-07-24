@@ -26,10 +26,10 @@
 import datetime
 from typing import Optional
 
-from pydantic import BaseModel
+from nodescraper.models import AnalyzerArgs
 
 
-class TimeRangeAnalyisArgs(BaseModel):
+class TimeRangeAnalysisArgs(AnalyzerArgs):
     """
     Model for time range analysis arguments.
     """

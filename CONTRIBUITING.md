@@ -55,5 +55,5 @@ When creating a PR, use the following process.
 ### Documentation
 
 Submit Node Scraper documentation changes to our
-[documentation](https://github.com/amd/node-scraper/development/README.md). You must update
+[documentation](https://github.com/amd/node-scraper/blob/development/README.md). You must update
 documentation related to any new feature or API contribution.

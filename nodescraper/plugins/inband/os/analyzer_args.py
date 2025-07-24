@@ -23,10 +23,13 @@
 # SOFTWARE.
 #
 ###############################################################################
-from pydantic import BaseModel, Field, field_validator
+from pydantic import Field, field_validator
+
+from nodescraper.models import AnalyzerArgs
+from nodescraper.plugins.inband.os.osdata import OsDataModel
 
 
-class OsAnalyzerArgs(BaseModel):
+class OsAnalyzerArgs(AnalyzerArgs):
     exp_os: str | list = Field(default_factory=list)
     exact_match: bool = True
 
@@ -45,3 +48,15 @@ class OsAnalyzerArgs(BaseModel):
             exp_os = [exp_os]
 
         return exp_os
+
+    @classmethod
+    def build_from_model(cls, datamodel: OsDataModel) -> "OsAnalyzerArgs":
+        """build analyzer args from data model
+
+        Args:
+            datamodel (OsDataModel): data model for plugin
+
+        Returns:
+            OsAnalyzerArgs: instance of analyzer args class
+        """
+        return cls(exp_os=datamodel.os_name)

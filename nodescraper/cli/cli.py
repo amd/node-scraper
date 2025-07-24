@@ -34,15 +34,22 @@ from typing import Optional
 
 from nodescraper.cli.constants import DEFAULT_CONFIG, META_VAR_MAP
 from nodescraper.cli.dynamicparserbuilder import DynamicParserBuilder
+from nodescraper.cli.helper import (
+    generate_reference_config,
+    generate_reference_config_from_logs,
+    get_plugin_configs,
+    get_system_info,
+    log_system_info,
+    parse_describe,
+    parse_gen_plugin_config,
+)
 from nodescraper.cli.inputargtypes import ModelArgHandler, json_arg, log_path_arg
-from nodescraper.configbuilder import ConfigBuilder
 from nodescraper.configregistry import ConfigRegistry
 from nodescraper.constants import DEFAULT_LOGGER
 from nodescraper.enums import ExecutionStatus, SystemInteractionLevel, SystemLocation
-from nodescraper.models import PluginConfig, SystemInfo
+from nodescraper.models import SystemInfo
 from nodescraper.pluginexecutor import PluginExecutor
 from nodescraper.pluginregistry import PluginRegistry
-from nodescraper.resultcollators.tablesummary import TableSummary
 
 
 def build_parser(
@@ -138,6 +145,13 @@ def build_parser(
         help="Change python log level",
     )
 
+    parser.add_argument(
+        "--gen-reference-config",
+        dest="reference_config",
+        action="store_true",
+        help="Generate reference config from system. Writes to ./reference_config.json.",
+    )
+
     subparsers = parser.add_subparsers(dest="subcmd", help="Subcommands")
 
     run_plugin_parser = subparsers.add_parser(
@@ -165,6 +179,13 @@ def build_parser(
     config_builder_parser = subparsers.add_parser(
         "gen-plugin-config",
         help="Generate a config for a plugin or list of plugins",
+    )
+
+    config_builder_parser.add_argument(
+        "--gen-reference-config-from-logs",
+        dest="reference_config_from_logs",
+        type=log_path_arg,
+        help="Generate reference config from previous run logfiles. Writes to --output-path/reference_config.json if provided, otherwise ./reference_config.json.",
     )
 
     config_builder_parser.add_argument(
@@ -249,111 +270,6 @@ def setup_logger(log_level: str = "INFO", log_path: str | None = None) -> loggin
     return logger
 
 
-def get_system_info(args: argparse.Namespace) -> SystemInfo:
-    """build system info object using args
-
-    Args:
-        args (argparse.Namespace): parsed args
-
-    Raises:
-        argparse.ArgumentTypeError: if system location arg is invalid
-
-    Returns:
-        SystemInfo: system info instance
-    """
-
-    if args.system_config:
-        system_info = args.system_config
-    else:
-        system_info = SystemInfo()
-
-    if args.sys_name:
-        system_info.name = args.sys_name
-
-    if args.sys_sku:
-        system_info.sku = args.sys_sku
-
-    if args.sys_platform:
-        system_info.platform = args.sys_platform
-
-    if args.sys_location:
-        try:
-            location = getattr(SystemLocation, args.sys_location)
-        except Exception as e:
-            raise argparse.ArgumentTypeError("Invalid input for system location") from e
-
-        system_info.location = location
-
-    return system_info
-
-
-def get_plugin_configs(
-    plugin_config_input: list[str],
-    system_interaction_level: SystemInteractionLevel,
-    built_in_configs: dict[str, PluginConfig],
-    parsed_plugin_args: dict[str, argparse.Namespace],
-    plugin_subparser_map: dict[str, tuple[argparse.ArgumentParser, dict]],
-) -> list[PluginConfig]:
-    """Build list of plugin configs based on input args
-
-    Args:
-        plugin_config_input (list[str]): list of plugin config inputs, can be paths to JSON files or built-in config names
-        system_interaction_level (SystemInteractionLevel): system interaction level, used to determine the type of actions that plugins can perform
-        built_in_configs (dict[str, PluginConfig]): built-in plugin configs, mapping from config name to PluginConfig instance
-        parsed_plugin_args (dict[str, argparse.Namespace]): parsed plugin arguments, mapping from plugin name to parsed args
-        plugin_subparser_map (dict[str, tuple[argparse.ArgumentParser, dict]]): plugin subparser map, mapping from plugin name to tuple of parser and model type map
-
-    Raises:
-        argparse.ArgumentTypeError: if system interaction level is invalid
-        argparse.ArgumentTypeError: if no plugin config found for a given input
-
-    Returns:
-        list[PluginConfig]: list of PluginConfig instances based on input args
-    """
-    try:
-        system_interaction_level = getattr(SystemInteractionLevel, system_interaction_level)
-    except Exception as e:
-        raise argparse.ArgumentTypeError("Invalid input for system interaction level") from e
-
-    base_config = PluginConfig(result_collators={str(TableSummary.__name__): {}})
-
-    base_config.global_args["system_interaction_level"] = system_interaction_level
-
-    plugin_configs = [base_config]
-
-    if plugin_config_input:
-        for config in plugin_config_input:
-            if os.path.exists(config):
-                plugin_configs.append(ModelArgHandler(PluginConfig).process_file_arg(config))
-            elif config in built_in_configs:
-                plugin_configs.append(built_in_configs[config])
-            else:
-                raise argparse.ArgumentTypeError(f"No plugin config found for: {config}")
-
-    if parsed_plugin_args:
-        plugin_input_config = PluginConfig()
-
-        for plugin, plugin_args in parsed_plugin_args.items():
-            config = {}
-            model_type_map = plugin_subparser_map[plugin][1]
-            for arg, val in vars(plugin_args).items():
-                if val is None:
-                    continue
-                if arg in model_type_map:
-                    model = model_type_map[arg]
-                    if model in config:
-                        config[model][arg] = val
-                    else:
-                        config[model] = {arg: val}
-                else:
-                    config[arg] = val
-            plugin_input_config.plugins[plugin] = config
-
-        plugin_configs.append(plugin_input_config)
-
-    return plugin_configs
-
-
 def process_args(
     raw_arg_input: list[str], plugin_names: list[str]
 ) -> tuple[list[str], dict[str, list[str]]]:
@@ -393,144 +309,6 @@ def process_args(
     return (top_level_args, plugin_arg_map)
 
 
-def build_config(
-    config_reg: ConfigRegistry,
-    plugin_reg: PluginRegistry,
-    logger: logging.Logger,
-    plugins: Optional[list[str]] = None,
-    built_in_configs: Optional[list[str]] = None,
-) -> PluginConfig:
-    """build a plugin config
-
-    Args:
-        config_reg (ConfigRegistry): config registry instance
-        plugin_reg (PluginRegistry): plugin registry instance
-        logger (logging.Logger): logger instance
-        plugins (Optional[list[str]], optional): list of plugin names to include. Defaults to None.
-        built_in_configs (Optional[list[str]], optional): list of built in config names to include. Defaults to None.
-
-    Returns:
-        PluginConfig: plugin config obf
-    """
-    configs = []
-    if plugins:
-        logger.info("Building config for plugins: %s", plugins)
-        config_builder = ConfigBuilder(plugin_registry=plugin_reg)
-        configs.append(config_builder.gen_config(plugins))
-
-    if built_in_configs:
-        logger.info("Retrieving built in configs: %s", built_in_configs)
-        for config in built_in_configs:
-            if config not in config_reg.configs:
-                logger.warning("No built in config found for name: %s", config)
-            else:
-                configs.append(config_reg.configs[config])
-
-    config = PluginExecutor.merge_configs(configs)
-    return config
-
-
-def parse_describe(
-    parsed_args: argparse.Namespace,
-    plugin_reg: PluginRegistry,
-    config_reg: ConfigRegistry,
-    logger: logging.Logger,
-):
-    """parse 'describe' cmd line argument
-
-    Args:
-        parsed_args (argparse.Namespace): parsed cmd line arguments
-        plugin_reg (PluginRegistry): plugin registry instance
-        config_reg (ConfigRegistry): config registry instance
-        logger (logging.Logger): logger instance
-    """
-    if not parsed_args.name:
-        if parsed_args.type == "config":
-            print("Available built-in configs:")  # noqa: T201
-            for name in config_reg.configs:
-                print(f"  {name}")  # noqa: T201
-        elif parsed_args.type == "plugin":
-            print("Available plugins:")  # noqa: T201
-            for name in plugin_reg.plugins:
-                print(f"  {name}")  # noqa: T201
-        print(f"\nUsage: describe {parsed_args.type} <name>")  # noqa: T201
-        sys.exit(0)
-
-    if parsed_args.type == "config":
-        if parsed_args.name not in config_reg.configs:
-            logger.error("No config found for name: %s", parsed_args.name)
-            sys.exit(1)
-        config_model = config_reg.configs[parsed_args.name]
-        print(f"Config Name: {parsed_args.name}")  # noqa: T201
-        print(f"Description: {getattr(config_model, 'desc', '')}")  # noqa: T201
-        print("Plugins:")  # noqa: T201
-        for plugin in getattr(config_model, "plugins", []):
-            print(f"\t{plugin}")  # noqa: T201
-
-    elif parsed_args.type == "plugin":
-        if parsed_args.name not in plugin_reg.plugins:
-            logger.error("No plugin found for name: %s", parsed_args.name)
-            sys.exit(1)
-        plugin_class = plugin_reg.plugins[parsed_args.name]
-        print(f"Plugin Name: {parsed_args.name}")  # noqa: T201
-        print(f"Description: {getattr(plugin_class, '__doc__', '')}")  # noqa: T201
-
-    sys.exit(0)
-
-
-def parse_gen_plugin_config(
-    parsed_args: argparse.Namespace,
-    plugin_reg: PluginRegistry,
-    config_reg: ConfigRegistry,
-    logger: logging.Logger,
-):
-    """parse 'gen_plugin_config' cmd line argument
-
-    Args:
-        parsed_args (argparse.Namespace): parsed cmd line arguments
-        plugin_reg (PluginRegistry): plugin registry instance
-        config_reg (ConfigRegistry): config registry instance
-        logger (logging.Logger): logger instance
-    """
-    try:
-        config = build_config(
-            config_reg, plugin_reg, logger, parsed_args.plugins, parsed_args.built_in_configs
-        )
-
-        config.name = parsed_args.config_name.split(".")[0]
-        config.desc = "Auto generated config"
-        output_path = os.path.join(parsed_args.output_path, parsed_args.config_name)
-        with open(output_path, "w", encoding="utf-8") as out_file:
-            out_file.write(config.model_dump_json(indent=2))
-
-        logger.info("Config saved to: %s", output_path)
-        sys.exit(0)
-    except Exception:
-        logger.exception("Exception when building config")
-        sys.exit(1)
-
-
-def log_system_info(log_path: str | None, system_info: SystemInfo, logger: logging.Logger):
-    """dump system info object to json log
-
-    Args:
-        log_path (str): path to log folder
-        system_info (SystemInfo): system object instance
-    """
-    if log_path:
-        try:
-            with open(
-                os.path.join(log_path, "system_info.json"), "w", encoding="utf-8"
-            ) as log_file:
-                json.dump(
-                    system_info.model_dump(mode="json", exclude_none=True),
-                    log_file,
-                    indent=2,
-                )
-        except Exception as exp:
-            logger.error(exp)
-
-
 def main(arg_input: Optional[list[str]] = None):
     """Main entry point for the CLI
 
@@ -548,11 +326,13 @@ def main(arg_input: Optional[list[str]] = None):
         top_level_args, plugin_arg_map = process_args(arg_input, list(plugin_subparser_map.keys()))
 
         parsed_args = parser.parse_args(top_level_args)
+        system_info = get_system_info(parsed_args)
 
         if parsed_args.log_path and parsed_args.subcmd not in ["gen-plugin-config", "describe"]:
+            sname = system_info.name.lower().replace("-", "_").replace(".", "_")
             log_path = os.path.join(
                 parsed_args.log_path,
-                f"scraper_logs_{datetime.datetime.now().strftime('%Y_%m_%d-%I_%M_%S_%p')}",
+                f"scraper_logs_{sname}_{datetime.datetime.now().strftime('%Y_%m_%d-%I_%M_%S_%p')}",
             )
             os.makedirs(log_path)
         else:
@@ -566,6 +346,27 @@ def main(arg_input: Optional[list[str]] = None):
             parse_describe(parsed_args, plugin_reg, config_reg, logger)
 
         if parsed_args.subcmd == "gen-plugin-config":
+
+            if parsed_args.reference_config_from_logs:
+                ref_config = generate_reference_config_from_logs(
+                    parsed_args.reference_config_from_logs, plugin_reg, logger
+                )
+                output_path = os.getcwd()
+                if parsed_args.output_path:
+                    output_path = parsed_args.output_path
+                path = os.path.join(output_path, "reference_config.json")
+                try:
+                    with open(path, "w") as f:
+                        json.dump(
+                            ref_config.model_dump(mode="json", exclude_none=True),
+                            f,
+                            indent=2,
+                        )
+                        logger.info("Reference config written to: %s", path)
+                except Exception as exp:
+                    logger.error(exp)
+                sys.exit(0)
+
             parse_gen_plugin_config(parsed_args, plugin_reg, config_reg, logger)
 
         parsed_plugin_args = {}
@@ -591,7 +392,6 @@ def main(arg_input: Optional[list[str]] = None):
             plugin_subparser_map=plugin_subparser_map,
         )
 
-        system_info = get_system_info(parsed_args)
         log_system_info(log_path, system_info, logger)
     except Exception as e:
         parser.error(str(e))
@@ -606,6 +406,21 @@ def main(arg_input: Optional[list[str]] = None):
 
     try:
         results = plugin_executor.run_queue()
+
+        if parsed_args.reference_config:
+            ref_config = generate_reference_config(results, plugin_reg, logger)
+            path = os.path.join(os.getcwd(), "reference_config.json")
+            try:
+                with open(path, "w") as f:
+                    json.dump(
+                        ref_config.model_dump(mode="json", exclude_none=True),
+                        f,
+                        indent=2,
+                    )
+                    logger.info("Reference config written to: %s", path)
+            except Exception as exp:
+                logger.error(exp)
+
         if any(result.status > ExecutionStatus.WARNING for result in results):
             sys.exit(1)
         else:

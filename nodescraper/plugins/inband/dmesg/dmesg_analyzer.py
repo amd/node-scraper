@@ -129,16 +129,17 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
         ErrorRegex(
             regex=re.compile(
                 (
-                    r"(amdgpu \d{4}:\d{2}:\d{2}.\d:\s+amdgpu:\s+\[\S+\]\s*(?:retry|no-retry)? page fault.*)"
-                    r"(?:\n.*(amdgpu \d{4}:\d{2}:\d{2}.\d:\s+amdgpu:.*))?"
-                    r"(?:\n.*(amdgpu \d{4}:\d{2}:\d{2}.\d:\s+amdgpu:.*))?"
-                    r"(?:\n.*(amdgpu \d{4}:\d{2}:\d{2}.\d:\s+amdgpu:.*))?"
-                    r"(?:\n.*(amdgpu \d{4}:\d{2}:\d{2}.\d:\s+amdgpu:.*))?"
-                    r"(?:\n.*(amdgpu \d{4}:\d{2}:\d{2}.\d:\s+amdgpu:.*))?"
-                    r"(?:\n.*(amdgpu \d{4}:\d{2}:\d{2}.\d:\s+amdgpu:.*))?"
-                    r"(?:\n.*(amdgpu \d{4}:\d{2}:\d{2}.\d:\s+amdgpu:.*))?"
-                    r"(?:\n.*(amdgpu \d{4}:\d{2}:\d{2}.\d:\s+amdgpu:.*))?"
-                    r"(?:\n.*(amdgpu \d{4}:\d{2}:\d{2}.\d:\s+amdgpu:.*))?"
+                    r"(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:\s+\[\S+\]\s*(?:retry|no-retry)? page fault.*)"
+                    r"(?:\n.*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:.*))?"
+                    r"(?:\n.*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:.*))?"
+                    r"(?:\n.*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:.*))?"
+                    r"(?:\n.*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:.*))?"
+                    r"(?:\n.*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:.*))?"
+                    r"(?:\n.*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:.*))?"
+                    r"(?:\n.*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:.*))?"
+                    r"(?:\n.*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:.*))?"
+                    r"(?:\n.*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:.*))?"
+                    r"(?:\n.*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:.*))?"
                 )
             ),
             message="amdgpu Page Fault",

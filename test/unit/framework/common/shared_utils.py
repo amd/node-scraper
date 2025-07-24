@@ -26,11 +26,10 @@
 from typing import Optional
 from unittest.mock import MagicMock
 
-from pydantic import BaseModel
-
 from nodescraper.enums import ExecutionStatus
 from nodescraper.interfaces import ConnectionManager, PluginInterface
-from nodescraper.models import PluginResult, TaskResult
+from nodescraper.models import AnalyzerArgs, PluginResult, TaskResult
+from nodescraper.models.datamodel import DataModel
 
 
 class MockConnectionManager(ConnectionManager):
@@ -68,13 +67,22 @@ class MockConnectionManager(ConnectionManager):
         pass
 
 
-class TestModelArg(BaseModel):
+class TestModelArg(AnalyzerArgs):
     model_attr: int = 123
+
+    @classmethod
+    def build_from_model(cls, model):
+        return cls(model_attr=int(model.some_version))
+
+
+class DummyDataModel(DataModel):
+    some_version: str = None
 
 
 class TestPluginA(PluginInterface[MockConnectionManager, None]):
 
     CONNECTION_TYPE = MockConnectionManager
+    ANALYZER_ARGS = TestModelArg
 
     def run(
         self,
