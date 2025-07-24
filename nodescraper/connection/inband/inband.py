@@ -24,8 +24,10 @@
 #
 ###############################################################################
 import abc
+import io
+import os
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 
 class CommandArtifact(BaseModel):
@@ -41,7 +43,29 @@ class FileArtifact(BaseModel):
     """Artifact to contains contents of file read into memory"""
 
     filename: str
-    contents: str
+    contents: bytes = Field(exclude=True)
+
+    @field_validator("file_contents", mode="before")
+    @classmethod
+    def file_contents_conformer(cls, value) -> bytes:
+        if isinstance(value, io.BytesIO):
+            return value.getvalue()
+        if isinstance(value, str):
+            return value.encode("utf-8")
+        return value
+
+    def log_model(self, log_path: str):
+        """Log data model to a file
+
+        Args:
+            log_path (str): log path
+        """
+        log_name = os.path.join(log_path, self.filename)
+        with open(log_name, "wb") as log_file:
+            log_file.write(self.file_contents)
+
+    def file_contents_str(self):
+        return self.file_contents.decode("utf-8")
 
 
 class InBandConnection(abc.ABC):
