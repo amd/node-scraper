@@ -44,7 +44,7 @@ class FileArtifact(BaseModel):
     """Artifact to contains contents of file read into memory"""
 
     filename: str
-    contents: bytes = Field(exclude=True)
+    contents: str | bytes = Field(exclude=True)
 
     @staticmethod
     def coerce_contents(value: io.BytesIO | str | bytes) -> bytes:
