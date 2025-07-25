@@ -165,14 +165,12 @@ class PluginExecutor:
                     plugin_inst = plugin_class(**init_payload)
 
                     run_payload = copy.deepcopy(plugin_args)
-
                     run_args = TypeUtils.get_func_arg_types(plugin_class.run, plugin_class)
 
                     for arg in run_args.keys():
                         if arg == "preserve_connection" and issubclass(plugin_class, DataPlugin):
                             run_payload[arg] = True
-                        elif arg in self.plugin_config.global_args:
-                            run_payload[arg] = self.plugin_config.global_args[arg]
+
                     try:
                         global_run_args = self.apply_global_args_to_plugin(
                             plugin_inst, plugin_class, self.plugin_config.global_args
@@ -239,17 +237,10 @@ class PluginExecutor:
         """
 
         run_args = {}
-        simple_keys = [
-            "collection",
-            "analysis",
-            "max_event_priority_level",
-            "system_interaction_level",
-            "preserve_connection",
-            "data",
-        ]
-
-        for key in simple_keys:
-            if key in global_args:
+        for key in global_args:
+            if key in ["collection_args", "analysis_args"] and isinstance(plugin_inst, DataPlugin):
+                continue
+            else:
                 run_args[key] = global_args[key]
 
         if "collection_args" in global_args and hasattr(plugin_class, "COLLECTOR_ARGS"):
