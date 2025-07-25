@@ -443,7 +443,7 @@ def dump_results_to_csv(
         logger (logging.Logger): instance of logger
     """
     fieldnames = ["nodename", "plugin", "status", "timestamp", "message"]
-    filename = log_path + "/errorscraper.csv"
+    filename = log_path + "/nodescraper.csv"
     all_rows = []
     for res in results:
         row = {
@@ -487,7 +487,7 @@ def generate_summary(base_path: str, logger: logging.Logger):
     fieldnames = ["nodename", "plugin", "status", "timestamp", "message"]
     all_rows = []
 
-    pattern = os.path.join(base_path, "**", "errorscraper.csv")
+    pattern = os.path.join(base_path, "**", "nodescraper.csv")
     for filepath in glob.glob(pattern, recursive=True):
         logger.info(f"Reading: {filepath}")
         with open(filepath, newline="") as f:

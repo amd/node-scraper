@@ -175,7 +175,7 @@ single summary.csv file. Sample run:
 node-scraper summary --summary_path /<path_to_node-scraper_logs>
 ```
 This will generate a new file '/<path_to_node-scraper_logs>/summary.csv' file. This file will
-contain the results from all 'errorscraper.csv' files from '/<path_to_node-scarper_logs>'.
+contain the results from all 'nodescraper.csv' files from '/<path_to_node-scarper_logs>'.
 
 
 ### Plugin Configs

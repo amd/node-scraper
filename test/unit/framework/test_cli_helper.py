@@ -215,7 +215,7 @@ def test_dump_results_to_csv(tmp_path, caplog):
 
     dump_results_to_csv([result], "node123", str(tmp_path), "2025_07_16-01_00_00_PM", logger)
 
-    out_file = tmp_path / "errorscraper.csv"
+    out_file = tmp_path / "nodescraper.csv"
     assert out_file.exists()
 
     with open(out_file, newline="") as f:
@@ -232,7 +232,7 @@ def test_generate_summary(tmp_path):
     subdir = tmp_path / "sub"
     subdir.mkdir()
 
-    errorscraper_path = subdir / "errorscraper.csv"
+    errorscraper_path = subdir / "nodescraper.csv"
     with open(errorscraper_path, "w", newline="") as f:
         writer = csv.DictWriter(
             f, fieldnames=["nodename", "plugin", "status", "timestamp", "message"]
