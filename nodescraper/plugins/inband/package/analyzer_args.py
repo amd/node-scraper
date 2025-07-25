@@ -31,7 +31,7 @@ from nodescraper.plugins.inband.package.packagedata import PackageDataModel
 
 class PackageAnalyzerArgs(AnalyzerArgs):
     exp_package_ver: dict[str, str | None] = Field(default_factory=dict)
-    regex_match: bool = True
+    regex_match: bool = False
 
     @classmethod
     def build_from_model(cls, datamodel: PackageDataModel) -> "PackageAnalyzerArgs":
