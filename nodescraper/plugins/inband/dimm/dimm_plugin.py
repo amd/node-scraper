@@ -25,6 +25,7 @@
 ###############################################################################
 from nodescraper.base import InBandDataPlugin
 
+from .collector_args import DimmCollectorArgs
 from .dimm_collector import DimmCollector
 from .dimmdata import DimmDataModel
 
@@ -35,3 +36,5 @@ class DimmPlugin(InBandDataPlugin[DimmDataModel, None, None]):
     DATA_MODEL = DimmDataModel
 
     COLLECTOR = DimmCollector
+
+    COLLECTOR_ARGS = DimmCollectorArgs

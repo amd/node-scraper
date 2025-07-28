@@ -240,8 +240,6 @@ class PluginExecutor:
         for key in global_args:
             if key in ["collection_args", "analysis_args"] and isinstance(plugin_inst, DataPlugin):
                 continue
-            if key == "skip_sudo" and (global_args[key] or global_args[key] == 1):
-                global_args["collection_args"]["skip_sudo"] = 1
             else:
                 run_args[key] = global_args[key]
 
