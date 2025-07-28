@@ -50,6 +50,7 @@ class DimmCollector(InBandDataCollector[DimmDataModel, DimmCollectorArgs]):
             self.result.message = "Skipping sudo plugin"
             self.result.status = ExecutionStatus.NOT_RAN
             return self.result, None
+
         dimm_str = None
         if self.system_info.os_family == OSFamily.WINDOWS:
             res = self._run_sut_cmd("wmic memorychip get Capacity")
