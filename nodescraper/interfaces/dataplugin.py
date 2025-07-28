@@ -241,6 +241,7 @@ class DataPlugin(
         Returns:
             TaskResult: result of data analysis
         """
+
         if self.ANALYZER is None:
             self.analysis_result = TaskResult(
                 status=ExecutionStatus.NOT_RAN,
