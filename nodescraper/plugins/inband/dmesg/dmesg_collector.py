@@ -24,7 +24,7 @@
 #
 ###############################################################################
 from nodescraper.base import InBandDataCollector
-from nodescraper.enums import EventCategory, EventPriority, OSFamily
+from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.models import TaskResult
 
 from .dmesgdata import DmesgData
@@ -67,6 +67,10 @@ class DmesgCollector(InBandDataCollector[DmesgData, None]):
         Returns:
             tuple[TaskResult, DmesgData | None]: tuple containing the result of the task and the dmesg data if available
         """
+        if args and "skip_sudo" in args.keys() and args["skip_sudo"]:
+            self.resultmessage = "Skipping sudo plugin"
+            self.result.status = ExecutionStatus.NOT_RAN
+            return self.result, None
         dmesg_content = self._get_dmesg_content()
 
         if dmesg_content:

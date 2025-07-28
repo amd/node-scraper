@@ -40,6 +40,10 @@ class DimmCollector(InBandDataCollector[DimmDataModel, None]):
         args=None,
     ) -> tuple[TaskResult, DimmDataModel | None]:
         """Collect data on installed DIMMs"""
+        if args and "skip_sudo" in args.keys() and args["skip_sudo"]:
+            self.resultmessage = "Skipping sudo plugin"
+            self.result.status = ExecutionStatus.NOT_RAN
+            return self.result, None
         dimm_str = None
         if self.system_info.os_family == OSFamily.WINDOWS:
             res = self._run_sut_cmd("wmic memorychip get Capacity")

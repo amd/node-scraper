@@ -39,6 +39,10 @@ class StorageCollector(InBandDataCollector[StorageDataModel, None]):
 
     def collect_data(self, args: None = None) -> tuple[TaskResult, StorageDataModel | None]:
         """read storage usage data"""
+        if args and "skip_sudo" in args.keys() and args["skip_sudo"]:
+            self.resultmessage = "Skipping sudo plugin"
+            self.result.status = ExecutionStatus.NOT_RAN
+            return self.result, None
         storage_data = {}
         if self.system_info.os_family == OSFamily.WINDOWS:
             res = self._run_sut_cmd(
