@@ -28,4 +28,4 @@ from nodescraper.models import CollectorArgs
 
 
 class DmesgCollectorArgs(CollectorArgs):
-    skip_sudo = False
+    skip_sudo: bool = False

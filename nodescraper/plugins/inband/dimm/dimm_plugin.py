@@ -30,7 +30,7 @@ from .dimm_collector import DimmCollector
 from .dimmdata import DimmDataModel
 
 
-class DimmPlugin(InBandDataPlugin[DimmDataModel, None, None]):
+class DimmPlugin(InBandDataPlugin[DimmDataModel, DimmCollectorArgs, None]):
     """Plugin for collection and analysis of DIMM data"""
 
     DATA_MODEL = DimmDataModel

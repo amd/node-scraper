@@ -28,4 +28,4 @@ from nodescraper.models import CollectorArgs
 
 
 class StorageCollectorArgs(CollectorArgs):
-    skip_sudo = False
+    skip_sudo: bool = False

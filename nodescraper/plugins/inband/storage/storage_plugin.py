@@ -32,7 +32,7 @@ from .storage_collector import StorageCollector
 from .storagedata import StorageDataModel
 
 
-class StoragePlugin(InBandDataPlugin[StorageDataModel, None, StorageAnalyzerArgs]):
+class StoragePlugin(InBandDataPlugin[StorageDataModel, StorageCollectorArgs, StorageAnalyzerArgs]):
     """Plugin for collection and analysis of disk usage data"""
 
     DATA_MODEL = StorageDataModel

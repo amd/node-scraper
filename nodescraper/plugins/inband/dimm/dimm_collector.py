@@ -23,23 +23,29 @@
 # SOFTWARE.
 #
 ###############################################################################
+from typing import Optional
+
 from nodescraper.base import InBandDataCollector
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.models import TaskResult
 
+from .collector_args import DimmCollectorArgs
 from .dimmdata import DimmDataModel
 
 
-class DimmCollector(InBandDataCollector[DimmDataModel, None]):
+class DimmCollector(InBandDataCollector[DimmDataModel, DimmCollectorArgs]):
     """Collect data on installed DIMMs"""
 
     DATA_MODEL = DimmDataModel
 
     def collect_data(
         self,
-        args=None,
+        args: Optional[DimmCollectorArgs] = None,
     ) -> tuple[TaskResult, DimmDataModel | None]:
         """Collect data on installed DIMMs"""
+        if args is None:
+            args = DimmCollectorArgs()
+
         if args.skip_sudo:
             self.result.message = "Skipping sudo plugin"
             self.result.status = ExecutionStatus.NOT_RAN
