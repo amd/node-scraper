@@ -31,11 +31,16 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from common.shared_utils import DummyDataModel
+
+# from common.shared_utils import DummyDataModel
+from conftest import DummyDataModel
 from pydantic import BaseModel
 
 from nodescraper.cli import cli
-from nodescraper.cli.helper import build_config, find_datamodel_and_result
+from nodescraper.cli.helper import (
+    build_config,
+    find_datamodel_and_result,
+)
 from nodescraper.configregistry import ConfigRegistry
 from nodescraper.enums import ExecutionStatus, SystemInteractionLevel
 from nodescraper.models import PluginConfig, TaskResult
@@ -50,7 +55,7 @@ def test_generate_reference_config(plugin_registry):
             source="TestPluginA",
             message="Plugin tasks completed successfully",
             result_data=DataPluginResult(
-                system_data=DummyDataModel(some_version="17"),
+                system_data=DummyDataModel(foo="17"),
                 collection_result=TaskResult(
                     status=ExecutionStatus.OK,
                     message="BIOS: 17",

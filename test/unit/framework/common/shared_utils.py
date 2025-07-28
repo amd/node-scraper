@@ -72,11 +72,11 @@ class TestModelArg(AnalyzerArgs):
 
     @classmethod
     def build_from_model(cls, model):
-        return cls(model_attr=int(model.some_version))
+        return cls(model_attr=int(model.foo))
 
 
 class DummyDataModel(DataModel):
-    some_version: str = None
+    foo: str = None
 
 
 class TestPluginA(PluginInterface[MockConnectionManager, None]):
