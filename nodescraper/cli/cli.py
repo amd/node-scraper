@@ -162,10 +162,17 @@ def build_parser(
     )
 
     summary_parser.add_argument(
-        "--summary_path",
-        dest="summary_path",
+        "--search-path",
+        dest="search_path",
         type=log_path_arg,
-        help="Path to node-scraper results. Generates summary csv file in summary.csv.",
+        help="Path to node-scraper previously generated results.",
+    )
+
+    summary_parser.add_argument(
+        "--output-path",
+        dest="output_path",
+        type=log_path_arg,
+        help="Specifies path for summary.csv.",
     )
 
     run_plugin_parser = subparsers.add_parser(
@@ -263,7 +270,7 @@ def setup_logger(log_level: str = "INFO", log_path: str | None = None) -> loggin
     handlers = [logging.StreamHandler(stream=sys.stdout)]
 
     if log_path:
-        log_file_name = os.path.join(log_path, "errorscraper.log")
+        log_file_name = os.path.join(log_path, "nodescraper.log")
         handlers.append(
             logging.FileHandler(filename=log_file_name, mode="wt", encoding="utf-8"),
         )
@@ -358,7 +365,7 @@ def main(arg_input: Optional[list[str]] = None):
             logger.info("Log path: %s", log_path)
 
         if parsed_args.subcmd == "summary":
-            generate_summary(parsed_args.summary_path, logger)
+            generate_summary(parsed_args.search_path, parsed_args.output_path, logger)
             sys.exit(0)
 
         if parsed_args.subcmd == "describe":

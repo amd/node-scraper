@@ -479,23 +479,36 @@ def dump_to_csv(all_rows: list, filename: str, fieldnames: list[str], logger: lo
     logger.info("Data written to csv file: %s", filename)
 
 
-def generate_summary(base_path: str, logger: logging.Logger):
+def generate_summary(search_path: str, output_path: str, logger: logging.Logger):
     """Concatenate csv files into 1 summary csv file
 
     Args:
-        base_path (str): base path to look for csv files
+        search_path (str): base path to look for csv files
         logger (logging.Logger): instance of logger
     """
     fieldnames = ["nodename", "plugin", "status", "timestamp", "message"]
     all_rows = []
 
-    pattern = os.path.join(base_path, "**", "nodescraper.csv")
-    for filepath in glob.glob(pattern, recursive=True):
+    pattern = os.path.join(search_path, "**", "nodescraper.csv")
+    matched_files = glob.glob(pattern, recursive=True)
+
+    if not matched_files:
+        logger.error(f"No nodescraper.csv files found under {search_path}")
+        return
+
+    for filepath in matched_files:
         logger.info(f"Reading: {filepath}")
         with open(filepath, newline="") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 all_rows.append(row)
 
-    output_path = os.path.join(base_path, "summary.csv")
+    if not all_rows:
+        logger.error("No data rows found in matched CSV files.")
+        return
+
+    if not output_path:
+        output_path = os.getcwd()
+
+    output_path = os.path.join(output_path, "summary.csv")
     dump_to_csv(all_rows, output_path, fieldnames, logger)

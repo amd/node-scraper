@@ -250,7 +250,7 @@ def test_generate_summary(tmp_path):
             }
         )
 
-    generate_summary(str(tmp_path), logger)
+    generate_summary(str(tmp_path), str(tmp_path), logger)
 
     summary_path = tmp_path / "summary.csv"
     assert summary_path.exists()
