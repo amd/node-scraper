@@ -202,6 +202,8 @@ class KernelModuleAnalyzer(DataAnalyzer[KernelModuleDataModel, KernelModuleAnaly
                 self.result.status = ExecutionStatus.ERROR
                 return self.result
         else:
-            self.result.message = "Kernel modules and regex_filter failed"
-            self.result.status = ExecutionStatus.ERROR
+            self.result.message = (
+                "No values provided in analysis args for: kernel_modules and regex_match"
+            )
+            self.result.status = ExecutionStatus.NOT_RAN
             return self.result

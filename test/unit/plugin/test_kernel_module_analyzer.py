@@ -109,3 +109,12 @@ def test_analyze_data_name_only_success(data_model, analyzer):
     result = analyzer.analyze_data(data_model, args)
     assert result.status == ExecutionStatus.OK
     assert result.message == "task completed successfully"
+
+
+def test_no_analyzer_args(data_model, analyzer):
+    args = KernelModuleAnalyzerArgs(kernel_modules={}, regex_filter=[])
+    result = analyzer.analyze_data(data_model, args)
+    assert result.status == ExecutionStatus.NOT_RAN
+    assert (
+        result.message == "No values provided in analysis args for: kernel_modules and regex_match"
+    )
