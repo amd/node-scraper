@@ -23,8 +23,8 @@
 # SOFTWARE.
 #
 ###############################################################################
-import glob
 import os
+import re
 
 from pydantic import ValidationError
 
@@ -64,14 +64,13 @@ class NvmeCollector(InBandDataCollector[NvmeDataModel, None]):
             self._log_event(
                 category=EventCategory.SW_DRIVER,
                 description="No NVMe devices found",
-                priority=EventPriority.CRITICAL,
+                priority=EventPriority.ERROR,
             )
             self.result.message = "No NVMe devices found"
             self.result.status = ExecutionStatus.ERROR
             return self.result, None
 
         all_device_data = {}
-        telemetry_file = "telemetry_log"
 
         for dev in nvme_devices:
             device_data = {}
@@ -83,15 +82,10 @@ class NvmeCollector(InBandDataCollector[NvmeDataModel, None]):
                 "fw_log": f"nvme fw-log {dev}",
                 "self_test_log": f"nvme self-test-log {dev}",
                 "get_log": f"nvme get-log {dev} --log-id=6 --log-len=512",
-                "telemetry_log": f"nvme telemetry-log {dev} --output-file={telemetry_file}",
             }
 
             for key, cmd in commands.items():
                 res = self._run_sut_cmd(cmd, sudo=True)
-                if "telemetry-log" in cmd and res.exit_code == 0:
-                    file_artifact = self._read_sut_file(filename=telemetry_file, encoding=None)
-                    self._log_file_artifact(file_artifact.filename, file_artifact.contents)
-
                 if res.exit_code == 0:
                     device_data[key] = res.stdout
                 else:
@@ -99,7 +93,7 @@ class NvmeCollector(InBandDataCollector[NvmeDataModel, None]):
                         category=EventCategory.SW_DRIVER,
                         description=f"Failed to execute NVMe command: '{cmd}'",
                         data={"command": cmd, "exit_code": res.exit_code},
-                        priority=EventPriority.ERROR,
+                        priority=EventPriority.WARNING,
                         console_log=True,
                     )
 
@@ -114,7 +108,7 @@ class NvmeCollector(InBandDataCollector[NvmeDataModel, None]):
                     category=EventCategory.SW_DRIVER,
                     description="Validation error while building NvmeDataModel",
                     data={"error": str(e)},
-                    priority=EventPriority.CRITICAL,
+                    priority=EventPriority.ERROR,
                 )
                 self.result.message = "NVMe data invalid format"
                 self.result.status = ExecutionStatus.ERROR
@@ -133,18 +127,17 @@ class NvmeCollector(InBandDataCollector[NvmeDataModel, None]):
             self._log_event(
                 category=EventCategory.SW_DRIVER,
                 description="Failed to collect any NVMe data",
-                priority=EventPriority.CRITICAL,
+                priority=EventPriority.ERROR,
             )
             self.result.message = "No NVMe data collected"
             self.result.status = ExecutionStatus.ERROR
             return self.result, None
 
     def _get_nvme_devices(self) -> list[str]:
-        """Find all non-partition NVMe block devices (e.g., /dev/nvme0, /dev/nvme1)."""
-        devices = []
-        for dev_path in sorted(glob.glob("/dev/nvme*")):
-            if os.path.basename(dev_path).endswith("n1"):
-                continue
-            if os.path.exists(dev_path) and os.path.isfile(dev_path) is False:
-                devices.append(dev_path)
-        return devices
+        nvme_devs = []
+        for entry in os.listdir("/dev"):
+            full_path = os.path.join("/dev", entry)
+
+            if re.fullmatch(r"nvme\d+$", entry) and os.path.exists(full_path):
+                nvme_devs.append(full_path)
+        return nvme_devs

@@ -99,6 +99,6 @@ def test_no_data_collected(collector):
     assert data is None
     assert "No NVMe data collected" in result.message
     assert any(
-        call.kwargs["priority"] == EventPriority.CRITICAL
+        call.kwargs["priority"] == EventPriority.ERROR
         for call in collector._log_event.call_args_list
     )
