@@ -33,7 +33,7 @@ from typing import Optional, Type
 from pydantic import BaseModel
 
 from nodescraper.constants import DEFAULT_LOGGER
-from nodescraper.interfaces import ConnectionManager, DataPlugin
+from nodescraper.interfaces import ConnectionManager, DataPlugin, PluginInterface
 from nodescraper.models import PluginConfig, SystemInfo
 from nodescraper.models.pluginresult import PluginResult
 from nodescraper.pluginregistry import PluginRegistry
@@ -165,16 +165,25 @@ class PluginExecutor:
                     plugin_inst = plugin_class(**init_payload)
 
                     run_payload = copy.deepcopy(plugin_args)
-
                     run_args = TypeUtils.get_func_arg_types(plugin_class.run, plugin_class)
+
                     for arg in run_args.keys():
                         if arg == "preserve_connection" and issubclass(plugin_class, DataPlugin):
                             run_payload[arg] = True
-                        elif arg in self.plugin_config.global_args:
-                            run_payload[arg] = self.plugin_config.global_args[arg]
 
-                        # TODO
-                        # enable global substitution in collection and analysis args
+                    try:
+                        global_run_args = self.apply_global_args_to_plugin(
+                            plugin_inst, plugin_class, self.plugin_config.global_args
+                        )
+                        run_payload.update(global_run_args)
+                    except ValueError as ve:
+                        self.logger.error(
+                            "Invalid global_args for plugin %s: %s. Skipping plugin.",
+                            plugin_name,
+                            str(ve),
+                        )
+                        continue
+
                     self.logger.info("-" * 50)
                     plugin_results.append(plugin_inst.run(**run_payload))
                 except Exception as e:
@@ -210,3 +219,42 @@ class PluginExecutor:
                     )
 
         return plugin_results
+
+    def apply_global_args_to_plugin(
+        self,
+        plugin_inst: PluginInterface,
+        plugin_class: type,
+        global_args: dict,
+    ) -> dict:
+        """
+        Applies global arguments to the plugin instance, including standard attributes
+        and merging Pydantic model arguments (collection_args, analysis_args).
+
+        Args:
+            plugin_inst: The plugin instance to update.
+            plugin_class: The plugin class (needed for model instantiation).
+            global_args: Dict of global argument overrides.
+        """
+
+        run_args = {}
+        for key in global_args:
+            if key in ["collection_args", "analysis_args"] and isinstance(plugin_inst, DataPlugin):
+                continue
+            else:
+                run_args[key] = global_args[key]
+
+        if "collection_args" in global_args and hasattr(plugin_class, "COLLECTOR_ARGS"):
+            plugin_fields = set(plugin_class.COLLECTOR_ARGS.__fields__.keys())
+            filtered = {
+                k: v for k, v in global_args["collection_args"].items() if k in plugin_fields
+            }
+            if filtered:
+                run_args["collection_args"] = filtered
+
+        if "analysis_args" in global_args and hasattr(plugin_class, "ANALYZER_ARGS"):
+            plugin_fields = set(plugin_class.ANALYZER_ARGS.__fields__.keys())
+            filtered = {k: v for k, v in global_args["analysis_args"].items() if k in plugin_fields}
+            if filtered:
+                run_args["analysis_args"] = filtered
+
+        return run_args
