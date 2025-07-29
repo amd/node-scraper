@@ -23,8 +23,21 @@
 # SOFTWARE.
 #
 ###############################################################################
+from pydantic import BaseModel
+
 from nodescraper.models import DataModel
 
 
+class DeviceNvmeData(BaseModel):
+    smart_log: str | None = None
+    error_log: str | None = None
+    id_ctrl: str | None = None
+    id_ns: str | None = None
+    fw_log: str | None = None
+    self_test_log: str | None = None
+    get_log: str | None = None
+    telemetry_log: str | None = None
+
+
 class NvmeDataModel(DataModel):
-    nvme_data: dict[str, str]
+    devices: dict[str, DeviceNvmeData]
