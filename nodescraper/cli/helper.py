@@ -346,11 +346,13 @@ def generate_reference_config(
 
         plugin = plugin_reg.plugins.get(obj.source)
 
-        args = extract_analyzer_args_from_model(plugin, data_model, logger)
-        if not args:
-            continue
-        plugins[obj.source] = {"analysis_args": {}}
-        plugins[obj.source]["analysis_args"] = args.model_dump(exclude_none=True)
+        if obj.source not in plugins:
+            plugins[obj.source] = {}
+
+        a_args = extract_analyzer_args_from_model(plugin, data_model, logger)
+        if a_args:
+            plugins[obj.source]["analysis_args"] = a_args.model_dump(exclude_none=True)
+
     plugin_config.plugins = plugins
 
     return plugin_config

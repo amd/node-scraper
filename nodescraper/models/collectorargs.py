@@ -23,40 +23,8 @@
 # SOFTWARE.
 #
 ###############################################################################
-from pydantic import Field, field_validator
-
-from nodescraper.models import AnalyzerArgs
-from nodescraper.plugins.inband.os.osdata import OsDataModel
+from pydantic import BaseModel
 
 
-class OsAnalyzerArgs(AnalyzerArgs):
-    exp_os: str | list = Field(default_factory=list)
-    exact_match: bool = True
-
-    @field_validator("exp_os", mode="before")
-    @classmethod
-    def validate_exp_os(cls, exp_os: str | list) -> list:
-        """support str or list input for exp_os
-
-        Args:
-            exp_os (str | list): exp_os input
-
-        Returns:
-            list: exp_os list
-        """
-        if isinstance(exp_os, str):
-            exp_os = [exp_os]
-
-        return exp_os
-
-    @classmethod
-    def build_from_model(cls, datamodel: OsDataModel) -> "OsAnalyzerArgs":
-        """build analyzer args from data model
-
-        Args:
-            datamodel (OsDataModel): data model for plugin
-
-        Returns:
-            OsAnalyzerArgs: instance of analyzer args class
-        """
-        return cls(exp_os=datamodel.os_name)
+class CollectorArgs(BaseModel):
+    model_config = {"extra": "forbid", "exclude_none": True}
