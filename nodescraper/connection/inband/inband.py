@@ -46,35 +46,36 @@ class FileArtifact(BaseModel):
     filename: str
     contents: str | bytes = Field(exclude=True)
 
-    @staticmethod
-    def coerce_contents(value: io.BytesIO | str | bytes) -> bytes:
+    @field_validator("contents", mode="before")
+    @classmethod
+    def validate_contents(cls, value: io.BytesIO | str | bytes):
         if isinstance(value, io.BytesIO):
             return value.getvalue()
         if isinstance(value, str):
             return value.encode("utf-8")
         return value
 
-    @field_validator("contents", mode="before")
-    @classmethod
-    def contents_conformer(cls, value):
-        return cls.coerce_contents(value)
-
     def log_model(self, log_path: str, encoding: Optional[str] = None) -> None:
         """Log the file contents to disk.
 
         Args:
             log_path (str): path to write the file
-            encoding (str | None): if None, writes as binary
+            encoding (str | None): if None, auto-detect binary or not
         """
         log_name = os.path.join(log_path, self.filename)
-        contents = self.coerce_contents(self.contents)
+        contents = self.contents
 
-        if encoding is None:
-            with open(log_name, "wb") as f:
-                f.write(contents)
-        else:
+        if encoding:
             with open(log_name, "w", encoding=encoding) as f:
                 f.write(contents.decode(encoding))
+        else:
+            try:
+                decoded = contents.decode("utf-8")
+                with open(log_name, "w", encoding="utf-8") as f:
+                    f.write(decoded)
+            except UnicodeDecodeError:
+                with open(log_name, "wb") as f:
+                    f.write(contents)
 
     def contents_str(self) -> str:
         """Safe string representation of contents (for logs)."""

@@ -62,15 +62,8 @@ class FileSystemLogHook(TaskResultHook):
         for artifact in task_result.artifacts:
             if isinstance(artifact, FileArtifact):
                 log_name = get_unique_filename(log_path, artifact.filename)
-                file_path = os.path.join(log_path, log_name)
+                artifact.log_model(log_path)
 
-                contents = artifact.contents
-                if isinstance(contents, bytes):
-                    with open(file_path, "wb") as log_file:
-                        log_file.write(contents)
-                else:
-                    with open(file_path, "w", encoding="utf-8") as log_file:
-                        log_file.write(contents)
             else:
                 name = f"{pascal_to_snake(artifact.__class__.__name__)}s"
                 if name in artifact_map:
