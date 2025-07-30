@@ -479,13 +479,15 @@ def dump_to_csv(all_rows: list, filename: str, fieldnames: list[str], logger: lo
     logger.info("Data written to csv file: %s", filename)
 
 
-def generate_summary(search_path: str, output_path: str, logger: logging.Logger):
+def generate_summary(search_path: str, output_path: str | None, logger: logging.Logger):
     """Concatenate csv files into 1 summary csv file
 
     Args:
-        search_path (str): base path to look for csv files
+        search_path (str): Path for previous runs
+        output_path (str | None): Path for new summary csv file
         logger (logging.Logger): instance of logger
     """
+
     fieldnames = ["nodename", "plugin", "status", "timestamp", "message"]
     all_rows = []
 
