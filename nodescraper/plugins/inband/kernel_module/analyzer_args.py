@@ -23,9 +23,37 @@
 # SOFTWARE.
 #
 ###############################################################################
+import re
 
-from nodescraper.models import CollectorArgs
+from nodescraper.models import AnalyzerArgs
+from nodescraper.plugins.inband.kernel_module.kernel_module_data import (
+    KernelModuleDataModel,
+)
 
 
-class ProcessCollectorArgs(CollectorArgs):
-    top_n_process: int = 10
+class KernelModuleAnalyzerArgs(AnalyzerArgs):
+    kernel_modules: dict[str, dict] = {}
+    regex_filter: list[str] = ["amd"]
+
+    @classmethod
+    def build_from_model(cls, datamodel: KernelModuleDataModel) -> "KernelModuleAnalyzerArgs":
+        """build analyzer args from data model and filter by regex_filter
+
+        Args:
+            datamodel (KernelModuleDataModel): data model for plugin
+
+        Returns:
+            KernelModuleAnalyzerArgs: instance of analyzer args class
+        """
+
+        pattern_regex = re.compile("amd", re.IGNORECASE)
+        filtered_mods = {
+            name: data
+            for name, data in datamodel.kernel_modules.items()
+            if pattern_regex.search(name)
+        }
+
+        return cls(
+            kernel_modules=filtered_mods,
+            regex_filter=[],
+        )

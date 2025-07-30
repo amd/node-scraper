@@ -55,6 +55,7 @@ class DummyDataModel(DataModel):
 
 class DummyArg(BaseModel):
     value: int
+    regex_match: bool = True
 
 
 class DummyResult:

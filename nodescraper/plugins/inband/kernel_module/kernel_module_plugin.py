@@ -23,9 +23,21 @@
 # SOFTWARE.
 #
 ###############################################################################
+from nodescraper.base import InBandDataPlugin
 
-from nodescraper.models import CollectorArgs
+from .analyzer_args import KernelModuleAnalyzerArgs
+from .kernel_module_analyzer import KernelModuleAnalyzer
+from .kernel_module_collector import KernelModuleCollector
+from .kernel_module_data import KernelModuleDataModel
 
 
-class ProcessCollectorArgs(CollectorArgs):
-    top_n_process: int = 10
+class KernelModulePlugin(InBandDataPlugin[KernelModuleDataModel, None, KernelModuleAnalyzerArgs]):
+    """Plugin for collection and analysis of kernel data"""
+
+    DATA_MODEL = KernelModuleDataModel
+
+    COLLECTOR = KernelModuleCollector
+
+    ANALYZER = KernelModuleAnalyzer
+
+    ANALYZER_ARGS = KernelModuleAnalyzerArgs

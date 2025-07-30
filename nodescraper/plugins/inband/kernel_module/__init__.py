@@ -23,9 +23,3 @@
 # SOFTWARE.
 #
 ###############################################################################
-
-from nodescraper.models import CollectorArgs
-
-
-class ProcessCollectorArgs(CollectorArgs):
-    top_n_process: int = 10

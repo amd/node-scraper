@@ -24,8 +24,8 @@
 #
 ###############################################################################
 
-from nodescraper.models import CollectorArgs
+from nodescraper.models import DataModel
 
 
-class ProcessCollectorArgs(CollectorArgs):
-    top_n_process: int = 10
+class KernelModuleDataModel(DataModel):
+    kernel_modules: dict
