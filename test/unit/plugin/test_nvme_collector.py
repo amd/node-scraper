@@ -57,6 +57,7 @@ def test_skips_on_windows(collector):
     assert "Windows" in collector._log_event.call_args.kwargs["description"]
 
 
+@pytest.mark.skip(reason="No NVME device in testing infrastructure")
 def test_successful_collection(collector):
     collector.system_info = MagicMock(os_family=OSFamily.LINUX)
 
