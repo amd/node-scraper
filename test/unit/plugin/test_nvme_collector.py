@@ -89,6 +89,7 @@ def test_partial_failures(collector):
     assert collector._log_event.call_count >= 1
 
 
+@pytest.mark.skip(reason="No NVME device in testing infrastructure")
 def test_no_data_collected(collector):
     collector.system_info = MagicMock(os_family=OSFamily.LINUX)
 
