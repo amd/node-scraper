@@ -140,3 +140,4 @@ class ConnectionManager(Task, Generic[TConnection, TConnectArg]):
     def disconnect(self):
         """disconnect connection (Optional)"""
         self.connection = None
+        self.result.status = ExecutionStatus.UNSET
