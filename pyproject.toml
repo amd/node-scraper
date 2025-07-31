@@ -30,6 +30,11 @@ dev = [
     "pytest-cov"
 ]
 
+exporter = [
+    "flask",
+    "prometheus_client"
+]
+
 [project.urls]
 homepage = "https://github.com/amd/node-scraper"
 documentation = "https://github.com/amd/node-scraper"
