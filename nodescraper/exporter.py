@@ -1,36 +1,34 @@
 #!/usr/bin/env python3
 
 import argparse
+import logging
 import threading
 import time
-import logging
 from datetime import datetime
+
 from flask import Flask, Response
 from prometheus_client import Gauge, generate_latest
 
-from nodescraper.pluginregistry import PluginRegistry
+from nodescraper.cli.helper import get_plugin_configs, get_system_info
 from nodescraper.configregistry import ConfigRegistry
-from nodescraper.cli.helper import get_system_info, get_plugin_configs
-from nodescraper.pluginexecutor import PluginExecutor
 from nodescraper.enums.executionstatus import ExecutionStatus
+from nodescraper.pluginexecutor import PluginExecutor
+from nodescraper.pluginregistry import PluginRegistry
 
 app = Flask(__name__)
 
-#prom metrics
+# prom metrics
 plugin_status = Gauge(
-    "plugin_status",
-    "Plugin status: 1=OK, 0=non-OK",
-    ["nodename", "plugin", "status"]
+    "plugin_status", "Plugin status: 1=OK, 0=non-OK", ["nodename", "plugin", "status"]
 )
 
 plugin_last_info = Gauge(
-    "plugin_info",
-    "Plugin metadata from last run",
-    ["nodename", "plugin", "timestamp", "message"]
+    "plugin_info", "Plugin metadata from last run", ["nodename", "plugin", "status", "timestamp", "message"]
 )
 
-#fake main for metrics
-#TODO: update for diff SKU/others
+
+# fake main for metrics
+# TODO: update for diff SKU/others
 def update_metrics():
     try:
         logger = logging.getLogger("node-scraper-exporter")
@@ -46,7 +44,7 @@ def update_metrics():
             sys_location="LOCAL",
             sys_interaction_level="INTERACTIVE",
             system_config=None,
-            plugin_configs=["default_config"],
+            plugin_configs=["NodeStatus"],
             connection_config=None,
         )
 
@@ -98,21 +96,24 @@ def update_metrics():
     except Exception as e:
         print("Exception in update_metrics():", e)
 
-#loop
+
+# loop
 def update_metrics_loop(interval=300):
     while True:
         update_metrics()
         time.sleep(interval)
 
-#flask route
+
+# flask route
 @app.route("/metrics")
 def metrics():
+    update_metrics()
     return Response(generate_latest(), mimetype="text/plain")
 
-#start exporter
+
+# start exporter
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     thread = threading.Thread(target=update_metrics_loop, daemon=True)
     thread.start()
     app.run(host="0.0.0.0", port=9101)
-
