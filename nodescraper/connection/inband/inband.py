@@ -24,11 +24,10 @@
 #
 ###############################################################################
 import abc
-import io
 import os
 from typing import Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel
 
 
 class CommandArtifact(BaseModel):
@@ -40,45 +39,56 @@ class CommandArtifact(BaseModel):
     exit_code: int
 
 
-class FileArtifact(BaseModel):
-    """Artifact to contains contents of file read into memory"""
-
+class BaseFileArtifact(BaseModel, abc.ABC):
     filename: str
-    contents: str | bytes = Field(exclude=True)
 
-    @field_validator("contents", mode="before")
+    @abc.abstractmethod
+    def log_model(self, log_path: str) -> None:
+        pass
+
+    @abc.abstractmethod
+    def contents_str(self) -> str:
+        pass
+
     @classmethod
-    def validate_contents(cls, value: io.BytesIO | str | bytes):
-        if isinstance(value, io.BytesIO):
-            return value.getvalue()
-        if isinstance(value, str):
-            return value.encode("utf-8")
-        return value
+    def from_bytes(
+        cls,
+        filename: str,
+        raw_contents: bytes,
+        encoding: Optional[str] = "utf-8",
+        strip: bool = True,
+    ) -> "BaseFileArtifact":
+        if encoding is None:
+            return BinaryFileArtifact(filename=filename, contents=raw_contents)
 
-    def log_model(self, log_path: str, encoding: Optional[str] = None) -> None:
-        """Log the file contents to disk.
+        try:
+            text = raw_contents.decode(encoding)
+            return TextFileArtifact(filename=filename, contents=text.strip() if strip else text)
+        except UnicodeDecodeError:
+            return BinaryFileArtifact(filename=filename, contents=raw_contents)
 
-        Args:
-            log_path (str): path to write the file
-            encoding (str | None): if None, auto-detect binary or not
-        """
-        log_name = os.path.join(log_path, self.filename)
-        contents = self.contents
 
-        if encoding:
-            with open(log_name, "w", encoding=encoding) as f:
-                f.write(contents.decode(encoding))
-        else:
-            try:
-                decoded = contents.decode("utf-8")
-                with open(log_name, "w", encoding="utf-8") as f:
-                    f.write(decoded)
-            except UnicodeDecodeError:
-                with open(log_name, "wb") as f:
-                    f.write(contents)
+class TextFileArtifact(BaseFileArtifact):
+    contents: str
+
+    def log_model(self, log_path: str) -> None:
+        path = os.path.join(log_path, self.filename)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(self.contents)
 
     def contents_str(self) -> str:
-        """Safe string representation of contents (for logs)."""
+        return self.contents
+
+
+class BinaryFileArtifact(BaseFileArtifact):
+    contents: bytes
+
+    def log_model(self, log_path: str) -> None:
+        log_name = os.path.join(log_path, self.filename)
+        with open(log_name, "wb") as f:
+            f.write(self.contents)
+
+    def contents_str(self) -> str:
         try:
             return self.contents.decode("utf-8")
         except UnicodeDecodeError:
@@ -104,8 +114,10 @@ class InBandConnection(abc.ABC):
         """
 
     @abc.abstractmethod
-    def read_file(self, filename: str, encoding: str = "utf-8", strip: bool = True) -> FileArtifact:
-        """Read a file into a FileArtifact
+    def read_file(
+        self, filename: str, encoding: str = "utf-8", strip: bool = True
+    ) -> BaseFileArtifact:
+        """Read a file into a BaseFileArtifact
 
         Args:
             filename (str): filename
@@ -113,5 +125,5 @@ class InBandConnection(abc.ABC):
             strip (bool): automatically strip file contents
 
         Returns:
-            FileArtifact: file artifact
+            BaseFileArtifact: file artifact
         """
