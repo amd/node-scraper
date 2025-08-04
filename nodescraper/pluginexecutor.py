@@ -245,10 +245,11 @@ class PluginExecutor:
 
         if (
             "collection_args" in global_args
-            and getattr(plugin_class, "COLLECTOR_ARGS", None) is not None
-            and "COLLECTOR_ARGS" in plugin_class.__dict__
+            and hasattr(plugin_class, "COLLECTOR_ARGS")
+            and plugin_class.COLLECTOR_ARGS is not None
         ):
-            plugin_fields = set(plugin_class.COLLECTOR_ARGS.__fields__.keys())
+
+            plugin_fields = set(plugin_class.COLLECTOR_ARGS.model_fields.keys())
             filtered = {
                 k: v for k, v in global_args["collection_args"].items() if k in plugin_fields
             }
@@ -257,10 +258,11 @@ class PluginExecutor:
 
         if (
             "analysis_args" in global_args
-            and getattr(plugin_class, "ANALYZER_ARGS", None) is not None
-            and "ANALYZER_ARGS" in plugin_class.__dict__
+            and hasattr(plugin_class, "ANALYZER_ARGS")
+            and plugin_class.ANALYZER_ARGS is not None
         ):
-            plugin_fields = set(plugin_class.ANALYZER_ARGS.__fields__.keys())
+
+            plugin_fields = set(plugin_class.ANALYZER_ARGS.model_fields.keys())
             filtered = {k: v for k, v in global_args["analysis_args"].items() if k in plugin_fields}
             if filtered:
                 run_args["analysis_args"] = filtered
