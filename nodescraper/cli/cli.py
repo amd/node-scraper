@@ -437,7 +437,10 @@ def main(arg_input: Optional[list[str]] = None):
 
         if parsed_args.reference_config:
             ref_config = generate_reference_config(results, plugin_reg, logger)
-            path = os.path.join(os.getcwd(), "reference_config.json")
+            if log_path:
+                path = os.path.join(log_path, "reference_config.json")
+            else:
+                path = os.path.join(os.getcwd(), "reference_config.json")
             try:
                 with open(path, "w") as f:
                     json.dump(
