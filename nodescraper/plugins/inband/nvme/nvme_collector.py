@@ -25,6 +25,7 @@
 ###############################################################################
 import os
 import re
+import traceback
 
 from pydantic import ValidationError
 
@@ -103,11 +104,11 @@ class NvmeCollector(InBandDataCollector[NvmeDataModel, None]):
         if all_device_data:
             try:
                 nvme_data = NvmeDataModel(devices=all_device_data)
-            except ValidationError as e:
+            except ValidationError as exp:
                 self._log_event(
                     category=EventCategory.SW_DRIVER,
                     description="Validation error while building NvmeDataModel",
-                    data={"error": str(e)},
+                    data={"errors": traceback.format_tb(exp.__traceback__)},
                     priority=EventPriority.ERROR,
                 )
                 self.result.message = "NVMe data invalid format"
@@ -135,9 +136,19 @@ class NvmeCollector(InBandDataCollector[NvmeDataModel, None]):
 
     def _get_nvme_devices(self) -> list[str]:
         nvme_devs = []
-        for entry in os.listdir("/dev"):
-            full_path = os.path.join("/dev", entry)
 
-            if re.fullmatch(r"nvme\d+$", entry) and os.path.exists(full_path):
-                nvme_devs.append(full_path)
+        res = self._run_sut_cmd("ls /dev", sudo=False)
+        if res.exit_code != 0:
+            self._log_event(
+                category=EventCategory.SW_DRIVER,
+                description="Failed to list /dev directory",
+                data={"exit_code": res.exit_code, "stderr": res.stderr},
+                priority=EventPriority.ERROR,
+            )
+            return []
+
+        for entry in res.stdout.strip().splitlines():
+            if re.fullmatch(r"nvme\d+$", entry):
+                nvme_devs.append(f"/dev/{entry}")
+
         return nvme_devs
