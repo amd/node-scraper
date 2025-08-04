@@ -107,3 +107,12 @@ def test_no_data_collected(collector):
         call.kwargs["priority"] == EventPriority.ERROR
         for call in collector._log_event.call_args_list
     )
+
+
+def test_get_nvme_devices_filters_partitions(collector):
+    fake_ls_output = "\n".join(["nvme0", "nvme0n1", "nvme1", "nvme1n1", "sda", "loop0", "nvme2"])
+    collector._run_sut_cmd.return_value = MagicMock(exit_code=0, stdout=fake_ls_output)
+
+    devices = collector._get_nvme_devices()
+
+    assert devices == ["/dev/nvme0", "/dev/nvme1", "/dev/nvme2"]

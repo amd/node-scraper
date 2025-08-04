@@ -243,16 +243,26 @@ class PluginExecutor:
             else:
                 run_args[key] = global_args[key]
 
-        if "collection_args" in global_args and hasattr(plugin_class, "COLLECTOR_ARGS"):
-            plugin_fields = set(plugin_class.COLLECTOR_ARGS.__fields__.keys())
+        if (
+            "collection_args" in global_args
+            and hasattr(plugin_class, "COLLECTOR_ARGS")
+            and plugin_class.COLLECTOR_ARGS is not None
+        ):
+
+            plugin_fields = set(plugin_class.COLLECTOR_ARGS.model_fields.keys())
             filtered = {
                 k: v for k, v in global_args["collection_args"].items() if k in plugin_fields
             }
             if filtered:
                 run_args["collection_args"] = filtered
 
-        if "analysis_args" in global_args and hasattr(plugin_class, "ANALYZER_ARGS"):
-            plugin_fields = set(plugin_class.ANALYZER_ARGS.__fields__.keys())
+        if (
+            "analysis_args" in global_args
+            and hasattr(plugin_class, "ANALYZER_ARGS")
+            and plugin_class.ANALYZER_ARGS is not None
+        ):
+
+            plugin_fields = set(plugin_class.ANALYZER_ARGS.model_fields.keys())
             filtered = {k: v for k, v in global_args["analysis_args"].items() if k in plugin_fields}
             if filtered:
                 run_args["analysis_args"] = filtered
