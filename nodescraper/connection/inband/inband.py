@@ -40,10 +40,17 @@ class CommandArtifact(BaseModel):
 
 
 class BaseFileArtifact(BaseModel, abc.ABC):
+    """Base class for files"""
+
     filename: str
 
     @abc.abstractmethod
     def log_model(self, log_path: str) -> None:
+        """Write file to path
+
+        Args:
+            log_path (str): Path for file
+        """
         pass
 
     @abc.abstractmethod
@@ -58,6 +65,17 @@ class BaseFileArtifact(BaseModel, abc.ABC):
         encoding: Optional[str] = "utf-8",
         strip: bool = True,
     ) -> "BaseFileArtifact":
+        """factory method
+
+        Args:
+            filename (str): name of file to be read
+            raw_contents (bytes): Raw file content
+            encoding (Optional[str], optional): Optional encoding. Defaults to "utf-8".
+            strip (bool, optional): Remove padding. Defaults to True.
+
+        Returns:
+            BaseFileArtifact: _Returns instance of Artifact file
+        """
         if encoding is None:
             return BinaryFileArtifact(filename=filename, contents=raw_contents)
 
@@ -69,26 +87,50 @@ class BaseFileArtifact(BaseModel, abc.ABC):
 
 
 class TextFileArtifact(BaseFileArtifact):
+    """Class for text file artifacts"""
+
     contents: str
 
     def log_model(self, log_path: str) -> None:
+        """Write file to disk
+
+        Args:
+            log_path (str): Path for file
+        """
         path = os.path.join(log_path, self.filename)
         with open(path, "w", encoding="utf-8") as f:
             f.write(self.contents)
 
     def contents_str(self) -> str:
+        """Get content as str
+
+        Returns:
+            str: Str instance of file content
+        """
         return self.contents
 
 
 class BinaryFileArtifact(BaseFileArtifact):
+    """Class for binary file artifacts"""
+
     contents: bytes
 
     def log_model(self, log_path: str) -> None:
+        """Write file to disk
+
+        Args:
+            log_path (str): Path for file
+        """
         log_name = os.path.join(log_path, self.filename)
         with open(log_name, "wb") as f:
             f.write(self.contents)
 
     def contents_str(self) -> str:
+        """File content
+
+        Returns:
+            str: Str instance of file content
+        """
         try:
             return self.contents.decode("utf-8")
         except UnicodeDecodeError:
