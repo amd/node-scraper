@@ -26,6 +26,7 @@
 
 from typing import Optional
 
+from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
 from nodescraper.interfaces import DataAnalyzer
 from nodescraper.models import TaskResult
 
@@ -41,16 +42,42 @@ class SysctlAnalyzer(DataAnalyzer[SysctlDataModel, SysctlAnalyzerArgs]):
     def analyze_data(
         self, data: SysctlDataModel, args: Optional[SysctlAnalyzerArgs] = None
     ) -> TaskResult:
-        """Analyze the Sysctl data against expected Sysctl versions.
-
-        Args:
-            data (SysctlDataModel): The Sysctl data to analyze.
-            args (Optional[SysctlAnalyzerArgs], optional): Expected Sysctl data. Defaults to None.
-
-        Returns:
-            TaskResult: The result of the analysis, indicating whether the Sysctl data matches
-            the expected versions or not.
-        """
+        """Analyze the Sysctl data against expected Sysctl values."""
+        self.result = self.result
+        self.result.status = ExecutionStatus.OK
+        self.result.message = "All expected sysctl parameters match."
+        mismatches = {}
 
         if not args:
             args = SysctlAnalyzerArgs()
+
+        for exp_field_name, expected_value in args.model_dump(exclude_unset=True).items():
+
+            data_field_name = exp_field_name.removeprefix("exp_")
+            actual_value = getattr(data, data_field_name, None)
+
+            if actual_value is None:
+                mismatches[data_field_name] = {"expected": expected_value, "actual": "missing"}
+            elif actual_value != expected_value:
+                mismatches[data_field_name] = {"expected": expected_value, "actual": actual_value}
+
+        if mismatches:
+            self.result.status = ExecutionStatus.ERROR
+            self.result.message = f"{len(mismatches)} sysctl parameter(s) mismatched."
+            self.result.message = "Sysctl parameters mismatch detected."
+            self._log_event(
+                category=EventCategory.OS,
+                description="Sysctl mismatch detected",
+                data=mismatches,
+                priority=EventPriority.ERROR,
+                console_log=True,
+            )
+        else:
+            self._log_event(
+                category=EventCategory.OS,
+                description="All expected sysctl parameters matched",
+                priority=EventPriority.INFO,
+                console_log=True,
+            )
+
+        return self.result

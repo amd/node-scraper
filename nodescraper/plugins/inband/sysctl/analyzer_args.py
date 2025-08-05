@@ -52,4 +52,16 @@ class SysctlAnalyzerArgs(AnalyzerArgs):
         Returns:
             SysctlAnalyzerArgs: instance of analyzer args class
         """
-        return cls(exp_vm_swappiness=datamodel.vm_swappiness)
+        return cls(
+            exp_vm_swappiness=datamodel.vm_swappiness,
+            exp_vm_numa_balancing=datamodel.vm_numa_balancing,
+            exp_vm_oom_kill_allocating_task=datamodel.vm_oom_kill_allocating_task,
+            exp_vm_compaction_proactiveness=datamodel.vm_compaction_proactiveness,
+            exp_vm_compact_unevictable_allowed=datamodel.vm_compact_unevictable_allowed,
+            exp_vm_extfrag_threshold=datamodel.vm_extfrag_threshold,
+            exp_vm_zone_reclaim_mode=datamodel.vm_zone_reclaim_mode,
+            exp_vm_dirty_background_ratio=datamodel.vm_dirty_background_ratio,
+            exp_vm_dirty_ratio=datamodel.vm_dirty_ratio,
+            exp_vm_dirty_writeback_centisecs=datamodel.vm_dirty_writeback_centisecs,
+            exp_kernel_numa_balancing=datamodel.kernel_numa_balancing,
+        )
