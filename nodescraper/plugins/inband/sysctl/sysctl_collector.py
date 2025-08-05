@@ -92,7 +92,6 @@ class SysctlCollector(InBandDataCollector[SysctlDataModel, None]):
                 category=EventCategory.OS,
                 description="Sysctl settings not read",
                 priority=EventPriority.CRITICAL,
-                console_log=True,
             )
             self.result.message = "Sysctl settings not read"
             self.result.status = ExecutionStatus.ERROR
