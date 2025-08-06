@@ -48,6 +48,12 @@ class RocmDataModel(DataModel):
         Returns:
             str: The validated ROCm version string.
         """
-        if not re.match(r"^\d+(?:\.\d+){0,3}(-\d+)?$", rocm_version):
+        if not bool(
+            re.match(
+                r"^(\d+(?:\.\d+){0,3})-(\d+)$",
+                rocm_version,
+            )
+        ):
             raise ValueError(f"ROCm version has invalid format: {rocm_version}")
+
         return rocm_version
