@@ -23,6 +23,8 @@
 # SOFTWARE.
 #
 ###############################################################################
+from pathlib import Path
+
 from nodescraper.base import InBandDataCollector
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.models import TaskResult
@@ -43,19 +45,35 @@ class RocmCollector(InBandDataCollector[RocmDataModel, None]):
         Returns:
             tuple[TaskResult, RocmDataModel | None]: tuple containing the task result and ROCm data model if available.
         """
-        res = self._run_sut_cmd("cat /opt/rocm/.info/version")
-        if res.exit_code == 0:
-            rocm_data = RocmDataModel(rocm_version=res.stdout)
-            self._log_event(
-                category="ROCM_VERSION_READ",
-                description="ROCm version data collected",
-                data=rocm_data.model_dump(),
-                priority=EventPriority.INFO,
-            )
-            self.result.message = f"ROCm: {rocm_data.model_dump()}"
-            self.result.status = ExecutionStatus.OK
-        else:
-            rocm_data = None
+        version_paths = [
+            "/opt/rocm/.info/version-rocm",
+            "/opt/rocm/.info/version",
+        ]
+
+        rocm_data = None
+        for path in version_paths:
+            if Path(path).exists():
+                res = self._run_sut_cmd(f"cat {path}")
+                if res.exit_code == 0:
+                    rocm_data = RocmDataModel(rocm_version=res.stdout)
+                    self._log_event(
+                        category="ROCM_VERSION_READ",
+                        description="ROCm version data collected",
+                        data=rocm_data.model_dump(),
+                        priority=EventPriority.INFO,
+                    )
+                    self.result.message = f"ROCm: {rocm_data.model_dump()}"
+                    self.result.status = ExecutionStatus.OK
+                    break
+                else:
+                    self._log_event(
+                        category=EventCategory.OS,
+                        description=f"Could not get ROCm version format from {path}",
+                        data={"raw_output": res.stdout},
+                        priority=EventPriority.ERROR,
+                    )
+
+        if not rocm_data:
             self._log_event(
                 category=EventCategory.OS,
                 description="Error checking ROCm version",
