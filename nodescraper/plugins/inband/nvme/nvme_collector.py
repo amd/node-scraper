@@ -25,7 +25,6 @@
 ###############################################################################
 import os
 import re
-import traceback
 
 from pydantic import ValidationError
 
@@ -108,7 +107,7 @@ class NvmeCollector(InBandDataCollector[NvmeDataModel, None]):
                 self._log_event(
                     category=EventCategory.SW_DRIVER,
                     description="Validation error while building NvmeDataModel",
-                    data={"errors": traceback.format_tb(exp.__traceback__)},
+                    data={"errors": exp.errors(include_url=False)},
                     priority=EventPriority.ERROR,
                 )
                 self.result.message = "NVMe data invalid format"
