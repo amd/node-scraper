@@ -1,7 +1,7 @@
 # Create venv if not already present
 if [ ! -d "venv" ]; then
-    python3 -m pip install virtualenv
-    python3 -m virtualenv venv
+    python3 -m pip install venv
+    python3 -m venv venv
 fi
 
 # Activate the desired venv
