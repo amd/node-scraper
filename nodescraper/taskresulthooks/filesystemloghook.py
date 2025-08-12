@@ -60,7 +60,7 @@ class FileSystemLogHook(TaskResultHook):
 
         artifact_map = {}
         for artifact in task_result.artifacts:
-            if isinstance(artifact, BaseFileArtifact):
+            if issubclass(artifact, BaseFileArtifact):
                 log_name = get_unique_filename(log_path, artifact.filename)
                 artifact.log_model(log_path)
 
