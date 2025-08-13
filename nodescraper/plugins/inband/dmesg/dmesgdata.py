@@ -34,6 +34,7 @@ class DmesgData(DataModel):
     """Data model for in band dmesg log"""
 
     dmesg_content: str
+    dmesg_logs: list[dict] = None
 
     @classmethod
     def get_new_dmesg_lines(cls, current_dmesg: str, new_dmesg: str) -> str:
