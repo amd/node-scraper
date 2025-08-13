@@ -23,6 +23,8 @@
 # SOFTWARE.
 #
 ###############################################################################
+import types
+
 import pytest
 
 from nodescraper.connection.inband.inband import CommandArtifact
@@ -115,7 +117,7 @@ def test_bad_exit_code(conn_mock, system_info):
 
     res, _ = collector.collect_data()
     assert res.status == ExecutionStatus.ERROR
-    assert len(res.events) == 1
+    assert len(res.events) == 2
     assert res.events[0].description == "Error reading dmesg"
 
 
@@ -141,3 +143,141 @@ def test_data_model():
     assert dmesg_data2.dmesg_content == (
         "2023-06-01T01:00:00,685236-05:00 test message1\n2023-06-01T02:30:00,685106-05:00 test message2"
     )
+
+
+class DummyRes:
+    def __init__(self, command="", stdout="", exit_code=0, stderr=""):
+        self.command = command
+        self.stdout = stdout
+        self.exit_code = exit_code
+        self.stderr = stderr
+
+
+def get_collector(monkeypatch, run_map, system_info, conn_mock):
+    c = DmesgCollector(
+        system_info=system_info,
+        system_interaction_level=SystemInteractionLevel.INTERACTIVE,
+        connection=conn_mock,
+    )
+    c.result = types.SimpleNamespace(artifacts=[], message=None)  # minimal fields we use
+    c._events = []
+
+    def _log_event(**kw):
+        c._events.append(kw)
+
+    def _run_sut_cmd(cmd, *args, **kwargs):
+        return run_map(cmd, *args, **kwargs)
+
+    monkeypatch.setattr(c, "_log_event", _log_event, raising=True)
+    monkeypatch.setattr(c, "_run_sut_cmd", _run_sut_cmd, raising=True)
+    return c
+
+
+def test_collect_rotations_good_path(monkeypatch, system_info, conn_mock):
+    ls_out = (
+        "\n".join(
+            [
+                "/var/log/dmesg",
+                "/var/log/dmesg.1",
+                "/var/log/dmesg.2.gz",
+                "/var/log/dmesg.10.gz",
+            ]
+        )
+        + "\n"
+    )
+
+    def run_map(cmd, **kwargs):
+        if cmd.startswith("ls -1 /var/log/dmesg"):
+            return DummyRes(command=cmd, stdout=ls_out, exit_code=0)
+        if cmd.startswith("cat '"):
+            if "/var/log/dmesg.1'" in cmd:
+                return DummyRes(command=cmd, stdout="dmesg.1 content\n", exit_code=0)
+            if "/var/log/dmesg'" in cmd:
+                return DummyRes(command=cmd, stdout="dmesg content\n", exit_code=0)
+        if "gzip -dc" in cmd and "/var/log/dmesg.2.gz" in cmd:
+            return DummyRes(command=cmd, stdout="gz2 content\n", exit_code=0)
+        if "gzip -dc" in cmd and "/var/log/dmesg.10.gz" in cmd:
+            return DummyRes(command=cmd, stdout="gz10 content\n", exit_code=0)
+        return DummyRes(command=cmd, stdout="", exit_code=1, stderr="unexpected")
+
+    c = get_collector(monkeypatch, run_map, system_info, conn_mock)
+
+    collected = c._collect_dmesg_rotations()
+
+    names = {a.filename for a in c.result.artifacts}
+    assert names == {"dmesg.log", "dmesg.1.log", "dmesg.2.gz.log", "dmesg.10.gz.log"}
+
+    assert isinstance(collected, list)
+    assert len(collected) == 4
+
+    descs = [e["description"] for e in c._events]
+    assert "Collected dmesg rotated files" in descs
+
+
+def test_collect_rotations_no_files(monkeypatch, system_info, conn_mock):
+    def run_map(cmd, **kwargs):
+        if cmd.startswith("ls -1 /var/log/dmesg"):
+            return DummyRes(command=cmd, stdout="", exit_code=0)
+        return DummyRes(command=cmd, stdout="", exit_code=1)
+
+    c = get_collector(monkeypatch, run_map, system_info, conn_mock)
+
+    collected = c._collect_dmesg_rotations()
+
+    assert collected == 0
+    assert c.result.artifacts == []
+
+    events = c._events
+    assert any(
+        e["description"].startswith("No /var/log/dmesg files found")
+        and e["priority"].name == "WARNING"
+        for e in events
+    )
+
+
+def test_collect_rotations_gz_failure(monkeypatch, system_info, conn_mock):
+    ls_out = "/var/log/dmesg.2.gz\n"
+
+    def run_map(cmd, **kwargs):
+        if cmd.startswith("ls -1 /var/log/dmesg"):
+            return DummyRes(command=cmd, stdout=ls_out, exit_code=0)
+        if "gzip -dc" in cmd and "/var/log/dmesg.2.gz" in cmd:
+            return DummyRes(command=cmd, stdout="", exit_code=1, stderr="gzip: not found")
+        return DummyRes(command=cmd, stdout="", exit_code=1)
+
+    c = get_collector(monkeypatch, run_map, system_info, conn_mock)
+
+    collected = c._collect_dmesg_rotations()
+
+    assert isinstance(collected, list)
+    assert len(collected) == 0
+    assert c.result.artifacts == []
+
+    fail_events = [
+        e for e in c._events if e["description"] == "Some dmesg files could not be collected."
+    ]
+    assert fail_events, "Expected a failure event"
+    failed = fail_events[-1]["data"]["failed"]
+    assert any(item["path"].endswith("/var/log/dmesg.2.gz") for item in failed)
+
+
+def test_collect_data_integration(monkeypatch, system_info, conn_mock):
+    def run_map(cmd, **kwargs):
+        if cmd == DmesgCollector.DMESG_CMD:
+            return DummyRes(command=cmd, stdout="DMESG OUTPUT\n", exit_code=0)
+        if cmd.startswith("ls -1 /var/log/dmesg"):
+            return DummyRes(command=cmd, stdout="/var/log/dmesg\n", exit_code=0)
+        if cmd.startswith("cat '") and "/var/log/dmesg'" in cmd:
+            return DummyRes(command=cmd, stdout="dmesg file content\n", exit_code=0)
+        return DummyRes(command=cmd, stdout="", exit_code=1)
+
+    c = get_collector(monkeypatch, run_map, system_info, conn_mock)
+
+    result, data = c.collect_data()
+
+    assert isinstance(data, DmesgData)
+    assert data.dmesg_content == "DMESG OUTPUT\n"
+
+    assert len(c.result.artifacts) == 1
+    assert c.result.artifacts[0].filename == "dmesg.log"
+    assert c.result.message == "Dmesg data collected"

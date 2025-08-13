@@ -42,12 +42,12 @@ class DmesgCollector(InBandDataCollector[DmesgData, None]):
 
     DMESG_CMD = "dmesg --time-format iso -x"
 
-    DMESG_LIST_CMD = (
+    DMESG_LOGS_CMD = (
         r"ls -1 /var/log/dmesg /var/log/dmesg.1 /var/log/dmesg.[0-9]*.gz 2>/dev/null || true"
     )
 
     def _shell_quote(self, s: str) -> str:
-        """POSIX single-quote."""
+        """single-quote fix."""
         return "'" + s.replace("'", "'\"'\"'") + "'"
 
     def _nice_dmesg_name(self, path: str) -> str:
@@ -58,20 +58,15 @@ class DmesgCollector(InBandDataCollector[DmesgData, None]):
             return "dmesg.1.log"
         m = re.search(r"/dmesg\.(\d+)\.gz$", path)
         if m:
-            return f"dmesg.{m.group(1)}.log"
+            return f"dmesg.{m.group(1)}.gz.log"
         base = path.rsplit("/", 1)[-1]
         return base.replace(".gz", "") + ".log"
 
     def _collect_dmesg_rotations(self) -> int:
-        """
-        Collect /var/log/dmesg, /var/log/dmesg.1, and /var/log/dmesg.N.gz (decompressed).
-        Attaches each as a text artifact.
-
-        Returns:
-             list: list of logs collected.
-
-        """
-        list_res = self._run_sut_cmd(self.DMESG_LIST_CMD)
+        list_res = self._run_sut_cmd(
+            r"ls -1 /var/log/dmesg /var/log/dmesg.1 /var/log/dmesg.[0-9]*.gz 2>/dev/null || true",
+            sudo=True,
+        )
         paths = [p.strip() for p in (list_res.stdout or "").splitlines() if p.strip()]
         if not paths:
             self._log_event(
@@ -82,43 +77,56 @@ class DmesgCollector(InBandDataCollector[DmesgData, None]):
             )
             return 0
 
-        collected, failed = [], []
+        collected_logs, failed_logs = [], []
         for p in paths:
             qp = self._shell_quote(p)
             if p.endswith(".gz"):
-                cmd = f"(command -v gzip >/dev/null && gzip -dc {qp}) || (command -v zcat >/dev/null && zcat {qp}) || cat {qp}"
+                cmd = f"gzip -dc {qp} 2>/dev/null || zcat {qp} 2>/dev/null"
+                res = self._run_sut_cmd(cmd, sudo=True)
+                if res.exit_code == 0 and res.stdout is not None:
+                    fname = self._nice_dmesg_name(p)
+                    self.logger.info("Collected dmesg log: %s", fname)
+                    self.result.artifacts.append(FileArtifact(filename=fname, contents=res.stdout))
+                    collected_logs.append(
+                        {"path": p, "as": fname, "bytes": len(res.stdout.encode("utf-8", "ignore"))}
+                    )
+                else:
+                    failed_logs.append(
+                        {"path": p, "exit_code": res.exit_code, "stderr": res.stderr, "cmd": cmd}
+                    )
             else:
                 cmd = f"cat {qp}"
+                res = self._run_sut_cmd(cmd, sudo=True)
+                if res.exit_code == 0 and res.stdout is not None:
+                    fname = self._nice_dmesg_name(p)
+                    self.logger.info("Collected dmesg log: %s", fname)
+                    self.result.artifacts.append(FileArtifact(filename=fname, contents=res.stdout))
+                    collected_logs.append(
+                        {"path": p, "as": fname, "bytes": len(res.stdout.encode("utf-8", "ignore"))}
+                    )
+                else:
+                    failed_logs.append(
+                        {"path": p, "exit_code": res.exit_code, "stderr": res.stderr, "cmd": cmd}
+                    )
 
-            res = self._run_sut_cmd(cmd)
-            if res.exit_code == 0 and res.stdout is not None:
-                fname = self._nice_dmesg_name(p)
-                self.result.artifacts.append(FileArtifact(filename=fname, contents=res.stdout))
-                collected.append(
-                    {"path": p, "as": fname, "bytes": len(res.stdout.encode("utf-8", "ignore"))}
-                )
-            else:
-                failed.append({"path": p, "exit_code": res.exit_code, "stderr": res.stderr})
-
-        if collected:
+        if collected_logs:
             self._log_event(
                 category=EventCategory.OS,
                 description="Collected dmesg rotated files",
-                data={"collected": collected},
+                data={"collected": collected_logs},
                 priority=EventPriority.INFO,
             )
-            # self.result.status = self.result.status or ExecutionStatus.OK
             self.result.message = self.result.message or "dmesg rotated files collected"
 
-        if failed:
+        if failed_logs:
             self._log_event(
                 category=EventCategory.OS,
                 description="Some dmesg files could not be collected.",
-                data={"failed": failed},
+                data={"failed": failed_logs},
                 priority=EventPriority.WARNING,
             )
 
-        return collected
+        return collected_logs
 
     def _get_dmesg_content(self) -> str:
         """run dmesg command on system and return output
