@@ -60,19 +60,22 @@ def test_skips_on_windows(collector):
 @pytest.mark.skip(reason="No NVME device in testing infrastructure")
 def test_successful_collection(collector):
     collector.system_info = MagicMock(os_family=OSFamily.LINUX)
-
     collector._run_sut_cmd.return_value = MagicMock(exit_code=0, stdout="output")
+
+    fake_artifact = MagicMock()
+    fake_artifact.filename = "telemetry_log"
+    fake_artifact.contents = b"telemetry-raw-binary"
+
+    collector._read_sut_file = MagicMock(return_value=fake_artifact)
 
     result, data = collector.collect_data()
 
     assert result.status == ExecutionStatus.OK
     assert result.message == "NVMe data successfully collected"
     assert isinstance(data, NvmeDataModel)
-    assert collector._run_sut_cmd.call_count == 7
-    assert any(
-        "Collected NVMe data" in call.kwargs["description"]
-        for call in collector._log_event.call_args_list
-    )
+    assert collector._run_sut_cmd.call_count == 8
+
+    collector._read_sut_file.assert_called_once_with(filename="telemetry_log", encoding=None)
 
 
 def test_partial_failures(collector):

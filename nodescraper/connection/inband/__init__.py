@@ -23,7 +23,13 @@
 # SOFTWARE.
 #
 ###############################################################################
-from .inband import CommandArtifact, FileArtifact, InBandConnection
+from .inband import (
+    BaseFileArtifact,
+    BinaryFileArtifact,
+    CommandArtifact,
+    InBandConnection,
+    TextFileArtifact,
+)
 from .inbandlocal import LocalShell
 from .inbandmanager import InBandConnectionManager
 from .sshparams import SSHConnectionParams
@@ -33,6 +39,8 @@ __all__ = [
     "LocalShell",
     "InBandConnectionManager",
     "InBandConnection",
-    "FileArtifact",
+    "BaseFileArtifact",
+    "TextFileArtifact",
+    "BinaryFileArtifact",
     "CommandArtifact",
 ]
