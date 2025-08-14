@@ -159,7 +159,7 @@ def get_collector(monkeypatch, run_map, system_info, conn_mock):
         system_interaction_level=SystemInteractionLevel.INTERACTIVE,
         connection=conn_mock,
     )
-    c.result = types.SimpleNamespace(artifacts=[], message=None)  # minimal fields we use
+    c.result = types.SimpleNamespace(artifacts=[], message=None)
     c._events = []
 
     def _log_event(**kw):

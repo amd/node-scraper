@@ -43,7 +43,7 @@ class DmesgCollector(InBandDataCollector[DmesgData, None]):
     DMESG_CMD = "dmesg --time-format iso -x"
 
     DMESG_LOGS_CMD = (
-        r"ls -1 /var/log/dmesg /var/log/dmesg.1 /var/log/dmesg.[0-9]*.gz 2>/dev/null || true"
+        r"ls -1 /var/log/dmesg* 2>/dev/null | grep -E '^/var/log/dmesg(\.[0-9]+(\.gz)?)?$' || true"
     )
 
     def _shell_quote(self, s: str) -> str:
@@ -51,22 +51,21 @@ class DmesgCollector(InBandDataCollector[DmesgData, None]):
         return "'" + s.replace("'", "'\"'\"'") + "'"
 
     def _nice_dmesg_name(self, path: str) -> str:
-        """Map path to filename"""
-        if path.endswith("/dmesg"):
+        """Map path to filename."""
+        base = path.rstrip("/").rsplit("/", 1)[-1]
+        if base == "dmesg":
             return "dmesg.log"
-        if path.endswith("/dmesg.1"):
-            return "dmesg.1.log"
-        m = re.search(r"/dmesg\.(\d+)\.gz$", path)
+        m = re.fullmatch(r"dmesg\.(\d+)\.gz", base)
         if m:
             return f"dmesg.{m.group(1)}.gz.log"
-        base = path.rsplit("/", 1)[-1]
-        return base.replace(".gz", "") + ".log"
+        m = re.fullmatch(r"dmesg\.(\d+)", base)
+        if m:
+            return f"dmesg.{m.group(1)}.log"
+
+        return (base[:-3] if base.endswith(".gz") else base) + ".log"
 
     def _collect_dmesg_rotations(self) -> int:
-        list_res = self._run_sut_cmd(
-            r"ls -1 /var/log/dmesg /var/log/dmesg.1 /var/log/dmesg.[0-9]*.gz 2>/dev/null || true",
-            sudo=True,
-        )
+        list_res = self._run_sut_cmd(self.DMESG_LOGS_CMD, sudo=True)
         paths = [p.strip() for p in (list_res.stdout or "").splitlines() if p.strip()]
         if not paths:
             self._log_event(
