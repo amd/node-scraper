@@ -28,4 +28,10 @@ from nodescraper.models import CollectorArgs
 
 
 class DmesgCollectorArgs(CollectorArgs):
+    """Collector args
+
+    Args:
+        CollectorArgs (CollectorArgs): specific dmesg collector args
+    """
+
     collect_logs: bool = False

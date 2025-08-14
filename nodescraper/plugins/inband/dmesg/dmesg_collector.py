@@ -49,11 +49,25 @@ class DmesgCollector(InBandDataCollector[DmesgData, None]):
     )
 
     def _shell_quote(self, s: str) -> str:
-        """single-quote fix."""
+        """Single quote fix
+
+        Args:
+            s (str): path to be converted
+
+        Returns:
+            str: path to be returned
+        """
         return "'" + s.replace("'", "'\"'\"'") + "'"
 
     def _nice_dmesg_name(self, path: str) -> str:
-        """Map path to filename."""
+        """Map path to filename
+
+        Args:
+            path (str): path of remote file
+
+        Returns:
+            str: filename for local file
+        """
         base = path.rstrip("/").rsplit("/", 1)[-1]
         if base == "dmesg":
             return "dmesg_log.log"
@@ -66,7 +80,8 @@ class DmesgCollector(InBandDataCollector[DmesgData, None]):
 
         return (base[:-3] if base.endswith(".gz") else base) + ".log"
 
-    def _collect_dmesg_rotations(self) -> int:
+    def _collect_dmesg_rotations(self):
+        """Collect dmesg logs"""
         list_res = self._run_sut_cmd(self.DMESG_LOGS_CMD, sudo=True)
         paths = [p.strip() for p in (list_res.stdout or "").splitlines() if p.strip()]
         if not paths:
