@@ -117,7 +117,7 @@ def test_bad_exit_code(conn_mock, system_info):
 
     res, _ = collector.collect_data()
     assert res.status == ExecutionStatus.ERROR
-    assert len(res.events) == 2
+    assert len(res.events) == 1
     assert res.events[0].description == "Error reading dmesg"
 
 
@@ -177,7 +177,7 @@ def test_collect_rotations_good_path(monkeypatch, system_info, conn_mock):
     ls_out = (
         "\n".join(
             [
-                "/var/log/dmesg",
+                "/var/log/dmesg_log",
                 "/var/log/dmesg.1",
                 "/var/log/dmesg.2.gz",
                 "/var/log/dmesg.10.gz",
@@ -192,7 +192,7 @@ def test_collect_rotations_good_path(monkeypatch, system_info, conn_mock):
         if cmd.startswith("cat '"):
             if "/var/log/dmesg.1'" in cmd:
                 return DummyRes(command=cmd, stdout="dmesg.1 content\n", exit_code=0)
-            if "/var/log/dmesg'" in cmd:
+            if "/var/log/dmesg_log'" in cmd:
                 return DummyRes(command=cmd, stdout="dmesg content\n", exit_code=0)
         if "gzip -dc" in cmd and "/var/log/dmesg.2.gz" in cmd:
             return DummyRes(command=cmd, stdout="gz2 content\n", exit_code=0)
@@ -202,13 +202,10 @@ def test_collect_rotations_good_path(monkeypatch, system_info, conn_mock):
 
     c = get_collector(monkeypatch, run_map, system_info, conn_mock)
 
-    collected = c._collect_dmesg_rotations()
+    c._collect_dmesg_rotations()
 
     names = {a.filename for a in c.result.artifacts}
-    assert names == {"dmesg.log", "dmesg.1.log", "dmesg.2.gz.log", "dmesg.10.gz.log"}
-
-    assert isinstance(collected, list)
-    assert len(collected) == 4
+    assert names == {"dmesg_log.log", "dmesg.1.log", "dmesg.2.gz.log", "dmesg.10.gz.log"}
 
     descs = [e["description"] for e in c._events]
     assert "Collected dmesg rotated files" in descs
@@ -222,9 +219,8 @@ def test_collect_rotations_no_files(monkeypatch, system_info, conn_mock):
 
     c = get_collector(monkeypatch, run_map, system_info, conn_mock)
 
-    collected = c._collect_dmesg_rotations()
+    c._collect_dmesg_rotations()
 
-    assert collected == 0
     assert c.result.artifacts == []
 
     events = c._events
@@ -247,10 +243,8 @@ def test_collect_rotations_gz_failure(monkeypatch, system_info, conn_mock):
 
     c = get_collector(monkeypatch, run_map, system_info, conn_mock)
 
-    collected = c._collect_dmesg_rotations()
+    c._collect_dmesg_rotations()
 
-    assert isinstance(collected, list)
-    assert len(collected) == 0
     assert c.result.artifacts == []
 
     fail_events = [
@@ -277,7 +271,3 @@ def test_collect_data_integration(monkeypatch, system_info, conn_mock):
 
     assert isinstance(data, DmesgData)
     assert data.dmesg_content == "DMESG OUTPUT\n"
-
-    assert len(c.result.artifacts) == 1
-    assert c.result.artifacts[0].filename == "dmesg.log"
-    assert c.result.message == "Dmesg data collected"

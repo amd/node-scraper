@@ -23,24 +23,9 @@
 # SOFTWARE.
 #
 ###############################################################################
-from nodescraper.base import InBandDataPlugin
 
-from .analyzer_args import DmesgAnalyzerArgs
-from .collector_args import DmesgCollectorArgs
-from .dmesg_analyzer import DmesgAnalyzer
-from .dmesg_collector import DmesgCollector
-from .dmesgdata import DmesgData
+from nodescraper.models import CollectorArgs
 
 
-class DmesgPlugin(InBandDataPlugin[DmesgData, DmesgCollectorArgs, DmesgAnalyzerArgs]):
-    """Plugin for collection and analysis of dmesg data"""
-
-    DATA_MODEL = DmesgData
-
-    COLLECTOR = DmesgCollector
-
-    ANALYZER = DmesgAnalyzer
-
-    ANALYZER_ARGS = DmesgAnalyzerArgs
-
-    COLLECTOR_ARGS = DmesgCollectorArgs
+class DmesgCollectorArgs(CollectorArgs):
+    collect_logs: bool = False

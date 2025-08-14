@@ -24,12 +24,14 @@
 #
 ###############################################################################
 import re
+from typing import Optional
 
 from nodescraper.base import InBandDataCollector
 from nodescraper.connection.inband import FileArtifact
 from nodescraper.enums import EventCategory, EventPriority, OSFamily
 from nodescraper.models import TaskResult
 
+from .collector_args import DmesgCollectorArgs
 from .dmesgdata import DmesgData
 
 
@@ -54,7 +56,7 @@ class DmesgCollector(InBandDataCollector[DmesgData, None]):
         """Map path to filename."""
         base = path.rstrip("/").rsplit("/", 1)[-1]
         if base == "dmesg":
-            return "dmesg.log"
+            return "dmesg_log.log"
         m = re.fullmatch(r"dmesg\.(\d+)\.gz", base)
         if m:
             return f"dmesg.{m.group(1)}.gz.log"
@@ -81,7 +83,7 @@ class DmesgCollector(InBandDataCollector[DmesgData, None]):
             qp = self._shell_quote(p)
             if p.endswith(".gz"):
                 cmd = f"gzip -dc {qp} 2>/dev/null || zcat {qp} 2>/dev/null"
-                res = self._run_sut_cmd(cmd, sudo=True)
+                res = self._run_sut_cmd(cmd, sudo=True, log_artifact=False)
                 if res.exit_code == 0 and res.stdout is not None:
                     fname = self._nice_dmesg_name(p)
                     self.logger.info("Collected dmesg log: %s", fname)
@@ -95,7 +97,7 @@ class DmesgCollector(InBandDataCollector[DmesgData, None]):
                     )
             else:
                 cmd = f"cat {qp}"
-                res = self._run_sut_cmd(cmd, sudo=True)
+                res = self._run_sut_cmd(cmd, sudo=True, log_artifact=False)
                 if res.exit_code == 0 and res.stdout is not None:
                     fname = self._nice_dmesg_name(p)
                     self.logger.info("Collected dmesg log: %s", fname)
@@ -125,8 +127,6 @@ class DmesgCollector(InBandDataCollector[DmesgData, None]):
                 priority=EventPriority.WARNING,
             )
 
-        return collected_logs
-
     def _get_dmesg_content(self) -> str:
         """run dmesg command on system and return output
 
@@ -148,15 +148,20 @@ class DmesgCollector(InBandDataCollector[DmesgData, None]):
 
     def collect_data(
         self,
-        args=None,
+        args: Optional[DmesgCollectorArgs] = None,
     ) -> tuple[TaskResult, DmesgData | None]:
         """Collect dmesg data from the system
 
         Returns:
             tuple[TaskResult, DmesgData | None]: tuple containing the result of the task and the dmesg data if available
         """
+
+        if args is None:
+            args = DmesgCollectorArgs()
+
         dmesg_content = self._get_dmesg_content()
-        _ = self._collect_dmesg_rotations()
+        if args.collect_logs:
+            self._collect_dmesg_rotations()
 
         if dmesg_content:
             dmesg_data = DmesgData(dmesg_content=dmesg_content)
