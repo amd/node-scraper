@@ -62,13 +62,13 @@ class RocmCollector(InBandDataCollector[RocmDataModel, None]):
                 self.result.message = f"ROCm: {rocm_data.model_dump()}"
                 self.result.status = ExecutionStatus.OK
                 break
-            else:
-                self._log_event(
-                    category=EventCategory.OS,
-                    description=f"Could not get ROCm version format from {path}",
-                    data={"raw_output": res.stdout},
-                    priority=EventPriority.ERROR,
-                )
+        else:
+            self._log_event(
+                category=EventCategory.OS,
+                description=f"Could not get ROCm version format from {path}",
+                data={"raw_output": res.stdout},
+                priority=EventPriority.ERROR,
+            )
 
         if not rocm_data:
             self._log_event(
