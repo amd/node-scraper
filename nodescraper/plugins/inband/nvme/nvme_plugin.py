@@ -23,24 +23,15 @@
 # SOFTWARE.
 #
 ###############################################################################
-from .inband import (
-    BaseFileArtifact,
-    BinaryFileArtifact,
-    CommandArtifact,
-    InBandConnection,
-    TextFileArtifact,
-)
-from .inbandlocal import LocalShell
-from .inbandmanager import InBandConnectionManager
-from .sshparams import SSHConnectionParams
+from nodescraper.base import InBandDataPlugin
 
-__all__ = [
-    "SSHConnectionParams",
-    "LocalShell",
-    "InBandConnectionManager",
-    "InBandConnection",
-    "BaseFileArtifact",
-    "TextFileArtifact",
-    "BinaryFileArtifact",
-    "CommandArtifact",
-]
+from .nvme_collector import NvmeCollector
+from .nvmedata import NvmeDataModel
+
+
+class NvmePlugin(InBandDataPlugin[NvmeDataModel, None, None]):
+    """Plugin for collection and analysis of nvme data"""
+
+    DATA_MODEL = NvmeDataModel
+
+    COLLECTOR = NvmeCollector
