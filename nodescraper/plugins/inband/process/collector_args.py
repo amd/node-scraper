@@ -23,10 +23,9 @@
 # SOFTWARE.
 #
 ###############################################################################
-from pydantic import BaseModel
+
+from nodescraper.models import CollectorArgs
 
 
-class ProcessCollectorArgs(BaseModel):
+class ProcessCollectorArgs(CollectorArgs):
     top_n_process: int = 10
-
-    model_config = {"extra": "forbid"}

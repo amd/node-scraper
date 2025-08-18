@@ -28,7 +28,7 @@ import re
 from typing import Optional
 
 from nodescraper.base.regexanalyzer import ErrorRegex, RegexAnalyzer
-from nodescraper.connection.inband import FileArtifact
+from nodescraper.connection.inband import TextFileArtifact
 from nodescraper.enums import EventCategory, EventPriority
 from nodescraper.models import Event, TaskResult
 
@@ -53,7 +53,7 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
             event_category=EventCategory.SW_DRIVER,
         ),
         ErrorRegex(
-            regex=re.compile(r"[Kk]ernel panic.*"),
+            regex=re.compile(r"\bkernel panic\b.*", re.IGNORECASE),
             message="Kernel Panic",
             event_category=EventCategory.SW_DRIVER,
         ),
@@ -294,6 +294,33 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
             event_category=EventCategory.SW_DRIVER,
             event_priority=EventPriority.WARNING,
         ),
+        ErrorRegex(
+            regex=re.compile(
+                r"(?:\[[^\]]+\]\s*)?LNetError:.*ko2iblnd:\s*No matching interfaces",
+                re.IGNORECASE,
+            ),
+            message="LNet: ko2iblnd has no matching interfaces",
+            event_category=EventCategory.IO,
+            event_priority=EventPriority.WARNING,
+        ),
+        ErrorRegex(
+            regex=re.compile(
+                r"(?:\[[^\]]+\]\s*)?LNetError:\s*.*Error\s*-?\d+\s+starting up LNI\s+\w+",
+                re.IGNORECASE,
+            ),
+            message="LNet: Error starting up LNI",
+            event_category=EventCategory.IO,
+            event_priority=EventPriority.WARNING,
+        ),
+        ErrorRegex(
+            regex=re.compile(
+                r"LustreError:.*ptlrpc_init_portals\(\).*network initiali[sz]ation failed",
+                re.IGNORECASE,
+            ),
+            message="Lustre: network initialisation failed",
+            event_category=EventCategory.IO,
+            event_priority=EventPriority.WARNING,
+        ),
     ]
 
     @classmethod
@@ -386,7 +413,7 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
                 args.analysis_range_end,
             )
             self.result.artifacts.append(
-                FileArtifact(filename="filtered_dmesg.log", contents=dmesg_content)
+                TextFileArtifact(filename="filtered_dmesg.log", contents=dmesg_content)
             )
         else:
             dmesg_content = data.dmesg_content

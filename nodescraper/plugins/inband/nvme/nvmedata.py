@@ -23,22 +23,21 @@
 # SOFTWARE.
 #
 ###############################################################################
-from nodescraper.base import InBandDataPlugin
+from pydantic import BaseModel
 
-from .analyzer_args import StorageAnalyzerArgs
-from .collector_args import StorageCollectorArgs
-from .storage_analyzer import StorageAnalyzer
-from .storage_collector import StorageCollector
-from .storagedata import StorageDataModel
+from nodescraper.models import DataModel
 
 
-class StoragePlugin(InBandDataPlugin[StorageDataModel, StorageCollectorArgs, StorageAnalyzerArgs]):
-    """Plugin for collection and analysis of disk usage data"""
+class DeviceNvmeData(BaseModel):
+    smart_log: str | None = None
+    error_log: str | None = None
+    id_ctrl: str | None = None
+    id_ns: str | None = None
+    fw_log: str | None = None
+    self_test_log: str | None = None
+    get_log: str | None = None
+    telemetry_log: str | None = None
 
-    DATA_MODEL = StorageDataModel
 
-    COLLECTOR = StorageCollector
-
-    ANALYZER = StorageAnalyzer
-
-    COLLECTOR_ARGS = StorageCollectorArgs
+class NvmeDataModel(DataModel):
+    devices: dict[str, DeviceNvmeData]

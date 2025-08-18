@@ -25,20 +25,19 @@
 ###############################################################################
 from nodescraper.base import InBandDataPlugin
 
-from .analyzer_args import StorageAnalyzerArgs
-from .collector_args import StorageCollectorArgs
-from .storage_analyzer import StorageAnalyzer
-from .storage_collector import StorageCollector
-from .storagedata import StorageDataModel
+from .analyzer_args import KernelModuleAnalyzerArgs
+from .kernel_module_analyzer import KernelModuleAnalyzer
+from .kernel_module_collector import KernelModuleCollector
+from .kernel_module_data import KernelModuleDataModel
 
 
-class StoragePlugin(InBandDataPlugin[StorageDataModel, StorageCollectorArgs, StorageAnalyzerArgs]):
-    """Plugin for collection and analysis of disk usage data"""
+class KernelModulePlugin(InBandDataPlugin[KernelModuleDataModel, None, KernelModuleAnalyzerArgs]):
+    """Plugin for collection and analysis of kernel data"""
 
-    DATA_MODEL = StorageDataModel
+    DATA_MODEL = KernelModuleDataModel
 
-    COLLECTOR = StorageCollector
+    COLLECTOR = KernelModuleCollector
 
-    ANALYZER = StorageAnalyzer
+    ANALYZER = KernelModuleAnalyzer
 
-    COLLECTOR_ARGS = StorageCollectorArgs
+    ANALYZER_ARGS = KernelModuleAnalyzerArgs

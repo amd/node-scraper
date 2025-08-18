@@ -50,7 +50,7 @@ class Event(BaseModel):
     timestamp: datetime.datetime = Field(
         default_factory=lambda: datetime.datetime.now(datetime.timezone.utc)
     )
-    reporter: str = "ERROR_SCRAPER"
+    reporter: str = "NODE_SCRAPER"
     category: str
     description: str
     data: dict = Field(default_factory=dict)

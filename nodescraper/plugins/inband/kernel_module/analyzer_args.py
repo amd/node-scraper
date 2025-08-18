@@ -23,22 +23,37 @@
 # SOFTWARE.
 #
 ###############################################################################
-from nodescraper.base import InBandDataPlugin
+import re
 
-from .analyzer_args import StorageAnalyzerArgs
-from .collector_args import StorageCollectorArgs
-from .storage_analyzer import StorageAnalyzer
-from .storage_collector import StorageCollector
-from .storagedata import StorageDataModel
+from nodescraper.models import AnalyzerArgs
+from nodescraper.plugins.inband.kernel_module.kernel_module_data import (
+    KernelModuleDataModel,
+)
 
 
-class StoragePlugin(InBandDataPlugin[StorageDataModel, StorageCollectorArgs, StorageAnalyzerArgs]):
-    """Plugin for collection and analysis of disk usage data"""
+class KernelModuleAnalyzerArgs(AnalyzerArgs):
+    kernel_modules: dict[str, dict] = {}
+    regex_filter: list[str] = ["amd"]
 
-    DATA_MODEL = StorageDataModel
+    @classmethod
+    def build_from_model(cls, datamodel: KernelModuleDataModel) -> "KernelModuleAnalyzerArgs":
+        """build analyzer args from data model and filter by regex_filter
 
-    COLLECTOR = StorageCollector
+        Args:
+            datamodel (KernelModuleDataModel): data model for plugin
 
-    ANALYZER = StorageAnalyzer
+        Returns:
+            KernelModuleAnalyzerArgs: instance of analyzer args class
+        """
 
-    COLLECTOR_ARGS = StorageCollectorArgs
+        pattern_regex = re.compile("amd", re.IGNORECASE)
+        filtered_mods = {
+            name: data
+            for name, data in datamodel.kernel_modules.items()
+            if pattern_regex.search(name)
+        }
+
+        return cls(
+            kernel_modules=filtered_mods,
+            regex_filter=[],
+        )

@@ -24,6 +24,8 @@
 #
 ###############################################################################
 import argparse
+import csv
+import glob
 import json
 import logging
 import os
@@ -331,7 +333,7 @@ def generate_reference_config(
     for obj in results:
         if obj.result_data.collection_result.status != ExecutionStatus.OK:
             logger.warning(
-                "Plugin: %s result status is %, skipping",
+                "Plugin: %s result status is %s, skipping",
                 obj.source,
                 obj.result_data.collection_result.status,
             )
@@ -344,11 +346,13 @@ def generate_reference_config(
 
         plugin = plugin_reg.plugins.get(obj.source)
 
-        args = extract_analyzer_args_from_model(plugin, data_model, logger)
-        if not args:
-            continue
-        plugins[obj.source] = {"analysis_args": {}}
-        plugins[obj.source]["analysis_args"] = args.model_dump(exclude_none=True)
+        if obj.source not in plugins:
+            plugins[obj.source] = {}
+
+        a_args = extract_analyzer_args_from_model(plugin, data_model, logger)
+        if a_args:
+            plugins[obj.source]["analysis_args"] = a_args.model_dump(exclude_none=True)
+
     plugin_config.plugins = plugins
 
     return plugin_config
@@ -422,3 +426,91 @@ def find_datamodel_and_result(base_path: str) -> list[Tuple[str, str]]:
                 tuple_list.append((datamodel_path, result_path))
 
     return tuple_list
+
+
+def dump_results_to_csv(
+    results: list[PluginResult],
+    nodename: str,
+    log_path: str,
+    timestamp: str,
+    logger: logging.Logger,
+):
+    """dump node-scraper summary results to csv file
+
+    Args:
+        results (list[PluginResult]): list of PluginResults
+        nodename (str): node where results come from
+        log_path (str): path to results
+        timestamp (str): time when results were taken
+        logger (logging.Logger): instance of logger
+    """
+    fieldnames = ["nodename", "plugin", "status", "timestamp", "message"]
+    filename = log_path + "/nodescraper.csv"
+    all_rows = []
+    for res in results:
+        row = {
+            "nodename": nodename,
+            "plugin": res.source,
+            "status": res.status.name,
+            "timestamp": timestamp,
+            "message": res.message,
+        }
+        all_rows.append(row)
+    dump_to_csv(all_rows, filename, fieldnames, logger)
+
+
+def dump_to_csv(all_rows: list, filename: str, fieldnames: list[str], logger: logging.Logger):
+    """dump data to csv
+
+    Args:
+        all_rows (list): rows to be written
+        filename (str): name of file to write to
+        fieldnames (list[str]): header for csv file
+        logger (logging.Logger): isntance of logger
+    """
+    try:
+        with open(filename, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            for row in all_rows:
+                writer.writerow(row)
+    except Exception as exp:
+        logger.error("Could not dump data to csv file: %s", exp)
+    logger.info("Data written to csv file: %s", filename)
+
+
+def generate_summary(search_path: str, output_path: str | None, logger: logging.Logger):
+    """Concatenate csv files into 1 summary csv file
+
+    Args:
+        search_path (str): Path for previous runs
+        output_path (str | None): Path for new summary csv file
+        logger (logging.Logger): instance of logger
+    """
+
+    fieldnames = ["nodename", "plugin", "status", "timestamp", "message"]
+    all_rows = []
+
+    pattern = os.path.join(search_path, "**", "nodescraper.csv")
+    matched_files = glob.glob(pattern, recursive=True)
+
+    if not matched_files:
+        logger.error(f"No nodescraper.csv files found under {search_path}")
+        return
+
+    for filepath in matched_files:
+        logger.info(f"Reading: {filepath}")
+        with open(filepath, newline="") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                all_rows.append(row)
+
+    if not all_rows:
+        logger.error("No data rows found in matched CSV files.")
+        return
+
+    if not output_path:
+        output_path = os.getcwd()
+
+    output_path = os.path.join(output_path, "summary.csv")
+    dump_to_csv(all_rows, output_path, fieldnames, logger)

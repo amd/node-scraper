@@ -25,20 +25,13 @@
 ###############################################################################
 from nodescraper.base import InBandDataPlugin
 
-from .analyzer_args import StorageAnalyzerArgs
-from .collector_args import StorageCollectorArgs
-from .storage_analyzer import StorageAnalyzer
-from .storage_collector import StorageCollector
-from .storagedata import StorageDataModel
+from .nvme_collector import NvmeCollector
+from .nvmedata import NvmeDataModel
 
 
-class StoragePlugin(InBandDataPlugin[StorageDataModel, StorageCollectorArgs, StorageAnalyzerArgs]):
-    """Plugin for collection and analysis of disk usage data"""
+class NvmePlugin(InBandDataPlugin[NvmeDataModel, None, None]):
+    """Plugin for collection and analysis of nvme data"""
 
-    DATA_MODEL = StorageDataModel
+    DATA_MODEL = NvmeDataModel
 
-    COLLECTOR = StorageCollector
-
-    ANALYZER = StorageAnalyzer
-
-    COLLECTOR_ARGS = StorageCollectorArgs
+    COLLECTOR = NvmeCollector

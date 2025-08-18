@@ -21,13 +21,14 @@ usage: node-scraper [-h] [--sys-name STRING] [--sys-location {LOCAL,REMOTE}] [--
                     [--sys-sku STRING] [--sys-platform STRING] [--plugin-configs [STRING ...]] [--system-config STRING]
                     [--connection-config STRING] [--log-path STRING] [--log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}]
                     [--gen-reference-config]
-                    {run-plugins,describe,gen-plugin-config} ...
+                    {summary,run-plugins,describe,gen-plugin-config} ...
 
 node scraper CLI
 
 positional arguments:
-  {run-plugins,describe,gen-plugin-config}
+  {summary,run-plugins,describe,gen-plugin-config}
                         Subcommands
+    summary             Generates summary csv file
     run-plugins         Run a series of plugins
     describe            Display details on a built-in config or plugin
     gen-plugin-config   Generate a config for a plugin or list of plugins
@@ -38,7 +39,8 @@ options:
   --sys-location {LOCAL,REMOTE}
                         Location of target system (default: LOCAL)
   --sys-interaction-level {PASSIVE,INTERACTIVE,DISRUPTIVE}
-                        Specify system interaction level, used to determine the type of actions that plugins can perform (default: INTERACTIVE)
+                        Specify system interaction level, used to determine the type of actions that plugins can perform (default:
+                        INTERACTIVE)
   --sys-sku STRING      Manually specify SKU of system (default: None)
   --sys-platform STRING
                         Specify system platform (default: None)
@@ -53,7 +55,6 @@ options:
                         Change python log level (default: INFO)
   --gen-reference-config
                         Generate reference config from system. Writes to ./reference_config.json. (default: False)
-
 
 ```
 
@@ -166,6 +167,16 @@ This would produce the following config:
   "result_collators": {}
 }
 ```
+
+4. **'summary' sub command**
+The 'summary' subcommand can be used to combine results from multiple runs of node-scraper to a
+single summary.csv file. Sample run:
+```sh
+node-scraper summary --summary_path /<path_to_node-scraper_logs>
+```
+This will generate a new file '/<path_to_node-scraper_logs>/summary.csv' file. This file will
+contain the results from all 'nodescraper.csv' files from '/<path_to_node-scarper_logs>'.
+
 
 ### Plugin Configs
 A plugin JSON config should follow the structure of the plugin config model defined here.
