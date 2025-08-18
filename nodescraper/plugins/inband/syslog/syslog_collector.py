@@ -40,29 +40,39 @@ class SyslogCollector(InBandDataCollector[SyslogData, None]):
 
     DATA_MODEL = SyslogData
 
-    DMESG_LOGS_CMD = r"ls -1 /var/log/syslog* 2>/dev/null | grep -E '^/var/log/syslog(\.[0-9]+(\.gz)?)?$' || true"
+    SYSLOG_CMD = r"ls -1 /var/log/syslog* 2>/dev/null | grep -E '^/var/log/syslog(\.[0-9]+(\.gz)?)?$' || true"
 
     def _shell_quote(self, s: str) -> str:
         """single-quote fix."""
         return "'" + s.replace("'", "'\"'\"'") + "'"
 
     def _nice_syslog_name(self, path: str) -> str:
-        """Map path to filename."""
+        """Map path to filename
+        Args:
+            path (str): file path
+        Returns:
+            str: new local filename
+        """
+        prefix = "rotated_"
         base = path.rstrip("/").rsplit("/", 1)[-1]
+
         if base == "syslog":
-            return "syslog_log.log"
+            return f"{prefix}syslog.log"
+
         m = re.fullmatch(r"syslog\.(\d+)\.gz", base)
         if m:
-            return f"syslog.{m.group(1)}.gz.log"
+            return f"{prefix}syslog.{m.group(1)}.gz.log"
+
         m = re.fullmatch(r"syslog\.(\d+)", base)
         if m:
-            return f"syslog.{m.group(1)}.log"
+            return f"{prefix}syslog.{m.group(1)}.log"
 
-        return (base[:-3] if base.endswith(".gz") else base) + ".log"
+        middle = base[:-3] if base.endswith(".gz") else base
+        return f"{prefix}{middle}.log"
 
     def _collect_syslog_rotations(self) -> int:
         ret = 0
-        list_res = self._run_sut_cmd(self.DMESG_LOGS_CMD, sudo=True)
+        list_res = self._run_sut_cmd(self.SYSLOG_CMD, sudo=True)
         paths = [p.strip() for p in (list_res.stdout or "").splitlines() if p.strip()]
         if not paths:
             self._log_event(
