@@ -46,10 +46,6 @@ class StorageCollector(InBandDataCollector[StorageDataModel, None]):
         if args is None:
             args = StorageCollectorArgs()
 
-        if args.skip_sudo:
-            self.result.message = "Skipping sudo plugin"
-            self.result.status = ExecutionStatus.NOT_RAN
-            return self.result, None
         storage_data = {}
         if self.system_info.os_family == OSFamily.WINDOWS:
             res = self._run_sut_cmd(
@@ -66,6 +62,10 @@ class StorageCollector(InBandDataCollector[StorageDataModel, None]):
                             percent=round((int(size) - int(free_space)) / int(size) * 100, 2),
                         )
         else:
+            if args.skip_sudo:
+                self.result.message = "Skipping sudo plugin"
+                self.result.status = ExecutionStatus.NOT_RAN
+                return self.result, None
             res = self._run_sut_cmd("""sh -c 'df -lH -B1 | grep -v 'boot''""", sudo=True)
             if res.exit_code == 0:
                 for line in res.stdout.splitlines()[1:]:

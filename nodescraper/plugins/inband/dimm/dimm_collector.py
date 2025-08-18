@@ -46,11 +46,6 @@ class DimmCollector(InBandDataCollector[DimmDataModel, DimmCollectorArgs]):
         if args is None:
             args = DimmCollectorArgs()
 
-        if args.skip_sudo:
-            self.result.message = "Skipping sudo plugin"
-            self.result.status = ExecutionStatus.NOT_RAN
-            return self.result, None
-
         dimm_str = None
         if self.system_info.os_family == OSFamily.WINDOWS:
             res = self._run_sut_cmd("wmic memorychip get Capacity")
@@ -70,6 +65,10 @@ class DimmCollector(InBandDataCollector[DimmDataModel, DimmCollectorArgs]):
                 for capacity, count in capacities.items():
                     dimm_str += f"{count} x {capacity / 1024 / 1024:.2f}GB "
         else:
+            if args.skip_sudo:
+                self.result.message = "Skipping sudo plugin"
+                self.result.status = ExecutionStatus.NOT_RAN
+                return self.result, None
             res = self._run_sut_cmd(
                 """sh -c 'dmidecode -t 17 | tr -s " " | grep -v "Volatile\\|None\\|Module" | grep Size' 2>/dev/null""",
                 sudo=True,

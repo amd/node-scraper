@@ -426,8 +426,9 @@ def main(arg_input: Optional[list[str]] = None):
         )
 
         if parsed_args.skip_sudo:
-            for pcfg in plugin_config_inst_list:
-                pcfg.global_args.setdefault("collection_args", {})["skip_sudo"] = True
+            plugin_config_inst_list[-1].global_args.setdefault("collection_args", {})[
+                "skip_sudo"
+            ] = True
 
         log_system_info(log_path, system_info, logger)
     except Exception as e:
