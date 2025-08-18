@@ -79,7 +79,7 @@ class SysctlCollector(InBandDataCollector[SysctlDataModel, None]):
         if values:
             sysctl_data = SysctlDataModel(**values)
             self._log_event(
-                category="SYSCTL_READ",
+                category="OS",
                 description="Sysctl settings read",
                 data=sysctl_data.model_dump(),
                 priority=EventPriority.INFO,

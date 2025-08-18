@@ -43,9 +43,6 @@ class SysctlAnalyzer(DataAnalyzer[SysctlDataModel, SysctlAnalyzerArgs]):
         self, data: SysctlDataModel, args: Optional[SysctlAnalyzerArgs] = None
     ) -> TaskResult:
         """Analyze the Sysctl data against expected Sysctl values."""
-        self.result = self.result
-        self.result.status = ExecutionStatus.OK
-        self.result.message = "All expected sysctl parameters match."
         mismatches = {}
 
         if not args:
@@ -79,5 +76,7 @@ class SysctlAnalyzer(DataAnalyzer[SysctlDataModel, SysctlAnalyzerArgs]):
                 priority=EventPriority.INFO,
                 console_log=True,
             )
+            self.result.status = ExecutionStatus.OK
+            self.result.message = "All expected sysctl parameters match."
 
         return self.result
