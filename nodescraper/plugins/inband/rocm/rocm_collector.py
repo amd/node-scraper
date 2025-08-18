@@ -65,7 +65,7 @@ class RocmCollector(InBandDataCollector[RocmDataModel, None]):
         else:
             self._log_event(
                 category=EventCategory.OS,
-                description=f"Could not get ROCm version format from {path}",
+                description=f"Unable to read ROCm version from {version_paths}",
                 data={"raw_output": res.stdout},
                 priority=EventPriority.ERROR,
             )
