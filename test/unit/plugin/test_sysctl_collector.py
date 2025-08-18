@@ -33,7 +33,7 @@ def test_collect_data_all_fields_success(linux_sysctl_collector):
         assert getattr(data, field) == 111
 
     event = result.events[-1]
-    assert event.category == "SYSCTL_READ"
+    assert event.category == "OS"
     assert event.priority == EventPriority.INFO.value
     assert result.message == "SYSCTL data collected"
 
