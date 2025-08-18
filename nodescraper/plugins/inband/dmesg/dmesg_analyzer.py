@@ -53,7 +53,7 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
             event_category=EventCategory.SW_DRIVER,
         ),
         ErrorRegex(
-            regex=re.compile(r"[Kk]ernel panic.*"),
+            regex=re.compile(r"\bkernel panic\b.*", re.IGNORECASE),
             message="Kernel Panic",
             event_category=EventCategory.SW_DRIVER,
         ),
@@ -292,6 +292,33 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
             regex=re.compile(r"amdgpu \w{4}:\w{2}:\w{2}.\w: amdgpu: WARN: GPU is throttled.*"),
             message="GPU Throttled",
             event_category=EventCategory.SW_DRIVER,
+            event_priority=EventPriority.WARNING,
+        ),
+        ErrorRegex(
+            regex=re.compile(
+                r"(?:\[[^\]]+\]\s*)?LNetError:.*ko2iblnd:\s*No matching interfaces",
+                re.IGNORECASE,
+            ),
+            message="LNet: ko2iblnd has no matching interfaces",
+            event_category=EventCategory.IO,
+            event_priority=EventPriority.WARNING,
+        ),
+        ErrorRegex(
+            regex=re.compile(
+                r"(?:\[[^\]]+\]\s*)?LNetError:\s*.*Error\s*-?\d+\s+starting up LNI\s+\w+",
+                re.IGNORECASE,
+            ),
+            message="LNet: Error starting up LNI",
+            event_category=EventCategory.IO,
+            event_priority=EventPriority.WARNING,
+        ),
+        ErrorRegex(
+            regex=re.compile(
+                r"LustreError:.*ptlrpc_init_portals\(\).*network initiali[sz]ation failed",
+                re.IGNORECASE,
+            ),
+            message="Lustre: network initialisation failed",
+            event_category=EventCategory.IO,
             event_priority=EventPriority.WARNING,
         ),
     ]
