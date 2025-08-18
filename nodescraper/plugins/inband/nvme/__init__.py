@@ -23,24 +23,6 @@
 # SOFTWARE.
 #
 ###############################################################################
-from .inband import (
-    BaseFileArtifact,
-    BinaryFileArtifact,
-    CommandArtifact,
-    InBandConnection,
-    TextFileArtifact,
-)
-from .inbandlocal import LocalShell
-from .inbandmanager import InBandConnectionManager
-from .sshparams import SSHConnectionParams
+from .nvme_plugin import NvmePlugin
 
-__all__ = [
-    "SSHConnectionParams",
-    "LocalShell",
-    "InBandConnectionManager",
-    "InBandConnection",
-    "BaseFileArtifact",
-    "TextFileArtifact",
-    "BinaryFileArtifact",
-    "CommandArtifact",
-]
+__all__ = ["NvmePlugin"]
