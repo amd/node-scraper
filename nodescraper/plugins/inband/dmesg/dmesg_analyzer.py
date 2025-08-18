@@ -28,7 +28,7 @@ import re
 from typing import Optional
 
 from nodescraper.base.regexanalyzer import ErrorRegex, RegexAnalyzer
-from nodescraper.connection.inband import FileArtifact
+from nodescraper.connection.inband import TextFileArtifact
 from nodescraper.enums import EventCategory, EventPriority
 from nodescraper.models import Event, TaskResult
 
@@ -413,7 +413,7 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
                 args.analysis_range_end,
             )
             self.result.artifacts.append(
-                FileArtifact(filename="filtered_dmesg.log", contents=dmesg_content)
+                TextFileArtifact(filename="filtered_dmesg.log", contents=dmesg_content)
             )
         else:
             dmesg_content = data.dmesg_content

@@ -27,7 +27,7 @@ import json
 import os
 from typing import Optional
 
-from nodescraper.connection.inband import FileArtifact
+from nodescraper.connection.inband import BaseFileArtifact
 from nodescraper.interfaces.taskresulthook import TaskResultHook
 from nodescraper.models import DataModel, TaskResult
 from nodescraper.utils import get_unique_filename, pascal_to_snake
@@ -60,10 +60,10 @@ class FileSystemLogHook(TaskResultHook):
 
         artifact_map = {}
         for artifact in task_result.artifacts:
-            if isinstance(artifact, FileArtifact):
+            if isinstance(artifact, BaseFileArtifact):
                 log_name = get_unique_filename(log_path, artifact.filename)
-                with open(os.path.join(log_path, log_name), "w", encoding="utf-8") as log_file:
-                    log_file.write(artifact.contents)
+                artifact.log_model(log_path)
+
             else:
                 name = f"{pascal_to_snake(artifact.__class__.__name__)}s"
                 if name in artifact_map:
