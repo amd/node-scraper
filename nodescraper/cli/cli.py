@@ -154,6 +154,13 @@ def build_parser(
         help="Generate reference config from system. Writes to ./reference_config.json.",
     )
 
+    parser.add_argument(
+        "--skip-sudo",
+        dest="skip_sudo",
+        action="store_true",
+        help="Skip plugins that require sudo permissions",
+    )
+
     subparsers = parser.add_subparsers(dest="subcmd", help="Subcommands")
 
     summary_parser = subparsers.add_parser(
@@ -417,6 +424,11 @@ def main(arg_input: Optional[list[str]] = None):
             parsed_plugin_args=parsed_plugin_args,
             plugin_subparser_map=plugin_subparser_map,
         )
+
+        if parsed_args.skip_sudo:
+            plugin_config_inst_list[-1].global_args.setdefault("collection_args", {})[
+                "skip_sudo"
+            ] = True
 
         log_system_info(log_path, system_info, logger)
     except Exception as e:

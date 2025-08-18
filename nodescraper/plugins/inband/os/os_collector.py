@@ -84,8 +84,7 @@ class OsCollector(InBandDataCollector[OsDataModel, None]):
         else:
             PRETTY_STR = "PRETTY_NAME"  # noqa: N806
             res = self._run_sut_cmd(
-                f"sh -c '( lsb_release -ds || (cat /etc/*release | grep {PRETTY_STR}) || uname -om ) 2>/dev/null | head -n1'",
-                sudo=False,
+                f"sh -c '( lsb_release -ds || (cat /etc/*release | grep {PRETTY_STR}) || uname -om ) 2>/dev/null | head -n1'"
             )
             # search for PRETTY_NAME in res
             if res.exit_code == 0:
