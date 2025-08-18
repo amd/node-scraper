@@ -60,7 +60,14 @@ class DmesgCollector(InBandDataCollector[DmesgData, None]):
         return "'" + s.replace("'", "'\"'\"'") + "'"
 
     def _nice_dmesg_name(self, path: str) -> str:
-        """Map path to filename"""
+        """Map path to filename
+
+        Args:
+            path (str): file path
+
+        Returns:
+            str: new local filename
+        """
         prefix = "rotated_"
         base = path.rstrip("/").rsplit("/", 1)[-1]
 
