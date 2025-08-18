@@ -34,4 +34,4 @@ class DmesgCollectorArgs(CollectorArgs):
         CollectorArgs (CollectorArgs): specific dmesg collector args
     """
 
-    collect_logs: bool = False
+    collect_rotated_logs: bool = False

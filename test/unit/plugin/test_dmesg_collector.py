@@ -205,7 +205,12 @@ def test_collect_rotations_good_path(monkeypatch, system_info, conn_mock):
     c._collect_dmesg_rotations()
 
     names = {a.filename for a in c.result.artifacts}
-    assert names == {"dmesg_log.log", "dmesg.1.log", "dmesg.2.gz.log", "dmesg.10.gz.log"}
+    assert names == {
+        "rotated_dmesg_log.log",
+        "rotated_dmesg.1.log",
+        "rotated_dmesg.2.gz.log",
+        "rotated_dmesg.10.gz.log",
+    }
 
     descs = [e["description"] for e in c._events]
     assert "Collected dmesg rotated files" in descs

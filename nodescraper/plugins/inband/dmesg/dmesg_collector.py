@@ -27,7 +27,7 @@ import re
 from typing import Optional
 
 from nodescraper.base import InBandDataCollector
-from nodescraper.connection.inband import FileArtifact
+from nodescraper.connection.inband import TextFileArtifact
 from nodescraper.enums import EventCategory, EventPriority, OSFamily
 from nodescraper.models import TaskResult
 
@@ -60,25 +60,23 @@ class DmesgCollector(InBandDataCollector[DmesgData, None]):
         return "'" + s.replace("'", "'\"'\"'") + "'"
 
     def _nice_dmesg_name(self, path: str) -> str:
-        """Map path to filename
-
-        Args:
-            path (str): path of remote file
-
-        Returns:
-            str: filename for local file
-        """
+        """Map path to filename"""
+        prefix = "rotated_"
         base = path.rstrip("/").rsplit("/", 1)[-1]
+
         if base == "dmesg":
-            return "dmesg_log.log"
+            return f"{prefix}dmesg_log.log"
+
         m = re.fullmatch(r"dmesg\.(\d+)\.gz", base)
         if m:
-            return f"dmesg.{m.group(1)}.gz.log"
+            return f"{prefix}dmesg.{m.group(1)}.gz.log"
+
         m = re.fullmatch(r"dmesg\.(\d+)", base)
         if m:
-            return f"dmesg.{m.group(1)}.log"
+            return f"{prefix}dmesg.{m.group(1)}.log"
 
-        return (base[:-3] if base.endswith(".gz") else base) + ".log"
+        middle = base[:-3] if base.endswith(".gz") else base
+        return f"{prefix}{middle}.log"
 
     def _collect_dmesg_rotations(self):
         """Collect dmesg logs"""
@@ -102,7 +100,9 @@ class DmesgCollector(InBandDataCollector[DmesgData, None]):
                 if res.exit_code == 0 and res.stdout is not None:
                     fname = self._nice_dmesg_name(p)
                     self.logger.info("Collected dmesg log: %s", fname)
-                    self.result.artifacts.append(FileArtifact(filename=fname, contents=res.stdout))
+                    self.result.artifacts.append(
+                        TextFileArtifact(filename=fname, contents=res.stdout)
+                    )
                     collected_logs.append(
                         {"path": p, "as": fname, "bytes": len(res.stdout.encode("utf-8", "ignore"))}
                     )
@@ -116,7 +116,9 @@ class DmesgCollector(InBandDataCollector[DmesgData, None]):
                 if res.exit_code == 0 and res.stdout is not None:
                     fname = self._nice_dmesg_name(p)
                     self.logger.info("Collected dmesg log: %s", fname)
-                    self.result.artifacts.append(FileArtifact(filename=fname, contents=res.stdout))
+                    self.result.artifacts.append(
+                        TextFileArtifact(filename=fname, contents=res.stdout)
+                    )
                     collected_logs.append(
                         {"path": p, "as": fname, "bytes": len(res.stdout.encode("utf-8", "ignore"))}
                     )
@@ -175,7 +177,7 @@ class DmesgCollector(InBandDataCollector[DmesgData, None]):
             args = DmesgCollectorArgs()
 
         dmesg_content = self._get_dmesg_content()
-        if args.collect_logs:
+        if args.collect_rotated_logs:
             self._collect_dmesg_rotations()
 
         if dmesg_content:
