@@ -119,7 +119,7 @@ class DataAnalyzer(Task, abc.ABC, Generic[TDataModel, TAnalyzeArg]):
             raise TypeError(f"No data model set for {cls.__name__}")
 
         if hasattr(cls, "analyze_data"):
-            setattr(cls, "analyze_data", analyze_decorator(cls.analyze_data))
+            setattr(cls, "analyze_data", analyze_decorator(cls.analyze_data))  # noqa
 
     @abc.abstractmethod
     def analyze_data(
