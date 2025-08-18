@@ -23,22 +23,20 @@
 # SOFTWARE.
 #
 ###############################################################################
-from nodescraper.base import InBandDataPlugin
+from typing import Optional
 
-from .analyzer_args import StorageAnalyzerArgs
-from .collector_args import StorageCollectorArgs
-from .storage_analyzer import StorageAnalyzer
-from .storage_collector import StorageCollector
-from .storagedata import StorageDataModel
+from nodescraper.models import DataModel
 
 
-class StoragePlugin(InBandDataPlugin[StorageDataModel, StorageCollectorArgs, StorageAnalyzerArgs]):
-    """Plugin for collection and analysis of disk usage data"""
-
-    DATA_MODEL = StorageDataModel
-
-    COLLECTOR = StorageCollector
-
-    ANALYZER = StorageAnalyzer
-
-    COLLECTOR_ARGS = StorageCollectorArgs
+class SysctlDataModel(DataModel):
+    vm_swappiness: Optional[int] = None
+    vm_numa_balancing: Optional[int] = None
+    vm_oom_kill_allocating_task: Optional[int] = None
+    vm_compaction_proactiveness: Optional[int] = None
+    vm_compact_unevictable_allowed: Optional[int] = None
+    vm_extfrag_threshold: Optional[int] = None
+    vm_zone_reclaim_mode: Optional[int] = None
+    vm_dirty_background_ratio: Optional[int] = None
+    vm_dirty_ratio: Optional[int] = None
+    vm_dirty_writeback_centisecs: Optional[int] = None
+    kernel_numa_balancing: Optional[int] = None

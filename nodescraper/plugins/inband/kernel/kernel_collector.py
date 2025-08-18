@@ -53,7 +53,7 @@ class KernelCollector(InBandDataCollector[KernelDataModel, None]):
                     "="
                 )[1]
         else:
-            res = self._run_sut_cmd("sh -c 'uname -r'", sudo=True)
+            res = self._run_sut_cmd("sh -c 'uname -r'")
             if res.exit_code == 0:
                 kernel = res.stdout
 

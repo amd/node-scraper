@@ -25,20 +25,19 @@
 ###############################################################################
 from nodescraper.base import InBandDataPlugin
 
-from .analyzer_args import StorageAnalyzerArgs
-from .collector_args import StorageCollectorArgs
-from .storage_analyzer import StorageAnalyzer
-from .storage_collector import StorageCollector
-from .storagedata import StorageDataModel
+from .analyzer_args import SysctlAnalyzerArgs
+from .sysctl_analyzer import SysctlAnalyzer
+from .sysctl_collector import SysctlCollector
+from .sysctldata import SysctlDataModel
 
 
-class StoragePlugin(InBandDataPlugin[StorageDataModel, StorageCollectorArgs, StorageAnalyzerArgs]):
-    """Plugin for collection and analysis of disk usage data"""
+class SysctlPlugin(InBandDataPlugin[SysctlDataModel, None, SysctlAnalyzerArgs]):
+    """Plugin for collection and analysis of BIOS data"""
 
-    DATA_MODEL = StorageDataModel
+    DATA_MODEL = SysctlDataModel
 
-    COLLECTOR = StorageCollector
+    COLLECTOR = SysctlCollector
 
-    ANALYZER = StorageAnalyzer
+    ANALYZER = SysctlAnalyzer
 
-    COLLECTOR_ARGS = StorageCollectorArgs
+    ANALYZER_ARGS = SysctlAnalyzerArgs
