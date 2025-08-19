@@ -43,14 +43,14 @@ class JournalCollector(InBandDataCollector[JournalData, None]):
         return "'" + s.replace("'", "'\"'\"'") + "'"
 
     def _flat_name(self, path: str) -> str:
-        return "journalctl__" + path.lstrip("/").replace("/", "__") + ".jsonl"
+        return "journalctl__" + path.lstrip("/").replace("/", "__") + ".json"
 
     def _read_with_journalctl(self, path: str):
         qp = self._shell_quote(path)
         cmd = f"journalctl --no-pager --system --all --file={qp} --output=json"
         res = self._run_sut_cmd(cmd, sudo=True, log_artifact=False, strip=False)
 
-        if res.exit_code == 0 and res.stdout:
+        if res.exit_code == 0:
             text = (
                 res.stdout.decode("utf-8", "replace")
                 if isinstance(res.stdout, (bytes, bytearray))
@@ -107,7 +107,7 @@ class JournalCollector(InBandDataCollector[JournalData, None]):
     def collect_data(self, args=None) -> tuple[TaskResult, JournalData | None]:
         collected = self._get_journals()
         if collected:
-            jd = JournalData(journal_logs=collected)
+            data = JournalData(journal_logs=collected)
             self.result.message = self.result.message or "Journal data collected"
-            return self.result, jd
+            return self.result, data
         return self.result, None
