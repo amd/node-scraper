@@ -40,12 +40,36 @@ class JournalCollector(InBandDataCollector[JournalData, None]):
     CMD = "ls -1 /var/log/journal/*/system* 2>/dev/null || true"
 
     def _shell_quote(self, s: str) -> str:
+        """single-quote fix.
+
+        Args:
+            s (str): path
+
+        Returns:
+            str: escaped path
+        """
         return "'" + s.replace("'", "'\"'\"'") + "'"
 
     def _flat_name(self, path: str) -> str:
+        """Flatten path name
+
+        Args:
+            path (str): path
+
+        Returns:
+            str: flattened path name
+        """
         return "journalctl__" + path.lstrip("/").replace("/", "__") + ".json"
 
     def _read_with_journalctl(self, path: str):
+        """Read journal logs using journalctl
+
+        Args:
+            path (str): path for log to read
+
+        Returns:
+            str|None: name of local journal log filed, or None if log was not read
+        """
         qp = self._shell_quote(path)
         cmd = f"journalctl --no-pager --system --all --file={qp} --output=json"
         res = self._run_sut_cmd(cmd, sudo=True, log_artifact=False, strip=False)
@@ -63,7 +87,12 @@ class JournalCollector(InBandDataCollector[JournalData, None]):
 
         return None
 
-    def _get_journals(self):
+    def _get_journals(self) -> list[str]:
+        """Read journal log files on remote system
+
+        Returns:
+            list[str]: List of names of read logs
+        """
         list_res = self._run_sut_cmd(self.CMD, sudo=True)
         paths = [p.strip() for p in (list_res.stdout or "").splitlines() if p.strip()]
 
@@ -105,6 +134,14 @@ class JournalCollector(InBandDataCollector[JournalData, None]):
         return collected
 
     def collect_data(self, args=None) -> tuple[TaskResult, JournalData | None]:
+        """Collect journal lofs
+
+        Args:
+            args (_type_, optional): Collection args. Defaults to None.
+
+        Returns:
+            tuple[TaskResult, JournalData | None]: Tuple of results and data model or none.
+        """
         collected = self._get_journals()
         if collected:
             data = JournalData(journal_logs=collected)
