@@ -23,6 +23,15 @@
 # SOFTWARE.
 #
 ###############################################################################
-from .amdsmi_plugin import AmdsmiPlugin
+from nodescraper.base import InBandDataPlugin
 
-__all__ = ["AmdsmiPlugin"]
+from .amdsmi_collector import AmdSmiCollector
+from .amdsmidata import AmdSmiData
+
+
+class AmdsmiPlugin(InBandDataPlugin[AmdSmiData, None, None]):
+    """Plugin for collection and analysis of amdsmi data"""
+
+    DATA_MODEL = AmdSmiData
+
+    COLLECTOR = AmdSmiCollector
