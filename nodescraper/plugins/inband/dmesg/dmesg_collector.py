@@ -40,7 +40,7 @@ class DmesgCollector(InBandDataCollector[DmesgData, DmesgCollectorArgs]):
 
     DATA_MODEL = DmesgData
 
-    DMESG_CMD = "dmesg --time-format iso -x"
+    DMESG_CMD = "dmesg --time-format iso -x "
 
     def _get_dmesg_content(self) -> str:
         """run dmesg command on system and return output
