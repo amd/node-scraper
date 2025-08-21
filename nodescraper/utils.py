@@ -27,7 +27,7 @@ import os
 import re
 import traceback
 from enum import Enum
-from typing import Any, TypeVar
+from typing import Any, TypeVar, get_args, get_origin
 
 T = TypeVar("T")
 
