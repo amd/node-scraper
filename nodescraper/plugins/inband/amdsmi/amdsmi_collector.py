@@ -26,17 +26,20 @@
 import io
 import json
 import re
+from tarfile import TarFile
 from typing import TypeVar
 
 from packaging.version import Version as PackageVersion
 from pydantic import BaseModel, ValidationError
 
 from nodescraper.base.inbandcollectortask import InBandDataCollector
+
+# from nodescraper.models.datamodel import FileModel
+from nodescraper.connection.inband import BinaryFileArtifact, TextFileArtifact
 from nodescraper.connection.inband.inband import BaseFileArtifact, CommandArtifact
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.enums.systeminteraction import SystemInteractionLevel
 from nodescraper.models import TaskResult
-from nodescraper.models.datamodel import FileModel
 from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     AmdSmiData,
     AmdSmiListItem,
@@ -69,7 +72,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiData, None]):
     def _check_amdsmi_installed(self) -> bool:
         """Return if amd-smi is installed"""
 
-        cmd_ret: CommandArtifact = self._run_system_command("which amd-smi")
+        cmd_ret: CommandArtifact = self._run_sut_cmd("which amd-smi")
         return bool(cmd_ret.exit_code == 0 and "no amd-smi in" not in cmd_ret.stdout)
 
     def _check_command_supported(self, command: str) -> bool:
@@ -255,7 +258,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiData, None]):
         -------
             str: str of output
         """
-        cmd_ret: CommandArtifact = self._run_system_command(f"{self.AMD_SMI_EXE} {cmd}", sudo=sudo)
+        cmd_ret: CommandArtifact = self._run_sut_cmd(f"{self.AMD_SMI_EXE} {cmd}", sudo=sudo)
         if cmd_ret.stderr != "" or cmd_ret.exit_code != 0:
             self._log_event(
                 category=EventCategory.APPLICATION,
@@ -399,14 +402,14 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiData, None]):
             "link": xgmi_link_data,
         }
 
-    def get_cper_data(self) -> list[FileModel]:
+    def get_cper_data(self) -> list[TextFileArtifact]:
         CPER_CMD = "ras"
         if not self._check_command_supported(CPER_CMD):
             # If the command is not supported, return an empty list
             return []
         AMD_SMI_CPER_FOLDER = "/tmp/amd_smi_cper"
         # Ensure the cper folder exists but is empty
-        self._run_system_command(
+        self._run_sut_cmd(
             f"mkdir -p {AMD_SMI_CPER_FOLDER} && rm -f {AMD_SMI_CPER_FOLDER}/*.cper && rm -f {AMD_SMI_CPER_FOLDER}/*.json",
             sudo=False,
         )
@@ -420,7 +423,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiData, None]):
             # Early exit if no CPER files were created
             return []
         # tar the cper folder
-        self._run_system_command(
+        self._run_sut_cmd(
             f"tar -czf {AMD_SMI_CPER_FOLDER}.tar.gz -C {AMD_SMI_CPER_FOLDER} .",
             sudo=True,
         )
@@ -447,7 +450,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiData, None]):
                         else:
                             file_content_bytes = b""
                         cper_data.append(
-                            FileModel(file_contents=file_content_bytes, file_name=member.name)
+                            BinaryFileArtifact(filename=member.name, contents=file_content_bytes)
                         )
             # Since we do not log the cper data in the data model create an invent informing the user if CPER created
             if cper_data:
@@ -489,7 +492,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiData, None]):
             self.logger.info("Skipping amdsmitst test due to Version incompatibility")
             return amdsmitst_data
         amdsmitst_cmd: str = "/opt/rocm/share/amd_smi/tests/amdsmitst"
-        cmd_ret: CommandArtifact = self._run_system_command(amdsmitst_cmd, sudo=True)
+        cmd_ret: CommandArtifact = self._run_sut_cmd(amdsmitst_cmd, sudo=True)
         if cmd_ret.stderr != "" or cmd_ret.exit_code != 0:
             self._log_event(
                 category=EventCategory.APPLICATION,
@@ -548,7 +551,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiData, None]):
 
     def collect_data(
         self,
-        **kwargs,
+        args=None,
     ) -> tuple[TaskResult, AmdSmiData | None]:
         try:
             self.amd_smi_commands = self.detect_amdsmi_commands()
