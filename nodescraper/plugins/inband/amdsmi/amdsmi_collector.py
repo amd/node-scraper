@@ -230,7 +230,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiData, None]):
             dict: dict of output
         """
         cmd += " --json"
-        cmd_ret = self._run_amd_smi(cmd, sudo=sudo)
+        cmd_ret = self._run_amd_smi(cmd, sudo=True)
         if cmd_ret:
             try:
                 return json.loads(cmd_ret)
@@ -259,7 +259,8 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiData, None]):
             str: str of output
         """
         cmd_ret: CommandArtifact = self._run_sut_cmd(f"{self.AMD_SMI_EXE} {cmd}", sudo=sudo)
-        if cmd_ret.stderr != "" or cmd_ret.exit_code != 0:
+
+        if cmd_ret.exit_code != 0:
             self._log_event(
                 category=EventCategory.APPLICATION,
                 description="Error running amd-smi command",
@@ -272,8 +273,8 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiData, None]):
                 console_log=True,
             )
             return None
-        else:
-            return cmd_ret.stdout
+
+        return cmd_ret.stdout or ""
 
     def get_gpu_list(self) -> list[dict] | None:
         """Get data as a list of dict from cmd: amdsmi list"""
