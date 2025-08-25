@@ -444,29 +444,20 @@ def dump_results_to_csv(
         timestamp (str): time when results were taken
         logger (logging.Logger): instance of logger
     """
-    fieldnames = ["nodename", "plugin", "status", "timestamp", "message", "analysis_results"]
+    fieldnames = ["nodename", "plugin", "status", "timestamp", "message", "analysis_result"]
     filename = log_path + "/nodescraper.csv"
     all_rows = []
     for res in results:
-        if res.status.name == "OK":
-            row = {
-                "nodename": nodename,
-                "plugin": res.source,
-                "status": res.status.name,
-                "timestamp": timestamp,
-                "message": res.message,
-                "analysis_results": "",
-            }
-        else:
-            row = {
-                "nodename": nodename,
-                "plugin": res.source,
-                "status": res.status.name,
-                "timestamp": timestamp,
-                "message": res.message,
-                "analysis_results": res.result_data.analysis_result,
-            }
+        row = {
+            "nodename": nodename,
+            "plugin": res.source,
+            "status": res.status.name,
+            "timestamp": timestamp,
+            "message": res.message,
+            "analysis_result": "" if res.status.name == "OK" else res.result_data.analysis_result,
+        }
         all_rows.append(row)
+
     dump_to_csv(all_rows, filename, fieldnames, logger)
 
 
@@ -499,7 +490,7 @@ def generate_summary(search_path: str, output_path: str | None, logger: logging.
         logger (logging.Logger): instance of logger
     """
 
-    fieldnames = ["nodename", "plugin", "status", "timestamp", "message", "analysis_results"]
+    fieldnames = ["nodename", "plugin", "status", "timestamp", "message", "analysis_result"]
     all_rows = []
 
     pattern = os.path.join(search_path, "**", "nodescraper.csv")
