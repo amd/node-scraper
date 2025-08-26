@@ -31,6 +31,29 @@ from typing import TypeVar
 
 from packaging.version import Version as PackageVersion
 from pydantic import BaseModel, ValidationError
+from amdsmi import (
+    amdsmi_init,
+    amdsmi_shut_down,
+    amdsmi_get_processor_handles,
+    amdsmi_get_lib_version,
+    amdsmi_get_rocm_version,
+    amdsmi_get_gpu_device_uuid,
+    amdsmi_get_gpu_device_bdf,
+    amdsmi_get_gpu_kfd_info,
+    amdsmi_get_fw_info,
+    amdsmi_get_gpu_process_list,
+    amdsmi_get_gpu_compute_process_info,
+    amdsmi_get_gpu_bad_page_info,
+    amdsmi_get_gpu_memory_reserved_pages,
+    amdsmi_get_gpu_compute_partition,
+    amdsmi_get_gpu_memory_partition,
+    amdsmi_get_gpu_accelerator_partition_profile,
+    amdsmi_get_xgmi_info,
+    amdsmi_get_gpu_metrics_info,  # you can expand mapping later
+    amdsmi_get_pcie_info,         # optional; for deeper metric/topo mapping
+    amdsmi_get_gpu_cper_entries,
+    amdsmi_get_afids_from_cper,
+)
 
 from nodescraper.base.inbandcollectortask import InBandDataCollector
 
@@ -68,6 +91,19 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiData, None]):
     SUPPORTED_OS_FAMILY: set[OSFamily] = {OSFamily.LINUX}
 
     DATA_MODEL = AmdSmiData
+
+    def _get_handles(self):
+        try:
+            return amdsmi_get_processor_handles()
+        except AmdSmiException as e:
+            self._log_event(
+                category=EventCategory.APPLICATION,
+                description="amdsmi_get_processor_handles failed",
+                data={"exception": get_exception_traceback(e)},
+                priority=EventPriority.ERROR,
+                console_log=True,
+            )
+            return []
 
     def _check_amdsmi_installed(self) -> bool:
         """Return if amd-smi is installed"""
@@ -209,12 +245,34 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiData, None]):
         return amd_smi_data
 
     def _get_amdsmi_version(self) -> AmdSmiVersion | None:
-        """Get amdsmi version and data."""
-        ret = self._run_amd_smi_dict("version")
-        version_data = self.build_amdsmi_sub_data(AmdSmiVersion, ret)
-        if version_data:
-            return version_data[0]
-        return None
+        """Get lib/rocm versions."""
+        try:
+            lib_ver = amdsmi_get_lib_version() or ""
+            rocm_ver = amdsmi_get_rocm_version() or ""
+        except AmdSmiException as e:
+            self._log_event(
+                category=EventCategory.APPLICATION,
+                description="Failed to read AMD SMI versions",
+                data={"exception": get_exception_traceback(e)},
+                priority=EventPriority.WARNING,
+            )
+            return None
+
+        return AmdSmiVersion(
+            tool="amdsmi",
+            version=lib_ver,
+            amdsmi_library_version=lib_ver,
+            rocm_version=rocm_ver,
+            # amdgpu_version / amd_hsmp_driver_version unavailable via py API???
+        )
+
+    #def _get_amdsmi_version(self) -> AmdSmiVersion | None:
+    #    """Get amdsmi version and data."""
+    #    ret = self._run_amd_smi_dict("version")
+    #    version_data = self.build_amdsmi_sub_data(AmdSmiVersion, ret)
+    #    if version_data:
+    #        return version_data[0]
+    #    return None
 
     def _run_amd_smi_dict(
         self, cmd: str, sudo: bool = False, raise_event=True
@@ -351,12 +409,36 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiData, None]):
         return self._run_amd_smi_dict(FW_CMD)
 
     def get_bad_pages(self) -> list[dict] | None:
-        """Get data as a list of dict from cmd: amdsmi bad-pages"""
-        BAD_PAGE_CMD = "bad-pages"
-        if self._check_command_supported(BAD_PAGE_CMD):
-            # If the command is supported, run it
-            return self._run_amd_smi_dict(BAD_PAGE_CMD)
-        return None
+        devices = self._get_handles()
+        out: list[dict] = []
+        for idx, h in enumerate(devices):
+            try:
+                bad = amdsmi_get_gpu_bad_page_info(h) or {}
+                res = amdsmi_get_gpu_memory_reserved_pages(h) or {}
+                out.append(
+                    {
+                        "gpu": idx,
+                        "retired": bad.get("retired", "N/A"),
+                        "pending": bad.get("pending", "N/A"),
+                        "un_res": res.get("unres", "N/A"),
+                    }
+                )
+            except AmdSmiException as e:
+                self._log_event(
+                    category=EventCategory.APPLICATION,
+                    description="Bad pages collection failed",
+                    data={"exception": get_exception_traceback(e)},
+                    priority=EventPriority.WARNING,
+                )
+        return out
+
+    #def get_bad_pages(self) -> list[dict] | None:
+    #    """Get data as a list of dict from cmd: amdsmi bad-pages"""
+    #    BAD_PAGE_CMD = "bad-pages"
+    #    if self._check_command_supported(BAD_PAGE_CMD):
+    #        # If the command is supported, run it
+    #        return self._run_amd_smi_dict(BAD_PAGE_CMD)
+    #    return None
 
     def get_xgmi_data_metric(self) -> dict[str, list[dict]] | None:
         """Get data as a list of dict from cmd: amdsmi xgmi"""
