@@ -67,7 +67,7 @@ class MemoryAnalyzer(DataAnalyzer[MemoryDataModel, MemoryAnalyzerArgs]):
             self.result.message = "Memory usage is within maximum allowed used memory"
             self.result.status = ExecutionStatus.OK
         else:
-            self.result.message = "Memory usage is more than the maximum allowed used memory!"
+            self.result.message = f"Memory usage exceeded max allowed! Used: {used_memory}, max allowed: {max_allowed_used_mem}"
             self.result.status = ExecutionStatus.ERROR
             self._log_event(
                 category=EventCategory.OS,

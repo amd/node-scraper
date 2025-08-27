@@ -25,7 +25,7 @@
 ###############################################################################
 from typing import Optional
 
-from nodescraper.enums import EventCategory, EventPriority
+from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
 from nodescraper.interfaces import DataAnalyzer
 from nodescraper.models import TaskResult
 
@@ -55,10 +55,14 @@ class ProcessAnalyzer(DataAnalyzer[ProcessDataModel, ProcessAnalyzerArgs]):
         if not args:
             args = ProcessAnalyzerArgs()
 
-        if data.kfd_process and data.kfd_process > args.max_kfd_processes:
+        err_messages = []
+        if data.kfd_process > args.max_kfd_processes:
+            err_messages.append(
+                f"Kfd processes {data.kfd_process} exeed max limit {args.max_kfd_processed}"
+            )
             self._log_event(
                 category=EventCategory.OS,
-                description="Kfd processes exceeds maximum limit",
+                description="Kfd processes exceed maximum limit",
                 data={
                     "kfd_process": data.kfd_process,
                     "kfd_process_limit": args.max_kfd_processes,
@@ -67,16 +71,21 @@ class ProcessAnalyzer(DataAnalyzer[ProcessDataModel, ProcessAnalyzerArgs]):
                 console_log=True,
             )
 
-        if data.cpu_usage and data.cpu_usage > args.max_cpu_usage:
+        if data.cpu_usage > args.max_cpu_usage:
+            err_messages.append(f"CPU usage {data.cpu_usage} exceeds limit {args.max_cpu_usage}")
             self._log_event(
                 category=EventCategory.OS,
-                description="Kfd processes exceeds maximum limit",
+                description="CPU usage exceeds maximum limit",
                 data={
-                    "kfd_process": data.kfd_process,
-                    "kfd_process_limit": args.max_kfd_processes,
+                    "cpu_usage": data.cpu_usage,
+                    "cpu_usage_limit": args.max_cpu_usage,
                 },
                 priority=EventPriority.CRITICAL,
                 console_log=True,
             )
+
+        if err_messages:
+            self.result.status = ExecutionStatus.ERROR
+            self.result.message = ". ".join(err_messages)
 
         return self.result

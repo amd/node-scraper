@@ -72,7 +72,7 @@ class CmdlineAnalyzer(DataAnalyzer[CmdlineDataModel, CmdlineAnalyzerArgs]):
                 console_log=True,
             )
 
-        return not (missing_required or found_banned)
+        return not (missing_required or found_banned), missing_required, found_banned
 
     def analyze_data(
         self, data: CmdlineDataModel, args: Optional[CmdlineAnalyzerArgs] = None
@@ -93,12 +93,16 @@ class CmdlineAnalyzer(DataAnalyzer[CmdlineDataModel, CmdlineAnalyzerArgs]):
             return self.result
 
         # check if any of the cmdline defined in the list match the actual kernel cmdline
-        if self._compare_cmdline(data.cmdline, args.required_cmdline, args.banned_cmdline):
+        check, missing_required, found_banned = self._compare_cmdline(
+            data.cmdline, args.required_cmdline, args.banned_cmdline
+        )
+        # if self._compare_cmdline(data.cmdline, args.required_cmdline, args.banned_cmdline):
+        if check:
             self.result.message = "Kernel cmdline matches expected"
             self.result.status = ExecutionStatus.OK
             return self.result
 
-        self.result.message = "Illegal kernel cmdline"
+        self.result.message = f"Illegal kernel cmdline, found_banned: {found_banned}, missing required: {missing_required}"
         self.result.status = ExecutionStatus.ERROR
         self._log_event(
             category=EventCategory.OS,
