@@ -17,10 +17,9 @@ The Node Scraper CLI can be used to run Node Scraper plugins on a target system.
 options are available:
 
 ```sh
-usage: node-scraper [-h] [--sys-name STRING] [--sys-location {LOCAL,REMOTE}] [--sys-interaction-level {PASSIVE,INTERACTIVE,DISRUPTIVE}]
-                    [--sys-sku STRING] [--sys-platform STRING] [--plugin-configs [STRING ...]] [--system-config STRING]
-                    [--connection-config STRING] [--log-path STRING] [--log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}]
-                    [--gen-reference-config]
+usage: node-scraper [-h] [--sys-name STRING] [--sys-location {LOCAL,REMOTE}] [--sys-interaction-level {PASSIVE,INTERACTIVE,DISRUPTIVE}] [--sys-sku STRING]
+                    [--sys-platform STRING] [--plugin-configs [STRING ...]] [--system-config STRING] [--connection-config STRING] [--log-path STRING]
+                    [--log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}] [--gen-reference-config] [--skip-sudo]
                     {summary,run-plugins,describe,gen-plugin-config} ...
 
 node scraper CLI
@@ -39,8 +38,7 @@ options:
   --sys-location {LOCAL,REMOTE}
                         Location of target system (default: LOCAL)
   --sys-interaction-level {PASSIVE,INTERACTIVE,DISRUPTIVE}
-                        Specify system interaction level, used to determine the type of actions that plugins can perform (default:
-                        INTERACTIVE)
+                        Specify system interaction level, used to determine the type of actions that plugins can perform (default: INTERACTIVE)
   --sys-sku STRING      Manually specify SKU of system (default: None)
   --sys-platform STRING
                         Specify system platform (default: None)
@@ -55,8 +53,42 @@ options:
                         Change python log level (default: INFO)
   --gen-reference-config
                         Generate reference config from system. Writes to ./reference_config.json. (default: False)
+  --skip-sudo           Skip plugins that require sudo permissions (default: False)
 
 ```
+
+### Execution Methods
+
+Node Scraper can operate in two modes: LOCAL and REMOTE, determined by the `--sys-location` argument.
+
+- **LOCAL** (default): Node Scraper is installed and run directly on the target system. All data collection and plugin execution occur locally.
+- **REMOTE**: Node Scraper runs on your local machine but targets a remote system over SSH. In this mode, Node Scraper does not need to be installed on the remote system; all commands are executed remotely via SSH.
+
+To use remote execution, specify `--sys-location REMOTE` and provide a connection configuration file with `--connection-config`.
+
+#### Example: Remote Execution
+
+```sh
+node-scraper --sys-name <remote_host> --sys-location REMOTE --connection-config ./connection_config.json run-plugins DmesgPlugin
+```
+
+##### Example connection_config.json
+
+```json
+{
+    "InBandConnectionManager": {
+        "hostname": "remote_host.example.com",
+        "port": 22,
+        "username": "myuser",
+        "password": "mypassword",
+        "key_filename": "/path/to/private/key"
+    }
+}
+```
+
+**Notes:**
+- If using SSH keys, specify `key_filename` instead of `password`.
+- The remote user must have permissions to run the requested plugins and access required files. If needed, use the `--skip-sudo` argument to skip plugins requiring sudo.
 
 ### Subcommmands
 

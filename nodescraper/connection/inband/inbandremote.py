@@ -57,6 +57,7 @@ class RemoteShell(InBandConnection):
     ) -> None:
         self.ssh_params = ssh_params
         self.client = paramiko.SSHClient()
+        self.client.load_system_host_keys()
         self.client.set_missing_host_key_policy(self.host_key_policy())
 
     def connect_ssh(self):
