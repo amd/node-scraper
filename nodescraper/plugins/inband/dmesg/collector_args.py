@@ -28,4 +28,11 @@ from nodescraper.models import CollectorArgs
 
 
 class DmesgCollectorArgs(CollectorArgs):
+    """Collector args
+
+    Args:
+        CollectorArgs (CollectorArgs): specific dmesg collector args
+    """
+
+    collect_rotated_logs: bool = False
     skip_sudo: bool = False

@@ -73,7 +73,8 @@ class Event(BaseModel):
         if timestamp.tzinfo is None or timestamp.tzinfo.utcoffset(timestamp) is None:
             raise ValueError("datetime must be timezone aware")
 
-        if timestamp.utcoffset() is not None and timestamp.utcoffset().total_seconds() != 0:
+        utc_offset = timestamp.utcoffset()
+        if utc_offset is not None and utc_offset.total_seconds() != 0:
             timestamp = timestamp.astimezone(datetime.timezone.utc)
 
         return timestamp
@@ -90,7 +91,7 @@ class Event(BaseModel):
         if isinstance(category, Enum):
             category = category.value
 
-        category = category.strip().upper()
+        category = str(category).strip().upper()
         category = re.sub(r"[\s-]", "_", category)
         return category
 

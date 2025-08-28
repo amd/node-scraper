@@ -23,9 +23,11 @@
 # SOFTWARE.
 #
 ###############################################################################
+import re
 from typing import Optional
 
 from nodescraper.base import InBandDataCollector
+from nodescraper.connection.inband import TextFileArtifact
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.models import TaskResult
 
@@ -41,6 +43,113 @@ class DmesgCollector(InBandDataCollector[DmesgData, DmesgCollectorArgs]):
     DATA_MODEL = DmesgData
 
     DMESG_CMD = "dmesg --time-format iso -x"
+
+    DMESG_LOGS_CMD = (
+        r"ls -1 /var/log/dmesg* 2>/dev/null | grep -E '^/var/log/dmesg(\.[0-9]+(\.gz)?)?$' || true"
+    )
+
+    def _shell_quote(self, s: str) -> str:
+        """Single quote fix
+
+        Args:
+            s (str): path to be converted
+
+        Returns:
+            str: path to be returned
+        """
+        return "'" + s.replace("'", "'\"'\"'") + "'"
+
+    def _nice_dmesg_name(self, path: str) -> str:
+        """Map path to filename
+
+        Args:
+            path (str): file path
+
+        Returns:
+            str: new local filename
+        """
+        prefix = "rotated_"
+        base = path.rstrip("/").rsplit("/", 1)[-1]
+
+        if base == "dmesg":
+            return f"{prefix}dmesg_log.log"
+
+        m = re.fullmatch(r"dmesg\.(\d+)\.gz", base)
+        if m:
+            return f"{prefix}dmesg.{m.group(1)}.gz.log"
+
+        m = re.fullmatch(r"dmesg\.(\d+)", base)
+        if m:
+            return f"{prefix}dmesg.{m.group(1)}.log"
+
+        middle = base[:-3] if base.endswith(".gz") else base
+        return f"{prefix}{middle}.log"
+
+    def _collect_dmesg_rotations(self):
+        """Collect dmesg logs"""
+        list_res = self._run_sut_cmd(self.DMESG_LOGS_CMD, sudo=True)
+        paths = [p.strip() for p in (list_res.stdout or "").splitlines() if p.strip()]
+        if not paths:
+            self._log_event(
+                category=EventCategory.OS,
+                description="No /var/log/dmesg files found (including rotations).",
+                data={"list_exit_code": list_res.exit_code},
+                priority=EventPriority.WARNING,
+            )
+            return 0
+
+        collected_logs, failed_logs = [], []
+        for p in paths:
+            qp = self._shell_quote(p)
+            if p.endswith(".gz"):
+                cmd = f"gzip -dc {qp} 2>/dev/null || zcat {qp} 2>/dev/null"
+                res = self._run_sut_cmd(cmd, sudo=True, log_artifact=False)
+                if res.exit_code == 0 and res.stdout is not None:
+                    fname = self._nice_dmesg_name(p)
+                    self.logger.info("Collected dmesg log: %s", fname)
+                    self.result.artifacts.append(
+                        TextFileArtifact(filename=fname, contents=res.stdout)
+                    )
+                    collected_logs.append(
+                        {"path": p, "as": fname, "bytes": len(res.stdout.encode("utf-8", "ignore"))}
+                    )
+                else:
+                    failed_logs.append(
+                        {"path": p, "exit_code": res.exit_code, "stderr": res.stderr, "cmd": cmd}
+                    )
+            else:
+                cmd = f"cat {qp}"
+                res = self._run_sut_cmd(cmd, sudo=True, log_artifact=False)
+                if res.exit_code == 0 and res.stdout is not None:
+                    fname = self._nice_dmesg_name(p)
+                    self.logger.info("Collected dmesg log: %s", fname)
+                    self.result.artifacts.append(
+                        TextFileArtifact(filename=fname, contents=res.stdout)
+                    )
+                    collected_logs.append(
+                        {"path": p, "as": fname, "bytes": len(res.stdout.encode("utf-8", "ignore"))}
+                    )
+                else:
+                    failed_logs.append(
+                        {"path": p, "exit_code": res.exit_code, "stderr": res.stderr, "cmd": cmd}
+                    )
+
+        if collected_logs:
+            self._log_event(
+                category=EventCategory.OS,
+                description="Collected dmesg rotated files",
+                data={"collected": collected_logs},
+                priority=EventPriority.INFO,
+            )
+            self.result.message = self.result.message or "dmesg rotated files collected"
+
+        if failed_logs:
+            self._log_event(
+                category=EventCategory.OS,
+                description="Some dmesg files could not be collected.",
+                data={"failed": failed_logs},
+                priority=EventPriority.WARNING,
+            )
 
     def _get_dmesg_content(self) -> str:
         """run dmesg command on system and return output
@@ -79,6 +188,8 @@ class DmesgCollector(InBandDataCollector[DmesgData, DmesgCollectorArgs]):
             return self.result, None
 
         dmesg_content = self._get_dmesg_content()
+        if args.collect_rotated_logs:
+            self._collect_dmesg_rotations()
 
         if dmesg_content:
             dmesg_data = DmesgData(dmesg_content=dmesg_content)
