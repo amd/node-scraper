@@ -83,9 +83,9 @@ def test_error_kfd_process(analyzer, model_obj, config):
     )
     result = analyzer.analyze_data(modified_model_obj, args)
 
-    assert result.status == ExecutionStatus.EXECUTION_FAILURE
+    assert result.status == ExecutionStatus.ERROR
     for event in result.events:
-        assert event.category == EventCategory.RUNTIME.value
+        assert event.category == EventCategory.OS.value
         assert event.priority == EventPriority.CRITICAL
 
 
