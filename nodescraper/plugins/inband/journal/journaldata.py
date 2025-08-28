@@ -29,4 +29,4 @@ from nodescraper.models import DataModel
 class JournalData(DataModel):
     """Data model for journal logs"""
 
-    journal_logs: list[str] = None
+    journal_logs: list[str] = []
