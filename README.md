@@ -10,6 +10,7 @@ system debug.
     - [Example: Remote Execution](#example-remote-execution)
     - [Example connection_config.json](#example-connection_configjson)
   - [Subcommmands](#subcommmands)
+- [Configs](#plugin-configs)
 - [Plugin Configs](#plugin-configs)
 
 
@@ -83,7 +84,7 @@ To use remote execution, specify `--sys-location REMOTE` and provide a connectio
 node-scraper --sys-name <remote_host> --sys-location REMOTE --connection-config ./connection_config.json run-plugins DmesgPlugin
 ```
 
-##### Example connection_config.json
+##### Example: connection_config.json
 
 ```json
 {
@@ -101,7 +102,7 @@ node-scraper --sys-name <remote_host> --sys-location REMOTE --connection-config 
 - If using SSH keys, specify `key_filename` instead of `password`.
 - The remote user must have permissions to run the requested plugins and access required files. If needed, use the `--skip-sudo` argument to skip plugins requiring sudo.
 
-### Subcommmands
+### Subcommands
 
 Plugins to run can be specified in two ways, using a plugin JSON config file or using the
 'run-plugins' sub command. These two options are not mutually exclusive and can be used together.
@@ -221,7 +222,7 @@ This will generate a new file '/<path_to_node-scraper_logs>/summary.csv' file. T
 contain the results from all 'nodescraper.csv' files from '/<path_to_node-scarper_logs>'.
 
 
-### Plugin Configs
+### Configs
 A plugin JSON config should follow the structure of the plugin config model defined here.
 The globals field is a dictionary of global key-value pairs; values in globals will be passed to
 any plugin that supports the corresponding key. The plugins field should be a dictionary mapping
@@ -248,7 +249,7 @@ tabular format to the console.
 }
 ```
 
-1. **'--plugin-configs' command**
+1. Plugin config: **'--plugin-configs' command**
 A plugin config can be used to compare the system data against the config specifications:
 ```sh
 node-scraper --plugin-configs plugin_config.json
@@ -306,7 +307,7 @@ Here is an example of a comprehensive plugin config that specifies analyzer args
 }
 ```
 
-2. **'gen-reference-config' command**
+2. Reference config: **'gen-reference-config' command**
 This command can be used to generate a reference config that is populated with current system
 configurations. Plugins that use analyzer args (where applicable) will be populated with system
 data.
@@ -352,3 +353,78 @@ node-scraper gen-plugin-config --gen-reference-config-from-logs scraper_logs_<pa
 ```
 This will generate a reference config that includes plugins with logged results in
 'scraper_log_<path>' and save the new config to 'custom_output_dir/reference_config.json'.
+
+
+## nodescraper integration
+Nodescraper can be integrated inside another Python tool by leveraging its classes and functionality.
+See bellow for a comprehensive example on how to create plugins and run the associated data
+collection and analysis.
+Sample run command:
+```
+python3 sample.py
+```
+
+Sample.py file:
+```
+import logging
+import sys
+from nodescraper.plugins.inband.bios.bios_plugin import BiosPlugin
+from nodescraper.plugins.inband.bios.analyzer_args import BiosAnalyzerArgs
+from nodescraper.plugins.inband.kernel.kernel_plugin import KernelPlugin
+from nodescraper.plugins.inband.kernel.analyzer_args import KernelAnalyzerArgs
+from nodescraper.pluginregistry import PluginRegistry
+from nodescraper.models.systeminfo import SystemInfo, OSFamily
+from nodescraper.enums import EventPriority
+from nodescraper.resultcollators.tablesummary import TableSummary
+
+def main():
+
+    #setting up my custom logger
+    log_level = "INFO"
+    handlers = [logging.StreamHandler(stream=sys.stdout)]
+    logging.basicConfig(
+        force=True,
+        level=log_level,
+        format="%(asctime)25s %(levelname)10s %(name)25s | %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S %Z",
+        handlers=handlers,
+        encoding="utf-8",
+    )
+    logging.root.setLevel(logging.INFO)
+    logging.getLogger("paramiko").setLevel(logging.ERROR)
+    logger = logging.getLogger("nodescraper")
+
+    #setting up system info
+    system_info = SystemInfo(name="test_host",
+                            platform="X",
+                            os_familty=OSFamily.LINUX,
+                            sku="some_sku")
+
+    #initiate plugins
+    bios_plugin = BiosPlugin(system_info=system_info, logger=logger)
+    kernel_plugin = KernelPlugin(system_info=system_info, logger=logger)
+
+    #launch data collection
+    _ = bios_plugin.collect()
+    _ = kernel_plugin.collect()
+
+    #launch data analysis
+    bios_plugin.analyze(analysis_args=BiosAnalyzerArgs(exp_bios_version="XYZ"))
+    kernel_plugin.analyze(analysis_args=KernelAnalyzerArgs(exp_kernel="ABC"))
+
+    #log plugin data models
+    logger.info(kernel_plugin.data.model_dump())
+    logger.info(bios_plugin.data.model_dump())
+
+    #alternate method
+    all_res = []
+
+    #launch plugin collection & analysis
+    bios_result = bios_plugin.run(analysis_args={"exp_bios_version":"ABC"})
+    all_res.append(bios_result)
+    table_summary = TableSummary()
+    table_summary.collate_results(all_res, None)
+
+if __name__ == "__main__":
+    main()
+```
