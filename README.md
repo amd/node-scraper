@@ -2,6 +2,17 @@
 Node Scraper is a tool which performs automated data collection and analysis for the purposes of
 system debug.
 
+## Table of Contents
+- [Installation](#installation)
+  - [Install From Source](#install-from-source)
+- [CLI Usage](#cli-usage)
+  - [Execution Methods](#execution-methods)
+    - [Example: Remote Execution](#example-remote-execution)
+    - [Example connection_config.json](#example-connection_configjson)
+  - [Subcommmands](#subcommmands)
+- [Plugin Configs](#plugin-configs)
+
+
 ## Installation
 ### Install From Source
 Node Scraper requires Python 3.10+ for installation. After cloning this repository,
