@@ -8,11 +8,10 @@ system debug.
 - [CLI Usage](#cli-usage)
   - [Execution Methods](#execution-methods)
     - [Example: Remote Execution](#example-remote-execution)
-    - [Example connection_config.json](#example-connection_configjson)
-  - [Subcommmands](#subcommmands)
-- [Configs](#plugin-configs)
-- [Plugin Configs](#plugin-configs)
-
+    - [Example: connection_config.json](#example-connection_configjson)
+  - [Subcommands](#subcommands)
+- [Configs](#configs)
+- [nodescraper integration](#nodescraper-integration)
 
 ## Installation
 ### Install From Source
