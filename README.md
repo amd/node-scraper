@@ -10,8 +10,16 @@ system debug.
     - [Example: Remote Execution](#example-remote-execution)
     - [Example: connection_config.json](#example-connection_configjson)
   - [Subcommands](#subcommands)
+    - ['describe' subcommand](#describe-subcommand)
+    - ['run-plugins' sub command](#run-plugins-sub-command)
+    - ['gen-plugin-config' sub command](#gen-plugin-config-sub-command)
+    - ['summary' sub command](#summary-sub-command)
 - [Configs](#configs)
+  - [Global args](#global-args)
+  - [Plugin config: `--plugin-configs` command](#plugin-config---plugin-configs-command)
+  - [Reference config: `gen-reference-config` command](#reference-config-gen-reference-config-command)
 - [nodescraper integration](#nodescraper-integration)
+
 
 ## Installation
 ### Install From Source
@@ -107,7 +115,7 @@ Plugins to run can be specified in two ways, using a plugin JSON config file or 
 'run-plugins' sub command. These two options are not mutually exclusive and can be used together.
 
 
-1. **'describe' subcommand**
+#### **'describe' subcommand**
 
 You can use the `describe` subcommand to display details about built-in configs or plugins.
 List all built-in configs:
@@ -130,7 +138,7 @@ Show details for a specific plugin
 node-scraper describe plugin <plugin-name>
 ```
 
-2. **'run-plugins' sub command**
+#### **'run-plugins' sub command**
 The plugins to run and their associated arguments can also be specified directly on the CLI using
 the 'run-plugins' sub-command. Using this sub-command you can specify a plugin name followed by
 the arguments for that particular plugin. Multiple plugins can be specified at once.
@@ -176,7 +184,7 @@ Use plugin configs and 'run-plugins'
 node-scraper run-plugins BiosPlugin
 ```
 
-3. **'gen-plugin-config' sub command**
+#### **'gen-plugin-config' sub command**
 The 'gen-plugin-config' sub command can be used to generate a plugin config JSON file for a plugin
 or list of plugins that can then be customized. Plugin arguments which have default values will be
 prepopulated in the JSON file, arguments without default values will have a value of 'null'.
@@ -211,7 +219,7 @@ This would produce the following config:
 }
 ```
 
-4. **'summary' sub command**
+#### **'summary' sub command**
 The 'summary' subcommand can be used to combine results from multiple runs of node-scraper to a
 single summary.csv file. Sample run:
 ```sh
@@ -248,7 +256,21 @@ tabular format to the console.
 }
 ```
 
-1. Plugin config: **'--plugin-configs' command**
+#### Global args
+Global args can be used to skip sudo plugins or enable/disble either collection or analysis.
+Below is an example that skips sudo requiring plugins and disables analysis.
+
+```
+  "global_args": {
+      "collection_args": {
+        "skip_sudo" : 1
+      },
+      "collection" : 1,
+      "analysis" : 0
+  },
+```
+
+#### Plugin config: **'--plugin-configs' command**
 A plugin config can be used to compare the system data against the config specifications:
 ```sh
 node-scraper --plugin-configs plugin_config.json
@@ -306,7 +328,7 @@ Here is an example of a comprehensive plugin config that specifies analyzer args
 }
 ```
 
-2. Reference config: **'gen-reference-config' command**
+#### Reference config: **'gen-reference-config' command**
 This command can be used to generate a reference config that is populated with current system
 configurations. Plugins that use analyzer args (where applicable) will be populated with system
 data.
@@ -356,7 +378,7 @@ This will generate a reference config that includes plugins with logged results 
 
 ## nodescraper integration
 Nodescraper can be integrated inside another Python tool by leveraging its classes and functionality.
-See bellow for a comprehensive example on how to create plugins and run the associated data
+See below for a comprehensive example on how to create plugins and run the associated data
 collection and analysis.
 Sample run command:
 ```
