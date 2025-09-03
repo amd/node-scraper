@@ -120,7 +120,9 @@ class InBandConnectionManager(ConnectionManager[InBandConnection, SSHConnectionP
             return self.result
 
         try:
-            self.logger.info("Initializing SSH connection to system")
+            self.logger.info(
+                "Initializing SSH connection to system '%s'", self.connection_args.hostname
+            )
             self.connection = RemoteShell(self.connection_args)
             self.connection.connect_ssh()
             self._check_os_family()

@@ -393,10 +393,14 @@ from nodescraper.plugins.inband.bios.bios_plugin import BiosPlugin
 from nodescraper.plugins.inband.bios.analyzer_args import BiosAnalyzerArgs
 from nodescraper.plugins.inband.kernel.kernel_plugin import KernelPlugin
 from nodescraper.plugins.inband.kernel.analyzer_args import KernelAnalyzerArgs
+from nodescraper.plugins.inband.os.os_plugin import OsPlugin
+from nodescraper.plugins.inband.os.analyzer_args import OsAnalyzerArgs
 from nodescraper.pluginregistry import PluginRegistry
 from nodescraper.models.systeminfo import SystemInfo, OSFamily
-from nodescraper.enums import EventPriority
+from nodescraper.enums import EventPriority, SystemLocation
 from nodescraper.resultcollators.tablesummary import TableSummary
+from nodescraper.connection.inband.inbandmanager import InBandConnectionManager
+from nodescraper.connection.inband.sshparams import SSHConnectionParams
 
 def main():
 
@@ -445,6 +449,18 @@ def main():
     all_res.append(bios_result)
     table_summary = TableSummary()
     table_summary.collate_results(all_res, None)
+
+    #remote connection
+    system_info.location=SystemLocation.REMOTE
+    ssh_params = SSHConnectionParams(hostname="my_system",
+                                    port=22,
+                                    username="my_username",
+                                    key_filename="/home/user/.ssh/ssh_key")
+    conn_manager = InBandConnectionManager(system_info=system_info, connection_args=ssh_params)
+    os_plugin = OsPlugin(system_info=system_info, logger=logger, connection_manager=conn_manager)
+    os_plugin.run(analysis_args=OsAnalyzerArgs(exp_os="DEF"))
+
+
 
 if __name__ == "__main__":
     main()
