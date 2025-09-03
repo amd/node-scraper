@@ -260,7 +260,7 @@ tabular format to the console.
 Global args can be used to skip sudo plugins or enable/disble either collection or analysis.
 Below is an example that skips sudo requiring plugins and disables analysis.
 
-```
+```json
   "global_args": {
       "collection_args": {
         "skip_sudo" : 1
@@ -381,12 +381,12 @@ Nodescraper can be integrated inside another Python tool by leveraging its class
 See below for a comprehensive example on how to create plugins and run the associated data
 collection and analysis.
 Sample run command:
-```
+```sh
 python3 sample.py
 ```
 
 Sample.py file:
-```
+```python
 import logging
 import sys
 from nodescraper.plugins.inband.bios.bios_plugin import BiosPlugin
@@ -395,12 +395,14 @@ from nodescraper.plugins.inband.kernel.kernel_plugin import KernelPlugin
 from nodescraper.plugins.inband.kernel.analyzer_args import KernelAnalyzerArgs
 from nodescraper.plugins.inband.os.os_plugin import OsPlugin
 from nodescraper.plugins.inband.os.analyzer_args import OsAnalyzerArgs
-from nodescraper.pluginregistry import PluginRegistry
 from nodescraper.models.systeminfo import SystemInfo, OSFamily
 from nodescraper.enums import EventPriority, SystemLocation
 from nodescraper.resultcollators.tablesummary import TableSummary
 from nodescraper.connection.inband.inbandmanager import InBandConnectionManager
 from nodescraper.connection.inband.sshparams import SSHConnectionParams
+from nodescraper.pluginregistry import PluginRegistry
+from nodescraper.models.pluginconfig import PluginConfig
+from nodescraper.pluginexecutor import PluginExecutor
 
 def main():
 
@@ -459,6 +461,38 @@ def main():
     conn_manager = InBandConnectionManager(system_info=system_info, connection_args=ssh_params)
     os_plugin = OsPlugin(system_info=system_info, logger=logger, connection_manager=conn_manager)
     os_plugin.run(analysis_args=OsAnalyzerArgs(exp_os="DEF"))
+
+    #run multiple plugins through a queue
+    system_info.location=SystemLocation.LOCAL
+    config_dict = {
+      "global_args": {
+          "collection" : 1,
+          "analysis" : 1
+      },
+      "plugins": {
+        "BiosPlugin": {
+          "analysis_args": {
+            "exp_bios_version": "123",
+          }
+        },
+        "KernelPlugin": {
+          "analysis_args": {
+            "exp_kernel": "ABC",
+          }
+        }
+      },
+      "result_collators": {},
+      "name": "plugin_config",
+      "desc": "Auto generated config"
+      }
+
+    config1 = PluginConfig(**config_dict)
+    plugin_executor = PluginExecutor(
+        logger=logger,
+        plugin_configs=[config1],
+        system_info=system_info
+    )
+    results = plugin_executor.run_queue()
 
 
 
