@@ -28,33 +28,32 @@ import json
 import re
 from tarfile import TarFile
 from typing import TypeVar
-import sys
 
-from packaging.version import Version as PackageVersion
-from pydantic import BaseModel, ValidationError
 import amdsmi
 from amdsmi import (
+    AmdSmiException,
     AmdSmiInitFlags,
+    amdsmi_get_fw_info,
+    amdsmi_get_gpu_accelerator_partition_profile,
+    amdsmi_get_gpu_asic_info,
+    amdsmi_get_gpu_bad_page_info,
+    amdsmi_get_gpu_board_info,
+    amdsmi_get_gpu_compute_partition,
+    amdsmi_get_gpu_compute_process_info,
+    amdsmi_get_gpu_device_bdf,
+    amdsmi_get_gpu_device_uuid,
+    amdsmi_get_gpu_kfd_info,
+    amdsmi_get_gpu_memory_partition,
+    amdsmi_get_gpu_memory_reserved_pages,
+    amdsmi_get_gpu_process_list,
+    amdsmi_get_lib_version,
+    amdsmi_get_processor_handles,
+    amdsmi_get_rocm_version,
     amdsmi_init,
     amdsmi_shut_down,
-    amdsmi_get_gpu_board_info,
-    amdsmi_get_gpu_asic_info,
-    amdsmi_get_processor_handles,
-    amdsmi_get_lib_version,
-    amdsmi_get_rocm_version,
-    amdsmi_get_gpu_device_uuid,
-    amdsmi_get_gpu_device_bdf,
-    amdsmi_get_gpu_kfd_info,
-    amdsmi_get_fw_info,
-    amdsmi_get_gpu_process_list,
-    amdsmi_get_gpu_compute_process_info,
-    amdsmi_get_gpu_bad_page_info,
-    amdsmi_get_gpu_memory_reserved_pages,
-    amdsmi_get_gpu_compute_partition,
-    amdsmi_get_gpu_memory_partition,
-    amdsmi_get_gpu_accelerator_partition_profile,
-    AmdSmiException,
 )
+from packaging.version import Version as PackageVersion
+from pydantic import BaseModel, ValidationError
 
 from nodescraper.base.inbandcollectortask import InBandDataCollector
 
@@ -336,15 +335,17 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiData, None]):
                     except amdsmi.AmdSmiException:
                         pass
 
-                out.append({
-                    "gpu": idx,
-                    "name": name or "unknown",
-                    "bdf": bdf,
-                    "uuid": uuid,
-                    "kfd_id": int(kfd.get("kfd_id", 0)) if isinstance(kfd, dict) else 0,
-                    "node_id": int(kfd.get("node_id", 0)) if isinstance(kfd, dict) else 0,
-                    "partition_id": 0,
-                })
+                out.append(
+                    {
+                        "gpu": idx,
+                        "name": name or "unknown",
+                        "bdf": bdf,
+                        "uuid": uuid,
+                        "kfd_id": int(kfd.get("kfd_id", 0)) if isinstance(kfd, dict) else 0,
+                        "node_id": int(kfd.get("node_id", 0)) if isinstance(kfd, dict) else 0,
+                        "partition_id": 0,
+                    }
+                )
             except AmdSmiException as e:
                 self._log_event(
                     category=EventCategory.APPLICATION,
@@ -365,20 +366,27 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiData, None]):
                 for pid in pids:
                     try:
                         pinfo = amdsmi_get_gpu_compute_process_info(h, pid) or {}
-                        plist.append({"process_info": {
-                            "name": pinfo.get("name", str(pid)),
-                            "pid": int(pid),
-                            "memory_usage": {
-                                "gtt_mem": {"value": pinfo.get("gtt_mem", 0), "unit": "B"},
-                                "cpu_mem": {"value": pinfo.get("cpu_mem", 0), "unit": "B"},
-                                "vram_mem": {"value": pinfo.get("vram_mem", 0), "unit": "B"},
-                            },
-                            "mem_usage": {"value": pinfo.get("vram_mem", 0), "unit": "B"},
-                            "usage": {
-                                "gfx": {"value": pinfo.get("gfx", 0), "unit": "%"},
-                                "enc": {"value": pinfo.get("enc", 0), "unit": "%"},
-                            },
-                        }})
+                        plist.append(
+                            {
+                                "process_info": {
+                                    "name": pinfo.get("name", str(pid)),
+                                    "pid": int(pid),
+                                    "memory_usage": {
+                                        "gtt_mem": {"value": pinfo.get("gtt_mem", 0), "unit": "B"},
+                                        "cpu_mem": {"value": pinfo.get("cpu_mem", 0), "unit": "B"},
+                                        "vram_mem": {
+                                            "value": pinfo.get("vram_mem", 0),
+                                            "unit": "B",
+                                        },
+                                    },
+                                    "mem_usage": {"value": pinfo.get("vram_mem", 0), "unit": "B"},
+                                    "usage": {
+                                        "gfx": {"value": pinfo.get("gfx", 0), "unit": "%"},
+                                        "enc": {"value": pinfo.get("enc", 0), "unit": "%"},
+                                    },
+                                }
+                            }
+                        )
                     except AmdSmiException:
                         plist.append({"process_info": str(pid)})
                 out.append({"gpu": idx, "process_list": plist})
@@ -405,18 +413,22 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiData, None]):
             c_dict = c if isinstance(c, dict) else {}
             m_dict = m if isinstance(m, dict) else {}
             profiles.append(p if isinstance(p, dict) else {})
-            current.append({
-                "gpu_id": idx,
-                "memory": c_dict.get("memory"),
-                "accelerator_type": c_dict.get("accelerator_type"),
-                "accelerator_profile_index": c_dict.get("accelerator_profile_index"),
-                "partition_id": c_dict.get("partition_id"),
-            })
-            memparts.append({
-                "gpu_id": idx,
-                "memory_partition_caps": m_dict.get("memory_partition_caps"),
-                "current_partition_id": m_dict.get("current_partition_id"),
-            })
+            current.append(
+                {
+                    "gpu_id": idx,
+                    "memory": c_dict.get("memory"),
+                    "accelerator_type": c_dict.get("accelerator_type"),
+                    "accelerator_profile_index": c_dict.get("accelerator_profile_index"),
+                    "partition_id": c_dict.get("partition_id"),
+                }
+            )
+            memparts.append(
+                {
+                    "gpu_id": idx,
+                    "memory_partition_caps": m_dict.get("memory_partition_caps"),
+                    "current_partition_id": m_dict.get("current_partition_id"),
+                }
+            )
         return {
             "current_partition": current,
             "memory_partition": memparts,
@@ -479,7 +491,11 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiData, None]):
                 out.append(
                     {
                         "gpu": idx,
-                        "fw_list": [{"fw_id": f.get("fw_id", ""), "fw_version": f.get("fw_version", "")} for f in fw_list if isinstance(f, dict)],
+                        "fw_list": [
+                            {"fw_id": f.get("fw_id", ""), "fw_version": f.get("fw_version", "")}
+                            for f in fw_list
+                            if isinstance(f, dict)
+                        ],
                     }
                 )
             except AmdSmiException as e:
@@ -499,8 +515,16 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiData, None]):
             bad_list = self._smi_try(amdsmi_get_gpu_bad_page_info, h, default=[]) or []
             res_list = self._smi_try(amdsmi_get_gpu_memory_reserved_pages, h, default=[]) or []
 
-            retired = sum(1 for b in bad_list if isinstance(b, dict) and str(b.get("status", "")).lower() == "retired")
-            pending = sum(1 for b in bad_list if isinstance(b, dict) and str(b.get("status", "")).lower() == "pending")
+            retired = sum(
+                1
+                for b in bad_list
+                if isinstance(b, dict) and str(b.get("status", "")).lower() == "retired"
+            )
+            pending = sum(
+                1
+                for b in bad_list
+                if isinstance(b, dict) and str(b.get("status", "")).lower() == "pending"
+            )
 
             out.append(
                 {
@@ -777,9 +801,9 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiData, None]):
 
             amd_smi_data = None
             version = self._get_amdsmi_version()
-            bad_pages = self.get_bad_pages() #call fails, need ras?
+            bad_pages = self.get_bad_pages()  # call fails, need ras?
             processes = self.get_process()
-            partition = self.get_partition() #call fails
+            partition = self.get_partition()  # call fails
             firmware = self.get_firmware()
             topology = self.get_topology()
             amdsmi_metric = self.get_metric()
@@ -789,7 +813,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiData, None]):
             if xgmi_metric is None:
                 xgmi_metric = {"metric": {}, "link": {}}
             cper_data = self.get_cper_data()
-            amd_smi_data = self._get_amdsmi_data() #fails ras not found
+            amd_smi_data = self._get_amdsmi_data()  # fails ras not found
             if amd_smi_data is None:
                 return self.result, None
 
@@ -814,4 +838,3 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiData, None]):
                 amdsmi_shut_down()
             except Exception:
                 pass
-
