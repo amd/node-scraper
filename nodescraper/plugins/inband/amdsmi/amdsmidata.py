@@ -801,6 +801,17 @@ class AmdSmiVersion(BaseModel):
     amdgpu_version: str | None = None
     amd_hsmp_driver_version: str | None = None
 
+    @field_validator("*", mode="before")
+    @classmethod
+    def _stringify(cls, v):
+        if v is None or isinstance(v, str):
+            return v
+        if isinstance(v, (bytes, bytearray)):
+            return v.decode("utf-8", "ignore")
+        if isinstance(v, (tuple, list)):
+            return ".".join(str(x) for x in v)
+        return str(v)
+
 
 class PartitionCurrent(BaseModel):
     """Contains the Current Partition data for the GPUs"""

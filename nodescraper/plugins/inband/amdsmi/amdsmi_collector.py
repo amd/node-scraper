@@ -28,12 +28,17 @@ import json
 import re
 from tarfile import TarFile
 from typing import TypeVar
+import sys
 
 from packaging.version import Version as PackageVersion
 from pydantic import BaseModel, ValidationError
+import amdsmi
 from amdsmi import (
+    AmdSmiInitFlags,
     amdsmi_init,
     amdsmi_shut_down,
+    amdsmi_get_gpu_board_info,
+    amdsmi_get_gpu_asic_info,
     amdsmi_get_processor_handles,
     amdsmi_get_lib_version,
     amdsmi_get_rocm_version,
@@ -48,11 +53,7 @@ from amdsmi import (
     amdsmi_get_gpu_compute_partition,
     amdsmi_get_gpu_memory_partition,
     amdsmi_get_gpu_accelerator_partition_profile,
-    amdsmi_get_xgmi_info,
-    amdsmi_get_gpu_metrics_info,  # you can expand mapping later
-    amdsmi_get_pcie_info,         # optional; for deeper metric/topo mapping
-    amdsmi_get_gpu_cper_entries,
-    amdsmi_get_afids_from_cper,
+    AmdSmiException,
 )
 
 from nodescraper.base.inbandcollectortask import InBandDataCollector
@@ -93,9 +94,11 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiData, None]):
     DATA_MODEL = AmdSmiData
 
     def _get_handles(self):
+        """Get processor handles."""
         try:
             return amdsmi_get_processor_handles()
-        except AmdSmiException as e:
+        except amdsmi.AmdSmiException as e:
+            print("Exception1: %s" % e)
             self._log_event(
                 category=EventCategory.APPLICATION,
                 description="amdsmi_get_processor_handles failed",
@@ -123,10 +126,11 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiData, None]):
         return True
 
     def build_amdsmi_sub_data(
-        self, amd_smi_data_model: type[T], json_data: list[dict] | None
+        self, amd_smi_data_model: type[T], json_data: list[dict] | dict | None
     ) -> list[T] | T | None:
         try:
             if json_data is None:
+                print("JSON is none")
                 self._log_event(
                     category=EventCategory.APPLICATION,
                     description="No data returned from amd-smi sub command",
@@ -183,6 +187,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiData, None]):
             self.result.status = ExecutionStatus.NOT_RAN
             return None
         try:
+            self.amd_smi_commands = self.detect_amdsmi_commands()
             version = self._get_amdsmi_version()
             bad_pages = self.get_bad_pages()
             processes = self.get_process()
@@ -197,6 +202,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiData, None]):
                 xgmi_metric = {"metric": {}, "link": {}}
             cper_data = self.get_cper_data()
         except Exception as e:
+            print(e)
             self._log_event(
                 category=EventCategory.APPLICATION,
                 description="Error running amd-smi sub commands",
@@ -263,32 +269,14 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiData, None]):
             version=lib_ver,
             amdsmi_library_version=lib_ver,
             rocm_version=rocm_ver,
-            # amdgpu_version / amd_hsmp_driver_version unavailable via py API???
         )
-
-    #def _get_amdsmi_version(self) -> AmdSmiVersion | None:
-    #    """Get amdsmi version and data."""
-    #    ret = self._run_amd_smi_dict("version")
-    #    version_data = self.build_amdsmi_sub_data(AmdSmiVersion, ret)
-    #    if version_data:
-    #        return version_data[0]
-    #    return None
 
     def _run_amd_smi_dict(
         self, cmd: str, sudo: bool = False, raise_event=True
     ) -> dict | list[dict] | None:
-        """Run amd-smi command with json output.
-
-        Args:
-        ----
-            cmd (str): command to run
-
-        Returns:
-        -------
-            dict: dict of output
-        """
+        """Run amd-smi command with json output."""
         cmd += " --json"
-        cmd_ret = self._run_amd_smi(cmd, sudo=True)
+        cmd_ret = self._run_amd_smi(cmd, sudo=True if sudo else False)
         if cmd_ret:
             try:
                 return json.loads(cmd_ret)
@@ -306,16 +294,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiData, None]):
             return None
 
     def _run_amd_smi(self, cmd: str, sudo: bool = False) -> str | None:
-        """Run amd-smi command
-
-        Args:
-        ----
-            cmd (str): command to run
-
-        Returns:
-        -------
-            str: str of output
-        """
+        """Run amd-smi command"""
         cmd_ret: CommandArtifact = self._run_sut_cmd(f"{self.AMD_SMI_EXE} {cmd}", sudo=sudo)
 
         if cmd_ret.exit_code != 0:
@@ -335,123 +314,219 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiData, None]):
         return cmd_ret.stdout or ""
 
     def get_gpu_list(self) -> list[dict] | None:
-        """Get data as a list of dict from cmd: amdsmi list"""
-        LIST_CMD = "list"
-        if not self._check_command_supported(LIST_CMD):
-            # If the command is not supported, return None
-            return None
-        return self._run_amd_smi_dict(LIST_CMD)
+        devices = self._get_handles()
+        out: list[dict] = []
+        for idx, h in enumerate(devices):
+            try:
+                uuid = amdsmi_get_gpu_device_uuid(h) or ""
+                bdf = amdsmi_get_gpu_device_bdf(h) or ""
+                kfd = amdsmi_get_gpu_kfd_info(h) or {}
+
+                # Name via board/ASIC info
+                name = None
+                try:
+                    board = amdsmi_get_gpu_board_info(h) or {}
+                    name = board.get("product_name")  # preferred
+                except amdsmi.AmdSmiException:
+                    pass
+                if not name:
+                    try:
+                        asic = amdsmi_get_gpu_asic_info(h) or {}
+                        name = asic.get("market_name")  # fallback
+                    except amdsmi.AmdSmiException:
+                        pass
+
+                out.append({
+                    "gpu": idx,
+                    "name": name or "unknown",
+                    "bdf": bdf,
+                    "uuid": uuid,
+                    "kfd_id": int(kfd.get("kfd_id", 0)) if isinstance(kfd, dict) else 0,
+                    "node_id": int(kfd.get("node_id", 0)) if isinstance(kfd, dict) else 0,
+                    "partition_id": 0,
+                })
+            except AmdSmiException as e:
+                self._log_event(
+                    category=EventCategory.APPLICATION,
+                    description="Failed to build gpu list entry from API",
+                    data={"exception": get_exception_traceback(e)},
+                    priority=EventPriority.WARNING,
+                )
+        return out
 
     def get_process(self) -> list[dict] | None:
         """Get data as a list of dict from cmd: amdsmi process"""
-        PROCESS_CMD = "process"
-        if not self._check_command_supported(PROCESS_CMD):
-            # If the command is not supported, return None
-            return None
-        return self._run_amd_smi_dict(PROCESS_CMD)
+        devices = self._get_handles()
+        out: list[dict] = []
+        for idx, h in enumerate(devices):
+            try:
+                pids = amdsmi_get_gpu_process_list(h) or []
+                plist = []
+                for pid in pids:
+                    try:
+                        pinfo = amdsmi_get_gpu_compute_process_info(h, pid) or {}
+                        plist.append({"process_info": {
+                            "name": pinfo.get("name", str(pid)),
+                            "pid": int(pid),
+                            "memory_usage": {
+                                "gtt_mem": {"value": pinfo.get("gtt_mem", 0), "unit": "B"},
+                                "cpu_mem": {"value": pinfo.get("cpu_mem", 0), "unit": "B"},
+                                "vram_mem": {"value": pinfo.get("vram_mem", 0), "unit": "B"},
+                            },
+                            "mem_usage": {"value": pinfo.get("vram_mem", 0), "unit": "B"},
+                            "usage": {
+                                "gfx": {"value": pinfo.get("gfx", 0), "unit": "%"},
+                                "enc": {"value": pinfo.get("enc", 0), "unit": "%"},
+                            },
+                        }})
+                    except AmdSmiException:
+                        plist.append({"process_info": str(pid)})
+                out.append({"gpu": idx, "process_list": plist})
+            except AmdSmiException as e:
+                self._log_event(
+                    category=EventCategory.APPLICATION,
+                    description="Process collection failed",
+                    data={"exception": get_exception_traceback(e)},
+                    priority=EventPriority.WARNING,
+                )
+        return out
 
-    def get_partition(self) -> list[dict] | None:
-        """Get data as a list of dict from cmd: amdsmi process"""
-        PARTITION_CMD = "partition"
-        if not self._check_command_supported(PARTITION_CMD):
-            # If the command is not supported, return None
-            return None
-        return self._run_amd_smi_dict(PARTITION_CMD)
+    def get_partition(self) -> dict | None:
+        """Collect partition info via AMDSMI; degrade gracefully if unsupported."""
+        devices = self._get_handles()
+        current: list[dict] = []
+        memparts: list[dict] = []
+        profiles: list[dict] = []
+        resources: list[dict] = []
+        for idx, h in enumerate(devices):
+            c = self._smi_try(amdsmi_get_gpu_compute_partition, h, default={}) or {}
+            m = self._smi_try(amdsmi_get_gpu_memory_partition, h, default={}) or {}
+            p = self._smi_try(amdsmi_get_gpu_accelerator_partition_profile, h, default={}) or {}
+            c_dict = c if isinstance(c, dict) else {}
+            m_dict = m if isinstance(m, dict) else {}
+            profiles.append(p if isinstance(p, dict) else {})
+            current.append({
+                "gpu_id": idx,
+                "memory": c_dict.get("memory"),
+                "accelerator_type": c_dict.get("accelerator_type"),
+                "accelerator_profile_index": c_dict.get("accelerator_profile_index"),
+                "partition_id": c_dict.get("partition_id"),
+            })
+            memparts.append({
+                "gpu_id": idx,
+                "memory_partition_caps": m_dict.get("memory_partition_caps"),
+                "current_partition_id": m_dict.get("current_partition_id"),
+            })
+        return {
+            "current_partition": current,
+            "memory_partition": memparts,
+            "partition_profiles": profiles,
+            "partition_resources": resources,
+        }
 
     def get_topology(self) -> list[dict] | None:
         """Get data as a list of dict from cmd: amdsmi topology"""
         TOPO_CMD = "topology"
+        if not hasattr(self, "amd_smi_commands"):
+            self.amd_smi_commands = self.detect_amdsmi_commands()
         if not self._check_command_supported(TOPO_CMD):
-            # If the command is not supported, return None
             return None
         return self._run_amd_smi_dict(TOPO_CMD)
 
     def get_static(self) -> list[dict] | None:
         """Get data in dict format from cmd: amdsmi static"""
         STATIC_CMD = "static"
+        if not hasattr(self, "amd_smi_commands"):
+            self.amd_smi_commands = self.detect_amdsmi_commands()
         if not self._check_command_supported(STATIC_CMD):
-            # If the command is not supported, return None
             return None
         static_data = self._run_amd_smi_dict(f"{STATIC_CMD} -g all")
         if static_data is None:
             return None
-        if "gpu_data" in static_data:
+        if isinstance(static_data, dict) and "gpu_data" in static_data:
             static_data = static_data["gpu_data"]
         static_data_gpus = []
         for static in static_data:
-            if "gpu" in static:
+            if isinstance(static, dict) and "gpu" in static:
                 static_data_gpus.append(static)
         return static_data_gpus
 
     def get_metric(self) -> list[dict] | None:
         """Get data as a list of dict from cmd: amdsmi metric"""
         METRIC_CMD = "metric"
+        if not hasattr(self, "amd_smi_commands"):
+            self.amd_smi_commands = self.detect_amdsmi_commands()
         if not self._check_command_supported(METRIC_CMD):
-            # If the command is not supported, return None
             return None
         metric_data = self._run_amd_smi_dict(f"{METRIC_CMD} -g all")
         if metric_data is None:
             return None
-        if "gpu_data" in metric_data:
+        if isinstance(metric_data, dict) and "gpu_data" in metric_data:
             metric_data = metric_data["gpu_data"]
         metric_data_gpus = []
         for metric in metric_data:
-            if "gpu" in metric:
+            if isinstance(metric, dict) and "gpu" in metric:
                 metric_data_gpus.append(metric)
         return metric_data_gpus
 
     def get_firmware(self) -> list[dict] | None:
         """Get data as a list of dict from cmd: amdsmi firmware"""
-        FW_CMD = "firmware"
-        if not self._check_command_supported(FW_CMD):
-            # If the command is not supported, return None
-            return None
-        return self._run_amd_smi_dict(FW_CMD)
-
-    def get_bad_pages(self) -> list[dict] | None:
         devices = self._get_handles()
         out: list[dict] = []
         for idx, h in enumerate(devices):
             try:
-                bad = amdsmi_get_gpu_bad_page_info(h) or {}
-                res = amdsmi_get_gpu_memory_reserved_pages(h) or {}
+                fw_list = amdsmi_get_fw_info(h) or []
                 out.append(
                     {
                         "gpu": idx,
-                        "retired": bad.get("retired", "N/A"),
-                        "pending": bad.get("pending", "N/A"),
-                        "un_res": res.get("unres", "N/A"),
+                        "fw_list": [{"fw_id": f.get("fw_id", ""), "fw_version": f.get("fw_version", "")} for f in fw_list if isinstance(f, dict)],
                     }
                 )
             except AmdSmiException as e:
                 self._log_event(
                     category=EventCategory.APPLICATION,
-                    description="Bad pages collection failed",
+                    description="amdsmi_get_fw_info failed",
                     data={"exception": get_exception_traceback(e)},
                     priority=EventPriority.WARNING,
                 )
         return out
 
-    #def get_bad_pages(self) -> list[dict] | None:
-    #    """Get data as a list of dict from cmd: amdsmi bad-pages"""
-    #    BAD_PAGE_CMD = "bad-pages"
-    #    if self._check_command_supported(BAD_PAGE_CMD):
-    #        # If the command is supported, run it
-    #        return self._run_amd_smi_dict(BAD_PAGE_CMD)
-    #    return None
+    def get_bad_pages(self) -> list[dict] | None:
+        devices = self._get_handles()
+        print("devices: %s" % (devices,))
+        out: list[dict] = []
+        for idx, h in enumerate(devices):
+            bad_list = self._smi_try(amdsmi_get_gpu_bad_page_info, h, default=[]) or []
+            res_list = self._smi_try(amdsmi_get_gpu_memory_reserved_pages, h, default=[]) or []
+
+            retired = sum(1 for b in bad_list if isinstance(b, dict) and str(b.get("status", "")).lower() == "retired")
+            pending = sum(1 for b in bad_list if isinstance(b, dict) and str(b.get("status", "")).lower() == "pending")
+
+            out.append(
+                {
+                    "gpu": idx,
+                    "retired": retired,
+                    "pending": pending,
+                    "un_res": len(res_list),
+                    "bad_pages": bad_list,
+                    "reserved_pages": res_list,
+                }
+            )
+        return out
 
     def get_xgmi_data_metric(self) -> dict[str, list[dict]] | None:
         """Get data as a list of dict from cmd: amdsmi xgmi"""
         XGMI_CMD = "xgmi"
+        if not hasattr(self, "amd_smi_commands"):
+            self.amd_smi_commands = self.detect_amdsmi_commands()
         if not self._check_command_supported(XGMI_CMD):
-            # If the command is not supported, return None
             return None
         xgmi_metric_data = self._run_amd_smi_dict(f"{XGMI_CMD} -m")
         if xgmi_metric_data is None:
             xgmi_metric_data = []
-        elif "xgmi_metric" in xgmi_metric_data:
+        elif isinstance(xgmi_metric_data, dict) and "xgmi_metric" in xgmi_metric_data:
             xgmi_metric_data = xgmi_metric_data["xgmi_metric"]
-            if len(xgmi_metric_data) == 1:
+            if isinstance(xgmi_metric_data, list) and len(xgmi_metric_data) == 1:
                 xgmi_metric_data = xgmi_metric_data[0]
         xgmi_link_data = self._run_amd_smi_dict(f"{XGMI_CMD} -l", raise_event=False)
         if isinstance(xgmi_link_data, dict) and "link_status" in xgmi_link_data:
@@ -487,30 +562,25 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiData, None]):
 
     def get_cper_data(self) -> list[TextFileArtifact]:
         CPER_CMD = "ras"
+        if not hasattr(self, "amd_smi_commands"):
+            self.amd_smi_commands = self.detect_amdsmi_commands()
         if not self._check_command_supported(CPER_CMD):
-            # If the command is not supported, return an empty list
             return []
         AMD_SMI_CPER_FOLDER = "/tmp/amd_smi_cper"
-        # Ensure the cper folder exists but is empty
         self._run_sut_cmd(
             f"mkdir -p {AMD_SMI_CPER_FOLDER} && rm -f {AMD_SMI_CPER_FOLDER}/*.cper && rm -f {AMD_SMI_CPER_FOLDER}/*.json",
             sudo=False,
         )
         cper_cmd = self._run_amd_smi(f"{CPER_CMD} --cper --folder={AMD_SMI_CPER_FOLDER}", sudo=True)
         if cper_cmd is None:
-            # Error was already logged in _run_amd_smi
             return []
-        # search that a CPER is actually created here
         regex_cper_search = re.findall(r"(\w+\.cper)", cper_cmd)
         if not regex_cper_search:
-            # Early exit if no CPER files were created
             return []
-        # tar the cper folder
         self._run_sut_cmd(
             f"tar -czf {AMD_SMI_CPER_FOLDER}.tar.gz -C {AMD_SMI_CPER_FOLDER} .",
             sudo=True,
         )
-        # Load teh tar files
         cper_zip: BaseFileArtifact = self.ib_interface.read_file(
             f"{AMD_SMI_CPER_FOLDER}.tar.gz", encoding=None, strip=False
         )
@@ -519,7 +589,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiData, None]):
             cper_zip.contents,
         )
         io_bytes = io.BytesIO(cper_zip.contents)
-        del cper_zip  # Free memory after reading the file
+        del cper_zip
         try:
             with TarFile.open(fileobj=io_bytes, mode="r:gz") as tar_file:
                 cper_data = []
@@ -527,15 +597,12 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiData, None]):
                     if member.isfile() and member.name.endswith(".cper"):
                         file_content = tar_file.extractfile(member)
                         if file_content is not None:
-                            # Decode the content, ignoring errors to avoid issues with binary data
-                            # that may not be valid UTF-8
                             file_content_bytes = file_content.read()
                         else:
                             file_content_bytes = b""
                         cper_data.append(
                             BinaryFileArtifact(filename=member.name, contents=file_content_bytes)
                         )
-            # Since we do not log the cper data in the data model create an invent informing the user if CPER created
             if cper_data:
                 self._log_event(
                     category=EventCategory.APPLICATION,
@@ -564,14 +631,11 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiData, None]):
         amdsmitst_data = AmdSmiTstData()
         if self.system_interaction_level != SystemInteractionLevel.DISRUPTIVE:
             return amdsmitst_data
-        # This test is disruptive, so we only run it if the system interaction level is set to DISRUPTIVE
         if (
             amdsmi_version is None
             or amdsmi_version.rocm_version is None
             or MIN_FUNCTIONAL_AMDSMITST_ROCM_VERSION > PackageVersion(amdsmi_version.rocm_version)
         ):
-            # In versions of ROCm prior to 6.4.1, the amdsmitst had a bug that would cause the sclk to get pinned
-            # To a constant value, so we do not run the test for older rocm see: SWDEV-496150
             self.logger.info("Skipping amdsmitst test due to Version incompatibility")
             return amdsmitst_data
         amdsmitst_cmd: str = "/opt/rocm/share/amd_smi/tests/amdsmitst"
@@ -595,12 +659,17 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiData, None]):
         failed_test_pat = r"\[\s+FAILED\s+\] (.*?) \(\d+ ms\)"
 
         for ret_line in cmd_ret.stdout.splitlines():
-            if match := re.match(passed_test_pat, ret_line):
-                amdsmitst_data.passed_tests.append(match.group(1))
-            elif match := re.match(skipped_test_pat, ret_line):
-                amdsmitst_data.skipped_tests.append(match.group(1))
-            elif match := re.match(failed_test_pat, ret_line):
-                amdsmitst_data.failed_tests.append(match.group(1))
+            m = re.match(passed_test_pat, ret_line)
+            if m:
+                amdsmitst_data.passed_tests.append(m.group(1))
+                continue
+            m = re.match(skipped_test_pat, ret_line)
+            if m:
+                amdsmitst_data.skipped_tests.append(m.group(1))
+                continue
+            m = re.match(failed_test_pat, ret_line)
+            if m:
+                amdsmitst_data.failed_tests.append(m.group(1))
 
         amdsmitst_data.passed_test_count = len(amdsmitst_data.passed_tests)
         amdsmitst_data.skipped_test_count = len(amdsmitst_data.skipped_tests)
@@ -609,16 +678,8 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiData, None]):
         return amdsmitst_data
 
     def detect_amdsmi_commands(self) -> set[str]:
-        r"""Runs the help command to determine if a amd-smi command can be used.
-
-        Uses the regex `^\s{4}(\w+)\s` to find all commands in the help output.
-
-        Returns:
-            set[str]: _description_
-        """
+        r"""Runs the help command to determine if a amd-smi command can be used."""
         command_pattern = re.compile(r"^\s{4}([\w\-]+)\s", re.MULTILINE)
-
-        # run command with help
         help_output = self._run_amd_smi("-h")
         if help_output is None:
             self._log_event(
@@ -628,19 +689,117 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiData, None]):
                 console_log=True,
             )
             return set()
-        # Find all matches in the provided output
         commands = command_pattern.findall(help_output)
         return set(commands)
+
+    def _smi_try(self, fn, *a, default=None, **kw):
+        """Call an AMDSMI function and normalize common library errors.
+        Extracts numeric ret_code from exceptions that don't expose a .status enum.
+        """
+        try:
+            return fn(*a, **kw)
+        except AmdSmiException as e:
+            code = getattr(e, "ret_code", None)
+            if code is None:
+                try:
+                    code = int(e.args[0]) if getattr(e, "args", None) else None
+                except Exception:
+                    code = None
+            CODE2NAME = {
+                1: "AMDSMI_STATUS_SUCCESS",
+                2: "AMDSMI_STATUS_NOT_SUPPORTED",
+                3: "AMDSMI_STATUS_PERMISSION",
+                4: "AMDSMI_STATUS_OUT_OF_RESOURCES",
+                5: "AMDSMI_STATUS_INIT_ERROR",
+                6: "AMDSMI_STATUS_INPUT_OUT_OF_BOUNDS",
+                7: "AMDSMI_STATUS_NOT_FOUND",
+            }
+            name = CODE2NAME.get(code, "unknown")
+
+            if name == "AMDSMI_STATUS_NOT_SUPPORTED" or name == "AMDSMI_STATUS_NOT_FOUND":
+                self._log_event(
+                    category=EventCategory.APPLICATION,
+                    description=f"{fn.__name__} not supported on this device/mode (status={name}, code={code})",
+                    priority=EventPriority.WARNING,
+                )
+                return default
+            if name == "AMDSMI_STATUS_PERMISSION":
+                self._log_event(
+                    category=EventCategory.APPLICATION,
+                    description=f"{fn.__name__} permission denied (need access to /dev/kfd & render nodes, or root for RAS). status={name}, code={code}",
+                    priority=EventPriority.WARNING,
+                )
+                return default
+            # Generic case
+            self._log_event(
+                category=EventCategory.APPLICATION,
+                description=f"{fn.__name__} failed (status={name}, code={code})",
+                data={"exception": get_exception_traceback(e)},
+                priority=EventPriority.WARNING,
+            )
+            return default
+            if name == "AMDSMI_STATUS_PERMISSION":
+                self._log_event(
+                    category=EventCategory.APPLICATION,
+                    description=f"{fn.__name__} permission denied (need access to /dev/kfd and render nodes). status={name}, code={code}",
+                    priority=EventPriority.WARNING,
+                )
+                return default
+            self._log_event(
+                category=EventCategory.APPLICATION,
+                description=f"{fn.__name__} failed (status={name or 'unknown'}, code={code})",
+                data={"exception": get_exception_traceback(e)},
+                priority=EventPriority.WARNING,
+            )
+            return default
+            self._log_event(
+                category=EventCategory.APPLICATION,
+                description=f"{fn.__name__} failed",
+                data={"exception": get_exception_traceback(e)},
+                priority=EventPriority.WARNING,
+            )
+            return default
 
     def collect_data(
         self,
         args=None,
     ) -> tuple[TaskResult, AmdSmiData | None]:
         try:
-            self.amd_smi_commands = self.detect_amdsmi_commands()
+            amdsmi_init(AmdSmiInitFlags.INIT_AMD_GPUS)
+
+            for h in self._get_handles():
+                board = self._smi_try(amdsmi_get_gpu_board_info, h, default={}) or {}
+                asic = self._smi_try(amdsmi_get_gpu_asic_info, h, default={}) or {}
+                name = board.get("product_name") or asic.get("market_name")
+                uuid = self._smi_try(amdsmi_get_gpu_device_uuid, h, default=None)
+                kfd = self._smi_try(amdsmi_get_gpu_kfd_info, h, default={}) or {}
+                print({"name": name, "uuid": uuid, "kfd": kfd})
+
+            amd_smi_data = None
+            version = self._get_amdsmi_version()
+            bad_pages = self.get_bad_pages() #call fails, need ras?
+            processes = self.get_process()
+            partition = self.get_partition() #call fails
+            firmware = self.get_firmware()
+            topology = self.get_topology()
+            amdsmi_metric = self.get_metric()
+            amdsmi_static = self.get_static()
+            gpu_list = self.get_gpu_list()
+            xgmi_metric = self.get_xgmi_data_metric()
+            if xgmi_metric is None:
+                xgmi_metric = {"metric": {}, "link": {}}
+            cper_data = self.get_cper_data()
+            amd_smi_data = self._get_amdsmi_data() #fails ras not found
+            if amd_smi_data is None:
+                return self.result, None
+
             amd_smi_data = self._get_amdsmi_data()
+            if amd_smi_data is None:
+                return self.result, None
+
             return self.result, amd_smi_data
         except Exception as e:
+            print(e)
             self._log_event(
                 category=EventCategory.APPLICATION,
                 description="Error running amd-smi collector",
@@ -650,3 +809,9 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiData, None]):
             )
             self.result.status = ExecutionStatus.EXECUTION_FAILURE
             return self.result, None
+        finally:
+            try:
+                amdsmi_shut_down()
+            except Exception:
+                pass
+
