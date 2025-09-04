@@ -29,4 +29,4 @@ from nodescraper.models import DataModel
 class SyslogData(DataModel):
     """Data model for in band syslog logs"""
 
-    syslog_logs: int = 0
+    syslog_logs: list[str] = []

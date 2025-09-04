@@ -23,12 +23,12 @@
 # SOFTWARE.
 #
 ###############################################################################
-import re
 
 from nodescraper.base import InBandDataCollector
 from nodescraper.connection.inband.inband import TextFileArtifact
 from nodescraper.enums import EventCategory, EventPriority, OSFamily
 from nodescraper.models import TaskResult
+from nodescraper.utils import nice_rotated_name, shell_quote
 
 from .syslogdata import SyslogData
 
@@ -42,36 +42,8 @@ class SyslogCollector(InBandDataCollector[SyslogData, None]):
 
     SYSLOG_CMD = r"ls -1 /var/log/syslog* 2>/dev/null | grep -E '^/var/log/syslog(\.[0-9]+(\.gz)?)?$' || true"
 
-    def _shell_quote(self, s: str) -> str:
-        """single-quote fix."""
-        return "'" + s.replace("'", "'\"'\"'") + "'"
-
-    def _nice_syslog_name(self, path: str) -> str:
-        """Map path to filename
-        Args:
-            path (str): file path
-        Returns:
-            str: new local filename
-        """
-        prefix = "rotated_"
-        base = path.rstrip("/").rsplit("/", 1)[-1]
-
-        if base == "syslog":
-            return f"{prefix}syslog.log"
-
-        m = re.fullmatch(r"syslog\.(\d+)\.gz", base)
-        if m:
-            return f"{prefix}syslog.{m.group(1)}.gz.log"
-
-        m = re.fullmatch(r"syslog\.(\d+)", base)
-        if m:
-            return f"{prefix}syslog.{m.group(1)}.log"
-
-        middle = base[:-3] if base.endswith(".gz") else base
-        return f"{prefix}{middle}.log"
-
-    def _collect_syslog_rotations(self) -> int:
-        ret = 0
+    def _collect_syslog_rotations(self) -> list[str]:
+        ret = []
         list_res = self._run_sut_cmd(self.SYSLOG_CMD, sudo=True)
         paths = [p.strip() for p in (list_res.stdout or "").splitlines() if p.strip()]
         if not paths:
@@ -81,43 +53,35 @@ class SyslogCollector(InBandDataCollector[SyslogData, None]):
                 data={"list_exit_code": list_res.exit_code},
                 priority=EventPriority.WARNING,
             )
-            return 0
+            return []
 
         collected_logs, failed_logs = [], []
         for p in paths:
-            qp = self._shell_quote(p)
+            qp = shell_quote(p)
             if p.endswith(".gz"):
                 cmd = f"gzip -dc {qp} 2>/dev/null || zcat {qp} 2>/dev/null"
                 res = self._run_sut_cmd(cmd, sudo=True, log_artifact=False)
                 if res.exit_code == 0 and res.stdout is not None:
-                    fname = self._nice_syslog_name(p)
+                    fname = nice_rotated_name(p, "syslog")
                     self.logger.info("Collected syslog log: %s", fname)
                     self.result.artifacts.append(
                         TextFileArtifact(filename=fname, contents=res.stdout)
                     )
-                    collected_logs.append(
-                        {"path": p, "as": fname, "bytes": len(res.stdout.encode("utf-8", "ignore"))}
-                    )
+                    collected_logs.append(fname)
                 else:
-                    failed_logs.append(
-                        {"path": p, "exit_code": res.exit_code, "stderr": res.stderr, "cmd": cmd}
-                    )
+                    failed_logs.append(p)
             else:
                 cmd = f"cat {qp}"
                 res = self._run_sut_cmd(cmd, sudo=True, log_artifact=False)
                 if res.exit_code == 0 and res.stdout is not None:
-                    fname = self._nice_syslog_name(p)
+                    fname = nice_rotated_name(p, "syslog")
                     self.logger.info("Collected syslog log: %s", fname)
                     self.result.artifacts.append(
                         TextFileArtifact(filename=fname, contents=res.stdout)
                     )
-                    collected_logs.append(
-                        {"path": p, "as": fname, "bytes": len(res.stdout.encode("utf-8", "ignore"))}
-                    )
+                    collected_logs.append(fname)
                 else:
-                    failed_logs.append(
-                        {"path": p, "exit_code": res.exit_code, "stderr": res.stderr, "cmd": cmd}
-                    )
+                    failed_logs.append(p)
 
         if collected_logs:
             self._log_event(
@@ -137,7 +101,7 @@ class SyslogCollector(InBandDataCollector[SyslogData, None]):
             )
 
         if collected_logs:
-            ret = len(collected_logs)
+            ret = collected_logs
         return ret
 
     def collect_data(
