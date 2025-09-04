@@ -67,6 +67,7 @@ class DkmsAnalyzer(DataAnalyzer[DkmsDataModel, DkmsAnalyzerArgs]):
         error_state = False
 
         actual_values = []
+        expected_values = []
         for check, accepted_values in check_map.items():
             actual_value = getattr(data, check)
             for accepted_value in accepted_values:
@@ -85,6 +86,7 @@ class DkmsAnalyzer(DataAnalyzer[DkmsDataModel, DkmsAnalyzerArgs]):
                 elif actual_value == accepted_value:
                     break
             else:
+                expected_values.append(accepted_values)
                 actual_values.append(actual_value)
                 self._log_event(
                     category=EventCategory.SW_DRIVER,
@@ -98,7 +100,7 @@ class DkmsAnalyzer(DataAnalyzer[DkmsDataModel, DkmsAnalyzerArgs]):
         if error_state:
             self.result.status = ExecutionStatus.ERROR
             self.result.message = (
-                f"DKMS data mismatch. Expected: {accepted_values}, actual: {actual_values}"
+                f"DKMS data mismatch. \nActual: {actual_values}.\nExpected: {expected_values}"
             )
 
         return self.result

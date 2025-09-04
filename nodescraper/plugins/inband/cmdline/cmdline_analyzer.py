@@ -96,7 +96,7 @@ class CmdlineAnalyzer(DataAnalyzer[CmdlineDataModel, CmdlineAnalyzerArgs]):
         check, missing_required, found_banned = self._compare_cmdline(
             data.cmdline, args.required_cmdline, args.banned_cmdline
         )
-        # if self._compare_cmdline(data.cmdline, args.required_cmdline, args.banned_cmdline):
+
         if check:
             self.result.message = "Kernel cmdline matches expected"
             self.result.status = ExecutionStatus.OK
