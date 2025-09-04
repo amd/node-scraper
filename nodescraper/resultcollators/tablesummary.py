@@ -47,9 +47,17 @@ class TableSummary(PluginResultCollator):
             rows: list[list[str | None]],
             max_widths: dict[str, int] | None = None,
         ) -> str:
+            """Wrap cells
+
+            Args:
+                headers (list[str]): table header
+                rows (list[list[str  |  None]]): table rows
+                max_widths (dict[str, int] | None, optional): width per col. Defaults to None.
+
+            Returns:
+                str: wrapped texed
             """
-            Wrap cells.
-            """
+
             max_widths = max_widths or {}
 
             norm_rows: list[list[str]] = [
@@ -116,7 +124,6 @@ class TableSummary(PluginResultCollator):
 
         tables = ""
         if connection_results:
-            # Allow Optional[str] elements
             conn_rows: list[list[str | None]] = []
             for connection_result in connection_results:
                 conn_rows.append(
@@ -135,7 +142,6 @@ class TableSummary(PluginResultCollator):
             tables += f"\n\n{table}"
 
         if plugin_results:
-            # Allow Optional[str] elements
             plug_rows: list[list[str | None]] = []
             for plugin_result in plugin_results:
                 plug_rows.append(
