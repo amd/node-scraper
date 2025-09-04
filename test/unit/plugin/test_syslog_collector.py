@@ -91,20 +91,10 @@ def test_collect_rotations_good_path(monkeypatch, system_info, conn_mock):
     c = get_collector(monkeypatch, run_map, system_info, conn_mock)
 
     n = c._collect_syslog_rotations()
-    assert n == [
-        "rotated_syslog.log",
-        "rotated_syslog.1.log",
-        "rotated_syslog.2.gz.log",
-        "rotated_syslog.10.gz.log",
-    ]
-
-    names = {a.filename for a in c.result.artifacts}
-    assert names == {
-        "rotated_syslog.log",
-        "rotated_syslog.1.log",
-        "rotated_syslog.2.gz.log",
-        "rotated_syslog.10.gz.log",
-    }
+    assert n[0].filename == "rotated_syslog.log"
+    assert n[1].filename == "rotated_syslog.1.log"
+    assert n[2].filename == "rotated_syslog.2.gz.log"
+    assert n[3].filename == "rotated_syslog.10.gz.log"
 
     descs = [e["description"] for e in c._events]
     assert "Collected syslog rotated files" in descs
@@ -167,5 +157,5 @@ def test_collect_data_integration(monkeypatch, system_info, conn_mock):
 
     result, data = c.collect_data()
     assert isinstance(data, SyslogData)
-    assert data.syslog_logs == ["rotated_syslog.log"]
+    assert data.syslog_logs[0].filename == "rotated_syslog.log"
     assert c.result.message == "Syslog data collected"

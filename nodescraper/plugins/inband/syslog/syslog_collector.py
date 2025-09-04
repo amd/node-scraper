@@ -42,7 +42,7 @@ class SyslogCollector(InBandDataCollector[SyslogData, None]):
 
     SYSLOG_CMD = r"ls -1 /var/log/syslog* 2>/dev/null | grep -E '^/var/log/syslog(\.[0-9]+(\.gz)?)?$' || true"
 
-    def _collect_syslog_rotations(self) -> list[str]:
+    def _collect_syslog_rotations(self) -> list[TextFileArtifact]:
         ret = []
         list_res = self._run_sut_cmd(self.SYSLOG_CMD, sudo=True)
         paths = [p.strip() for p in (list_res.stdout or "").splitlines() if p.strip()]
@@ -56,6 +56,7 @@ class SyslogCollector(InBandDataCollector[SyslogData, None]):
             return []
 
         collected_logs, failed_logs = [], []
+        collected = []
         for p in paths:
             qp = shell_quote(p)
             if p.endswith(".gz"):
@@ -64,9 +65,7 @@ class SyslogCollector(InBandDataCollector[SyslogData, None]):
                 if res.exit_code == 0 and res.stdout is not None:
                     fname = nice_rotated_name(p, "syslog")
                     self.logger.info("Collected syslog log: %s", fname)
-                    self.result.artifacts.append(
-                        TextFileArtifact(filename=fname, contents=res.stdout)
-                    )
+                    collected.append(TextFileArtifact(filename=fname, contents=res.stdout))
                     collected_logs.append(fname)
                 else:
                     failed_logs.append(p)
@@ -76,10 +75,8 @@ class SyslogCollector(InBandDataCollector[SyslogData, None]):
                 if res.exit_code == 0 and res.stdout is not None:
                     fname = nice_rotated_name(p, "syslog")
                     self.logger.info("Collected syslog log: %s", fname)
-                    self.result.artifacts.append(
-                        TextFileArtifact(filename=fname, contents=res.stdout)
-                    )
                     collected_logs.append(fname)
+                    collected.append(TextFileArtifact(filename=fname, contents=res.stdout))
                 else:
                     failed_logs.append(p)
 
@@ -100,8 +97,8 @@ class SyslogCollector(InBandDataCollector[SyslogData, None]):
                 priority=EventPriority.WARNING,
             )
 
-        if collected_logs:
-            ret = collected_logs
+        if collected:
+            ret = collected
         return ret
 
     def collect_data(
