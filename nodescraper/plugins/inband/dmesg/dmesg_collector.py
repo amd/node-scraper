@@ -23,13 +23,13 @@
 # SOFTWARE.
 #
 ###############################################################################
-import re
 from typing import Optional
 
 from nodescraper.base import InBandDataCollector
 from nodescraper.connection.inband import TextFileArtifact
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.models import TaskResult
+from nodescraper.utils import nice_rotated_name, shell_quote
 
 from .collector_args import DmesgCollectorArgs
 from .dmesgdata import DmesgData
@@ -48,43 +48,6 @@ class DmesgCollector(InBandDataCollector[DmesgData, DmesgCollectorArgs]):
         r"ls -1 /var/log/dmesg* 2>/dev/null | grep -E '^/var/log/dmesg(\.[0-9]+(\.gz)?)?$' || true"
     )
 
-    def _shell_quote(self, s: str) -> str:
-        """Single quote fix
-
-        Args:
-            s (str): path to be converted
-
-        Returns:
-            str: path to be returned
-        """
-        return "'" + s.replace("'", "'\"'\"'") + "'"
-
-    def _nice_dmesg_name(self, path: str) -> str:
-        """Map path to filename
-
-        Args:
-            path (str): file path
-
-        Returns:
-            str: new local filename
-        """
-        prefix = "rotated_"
-        base = path.rstrip("/").rsplit("/", 1)[-1]
-
-        if base == "dmesg":
-            return f"{prefix}dmesg_log.log"
-
-        m = re.fullmatch(r"dmesg\.(\d+)\.gz", base)
-        if m:
-            return f"{prefix}dmesg.{m.group(1)}.gz.log"
-
-        m = re.fullmatch(r"dmesg\.(\d+)", base)
-        if m:
-            return f"{prefix}dmesg.{m.group(1)}.log"
-
-        middle = base[:-3] if base.endswith(".gz") else base
-        return f"{prefix}{middle}.log"
-
     def _collect_dmesg_rotations(self):
         """Collect dmesg logs"""
         list_res = self._run_sut_cmd(self.DMESG_LOGS_CMD, sudo=True)
@@ -100,12 +63,12 @@ class DmesgCollector(InBandDataCollector[DmesgData, DmesgCollectorArgs]):
 
         collected_logs, failed_logs = [], []
         for p in paths:
-            qp = self._shell_quote(p)
+            qp = shell_quote(p)
             if p.endswith(".gz"):
                 cmd = f"gzip -dc {qp} 2>/dev/null || zcat {qp} 2>/dev/null"
                 res = self._run_sut_cmd(cmd, sudo=True, log_artifact=False)
                 if res.exit_code == 0 and res.stdout is not None:
-                    fname = self._nice_dmesg_name(p)
+                    fname = nice_rotated_name(p, "dmesg")
                     self.logger.info("Collected dmesg log: %s", fname)
                     self.result.artifacts.append(
                         TextFileArtifact(filename=fname, contents=res.stdout)
@@ -121,7 +84,7 @@ class DmesgCollector(InBandDataCollector[DmesgData, DmesgCollectorArgs]):
                 cmd = f"cat {qp}"
                 res = self._run_sut_cmd(cmd, sudo=True, log_artifact=False)
                 if res.exit_code == 0 and res.stdout is not None:
-                    fname = self._nice_dmesg_name(p)
+                    fname = nice_rotated_name(p, "dmesg")
                     self.logger.info("Collected dmesg log: %s", fname)
                     self.result.artifacts.append(
                         TextFileArtifact(filename=fname, contents=res.stdout)
