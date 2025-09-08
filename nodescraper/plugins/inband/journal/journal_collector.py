@@ -24,7 +24,7 @@
 #
 ###############################################################################
 from nodescraper.base import InBandDataCollector
-from nodescraper.enums import OSFamily
+from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.models import TaskResult
 
 from .journaldata import JournalData
@@ -47,6 +47,16 @@ class JournalCollector(InBandDataCollector[JournalData, None]):
 
         if res.exit_code == 0:
             return res.stdout
+        else:
+            self._log_event(
+                category=EventCategory.OS,
+                description="Error reading journalctl",
+                data={"command": res.command, "exit_code": res.exit_code},
+                priority=EventPriority.ERROR,
+                console_log=True,
+            )
+            self.result.message = "Could not read journalctl data"
+            self.result.status = ExecutionStatus.ERROR
 
         return None
 
