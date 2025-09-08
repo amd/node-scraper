@@ -24,8 +24,7 @@
 #
 ###############################################################################
 from nodescraper.base import InBandDataCollector
-from nodescraper.connection.inband import TextFileArtifact
-from nodescraper.enums import EventCategory, EventPriority, OSFamily
+from nodescraper.enums import OSFamily
 from nodescraper.models import TaskResult
 
 from .journaldata import JournalData
@@ -37,101 +36,19 @@ class JournalCollector(InBandDataCollector[JournalData, None]):
     SUPPORTED_OS_FAMILY = {OSFamily.LINUX}
     DATA_MODEL = JournalData
 
-    CMD = "ls -1 /var/log/journal/*/system* 2>/dev/null || true"
-
-    def _shell_quote(self, s: str) -> str:
-        """single-quote fix.
-
-        Args:
-            s (str): path
-
-        Returns:
-            str: escaped path
-        """
-        return "'" + s.replace("'", "'\"'\"'") + "'"
-
-    def _flat_name(self, path: str) -> str:
-        """Flatten path name
-
-        Args:
-            path (str): path
-
-        Returns:
-            str: flattened path name
-        """
-        return "journalctl__" + path.lstrip("/").replace("/", "__") + ".json"
-
-    def _read_with_journalctl(self, path: str):
+    def _read_with_journalctl(self):
         """Read journal logs using journalctl
 
-        Args:
-            path (str): path for log to read
-
         Returns:
-            str|None: name of local journal log filed, or None if log was not read
+            str|None: system journal read
         """
-        qp = self._shell_quote(path)
-        cmd = f"journalctl --no-pager --system --all --file={qp} --output=json"
+        cmd = "journalctl --no-pager --system --all -o short-iso --output=json"
         res = self._run_sut_cmd(cmd, sudo=True, log_artifact=False, strip=False)
 
         if res.exit_code == 0:
-            text = (
-                res.stdout.decode("utf-8", "replace")
-                if isinstance(res.stdout, (bytes, bytearray))
-                else res.stdout
-            )
-            fname = self._flat_name(path)
-            self.result.artifacts.append(TextFileArtifact(filename=fname, contents=text))
-            self.logger.info("Collected journal: %s", path)
-            return fname
+            return res.stdout
 
         return None
-
-    def _get_journals(self) -> list[str]:
-        """Read journal log files on remote system
-
-        Returns:
-            list[str]: List of names of read logs
-        """
-        list_res = self._run_sut_cmd(self.CMD, sudo=True)
-        paths = [p.strip() for p in (list_res.stdout or "").splitlines() if p.strip()]
-
-        if not paths:
-            self._log_event(
-                category=EventCategory.OS,
-                description="No /var/log/journal files found (including rotations).",
-                data={"list_exit_code": list_res.exit_code},
-                priority=EventPriority.WARNING,
-            )
-            return []
-
-        collected, failed = [], []
-        for p in paths:
-            self.logger.debug("Reading journal file: %s", p)
-            fname = self._read_with_journalctl(p)
-            if fname:
-                collected.append(fname)
-            else:
-                failed.append(fname)
-
-        if collected:
-            self._log_event(
-                category=EventCategory.OS,
-                description="Collected journal logs.",
-                data={"collected": collected},
-                priority=EventPriority.INFO,
-            )
-            self.result.message = self.result.message or "journalctl logs collected"
-
-        if failed:
-            self._log_event(
-                category=EventCategory.OS,
-                description="Some journal files could not be read with journalctl.",
-                data={"failed": failed},
-                priority=EventPriority.WARNING,
-            )
-
-        return collected
 
     def collect_data(self, args=None) -> tuple[TaskResult, JournalData | None]:
         """Collect journal lofs
@@ -142,9 +59,9 @@ class JournalCollector(InBandDataCollector[JournalData, None]):
         Returns:
             tuple[TaskResult, JournalData | None]: Tuple of results and data model or none.
         """
-        collected = self._get_journals()
-        if collected:
-            data = JournalData(journal_logs=collected)
+        journal_log = self._read_with_journalctl()
+        if journal_log:
+            data = JournalData(journal_log=journal_log)
             self.result.message = self.result.message or "Journal data collected"
             return self.result, data
         return self.result, None
