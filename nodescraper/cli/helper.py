@@ -456,6 +456,7 @@ def dump_results_to_csv(
             "message": res.message,
         }
         all_rows.append(row)
+
     dump_to_csv(all_rows, filename, fieldnames, logger)
 
 
