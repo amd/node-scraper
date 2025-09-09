@@ -2,6 +2,25 @@
 Node Scraper is a tool which performs automated data collection and analysis for the purposes of
 system debug.
 
+## Table of Contents
+- [Installation](#installation)
+  - [Install From Source](#install-from-source)
+- [CLI Usage](#cli-usage)
+  - [Execution Methods](#execution-methods)
+    - [Example: Remote Execution](#example-remote-execution)
+    - [Example: connection_config.json](#example-connection_configjson)
+  - [Subcommands](#subcommands)
+    - ['describe' subcommand](#describe-subcommand)
+    - ['run-plugins' sub command](#run-plugins-sub-command)
+    - ['gen-plugin-config' sub command](#gen-plugin-config-sub-command)
+    - ['summary' sub command](#summary-sub-command)
+- [Configs](#configs)
+  - [Global args](#global-args)
+  - [Plugin config: `--plugin-configs` command](#plugin-config---plugin-configs-command)
+  - [Reference config: `gen-reference-config` command](#reference-config-gen-reference-config-command)
+- [nodescraper integration](#nodescraper-integration)
+
+
 ## Installation
 ### Install From Source
 Node Scraper requires Python 3.10+ for installation. After cloning this repository,
@@ -72,7 +91,7 @@ To use remote execution, specify `--sys-location REMOTE` and provide a connectio
 node-scraper --sys-name <remote_host> --sys-location REMOTE --connection-config ./connection_config.json run-plugins DmesgPlugin
 ```
 
-##### Example connection_config.json
+##### Example: connection_config.json
 
 ```json
 {
@@ -90,13 +109,13 @@ node-scraper --sys-name <remote_host> --sys-location REMOTE --connection-config 
 - If using SSH keys, specify `key_filename` instead of `password`.
 - The remote user must have permissions to run the requested plugins and access required files. If needed, use the `--skip-sudo` argument to skip plugins requiring sudo.
 
-### Subcommmands
+### Subcommands
 
 Plugins to run can be specified in two ways, using a plugin JSON config file or using the
 'run-plugins' sub command. These two options are not mutually exclusive and can be used together.
 
 
-1. **'describe' subcommand**
+#### **'describe' subcommand**
 
 You can use the `describe` subcommand to display details about built-in configs or plugins.
 List all built-in configs:
@@ -119,7 +138,7 @@ Show details for a specific plugin
 node-scraper describe plugin <plugin-name>
 ```
 
-2. **'run-plugins' sub command**
+#### **'run-plugins' sub command**
 The plugins to run and their associated arguments can also be specified directly on the CLI using
 the 'run-plugins' sub-command. Using this sub-command you can specify a plugin name followed by
 the arguments for that particular plugin. Multiple plugins can be specified at once.
@@ -165,7 +184,7 @@ Use plugin configs and 'run-plugins'
 node-scraper run-plugins BiosPlugin
 ```
 
-3. **'gen-plugin-config' sub command**
+#### **'gen-plugin-config' sub command**
 The 'gen-plugin-config' sub command can be used to generate a plugin config JSON file for a plugin
 or list of plugins that can then be customized. Plugin arguments which have default values will be
 prepopulated in the JSON file, arguments without default values will have a value of 'null'.
@@ -200,7 +219,7 @@ This would produce the following config:
 }
 ```
 
-4. **'summary' sub command**
+#### **'summary' sub command**
 The 'summary' subcommand can be used to combine results from multiple runs of node-scraper to a
 single summary.csv file. Sample run:
 ```sh
@@ -210,7 +229,7 @@ This will generate a new file '/<path_to_node-scraper_logs>/summary.csv' file. T
 contain the results from all 'nodescraper.csv' files from '/<path_to_node-scarper_logs>'.
 
 
-### Plugin Configs
+### Configs
 A plugin JSON config should follow the structure of the plugin config model defined here.
 The globals field is a dictionary of global key-value pairs; values in globals will be passed to
 any plugin that supports the corresponding key. The plugins field should be a dictionary mapping
@@ -237,7 +256,21 @@ tabular format to the console.
 }
 ```
 
-1. **'--plugin-configs' command**
+#### Global args
+Global args can be used to skip sudo plugins or enable/disble either collection or analysis.
+Below is an example that skips sudo requiring plugins and disables analysis.
+
+```json
+  "global_args": {
+      "collection_args": {
+        "skip_sudo" : 1
+      },
+      "collection" : 1,
+      "analysis" : 0
+  },
+```
+
+#### Plugin config: **'--plugin-configs' command**
 A plugin config can be used to compare the system data against the config specifications:
 ```sh
 node-scraper --plugin-configs plugin_config.json
@@ -295,7 +328,7 @@ Here is an example of a comprehensive plugin config that specifies analyzer args
 }
 ```
 
-2. **'gen-reference-config' command**
+#### Reference config: **'gen-reference-config' command**
 This command can be used to generate a reference config that is populated with current system
 configurations. Plugins that use analyzer args (where applicable) will be populated with system
 data.
@@ -341,3 +374,128 @@ node-scraper gen-plugin-config --gen-reference-config-from-logs scraper_logs_<pa
 ```
 This will generate a reference config that includes plugins with logged results in
 'scraper_log_<path>' and save the new config to 'custom_output_dir/reference_config.json'.
+
+
+## nodescraper integration
+Nodescraper can be integrated inside another Python tool by leveraging its classes and functionality.
+See below for a comprehensive example on how to create plugins and run the associated data
+collection and analysis.
+Sample run command:
+```sh
+python3 sample.py
+```
+
+Sample.py file:
+```python
+import logging
+import sys
+from nodescraper.plugins.inband.bios.bios_plugin import BiosPlugin
+from nodescraper.plugins.inband.bios.analyzer_args import BiosAnalyzerArgs
+from nodescraper.plugins.inband.kernel.kernel_plugin import KernelPlugin
+from nodescraper.plugins.inband.kernel.analyzer_args import KernelAnalyzerArgs
+from nodescraper.plugins.inband.os.os_plugin import OsPlugin
+from nodescraper.plugins.inband.os.analyzer_args import OsAnalyzerArgs
+from nodescraper.models.systeminfo import SystemInfo, OSFamily
+from nodescraper.enums import EventPriority, SystemLocation
+from nodescraper.resultcollators.tablesummary import TableSummary
+from nodescraper.connection.inband.inbandmanager import InBandConnectionManager
+from nodescraper.connection.inband.sshparams import SSHConnectionParams
+from nodescraper.pluginregistry import PluginRegistry
+from nodescraper.models.pluginconfig import PluginConfig
+from nodescraper.pluginexecutor import PluginExecutor
+
+def main():
+
+    #setting up my custom logger
+    log_level = "INFO"
+    handlers = [logging.StreamHandler(stream=sys.stdout)]
+    logging.basicConfig(
+        force=True,
+        level=log_level,
+        format="%(asctime)25s %(levelname)10s %(name)25s | %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S %Z",
+        handlers=handlers,
+        encoding="utf-8",
+    )
+    logging.root.setLevel(logging.INFO)
+    logging.getLogger("paramiko").setLevel(logging.ERROR)
+    logger = logging.getLogger("nodescraper")
+
+    #setting up system info
+    system_info = SystemInfo(name="test_host",
+                            platform="X",
+                            os_familty=OSFamily.LINUX,
+                            sku="some_sku")
+
+    #initiate plugins
+    bios_plugin = BiosPlugin(system_info=system_info, logger=logger)
+    kernel_plugin = KernelPlugin(system_info=system_info, logger=logger)
+
+    #launch data collection
+    _ = bios_plugin.collect()
+    _ = kernel_plugin.collect()
+
+    #launch data analysis
+    bios_plugin.analyze(analysis_args=BiosAnalyzerArgs(exp_bios_version="XYZ"))
+    kernel_plugin.analyze(analysis_args=KernelAnalyzerArgs(exp_kernel="ABC"))
+
+    #log plugin data models
+    logger.info(kernel_plugin.data.model_dump())
+    logger.info(bios_plugin.data.model_dump())
+
+    #alternate method
+    all_res = []
+
+    #launch plugin collection & analysis
+    bios_result = bios_plugin.run(analysis_args={"exp_bios_version":"ABC"})
+    all_res.append(bios_result)
+    table_summary = TableSummary()
+    table_summary.collate_results(all_res, None)
+
+    #remote connection
+    system_info.location=SystemLocation.REMOTE
+    ssh_params = SSHConnectionParams(hostname="my_system",
+                                    port=22,
+                                    username="my_username",
+                                    key_filename="/home/user/.ssh/ssh_key")
+    conn_manager = InBandConnectionManager(system_info=system_info, connection_args=ssh_params)
+    os_plugin = OsPlugin(system_info=system_info, logger=logger, connection_manager=conn_manager)
+    os_plugin.run(analysis_args=OsAnalyzerArgs(exp_os="DEF"))
+
+    #run multiple plugins through a queue
+    system_info.location=SystemLocation.LOCAL
+    config_dict = {
+      "global_args": {
+          "collection" : 1,
+          "analysis" : 1
+      },
+      "plugins": {
+        "BiosPlugin": {
+          "analysis_args": {
+            "exp_bios_version": "123",
+          }
+        },
+        "KernelPlugin": {
+          "analysis_args": {
+            "exp_kernel": "ABC",
+          }
+        }
+      },
+      "result_collators": {},
+      "name": "plugin_config",
+      "desc": "Auto generated config"
+      }
+
+    config1 = PluginConfig(**config_dict)
+    plugin_executor = PluginExecutor(
+        logger=logger,
+        plugin_configs=[config1],
+        system_info=system_info
+    )
+    results = plugin_executor.run_queue()
+
+
+
+if __name__ == "__main__":
+    main()
+```
