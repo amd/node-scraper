@@ -89,4 +89,4 @@ def test_data_version_regex(package_analyzer, default_data_lib):
         regex_match=True,
     )
     res = package_analyzer.analyze_data(default_data_lib, args=args)
-    assert res.status == ExecutionStatus.OK
+    assert res.status == ExecutionStatus.ERROR

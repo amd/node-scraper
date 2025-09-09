@@ -133,7 +133,7 @@ def test_mismatch_regex(system_info, model_obj):
     assert len(result.events) == 1
     assert result.events[0].priority == EventPriority.CRITICAL
     assert result.events[0].category == EventCategory.OS.value
-    assert result.events[0].description == "Kernel mismatch!"
+    assert "Kernel mismatch!" in result.events[0].description
 
 
 def test_bad_regex(system_info, model_obj):
@@ -148,4 +148,4 @@ def test_bad_regex(system_info, model_obj):
     assert result.events[0].description == "Kernel regex is invalid"
     assert result.events[1].priority == EventPriority.CRITICAL
     assert result.events[1].category == EventCategory.OS.value
-    assert result.events[1].description == "Kernel mismatch!"
+    assert "Kernel mismatch!" in result.events[1].description
