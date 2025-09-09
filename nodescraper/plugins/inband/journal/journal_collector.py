@@ -23,6 +23,9 @@
 # SOFTWARE.
 #
 ###############################################################################
+import io
+import json
+
 from nodescraper.base import InBandDataCollector
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.models import TaskResult
@@ -42,12 +45,10 @@ class JournalCollector(InBandDataCollector[JournalData, None]):
         Returns:
             str|None: system journal read
         """
-        cmd = "journalctl --no-pager --system --all -o short-iso --output=json"
+        cmd = "journalctl --no-pager --system --all --output=json"
         res = self._run_sut_cmd(cmd, sudo=True, log_artifact=False, strip=False)
 
-        if res.exit_code == 0:
-            return res.stdout
-        else:
+        if res.exit_code != 0:
             self._log_event(
                 category=EventCategory.OS,
                 description="Error reading journalctl",
@@ -57,8 +58,20 @@ class JournalCollector(InBandDataCollector[JournalData, None]):
             )
             self.result.message = "Could not read journalctl data"
             self.result.status = ExecutionStatus.ERROR
+            return None
 
-        return None
+        raw = res.stdout
+        text = (
+            raw.decode("utf-8", errors="surrogateescape")
+            if isinstance(raw, (bytes, bytearray))
+            else raw
+        )
+
+        lines = [ln for ln in (line.strip() for line in text.splitlines()) if ln.startswith("{")]
+        array_like = "[" + ",".join(lines) + "]"
+        entries: list[dict] = json.load(io.StringIO(array_like))
+
+        return entries
 
     def collect_data(self, args=None) -> tuple[TaskResult, JournalData | None]:
         """Collect journal lofs

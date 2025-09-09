@@ -23,10 +23,25 @@
 # SOFTWARE.
 #
 ###############################################################################
+import json
+import os
+
 from nodescraper.models import DataModel
 
 
 class JournalData(DataModel):
     """Data model for journal logs"""
 
-    journal_log: str
+    journal_log: list[dict]
+
+    def log_model(self, log_path: str):
+        """Log data model to a file
+
+        Args:
+            log_path (str): log path
+        """
+        log_name = os.path.join(log_path, "journal.log")
+        with open(log_name, "w", encoding="utf-8") as log_filename:
+            for e in self.journal_log:
+                log_filename.write(json.dumps(e, ensure_ascii=False, separators=(",", ":")))
+                log_filename.write("\n")
