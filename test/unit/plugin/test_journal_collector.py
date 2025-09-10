@@ -68,4 +68,4 @@ def test_collect_data_integration(monkeypatch, system_info, conn_mock):
     result, data = c.collect_data()
     assert isinstance(data, JournalData)
 
-    assert data.journal_log == [{"MESSAGE": "hello"}]
+    assert data.journal_log == '{"MESSAGE":"hello"}\n'

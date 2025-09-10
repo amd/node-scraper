@@ -23,8 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
-import io
-import json
+import base64
 
 from nodescraper.base import InBandDataCollector
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
@@ -45,9 +44,8 @@ class JournalCollector(InBandDataCollector[JournalData, None]):
         Returns:
             str|None: system journal read
         """
-        cmd = "journalctl --no-pager --system --all --output=short-iso"
+        cmd = "journalctl --no-pager --system --all --output=short-iso  2>&1 | base64 -w0"
         res = self._run_sut_cmd(cmd, sudo=True, log_artifact=False, strip=False)
-
 
         if res.exit_code != 0:
             self._log_event(
@@ -61,19 +59,16 @@ class JournalCollector(InBandDataCollector[JournalData, None]):
             self.result.status = ExecutionStatus.ERROR
             return None
 
-        out = res.stdout
-
-        if isinstance(out, (bytes, bytearray)):
-            try:
-                text = out.decode("utf-8")
-            except UnicodeDecodeError:
-                text = out.decode("utf-8", errors="replace")
+        if isinstance(res.stdout, (bytes, bytearray)):
+            b64 = (
+                res.stdout if isinstance(res.stdout, str) else res.stdout.decode("ascii", "ignore")
+            )
+            raw = base64.b64decode("".join(b64.split()))
+            text = raw.decode("utf-8", errors="replace")
         else:
-            text = out
+            text = res.stdout
 
-        text = text.replace("\r\n", "\n").replace("\r", "\n").replace("\x00", "")
         return text
-
 
     def collect_data(self, args=None) -> tuple[TaskResult, JournalData | None]:
         """Collect journal logs

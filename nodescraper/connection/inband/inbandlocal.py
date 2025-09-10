@@ -54,7 +54,7 @@ class LocalShell(InBandConnection):
 
         res = subprocess.run(
             command,
-            encoding=None,
+            encoding="utf-8",
             shell=True,
             timeout=timeout,
             capture_output=True,
