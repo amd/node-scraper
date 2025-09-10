@@ -32,7 +32,7 @@ from nodescraper.models import DataModel
 class JournalData(DataModel):
     """Data model for journal logs"""
 
-    journal_log: list[dict]
+    journal_log: str 
 
     def log_model(self, log_path: str):
         """Log data model to a file

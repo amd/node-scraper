@@ -45,8 +45,9 @@ class JournalCollector(InBandDataCollector[JournalData, None]):
         Returns:
             str|None: system journal read
         """
-        cmd = "journalctl --no-pager --system --all --output=json"
+        cmd = "journalctl --no-pager --system --all --output=short-iso"
         res = self._run_sut_cmd(cmd, sudo=True, log_artifact=False, strip=False)
+
 
         if res.exit_code != 0:
             self._log_event(
@@ -60,21 +61,22 @@ class JournalCollector(InBandDataCollector[JournalData, None]):
             self.result.status = ExecutionStatus.ERROR
             return None
 
-        raw = res.stdout
-        text = (
-            raw.decode("utf-8", errors="surrogateescape")
-            if isinstance(raw, (bytes, bytearray))
-            else raw
-        )
+        out = res.stdout
 
-        lines = [ln for ln in (line.strip() for line in text.splitlines()) if ln.startswith("{")]
-        array_like = "[" + ",".join(lines) + "]"
-        entries: list[dict] = json.load(io.StringIO(array_like))
+        if isinstance(out, (bytes, bytearray)):
+            try:
+                text = out.decode("utf-8")
+            except UnicodeDecodeError:
+                text = out.decode("utf-8", errors="replace")
+        else:
+            text = out
 
-        return entries
+        text = text.replace("\r\n", "\n").replace("\r", "\n").replace("\x00", "")
+        return text
+
 
     def collect_data(self, args=None) -> tuple[TaskResult, JournalData | None]:
-        """Collect journal lofs
+        """Collect journal logs
 
         Args:
             args (_type_, optional): Collection args. Defaults to None.
