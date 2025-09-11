@@ -23,7 +23,6 @@
 # SOFTWARE.
 #
 ###############################################################################
-import base64
 
 from nodescraper.base import InBandDataCollector
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
@@ -44,7 +43,7 @@ class JournalCollector(InBandDataCollector[JournalData, None]):
         Returns:
             str|None: system journal read
         """
-        cmd = "journalctl --no-pager --system --all --output=short-iso  2>&1 | base64 -w0"
+        cmd = "journalctl --no-pager --system --output=short-iso"
         res = self._run_sut_cmd(cmd, sudo=True, log_artifact=False, strip=False)
 
         if res.exit_code != 0:
@@ -59,16 +58,7 @@ class JournalCollector(InBandDataCollector[JournalData, None]):
             self.result.status = ExecutionStatus.ERROR
             return None
 
-        if isinstance(res.stdout, (bytes, bytearray)):
-            b64 = (
-                res.stdout if isinstance(res.stdout, str) else res.stdout.decode("ascii", "ignore")
-            )
-            raw = base64.b64decode("".join(b64.split()))
-            text = raw.decode("utf-8", errors="replace")
-        else:
-            text = res.stdout
-
-        return text
+        return res.stdout
 
     def collect_data(self, args=None) -> tuple[TaskResult, JournalData | None]:
         """Collect journal logs
