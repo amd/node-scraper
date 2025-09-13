@@ -23,16 +23,15 @@
 # SOFTWARE.
 #
 ###############################################################################
+from nodescraper.base import InBandDataPlugin
 
-from nodescraper.models import CollectorArgs
+from .syslog_collector import SyslogCollector
+from .syslogdata import SyslogData
 
 
-class DmesgCollectorArgs(CollectorArgs):
-    """Collector args
+class SyslogPlugin(InBandDataPlugin[SyslogData, None, None]):
+    """Plugin for collection of syslog data"""
 
-    Args:
-        CollectorArgs (CollectorArgs): specific dmesg collector args
-    """
+    DATA_MODEL = SyslogData
 
-    collect_rotated_logs: bool = False
-    skip_sudo: bool = False
+    COLLECTOR = SyslogCollector

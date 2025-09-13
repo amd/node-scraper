@@ -1,4 +1,4 @@
-###############################################################################
+##############################################################
 #
 # MIT License
 #
@@ -23,16 +23,24 @@
 # SOFTWARE.
 #
 ###############################################################################
+import os
 
-from nodescraper.models import CollectorArgs
+from nodescraper.connection.inband.inband import TextFileArtifact
+from nodescraper.models import DataModel
 
 
-class DmesgCollectorArgs(CollectorArgs):
-    """Collector args
+class SyslogData(DataModel):
+    """Data model for in band syslog logs"""
 
-    Args:
-        CollectorArgs (CollectorArgs): specific dmesg collector args
-    """
+    syslog_logs: list[TextFileArtifact] = []
 
-    collect_rotated_logs: bool = False
-    skip_sudo: bool = False
+    def log_model(self, log_path: str):
+        """Log data model to a file
+
+        Args:
+            log_path (str): log path
+        """
+        for artifact in self.syslog_logs:
+            log_name = os.path.join(log_path, artifact.filename)
+            with open(log_name, "w", encoding="utf-8") as log_file:
+                log_file.write(artifact.contents)

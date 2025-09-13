@@ -23,16 +23,15 @@
 # SOFTWARE.
 #
 ###############################################################################
+from nodescraper.base import InBandDataPlugin
 
-from nodescraper.models import CollectorArgs
+from .journal_collector import JournalCollector
+from .journaldata import JournalData
 
 
-class DmesgCollectorArgs(CollectorArgs):
-    """Collector args
+class JournalPlugin(InBandDataPlugin[JournalData, None, None]):
+    """Plugin for collection of journal data"""
 
-    Args:
-        CollectorArgs (CollectorArgs): specific dmesg collector args
-    """
+    DATA_MODEL = JournalData
 
-    collect_rotated_logs: bool = False
-    skip_sudo: bool = False
+    COLLECTOR = JournalCollector

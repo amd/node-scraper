@@ -23,16 +23,22 @@
 # SOFTWARE.
 #
 ###############################################################################
+import os
 
-from nodescraper.models import CollectorArgs
+from nodescraper.models import DataModel
 
 
-class DmesgCollectorArgs(CollectorArgs):
-    """Collector args
+class JournalData(DataModel):
+    """Data model for journal logs"""
 
-    Args:
-        CollectorArgs (CollectorArgs): specific dmesg collector args
-    """
+    journal_log: str
 
-    collect_rotated_logs: bool = False
-    skip_sudo: bool = False
+    def log_model(self, log_path: str):
+        """Log data model to a file
+
+        Args:
+            log_path (str): log path
+        """
+        log_name = os.path.join(log_path, "journal.log")
+        with open(log_name, "w", encoding="utf-8") as log_filename:
+            log_filename.write(self.journal_log)

@@ -213,3 +213,35 @@ def find_annotation_in_container(
                 containers.append(origin)
                 return item, containers
     return None, []
+
+
+def shell_quote(s: str) -> str:
+    """Single quote fix
+
+    Args:
+        s (str): path to be converted
+
+    Returns:
+        str: path to be returned
+    """
+    return "'" + s.replace("'", "'\"'\"'") + "'"
+
+
+def nice_rotated_name(path: str, stem: str, prefix: str = "rotated_") -> str:
+    """Map path to a new local filename, generalized for any stem."""
+    base = path.rstrip("/").rsplit("/", 1)[-1]
+    s = re.escape(stem)
+
+    if base == stem:
+        return f"{prefix}{stem}.log"
+
+    m = re.fullmatch(rf"{s}\.(\d+)\.gz", base)
+    if m:
+        return f"{prefix}{stem}.{m.group(1)}.gz.log"
+
+    m = re.fullmatch(rf"{s}\.(\d+)", base)
+    if m:
+        return f"{prefix}{stem}.{m.group(1)}.log"
+
+    middle = base[:-3] if base.endswith(".gz") else base
+    return f"{prefix}{middle}.log"
