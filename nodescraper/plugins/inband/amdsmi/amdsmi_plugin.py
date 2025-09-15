@@ -26,12 +26,12 @@
 from nodescraper.base import InBandDataPlugin
 
 from .amdsmi_collector import AmdSmiCollector
-from .amdsmidata import AmdSmiData
+from .amdsmidata import AmdSmiDataModel
 
 
-class AmdsmiPlugin(InBandDataPlugin[AmdSmiData, None, None]):
+class AmdsmiPlugin(InBandDataPlugin[AmdSmiDataModel, None, None]):
     """Plugin for collection and analysis of amdsmi data"""
 
-    DATA_MODEL = AmdSmiData
+    DATA_MODEL = AmdSmiDataModel
 
     COLLECTOR = AmdSmiCollector

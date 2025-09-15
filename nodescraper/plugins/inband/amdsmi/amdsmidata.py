@@ -244,7 +244,7 @@ class Partition(BaseModel):
     partition_resources: list[dict] = Field(default_factory=list)
 
 
-class AmdSmiData(DataModel):
+class AmdSmiDataModel(DataModel):
     """Data model for amd-smi data.
 
     Optionals are used to allow for the data to be missing,

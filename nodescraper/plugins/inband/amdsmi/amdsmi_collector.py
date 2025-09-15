@@ -25,32 +25,38 @@
 ###############################################################################
 from typing import TypeVar
 
-import amdsmi
-from amdsmi import (
-    AmdSmiException,
-    AmdSmiInitFlags,
-    amdsmi_get_fw_info,
-    amdsmi_get_gpu_compute_partition,
-    amdsmi_get_gpu_compute_process_info,
-    amdsmi_get_gpu_device_bdf,
-    amdsmi_get_gpu_device_uuid,
-    amdsmi_get_gpu_kfd_info,
-    amdsmi_get_gpu_memory_partition,
-    amdsmi_get_gpu_process_list,
-    amdsmi_get_lib_version,
-    amdsmi_get_processor_handles,
-    amdsmi_get_rocm_version,
-    amdsmi_init,
-    amdsmi_shut_down,
-)
 from pydantic import BaseModel, ValidationError
+
+try:
+    import amdsmi  # noqa: F401
+    from amdsmi import (
+        AmdSmiException,
+        AmdSmiInitFlags,
+        amdsmi_get_fw_info,
+        amdsmi_get_gpu_compute_partition,
+        amdsmi_get_gpu_compute_process_info,
+        amdsmi_get_gpu_device_bdf,
+        amdsmi_get_gpu_device_uuid,
+        amdsmi_get_gpu_kfd_info,
+        amdsmi_get_gpu_memory_partition,
+        amdsmi_get_gpu_process_list,
+        amdsmi_get_lib_version,
+        amdsmi_get_processor_handles,
+        amdsmi_get_rocm_version,
+        amdsmi_init,
+        amdsmi_shut_down,
+    )
+
+    _AMDSMI_IMPORT_ERROR = None
+except Exception as _e:
+    _AMDSMI_IMPORT_ERROR = _e
 
 from nodescraper.base.inbandcollectortask import InBandDataCollector
 from nodescraper.connection.inband.inband import CommandArtifact
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.models import TaskResult
 from nodescraper.plugins.inband.amdsmi.amdsmidata import (
-    AmdSmiData,
+    AmdSmiDataModel,
     AmdSmiListItem,
     AmdSmiVersion,
     Fw,
@@ -62,14 +68,14 @@ from nodescraper.utils import get_exception_details, get_exception_traceback
 T = TypeVar("T", bound=BaseModel)
 
 
-class AmdSmiCollector(InBandDataCollector[AmdSmiData, None]):
+class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
     """class for collection of inband tool amd-smi data."""
 
     AMD_SMI_EXE = "amd-smi"
 
     SUPPORTED_OS_FAMILY: set[OSFamily] = {OSFamily.LINUX}
 
-    DATA_MODEL = AmdSmiData
+    DATA_MODEL = AmdSmiDataModel
 
     def _get_handles(self):
         """Get processor handles."""
@@ -128,13 +134,13 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiData, None]):
             )
             return None
 
-    def _get_amdsmi_data(self) -> AmdSmiData | None:
-        """Returns amd-smi tool data formatted as a AmdSmiData object
+    def _get_amdsmi_data(self) -> AmdSmiDataModel | None:
+        """Returns amd-smi tool data formatted as a AmdSmiDataModel object
 
         Returns None if tool is not installed or if drivers are not loaded
 
         Returns:
-            Union[AmdSmiData, None]: AmdSmiData object or None on failure
+            Union[AmdSmiDataModel, None]: AmdSmiDataModel object or None on failure
         """
         try:
             version = self._get_amdsmi_version()
@@ -158,7 +164,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiData, None]):
         firmware_model = self.build_amdsmi_sub_data(Fw, firmware)
         gpu_list_model = self.build_amdsmi_sub_data(AmdSmiListItem, gpu_list)
         try:
-            amd_smi_data = AmdSmiData(
+            amd_smi_data = AmdSmiDataModel(
                 version=version,
                 gpu_list=gpu_list_model,
                 process=process_data_model,
@@ -169,7 +175,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiData, None]):
             self.logger.warning("Validation err: %s", e)
             self._log_event(
                 category=EventCategory.APPLICATION,
-                description="Failed to build AmdSmiData model",
+                description="Failed to build AmdSmiDataModel model",
                 data=get_exception_details(e),
                 priority=EventPriority.ERROR,
             )
@@ -265,31 +271,29 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiData, None]):
                 pids = amdsmi_get_gpu_process_list(h) or []
                 plist = []
                 for pid in pids:
-                    try:
-                        pinfo = self._smi_try(amdsmi_get_gpu_compute_process_info(h, pid)) or {}
-                        plist.append(
-                            {
-                                "process_info": {
-                                    "name": pinfo.get("name", str(pid)),
-                                    "pid": int(pid),
-                                    "memory_usage": {
-                                        "gtt_mem": {"value": pinfo.get("gtt_mem", 0), "unit": "B"},
-                                        "cpu_mem": {"value": pinfo.get("cpu_mem", 0), "unit": "B"},
-                                        "vram_mem": {
-                                            "value": pinfo.get("vram_mem", 0),
-                                            "unit": "B",
-                                        },
-                                    },
-                                    "mem_usage": {"value": pinfo.get("vram_mem", 0), "unit": "B"},
-                                    "usage": {
-                                        "gfx": {"value": pinfo.get("gfx", 0), "unit": "%"},
-                                        "enc": {"value": pinfo.get("enc", 0), "unit": "%"},
-                                    },
-                                }
-                            }
-                        )
-                    except AmdSmiException:
+                    pinfo = self._smi_try(amdsmi_get_gpu_compute_process_info, h, pid, default=None)
+                    if not isinstance(pinfo, dict):
                         plist.append({"process_info": str(pid)})
+                        continue
+
+                    plist.append(
+                        {
+                            "process_info": {
+                                "name": pinfo.get("name", str(pid)),
+                                "pid": int(pid),
+                                "memory_usage": {
+                                    "gtt_mem": {"value": pinfo.get("gtt_mem", 0), "unit": "B"},
+                                    "cpu_mem": {"value": pinfo.get("cpu_mem", 0), "unit": "B"},
+                                    "vram_mem": {"value": pinfo.get("vram_mem", 0), "unit": "B"},
+                                },
+                                "mem_usage": {"value": pinfo.get("vram_mem", 0), "unit": "B"},
+                                "usage": {
+                                    "gfx": {"value": pinfo.get("gfx", 0), "unit": "%"},
+                                    "enc": {"value": pinfo.get("enc", 0), "unit": "%"},
+                                },
+                            }
+                        }
+                    )
                 out.append({"gpu": idx, "process_list": plist})
             except AmdSmiException as e:
                 self._log_event(
@@ -458,7 +462,19 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiData, None]):
     def collect_data(
         self,
         args=None,
-    ) -> tuple[TaskResult, AmdSmiData | None]:
+    ) -> tuple[TaskResult, AmdSmiDataModel | None]:
+
+        if _AMDSMI_IMPORT_ERROR is not None:
+            self._log_event(
+                category=EventCategory.APPLICATION,
+                description="Failed to import amdsmi Python bindings",
+                data={"exception": get_exception_traceback(_AMDSMI_IMPORT_ERROR)},
+                priority=EventPriority.ERROR,
+                console_log=True,
+            )
+            self.result.status = ExecutionStatus.NOT_RAN
+            return self.result, None
+
         try:
             amdsmi_init(AmdSmiInitFlags.INIT_AMD_GPUS)
             amd_smi_data = self._get_amdsmi_data()  # fails ras not found
