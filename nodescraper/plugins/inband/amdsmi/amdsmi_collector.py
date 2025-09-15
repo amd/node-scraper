@@ -27,29 +27,23 @@ from typing import TypeVar
 
 from pydantic import BaseModel, ValidationError
 
-try:
-    import amdsmi  # noqa: F401
-    from amdsmi import (
-        AmdSmiException,
-        AmdSmiInitFlags,
-        amdsmi_get_fw_info,
-        amdsmi_get_gpu_compute_partition,
-        amdsmi_get_gpu_compute_process_info,
-        amdsmi_get_gpu_device_bdf,
-        amdsmi_get_gpu_device_uuid,
-        amdsmi_get_gpu_kfd_info,
-        amdsmi_get_gpu_memory_partition,
-        amdsmi_get_gpu_process_list,
-        amdsmi_get_lib_version,
-        amdsmi_get_processor_handles,
-        amdsmi_get_rocm_version,
-        amdsmi_init,
-        amdsmi_shut_down,
-    )
-
-    _AMDSMI_IMPORT_ERROR = None
-except Exception as _e:
-    _AMDSMI_IMPORT_ERROR = _e
+_AMDSMI_SYMBOLS = (
+    "AmdSmiException",
+    "AmdSmiInitFlags",
+    "amdsmi_get_fw_info",
+    "amdsmi_get_gpu_compute_partition",
+    "amdsmi_get_gpu_compute_process_info",
+    "amdsmi_get_gpu_device_bdf",
+    "amdsmi_get_gpu_device_uuid",
+    "amdsmi_get_gpu_kfd_info",
+    "amdsmi_get_gpu_memory_partition",
+    "amdsmi_get_gpu_process_list",
+    "amdsmi_get_lib_version",
+    "amdsmi_get_processor_handles",
+    "amdsmi_get_rocm_version",
+    "amdsmi_init",
+    "amdsmi_shut_down",
+)
 
 from nodescraper.base.inbandcollectortask import InBandDataCollector
 from nodescraper.connection.inband.inband import CommandArtifact
@@ -58,6 +52,7 @@ from nodescraper.models import TaskResult
 from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     AmdSmiDataModel,
     AmdSmiListItem,
+    AmdSmiStatic,
     AmdSmiVersion,
     Fw,
     Partition,
@@ -76,6 +71,33 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
     SUPPORTED_OS_FAMILY: set[OSFamily] = {OSFamily.LINUX}
 
     DATA_MODEL = AmdSmiDataModel
+
+    def _amdsmi_is_bound() -> bool:
+        """Check if symbol has already been added into globals"""
+        return all(name in globals() for name in ("amdsmi_init", "AmdSmiInitFlags"))
+
+    def _bind_amdsmi_or_log(collector) -> bool:
+        """
+        Try to import amdsmi and bind the symbols used by this module into globals().
+        On failure, log an event and return False (caller should set NOT_RAN and exit).
+        """
+        if _amdsmi_is_bound():
+            return True
+        try:
+            mod = importlib.import_module("amdsmi")
+            g = globals()
+            for name in _AMDSMI_SYMBOLS:
+                g[name] = getattr(mod, name)
+            return True
+        except Exception as e:
+            collector._log_event(
+                category=EventCategory.APPLICATION,
+                description="Failed to import amdsmi Python bindings",
+                data={"exception": get_exception_traceback(e)},
+                priority=EventPriority.ERROR,
+                console_log=True,
+            )
+            return False
 
     def _get_handles(self):
         """Get processor handles."""
@@ -148,6 +170,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             partition = self.get_partition()
             firmware = self.get_firmware()
             gpu_list = self.get_gpu_list()
+            amdsmi_static = self.get_static()
         except Exception as e:
             self._log_event(
                 category=EventCategory.APPLICATION,
@@ -163,6 +186,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         process_data_model = self.build_amdsmi_sub_data(Processes, processes)
         firmware_model = self.build_amdsmi_sub_data(Fw, firmware)
         gpu_list_model = self.build_amdsmi_sub_data(AmdSmiListItem, gpu_list)
+        amdsmi_static_model = self.build_amdsmi_sub_data(AmdSmiStatic, amdsmi_static)
         try:
             amd_smi_data = AmdSmiDataModel(
                 version=version,
@@ -459,25 +483,172 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             )
             return default
 
+    def get_static(self) -> list[dict] | None:
+        devices = self._get_handles()
+        if not devices:
+            return []
+
+        _pcie_fn = globals().get("amdsmi_get_pcie_info", None)
+
+        out: list[dict] = []
+
+        for idx, h in enumerate(devices):
+            board = self._smi_try(amdsmi_get_gpu_board_info, h, default={}) or {}
+            asic = self._smi_try(amdsmi_get_gpu_asic_info, h, default={}) or {}
+            bdf = self._smi_try(amdsmi_get_gpu_device_bdf, h, default="") or ""
+            _ = self._smi_try(amdsmi_get_gpu_device_uuid, h, default="")  # uuid not used here
+            kfd = self._smi_try(amdsmi_get_gpu_kfd_info, h, default={}) or {}
+
+            # -----------------------
+            # Bus / PCIe
+            # -----------------------
+            pcie = {}
+            if callable(_pcie_fn):
+                p = self._smi_try(_pcie_fn, h, default={}) or {}
+                if isinstance(p, dict):
+                    max_w = p.get("max_link_width")
+                    max_s = p.get("max_link_speed")
+                    pcie_ver = p.get("pcie_version") or p.get("pcie_interface_version")
+                    pcie = {
+                        "bdf": bdf,
+                        "max_pcie_width": (
+                            f"{max_w} x" if max_w not in (None, "", "N/A") else None
+                        ),
+                        "max_pcie_speed": (
+                            f"{max_s} GT/s" if max_s not in (None, "", "N/A") else None
+                        ),
+                        "pcie_interface_version": str(pcie_ver or ""),
+                        "slot_type": str(p.get("slot_type", "")),
+                    }
+            if not pcie:
+                pcie = {
+                    "bdf": bdf,
+                    "max_pcie_width": None,
+                    "max_pcie_speed": None,
+                    "pcie_interface_version": "",
+                    "slot_type": "",
+                }
+
+            # -----------------------
+            # ASIC
+            # -----------------------
+            asic_mapped = {
+                "market_name": str(asic.get("market_name") or asic.get("asic_name") or ""),
+                "vendor_id": str(asic.get("vendor_id", "")),
+                "vendor_name": str(asic.get("vendor_name", "")),
+                "subvendor_id": str(asic.get("subvendor_id", "")),
+                "device_id": str(asic.get("device_id", "")),
+                "subsystem_id": str(asic.get("subsystem_id", "")),
+                "rev_id": str(asic.get("rev_id", "")),
+                "asic_serial": str(asic.get("asic_serial", "")),
+                "oam_id": int(asic.get("oam_id", 0) or 0),
+                "num_compute_units": int(asic.get("num_compute_units", 0) or 0),
+                "target_graphics_version": str(asic.get("target_graphics_version", "")),
+            }
+
+            # -----------------------
+            # Board
+            # -----------------------
+            board_mapped = {
+                "model_number": str(
+                    board.get("model_number", "") or board.get("amdsmi_model_number", "")
+                ),
+                "product_serial": str(board.get("product_serial", "")),
+                "fru_id": str(board.get("fru_id", "")),
+                "product_name": str(board.get("product_name", "")),
+                "manufacturer_name": str(board.get("manufacturer_name", "")),
+            }
+
+            # -----------------------
+            # VBIOS
+            # -----------------------
+            vbios = None
+            vb = {}
+            for k in ("vbios_name", "vbios_build_date", "vbios_part_number", "vbios_version"):
+                if k in board:
+                    vb[k] = board[k]
+            if vb:
+                vbios = {
+                    "name": str(vb.get("vbios_name", "")),
+                    "build_date": str(vb.get("vbios_build_date", "")),
+                    "part_number": str(vb.get("vbios_part_number", "")),
+                    "version": str(vb.get("vbios_version", "")),
+                }
+
+            # -----------------------
+            # NUMA (from KFD)
+            # -----------------------
+            if isinstance(kfd, dict):
+                try:
+                    numa_node = int(kfd.get("node_id", 0) or 0)
+                except Exception:
+                    numa_node = 0
+                try:
+                    affinity = int(kfd.get("cpu_affinity", 0) or 0)
+                except Exception:
+                    affinity = 0
+            else:
+                numa_node, affinity = 0, 0
+            numa = {"node": numa_node, "affinity": affinity}
+
+            # -----------------------
+            # VRAM
+            # -----------------------
+            vram_type = str(asic.get("vram_type", "") or "unknown")
+            vram_vendor = asic.get("vram_vendor")
+            vram_bits = asic.get("vram_bit_width")
+            vram_size_b = None
+            if asic.get("vram_size_bytes") is not None:
+                vram_size_b = int(asic["vram_size_bytes"])
+            elif asic.get("vram_size_mb") is not None:
+                try:
+                    vram_size_b = int(asic["vram_size_mb"]) * 1024 * 1024
+                except Exception:
+                    vram_size_b = None
+
+            vram = {
+                "type": vram_type,
+                "vendor": None if vram_vendor in (None, "", "N/A") else str(vram_vendor),
+                "size": (f"{vram_size_b} B" if isinstance(vram_size_b, int) else None),
+                "bit_width": (f"{vram_bits} bit" if isinstance(vram_bits, (int, float)) else None),
+                "max_bandwidth": None,
+            }
+
+            out.append(
+                {
+                    "gpu": idx,
+                    "asic": asic_mapped,
+                    "bus": pcie,
+                    "vbios": vbios,
+                    "limit": None,  # not available via API
+                    "driver": None,
+                    "board": board_mapped,
+                    "ras": None,
+                    "soc_pstate": soc_pstate,
+                    "xgmi_plpd": xgmi_plpd,
+                    "process_isolation": process_isolation,
+                    "numa": numa,
+                    "vram": vram,
+                    "cache_info": cache_info,
+                    "partition": part,
+                    "clock": clock,
+                }
+            )
+
+        return out
+
     def collect_data(
         self,
         args=None,
     ) -> tuple[TaskResult, AmdSmiDataModel | None]:
 
-        if _AMDSMI_IMPORT_ERROR is not None:
-            self._log_event(
-                category=EventCategory.APPLICATION,
-                description="Failed to import amdsmi Python bindings",
-                data={"exception": get_exception_traceback(_AMDSMI_IMPORT_ERROR)},
-                priority=EventPriority.ERROR,
-                console_log=True,
-            )
+        if not _bind_amdsmi_or_log(self):
             self.result.status = ExecutionStatus.NOT_RAN
             return self.result, None
 
         try:
             amdsmi_init(AmdSmiInitFlags.INIT_AMD_GPUS)
-            amd_smi_data = self._get_amdsmi_data()  # fails ras not found
+            amd_smi_data = self._get_amdsmi_data()
 
             if amd_smi_data is None:
                 return self.result, None

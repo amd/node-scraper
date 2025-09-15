@@ -68,10 +68,61 @@ class AmdSmiBaseModel(BaseModel):
 
 
 class ValueUnit(BaseModel):
-    """A model for a value with a unit."""
+    """A model for a value with a unit.
 
-    value: int | str | float
+    Accepts:
+      - dict: {"value": 123, "unit": "W"}
+      - number: 123  -> unit=""
+      - string with number+unit: "123 W" -> {"value": 123, "unit": "W"}
+      - "N/A" / "NA" / "" / None -> None
+    """
+
+    value: int | float | str
     unit: str = ""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce(cls, v):
+        # treat N/A as None
+        def na(x) -> bool:
+            return x is None or (isinstance(x, str) and x.strip().upper() in {"N/A", "NA", ""})
+
+        if na(v):
+            return None
+
+        # Dict form: normalize value and possibly extract unit
+        if isinstance(v, dict):
+            val = v.get("value")
+            unit = v.get("unit", "")
+            if na(val):
+                return None
+            if isinstance(val, str):
+                m = _NUM_UNIT_RE.match(val.strip())
+                if m and not unit:
+                    num, u = m.groups()
+                    unit = u or unit or ""
+                    val = float(num) if "." in num else int(num)
+            return {"value": val, "unit": unit}
+
+        # numbers
+        if isinstance(v, (int, float)):
+            return {"value": v, "unit": ""}
+
+        if isinstance(v, str):
+            s = v.strip()
+            m = _NUM_UNIT_RE.match(s)
+            if m:
+                num, unit = m.groups()
+                val = float(num) if "." in num else int(num)
+                return {"value": val, "unit": unit or ""}
+            return {"value": s, "unit": ""}
+
+        return v
+
+    @field_validator("unit")
+    @classmethod
+    def _clean_unit(cls, u):
+        return "" if u is None else str(u).strip()
 
 
 class EccState(Enum):
@@ -244,6 +295,184 @@ class Partition(BaseModel):
     partition_resources: list[dict] = Field(default_factory=list)
 
 
+### STATIC DATA ###
+class StaticAsic(BaseModel):
+    market_name: str
+    vendor_id: str
+    vendor_name: str
+    subvendor_id: str
+    device_id: str
+    subsystem_id: str
+    rev_id: str
+    asic_serial: str
+    oam_id: int
+    num_compute_units: int
+    target_graphics_version: str
+
+
+class StaticBus(AmdSmiBaseModel):
+    bdf: str
+    max_pcie_width: ValueUnit
+    max_pcie_speed: ValueUnit
+    pcie_interface_version: str
+    slot_type: str
+
+
+class StaticVbios(BaseModel):
+    name: str
+    build_date: str
+    part_number: str
+    version: str
+
+
+class StaticLimit(AmdSmiBaseModel):
+    max_power: ValueUnit | None
+    min_power: ValueUnit | None
+    socket_power: ValueUnit | None
+    slowdown_edge_temperature: ValueUnit | None
+    slowdown_hotspot_temperature: ValueUnit | None
+    slowdown_vram_temperature: ValueUnit | None
+    shutdown_edge_temperature: ValueUnit | None
+    shutdown_hotspot_temperature: ValueUnit | None
+    shutdown_vram_temperature: ValueUnit | None
+    na_validator = field_validator(
+        "max_power",
+        "min_power",
+        "socket_power",
+        "slowdown_edge_temperature",
+        "slowdown_hotspot_temperature",
+        "slowdown_vram_temperature",
+        "shutdown_edge_temperature",
+        "shutdown_hotspot_temperature",
+        "shutdown_vram_temperature",
+        mode="before",
+    )(na_to_none)
+
+
+class StaticDriver(BaseModel):
+    name: str
+    version: str
+
+
+class StaticBoard(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+
+    amdsmi_model_number: str = Field(
+        alias="model_number"
+    )  # Model number is a reserved keyword for pydantic
+    product_serial: str
+    fru_id: str
+    product_name: str
+    manufacturer_name: str
+
+
+class StaticRas(BaseModel):
+    eeprom_version: str
+    parity_schema: EccState
+    single_bit_schema: EccState
+    double_bit_schema: EccState
+    poison_schema: EccState
+    ecc_block_state: dict[str, EccState]
+
+
+class StaticPartition(BaseModel):
+    # The name for compute_partition has changed we will support both for now
+
+    compute_partition: str = Field(
+        validation_alias=AliasChoices("compute_partition", "accelerator_partition")
+    )
+    memory_partition: str
+    partition_id: int
+
+
+class StaticPolicy(BaseModel):
+    policy_id: int
+    policy_description: str
+
+
+class StaticSocPstate(BaseModel):
+    num_supported: int
+    current_id: int
+    policies: List[StaticPolicy]
+
+
+class StaticXgmiPlpd(BaseModel):
+    num_supported: int
+    current_id: int
+    plpds: List[StaticPolicy]
+
+
+class StaticNuma(BaseModel):
+    node: int
+    affinity: int
+
+
+class StaticVram(AmdSmiBaseModel):
+    type: str
+    vendor: str | None
+    size: ValueUnit | None
+    bit_width: ValueUnit | None
+    max_bandwidth: ValueUnit | None = None
+    na_validator = field_validator("vendor", "size", "bit_width", "max_bandwidth", mode="before")(
+        na_to_none
+    )
+
+
+class StaticCacheInfoItem(AmdSmiBaseModel):
+    cache: ValueUnit
+    cache_properties: List[str]
+    cache_size: ValueUnit | None
+    cache_level: ValueUnit
+    max_num_cu_shared: ValueUnit
+    num_cache_instance: ValueUnit
+    na_validator = field_validator("cache_size", mode="before")(na_to_none)
+
+
+class StaticFrequencyLevels(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+
+    Level_0: str = Field(..., alias="Level 0")
+    Level_1: str | None = Field(default=None, alias="Level 1")
+    Level_2: str | None = Field(default=None, alias="Level 2")
+
+
+class StaticClockData(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+    )
+    frequency_levels: StaticFrequencyLevels
+
+    current_level: int | None = Field(..., alias="current level")
+    na_validator = field_validator("current_level", mode="before")(na_to_none)
+
+
+class AmdSmiStatic(BaseModel):
+    gpu: int
+    asic: StaticAsic
+    bus: StaticBus
+    vbios: StaticVbios | None
+    limit: StaticLimit | None
+    driver: StaticDriver
+    board: StaticBoard
+    ras: StaticRas
+    soc_pstate: StaticSocPstate | None
+    xgmi_plpd: StaticXgmiPlpd | None
+    process_isolation: str
+    numa: StaticNuma
+    vram: StaticVram
+    cache_info: List[StaticCacheInfoItem]
+    partition: StaticPartition | None = None  # This has been removed in Amd-smi 26.0.0+d30a0afe+
+    clock: dict[str, StaticClockData | None] | None = None
+    na_validator_dict = field_validator("clock", mode="before")(na_to_none_dict)
+    na_validator = field_validator("soc_pstate", "xgmi_plpd", "vbios", "limit", mode="before")(
+        na_to_none
+    )
+
+
 class AmdSmiDataModel(DataModel):
     """Data model for amd-smi data.
 
@@ -265,6 +494,7 @@ class AmdSmiDataModel(DataModel):
     partition: Partition | None = None
     process: list[Processes] | None = Field(default_factory=list)
     firmware: list[Fw] | None = Field(default_factory=list)
+    static: list[AmdSmiStatic] | None = Field(default_factory=list)
 
     def get_list(self, gpu: int) -> AmdSmiListItem | None:
         """Get the gpu list item for the given gpu id."""
@@ -289,6 +519,15 @@ class AmdSmiDataModel(DataModel):
         if self.firmware is None:
             return None
         for item in self.firmware:
+            if item.gpu == gpu:
+                return item
+        return None
+
+    def get_static(self, gpu: int) -> AmdSmiStatic | None:
+        """Get the static data for the given gpu id."""
+        if self.static is None:
+            return None
+        for item in self.static:
             if item.gpu == gpu:
                 return item
         return None

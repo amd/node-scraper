@@ -23,6 +23,28 @@
 # SOFTWARE.
 #
 ###############################################################################
-from .amdsmi_plugin import AmdSmiPlugin
+from pydantic import Field, field_validator
 
-__all__ = ["AmdSmiPlugin"]
+from nodescraper.models import AnalyzerArgs
+from nodescraper.plugins.inband.os.osdata import OsDataModel
+
+
+class AmdSmiAnalyzerArgs(AnalyzerArgs):
+
+
+    @classmethod
+    def build_from_model(cls, datamodel: OsDataModel) -> "AmdSmiAnalyzerArgs":
+        """build analyzer args from data model
+
+        Args:
+            datamodel (AmdSmiDataModel): data model for plugin
+
+        Returns:
+            AmdSmiAnalyzerArgs: instance of analyzer args class
+        """
+        return cls(expected_gpu_processes=
+        expected_max_power
+        expected_driver_version
+        expected_memory_partition_mode
+        expected_compute_partition_mode
+        expected_pldm_version
