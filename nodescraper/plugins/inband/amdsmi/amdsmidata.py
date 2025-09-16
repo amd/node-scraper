@@ -1,15 +1,20 @@
+import re
 from enum import Enum
 from typing import List
 
 from pydantic import (
+    AliasChoices,
     BaseModel,
     ConfigDict,
     Field,
     field_validator,
+    model_validator,
 )
 
 from nodescraper.models.datamodel import DataModel
 from nodescraper.utils import find_annotation_in_container
+
+_NUM_UNIT_RE = re.compile(r"^\s*([-+]?\d+(?:\.\d+)?)(?:\s*([A-Za-z%/][A-Za-z0-9%/._-]*))?\s*$")
 
 
 def na_to_none(values: int | str):

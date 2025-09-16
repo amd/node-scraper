@@ -23,28 +23,18 @@
 # SOFTWARE.
 #
 ###############################################################################
-from pydantic import Field, field_validator
+from typing import Optional
 
 from nodescraper.models import AnalyzerArgs
-from nodescraper.plugins.inband.os.osdata import OsDataModel
 
 
 class AmdSmiAnalyzerArgs(AnalyzerArgs):
 
-
-    @classmethod
-    def build_from_model(cls, datamodel: OsDataModel) -> "AmdSmiAnalyzerArgs":
-        """build analyzer args from data model
-
-        Args:
-            datamodel (AmdSmiDataModel): data model for plugin
-
-        Returns:
-            AmdSmiAnalyzerArgs: instance of analyzer args class
-        """
-        return cls(expected_gpu_processes=
-        expected_max_power
-        expected_driver_version
-        expected_memory_partition_mode
-        expected_compute_partition_mode
-        expected_pldm_version
+    check_static_data: bool = False
+    expected_gpu_processes: Optional[int] = None
+    expected_max_power: Optional[int] = None
+    expected_driver_version: Optional[str] = None
+    expected_memory_partition_mode: Optional[str] = None
+    expected_compute_partition_mode: Optional[str] = None
+    expected_pldm_version: Optional[str] = None
+    xgmi_speed_override: Optional[float] = None

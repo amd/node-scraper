@@ -29,13 +29,17 @@ from nodescraper.enums import EventCategory, EventPriority
 from nodescraper.interfaces import DataAnalyzer
 from nodescraper.models import TaskResult
 
-from .amdsmidata import AmdSmiDataModel
+from .amdsmidata import AmdSmiDataModel, Fw, Partition, Processes
+from .analyzer_args import AmdSmiAnalyzerArgs
 
 
 class AmdSmiAnalyzer(DataAnalyzer[AmdSmiDataModel, None]):
     """"""
 
     DATA_MODEL = AmdSmiDataModel
+
+    L0_TO_RECOVERY_COUNT_ERROR_THRESHOLD = 3  # Thresholds defined in https://ontrack-internal.amd.com/browse/DCGPUSDV-1204, must be greated than this value to generate a error event
+    L0_TO_RECOVERY_COUNT_WARNING_THRESHOLD = 1  # Thresholds defined in https://ontrack-internal.amd.com/browse/SWLORC-10120, Must be greater than this value to generate a warning event
 
     def expected_gpu_processes(
         self, processes_data: list[Processes] | None, max_num_processes: int
@@ -73,88 +77,6 @@ class AmdSmiAnalyzer(DataAnalyzer[AmdSmiDataModel, None]):
                     "gpu_exceeds_num_processes": gpu_exceeds_num_processes,
                 },
                 console_log=True,
-            )
-
-    def check_expected_memory_partition_mode(
-        self,
-        partition_data: Partition | None,
-        expected_memory_partition_mode: str | None,
-        expected_compute_partition_mode: str | None,
-    ):
-        if partition_data is None:
-            self._log_event(
-                category=EventCategory.PLATFORM,
-                description="No AMD SMI Partition data not available",
-                priority=EventPriority.WARNING,
-            )
-            return
-        bad_memory_partition_mode_gpus = []
-        for partition_current in partition_data.current_partition:
-            if (
-                expected_memory_partition_mode is not None
-                and partition_current.memory != expected_memory_partition_mode
-            ) or (
-                expected_compute_partition_mode is not None
-                and partition_current.accelerator_type != expected_compute_partition_mode
-            ):
-                bad_memory_partition_mode_gpus.append(
-                    {
-                        "gpu_id": partition_current.gpu_id,
-                        "compute_partition_mode": partition_current.accelerator_type,
-                        "memory_partition_mode": partition_current.memory,
-                    }
-                )
-        if bad_memory_partition_mode_gpus:
-            self._log_event(
-                category=EventCategory.PLATFORM,
-                description="Partition Mode Mismatch",
-                priority=EventPriority.ERROR,
-                data={
-                    "actual_partition_data": bad_memory_partition_mode_gpus,
-                    "expected_memory_partition_mode": expected_memory_partition_mode,
-                    "expected_compute_partition_mode": expected_compute_partition_mode,
-                },
-            )
-
-    def check_expected_memory_partition_mode(
-        self,
-        partition_data: Partition | None,
-        expected_memory_partition_mode: str | None,
-        expected_compute_partition_mode: str | None,
-    ):
-        if partition_data is None:
-            self._log_event(
-                category=EventCategory.PLATFORM,
-                description="No AMD SMI Partition data not available",
-                priority=EventPriority.WARNING,
-            )
-            return
-        bad_memory_partition_mode_gpus = []
-        for partition_current in partition_data.current_partition:
-            if (
-                expected_memory_partition_mode is not None
-                and partition_current.memory != expected_memory_partition_mode
-            ) or (
-                expected_compute_partition_mode is not None
-                and partition_current.accelerator_type != expected_compute_partition_mode
-            ):
-                bad_memory_partition_mode_gpus.append(
-                    {
-                        "gpu_id": partition_current.gpu_id,
-                        "compute_partition_mode": partition_current.accelerator_type,
-                        "memory_partition_mode": partition_current.memory,
-                    }
-                )
-        if bad_memory_partition_mode_gpus:
-            self._log_event(
-                category=EventCategory.PLATFORM,
-                description="Partition Mode Mismatch",
-                priority=EventPriority.ERROR,
-                data={
-                    "actual_partition_data": bad_memory_partition_mode_gpus,
-                    "expected_memory_partition_mode": expected_memory_partition_mode,
-                    "expected_compute_partition_mode": expected_compute_partition_mode,
-                },
             )
 
     def check_pldm_version(
@@ -239,11 +161,14 @@ class AmdSmiAnalyzer(DataAnalyzer[AmdSmiDataModel, None]):
 
     def analyze_data(self, data: AmdSmiDataModel, args=None) -> TaskResult:
 
+        if args is None:
+            args = AmdSmiAnalyzerArgs()
+
         if args.expected_gpu_processes:
-            self.expected_gpu_processes(amdsmi_data.process, expected_gpu_processes)
-            if expected_memory_partition_mode or expected_compute_partition_mode:
+            self.expected_gpu_processes(amdsmi_data.process, args.expected_gpu_processes)
+            if args.expected_memory_partition_mode or args.expected_compute_partition_mode:
                 self.check_expected_memory_partition_mode(
                     amdsmi_data.partition,
-                    expected_memory_partition_mode,
-                    expected_compute_partition_mode,
+                    args.expected_memory_partition_mode,
+                    args.expected_compute_partition_mode,
                 )

@@ -23,27 +23,10 @@
 # SOFTWARE.
 #
 ###############################################################################
+import importlib
 from typing import TypeVar
 
 from pydantic import BaseModel, ValidationError
-
-_AMDSMI_SYMBOLS = (
-    "AmdSmiException",
-    "AmdSmiInitFlags",
-    "amdsmi_get_fw_info",
-    "amdsmi_get_gpu_compute_partition",
-    "amdsmi_get_gpu_compute_process_info",
-    "amdsmi_get_gpu_device_bdf",
-    "amdsmi_get_gpu_device_uuid",
-    "amdsmi_get_gpu_kfd_info",
-    "amdsmi_get_gpu_memory_partition",
-    "amdsmi_get_gpu_process_list",
-    "amdsmi_get_lib_version",
-    "amdsmi_get_processor_handles",
-    "amdsmi_get_rocm_version",
-    "amdsmi_init",
-    "amdsmi_shut_down",
-)
 
 from nodescraper.base.inbandcollectortask import InBandDataCollector
 from nodescraper.connection.inband.inband import CommandArtifact
@@ -72,25 +55,18 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
 
     DATA_MODEL = AmdSmiDataModel
 
-    def _amdsmi_is_bound() -> bool:
-        """Check if symbol has already been added into globals"""
+    def _amdsmi_is_bound(self) -> bool:
         return all(name in globals() for name in ("amdsmi_init", "AmdSmiInitFlags"))
 
-    def _bind_amdsmi_or_log(collector) -> bool:
-        """
-        Try to import amdsmi and bind the symbols used by this module into globals().
-        On failure, log an event and return False (caller should set NOT_RAN and exit).
-        """
-        if _amdsmi_is_bound():
+    def _bind_amdsmi_or_log(self) -> bool:
+        """Import amdsmi and store the module on self. Return True if ok."""
+        if getattr(self, "_amdsmi", None) is not None:
             return True
         try:
-            mod = importlib.import_module("amdsmi")
-            g = globals()
-            for name in _AMDSMI_SYMBOLS:
-                g[name] = getattr(mod, name)
+            self._amdsmi = importlib.import_module("amdsmi")
             return True
         except Exception as e:
-            collector._log_event(
+            self._log_event(
                 category=EventCategory.APPLICATION,
                 description="Failed to import amdsmi Python bindings",
                 data={"exception": get_exception_traceback(e)},
@@ -100,10 +76,9 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             return False
 
     def _get_handles(self):
-        """Get processor handles."""
         try:
-            return amdsmi_get_processor_handles()
-        except amdsmi.AmdSmiException as e:
+            return self._amdsmi.amdsmi_get_processor_handles()
+        except self._amdsmi.AmdSmiException as e:
             self._log_event(
                 category=EventCategory.APPLICATION,
                 description="amdsmi_get_processor_handles failed",
@@ -194,6 +169,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                 process=process_data_model,
                 partition=partition_data_model,
                 firmware=firmware_model,
+                static=amdsmi_static_model,
             )
         except ValidationError as e:
             self.logger.warning("Validation err: %s", e)
@@ -210,9 +186,9 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
     def _get_amdsmi_version(self) -> AmdSmiVersion | None:
         """Get lib/rocm versions."""
         try:
-            lib_ver = amdsmi_get_lib_version() or ""
-            rocm_ver = amdsmi_get_rocm_version() or ""
-        except AmdSmiException as e:
+            lib_ver = self._amdsmi.amdsmi_get_lib_version() or ""
+            rocm_ver = self._amdsmi.amdsmi_get_rocm_version() or ""
+        except self._amdsmi.AmdSmiException as e:
             self._log_event(
                 category=EventCategory.APPLICATION,
                 description="Failed to read AMD SMI versions",
@@ -260,16 +236,18 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                 return default
 
         for idx, h in enumerate(devices):
-            bdf = self._smi_try(amdsmi_get_gpu_device_bdf, h, default="") or ""
-            uuid = self._smi_try(amdsmi_get_gpu_device_uuid, h, default="") or ""
-            kfd = self._smi_try(amdsmi_get_gpu_kfd_info, h, default={}) or {}
+            bdf = self._smi_try(self._amdsmi.amdsmi_get_gpu_device_bdf, h, default="") or ""
+            uuid = self._smi_try(self._amdsmi.amdsmi_get_gpu_device_uuid, h, default="") or ""
+            kfd = self._smi_try(self._amdsmi.amdsmi_get_gpu_kfd_info, h, default={}) or {}
 
             partition_id = 0
-            cp = self._smi_try(amdsmi_get_gpu_compute_partition, h, default={}) or {}
+            cp = self._smi_try(self._amdsmi.amdsmi_get_gpu_compute_partition, h, default={}) or {}
             if isinstance(cp, dict) and cp.get("partition_id") is not None:
                 partition_id = _to_int(cp.get("partition_id"), 0)
             else:
-                mp = self._smi_try(amdsmi_get_gpu_memory_partition, h, default={}) or {}
+                mp = (
+                    self._smi_try(self._amdsmi.amdsmi_get_gpu_memory_partition, h, default={}) or {}
+                )
                 if isinstance(mp, dict) and mp.get("current_partition_id") is not None:
                     partition_id = _to_int(mp.get("current_partition_id"), 0)
 
@@ -292,10 +270,12 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         out: list[dict] = []
         for idx, h in enumerate(devices):
             try:
-                pids = amdsmi_get_gpu_process_list(h) or []
+                pids = self._amdsmi.amdsmi_get_gpu_process_list(h) or []
                 plist = []
                 for pid in pids:
-                    pinfo = self._smi_try(amdsmi_get_gpu_compute_process_info, h, pid, default=None)
+                    pinfo = self._smi_try(
+                        self._amdsmi.amdsmi_get_gpu_compute_process_info, h, pid, default=None
+                    )
                     if not isinstance(pinfo, dict):
                         plist.append({"process_info": str(pid)})
                         continue
@@ -335,8 +315,8 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         memparts: list[dict] = []
         resources: list[dict] = []
         for idx, h in enumerate(devices):
-            c = self._smi_try(amdsmi_get_gpu_compute_partition, h, default={}) or {}
-            m = self._smi_try(amdsmi_get_gpu_memory_partition, h, default={}) or {}
+            c = self._smi_try(self._amdsmi.amdsmi_get_gpu_compute_partition, h, default={}) or {}
+            m = self._smi_try(self._amdsmi.amdsmi_get_gpu_memory_partition, h, default={}) or {}
             c_dict = c if isinstance(c, dict) else {}
             m_dict = m if isinstance(m, dict) else {}
             current.append(
@@ -366,7 +346,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         out: list[dict] = []
 
         for idx, h in enumerate(devices):
-            raw = self._smi_try(amdsmi_get_fw_info, h, default=None)
+            raw = self._smi_try(self._amdsmi.amdsmi_get_fw_info, h, default=None)
             if raw is None:
                 continue
 
@@ -420,7 +400,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         """
         try:
             return fn(*a, **kw)
-        except AmdSmiException as e:
+        except self._amdsmi.AmdSmiException as e:
             self.logger.warning(e)
             code = getattr(e, "ret_code", None)
             if code is None:
@@ -493,11 +473,20 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         out: list[dict] = []
 
         for idx, h in enumerate(devices):
-            board = self._smi_try(amdsmi_get_gpu_board_info, h, default={}) or {}
-            asic = self._smi_try(amdsmi_get_gpu_asic_info, h, default={}) or {}
-            bdf = self._smi_try(amdsmi_get_gpu_device_bdf, h, default="") or ""
-            _ = self._smi_try(amdsmi_get_gpu_device_uuid, h, default="")  # uuid not used here
-            kfd = self._smi_try(amdsmi_get_gpu_kfd_info, h, default={}) or {}
+            board = self._smi_try(self._amdsmi.amdsmi_get_gpu_board_info, h, default={}) or {}
+            asic = self._smi_try(self._amdsmi.amdsmi_get_gpu_asic_info, h, default={}) or {}
+            bdf = self._smi_try(self._amdsmi.amdsmi_get_gpu_device_bdf, h, default="") or ""
+            _ = self._smi_try(
+                self._amdsmi.amdsmi_get_gpu_device_uuid, h, default=""
+            )  # uuid not used here
+            kfd = self._smi_try(self._amdsmi.amdsmi_get_gpu_kfd_info, h, default={}) or {}
+
+            cache_info: list[dict] = []
+            part = None
+            soc_pstate = None
+            xgmi_plpd = None
+            clock = None
+            process_isolation = ""
 
             # -----------------------
             # Bus / PCIe
@@ -642,12 +631,12 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         args=None,
     ) -> tuple[TaskResult, AmdSmiDataModel | None]:
 
-        if not _bind_amdsmi_or_log(self):
+        if not self._bind_amdsmi_or_log():
             self.result.status = ExecutionStatus.NOT_RAN
             return self.result, None
 
         try:
-            amdsmi_init(AmdSmiInitFlags.INIT_AMD_GPUS)
+            self._amdsmi.amdsmi_init(self._amdsmi.AmdSmiInitFlags.INIT_AMD_GPUS)
             amd_smi_data = self._get_amdsmi_data()
 
             if amd_smi_data is None:
@@ -666,6 +655,6 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             return self.result, None
         finally:
             try:
-                amdsmi_shut_down()
+                self._amdsmi.amdsmi_shut_down()
             except Exception:
                 pass

@@ -29,7 +29,7 @@ from .amdsmi_collector import AmdSmiCollector
 from .amdsmidata import AmdSmiDataModel
 
 
-class AmdsmiPlugin(InBandDataPlugin[AmdSmiDataModel, None, None]):
+class AmdSmiPlugin(InBandDataPlugin[AmdSmiDataModel, None, None]):
     """Plugin for collection and analysis of amdsmi data"""
 
     DATA_MODEL = AmdSmiDataModel
