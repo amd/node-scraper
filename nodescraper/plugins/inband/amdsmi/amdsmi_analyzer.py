@@ -165,10 +165,12 @@ class AmdSmiAnalyzer(DataAnalyzer[AmdSmiDataModel, None]):
             args = AmdSmiAnalyzerArgs()
 
         if args.expected_gpu_processes:
-            self.expected_gpu_processes(amdsmi_data.process, args.expected_gpu_processes)
+            self.expected_gpu_processes(data.process, args.expected_gpu_processes)
             if args.expected_memory_partition_mode or args.expected_compute_partition_mode:
                 self.check_expected_memory_partition_mode(
-                    amdsmi_data.partition,
+                    data.partition,
                     args.expected_memory_partition_mode,
                     args.expected_compute_partition_mode,
                 )
+
+        return self.result

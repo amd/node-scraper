@@ -23,7 +23,7 @@ def na_to_none(values: int | str):
     return values
 
 
-def na_to_none_list(values: list[int | str]) -> List[int | str | None]:
+def na_to_none_list(values: List[int | str | None]) -> List[int | str | None]:
     ret_list: List[int | str | None] = values.copy()
     for i in range(len(ret_list)):
         if ret_list[i] == "N/A":
