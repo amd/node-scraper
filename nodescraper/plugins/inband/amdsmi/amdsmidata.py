@@ -1,6 +1,6 @@
 import re
 from enum import Enum
-from typing import List
+from typing import Any, List, Mapping
 
 from pydantic import (
     AliasChoices,
@@ -31,12 +31,23 @@ def na_to_none_list(values: list[int | str]) -> List[int | str | None]:
     return ret_list
 
 
-def na_to_none_dict(values: dict[str, int | str]) -> dict[str, int | str | None]:
-    ret_dict: dict[str, int | str | None] = values.copy()
-    for key in ret_dict:
-        if ret_dict[key] == "N/A":
-            ret_dict[key] = None
-    return ret_dict
+def na_to_none_dict(values: object) -> dict[str, Any] | None:
+    """Normalize mapping-like fields where 'N/A' or empty should become None.
+    Accepts None; returns None for 'N/A'/'NA'/'' or non-mapping inputs."""
+    if values is None:
+        return None
+    if isinstance(values, str) and values.strip().upper() in {"N/A", "NA", ""}:
+        return None
+    if not isinstance(values, Mapping):  # guard: pydantic may pass non-dicts in 'before' mode
+        return None
+
+    out: dict[str, Any] = {}
+    for k, v in values.items():
+        if isinstance(v, str) and v.strip().upper() in {"N/A", "NA", ""}:
+            out[k] = None
+        else:
+            out[k] = v
+    return out
 
 
 class AmdSmiBaseModel(BaseModel):
@@ -317,10 +328,10 @@ class StaticAsic(BaseModel):
 
 class StaticBus(AmdSmiBaseModel):
     bdf: str
-    max_pcie_width: ValueUnit
-    max_pcie_speed: ValueUnit
-    pcie_interface_version: str
-    slot_type: str
+    max_pcie_width: ValueUnit | None = None
+    max_pcie_speed: ValueUnit | None = None
+    pcie_interface_version: str = "unknown"
+    slot_type: str = "unknown"
 
 
 class StaticVbios(BaseModel):
@@ -461,9 +472,9 @@ class AmdSmiStatic(BaseModel):
     bus: StaticBus
     vbios: StaticVbios | None
     limit: StaticLimit | None
-    driver: StaticDriver
+    # driver: StaticDriver
     board: StaticBoard
-    ras: StaticRas
+    # ras: StaticRas
     soc_pstate: StaticSocPstate | None
     xgmi_plpd: StaticXgmiPlpd | None
     process_isolation: str
