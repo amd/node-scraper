@@ -48,9 +48,14 @@ from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     StaticAsic,
     StaticBoard,
     StaticBus,
+    StaticCacheInfoItem,
+    StaticDriver,
     StaticNuma,
+    StaticPolicy,
+    StaticSocPstate,
     StaticVbios,
     StaticVram,
+    StaticXgmiPlpd,
     ValueUnit,
 )
 from nodescraper.utils import get_exception_details, get_exception_traceback
@@ -537,6 +542,16 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                 manufacturer_name=str(board.get("manufacturer_name", "")),
             )
 
+            # Driver
+            driver_model = None
+            drv_fn = getattr(self._amdsmi, "amdsmi_get_gpu_driver_info", None)
+            if callable(drv_fn):
+                drv = self._smi_try(drv_fn, h, default={}) or {}
+                driver_model = StaticDriver(
+                    name=_nz(drv.get("driver_name"), default="unknown"),
+                    version=_nz(drv.get("driver_version"), default="unknown"),
+                )
+
             # VBIOS
             vb = {
                 k: board[k]
@@ -590,6 +605,10 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                 max_bandwidth=None,
             )
 
+            soc_pstate_model = self._get_soc_pstate(h)
+            xgmi_plpd_model = self._get_xgmi_plpd(h)
+            cache_info_model = self._get_cache_info(h)
+
             try:
                 out.append(
                     AmdSmiStatic(
@@ -598,15 +617,16 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                         bus=bus,
                         vbios=vbios_model,
                         limit=None,  # not available via API
+                        driver=driver_model,
                         board=board_model,
-                        soc_pstate=None,  # TODO
-                        xgmi_plpd=None,  # TODO
+                        soc_pstate=soc_pstate_model,
+                        xgmi_plpd=xgmi_plpd_model,
                         process_isolation="",
                         numa=numa_model,
                         vram=vram_model,
-                        cache_info=[],  # TODO
+                        cache_info=cache_info_model,
                         partition=None,
-                        clock=None,  # TODO
+                        clock=None,  # TODO amdsmi_get_clk_freq??
                     )
                 )
             except ValidationError as e:
@@ -616,6 +636,169 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                     data={"exception": get_exception_traceback(e), "gpu_index": idx},
                     priority=EventPriority.WARNING,
                 )
+
+        return out
+
+    def _get_soc_pstate(self, h) -> StaticSocPstate | None:
+        data = self._smi_try(self._amdsmi.amdsmi_get_soc_pstate, h, default=None)
+        if not isinstance(data, dict):
+            return None
+
+        try:
+            num_supported = int(data.get("num_supported", 0) or 0)
+        except Exception:
+            num_supported = 0
+        try:
+            current_id = int(data.get("current_id", 0) or 0)
+        except Exception:
+            current_id = 0
+
+        policies_raw = data.get("policies") or []
+        policies: list[StaticPolicy] = []
+        if isinstance(policies_raw, list):
+            for p in policies_raw:
+                if not isinstance(p, dict):
+                    continue
+                pid = p.get("policy_id", 0)
+                desc = p.get("policy_description", "")
+                try:
+                    policies.append(
+                        StaticPolicy(
+                            policy_id=int(pid) if pid not in (None, "") else 0,
+                            policy_description=str(desc),
+                        )
+                    )
+                except ValidationError:
+                    continue
+
+        if not num_supported and not current_id and not policies:
+            return None
+
+        try:
+            return StaticSocPstate(
+                num_supported=num_supported,
+                current_id=current_id,
+                policies=policies,
+            )
+        except ValidationError:
+            return None
+
+    def _get_xgmi_plpd(self, h) -> StaticXgmiPlpd | None:
+        data = self._smi_try(self._amdsmi.amdsmi_get_xgmi_plpd, h, default=None)
+        if not isinstance(data, dict):
+            return None
+
+        try:
+            num_supported = int(data.get("num_supported", 0) or 0)
+        except Exception:
+            num_supported = 0
+        try:
+            current_id = int(data.get("current_id", 0) or 0)
+        except Exception:
+            current_id = 0
+
+        plpds_raw = data.get("plpds") or []
+        plpds: list[StaticPolicy] = []
+        if isinstance(plpds_raw, list):
+            for p in plpds_raw:
+                if not isinstance(p, dict):
+                    continue
+                pid = p.get("policy_id", 0)
+                desc = p.get("policy_description", "")
+                try:
+                    plpds.append(
+                        StaticPolicy(
+                            policy_id=int(pid) if pid not in (None, "") else 0,
+                            policy_description=str(desc),
+                        )
+                    )
+                except ValidationError:
+                    continue
+
+        if not num_supported and not current_id and not plpds:
+            return None
+
+        try:
+            return StaticXgmiPlpd(
+                num_supported=num_supported,
+                current_id=current_id,
+                plpds=plpds,
+            )
+        except ValidationError:
+            return None
+
+    def _get_cache_info(self, h) -> list[StaticCacheInfoItem]:
+        """Map amdsmi_get_gpu_cache_info -> List[StaticCacheInfoItem]."""
+        raw = self._smi_try(self._amdsmi.amdsmi_get_gpu_cache_info, h, default=None)
+        if raw is None:
+            return []
+
+        items = raw if isinstance(raw, list) else [raw]
+
+        def _to_num(v) -> float | int | None:
+            if isinstance(v, (int, float)):
+                return v
+            if isinstance(v, str):
+                s = v.strip()
+                try:
+                    return int(s)
+                except Exception:
+                    try:
+                        return float(s)
+                    except Exception:
+                        return None
+            return None
+
+        def _vu_req(v) -> ValueUnit:
+            n = _to_num(v)
+            return ValueUnit(value=0 if n is None else n, unit="")
+
+        def _vu_opt(v) -> ValueUnit | None:
+            n = _to_num(v)
+            return None if n is None else ValueUnit(value=n, unit="")
+
+        def _as_list_str(v) -> list[str]:
+            if isinstance(v, list):
+                return [str(x) for x in v]
+            if isinstance(v, str):
+                parts = [p.strip() for p in v.replace(";", ",").split(",")]
+                return [p for p in parts if p]
+            return []
+
+        out: list[StaticCacheInfoItem] = []
+        for e in items:
+            if not isinstance(e, dict):
+                continue
+
+            cache_level = _vu_req(e.get("cache_level"))
+            max_num_cu_shared = _vu_req(e.get("max_num_cu_shared"))
+            num_cache_instance = _vu_req(e.get("num_cache_instance"))
+            cache_size = _vu_opt(e.get("cache_size"))
+            cache_props = _as_list_str(e.get("cache_properties"))
+
+            # AMDSMI doesn’t give a name , "Lable_<level>" as the label???
+            cache_label_val = f"Lable_{int(cache_level.value) if isinstance(cache_level.value, (int, float)) else cache_level.value}"
+            cache_label = ValueUnit(value=cache_label_val, unit="")
+
+            try:
+                out.append(
+                    StaticCacheInfoItem(
+                        cache=cache_label,
+                        cache_properties=cache_props,
+                        cache_size=cache_size,
+                        cache_level=cache_level,
+                        max_num_cu_shared=max_num_cu_shared,
+                        num_cache_instance=num_cache_instance,
+                    )
+                )
+            except ValidationError as ve:
+                self._log_event(
+                    category=EventCategory.APPLICATION,
+                    description="Bad cache info entry from AMDSMI; skipping",
+                    data={"entry": repr(e), "exception": get_exception_traceback(ve)},
+                    priority=EventPriority.WARNING,
+                )
+                continue
 
         return out
 

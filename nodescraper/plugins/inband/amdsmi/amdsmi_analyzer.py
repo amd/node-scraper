@@ -38,8 +38,8 @@ class AmdSmiAnalyzer(DataAnalyzer[AmdSmiDataModel, None]):
 
     DATA_MODEL = AmdSmiDataModel
 
-    L0_TO_RECOVERY_COUNT_ERROR_THRESHOLD = 3  # Thresholds defined in https://ontrack-internal.amd.com/browse/DCGPUSDV-1204, must be greated than this value to generate a error event
-    L0_TO_RECOVERY_COUNT_WARNING_THRESHOLD = 1  # Thresholds defined in https://ontrack-internal.amd.com/browse/SWLORC-10120, Must be greater than this value to generate a warning event
+    L0_TO_RECOVERY_COUNT_ERROR_THRESHOLD = 3
+    L0_TO_RECOVERY_COUNT_WARNING_THRESHOLD = 1
 
     def expected_gpu_processes(
         self, processes_data: list[Processes] | None, max_num_processes: int
@@ -65,7 +65,6 @@ class AmdSmiAnalyzer(DataAnalyzer[AmdSmiDataModel, None]):
 
             process_count = len(process.process_list)  # Number of processes for GPU
             if process_count > max_num_processes:
-                # Log an error event if the number of processes is greater than the expected number log event
                 gpu_exceeds_num_processes[process.gpu] = process_count
 
         if gpu_exceeds_num_processes:

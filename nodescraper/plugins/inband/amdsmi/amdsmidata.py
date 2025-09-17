@@ -472,7 +472,7 @@ class AmdSmiStatic(BaseModel):
     bus: StaticBus
     vbios: StaticVbios | None
     limit: StaticLimit | None
-    # driver: StaticDriver
+    driver: StaticDriver | None
     board: StaticBoard
     # ras: StaticRas
     soc_pstate: StaticSocPstate | None
