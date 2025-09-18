@@ -49,7 +49,9 @@ from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     StaticBoard,
     StaticBus,
     StaticCacheInfoItem,
+    StaticClockData,
     StaticDriver,
+    StaticFrequencyLevels,
     StaticNuma,
     StaticPolicy,
     StaticSocPstate,
@@ -111,7 +113,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         try:
             version = self._get_amdsmi_version()
             processes = self.get_process()
-            partition = self.get_partition()
+            partition = self._get_partition()
             firmware = self.get_firmware()
             gpu_list = self.get_gpu_list()
             statics = self.get_static()
@@ -296,7 +298,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                 )
         return out
 
-    def get_partition(self) -> Partition | None:
+    def _get_partition(self) -> Partition | None:
         devices = self._get_handles()
         current: list[PartitionCurrent] = []
         memparts: list[PartitionMemory] = []
@@ -608,6 +610,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             soc_pstate_model = self._get_soc_pstate(h)
             xgmi_plpd_model = self._get_xgmi_plpd(h)
             cache_info_model = self._get_cache_info(h)
+            clock_model = self._get_clock(h)
 
             try:
                 out.append(
@@ -626,10 +629,11 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                         vram=vram_model,
                         cache_info=cache_info_model,
                         partition=None,
-                        clock=None,  # TODO amdsmi_get_clk_freq??
+                        clock=clock_model,
                     )
                 )
             except ValidationError as e:
+                self.logger.error(e)
                 self._log_event(
                     category=EventCategory.APPLICATION,
                     description="Failed to build AmdSmiStatic",
@@ -640,7 +644,16 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         return out
 
     def _get_soc_pstate(self, h) -> StaticSocPstate | None:
-        data = self._smi_try(self._amdsmi.amdsmi_get_soc_pstate, h, default=None)
+        fn = getattr(self._amdsmi, "amdsmi_get_soc_pstate", None)
+        if not callable(fn):
+            self._log_event(
+                category=EventCategory.APPLICATION,
+                description="amdsmi_get_soc_pstate not exposed by amdsmi build",
+                priority=EventPriority.INFO,
+            )
+            return None
+
+        data = self._smi_try(fn, h, default=None)
         if not isinstance(data, dict):
             return None
 
@@ -684,7 +697,16 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             return None
 
     def _get_xgmi_plpd(self, h) -> StaticXgmiPlpd | None:
-        data = self._smi_try(self._amdsmi.amdsmi_get_xgmi_plpd, h, default=None)
+        fn = getattr(self._amdsmi, "amdsmi_get_xgmi_plpd", None)
+        if not callable(fn):
+            self._log_event(
+                category=EventCategory.APPLICATION,
+                description="XGMI PLPD not exposed by this amdsmi build",
+                priority=EventPriority.INFO,
+            )
+            return None
+
+        data = self._smi_try(fn, h, default=None)
         if not isinstance(data, dict):
             return None
 
@@ -801,6 +823,52 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                 continue
 
         return out
+
+
+    def _get_clock(self, h) -> StaticClockData | None:
+        """
+        """
+        fn = getattr(self._amdsmi, "amdsmi_get_clk_freq", None)
+        clk_type = getattr(self._amdsmi, "AmdSmiClkType", None)
+        if not callable(fn) or clk_type is None or not hasattr(clk_type, "SYS"):
+            return None
+
+        data = self._smi_try(fn, h, clk_type.SYS, default=None)
+        if not isinstance(data, dict):
+            return None
+
+        freqs_raw = data.get("frequency")
+        if not isinstance(freqs_raw, list):
+            return None
+
+        freqs_mhz: list[int] = []
+        for v in freqs_raw:
+            if isinstance(v, (int, float)):
+                freqs_mhz.append(int(round(float(v) / 1_000_000.0)))
+
+        if not freqs_mhz:
+            return None
+
+        def _fmt(n: int | None) -> str | None:
+            return None if n is None else f"{n} MHz"
+
+        level0: str = _fmt(freqs_mhz[0]) or "0 MHz"
+        level1: str | None = _fmt(freqs_mhz[1]) if len(freqs_mhz) > 1 else None
+        level2: str | None = _fmt(freqs_mhz[2]) if len(freqs_mhz) > 2 else None
+
+        cur_raw = data.get("current")
+        try:
+            current: int | None = None if cur_raw in (None, "", "N/A") else int(cur_raw)
+        except Exception:
+            current = None
+
+        try:
+            levels = StaticFrequencyLevels(Level_0=level0, Level_1=level1, Level_2=level2)
+            return StaticClockData(frequency=levels, current=current)
+        except ValidationError:
+            return None
+
+
 
     def collect_data(
         self,

@@ -460,10 +460,10 @@ class StaticClockData(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
     )
-    frequency_levels: StaticFrequencyLevels
+    frequency: StaticFrequencyLevels
 
-    current_level: int | None = Field(..., alias="current level")
-    na_validator = field_validator("current_level", mode="before")(na_to_none)
+    current: int | None = Field(..., alias="current")
+    na_validator = field_validator("current", mode="before")(na_to_none)
 
 
 class AmdSmiStatic(BaseModel):
@@ -481,8 +481,8 @@ class AmdSmiStatic(BaseModel):
     numa: StaticNuma
     vram: StaticVram
     cache_info: List[StaticCacheInfoItem]
-    partition: StaticPartition | None = None  # This has been removed in Amd-smi 26.0.0+d30a0afe+
-    clock: dict[str, StaticClockData | None] | None = None
+    partition: StaticPartition | None = None
+    clock: StaticClockData | None = None
     na_validator_dict = field_validator("clock", mode="before")(na_to_none_dict)
     na_validator = field_validator("soc_pstate", "xgmi_plpd", "vbios", "limit", mode="before")(
         na_to_none
