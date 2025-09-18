@@ -24,12 +24,10 @@
 #
 ###############################################################################
 import importlib
-from typing import cast
 
 from pydantic import ValidationError
 
 from nodescraper.base.inbandcollectortask import InBandDataCollector
-from nodescraper.connection.inband.inband import CommandArtifact
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.models import TaskResult
 from nodescraper.plugins.inband.amdsmi.amdsmidata import (
@@ -65,8 +63,6 @@ from nodescraper.utils import get_exception_details, get_exception_traceback
 
 class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
     """class for collection of inband tool amd-smi data."""
-
-    AMD_SMI_EXE = "amd-smi"
 
     SUPPORTED_OS_FAMILY: set[OSFamily] = {OSFamily.LINUX}
 
@@ -113,7 +109,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         try:
             version = self._get_amdsmi_version()
             processes = self.get_process()
-            partition = self._get_partition()
+            partition = self.get_partition()
             firmware = self.get_firmware()
             gpu_list = self.get_gpu_list()
             statics = self.get_static()
@@ -168,26 +164,6 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             rocm_version=rocm_ver,
         )
 
-    def _run_amd_smi(self, cmd: str, sudo: bool = False) -> str | None:
-        """Run amd-smi command"""
-        cmd_ret: CommandArtifact = self._run_sut_cmd(f"{self.AMD_SMI_EXE} {cmd}", sudo=sudo)
-
-        if cmd_ret.exit_code != 0:
-            self._log_event(
-                category=EventCategory.APPLICATION,
-                description="Error running amd-smi command",
-                data={
-                    "command": cmd,
-                    "exit_code": cmd_ret.exit_code,
-                    "stderr": cmd_ret.stderr,
-                },
-                priority=EventPriority.ERROR,
-                console_log=True,
-            )
-            return None
-
-        return cmd_ret.stdout or ""
-
     def get_gpu_list(self) -> list[AmdSmiListItem] | None:
         devices = self._get_handles()
         out: list[AmdSmiListItem] = []
@@ -238,48 +214,68 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
     def get_process(self) -> list[Processes] | None:
         devices = self._get_handles()
         out: list[Processes] = []
+
         for idx, h in enumerate(devices):
             try:
-                pids = self._amdsmi.amdsmi_get_gpu_process_list(h) or []
+                raw_list = (
+                    self._smi_try(self._amdsmi.amdsmi_get_gpu_process_list, h, default=[]) or []
+                )
                 plist: list[ProcessListItem] = []
 
-                for pid in pids:
-                    pinfo = self._smi_try(
-                        self._amdsmi.amdsmi_get_gpu_compute_process_info, h, pid, default=None
-                    )
-                    if not isinstance(pinfo, dict):
-                        plist.append(ProcessListItem(process_info=str(pid)))
+                for entry in raw_list:
+                    if not isinstance(entry, dict):
+                        plist.append(ProcessListItem(process_info=str(entry)))
                         continue
 
-                    plist.append(
-                        ProcessListItem(
-                            process_info=cast(
-                                ProcessInfo,
-                                {
-                                    "name": pinfo.get("name", str(pid)),
-                                    "pid": int(pid),
-                                    "memory_usage": {
-                                        "gtt_mem": ValueUnit(
-                                            value=pinfo.get("gtt_mem", 0), unit="B"
-                                        ),
-                                        "cpu_mem": ValueUnit(
-                                            value=pinfo.get("cpu_mem", 0), unit="B"
-                                        ),
-                                        "vram_mem": ValueUnit(
-                                            value=pinfo.get("vram_mem", 0), unit="B"
-                                        ),
-                                    },
-                                    "mem_usage": ValueUnit(
-                                        value=pinfo.get("vram_mem", 0), unit="B"
-                                    ),
-                                    "usage": {
-                                        "gfx": ValueUnit(value=pinfo.get("gfx", 0), unit="%"),
-                                        "enc": ValueUnit(value=pinfo.get("enc", 0), unit="%"),
-                                    },
-                                },
+                    name = entry.get("name", "N/A")
+                    pid_val = entry.get("pid", 0)
+                    try:
+                        pid = int(pid_val) if pid_val not in (None, "") else 0
+                    except Exception:
+                        pid = 0
+
+                    mem_vu = self._vu(entry.get("mem"), "B")
+                    mu = entry.get("memory_usage") or {}
+                    mem_usage = {
+                        "gtt_mem": self._vu(mu.get("gtt_mem"), "B"),
+                        "cpu_mem": self._vu(mu.get("cpu_mem"), "B"),
+                        "vram_mem": self._vu(mu.get("vram_mem"), "B"),
+                    }
+
+                    eu = entry.get("engine_usage") or {}
+                    usage = {
+                        "gfx": self._vu(eu.get("gfx"), "ns"),
+                        "enc": self._vu(eu.get("enc"), "ns"),
+                    }
+
+                    cu_occ = self._vu(entry.get("cu_occupancy"), "")
+
+                    try:
+                        plist.append(
+                            ProcessListItem(
+                                process_info=ProcessInfo(
+                                    name=str(name),
+                                    pid=pid,
+                                    mem=mem_vu,
+                                    memory_usage=mem_usage,
+                                    usage=usage,
+                                    cu_occupancy=cu_occ,
+                                )
                             )
                         )
-                    )
+                    except ValidationError as e:
+                        self._log_event(
+                            category=EventCategory.APPLICATION,
+                            description="Failed to build ProcessListItem; skipping entry",
+                            data={
+                                "exception": get_exception_traceback(e),
+                                "gpu_index": idx,
+                                "entry": repr(entry),
+                            },
+                            priority=EventPriority.WARNING,
+                        )
+                        continue
+
                 try:
                     out.append(Processes(gpu=idx, process_list=plist))
                 except ValidationError as e:
@@ -296,36 +292,71 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                     data={"exception": get_exception_traceback(e), "gpu_index": idx},
                     priority=EventPriority.WARNING,
                 )
+
         return out
 
-    def _get_partition(self) -> Partition | None:
+    def get_partition(self) -> Partition | None:
         devices = self._get_handles()
         current: list[PartitionCurrent] = []
         memparts: list[PartitionMemory] = []
-        resources: list[dict] = []  # keep as-is if your model allows
+        resources: list[dict] = []
 
         for idx, h in enumerate(devices):
+            # compute
             c = self._smi_try(self._amdsmi.amdsmi_get_gpu_compute_partition, h, default={}) or {}
-            m = self._smi_try(self._amdsmi.amdsmi_get_gpu_memory_partition, h, default={}) or {}
             c_dict = c if isinstance(c, dict) else {}
+
+            # memory
+            m = self._smi_try(self._amdsmi.amdsmi_get_gpu_memory_partition, h, default={}) or {}
             m_dict = m if isinstance(m, dict) else {}
 
-            current.append(
-                PartitionCurrent(
-                    gpu_id=idx,
-                    memory=c_dict.get("memory"),
-                    accelerator_type=c_dict.get("accelerator_type"),
-                    accelerator_profile_index=c_dict.get("accelerator_profile_index"),
-                    partition_id=c_dict.get("partition_id"),
+            prof_list: list[dict] = (
+                []
+            )  # amdsmi_get_gpu_accelerator_partition_profile -> currently not supported
+
+            try:
+                current.append(
+                    PartitionCurrent(
+                        gpu_id=idx,
+                        memory=c_dict.get("memory"),
+                        accelerator_type=c_dict.get("accelerator_type"),
+                        accelerator_profile_index=c_dict.get("accelerator_profile_index"),
+                        partition_id=c_dict.get("partition_id"),
+                    )
                 )
-            )
-            memparts.append(
-                PartitionMemory(
-                    gpu_id=idx,
-                    memory_partition_caps=m_dict.get("memory_partition_caps"),
-                    current_partition_id=m_dict.get("current_partition_id"),
+            except ValidationError as e:
+                self._log_event(
+                    category=EventCategory.APPLICATION,
+                    description="Failed to build PartitionCurrent",
+                    data={
+                        "exception": get_exception_traceback(e),
+                        "gpu_index": idx,
+                        "data": c_dict,
+                    },
+                    priority=EventPriority.WARNING,
                 )
-            )
+
+            try:
+                memparts.append(
+                    PartitionMemory(
+                        gpu_id=idx,
+                        memory_partition_caps=m_dict.get("memory_partition_caps"),
+                        current_partition_id=m_dict.get("current_partition_id"),
+                    )
+                )
+            except ValidationError as e:
+                self._log_event(
+                    category=EventCategory.APPLICATION,
+                    description="Failed to build PartitionMemory",
+                    data={
+                        "exception": get_exception_traceback(e),
+                        "gpu_index": idx,
+                        "data": m_dict,
+                    },
+                    priority=EventPriority.WARNING,
+                )
+
+            resources.append({"gpu_id": idx, "profiles": []})
 
         try:
             return Partition(
@@ -461,21 +492,6 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             s = str(val).strip() if val is not None else ""
             return s if s and s.upper() != "N/A" else default
 
-        def _vu(val: object, unit: str) -> ValueUnit | None:
-            """Build ValueUnit from mixed numeric/string input, else None."""
-            if val in (None, "", "N/A"):
-                return None
-            try:
-                if isinstance(val, str):
-                    v = float(val) if any(ch in val for ch in ".eE") else int(val)
-                elif isinstance(val, float):
-                    v = val
-                else:
-                    v = int(val)
-            except Exception:
-                return None
-            return ValueUnit(value=v, unit=unit)
-
         pcie_fn = getattr(self._amdsmi, "amdsmi_get_pcie_info", None)
 
         out: list[AmdSmiStatic] = []
@@ -496,8 +512,8 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                     pcie_ver = p.get("pcie_version") or p.get("pcie_interface_version")
                     bus = StaticBus(
                         bdf=bdf,
-                        max_pcie_width=_vu(max_w, "x"),
-                        max_pcie_speed=_vu(max_s, "GT/s"),
+                        max_pcie_width=self._vu(max_w, "x"),
+                        max_pcie_speed=self._vu(max_s, "GT/s"),
                         pcie_interface_version=_nz(pcie_ver),
                         slot_type=_nz(p.get("slot_type")),
                     )
@@ -602,8 +618,8 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             vram_model = StaticVram(
                 type=vram_type,
                 vendor=None if vram_vendor in (None, "", "N/A") else str(vram_vendor),
-                size=_vu(vram_size_b, "B"),
-                bit_width=_vu(vram_bits, "bit"),
+                size=self._vu(vram_size_b, "B"),
+                bit_width=self._vu(vram_bits, "bit"),
                 max_bandwidth=None,
             )
 
@@ -757,28 +773,6 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
 
         items = raw if isinstance(raw, list) else [raw]
 
-        def _to_num(v) -> float | int | None:
-            if isinstance(v, (int, float)):
-                return v
-            if isinstance(v, str):
-                s = v.strip()
-                try:
-                    return int(s)
-                except Exception:
-                    try:
-                        return float(s)
-                    except Exception:
-                        return None
-            return None
-
-        def _vu_req(v) -> ValueUnit:
-            n = _to_num(v)
-            return ValueUnit(value=0 if n is None else n, unit="")
-
-        def _vu_opt(v) -> ValueUnit | None:
-            n = _to_num(v)
-            return None if n is None else ValueUnit(value=n, unit="")
-
         def _as_list_str(v) -> list[str]:
             if isinstance(v, list):
                 return [str(x) for x in v]
@@ -792,10 +786,10 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             if not isinstance(e, dict):
                 continue
 
-            cache_level = _vu_req(e.get("cache_level"))
-            max_num_cu_shared = _vu_req(e.get("max_num_cu_shared"))
-            num_cache_instance = _vu_req(e.get("num_cache_instance"))
-            cache_size = _vu_opt(e.get("cache_size"))
+            cache_level = self._vu(e.get("cache_level"), "", required=True)
+            max_num_cu_shared = self._vu(e.get("max_num_cu_shared"), "", required=True)
+            num_cache_instance = self._vu(e.get("num_cache_instance"), "", required=True)
+            cache_size = self._vu(e.get("cache_size"), "", required=False)
             cache_props = _as_list_str(e.get("cache_properties"))
 
             # AMDSMI doesn’t give a name , "Lable_<level>" as the label???
@@ -824,10 +818,8 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
 
         return out
 
-
     def _get_clock(self, h) -> StaticClockData | None:
-        """
-        """
+        """ """
         fn = getattr(self._amdsmi, "amdsmi_get_clk_freq", None)
         clk_type = getattr(self._amdsmi, "AmdSmiClkType", None)
         if not callable(fn) or clk_type is None or not hasattr(clk_type, "SYS"):
@@ -868,8 +860,6 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         except ValidationError:
             return None
 
-
-
     def collect_data(
         self,
         args=None,
@@ -902,3 +892,26 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                 self._amdsmi.amdsmi_shut_down()
             except Exception:
                 pass
+
+    def _vu(self, v: object, unit: str, *, required: bool = False) -> ValueUnit | None:
+        """
+        Build ValueUnit from mixed numeric/string input.
+        Returns:
+             None for None/''/'N/A' unless required=True, in which case ValueUnit(0, unit).
+        """
+        if v in (None, "", "N/A"):
+            return ValueUnit(value=0, unit=unit) if required else None
+        try:
+            if isinstance(v, str):
+                s = v.strip()
+                try:
+                    n = int(s)
+                except Exception:
+                    n = float(s)
+            elif isinstance(v, (int, float)):
+                n = v
+            else:
+                n = int(v)
+        except Exception:
+            return ValueUnit(value=0, unit=unit) if required else None
+        return ValueUnit(value=n, unit=unit)

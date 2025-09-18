@@ -195,14 +195,17 @@ class CoherentTable(Enum):
     SELF = "SELF"
 
 
+# Process
 class ProcessMemoryUsage(BaseModel):
     gtt_mem: ValueUnit | None
     cpu_mem: ValueUnit | None
     vram_mem: ValueUnit | None
+
     na_validator = field_validator("gtt_mem", "cpu_mem", "vram_mem", mode="before")(na_to_none)
 
 
 class ProcessUsage(BaseModel):
+    # AMDSMI reports engine usage in nanoseconds
     gfx: ValueUnit | None
     enc: ValueUnit | None
     na_validator = field_validator("gfx", "enc", mode="before")(na_to_none)
@@ -211,10 +214,12 @@ class ProcessUsage(BaseModel):
 class ProcessInfo(BaseModel):
     name: str
     pid: int
+
+    mem: ValueUnit | None = None
     memory_usage: ProcessMemoryUsage
-    mem_usage: ValueUnit | None
     usage: ProcessUsage
-    na_validator = field_validator("mem_usage", mode="before")(na_to_none)
+    cu_occupancy: ValueUnit | None = None
+    na_validator = field_validator("mem", "cu_occupancy", mode="before")(na_to_none)
 
 
 class ProcessListItem(BaseModel):
