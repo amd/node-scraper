@@ -38,7 +38,7 @@ from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     Fw,
     FwListItem,
     Partition,
-    PartitionCurrent,
+    PartitionCompute,
     PartitionMemory,
     Processes,
     ProcessInfo,
@@ -179,16 +179,9 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             uuid = self._smi_try(self._amdsmi.amdsmi_get_gpu_device_uuid, h, default="") or ""
             kfd = self._smi_try(self._amdsmi.amdsmi_get_gpu_kfd_info, h, default={}) or {}
 
+            # partition is will be supported in amdsmi_get_gpu_accelerator_partition_profile.
+            # Currently returns hardcoded empty values
             partition_id = 0
-            cp = self._smi_try(self._amdsmi.amdsmi_get_gpu_compute_partition, h, default={}) or {}
-            if isinstance(cp, dict) and cp.get("partition_id") is not None:
-                partition_id = _to_int(cp.get("partition_id"), 0)
-            else:
-                mp = (
-                    self._smi_try(self._amdsmi.amdsmi_get_gpu_memory_partition, h, default={}) or {}
-                )
-                if isinstance(mp, dict) and mp.get("current_partition_id") is not None:
-                    partition_id = _to_int(mp.get("current_partition_id"), 0)
 
             try:
                 out.append(
@@ -297,51 +290,27 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
 
     def get_partition(self) -> Partition | None:
         devices = self._get_handles()
-        current: list[PartitionCurrent] = []
         memparts: list[PartitionMemory] = []
-        resources: list[dict] = []
+        computeparts: list[PartitionCompute] = []
 
         for idx, h in enumerate(devices):
             # compute
-            c = self._smi_try(self._amdsmi.amdsmi_get_gpu_compute_partition, h, default={}) or {}
-            c_dict = c if isinstance(c, dict) else {}
+            compute_partition = (
+                self._smi_try(self._amdsmi.amdsmi_get_gpu_compute_partition, h, default={}) or {}
+            )
 
             # memory
-            m = self._smi_try(self._amdsmi.amdsmi_get_gpu_memory_partition, h, default={}) or {}
-            m_dict = m if isinstance(m, dict) else {}
+            memory_partition = (
+                self._smi_try(self._amdsmi.amdsmi_get_gpu_memory_partition, h, default={}) or {}
+            )
 
-            prof_list: list[dict] = (
-                []
-            )  # amdsmi_get_gpu_accelerator_partition_profile -> currently not supported
-
-            try:
-                current.append(
-                    PartitionCurrent(
-                        gpu_id=idx,
-                        memory=c_dict.get("memory"),
-                        accelerator_type=c_dict.get("accelerator_type"),
-                        accelerator_profile_index=c_dict.get("accelerator_profile_index"),
-                        partition_id=c_dict.get("partition_id"),
-                    )
-                )
-            except ValidationError as e:
-                self._log_event(
-                    category=EventCategory.APPLICATION,
-                    description="Failed to build PartitionCurrent",
-                    data={
-                        "exception": get_exception_traceback(e),
-                        "gpu_index": idx,
-                        "data": c_dict,
-                    },
-                    priority=EventPriority.WARNING,
-                )
+            # accelerator partion currently hardcoded to compty values in API
 
             try:
                 memparts.append(
                     PartitionMemory(
                         gpu_id=idx,
-                        memory_partition_caps=m_dict.get("memory_partition_caps"),
-                        current_partition_id=m_dict.get("current_partition_id"),
+                        partition_type=memory_partition,
                     )
                 )
             except ValidationError as e:
@@ -351,19 +320,32 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                     data={
                         "exception": get_exception_traceback(e),
                         "gpu_index": idx,
-                        "data": m_dict,
+                        "data": memory_partition,
                     },
                     priority=EventPriority.WARNING,
                 )
 
-            resources.append({"gpu_id": idx, "profiles": []})
+            try:
+                computeparts.append(
+                    PartitionCompute(
+                        gpu_id=idx,
+                        partition_type=compute_partition,
+                    )
+                )
+            except ValidationError as e:
+                self._log_event(
+                    category=EventCategory.APPLICATION,
+                    description="Failed to build PartitionCompute",
+                    data={
+                        "exception": get_exception_traceback(e),
+                        "gpu_index": idx,
+                        "data": compute_partition,
+                    },
+                    priority=EventPriority.WARNING,
+                )
 
         try:
-            return Partition(
-                current_partition=current,
-                memory_partition=memparts,
-                partition_resources=resources,
-            )
+            return Partition(memory_partition=memparts, compute_partition=computeparts)
         except ValidationError as e:
             self._log_event(
                 category=EventCategory.APPLICATION,
@@ -382,38 +364,19 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             if raw is None:
                 continue
 
-            if isinstance(raw, list):
-                items = raw
-            elif isinstance(raw, dict):
-                if isinstance(raw.get("fw_list"), list):
-                    items = raw["fw_list"]
-                elif raw and all(not isinstance(v, (dict, list, tuple)) for v in raw.values()):
-                    items = [{"fw_id": k, "fw_version": v} for k, v in raw.items()]
-                else:
-                    items = [raw]
-            else:
-                items = []
+            items = raw["fw_list"]
 
             normalized: list[FwListItem] = []
             for e in items:
                 if isinstance(e, dict):
-                    fid = (
-                        e.get("fw_id")
-                        or e.get("fw_name")
-                        or e.get("name")
-                        or e.get("block")
-                        or e.get("type")
-                        or e.get("id")
-                    )
-                    ver = e.get("fw_version") or e.get("version") or e.get("fw_ver") or e.get("ver")
+                    fid = e.get("fw_name")
+                    ver = e.get("fw_version")
                     normalized.append(
                         FwListItem(
-                            fw_id="" if fid is None else str(fid),
+                            fw_name="" if fid is None else str(fid),
                             fw_version="" if ver is None else str(ver),
                         )
                     )
-                elif isinstance(e, (tuple, list)) and len(e) >= 2:
-                    normalized.append(FwListItem(fw_id=str(e[0]), fw_version=str(e[1])))
                 else:
                     self._log_event(
                         category=EventCategory.APPLICATION,
@@ -487,11 +450,6 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         if not devices:
             return []
 
-        def _nz(val: object, default: str = "unknown") -> str:
-            """Normalize possibly-empty/NA strings to a non-empty default."""
-            s = str(val).strip() if val is not None else ""
-            return s if s and s.upper() != "N/A" else default
-
         pcie_fn = getattr(self._amdsmi, "amdsmi_get_pcie_info", None)
 
         out: list[AmdSmiStatic] = []
@@ -507,15 +465,15 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             if callable(pcie_fn):
                 p = self._smi_try(pcie_fn, h, default={}) or {}
                 if isinstance(p, dict):
-                    max_w = p.get("max_link_width")
-                    max_s = p.get("max_link_speed")
-                    pcie_ver = p.get("pcie_version") or p.get("pcie_interface_version")
+                    max_w = p.get("max_pcie_width")
+                    max_s = p.get("max_pcie_speed")
+                    pcie_ver = p.get("pcie_interface_version")
                     bus = StaticBus(
                         bdf=bdf,
                         max_pcie_width=self._vu(max_w, "x"),
                         max_pcie_speed=self._vu(max_s, "GT/s"),
-                        pcie_interface_version=_nz(pcie_ver),
-                        slot_type=_nz(p.get("slot_type")),
+                        pcie_interface_version=self._nz(pcie_ver),
+                        slot_type=self._nz(p.get("slot_type"), slot_type=True),
                     )
                 else:
                     bus = StaticBus(
@@ -523,7 +481,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                         max_pcie_width=None,
                         max_pcie_speed=None,
                         pcie_interface_version="unknown",
-                        slot_type="unknown",
+                        slot_type="Unknown",
                     )
             else:
                 bus = StaticBus(
@@ -531,12 +489,12 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                     max_pcie_width=None,
                     max_pcie_speed=None,
                     pcie_interface_version="unknown",
-                    slot_type="unknown",
+                    slot_type="Unknown",
                 )
 
             # ASIC
             asic_model = StaticAsic(
-                market_name=_nz(asic.get("market_name") or asic.get("asic_name"), default=""),
+                market_name=self._nz(asic.get("market_name") or asic.get("asic_name"), default=""),
                 vendor_id=str(asic.get("vendor_id", "")),
                 vendor_name=str(asic.get("vendor_name", "")),
                 subvendor_id=str(asic.get("subvendor_id", "")),
@@ -566,8 +524,8 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             if callable(drv_fn):
                 drv = self._smi_try(drv_fn, h, default={}) or {}
                 driver_model = StaticDriver(
-                    name=_nz(drv.get("driver_name"), default="unknown"),
-                    version=_nz(drv.get("driver_version"), default="unknown"),
+                    name=self._nz(drv.get("driver_name"), default="unknown"),
+                    version=self._nz(drv.get("driver_version"), default="unknown"),
                 )
 
             # VBIOS
@@ -915,3 +873,25 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         except Exception:
             return ValueUnit(value=0, unit=unit) if required else None
         return ValueUnit(value=n, unit=unit)
+
+    def _nz(self, val: object, default: str = "unknown", *, slot_type: bool = False) -> str:
+        """
+        Normalize strings:
+          - Generic: return trimmed value unless empty/'N/A', else `default`.
+          - slot_type=True: map to one of {'OAM','PCIE','CEM','Unknown'}.
+        """
+        s = str(val).strip() if val is not None else ""
+        if not s or s.upper() == "N/A":
+            return "Unknown" if slot_type else default
+
+        if slot_type:
+            u = s.upper().replace(" ", "").replace("-", "")
+            if u == "OAM":
+                return "OAM"
+            if u in {"PCIE", "PCIEXPRESS", "PCIEXP"} or u.startswith("PCIE"):
+                return "PCIE"
+            if u == "CEM":
+                return "CEM"
+            return "Unknown"
+
+        return s

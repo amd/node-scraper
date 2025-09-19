@@ -233,8 +233,8 @@ class Processes(BaseModel):
 
 # FW
 class FwListItem(BaseModel):
-    fw_id: str
     fw_version: str
+    fw_name: str
 
 
 class Fw(BaseModel):
@@ -273,8 +273,8 @@ class AmdSmiVersion(BaseModel):
         return str(v)
 
 
-class PartitionCurrent(BaseModel):
-    """Contains the Current Partition data for the GPUs"""
+class PartitionAccelerator(BaseModel):
+    """Contains the tition data for the GPUs"""
 
     gpu_id: int
     memory: str | None = None
@@ -287,33 +287,37 @@ class PartitionMemory(BaseModel):
     """Memory Partition data"""
 
     gpu_id: int
-    memory_partition_caps: str | None = None
-    current_partition_id: str | None = None
+    partition_type: str | None = None
 
 
-class PartitionProfiles(AmdSmiBaseModel):
-    """Partition Profiles data"""
+class PartitionCompute(BaseModel):
+    """Compute Partition data"""
 
     gpu_id: int
-    profile_index: str | None = None
-    memory_partition_caps: str | None = None
-    accelerator_type: str | None = None
-    partition_id: str | None = None
-    num_partitions: str | None = None
-    num_resources: str | None = None
-    resource_index: str | None = None
-    resource_type: str | None = None
-    resource_instances: str | None = None
-    resources_shared: str | None = None
+    partition_type: str | None = None
+
+
+# class PartitionProfiles(AmdSmiBaseModel):
+#    """Partition Profiles data"""
+#
+#    gpu_id: int
+#    profile_index: str | None = None
+#    memory_partition_caps: str | None = None
+#    accelerator_type: str | None = None
+#    partition_id: str | None = None
+#    num_partitions: str | None = None
+#    num_resources: str | None = None
+#    resource_index: str | None = None
+#    resource_type: str | None = None
+#    resource_instances: str | None = None
+#    resources_shared: str | None = None
 
 
 class Partition(BaseModel):
     """Contains the partition info for amd-smi"""
 
-    current_partition: list[PartitionCurrent] = Field(default_factory=list)
     memory_partition: list[PartitionMemory] = Field(default_factory=list)
-    partition_profiles: list[dict] = Field(default_factory=list)
-    partition_resources: list[dict] = Field(default_factory=list)
+    compute_partition: list[PartitionCompute] = Field(default_factory=list)
 
 
 ### STATIC DATA ###
