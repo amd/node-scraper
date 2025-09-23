@@ -30,16 +30,16 @@ from nodescraper.models import AnalyzerArgs
 
 class AmdSmiAnalyzerArgs(AnalyzerArgs):
 
-    check_static_data: bool = True
-    expected_gpu_processes: Optional[int] = 12
-    expected_max_power: Optional[int] = 2
-    expected_driver_version: Optional[str] = "5"
-    expected_memory_partition_mode: Optional[str] = "test"
-    expected_compute_partition_mode: Optional[str] = "test2"
-    expected_pldm_version: Optional[str] = "test3"
-    l0_to_recovery_count_error_threshold: Optional[int] = 1
-    l0_to_recovery_count_warning_threshold: Optional[int] = 2
-    vendorid_ep: Optional["str"] = "vendorid_ep"
-    vendorid_ep_vf: Optional["str"] = "vendorid_ep_vf"
-    devid_ep: Optional["str"] = "devid_ep"
-    sku_name: Optional["str"] = "sku_name"
+    check_static_data: bool = False
+    expected_gpu_processes: Optional[int] = None
+    expected_max_power: Optional[int] = None
+    expected_driver_version: Optional[str] = None
+    expected_memory_partition_mode: Optional[str] = None
+    expected_compute_partition_mode: Optional[str] = None
+    expected_pldm_version: Optional[str] = None
+    l0_to_recovery_count_error_threshold: Optional[int] = None
+    l0_to_recovery_count_warning_threshold: Optional[int] = None
+    vendorid_ep: Optional["str"] = None
+    vendorid_ep_vf: Optional["str"] = None
+    devid_ep: Optional["str"] = None
+    sku_name: Optional["str"] = None
