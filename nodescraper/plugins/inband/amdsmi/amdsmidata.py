@@ -1,9 +1,7 @@
 import re
-from enum import Enum
 from typing import Any, List, Mapping
 
 from pydantic import (
-    AliasChoices,
     BaseModel,
     ConfigDict,
     Field,
@@ -38,7 +36,7 @@ def na_to_none_dict(values: object) -> dict[str, Any] | None:
         return None
     if isinstance(values, str) and values.strip().upper() in {"N/A", "NA", ""}:
         return None
-    if not isinstance(values, Mapping):  # guard: pydantic may pass non-dicts in 'before' mode
+    if not isinstance(values, Mapping):
         return None
 
     out: dict[str, Any] = {}
@@ -139,60 +137,6 @@ class ValueUnit(BaseModel):
     @classmethod
     def _clean_unit(cls, u):
         return "" if u is None else str(u).strip()
-
-
-class EccState(Enum):
-    ENABLED = "ENABLED"
-    DISABLED = "DISABLED"
-    NONE = "NONE"
-    PARITY = "PARITY"
-    SING_C = "SING_C"
-    MULT_UC = "MULT_UC"
-    POISON = "POISON"
-    NA = "N/A"
-
-
-### LINK DATA ###
-
-
-class LinkStatusTable(Enum):
-    UP = "U"
-    DOWN = "D"
-    DISABLED = "X"
-
-
-class BiDirectionalTable(Enum):
-    SELF = "SELF"
-    TRUE = "T"
-
-
-class DmaTable(Enum):
-    SELF = "SELF"
-    TRUE = "T"
-
-
-class AtomicsTable(Enum):
-    SELF = "SELF"
-    TRUE = "64,32"
-    THIRTY_TWO = "32"
-    SIXTY_FOUR = "64"
-
-
-class LinkTypes(Enum):
-    XGMI = "XGMI"
-    PCIE = "PCIE"
-    SELF = "SELF"
-
-
-class AccessTable(Enum):
-    ENABLED = "ENABLED"
-    DISABLED = "DISABLED"
-
-
-class CoherentTable(Enum):
-    COHERANT = "C"
-    NON_COHERANT = "NC"
-    SELF = "SELF"
 
 
 # Process
@@ -297,22 +241,6 @@ class PartitionCompute(BaseModel):
     partition_type: str | None = None
 
 
-# class PartitionProfiles(AmdSmiBaseModel):
-#    """Partition Profiles data"""
-#
-#    gpu_id: int
-#    profile_index: str | None = None
-#    memory_partition_caps: str | None = None
-#    accelerator_type: str | None = None
-#    partition_id: str | None = None
-#    num_partitions: str | None = None
-#    num_resources: str | None = None
-#    resource_index: str | None = None
-#    resource_type: str | None = None
-#    resource_instances: str | None = None
-#    resources_shared: str | None = None
-
-
 class Partition(BaseModel):
     """Contains the partition info for amd-smi"""
 
@@ -393,21 +321,9 @@ class StaticBoard(BaseModel):
     manufacturer_name: str
 
 
-class StaticRas(BaseModel):
-    eeprom_version: str
-    parity_schema: EccState
-    single_bit_schema: EccState
-    double_bit_schema: EccState
-    poison_schema: EccState
-    ecc_block_state: dict[str, EccState]
-
-
 class StaticPartition(BaseModel):
-    # The name for compute_partition has changed we will support both for now
 
-    compute_partition: str = Field(
-        validation_alias=AliasChoices("compute_partition", "accelerator_partition")
-    )
+    compute_partition: str
     memory_partition: str
     partition_id: int
 
@@ -483,7 +399,6 @@ class AmdSmiStatic(BaseModel):
     limit: StaticLimit | None
     driver: StaticDriver | None
     board: StaticBoard
-    # ras: StaticRas
     soc_pstate: StaticSocPstate | None
     xgmi_plpd: StaticXgmiPlpd | None
     process_isolation: str

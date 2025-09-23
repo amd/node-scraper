@@ -23,7 +23,8 @@
 # SOFTWARE.
 #
 ###############################################################################
-
+from collections import defaultdict
+from typing import Any, Dict, List
 
 from nodescraper.enums import EventCategory, EventPriority
 from nodescraper.interfaces import DataAnalyzer
@@ -89,11 +90,18 @@ class AmdSmiAnalyzer(DataAnalyzer[AmdSmiDataModel, None]):
         self,
         amdsmi_static_data: list[AmdSmiStatic],
         expected_driver_version: str,
-    ):
-        bad_driver_gpus = []
+    ) -> None:
+        bad_driver_gpus: list[int] = []
+
+        versions_by_gpu: dict[int, str | None] = {}
         for gpu in amdsmi_static_data:
-            if gpu.driver.version != expected_driver_version:
+            ver: str | None = None
+            if gpu.driver is not None:
+                ver = gpu.driver.version
+            versions_by_gpu[gpu.gpu] = ver
+            if ver != expected_driver_version:
                 bad_driver_gpus.append(gpu.gpu)
+
         if bad_driver_gpus:
             self._log_event(
                 category=EventCategory.PLATFORM,
@@ -101,11 +109,7 @@ class AmdSmiAnalyzer(DataAnalyzer[AmdSmiDataModel, None]):
                 priority=EventPriority.ERROR,
                 data={
                     "gpus": bad_driver_gpus,
-                    "driver_version": {
-                        gpu.gpu: gpu.driver.version
-                        for gpu in amdsmi_static_data
-                        if gpu.gpu in bad_driver_gpus
-                    },
+                    "driver_version": {g: versions_by_gpu[g] for g in bad_driver_gpus},
                     "expected_driver_version": expected_driver_version,
                 },
             )
@@ -182,49 +186,90 @@ class AmdSmiAnalyzer(DataAnalyzer[AmdSmiDataModel, None]):
         device_id: tuple[str | None, str | None],
         subsystem_id: tuple[str | None, str | None],
         sku_name: str,
-    ):
-        mismatch_gpus: list[tuple[int, str, str]] = []
+    ) -> None:
+        mismatches: list[tuple[int, str, str, str]] = []
         expected_data: dict[str, str | None] = {
             "vendor_id": vendor_id,
             "subvendor_id": subvendor_id,
             "vendor_name": "Advanced Micro Devices Inc",
             "market_name": sku_name,
         }
+
         for gpu_data in amdsmi_static_data:
-            for key in expected_data:
-                collected_data: dict[str, str] = {
-                    "vendor_id": gpu_data.asic.vendor_id,
-                    "subvendor_id": gpu_data.asic.subvendor_id,
-                    "vendor_name": gpu_data.asic.vendor_name,
-                    "market_name": sku_name,
-                }
-                if expected_data[key] is not None:
-                    if expected_data[key] not in collected_data[key]:
-                        mismatch_gpus.append((gpu_data.gpu, key, collected_data[key]))
-                        break
+            collected_data: dict[str, str] = {
+                "vendor_id": gpu_data.asic.vendor_id,
+                "subvendor_id": gpu_data.asic.subvendor_id,
+                "vendor_name": gpu_data.asic.vendor_name,
+                "market_name": sku_name,
+            }
+
+            for key, expected in expected_data.items():
+                if expected is None:
+                    continue
+                actual = collected_data[key]
+                if expected not in actual:
+                    mismatches.append((gpu_data.gpu, key, expected, actual))
+                    break
+
             if device_id[0] is not None and device_id[1] is not None:
+                dev_actual = gpu_data.asic.device_id
                 if (
-                    device_id[0].upper() not in gpu_data.asic.device_id.upper()
-                    and device_id[1].upper() not in gpu_data.asic.device_id.upper()
+                    device_id[0].upper() not in dev_actual.upper()
+                    and device_id[1].upper() not in dev_actual.upper()
                 ):
-                    mismatch_gpus.append((gpu_data.gpu, "device_id", gpu_data.asic.device_id))
+                    mismatches.append(
+                        (gpu_data.gpu, "device_id", f"{device_id[0]}|{device_id[1]}", dev_actual)
+                    )
+
             if subsystem_id[0] is not None and subsystem_id[1] is not None:
+                subsys_actual = gpu_data.asic.subsystem_id
                 if (
-                    subsystem_id[0].upper() not in gpu_data.asic.subsystem_id.upper()
-                    and subsystem_id[1].upper() not in gpu_data.asic.subsystem_id.upper()
+                    subsystem_id[0].upper() not in subsys_actual.upper()
+                    and subsystem_id[1].upper() not in subsys_actual.upper()
                 ):
-                    mismatch_gpus.append((gpu_data.gpu, "subsystem_id", gpu_data.asic.subsystem_id))
-        if mismatch_gpus:
+                    mismatches.append(
+                        (
+                            gpu_data.gpu,
+                            "subsystem_id",
+                            f"{subsystem_id[0]}|{subsystem_id[1]}",
+                            subsys_actual,
+                        )
+                    )
+
+        if mismatches:
+            payload = self._format_static_mismatch_payload(mismatches)
             self._log_event(
                 category=EventCategory.PLATFORM,
                 description="amd-smi static data mismatch",
                 priority=EventPriority.ERROR,
-                data={
-                    "gpus": [data[0] for data in mismatch_gpus],
-                    "key": [data[1] for data in mismatch_gpus],
-                    "collected_data": [data[2] for data in mismatch_gpus],
-                },
+                data=payload,
             )
+
+    def _format_static_mismatch_payload(
+        self,
+        mismatches: List[tuple[int, str, str, str]],
+    ) -> Dict[str, Any]:
+        """ """
+        per_gpu: Dict[int, List[Dict[str, str]]] = defaultdict(list)
+        field_set: set[str] = set()
+
+        for gpu, field, expected, actual in mismatches:
+            field_set.add(field)
+            per_gpu[gpu].append({"field": field, "expected": expected, "actual": actual})
+
+        per_gpu_list: List[Dict[str, Any]] = [
+            {"gpu": gpu, "mismatches": entries}
+            for gpu, entries in sorted(per_gpu.items(), key=lambda kv: kv[0])
+        ]
+
+        return {
+            "summary": {
+                "gpus_affected": len(per_gpu),
+                "fields": sorted(field_set),
+                "total_mismatches": sum(len(v) for v in per_gpu.values()),
+            },
+            "per_gpu": per_gpu_list,
+        }
 
     def check_pldm_version(
         self,
