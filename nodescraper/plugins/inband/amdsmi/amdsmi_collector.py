@@ -36,8 +36,10 @@ from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     AmdSmiListItem,
     AmdSmiStatic,
     AmdSmiVersion,
+    BadPages,
     Fw,
     FwListItem,
+    PageData,
     Partition,
     PartitionCompute,
     PartitionMemory,
@@ -163,6 +165,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
     def _get_amdsmi_data(self) -> AmdSmiDataModel | None:
         try:
             version = self._get_amdsmi_version()
+            bad_pages = self.get_bad_pages()
             processes = self.get_process()
             partition = self.get_partition()
             firmware = self.get_firmware()
@@ -182,6 +185,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         try:
             return AmdSmiDataModel(
                 version=version,
+                bad_pages=bad_pages,
                 gpu_list=gpu_list,
                 process=processes,
                 partition=partition,
@@ -464,13 +468,21 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         try:
             return fn(*a, **kw)
         except amdsmi.AmdSmiException as e:  # type: ignore[attr-defined]
-            self.logger.warning(e)
+            fn_name = getattr(fn, "__name__", str(fn))
+            self.logger.warning(
+                "%s(%s) raised AmdSmiException: %s",
+                fn_name,
+                ", ".join(repr(x) for x in a),
+                e,
+            )
+
             code = getattr(e, "ret_code", None)
             if code is None:
                 try:
                     code = int(e.args[0]) if getattr(e, "args", None) else None
                 except Exception:
                     code = None
+
             CODE2NAME = {
                 1: "AMDSMI_STATUS_SUCCESS",
                 2: "AMDSMI_STATUS_NOT_SUPPORTED",
@@ -482,25 +494,40 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             }
             name = CODE2NAME.get(code, "unknown")
 
+            common_data = {
+                "function": fn_name,
+                "args": [repr(x) for x in a],
+                "status_name": name,
+                "status_code": code,
+                "exception": get_exception_traceback(e),
+            }
+
             if name in ("AMDSMI_STATUS_NOT_SUPPORTED", "AMDSMI_STATUS_NOT_FOUND"):
                 self._log_event(
                     category=EventCategory.APPLICATION,
-                    description=f"{fn.__name__} not supported on this device/mode (status={name}, code={code})",
+                    description=f"{fn_name} not supported on this device/mode (status={name}, code={code})",
+                    data=common_data,
                     priority=EventPriority.WARNING,
                 )
                 return default
+
             if name == "AMDSMI_STATUS_PERMISSION":
                 self._log_event(
                     category=EventCategory.APPLICATION,
-                    description=f"{fn.__name__} permission denied (need access to /dev/kfd & render nodes, or root for RAS). status={name}, code={code})",
+                    description=(
+                        f"{fn_name} permission denied "
+                        f"(need access to /dev/kfd & render nodes, or root for RAS). "
+                        f"status={name}, code={code}"
+                    ),
+                    data=common_data,
                     priority=EventPriority.WARNING,
                 )
                 return default
 
             self._log_event(
                 category=EventCategory.APPLICATION,
-                description=f"{fn.__name__} failed (status={name}, code={code})",
-                data={"exception": get_exception_traceback(e)},
+                description=f"{fn_name} failed (status={name}, code={code})",
+                data=common_data,
                 priority=EventPriority.WARNING,
             )
             return default
@@ -905,6 +932,92 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             return StaticClockData(frequency=levels, current=current)
         except ValidationError:
             return None
+
+    def get_bad_pages(self) -> list[BadPages] | None:
+        """
+        Collect bad page info per GPU and map to BadPages/PageData models.
+
+        Returns:
+            List[BadPages] (one item per GPU) or None if no devices.
+        """
+        amdsmi = self._amdsmi_mod()
+        devices = self._get_handles()
+        if not devices:
+            return None
+
+        out: list[BadPages] = []
+
+        for idx, h in enumerate(devices):
+            raw = self._smi_try(amdsmi.amdsmi_get_gpu_bad_page_info, h, default=[]) or []
+            pages: list[PageData] = []
+
+            if isinstance(raw, list):
+                for entry in raw:
+                    if not isinstance(entry, dict):
+                        continue
+
+                    pa = entry.get("page_address")
+                    ps = entry.get("page_size")
+                    st = entry.get("status")
+                    val = entry.get("value")
+
+                    page_address: int | str
+                    if isinstance(pa, (int, str)):
+                        page_address = pa
+                    else:
+                        page_address = str(pa)
+
+                    page_size: int | str
+                    if isinstance(ps, (int, str)):
+                        page_size = ps
+                    else:
+                        page_size = str(ps)
+
+                    status = "" if st in (None, "N/A") else str(st)
+
+                    value_i: int | None = None
+                    if isinstance(val, int):
+                        value_i = val
+                    elif isinstance(val, str):
+                        s = val.strip()
+                        try:
+                            value_i = int(s, 0)
+                        except Exception:
+                            value_i = None
+
+                    try:
+                        pages.append(
+                            PageData(
+                                page_address=page_address,
+                                page_size=page_size,
+                                status=status,
+                                value=value_i,
+                            )
+                        )
+                    except ValidationError as e:
+                        self._log_event(
+                            category=EventCategory.APPLICATION,
+                            description="Failed to build PageData; skipping entry",
+                            data={
+                                "exception": get_exception_traceback(e),
+                                "gpu_index": idx,
+                                "entry": repr(entry),
+                            },
+                            priority=EventPriority.WARNING,
+                        )
+                        continue
+
+            try:
+                out.append(BadPages(gpu=idx, retired=pages))
+            except ValidationError as e:
+                self._log_event(
+                    category=EventCategory.APPLICATION,
+                    description="Failed to build BadPages",
+                    data={"exception": get_exception_traceback(e), "gpu_index": idx},
+                    priority=EventPriority.WARNING,
+                )
+
+        return out
 
     def collect_data(
         self,

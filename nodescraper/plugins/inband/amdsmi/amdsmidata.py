@@ -413,6 +413,19 @@ class AmdSmiStatic(BaseModel):
     )
 
 
+# PAGES
+class PageData(BaseModel):
+    page_address: int | str
+    page_size: int | str
+    status: str
+    value: int | None
+
+
+class BadPages(BaseModel):
+    gpu: int
+    retired: list[PageData]
+
+
 class AmdSmiDataModel(DataModel):
     """Data model for amd-smi data.
 
@@ -434,6 +447,7 @@ class AmdSmiDataModel(DataModel):
     partition: Partition | None = None
     process: list[Processes] | None = Field(default_factory=list)
     firmware: list[Fw] | None = Field(default_factory=list)
+    bad_pages: list[BadPages] | None = Field(default_factory=list)
     static: list[AmdSmiStatic] | None = Field(default_factory=list)
 
     def get_list(self, gpu: int) -> AmdSmiListItem | None:
@@ -468,6 +482,15 @@ class AmdSmiDataModel(DataModel):
         if self.static is None:
             return None
         for item in self.static:
+            if item.gpu == gpu:
+                return item
+        return None
+
+    def get_bad_pages(self, gpu: int) -> BadPages | None:
+        """Get the bad pages data for the given gpu id."""
+        if self.bad_pages is None:
+            return None
+        for item in self.bad_pages:
             if item.gpu == gpu:
                 return item
         return None
