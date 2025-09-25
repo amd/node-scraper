@@ -413,18 +413,25 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
             bool: return True if error is known
         """
         for regex_obj in self.ERROR_REGEX:
-            if regex_obj.regex.search(unknown_match):
-                return True
+            try:
+                if regex_obj.regex.search(unknown_match):
+                    return True
+            except re.error:
+                continue
 
-        # handle multline matches
         for event in known_err_events:
             known_match = event.data["match_content"]
             if isinstance(known_match, list):
                 for line in known_match:
-                    if unknown_match in line:
+                    if unknown_match == line or unknown_match in line or line in unknown_match:
                         return True
-            elif known_match in unknown_match:
-                return True
+            elif isinstance(known_match, str):
+                if (
+                    unknown_match == known_match
+                    or unknown_match in known_match
+                    or known_match in unknown_match
+                ):
+                    return True
         return False
 
     def analyze_data(
