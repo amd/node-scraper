@@ -98,9 +98,7 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
             event_category=EventCategory.SW_DRIVER,
         ),
         ErrorRegex(
-            regex=re.compile(
-                r"(?:[\w\d_-]*)(?:\[[\d.]*\])? (?:general protection fault)|(?:general protection fault.*)"
-            ),
+            regex=re.compile(r"(?:[\w-]+(?:\[[0-9.]+\])?\s+)?general protection fault[^\n]*"),
             message="General protection fault",
             event_category=EventCategory.SW_DRIVER,
         ),
@@ -129,18 +127,19 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
         ErrorRegex(
             regex=re.compile(
                 (
-                    r"(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:\s+\[\S+\]\s*(?:retry|no-retry)? page fault.*)"
-                    r"(?:\n.*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:.*))?"
-                    r"(?:\n.*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:.*))?"
-                    r"(?:\n.*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:.*))?"
-                    r"(?:\n.*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:.*))?"
-                    r"(?:\n.*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:.*))?"
-                    r"(?:\n.*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:.*))?"
-                    r"(?:\n.*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:.*))?"
-                    r"(?:\n.*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:.*))?"
-                    r"(?:\n.*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:.*))?"
-                    r"(?:\n.*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:.*))?"
-                )
+                    r"(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:\s+\[\S+\]\s*(?:retry|no-retry)? page fault[^\n]*)"
+                    r"(?:\n[^\n]*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:[^\n]*))?"
+                    r"(?:\n[^\n]*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:[^\n]*))?"
+                    r"(?:\n[^\n]*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:[^\n]*))?"
+                    r"(?:\n[^\n]*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:[^\n]*))?"
+                    r"(?:\n[^\n]*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:[^\n]*))?"
+                    r"(?:\n[^\n]*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:[^\n]*))?"
+                    r"(?:\n[^\n]*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:[^\n]*))?"
+                    r"(?:\n[^\n]*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:[^\n]*))?"
+                    r"(?:\n[^\n]*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:[^\n]*))?"
+                    r"(?:\n[^\n]*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:[^\n]*))?"
+                ),
+                re.MULTILINE,
             ),
             message="amdgpu Page Fault",
             event_category=EventCategory.SW_DRIVER,
@@ -259,7 +258,52 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
             event_category=EventCategory.RAS,
         ),
         ErrorRegex(
-            regex=re.compile(r"Accelerator Check Architecture.*(?:\n.*){0,5}"),
+            regex=re.compile(
+                (
+                    r"(Accelerator Check Architecture[^\n]*)"
+                    r"(?:\n[^\n]*){0,10}?"
+                    r"(amdgpu[ 0-9a-fA-F:.]+:? [^\n]*entry\[\d+\]\.STATUS=0x[0-9a-fA-F]+)"
+                    r"(?:\n[^\n]*){0,5}?"
+                    r"(amdgpu[ 0-9a-fA-F:.]+:? [^\n]*entry\[\d+\]\.ADDR=0x[0-9a-fA-F]+)"
+                    r"(?:\n[^\n]*){0,5}?"
+                    r"(amdgpu[ 0-9a-fA-F:.]+:? [^\n]*entry\[\d+\]\.MISC0=0x[0-9a-fA-F]+)"
+                    r"(?:\n[^\n]*){0,5}?"
+                    r"(amdgpu[ 0-9a-fA-F:.]+:? [^\n]*entry\[\d+\]\.IPID=0x[0-9a-fA-F]+)"
+                    r"(?:\n[^\n]*){0,5}?"
+                    r"(amdgpu[ 0-9a-fA-F:.]+:? [^\n]*entry\[\d+\]\.SYND=0x[0-9a-fA-F]+-?)"
+                ),
+                re.MULTILINE,
+            ),
+            message="ACA Error",
+            event_category=EventCategory.RAS,
+        ),
+        ErrorRegex(
+            regex=re.compile(
+                (
+                    r"(Accelerator Check Architecture[^\n]*)"
+                    r"(?:\n[^\n]*){0,10}?"
+                    r"(amdgpu[ 0-9a-fA-F:.]+:? [^\n]*CONTROL=0x[0-9a-fA-F]+)"
+                    r"(?:\n[^\n]*){0,5}?"
+                    r"(amdgpu[ 0-9a-fA-F:.]+:? [^\n]*STATUS=0x[0-9a-fA-F]+)"
+                    r"(?:\n[^\n]*){0,5}?"
+                    r"(amdgpu[ 0-9a-fA-F:.]+:? [^\n]*ADDR=0x[0-9a-fA-F]+)"
+                    r"(?:\n[^\n]*){0,5}?"
+                    r"(amdgpu[ 0-9a-fA-F:.]+:? [^\n]*MISC=0x[0-9a-fA-F]+)"
+                    r"(?:\n[^\n]*){0,5}?"
+                    r"(amdgpu[ 0-9a-fA-F:.]+:? [^\n]*CONFIG=0x[0-9a-fA-F]+)"
+                    r"(?:\n[^\n]*){0,5}?"
+                    r"(amdgpu[ 0-9a-fA-F:.]+:? [^\n]*IPID=0x[0-9a-fA-F]+)"
+                    r"(?:\n[^\n]*){0,5}?"
+                    r"(amdgpu[ 0-9a-fA-F:.]+:? [^\n]*SYND=0x[0-9a-fA-F]+)"
+                    r"(?:\n[^\n]*){0,5}?"
+                    r"(amdgpu[ 0-9a-fA-F:.]+:? [^\n]*DESTAT=0x[0-9a-fA-F]+)"
+                    r"(?:\n[^\n]*){0,5}?"
+                    r"(amdgpu[ 0-9a-fA-F:.]+:? [^\n]*DEADDR=0x[0-9a-fA-F]+)"
+                    r"(?:\n[^\n]*){0,5}?"
+                    r"(amdgpu[ 0-9a-fA-F:.]+:? [^\n]*CONTROL_MASK=0x[0-9a-fA-F]+)"
+                ),
+                re.MULTILINE,
+            ),
             message="ACA Error",
             event_category=EventCategory.RAS,
         ),
