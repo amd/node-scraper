@@ -34,11 +34,24 @@ from nodescraper.models import TaskResult
 from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     AmdSmiDataModel,
     AmdSmiListItem,
+    AmdSmiMetric,
     AmdSmiStatic,
     AmdSmiVersion,
     BadPages,
     Fw,
     FwListItem,
+    MetricClockData,
+    MetricEccTotals,
+    MetricEnergy,
+    MetricFan,
+    MetricMemUsage,
+    MetricPcie,
+    MetricPower,
+    MetricTemperature,
+    MetricThrottle,
+    MetricThrottleVu,
+    MetricUsage,
+    MetricVoltageCurve,
     PageData,
     Partition,
     PartitionCompute,
@@ -171,7 +184,9 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             firmware = self.get_firmware()
             gpu_list = self.get_gpu_list()
             statics = self.get_static()
+            metric = self.get_metric()
         except Exception as e:
+            self.logger.error(e)
             self._log_event(
                 category=EventCategory.APPLICATION,
                 description="Error running amd-smi sub commands",
@@ -191,6 +206,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                 partition=partition,
                 firmware=firmware,
                 static=statics,
+                metric=metric
             )
         except ValidationError as e:
             self.logger.warning("Validation err: %s", e)
@@ -277,35 +293,54 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                         plist.append(ProcessListItem(process_info=str(entry)))
                         continue
 
-                    name = entry.get("name", "N/A")
+                    raw_name = entry.get("name", None)
+                    name = (
+                        None
+                        if (raw_name is None or str(raw_name).strip().upper() == "N/A")
+                        else str(raw_name)
+                    )
+
                     pid_val = entry.get("pid", 0)
                     try:
                         pid = int(pid_val) if pid_val not in (None, "") else 0
                     except Exception:
                         pid = 0
 
-                    mem_vu = self._vu(entry.get("mem"), "B")
-
+                    # memory_usage block
                     mu = entry.get("memory_usage") or {}
+                    gtt_mem_vu = self._vu(mu.get("gtt_mem"), "B")
+                    cpu_mem_vu = self._vu(mu.get("cpu_mem"), "B")
+                    vram_mem_vu = self._vu(mu.get("vram_mem"), "B")
+
+                    # mem
+                    mem_vu = self._vu(entry.get("mem"), "B")
+                    if mem_vu is None and vram_mem_vu is not None:
+                        mem_vu = vram_mem_vu
+
+                    if (not mu) and mem_vu is not None and vram_mem_vu is None:
+                        vram_mem_vu = mem_vu
+
                     mem_usage = ProcessMemoryUsage(
-                        gtt_mem=self._vu(mu.get("gtt_mem"), "B"),
-                        cpu_mem=self._vu(mu.get("cpu_mem"), "B"),
-                        vram_mem=self._vu(mu.get("vram_mem"), "B"),
+                        gtt_mem=gtt_mem_vu,
+                        cpu_mem=cpu_mem_vu,
+                        vram_mem=vram_mem_vu,
                     )
 
+                    # engine_usage
                     eu = entry.get("engine_usage") or {}
-                    usage = ProcessUsage(
-                        gfx=self._vu(eu.get("gfx"), "ns"),
-                        enc=self._vu(eu.get("enc"), "ns"),
-                    )
+                    gfx_vu = self._vu(eu.get("gfx"), "ns") or self._vu(0, "ns")
+                    enc_vu = self._vu(eu.get("enc"), "ns") or self._vu(0, "ns")
+                    usage = ProcessUsage(gfx=gfx_vu, enc=enc_vu)
 
-                    cu_occ = self._vu(entry.get("cu_occupancy"), "")
+                    # CU occupancy, default 0
+                    cu_raw = entry.get("cu_occupancy", None)
+                    cu_occ = self._vu(cu_raw, "") or self._vu(0, "")
 
                     try:
                         plist.append(
                             ProcessListItem(
                                 process_info=ProcessInfo(
-                                    name=str(name),
+                                    name=name if name is not None else "N/A",
                                     pid=pid,
                                     mem=mem_vu,
                                     memory_usage=mem_usage,
@@ -633,7 +668,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                     version=str(vb.get("vbios_version", "")),
                 )
 
-            # NUMA (via KFD)
+            # NUMA
             if isinstance(kfd, dict):
                 try:
                     numa_node = int(kfd.get("node_id", 0) or 0)
@@ -714,7 +749,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             self._log_event(
                 category=EventCategory.APPLICATION,
                 description="amdsmi_get_soc_pstate not exposed by amdsmi build",
-                priority=EventPriority.INFO,
+                priority=EventPriority.WARNING,
             )
             return None
 
@@ -768,7 +803,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             self._log_event(
                 category=EventCategory.APPLICATION,
                 description="XGMI PLPD not exposed by this amdsmi build",
-                priority=EventPriority.INFO,
+                priority=EventPriority.WARNING,
             )
             return None
 
@@ -1018,6 +1053,518 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                 )
 
         return out
+
+    def get_metric(self) -> list[AmdSmiMetric] | None:
+        amdsmi = self._amdsmi_mod()
+        devices = self._get_handles()
+        out: list[AmdSmiMetric] = []
+
+        def _to_int_or_none(v: object) -> int | None:
+            n = self._to_number(v)
+            if n is None:
+                return None
+            try:
+                return int(n)
+            except Exception:
+                try:
+                    return int(float(n))
+                except Exception:
+                    return None
+
+        def _as_list(v: object) -> list[object]:
+            if isinstance(v, list):
+                return v
+            return (
+                [] if v in (None, "N/A") else [v] if not isinstance(v, (dict, tuple, set)) else []
+            )
+
+        for idx, h in enumerate(devices):
+            raw = self._smi_try(amdsmi.amdsmi_get_gpu_metrics_info, h, default=None)
+
+            if not isinstance(raw, dict):
+                self._log_event(
+                    category=EventCategory.APPLICATION,
+                    description="amdsmi_get_gpu_metrics_info returned no dict; using empty metric",
+                    data={"gpu_index": idx, "type": type(raw).__name__},
+                    priority=EventPriority.WARNING,
+                )
+                out.append(self._empty_metric(idx))
+                continue
+
+            try:
+                # Usage
+                usage = MetricUsage(
+                    gfx_activity=self._vu(raw.get("average_gfx_activity"), "%"),
+                    umc_activity=self._vu(raw.get("average_umc_activity"), "%"),
+                    mm_activity=self._vu(raw.get("average_mm_activity"), "%"),
+                    vcn_activity=[self._vu(v, "%") for v in _as_list(raw.get("vcn_activity"))],
+                    jpeg_activity=[self._vu(v, "%") for v in _as_list(raw.get("jpeg_activity"))],
+                    gfx_busy_inst=None,
+                    jpeg_busy=None,
+                    vcn_busy=None,
+                )
+
+                # Power / Energy
+                power = MetricPower(
+                    socket_power=self._vu(raw.get("average_socket_power"), "W"),
+                    gfx_voltage=self._vu(raw.get("voltage_gfx"), "mV"),
+                    soc_voltage=self._vu(raw.get("voltage_soc"), "mV"),
+                    mem_voltage=self._vu(raw.get("voltage_mem"), "mV"),
+                    throttle_status=(
+                        str(raw.get("throttle_status"))
+                        if raw.get("throttle_status") is not None
+                        else None
+                    ),
+                    power_management=self._nz(raw.get("indep_throttle_status"), default="unknown"),
+                )
+                energy = MetricEnergy(
+                    total_energy_consumption=self._vu(raw.get("energy_accumulator"), "uJ")
+                )
+
+                # Temperature
+                temperature = MetricTemperature(
+                    edge=self._vu(raw.get("temperature_edge"), "C"),
+                    hotspot=self._vu(raw.get("temperature_hotspot"), "C"),
+                    mem=self._vu(raw.get("temperature_mem"), "C"),
+                )
+
+                # PCIe
+                speed_raw = self._to_number(raw.get("pcie_link_speed"))
+                speed_gtps = (
+                    float(speed_raw) / 10.0 if isinstance(speed_raw, (int, float)) else None
+                )
+
+                pcie = MetricPcie(
+                    width=_to_int_or_none(raw.get("pcie_link_width")),
+                    speed=self._vu(speed_gtps, "GT/s"),
+                    bandwidth=self._vu(raw.get("pcie_bandwidth_inst"), "GB/s"),
+                    replay_count=_to_int_or_none(raw.get("pcie_replay_count_acc")),
+                    l0_to_recovery_count=_to_int_or_none(raw.get("pcie_l0_to_recov_count_acc")),
+                    replay_roll_over_count=_to_int_or_none(raw.get("pcie_replay_rover_count_acc")),
+                    nak_sent_count=_to_int_or_none(raw.get("pcie_nak_sent_count_acc")),
+                    nak_received_count=_to_int_or_none(raw.get("pcie_nak_rcvd_count_acc")),
+                    current_bandwidth_sent=None,
+                    current_bandwidth_received=None,
+                    max_packet_size=None,
+                    lc_perf_other_end_recovery=None,
+                )
+
+                # Clocks
+                def _clk(cur_key: str) -> MetricClockData:
+                    return MetricClockData(
+                        clk=self._vu(raw.get(cur_key), "MHz"),
+                        min_clk=None,
+                        max_clk=None,
+                        clk_locked=(
+                            raw.get("gfxclk_lock_status") if cur_key == "current_gfxclk" else None
+                        ),
+                        deep_sleep=None,
+                    )
+
+                clock: dict[str, MetricClockData] = {
+                    "GFX": _clk("current_gfxclk"),
+                    "SOC": _clk("current_socclk"),
+                    "UCLK": _clk("current_uclk"),
+                    "VCLK0": _clk("current_vclk0"),
+                    "DCLK0": _clk("current_dclk0"),
+                    "VCLK1": _clk("current_vclk1"),
+                    "DCLK1": _clk("current_dclk1"),
+                }
+
+                # Fan
+                fan = MetricFan(
+                    rpm=self._vu(raw.get("current_fan_speed"), "RPM"),
+                    speed=None,
+                    max=None,
+                    usage=None,
+                )
+
+                # Voltage curve
+                voltage_curve = self._get_voltage_curve(h) or self._empty_voltage_curve()
+
+                # Memory usage
+                total_vram_vu: ValueUnit | None = None
+                used_vram_vu: ValueUnit | None = None
+                free_vram_vu: ValueUnit | None = None
+
+                vram_usage = self._smi_try(amdsmi.amdsmi_get_gpu_vram_usage, h, default=None)
+                if isinstance(vram_usage, dict):
+                    used_vram_vu = self._vu(vram_usage.get("vram_used"), "B")
+                    total_vram_vu = self._vu(vram_usage.get("vram_total"), "B")
+
+                mem_enum = getattr(amdsmi, "AmdSmiMemoryType", None)
+                vis_total_vu: ValueUnit | None = None
+                gtt_total_vu: ValueUnit | None = None
+
+                if mem_enum is not None:
+                    if total_vram_vu is None:
+                        vram_total_alt = self._smi_try(
+                            amdsmi.amdsmi_get_gpu_memory_total, h, mem_enum.VRAM, default=None
+                        )
+                        if vram_total_alt is not None:
+                            total_vram_vu = self._vu(vram_total_alt, "B")
+
+                    vis_total = self._smi_try(
+                        amdsmi.amdsmi_get_gpu_memory_total, h, mem_enum.VIS_VRAM, default=None
+                    )
+                    if vis_total is not None:
+                        vis_total_vu = self._vu(vis_total, "B")
+
+                    gtt_total = self._smi_try(
+                        amdsmi.amdsmi_get_gpu_memory_total, h, mem_enum.GTT, default=None
+                    )
+                    if gtt_total is not None:
+                        gtt_total_vu = self._vu(gtt_total, "B")
+
+                # Compute free if possible
+                if free_vram_vu is None and total_vram_vu is not None and used_vram_vu is not None:
+                    try:
+                        free_num = max(0.0, float(total_vram_vu.value) - float(used_vram_vu.value))
+                        free_vram_vu = self._vu(free_num, "B")
+                    except Exception:
+                        pass
+
+                # Build mem_usage
+                mem_usage = MetricMemUsage(
+                    total_vram=total_vram_vu,
+                    used_vram=used_vram_vu,
+                    free_vram=free_vram_vu,
+                    total_visible_vram=vis_total_vu,
+                    used_visible_vram=None,
+                    free_visible_vram=None,
+                    total_gtt=gtt_total_vu,
+                    used_gtt=None,
+                    free_gtt=None,
+                )
+
+                # ECC totals
+                ecc_raw = self._smi_try(amdsmi.amdsmi_get_gpu_total_ecc_count, h, default=None)
+                if isinstance(ecc_raw, dict):
+                    ecc = MetricEccTotals(
+                        total_correctable_count=_to_int_or_none(ecc_raw.get("correctable_count")),
+                        total_uncorrectable_count=_to_int_or_none(
+                            ecc_raw.get("uncorrectable_count")
+                        ),
+                        total_deferred_count=_to_int_or_none(ecc_raw.get("deferred_count")),
+                        cache_correctable_count=None,
+                        cache_uncorrectable_count=None,
+                    )
+                else:
+                    ecc = MetricEccTotals(
+                        total_correctable_count=None,
+                        total_uncorrectable_count=None,
+                        total_deferred_count=None,
+                        cache_correctable_count=None,
+                        cache_uncorrectable_count=None,
+                    )
+
+                # Throttle
+                throttle = self.get_throttle(h) or MetricThrottle()
+
+                out.append(
+                    AmdSmiMetric(
+                        gpu=idx,
+                        usage=usage,
+                        power=power,
+                        clock=clock,
+                        temperature=temperature,
+                        pcie=pcie,
+                        ecc=ecc,
+                        ecc_blocks={},
+                        fan=fan,
+                        voltage_curve=voltage_curve,
+                        perf_level=None,
+                        xgmi_err=None,
+                        energy=energy,
+                        mem_usage=mem_usage,
+                        throttle=throttle,
+                    )
+                )
+            except ValidationError as e:
+                self.logger.warning(e)
+                self._log_event(
+                    category=EventCategory.APPLICATION,
+                    description="Failed to build AmdSmiMetric; using empty metric",
+                    data={"exception": get_exception_traceback(e), "gpu_index": idx},
+                    priority=EventPriority.WARNING,
+                )
+                out.append(self._empty_metric(idx))
+
+        return out
+
+    def _empty_metric(self, gpu_idx: int) -> AmdSmiMetric:
+        return AmdSmiMetric(
+            gpu=gpu_idx,
+            usage=MetricUsage(
+                gfx_activity=None,
+                umc_activity=None,
+                mm_activity=None,
+                vcn_activity=[],
+                jpeg_activity=[],
+                gfx_busy_inst=None,
+                jpeg_busy=None,
+                vcn_busy=None,
+            ),
+            power=MetricPower(
+                socket_power=None,
+                gfx_voltage=None,
+                soc_voltage=None,
+                mem_voltage=None,
+                throttle_status=None,
+                power_management=None,
+            ),
+            clock={},
+            temperature=MetricTemperature(edge=None, hotspot=None, mem=None),
+            pcie=MetricPcie(
+                width=None,
+                speed=None,
+                bandwidth=None,
+                replay_count=None,
+                l0_to_recovery_count=None,
+                replay_roll_over_count=None,
+                nak_sent_count=None,
+                nak_received_count=None,
+                current_bandwidth_sent=None,
+                current_bandwidth_received=None,
+                max_packet_size=None,
+                lc_perf_other_end_recovery=None,
+            ),
+            ecc=MetricEccTotals(
+                total_correctable_count=None,
+                total_uncorrectable_count=None,
+                total_deferred_count=None,
+                cache_correctable_count=None,
+                cache_uncorrectable_count=None,
+            ),
+            ecc_blocks={},
+            fan=MetricFan(speed=None, max=None, rpm=None, usage=None),
+            voltage_curve=self._empty_voltage_curve(),
+            perf_level=None,
+            xgmi_err=None,
+            energy=None,
+            mem_usage=MetricMemUsage(
+                total_vram=None,
+                used_vram=None,
+                free_vram=None,
+                total_visible_vram=None,
+                used_visible_vram=None,
+                free_visible_vram=None,
+                total_gtt=None,
+                used_gtt=None,
+                free_gtt=None,
+            ),
+            throttle=MetricThrottle(),
+        )
+
+    def _get_voltage_curve(self, h) -> MetricVoltageCurve:
+        amdsmi = self._amdsmi_mod()
+        raw = self._smi_try(amdsmi.amdsmi_get_gpu_od_volt_info, h, default=None)
+        if not isinstance(raw, dict):
+            return self._empty_voltage_curve()
+
+        try:
+            num_regions = int(raw.get("num_regions", 0) or 0)
+        except Exception:
+            num_regions = 0
+        if num_regions == 0:
+            return self._empty_voltage_curve()
+
+        curve = raw.get("curve") or {}
+        pts = curve.get("vc_points") or raw.get("vc_points") or []
+        if not isinstance(pts, list) or len(pts) == 0:
+            return self._empty_voltage_curve()
+
+        def _pt_get(d: object, *names: str) -> object | None:
+            if not isinstance(d, dict):
+                return None
+            for n in names:
+                if n in d:
+                    return d.get(n)
+            lower = {str(k).lower(): v for k, v in d.items()}
+            for n in names:
+                v = lower.get(n.lower())
+                if v is not None:
+                    return v
+            return None
+
+        def _extract_point(p: object) -> tuple[object | None, object | None]:
+            clk = _pt_get(p, "clk_value", "frequency", "freq", "clk", "sclk")
+            volt = _pt_get(p, "volt_value", "voltage", "volt", "mV")
+            return clk, volt
+
+        p0_clk, p0_volt = _extract_point(pts[0]) if len(pts) >= 1 else (None, None)
+        p1_clk, p1_volt = _extract_point(pts[1]) if len(pts) >= 2 else (None, None)
+        p2_clk, p2_volt = _extract_point(pts[2]) if len(pts) >= 3 else (None, None)
+
+        return MetricVoltageCurve(
+            point_0_frequency=self._vu(p0_clk, "MHz"),
+            point_0_voltage=self._vu(p0_volt, "mV"),
+            point_1_frequency=self._vu(p1_clk, "MHz"),
+            point_1_voltage=self._vu(p1_volt, "mV"),
+            point_2_frequency=self._vu(p2_clk, "MHz"),
+            point_2_voltage=self._vu(p2_volt, "mV"),
+        )
+
+    def _empty_voltage_curve(self) -> MetricVoltageCurve:
+        return MetricVoltageCurve(
+            point_0_frequency=None,
+            point_0_voltage=None,
+            point_1_frequency=None,
+            point_1_voltage=None,
+            point_2_frequency=None,
+            point_2_voltage=None,
+        )
+
+    def _as_first_plane(self, obj) -> list:
+        """Take a scalar/list/2D-list and return the first plane as a flat list."""
+        if isinstance(obj, list):
+            if obj and isinstance(obj[0], list):  # 2D
+                return obj[0]
+            return obj
+        return []
+
+    def _th_vu_list_pct(self, obj) -> MetricThrottleVu | None:
+        """Return MetricThrottleVu with % ValueUnits for the first XCP plane."""
+        arr = self._as_first_plane(obj)
+        if not arr:
+            return None
+        return MetricThrottleVu(
+            xcp_0=[self._vu(v, "%") if v not in (None, "N/A") else "N/A" for v in arr]
+        )
+
+    def _th_vu_list_raw(self, obj) -> MetricThrottleVu | None:
+        """Return MetricThrottleVu with raw ints/strings for the first XCP plane."""
+        arr = self._as_first_plane(obj)
+        if not arr:
+            return None
+        return MetricThrottleVu(
+            xcp_0=[
+                (int(v) if isinstance(v, (int, float, str)) and str(v).strip().isdigit() else v)
+                for v in arr
+            ]
+        )
+
+    def get_throttle(self, h) -> MetricThrottle:
+        amdsmi = self._amdsmi_mod()
+        raw = self._smi_try(amdsmi.amdsmi_get_violation_status, h, default=None)
+        if not isinstance(raw, dict):
+            return MetricThrottle()
+
+        acc_counter = raw.get("acc_counter")
+        prochot_acc = raw.get("acc_prochot_thrm")
+        ppt_acc = raw.get("acc_ppt_pwr")
+        socket_thrm_acc = raw.get("acc_socket_thrm")
+        vr_thrm_acc = raw.get("acc_vr_thrm")
+        hbm_thrm_acc = raw.get("acc_hbm_thrm")
+
+        acc_gfx_pwr = raw.get("acc_gfx_clk_below_host_limit_pwr")
+        acc_gfx_thm = raw.get("acc_gfx_clk_below_host_limit_thm")
+        acc_low_util = raw.get("acc_low_utilization")
+        acc_gfx_total = raw.get("acc_gfx_clk_below_host_limit_total")
+
+        act_prochot = raw.get("active_prochot_thrm")
+        act_ppt = raw.get("active_ppt_pwr")
+        act_socket = raw.get("active_socket_thrm")
+        act_vr = raw.get("active_vr_thrm")
+        act_hbm = raw.get("active_hbm_thrm")
+        act_gfx_pwr = raw.get("active_gfx_clk_below_host_limit_pwr")
+        act_gfx_thm = raw.get("active_gfx_clk_below_host_limit_thm")
+        act_low_util = raw.get("active_low_utilization")
+        act_gfx_total = raw.get("active_gfx_clk_below_host_limit_total")
+
+        per_prochot = raw.get("per_prochot_thrm")
+        per_ppt = raw.get("per_ppt_pwr")
+        per_socket = raw.get("per_socket_thrm")
+        per_vr = raw.get("per_vr_thrm")
+        per_hbm = raw.get("per_hbm_thrm")
+        per_gfx_pwr = raw.get("per_gfx_clk_below_host_limit_pwr")
+        per_gfx_thm = raw.get("per_gfx_clk_below_host_limit_thm")
+        per_low_util = raw.get("per_low_utilization")
+        per_gfx_total = raw.get("per_gfx_clk_below_host_limit_total")
+
+        return MetricThrottle(
+            accumulation_counter=self._vu(acc_counter, ""),  # unitless counter
+            prochot_accumulated=self._th_vu_list_raw(prochot_acc),
+            ppt_accumulated=self._th_vu_list_raw(ppt_acc),
+            socket_thermal_accumulated=self._th_vu_list_raw(socket_thrm_acc),
+            vr_thermal_accumulated=self._th_vu_list_raw(vr_thrm_acc),
+            hbm_thermal_accumulated=self._th_vu_list_raw(hbm_thrm_acc),
+            gfx_clk_below_host_limit_power_accumulated=self._th_vu_list_raw(acc_gfx_pwr),
+            gfx_clk_below_host_limit_thermal_accumulated=self._th_vu_list_raw(acc_gfx_thm),
+            low_utilization_accumulated=self._th_vu_list_raw(acc_low_util),
+            total_gfx_clk_below_host_limit_accumulated=self._th_vu_list_raw(acc_gfx_total),
+            prochot_violation_status=self._th_vu_list_raw(act_prochot),
+            ppt_violation_status=self._th_vu_list_raw(act_ppt),
+            socket_thermal_violation_status=self._th_vu_list_raw(act_socket),
+            vr_thermal_violation_status=self._th_vu_list_raw(act_vr),
+            hbm_thermal_violation_status=self._th_vu_list_raw(act_hbm),
+            gfx_clk_below_host_limit_power_violation_status=self._th_vu_list_raw(act_gfx_pwr),
+            gfx_clk_below_host_limit_thermal_violation_status=self._th_vu_list_raw(act_gfx_thm),
+            low_utilization_violation_status=self._th_vu_list_raw(act_low_util),
+            total_gfx_clk_below_host_limit_violation_status=self._th_vu_list_raw(act_gfx_total),
+            prochot_violation_activity=self._vu(per_prochot, "%"),
+            ppt_violation_activity=self._vu(per_ppt, "%"),
+            socket_thermal_violation_activity=self._vu(per_socket, "%"),
+            vr_thermal_violation_activity=self._vu(per_vr, "%"),
+            hbm_thermal_violation_activity=self._vu(per_hbm, "%"),
+            gfx_clk_below_host_limit_power_violation_activity=self._th_vu_list_pct(per_gfx_pwr),
+            gfx_clk_below_host_limit_thermal_violation_activity=self._th_vu_list_pct(per_gfx_thm),
+            low_utilization_violation_activity=self._th_vu_list_pct(per_low_util),
+            total_gfx_clk_below_host_limit_violation_activity=self._th_vu_list_pct(per_gfx_total),
+        )
+
+    def _flatten_2d(self, v: object) -> list[object]:
+        if isinstance(v, list) and v and isinstance(v[0], list):
+            out: list[object] = []
+            for row in v:
+                if isinstance(row, list):
+                    out.extend(row)
+                else:
+                    out.append(row)
+            return out
+        return v if isinstance(v, list) else [v] if v not in (None, "N/A") else []
+
+    def _coerce_throttle_value(
+        self, v: object, unit: str = ""
+    ) -> MetricThrottleVu | ValueUnit | None:
+        """
+        Convert ints/floats/strings/lists/2D-lists/dicts into:
+          - ValueUnit
+          - MetricThrottleVu(xcp_0=[...])
+          - None for N/A/empty
+        """
+        if v in (None, "", "N/A"):
+            return None
+
+        if isinstance(v, (int, float)):
+            return ValueUnit(value=v, unit=unit)
+        if isinstance(v, str):
+            s = v.strip()
+            if not s or s.upper() == "N/A":
+                return None
+            try:
+                return ValueUnit(value=int(s, 0), unit=unit)
+            except Exception:
+                try:
+                    return ValueUnit(value=float(s), unit=unit)
+                except Exception:
+                    return MetricThrottleVu(xcp_0=[s])
+
+        if isinstance(v, list):
+            flat = self._flatten_2d(v)
+            return MetricThrottleVu(xcp_0=flat if flat else None)
+
+        if isinstance(v, dict):
+            if "xcp_0" in v and isinstance(v["xcp_0"], list):
+                return MetricThrottleVu(xcp_0=self._flatten_2d(v["xcp_0"]))
+            val = v.get("value")
+            if isinstance(val, dict):
+                for maybe_list in val.values():
+                    if isinstance(maybe_list, list):
+                        return MetricThrottleVu(xcp_0=self._flatten_2d(maybe_list))
+            return MetricThrottleVu(xcp_0=[str(v)])
+
+        return MetricThrottleVu(xcp_0=[str(v)])
 
     def collect_data(
         self,

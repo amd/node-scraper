@@ -426,6 +426,315 @@ class BadPages(BaseModel):
     retired: list[PageData]
 
 
+# Metric Data
+class MetricUsage(BaseModel):
+    gfx_activity: ValueUnit | None
+    umc_activity: ValueUnit | None
+    mm_activity: ValueUnit | None
+    vcn_activity: list[ValueUnit | str | None]
+    jpeg_activity: list[ValueUnit | str | None]
+    gfx_busy_inst: dict[str, list[ValueUnit | str | None]] | None
+    jpeg_busy: dict[str, list[ValueUnit | str | None]] | None
+    vcn_busy: dict[str, list[ValueUnit | str | None]] | None
+    na_validator_list = field_validator("vcn_activity", "jpeg_activity", mode="before")(
+        na_to_none_list
+    )
+    na_validator = field_validator(
+        "gfx_activity",
+        "umc_activity",
+        "mm_activity",
+        "gfx_busy_inst",
+        "jpeg_busy",
+        "vcn_busy",
+        mode="before",
+    )(na_to_none)
+
+
+class MetricPower(BaseModel):
+    socket_power: ValueUnit | None
+    gfx_voltage: ValueUnit | None
+    soc_voltage: ValueUnit | None
+    mem_voltage: ValueUnit | None
+    throttle_status: str | None
+    power_management: str | None
+    na_validator = field_validator(
+        "socket_power",
+        "gfx_voltage",
+        "soc_voltage",
+        "mem_voltage",
+        "throttle_status",
+        "power_management",
+        mode="before",
+    )(na_to_none)
+
+
+class MetricClockData(BaseModel):
+    clk: ValueUnit | None
+    min_clk: ValueUnit | None
+    max_clk: ValueUnit | None
+    clk_locked: int | str | dict | None
+    deep_sleep: int | str | dict | None
+    na_validator = field_validator(
+        "clk", "min_clk", "max_clk", "clk_locked", "deep_sleep", mode="before"
+    )(na_to_none)
+
+
+class MetricTemperature(BaseModel):
+    edge: ValueUnit | None
+    hotspot: ValueUnit | None
+    mem: ValueUnit | None
+    na_validator = field_validator("edge", "hotspot", "mem", mode="before")(na_to_none)
+
+
+class MetricPcie(BaseModel):
+    width: int | None
+    speed: ValueUnit | None
+    bandwidth: ValueUnit | None
+    replay_count: int | None
+    l0_to_recovery_count: int | None
+    replay_roll_over_count: int | None
+    nak_sent_count: int | None
+    nak_received_count: int | None
+    current_bandwidth_sent: int | None
+    current_bandwidth_received: int | None
+    max_packet_size: int | None
+    lc_perf_other_end_recovery: int | None
+    na_validator = field_validator(
+        "width",
+        "speed",
+        "bandwidth",
+        "replay_count",
+        "l0_to_recovery_count",
+        "replay_roll_over_count",
+        "nak_sent_count",
+        "nak_received_count",
+        "current_bandwidth_sent",
+        "current_bandwidth_received",
+        "max_packet_size",
+        "lc_perf_other_end_recovery",
+        mode="before",
+    )(na_to_none)
+
+
+class MetricEccTotals(BaseModel):
+    total_correctable_count: int | None
+    total_uncorrectable_count: int | None
+    total_deferred_count: int | None
+    cache_correctable_count: int | None
+    cache_uncorrectable_count: int | None
+    na_validator = field_validator(
+        "total_correctable_count",
+        "total_uncorrectable_count",
+        "total_deferred_count",
+        "cache_correctable_count",
+        "cache_uncorrectable_count",
+        mode="before",
+    )(na_to_none)
+
+
+class MetricErrorCounts(BaseModel):
+    correctable_count: str | None
+    uncorrectable_count: str | None
+    deferred_count: str | None
+    na_validator = field_validator(
+        "correctable_count", "uncorrectable_count", "deferred_count", mode="before"
+    )(na_to_none)
+
+
+class MetricFan(BaseModel):
+    speed: ValueUnit | None
+    max: ValueUnit | None
+    rpm: ValueUnit | None
+    usage: ValueUnit | None
+    na_validator = field_validator("speed", "max", "rpm", "usage", mode="before")(na_to_none)
+
+
+class MetricVoltageCurve(BaseModel):
+    point_0_frequency: ValueUnit | None
+    point_0_voltage: ValueUnit | None
+    point_1_frequency: ValueUnit | None
+    point_1_voltage: ValueUnit | None
+    point_2_frequency: ValueUnit | None
+    point_2_voltage: ValueUnit | None
+
+    na_validator = field_validator(
+        "point_0_frequency",
+        "point_0_voltage",
+        "point_1_frequency",
+        "point_1_voltage",
+        "point_2_frequency",
+        "point_2_voltage",
+        mode="before",
+    )(na_to_none)
+
+
+class MetricEnergy(BaseModel):
+    total_energy_consumption: ValueUnit | None
+    na_validator = field_validator("total_energy_consumption", mode="before")(na_to_none)
+
+
+class MetricMemUsage(BaseModel):
+    total_vram: ValueUnit | None
+    used_vram: ValueUnit | None
+    free_vram: ValueUnit | None
+    total_visible_vram: ValueUnit | None
+    used_visible_vram: ValueUnit | None
+    free_visible_vram: ValueUnit | None
+    total_gtt: ValueUnit | None
+    used_gtt: ValueUnit | None
+    free_gtt: ValueUnit | None
+    na_validator = field_validator(
+        "total_vram",
+        "used_vram",
+        "free_vram",
+        "total_visible_vram",
+        "used_visible_vram",
+        "free_visible_vram",
+        "total_gtt",
+        "used_gtt",
+        "free_gtt",
+        mode="before",
+    )(na_to_none)
+
+
+class MetricThrottleVu(BaseModel):
+    xcp_0: list[ValueUnit | str | None] = None
+    # Deprecated below
+    value: dict[str, list[int | str]] | None = Field(deprecated=True, default=None)
+    unit: str = Field(deprecated=True, default="")
+
+
+class MetricThrottle(AmdSmiBaseModel):
+    # At some point in time these changed from being int -> ValueUnit
+
+    accumulation_counter: MetricThrottleVu | ValueUnit | None = None
+
+    gfx_clk_below_host_limit_accumulated: MetricThrottleVu | ValueUnit | None = None
+    gfx_clk_below_host_limit_power_accumulated: MetricThrottleVu | ValueUnit | None = None
+    gfx_clk_below_host_limit_power_violation_activity: MetricThrottleVu | ValueUnit | None = None
+    gfx_clk_below_host_limit_power_violation_status: MetricThrottleVu | ValueUnit | None = None
+    gfx_clk_below_host_limit_violation_activity: MetricThrottleVu | ValueUnit | None = None
+    gfx_clk_below_host_limit_violation_accumulated: MetricThrottleVu | ValueUnit | None = None
+    gfx_clk_below_host_limit_violation_status: MetricThrottleVu | ValueUnit | None = None
+    gfx_clk_below_host_limit_thermal_violation_accumulated: MetricThrottleVu | ValueUnit | None = (
+        None
+    )
+    gfx_clk_below_host_limit_thermal_violation_activity: MetricThrottleVu | ValueUnit | None = None
+    gfx_clk_below_host_limit_thermal_violation_status: MetricThrottleVu | ValueUnit | None = None
+    gfx_clk_below_host_limit_thermal_accumulated: MetricThrottleVu | ValueUnit | None = None
+
+    hbm_thermal_accumulated: MetricThrottleVu | ValueUnit | None = None
+    hbm_thermal_violation_activity: MetricThrottleVu | ValueUnit | None = None
+    hbm_thermal_violation_status: MetricThrottleVu | ValueUnit | None = None
+    low_utilization_violation_accumulated: MetricThrottleVu | ValueUnit | None = None
+    low_utilization_violation_activity: MetricThrottleVu | ValueUnit | None = None
+    low_utilization_violation_status: MetricThrottleVu | ValueUnit | None = None
+    ppt_accumulated: MetricThrottleVu | ValueUnit | None = None
+    ppt_violation_activity: MetricThrottleVu | ValueUnit | None = None
+    ppt_violation_status: MetricThrottleVu | ValueUnit | None = None
+    prochot_accumulated: MetricThrottleVu | ValueUnit | None = None
+    prochot_violation_activity: MetricThrottleVu | ValueUnit | None = None
+    prochot_violation_status: MetricThrottleVu | ValueUnit | None = None
+    socket_thermal_accumulated: MetricThrottleVu | ValueUnit | None = None
+    socket_thermal_violation_activity: MetricThrottleVu | ValueUnit | None = None
+    socket_thermal_violation_status: MetricThrottleVu | ValueUnit | None = None
+    vr_thermal_accumulated: MetricThrottleVu | ValueUnit | None = None
+    vr_thermal_violation_activity: MetricThrottleVu | ValueUnit | None = None
+    vr_thermal_violation_status: MetricThrottleVu | ValueUnit | None = None
+
+    total_gfx_clk_below_host_limit_accumulated: MetricThrottleVu | ValueUnit | None = None
+    low_utilization_accumulated: MetricThrottleVu | ValueUnit | None = None
+    total_gfx_clk_below_host_limit_violation_status: MetricThrottleVu | ValueUnit | None = None
+    total_gfx_clk_below_host_limit_violation_activity: MetricThrottleVu | ValueUnit | None = None
+
+    na_validator = field_validator(
+        "accumulation_counter",
+        "gfx_clk_below_host_limit_accumulated",
+        "gfx_clk_below_host_limit_power_accumulated",
+        "gfx_clk_below_host_limit_power_violation_activity",
+        "gfx_clk_below_host_limit_power_violation_status",
+        "gfx_clk_below_host_limit_violation_activity",
+        "gfx_clk_below_host_limit_violation_accumulated",
+        "gfx_clk_below_host_limit_violation_status",
+        "gfx_clk_below_host_limit_thermal_violation_accumulated",
+        "gfx_clk_below_host_limit_thermal_violation_activity",
+        "gfx_clk_below_host_limit_thermal_violation_status",
+        "gfx_clk_below_host_limit_thermal_accumulated",
+        "hbm_thermal_accumulated",
+        "hbm_thermal_violation_activity",
+        "hbm_thermal_violation_status",
+        "low_utilization_violation_accumulated",
+        "low_utilization_violation_activity",
+        "low_utilization_violation_status",
+        "ppt_accumulated",
+        "ppt_violation_activity",
+        "ppt_violation_status",
+        "prochot_accumulated",
+        "prochot_violation_activity",
+        "prochot_violation_status",
+        "socket_thermal_accumulated",
+        "socket_thermal_violation_activity",
+        "socket_thermal_violation_status",
+        "vr_thermal_accumulated",
+        "vr_thermal_violation_activity",
+        "vr_thermal_violation_status",
+        "total_gfx_clk_below_host_limit_accumulated",
+        "low_utilization_accumulated",
+        "total_gfx_clk_below_host_limit_violation_status",
+        "total_gfx_clk_below_host_limit_violation_activity",
+        mode="before",
+    )(na_to_none)
+
+
+class EccData(BaseModel):
+    "ECC counts collected per ecc block"
+
+    correctable_count: int | None = 0
+    uncorrectable_count: int | None = 0
+    deferred_count: int | None = 0
+
+    na_validator = field_validator(
+        "correctable_count", "uncorrectable_count", "deferred_count", mode="before"
+    )(na_to_none)
+
+
+class AmdSmiMetric(BaseModel):
+    gpu: int
+    usage: MetricUsage
+    power: MetricPower
+    clock: dict[str, MetricClockData]
+    temperature: MetricTemperature
+    pcie: MetricPcie
+    ecc: MetricEccTotals
+    ecc_blocks: dict[str, EccData] | str
+    fan: MetricFan
+    voltage_curve: MetricVoltageCurve | None
+    perf_level: str | dict | None
+    xgmi_err: str | dict | None
+    energy: MetricEnergy | None
+    mem_usage: MetricMemUsage
+    throttle: MetricThrottle
+
+    na_validator = field_validator("xgmi_err", "perf_level", mode="before")(na_to_none)
+
+    @field_validator("ecc_blocks", mode="before")
+    @classmethod
+    def validate_ecc_blocks(cls, value: dict[str, EccData] | str) -> dict[str, EccData]:
+        """Validate the ecc_blocks field."""
+        if isinstance(value, str):
+            # If it's a string, we assume it's "N/A" and return an empty dict
+            return {}
+        return value
+
+    @field_validator("energy", mode="before")
+    @classmethod
+    def validate_energy(cls, value: Any | None) -> MetricEnergy | None:
+        """Validate the energy field."""
+        if value == "N/A" or value is None:
+            return None
+        return value
+
+
 class AmdSmiDataModel(DataModel):
     """Data model for amd-smi data.
 
@@ -449,6 +758,7 @@ class AmdSmiDataModel(DataModel):
     firmware: list[Fw] | None = Field(default_factory=list)
     bad_pages: list[BadPages] | None = Field(default_factory=list)
     static: list[AmdSmiStatic] | None = Field(default_factory=list)
+    metric: list[AmdSmiMetric] | None = Field(default_factory=list)
 
     def get_list(self, gpu: int) -> AmdSmiListItem | None:
         """Get the gpu list item for the given gpu id."""
