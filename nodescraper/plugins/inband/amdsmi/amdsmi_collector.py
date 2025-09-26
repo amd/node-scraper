@@ -235,7 +235,13 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             uuid = self._smi_try(amdsmi.amdsmi_get_gpu_device_uuid, h, default="") or ""
             kfd = self._smi_try(amdsmi.amdsmi_get_gpu_kfd_info, h, default={}) or {}
 
-            partition_id = 0  # no profile id available yet
+            kfd = self._smi_try(amdsmi.amdsmi_get_gpu_kfd_info, h, default={}) or {}
+            partition_id = 0
+            if isinstance(kfd, dict):
+                try:
+                    partition_id = int(kfd.get("current_partition_id", 0) or 0)
+                except Exception:
+                    partition_id = 0
 
             try:
                 out.append(
@@ -349,26 +355,12 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         computeparts: list[PartitionCompute] = []
 
         for idx, h in enumerate(devices):
-            compute_partition = (
-                self._smi_try(amdsmi.amdsmi_get_gpu_compute_partition, h, default={}) or {}
-            )
-            memory_partition = (
-                self._smi_try(amdsmi.amdsmi_get_gpu_memory_partition, h, default={}) or {}
-            )
-
-            mem_pt: Optional[str] = None
-            if isinstance(memory_partition, dict):
-                mem_pt = cast(Optional[str], memory_partition.get("partition_type"))
-            comp_pt: Optional[str] = None
-            if isinstance(compute_partition, dict):
-                comp_pt = cast(Optional[str], compute_partition.get("partition_type"))
+            mem_pt = self._smi_try(amdsmi.amdsmi_get_gpu_memory_partition, h, default=None)
+            comp_pt = self._smi_try(amdsmi.amdsmi_get_gpu_compute_partition, h, default=None)
 
             try:
                 memparts.append(
-                    PartitionMemory(
-                        gpu_id=idx,
-                        partition_type=mem_pt,
-                    )
+                    PartitionMemory(gpu_id=idx, partition_type=cast(Optional[str], mem_pt))
                 )
             except ValidationError as e:
                 self._log_event(
@@ -377,17 +369,14 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                     data={
                         "exception": get_exception_traceback(e),
                         "gpu_index": idx,
-                        "data": memory_partition,
+                        "data": mem_pt,
                     },
                     priority=EventPriority.WARNING,
                 )
 
             try:
                 computeparts.append(
-                    PartitionCompute(
-                        gpu_id=idx,
-                        partition_type=comp_pt,
-                    )
+                    PartitionCompute(gpu_id=idx, partition_type=cast(Optional[str], comp_pt))
                 )
             except ValidationError as e:
                 self._log_event(
@@ -396,7 +385,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                     data={
                         "exception": get_exception_traceback(e),
                         "gpu_index": idx,
-                        "data": compute_partition,
+                        "data": comp_pt,
                     },
                     priority=EventPriority.WARNING,
                 )
@@ -817,7 +806,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
 
             lvl_val = cache_level.value
             cache_label_val = (
-                f"Lable_{int(lvl_val) if isinstance(lvl_val, (int, float)) else lvl_val}"
+                f"Label_{int(lvl_val) if isinstance(lvl_val, (int, float)) else lvl_val}"
             )
             cache_label = ValueUnit(value=cache_label_val, unit="")
 
