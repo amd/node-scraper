@@ -30,7 +30,7 @@ from nodescraper.models import AnalyzerArgs
 
 class AmdSmiAnalyzerArgs(AnalyzerArgs):
 
-    check_static_data: bool = False
+    check_static_data: bool = True
     expected_gpu_processes: Optional[int] = None
     expected_max_power: Optional[int] = None
     expected_driver_version: Optional[str] = None
@@ -39,7 +39,8 @@ class AmdSmiAnalyzerArgs(AnalyzerArgs):
     expected_pldm_version: Optional[str] = None
     l0_to_recovery_count_error_threshold: Optional[int] = None
     l0_to_recovery_count_warning_threshold: Optional[int] = None
-    vendorid_ep: Optional["str"] = None
-    vendorid_ep_vf: Optional["str"] = None
-    devid_ep: Optional["str"] = None
-    sku_name: Optional["str"] = None
+    vendorid_ep: Optional[str] = None
+    vendorid_ep_vf: Optional[str] = None
+    devid_ep: Optional[str] = None
+    devid_ep_vf: Optional[str] = None
+    sku_name: Optional[str] = None

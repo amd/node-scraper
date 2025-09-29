@@ -65,7 +65,7 @@ from nodescraper.utils import get_exception_details, get_exception_traceback
 
 
 class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
-    """class for collection of inband tool amd-smi data."""
+    """Class for collection of inband tool amd-smi data."""
 
     SUPPORTED_OS_FAMILY: set[OSFamily] = {OSFamily.LINUX}
 
@@ -74,10 +74,23 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
     _amdsmi: Any | None = None  # dynamic import
 
     def _amdsmi_mod(self) -> Any:
+        """Check for amdsmi installation
+
+        Returns:
+            Any: local instance of amdsmi module
+        """
         assert self._amdsmi is not None, "amdsmi module not bound"
         return self._amdsmi
 
     def _to_number(self, v: object) -> Union[int, float] | None:
+        """Helper function to return number from str, float or "N/A"
+
+        Args:
+            v (object): non number object
+
+        Returns:
+            Union[int, float] | None: number version of input
+        """
         if v in (None, "", "N/A"):
             return None
         try:
@@ -94,9 +107,15 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             return None
 
     def _vu(self, v: object, unit: str, *, required: bool = False) -> ValueUnit | None:
-        """
-        Build ValueUnit from mixed numeric/string input.
-        None/''/'N/A' -> None unless required=True (then 0{unit})
+        """Build ValueUnit instance from object
+
+        Args:
+            v (object): object to be turned into ValueUnit
+            unit (str): unit of measurement
+            required (bool, optional): bool to force instance creation. Defaults to False.
+
+        Returns:
+            ValueUnit | None: ValueUnit Instance
         """
         n = self._to_number(v)
         if n is None:
@@ -104,15 +123,28 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         return ValueUnit(value=n, unit=unit)
 
     def _vu_req(self, v: object, unit: str) -> ValueUnit:
+        """Helper function to force ValueUnit instance creation
+
+        Args:
+            v (object): object
+            unit (str): unit of measurement
+
+        Returns:
+            ValueUnit: instance of ValueUnit
+        """
         vu = self._vu(v, unit, required=True)
         assert vu is not None
         return vu
 
-    def _nz(self, val: object, default: str = "unknown", *, slot_type: bool = False) -> str:
-        """
-        Normalize strings:
-          - Generic: return trimmed value unless empty/'N/A', else `default`.
-          - slot_type=True: map to one of {'OAM','PCIE','CEM','Unknown'}.
+    def _nz(self, val: object, default: str = "unknown", slot_type: bool = False) -> str:
+        """Normalize strings
+
+        Args:
+            val (object): object
+            default (str, optional): default option. Defaults to "unknown".
+            slot_type (bool, optional): map to one of {'OAM','PCIE','CEM','Unknown'}.
+        Returns:
+            str: normalized string
         """
         s = str(val).strip() if val is not None else ""
         if not s or s.upper() == "N/A":
@@ -131,6 +163,11 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         return s
 
     def _bind_amdsmi_or_log(self) -> bool:
+        """Bind to local amdsmi lib or log that it is not found
+
+        Returns:
+            bool: True if module is found, false otherwise
+        """
         if getattr(self, "_amdsmi", None) is not None:
             return True
         try:
@@ -147,6 +184,11 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             return False
 
     def _get_handles(self):
+        """get amdsmi handles
+
+        Returns:
+            List[c_void_p]: list of processor handles
+        """
         amdsmi = self._amdsmi_mod()
         try:
             return amdsmi.amdsmi_get_processor_handles()
@@ -161,6 +203,11 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             return []
 
     def _get_amdsmi_data(self) -> AmdSmiDataModel | None:
+        """Fill in information for AmdSmi data model
+
+        Returns:
+            AmdSmiDataModel | None: instance of the AmdSmi data model
+        """
         try:
             version = self._get_amdsmi_version()
             processes = self.get_process()
@@ -199,6 +246,11 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             return None
 
     def _get_amdsmi_version(self) -> AmdSmiVersion | None:
+        """Check amdsmi library version
+
+        Returns:
+            AmdSmiVersion | None: version of the library
+        """
         amdsmi = self._amdsmi_mod()
         try:
             lib_ver = amdsmi.amdsmi_get_lib_version() or ""
@@ -220,6 +272,11 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         )
 
     def get_gpu_list(self) -> list[AmdSmiListItem] | None:
+        """Get GPU information from amdsmi lib
+
+        Returns:
+            list[AmdSmiListItem] | None: list of GPU info items
+        """
         amdsmi = self._amdsmi_mod()
         devices = self._get_handles()
         out: list[AmdSmiListItem] = []
@@ -265,6 +322,11 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         return out
 
     def get_process(self) -> list[Processes] | None:
+        """Get process information
+
+        Returns:
+            list[Processes] | None: list of GPU processes
+        """
         amdsmi = self._amdsmi_mod()
         devices = self._get_handles()
         out: list[Processes] = []
@@ -349,6 +411,11 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         return out
 
     def get_partition(self) -> Partition | None:
+        """Check partition information
+
+        Returns:
+            Partition | None: Partition data if availabe
+        """
         amdsmi = self._amdsmi_mod()
         devices = self._get_handles()
         memparts: list[PartitionMemory] = []
@@ -402,6 +469,11 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             return None
 
     def get_firmware(self) -> list[Fw] | None:
+        """Get firmware information
+
+        Returns:
+            list[Fw] | None: List of firmware info per GPU
+        """
         amdsmi = self._amdsmi_mod()
         devices = self._get_handles()
         out: list[Fw] = []
@@ -449,6 +521,15 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         return out
 
     def _smi_try(self, fn, *a, default=None, **kw):
+        """Helper function to check if amdsmi lib call is availabe
+
+        Args:
+            fn (function): amdsmi lib function to call
+            default (_type_, optional): default ret value. Defaults to None.
+
+        Returns:
+            function call: function call or log error
+        """
         amdsmi = self._amdsmi_mod()
         try:
             return fn(*a, **kw)
@@ -495,6 +576,11 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             return default
 
     def get_static(self) -> list[AmdSmiStatic] | None:
+        """Get Static info from amdsmi lib
+
+        Returns:
+            list[AmdSmiStatic] | None: AmdSmiStatic instance or None
+        """
         amdsmi = self._amdsmi_mod()
         devices = self._get_handles()
         if not devices:
@@ -670,6 +756,14 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         return out
 
     def _get_soc_pstate(self, h) -> StaticSocPstate | None:
+        """SOC pstate check
+
+        Args:
+            h (_type_): handle
+
+        Returns:
+            StaticSocPstate | None: class instance
+        """
         amdsmi = self._amdsmi_mod()
         fn = getattr(amdsmi, "amdsmi_get_soc_pstate", None)
         if not callable(fn):
@@ -724,6 +818,14 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             return None
 
     def _get_xgmi_plpd(self, h) -> StaticXgmiPlpd | None:
+        """Check XGMI plpd
+
+        Args:
+            h (_type_): handle
+
+        Returns:
+            StaticXgmiPlpd | None: class instance
+        """
         amdsmi = self._amdsmi_mod()
         fn = getattr(amdsmi, "amdsmi_get_xgmi_plpd", None)
         if not callable(fn):
@@ -778,6 +880,14 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             return None
 
     def _get_cache_info(self, h) -> list[StaticCacheInfoItem]:
+        """check cache info
+
+        Args:
+            h (_type_): handle
+
+        Returns:
+            list[StaticCacheInfoItem]: class instance
+        """
         amdsmi = self._amdsmi_mod()
         raw = self._smi_try(amdsmi.amdsmi_get_gpu_cache_info, h, default=None)
         if not isinstance(raw, dict) or not isinstance(raw.get("cache"), list):
@@ -833,6 +943,14 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         return out
 
     def _get_clock(self, h) -> StaticClockData | None:
+        """Get clock info
+
+        Args:
+            h (_type_): handle
+
+        Returns:
+            StaticClockData | None: class instance
+        """
         amdsmi = self._amdsmi_mod()
         fn = getattr(amdsmi, "amdsmi_get_clk_freq", None)
         clk_type = getattr(amdsmi, "AmdSmiClkType", None)
@@ -899,6 +1017,14 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         self,
         args=None,
     ) -> tuple[TaskResult, AmdSmiDataModel | None]:
+        """Collect AmdSmi data from system
+
+        Args:
+            args (_type_, optional): _description_. Defaults to None.
+
+        Returns:
+            tuple[TaskResult, AmdSmiDataModel | None]: _description_
+        """
 
         if not self._bind_amdsmi_or_log():
             self.result.status = ExecutionStatus.NOT_RAN
