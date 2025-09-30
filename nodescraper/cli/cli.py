@@ -353,7 +353,6 @@ def main(arg_input: Optional[list[str]] = None):
     if arg_input is None:
         arg_input = sys.argv[1:]
 
-    # plugin_reg = PluginRegistry()
     plugin_reg = PluginRegistry(plugin_pkg=extra_pkgs)
     config_reg = ConfigRegistry()
     parser, plugin_subparser_map = build_parser(plugin_reg, config_reg)
