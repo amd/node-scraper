@@ -30,7 +30,7 @@ from nodescraper.models import AnalyzerArgs
 
 class AmdSmiAnalyzerArgs(AnalyzerArgs):
 
-    check_static_data: bool = True
+    check_static_data: bool = False
     expected_gpu_processes: Optional[int] = None
     expected_max_power: Optional[int] = None
     expected_driver_version: Optional[str] = None

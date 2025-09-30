@@ -62,9 +62,8 @@ class AmdSmiBaseModel(BaseModel):
         extra="forbid",  # Forbid extra fields not defined in the model
     )
 
-    # During building if a field contains a ValueUnit in its tuple, convert input into a ValueUnit
     def __init__(self, **data):
-        # Convert all fields that are supposed to be ValueUnit to ValueUnit if they are int | str | float
+        # Convert  int | str | float -> ValueUnit
         for field_name, field_type in self.model_fields.items():
             annotation = field_type.annotation
             target_type, container = find_annotation_in_container(annotation, ValueUnit)
@@ -72,7 +71,7 @@ class AmdSmiBaseModel(BaseModel):
                 continue
 
             if field_name in data and isinstance(data[field_name], (int, str, float)):
-                # If the field is a primitive type, convert it to ValueUnit dict and let validtor handle it
+                # If the field is a primitive type, convert it to ValueUnit dict for validator
                 data[field_name] = {
                     "value": data[field_name],
                     "unit": "",
@@ -104,7 +103,6 @@ class ValueUnit(BaseModel):
         if na(v):
             return None
 
-        # Dict form: normalize value and possibly extract unit
         if isinstance(v, dict):
             val = v.get("value")
             unit = v.get("unit", "")
@@ -218,7 +216,7 @@ class AmdSmiVersion(BaseModel):
 
 
 class PartitionAccelerator(BaseModel):
-    """Contains the tition data for the GPUs"""
+    """Accelerator partition data"""
 
     gpu_id: int
     memory: str | None = None
@@ -392,6 +390,8 @@ class StaticClockData(BaseModel):
 
 
 class AmdSmiStatic(BaseModel):
+    """Contains all static data"""
+
     gpu: int
     asic: StaticAsic
     bus: StaticBus
