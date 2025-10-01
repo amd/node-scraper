@@ -50,7 +50,7 @@ class PluginExecutor:
         connections: Optional[dict[str, dict | BaseModel]] = None,
         system_info: Optional[SystemInfo] = None,
         logger: Optional[logging.Logger] = None,
-        plugin_registry: Optional[PluginRegistry] = None,
+        plugin_registry: PluginRegistry | None = None,
         log_path: Optional[str] = None,
     ):
 
@@ -58,9 +58,7 @@ class PluginExecutor:
             logger = logging.getLogger(DEFAULT_LOGGER)
         self.logger = logger
 
-        if plugin_registry is None:
-            plugin_registry = PluginRegistry()
-        self.plugin_registry = plugin_registry
+        self.plugin_registry = plugin_registry or PluginRegistry()
 
         if system_info is None:
             system_info = SystemInfo()
