@@ -7,7 +7,6 @@ an example external plugin package you can install in editable mode.
 
 Use the same Python environment as `node-scraper`.
 
-**Option A — from the repo root:**
 ```bash
 cd ~/node-scraper
 pip install -e ./docs/node-scraper-external
