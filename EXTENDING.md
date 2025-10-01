@@ -131,38 +131,5 @@ if __name__ == "__main__":
 ```
 
 ## external plugins
-Plugins can be added and installed in the same env as node-scraper by following the
-next steps:
-1. Define your pyproject.toml in the right namespace `ext-nodescraper-plugins`:
-```
-[project]
-name = "ext-nodescraper-plugins"
-version = "0.1.0"
-requires-python = ">=3.10"
-dependencies = ["node-scraper"]
-
-[build-system]
-requires = ["setuptools", "wheel"]
-build-backend = "setuptools.build_meta"
-```
-
-2. Define your plugins:
-```
-(project root)
-├─ pyproject.toml
-└─ ext_nodescraper_plugins/
-   ├─ __init__.py
-   └─ sample_plugin/
-      ├─ __init__.py
-      └─ sample_plugin.py
-```
-
-3. Install your plugin in the same env as node-scraper:
-```
-pip install -e .
-```
-
-4. Double check that the external plugin is getting picked up by:
-```
-node-scraper run-plugins -h
-```
+External plugins can be added and installed in the same env as node-scraper plugins. Find an
+example of an external plugin in **`/docs/node-scraper-external`**
