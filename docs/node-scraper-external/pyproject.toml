@@ -1,0 +1,9 @@
+[project]
+name = "ext-nodescraper-plugins"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = ["node-scraper"]
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
