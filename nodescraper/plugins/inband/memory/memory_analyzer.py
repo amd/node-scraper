@@ -42,7 +42,14 @@ class MemoryAnalyzer(DataAnalyzer[MemoryDataModel, MemoryAnalyzerArgs]):
     def analyze_data(
         self, data: MemoryDataModel, args: Optional[MemoryAnalyzerArgs] = None
     ) -> TaskResult:
-        """Analyze the memory data to check if the memory usage is within the maximum allowed used memory."""
+        """Analyze the memory data to check if the memory usage is within the maximum allowed used memory.
+
+        Args:
+            data (MemoryDataModel): memory data to analyze.
+            args (Optional[MemoryAnalyzerArgs], optional): memory analysis arguments. Defaults to None.
+        Returns:
+            TaskResult: Result of the memory analysis containing the status and message.
+        """
 
         if not args:
             args = MemoryAnalyzerArgs()
@@ -84,10 +91,7 @@ class MemoryAnalyzer(DataAnalyzer[MemoryDataModel, MemoryAnalyzerArgs]):
             self.result.status = ExecutionStatus.ERROR
             self._log_event(
                 category=EventCategory.OS,
-                description=(
-                    f"{self.result.message}, Actual: {used_gb:.2f} GB "
-                    f"[computed from {base_source} {base_gb:.2f} GB × ratio={args.ratio:.2f}]"
-                ),
+                description=(f"{self.result.message}"),
                 priority=EventPriority.CRITICAL,
             )
 
