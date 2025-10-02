@@ -50,7 +50,7 @@ class PluginExecutor:
         connections: Optional[dict[str, dict | BaseModel]] = None,
         system_info: Optional[SystemInfo] = None,
         logger: Optional[logging.Logger] = None,
-        plugin_registry: PluginRegistry | None = None,
+        plugin_registry: Optional[PluginRegistry] = None,
         log_path: Optional[str] = None,
     ):
 
