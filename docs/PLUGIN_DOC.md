@@ -33,7 +33,7 @@ Collect BIOS details
 
 **Bases**: ['InBandDataCollector']
 
-**Link to code**: ../bios_collector.py
+**Link to code**: ../nodescraper/plugins/inband/bios/bios_collector.py
 
 ### Class Variables
 
@@ -57,7 +57,7 @@ Read linux cmdline data
 
 **Bases**: ['InBandDataCollector']
 
-**Link to code**: ../cmdline_collector.py
+**Link to code**: ../nodescraper/plugins/inband/cmdline/cmdline_collector.py
 
 ### Class Variables
 
@@ -80,7 +80,7 @@ Collect data on installed DIMMs
 
 **Bases**: ['InBandDataCollector']
 
-**Link to code**: ../dimm_collector.py
+**Link to code**: ../nodescraper/plugins/inband/dimm/dimm_collector.py
 
 ### Class Variables
 
@@ -104,7 +104,7 @@ Collect DKMS status and version data
 
 **Bases**: ['InBandDataCollector']
 
-**Link to code**: ../dkms_collector.py
+**Link to code**: ../nodescraper/plugins/inband/dkms/dkms_collector.py
 
 ### Class Variables
 
@@ -129,7 +129,7 @@ Read dmesg log
 
 **Bases**: ['InBandDataCollector']
 
-**Link to code**: ../dmesg_collector.py
+**Link to code**: ../nodescraper/plugins/inband/dmesg/dmesg_collector.py
 
 ### Class Variables
 
@@ -154,7 +154,7 @@ Read journal log via journalctl.
 
 **Bases**: ['InBandDataCollector']
 
-**Link to code**: ../journal_collector.py
+**Link to code**: ../nodescraper/plugins/inband/journal/journal_collector.py
 
 ### Class Variables
 
@@ -177,7 +177,7 @@ Read kernel version
 
 **Bases**: ['InBandDataCollector']
 
-**Link to code**: ../kernel_collector.py
+**Link to code**: ../nodescraper/plugins/inband/kernel/kernel_collector.py
 
 ### Class Variables
 
@@ -201,7 +201,7 @@ Read kernel modules and associated parameters
 
 **Bases**: ['InBandDataCollector']
 
-**Link to code**: ../kernel_module_collector.py
+**Link to code**: ../nodescraper/plugins/inband/kernel_module/kernel_module_collector.py
 
 ### Class Variables
 
@@ -225,7 +225,7 @@ Collect memory usage details
 
 **Bases**: ['InBandDataCollector']
 
-**Link to code**: ../memory_collector.py
+**Link to code**: ../nodescraper/plugins/inband/memory/memory_collector.py
 
 ### Class Variables
 
@@ -249,7 +249,7 @@ Collect NVMe details from the system.
 
 **Bases**: ['InBandDataCollector']
 
-**Link to code**: ../nvme_collector.py
+**Link to code**: ../nodescraper/plugins/inband/nvme/nvme_collector.py
 
 ### Provides Data
 
@@ -263,7 +263,7 @@ Collect OS details
 
 **Bases**: ['InBandDataCollector']
 
-**Link to code**: ../os_collector.py
+**Link to code**: ../nodescraper/plugins/inband/os/os_collector.py
 
 ### Class Variables
 
@@ -292,7 +292,7 @@ Collecting Package information from the system
 
 **Bases**: ['InBandDataCollector']
 
-**Link to code**: ../package_collector.py
+**Link to code**: ../nodescraper/plugins/inband/package/package_collector.py
 
 ### Class Variables
 
@@ -322,7 +322,7 @@ Collect Process details
 
 **Bases**: ['InBandDataCollector']
 
-**Link to code**: ../process_collector.py
+**Link to code**: ../nodescraper/plugins/inband/process/process_collector.py
 
 ### Class Variables
 
@@ -349,7 +349,7 @@ Collect ROCm version data
 
 **Bases**: ['InBandDataCollector']
 
-**Link to code**: ../rocm_collector.py
+**Link to code**: ../nodescraper/plugins/inband/rocm/rocm_collector.py
 
 ### Class Variables
 
@@ -373,7 +373,7 @@ Collect disk usage details
 
 **Bases**: ['InBandDataCollector']
 
-**Link to code**: ../storage_collector.py
+**Link to code**: ../nodescraper/plugins/inband/storage/storage_collector.py
 
 ### Class Variables
 
@@ -397,7 +397,7 @@ Collect sysctl kernel VM settings.
 
 **Bases**: ['InBandDataCollector']
 
-**Link to code**: ../sysctl_collector.py
+**Link to code**: ../nodescraper/plugins/inband/sysctl/sysctl_collector.py
 
 ### Class Variables
 
@@ -419,7 +419,7 @@ Read syslog log
 
 **Bases**: ['InBandDataCollector']
 
-**Link to code**: ../syslog_collector.py
+**Link to code**: ../nodescraper/plugins/inband/syslog/syslog_collector.py
 
 ### Class Variables
 
@@ -442,7 +442,7 @@ Collect last boot time and uptime from uptime command
 
 **Bases**: ['InBandDataCollector']
 
-**Link to code**: ../uptime_collector.py
+**Link to code**: ../nodescraper/plugins/inband/uptime/uptime_collector.py
 
 ### Class Variables
 
@@ -465,7 +465,7 @@ UptimeDataModel
 
 Base class for data model, used to define structure of data collected from the system
 
-**Link to code**: ../biosdata.py
+**Link to code**: ../nodescraper/plugins/inband/bios/biosdata.py
 
 **Bases**: ['DataModel']
 
@@ -479,7 +479,7 @@ Base class for data model, used to define structure of data collected from the s
 
 Base class for data model, used to define structure of data collected from the system
 
-**Link to code**: ../cmdlinedata.py
+**Link to code**: ../nodescraper/plugins/inband/cmdline/cmdlinedata.py
 
 **Bases**: ['DataModel']
 
@@ -493,7 +493,7 @@ Base class for data model, used to define structure of data collected from the s
 
 Base class for data model, used to define structure of data collected from the system
 
-**Link to code**: ../dimmdata.py
+**Link to code**: ../nodescraper/plugins/inband/dimm/dimmdata.py
 
 **Bases**: ['DataModel']
 
@@ -507,7 +507,7 @@ Base class for data model, used to define structure of data collected from the s
 
 Base class for data model, used to define structure of data collected from the system
 
-**Link to code**: ../dkmsdata.py
+**Link to code**: ../nodescraper/plugins/inband/dkms/dkmsdata.py
 
 **Bases**: ['DataModel']
 
@@ -522,7 +522,7 @@ Base class for data model, used to define structure of data collected from the s
 
 Data model for in band dmesg log
 
-**Link to code**: ../dmesgdata.py
+**Link to code**: ../nodescraper/plugins/inband/dmesg/dmesgdata.py
 
 **Bases**: ['DataModel']
 
@@ -536,7 +536,7 @@ Data model for in band dmesg log
 
 Data model for journal logs
 
-**Link to code**: ../journaldata.py
+**Link to code**: ../nodescraper/plugins/inband/journal/journaldata.py
 
 **Bases**: ['DataModel']
 
@@ -550,7 +550,7 @@ Data model for journal logs
 
 Base class for data model, used to define structure of data collected from the system
 
-**Link to code**: ../kerneldata.py
+**Link to code**: ../nodescraper/plugins/inband/kernel/kerneldata.py
 
 **Bases**: ['DataModel']
 
@@ -564,7 +564,7 @@ Base class for data model, used to define structure of data collected from the s
 
 Base class for data model, used to define structure of data collected from the system
 
-**Link to code**: ../kernel_module_data.py
+**Link to code**: ../nodescraper/plugins/inband/kernel_module/kernel_module_data.py
 
 **Bases**: ['DataModel']
 
@@ -578,7 +578,7 @@ Base class for data model, used to define structure of data collected from the s
 
 Base class for data model, used to define structure of data collected from the system
 
-**Link to code**: ../memorydata.py
+**Link to code**: ../nodescraper/plugins/inband/memory/memorydata.py
 
 **Bases**: ['DataModel']
 
@@ -593,7 +593,7 @@ Base class for data model, used to define structure of data collected from the s
 
 Base class for data model, used to define structure of data collected from the system
 
-**Link to code**: ../nvmedata.py
+**Link to code**: ../nodescraper/plugins/inband/nvme/nvmedata.py
 
 **Bases**: ['DataModel']
 
@@ -607,7 +607,7 @@ Base class for data model, used to define structure of data collected from the s
 
 Base class for data model, used to define structure of data collected from the system
 
-**Link to code**: ../osdata.py
+**Link to code**: ../nodescraper/plugins/inband/os/osdata.py
 
 **Bases**: ['DataModel']
 
@@ -622,7 +622,7 @@ Base class for data model, used to define structure of data collected from the s
 
 Pacakge data contains the package data for the system
 
-**Link to code**: ../packagedata.py
+**Link to code**: ../nodescraper/plugins/inband/package/packagedata.py
 
 **Bases**: ['DataModel']
 
@@ -636,7 +636,7 @@ Pacakge data contains the package data for the system
 
 Base class for data model, used to define structure of data collected from the system
 
-**Link to code**: ../processdata.py
+**Link to code**: ../nodescraper/plugins/inband/process/processdata.py
 
 **Bases**: ['DataModel']
 
@@ -652,7 +652,7 @@ Base class for data model, used to define structure of data collected from the s
 
 Base class for data model, used to define structure of data collected from the system
 
-**Link to code**: ../rocmdata.py
+**Link to code**: ../nodescraper/plugins/inband/rocm/rocmdata.py
 
 **Bases**: ['DataModel']
 
@@ -666,7 +666,7 @@ Base class for data model, used to define structure of data collected from the s
 
 Base class for data model, used to define structure of data collected from the system
 
-**Link to code**: ../storagedata.py
+**Link to code**: ../nodescraper/plugins/inband/storage/storagedata.py
 
 **Bases**: ['DataModel']
 
@@ -680,7 +680,7 @@ Base class for data model, used to define structure of data collected from the s
 
 Base class for data model, used to define structure of data collected from the system
 
-**Link to code**: ../sysctldata.py
+**Link to code**: ../nodescraper/plugins/inband/sysctl/sysctldata.py
 
 **Bases**: ['DataModel']
 
@@ -704,7 +704,7 @@ Base class for data model, used to define structure of data collected from the s
 
 Data model for in band syslog logs
 
-**Link to code**: ../syslogdata.py
+**Link to code**: ../nodescraper/plugins/inband/syslog/syslogdata.py
 
 **Bases**: ['DataModel']
 
@@ -718,7 +718,7 @@ Data model for in band syslog logs
 
 Base class for data model, used to define structure of data collected from the system
 
-**Link to code**: ../uptimedata.py
+**Link to code**: ../nodescraper/plugins/inband/uptime/uptimedata.py
 
 **Bases**: ['DataModel']
 
@@ -737,7 +737,7 @@ Check bios matches expected bios details
 
 **Bases**: ['DataAnalyzer']
 
-**Link to code**: ../bios_analyzer.py
+**Link to code**: ../nodescraper/plugins/inband/bios/bios_analyzer.py
 
 ### Required Data
 
@@ -751,7 +751,7 @@ Check cmdline matches expected kernel cmdline
 
 **Bases**: ['DataAnalyzer']
 
-**Link to code**: ../cmdline_analyzer.py
+**Link to code**: ../nodescraper/plugins/inband/cmdline/cmdline_analyzer.py
 
 ### Required Data
 
@@ -765,7 +765,7 @@ Check dkms matches expected status and version
 
 **Bases**: ['DataAnalyzer']
 
-**Link to code**: ../dkms_analyzer.py
+**Link to code**: ../nodescraper/plugins/inband/dkms/dkms_analyzer.py
 
 ### Required Data
 
@@ -779,7 +779,7 @@ Check dmesg for errors
 
 **Bases**: ['RegexAnalyzer']
 
-**Link to code**: ../dmesg_analyzer.py
+**Link to code**: ../nodescraper/plugins/inband/dmesg/dmesg_analyzer.py
 
 ### Class Variables
 
@@ -797,7 +797,7 @@ Check kernel matches expected versions
 
 **Bases**: ['DataAnalyzer']
 
-**Link to code**: ../kernel_analyzer.py
+**Link to code**: ../nodescraper/plugins/inband/kernel/kernel_analyzer.py
 
 ### Required Data
 
@@ -811,7 +811,7 @@ Check kernel matches expected versions
 
 **Bases**: ['DataAnalyzer']
 
-**Link to code**: ../kernel_module_analyzer.py
+**Link to code**: ../nodescraper/plugins/inband/kernel_module/kernel_module_analyzer.py
 
 ### Required Data
 
@@ -825,7 +825,7 @@ Check memory usage is within the maximum allowed used memory
 
 **Bases**: ['DataAnalyzer']
 
-**Link to code**: ../memory_analyzer.py
+**Link to code**: ../nodescraper/plugins/inband/memory/memory_analyzer.py
 
 ### Required Data
 
@@ -839,7 +839,7 @@ Check os matches expected versions
 
 **Bases**: ['DataAnalyzer']
 
-**Link to code**: ../os_analyzer.py
+**Link to code**: ../nodescraper/plugins/inband/os/os_analyzer.py
 
 ### Required Data
 
@@ -853,7 +853,7 @@ Check the package version data against the expected package version data
 
 **Bases**: ['DataAnalyzer']
 
-**Link to code**: ../package_analyzer.py
+**Link to code**: ../nodescraper/plugins/inband/package/package_analyzer.py
 
 ### Required Data
 
@@ -867,7 +867,7 @@ Check cpu and kfd processes are within allowed maximum cpu and gpu usage
 
 **Bases**: ['DataAnalyzer']
 
-**Link to code**: ../process_analyzer.py
+**Link to code**: ../nodescraper/plugins/inband/process/process_analyzer.py
 
 ### Required Data
 
@@ -881,7 +881,7 @@ Check ROCm matches expected versions
 
 **Bases**: ['DataAnalyzer']
 
-**Link to code**: ../rocm_analyzer.py
+**Link to code**: ../nodescraper/plugins/inband/rocm/rocm_analyzer.py
 
 ### Required Data
 
@@ -895,7 +895,7 @@ Check storage usage
 
 **Bases**: ['DataAnalyzer']
 
-**Link to code**: ../storage_analyzer.py
+**Link to code**: ../nodescraper/plugins/inband/storage/storage_analyzer.py
 
 ### Required Data
 
@@ -909,7 +909,7 @@ Check sysctl matches expected sysctl details
 
 **Bases**: ['DataAnalyzer']
 
-**Link to code**: ../sysctl_analyzer.py
+**Link to code**: ../nodescraper/plugins/inband/sysctl/sysctl_analyzer.py
 
 ### Required Data
 
@@ -921,7 +921,7 @@ Check sysctl matches expected sysctl details
 
 **Bases**: ['AnalyzerArgs']
 
-**Link to code**: ../analyzer_args.py
+**Link to code**: ../nodescraper/plugins/inband/bios/analyzer_args.py
 
 ### Class Variables
 
@@ -936,7 +936,7 @@ Check sysctl matches expected sysctl details
 
 **Bases**: ['AnalyzerArgs']
 
-**Link to code**: ../analyzer_args.py
+**Link to code**: ../nodescraper/plugins/inband/cmdline/analyzer_args.py
 
 ### Class Variables
 
@@ -951,7 +951,7 @@ Check sysctl matches expected sysctl details
 
 **Bases**: ['AnalyzerArgs']
 
-**Link to code**: ../analyzer_args.py
+**Link to code**: ../nodescraper/plugins/inband/dkms/analyzer_args.py
 
 ### Class Variables
 
@@ -967,7 +967,7 @@ Check sysctl matches expected sysctl details
 
 **Bases**: ['AnalyzerArgs']
 
-**Link to code**: ../analyzer_args.py
+**Link to code**: ../nodescraper/plugins/inband/kernel/analyzer_args.py
 
 ### Class Variables
 
@@ -982,7 +982,7 @@ Check sysctl matches expected sysctl details
 
 **Bases**: ['AnalyzerArgs']
 
-**Link to code**: ../analyzer_args.py
+**Link to code**: ../nodescraper/plugins/inband/kernel_module/analyzer_args.py
 
 ### Class Variables
 
@@ -997,7 +997,7 @@ Check sysctl matches expected sysctl details
 
 **Bases**: ['AnalyzerArgs']
 
-**Link to code**: ../analyzer_args.py
+**Link to code**: ../nodescraper/plugins/inband/os/analyzer_args.py
 
 ### Class Variables
 
@@ -1012,7 +1012,7 @@ Check sysctl matches expected sysctl details
 
 **Bases**: ['AnalyzerArgs']
 
-**Link to code**: ../analyzer_args.py
+**Link to code**: ../nodescraper/plugins/inband/package/analyzer_args.py
 
 ### Class Variables
 
@@ -1027,7 +1027,7 @@ Check sysctl matches expected sysctl details
 
 **Bases**: ['AnalyzerArgs']
 
-**Link to code**: ../analyzer_args.py
+**Link to code**: ../nodescraper/plugins/inband/process/analyzer_args.py
 
 ### Class Variables
 
@@ -1042,7 +1042,7 @@ Check sysctl matches expected sysctl details
 
 **Bases**: ['BaseModel']
 
-**Link to code**: ../analyzer_args.py
+**Link to code**: ../nodescraper/plugins/inband/rocm/analyzer_args.py
 
 ### Class Variables
 
@@ -1056,7 +1056,7 @@ Check sysctl matches expected sysctl details
 
 **Bases**: ['AnalyzerArgs']
 
-**Link to code**: ../analyzer_args.py
+**Link to code**: ../nodescraper/plugins/inband/sysctl/analyzer_args.py
 
 ### Class Variables
 
