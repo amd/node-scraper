@@ -40,11 +40,11 @@ class SyslogCollector(InBandDataCollector[SyslogData, None]):
 
     DATA_MODEL = SyslogData
 
-    SYSLOG_CMD = r"ls -1 /var/log/syslog* 2>/dev/null | grep -E '^/var/log/syslog(\.[0-9]+(\.gz)?)?$' || true"
+    CMD = r"ls -1 /var/log/syslog* 2>/dev/null | grep -E '^/var/log/syslog(\.[0-9]+(\.gz)?)?$' || true"
 
     def _collect_syslog_rotations(self) -> list[TextFileArtifact]:
         ret = []
-        list_res = self._run_sut_cmd(self.SYSLOG_CMD, sudo=True)
+        list_res = self._run_sut_cmd(self.CMD, sudo=True)
         paths = [p.strip() for p in (list_res.stdout or "").splitlines() if p.strip()]
         if not paths:
             self._log_event(

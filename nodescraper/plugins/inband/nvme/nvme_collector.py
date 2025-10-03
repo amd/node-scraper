@@ -75,7 +75,7 @@ class NvmeCollector(InBandDataCollector[NvmeDataModel, None]):
 
         for dev in nvme_devices:
             device_data = {}
-            commands = {
+            CMD = {
                 "smart_log": f"nvme smart-log {dev}",
                 "error_log": f"nvme error-log {dev} --log-entries=256",
                 "id_ctrl": f"nvme id-ctrl {dev}",
@@ -86,7 +86,7 @@ class NvmeCollector(InBandDataCollector[NvmeDataModel, None]):
                 "telemetry_log": f"nvme telemetry-log {dev} --output-file={dev}_{f_name}",
             }
 
-            for key, cmd in commands.items():
+            for key, cmd in CMD.items():
                 res = self._run_sut_cmd(cmd, sudo=True)
                 if "--output-file" in cmd:
                     _ = self._read_sut_file(filename=f"{dev}_{f_name}", encoding=None)

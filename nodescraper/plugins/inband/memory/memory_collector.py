@@ -37,6 +37,11 @@ class MemoryCollector(InBandDataCollector[MemoryDataModel, None]):
 
     DATA_MODEL = MemoryDataModel
 
+    CMD_WINDOWS = (
+        "wmic OS get FreePhysicalMemory /Value; wmic ComputerSystem get TotalPhysicalMemory /Value"
+    )
+    CMD = "free -b"
+
     def collect_data(self, args=None) -> tuple[TaskResult, MemoryDataModel | None]:
         """
         Collects memory usage details from the system.
@@ -46,16 +51,14 @@ class MemoryCollector(InBandDataCollector[MemoryDataModel, None]):
         """
         mem_free, mem_total = None, None
         if self.system_info.os_family == OSFamily.WINDOWS:
-            os_memory_cmd = self._run_sut_cmd(
-                "wmic OS get FreePhysicalMemory /Value; wmic ComputerSystem get TotalPhysicalMemory /Value"
-            )
+            os_memory_cmd = self._run_sut_cmd(self.CMD_WINDOWS)
             if os_memory_cmd.exit_code == 0:
                 mem_free = re.search(r"FreePhysicalMemory=(\d+)", os_memory_cmd.stdout).group(
                     1
                 )  # bytes
                 mem_total = re.search(r"TotalPhysicalMemory=(\d+)", os_memory_cmd.stdout).group(1)
         else:
-            os_memory_cmd = self._run_sut_cmd("free -b")
+            os_memory_cmd = self._run_sut_cmd(self.CMD)
             if os_memory_cmd.exit_code == 0:
                 pattern = r"Mem:\s+(\d\.?\d*\w+)\s+\d\.?\d*\w+\s+(\d\.?\d*\w+)"
                 mem_free = re.search(pattern, os_memory_cmd.stdout).group(2)
