@@ -91,7 +91,7 @@ class MemoryAnalyzer(DataAnalyzer[MemoryDataModel, MemoryAnalyzerArgs]):
             self.result.status = ExecutionStatus.ERROR
             self._log_event(
                 category=EventCategory.OS,
-                description=(f"{self.result.message}"),
+                description=self.result.message,
                 priority=EventPriority.CRITICAL,
             )
 
