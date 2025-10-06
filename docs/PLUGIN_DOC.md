@@ -13,7 +13,7 @@
 | nodescraper.plugins.inband.kernel.kernel_plugin.KernelPlugin | [KernelDataModel](#KernelDataModel-Model) | [KernelCollector](#Collector-Class-KernelCollector) | [KernelAnalyzer](#Data-Analyzer-Class-KernelAnalyzer) | KernelAnalyzerArgs | sh -c 'uname -r'<br>wmic os get Version /Value |
 | nodescraper.plugins.inband.kernel_module.kernel_module_plugin.KernelModulePlugin | [KernelModuleDataModel](#KernelModuleDataModel-Model) | [KernelModuleCollector](#Collector-Class-KernelModuleCollector) | [KernelModuleAnalyzer](#Data-Analyzer-Class-KernelModuleAnalyzer) | KernelModuleAnalyzerArgs | cat /proc/modules<br>wmic os get Version /Value |
 | nodescraper.plugins.inband.memory.memory_plugin.MemoryPlugin | [MemoryDataModel](#MemoryDataModel-Model) | [MemoryCollector](#Collector-Class-MemoryCollector) | [MemoryAnalyzer](#Data-Analyzer-Class-MemoryAnalyzer) | - | free -b<br>wmic OS get FreePhysicalMemory /Value; wmic ComputerSystem get TotalPhysicalMemory /Value |
-| nodescraper.plugins.inband.nvme.nvme_plugin.NvmePlugin | [NvmeDataModel](#NvmeDataModel-Model) | [NvmeCollector](#Collector-Class-NvmeCollector) | - | - | - |
+| nodescraper.plugins.inband.nvme.nvme_plugin.NvmePlugin | [NvmeDataModel](#NvmeDataModel-Model) | [NvmeCollector](#Collector-Class-NvmeCollector) | - | - | nvme smart-log {dev}<br>nvme error-log {dev} --log-entries=256<br>nvme id-ctrl {dev}<br>nvme id-ns {dev}{ns}<br>nvme fw-log {dev}<br>nvme self-test-log {dev}<br>nvme get-log {dev} --log-id=6 --log-len=512<br>nvme telemetry-log {dev} --output-file={dev}_{f_name} |
 | nodescraper.plugins.inband.os.os_plugin.OsPlugin | [OsDataModel](#OsDataModel-Model) | [OsCollector](#Collector-Class-OsCollector) | [OsAnalyzer](#Data-Analyzer-Class-OsAnalyzer) | OsAnalyzerArgs | sh -c '( lsb_release -ds || (cat /etc/*release | grep PRETTY_NAME) || uname -om ) 2>/dev/null | head -n1'<br>cat /etc/*release | grep VERSION_ID<br>wmic os get Version /value<br>wmic os get Caption /Value |
 | nodescraper.plugins.inband.package.package_plugin.PackagePlugin | [PackageDataModel](#PackageDataModel-Model) | [PackageCollector](#Collector-Class-PackageCollector) | [PackageAnalyzer](#Data-Analyzer-Class-PackageAnalyzer) | PackageAnalyzerArgs | dnf list --installed<br>dpkg-query -W<br>pacman -Q<br>cat /etc/*release<br>wmic product get name,version |
 | nodescraper.plugins.inband.process.process_plugin.ProcessPlugin | [ProcessDataModel](#ProcessDataModel-Model) | [ProcessCollector](#Collector-Class-ProcessCollector) | [ProcessAnalyzer](#Data-Analyzer-Class-ProcessAnalyzer) | ProcessAnalyzerArgs | top -b -n 1<br>rocm-smi --showpids<br>top -b -n 1 -o %CPU  |
@@ -251,9 +251,26 @@ Collect NVMe details from the system.
 
 **Link to code**: ../nodescraper/plugins/inband/nvme/nvme_collector.py
 
+### Class Variables
+
+- **CMD_LINUX**: `{'smart_log': 'nvme smart-log {dev}', 'error_log': 'nvme error-log {dev} --log-entries=256', 'id_ctrl': 'nvme id-ctrl {dev}', 'id_ns': 'nvme id-ns {dev}{ns}', 'fw_log': 'nvme fw-log {dev}', 'self_test_log': 'nvme self-test-log {dev}', 'get_log': 'nvme get-log {dev} --log-id=6 --log-len=512', 'telemetry_log': 'nvme telemetry-log {dev} --output-file={dev}_{f_name}'}`
+- **CMD_TEMPLATES**: `['nvme smart-log {dev}', 'nvme error-log {dev} --log-entries=256', 'nvme id-ctrl {dev}', 'nvme id-ns {dev}{ns}', 'nvme fw-log {dev}', 'nvme self-test-log {dev}', 'nvme get-log {dev} --log-id=6 --log-len=512', 'nvme telemetry-log {dev} --output-file={dev}_{f_name}']`
+- **TELEMETRY_FILENAME**: `telemetry_log.bin`
+
 ### Provides Data
 
 NvmeDataModel
+
+### Commands
+
+- nvme smart-log {dev}
+- nvme error-log {dev} --log-entries=256
+- nvme id-ctrl {dev}
+- nvme id-ns {dev}{ns}
+- nvme fw-log {dev}
+- nvme self-test-log {dev}
+- nvme get-log {dev} --log-id=6 --log-len=512
+- nvme telemetry-log {dev} --output-file={dev}_{f_name}
 
 ## Collector Class OsCollector
 
@@ -461,10 +478,6 @@ UptimeDataModel
 
 ## BiosDataModel Model
 
-### Description
-
-Base class for data model, used to define structure of data collected from the system
-
 **Link to code**: ../nodescraper/plugins/inband/bios/biosdata.py
 
 **Bases**: ['DataModel']
@@ -474,10 +487,6 @@ Base class for data model, used to define structure of data collected from the s
 - **bios_version**: `<class 'str'>`
 
 ## CmdlineDataModel Model
-
-### Description
-
-Base class for data model, used to define structure of data collected from the system
 
 **Link to code**: ../nodescraper/plugins/inband/cmdline/cmdlinedata.py
 
@@ -489,10 +498,6 @@ Base class for data model, used to define structure of data collected from the s
 
 ## DimmDataModel Model
 
-### Description
-
-Base class for data model, used to define structure of data collected from the system
-
 **Link to code**: ../nodescraper/plugins/inband/dimm/dimmdata.py
 
 **Bases**: ['DataModel']
@@ -502,10 +507,6 @@ Base class for data model, used to define structure of data collected from the s
 - **dimms**: `<class 'str'>`
 
 ## DkmsDataModel Model
-
-### Description
-
-Base class for data model, used to define structure of data collected from the system
 
 **Link to code**: ../nodescraper/plugins/inband/dkms/dkmsdata.py
 
@@ -546,10 +547,6 @@ Data model for journal logs
 
 ## KernelDataModel Model
 
-### Description
-
-Base class for data model, used to define structure of data collected from the system
-
 **Link to code**: ../nodescraper/plugins/inband/kernel/kerneldata.py
 
 **Bases**: ['DataModel']
@@ -560,10 +557,6 @@ Base class for data model, used to define structure of data collected from the s
 
 ## KernelModuleDataModel Model
 
-### Description
-
-Base class for data model, used to define structure of data collected from the system
-
 **Link to code**: ../nodescraper/plugins/inband/kernel_module/kernel_module_data.py
 
 **Bases**: ['DataModel']
@@ -573,10 +566,6 @@ Base class for data model, used to define structure of data collected from the s
 - **kernel_modules**: `<class 'dict'>`
 
 ## MemoryDataModel Model
-
-### Description
-
-Base class for data model, used to define structure of data collected from the system
 
 **Link to code**: ../nodescraper/plugins/inband/memory/memorydata.py
 
@@ -589,10 +578,6 @@ Base class for data model, used to define structure of data collected from the s
 
 ## NvmeDataModel Model
 
-### Description
-
-Base class for data model, used to define structure of data collected from the system
-
 **Link to code**: ../nodescraper/plugins/inband/nvme/nvmedata.py
 
 **Bases**: ['DataModel']
@@ -602,10 +587,6 @@ Base class for data model, used to define structure of data collected from the s
 - **devices**: `dict[str, nodescraper.plugins.inband.nvme.nvmedata.DeviceNvmeData]`
 
 ## OsDataModel Model
-
-### Description
-
-Base class for data model, used to define structure of data collected from the system
 
 **Link to code**: ../nodescraper/plugins/inband/os/osdata.py
 
@@ -632,10 +613,6 @@ Pacakge data contains the package data for the system
 
 ## ProcessDataModel Model
 
-### Description
-
-Base class for data model, used to define structure of data collected from the system
-
 **Link to code**: ../nodescraper/plugins/inband/process/processdata.py
 
 **Bases**: ['DataModel']
@@ -648,10 +625,6 @@ Base class for data model, used to define structure of data collected from the s
 
 ## RocmDataModel Model
 
-### Description
-
-Base class for data model, used to define structure of data collected from the system
-
 **Link to code**: ../nodescraper/plugins/inband/rocm/rocmdata.py
 
 **Bases**: ['DataModel']
@@ -662,10 +635,6 @@ Base class for data model, used to define structure of data collected from the s
 
 ## StorageDataModel Model
 
-### Description
-
-Base class for data model, used to define structure of data collected from the system
-
 **Link to code**: ../nodescraper/plugins/inband/storage/storagedata.py
 
 **Bases**: ['DataModel']
@@ -675,10 +644,6 @@ Base class for data model, used to define structure of data collected from the s
 - **storage_data**: `dict[str, nodescraper.plugins.inband.storage.storagedata.DeviceStorageData]`
 
 ## SysctlDataModel Model
-
-### Description
-
-Base class for data model, used to define structure of data collected from the system
 
 **Link to code**: ../nodescraper/plugins/inband/sysctl/sysctldata.py
 
@@ -713,10 +678,6 @@ Data model for in band syslog logs
 - **syslog_logs**: `list[nodescraper.connection.inband.inband.TextFileArtifact]`
 
 ## UptimeDataModel Model
-
-### Description
-
-Base class for data model, used to define structure of data collected from the system
 
 **Link to code**: ../nodescraper/plugins/inband/uptime/uptimedata.py
 
@@ -926,6 +887,8 @@ Check sysctl matches expected sysctl details
 ### Class Variables
 
 - **model_config**: `{'extra': 'forbid', 'exclude_none': True}`
+- **model_fields**: `{'exp_bios_version': FieldInfo(annotation=list[str], required=False, default_factory=list), 'regex_match': FieldInfo(annotation=bool, required=False, default=False)}`
+- **model_computed_fields**: `{}`
 
 ### Annotations / fields
 
@@ -941,6 +904,8 @@ Check sysctl matches expected sysctl details
 ### Class Variables
 
 - **model_config**: `{'extra': 'forbid', 'exclude_none': True}`
+- **model_fields**: `{'required_cmdline': FieldInfo(annotation=Union[str, list], required=False, default_factory=list), 'banned_cmdline': FieldInfo(annotation=Union[str, list], required=False, default_factory=list)}`
+- **model_computed_fields**: `{}`
 
 ### Annotations / fields
 
@@ -956,6 +921,8 @@ Check sysctl matches expected sysctl details
 ### Class Variables
 
 - **model_config**: `{'extra': 'forbid', 'exclude_none': True}`
+- **model_fields**: `{'dkms_status': FieldInfo(annotation=Union[str, list], required=False, default_factory=list), 'dkms_version': FieldInfo(annotation=Union[str, list], required=False, default_factory=list), 'regex_match': FieldInfo(annotation=bool, required=False, default=False)}`
+- **model_computed_fields**: `{}`
 
 ### Annotations / fields
 
@@ -972,6 +939,8 @@ Check sysctl matches expected sysctl details
 ### Class Variables
 
 - **model_config**: `{'extra': 'forbid', 'exclude_none': True}`
+- **model_fields**: `{'exp_kernel': FieldInfo(annotation=Union[str, list], required=False, default_factory=list), 'regex_match': FieldInfo(annotation=bool, required=False, default=False)}`
+- **model_computed_fields**: `{}`
 
 ### Annotations / fields
 
@@ -987,6 +956,8 @@ Check sysctl matches expected sysctl details
 ### Class Variables
 
 - **model_config**: `{'extra': 'forbid', 'exclude_none': True}`
+- **model_fields**: `{'kernel_modules': FieldInfo(annotation=dict[str, dict], required=False, default={}), 'regex_filter': FieldInfo(annotation=list[str], required=False, default=['amd'])}`
+- **model_computed_fields**: `{}`
 
 ### Annotations / fields
 
@@ -1002,6 +973,8 @@ Check sysctl matches expected sysctl details
 ### Class Variables
 
 - **model_config**: `{'extra': 'forbid', 'exclude_none': True}`
+- **model_fields**: `{'exp_os': FieldInfo(annotation=Union[str, list], required=False, default_factory=list), 'exact_match': FieldInfo(annotation=bool, required=False, default=True)}`
+- **model_computed_fields**: `{}`
 
 ### Annotations / fields
 
@@ -1017,6 +990,8 @@ Check sysctl matches expected sysctl details
 ### Class Variables
 
 - **model_config**: `{'extra': 'forbid', 'exclude_none': True}`
+- **model_fields**: `{'exp_package_ver': FieldInfo(annotation=dict[str, Union[str, NoneType]], required=False, default_factory=dict), 'regex_match': FieldInfo(annotation=bool, required=False, default=False)}`
+- **model_computed_fields**: `{}`
 
 ### Annotations / fields
 
@@ -1032,6 +1007,8 @@ Check sysctl matches expected sysctl details
 ### Class Variables
 
 - **model_config**: `{'extra': 'forbid', 'exclude_none': True}`
+- **model_fields**: `{'max_kfd_processes': FieldInfo(annotation=int, required=False, default=0), 'max_cpu_usage': FieldInfo(annotation=float, required=False, default=20.0)}`
+- **model_computed_fields**: `{}`
 
 ### Annotations / fields
 
@@ -1047,6 +1024,8 @@ Check sysctl matches expected sysctl details
 ### Class Variables
 
 - **model_config**: `{}`
+- **model_fields**: `{'exp_rocm': FieldInfo(annotation=Union[str, list], required=False, default_factory=list)}`
+- **model_computed_fields**: `{}`
 
 ### Annotations / fields
 
@@ -1061,6 +1040,8 @@ Check sysctl matches expected sysctl details
 ### Class Variables
 
 - **model_config**: `{'extra': 'forbid', 'exclude_none': True}`
+- **model_fields**: `{'exp_vm_swappiness': FieldInfo(annotation=Union[int, NoneType], required=False, default=None), 'exp_vm_numa_balancing': FieldInfo(annotation=Union[int, NoneType], required=False, default=None), 'exp_vm_oom_kill_allocating_task': FieldInfo(annotation=Union[int, NoneType], required=False, default=None), 'exp_vm_compaction_proactiveness': FieldInfo(annotation=Union[int, NoneType], required=False, default=None), 'exp_vm_compact_unevictable_allowed': FieldInfo(annotation=Union[int, NoneType], required=False, default=None), 'exp_vm_extfrag_threshold': FieldInfo(annotation=Union[int, NoneType], required=False, default=None), 'exp_vm_zone_reclaim_mode': FieldInfo(annotation=Union[int, NoneType], required=False, default=None), 'exp_vm_dirty_background_ratio': FieldInfo(annotation=Union[int, NoneType], required=False, default=None), 'exp_vm_dirty_ratio': FieldInfo(annotation=Union[int, NoneType], required=False, default=None), 'exp_vm_dirty_writeback_centisecs': FieldInfo(annotation=Union[int, NoneType], required=False, default=None), 'exp_kernel_numa_balancing': FieldInfo(annotation=Union[int, NoneType], required=False, default=None)}`
+- **model_computed_fields**: `{}`
 
 ### Annotations / fields
 
