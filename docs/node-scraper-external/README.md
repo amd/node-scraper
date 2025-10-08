@@ -9,6 +9,7 @@ Use the same Python environment as `node-scraper`.
 
 ```bash
 cd ~/node-scraper
+source venv/bin/activate
 pip install -e ./docs/node-scraper-external
 ```
 You should see `ext-nodescraper-plugins` installed in editable mode.
@@ -40,7 +41,6 @@ Add new modules under the **`ext_nodescraper_plugins/`** package. Example layout
 /docs/node-scraper-external
 ├─ pyproject.toml
 └─ ext_nodescraper_plugins/
-   ├─ __init__.py
    └─ sample/
       ├─ __init__.py
       └─ sample_plugin.py
