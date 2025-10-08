@@ -58,9 +58,7 @@ class PluginExecutor:
             logger = logging.getLogger(DEFAULT_LOGGER)
         self.logger = logger
 
-        if plugin_registry is None:
-            plugin_registry = PluginRegistry()
-        self.plugin_registry = plugin_registry
+        self.plugin_registry = plugin_registry or PluginRegistry()
 
         if system_info is None:
             system_info = SystemInfo()
