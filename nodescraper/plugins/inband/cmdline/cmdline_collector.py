@@ -37,6 +37,8 @@ class CmdlineCollector(InBandDataCollector[CmdlineDataModel, None]):
 
     DATA_MODEL = CmdlineDataModel
 
+    CMD = "cat /proc/cmdline"
+
     def collect_data(
         self,
         args=None,
@@ -47,7 +49,7 @@ class CmdlineCollector(InBandDataCollector[CmdlineDataModel, None]):
         Returns:
             tuple[TaskResult, CmdlineDataModel | None]: tuple containing the task result and the cmdline data model if successful, otherwise None.
         """
-        res = self._run_sut_cmd("cat /proc/cmdline")
+        res = self._run_sut_cmd(self.CMD)
         cmdline_data = None
         if res.exit_code == 0:
             cmdline_data = CmdlineDataModel(cmdline=res.stdout)

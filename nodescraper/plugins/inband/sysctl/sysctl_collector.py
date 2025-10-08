@@ -35,6 +35,7 @@ class SysctlCollector(InBandDataCollector[SysctlDataModel, None]):
     """Collect sysctl kernel VM settings."""
 
     DATA_MODEL = SysctlDataModel
+    CMD = "sysctl -n"
 
     def collect_data(
         self,
@@ -54,7 +55,7 @@ class SysctlCollector(InBandDataCollector[SysctlDataModel, None]):
 
         for field_name in SysctlDataModel.model_fields:
             sysctl_key = field_name.replace("_", ".", 1)
-            res = self._run_sut_cmd(f"sysctl -n {sysctl_key}")
+            res = self._run_sut_cmd(f"{self.CMD} {sysctl_key}")
 
             if res.exit_code == 0:
                 try:

@@ -42,15 +42,15 @@ class DmesgCollector(InBandDataCollector[DmesgData, DmesgCollectorArgs]):
 
     DATA_MODEL = DmesgData
 
-    DMESG_CMD = "dmesg --time-format iso -x"
+    CMD = "dmesg --time-format iso -x"
 
-    DMESG_LOGS_CMD = (
+    CMD_LOGS = (
         r"ls -1 /var/log/dmesg* 2>/dev/null | grep -E '^/var/log/dmesg(\.[0-9]+(\.gz)?)?$' || true"
     )
 
     def _collect_dmesg_rotations(self):
         """Collect dmesg logs"""
-        list_res = self._run_sut_cmd(self.DMESG_LOGS_CMD, sudo=True)
+        list_res = self._run_sut_cmd(self.CMD_LOGS, sudo=True)
         paths = [p.strip() for p in (list_res.stdout or "").splitlines() if p.strip()]
         if not paths:
             self._log_event(
@@ -122,7 +122,7 @@ class DmesgCollector(InBandDataCollector[DmesgData, DmesgCollectorArgs]):
         """
 
         self.logger.info("Running dmesg command on system")
-        res = self._run_sut_cmd(self.DMESG_CMD, sudo=True, log_artifact=False)
+        res = self._run_sut_cmd(self.CMD, sudo=True, log_artifact=False)
         if res.exit_code != 0:
             self._log_event(
                 category=EventCategory.OS,
