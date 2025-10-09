@@ -38,7 +38,7 @@ import sys
 from pathlib import Path
 from typing import Any, Iterable, List, Type
 
-LINK_BASE_DEFAULT = "../"
+LINK_BASE_DEFAULT = "https://github.com/amd/node-scraper/blob/HEAD/"
 REL_ROOT_DEFAULT = "nodescraper/plugins/inband"
 DEFAULT_ROOT_PACKAGE = "nodescraper.plugins"
 
