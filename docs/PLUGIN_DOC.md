@@ -832,10 +832,6 @@ Check sysctl matches expected sysctl details
 
 **Link to code**: [analyzer_args.py](../nodescraper/plugins/inband/bios/analyzer_args.py)
 
-### Class Variables
-
-- **model_config**: `{'extra': 'forbid', 'exclude_none': True}`
-
 ### Annotations / fields
 
 - **exp_bios_version**: `list[str]`
@@ -847,10 +843,6 @@ Check sysctl matches expected sysctl details
 
 **Link to code**: [analyzer_args.py](../nodescraper/plugins/inband/cmdline/analyzer_args.py)
 
-### Class Variables
-
-- **model_config**: `{'extra': 'forbid', 'exclude_none': True}`
-
 ### Annotations / fields
 
 - **required_cmdline**: `str | list`
@@ -861,10 +853,6 @@ Check sysctl matches expected sysctl details
 **Bases**: ['AnalyzerArgs']
 
 **Link to code**: [analyzer_args.py](../nodescraper/plugins/inband/dkms/analyzer_args.py)
-
-### Class Variables
-
-- **model_config**: `{'extra': 'forbid', 'exclude_none': True}`
 
 ### Annotations / fields
 
@@ -878,10 +866,6 @@ Check sysctl matches expected sysctl details
 
 **Link to code**: [analyzer_args.py](../nodescraper/plugins/inband/kernel/analyzer_args.py)
 
-### Class Variables
-
-- **model_config**: `{'extra': 'forbid', 'exclude_none': True}`
-
 ### Annotations / fields
 
 - **exp_kernel**: `str | list`
@@ -892,10 +876,6 @@ Check sysctl matches expected sysctl details
 **Bases**: ['AnalyzerArgs']
 
 **Link to code**: [analyzer_args.py](../nodescraper/plugins/inband/kernel_module/analyzer_args.py)
-
-### Class Variables
-
-- **model_config**: `{'extra': 'forbid', 'exclude_none': True}`
 
 ### Annotations / fields
 
@@ -908,10 +888,6 @@ Check sysctl matches expected sysctl details
 
 **Link to code**: [analyzer_args.py](../nodescraper/plugins/inband/os/analyzer_args.py)
 
-### Class Variables
-
-- **model_config**: `{'extra': 'forbid', 'exclude_none': True}`
-
 ### Annotations / fields
 
 - **exp_os**: `str | list`
@@ -922,10 +898,6 @@ Check sysctl matches expected sysctl details
 **Bases**: ['AnalyzerArgs']
 
 **Link to code**: [analyzer_args.py](../nodescraper/plugins/inband/package/analyzer_args.py)
-
-### Class Variables
-
-- **model_config**: `{'extra': 'forbid', 'exclude_none': True}`
 
 ### Annotations / fields
 
@@ -938,10 +910,6 @@ Check sysctl matches expected sysctl details
 
 **Link to code**: [analyzer_args.py](../nodescraper/plugins/inband/process/analyzer_args.py)
 
-### Class Variables
-
-- **model_config**: `{'extra': 'forbid', 'exclude_none': True}`
-
 ### Annotations / fields
 
 - **max_kfd_processes**: `<class 'int'>`
@@ -953,10 +921,6 @@ Check sysctl matches expected sysctl details
 
 **Link to code**: [analyzer_args.py](../nodescraper/plugins/inband/rocm/analyzer_args.py)
 
-### Class Variables
-
-- **model_config**: `{}`
-
 ### Annotations / fields
 
 - **exp_rocm**: `str | list`
@@ -966,10 +930,6 @@ Check sysctl matches expected sysctl details
 **Bases**: ['AnalyzerArgs']
 
 **Link to code**: [analyzer_args.py](../nodescraper/plugins/inband/sysctl/analyzer_args.py)
-
-### Class Variables
-
-- **model_config**: `{'extra': 'forbid', 'exclude_none': True}`
 
 ### Annotations / fields
 

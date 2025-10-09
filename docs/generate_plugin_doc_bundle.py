@@ -378,11 +378,6 @@ def render_analyzer_args_section(args_cls: type, link_base: str, rel_root: str |
     _url = setup_link(args_cls, link_base, rel_root)
     s += md_kv("Link to code", f"[{Path(_url).name}]({_url})")
 
-    exclude = {"__doc__", "__module__", "__weakref__", "__dict__"}
-    cv = class_vars_dump(args_cls, exclude)
-    if cv:
-        s += md_header("Class Variables", 3) + md_list(cv)
-
     anns = get_attr(args_cls, "__annotations__", {}) or {}
     if anns:
         ann_items = [f"**{k}**: `{v}`" for k, v in anns.items()]
