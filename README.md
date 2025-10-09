@@ -19,6 +19,8 @@ system debug.
   - [Plugin config: `--plugin-configs` command](#plugin-config---plugin-configs-command)
   - [Reference config: `gen-reference-config` command](#reference-config-gen-reference-config-command)
 - **Extending Node Scraper (integration & external plugins)** → See [EXTENDING.md](EXTENDING.md)
+- **Full view of the plugins with the associated collectors & analyzers as well as the commands
+invoked by collectors** -> See [docs/PLUGIN_DOC.md](docs/PLUGIN_DOC.md)
 
 ## Installation
 ### Install From Source
