@@ -33,7 +33,7 @@ Collect BIOS details
 
 **Bases**: ['InBandDataCollector']
 
-**Link to code**: ../nodescraper/plugins/inband/bios/bios_collector.py
+**Link to code**: [bios_collector.py](../nodescraper/plugins/inband/bios/bios_collector.py)
 
 ### Class Variables
 
@@ -57,7 +57,7 @@ Read linux cmdline data
 
 **Bases**: ['InBandDataCollector']
 
-**Link to code**: ../nodescraper/plugins/inband/cmdline/cmdline_collector.py
+**Link to code**: [cmdline_collector.py](../nodescraper/plugins/inband/cmdline/cmdline_collector.py)
 
 ### Class Variables
 
@@ -80,7 +80,7 @@ Collect data on installed DIMMs
 
 **Bases**: ['InBandDataCollector']
 
-**Link to code**: ../nodescraper/plugins/inband/dimm/dimm_collector.py
+**Link to code**: [dimm_collector.py](../nodescraper/plugins/inband/dimm/dimm_collector.py)
 
 ### Class Variables
 
@@ -104,7 +104,7 @@ Collect DKMS status and version data
 
 **Bases**: ['InBandDataCollector']
 
-**Link to code**: ../nodescraper/plugins/inband/dkms/dkms_collector.py
+**Link to code**: [dkms_collector.py](../nodescraper/plugins/inband/dkms/dkms_collector.py)
 
 ### Class Variables
 
@@ -129,7 +129,7 @@ Read dmesg log
 
 **Bases**: ['InBandDataCollector']
 
-**Link to code**: ../nodescraper/plugins/inband/dmesg/dmesg_collector.py
+**Link to code**: [dmesg_collector.py](../nodescraper/plugins/inband/dmesg/dmesg_collector.py)
 
 ### Class Variables
 
@@ -154,7 +154,7 @@ Read journal log via journalctl.
 
 **Bases**: ['InBandDataCollector']
 
-**Link to code**: ../nodescraper/plugins/inband/journal/journal_collector.py
+**Link to code**: [journal_collector.py](../nodescraper/plugins/inband/journal/journal_collector.py)
 
 ### Class Variables
 
@@ -177,7 +177,7 @@ Read kernel version
 
 **Bases**: ['InBandDataCollector']
 
-**Link to code**: ../nodescraper/plugins/inband/kernel/kernel_collector.py
+**Link to code**: [kernel_collector.py](../nodescraper/plugins/inband/kernel/kernel_collector.py)
 
 ### Class Variables
 
@@ -201,7 +201,7 @@ Read kernel modules and associated parameters
 
 **Bases**: ['InBandDataCollector']
 
-**Link to code**: ../nodescraper/plugins/inband/kernel_module/kernel_module_collector.py
+**Link to code**: [kernel_module_collector.py](../nodescraper/plugins/inband/kernel_module/kernel_module_collector.py)
 
 ### Class Variables
 
@@ -225,7 +225,7 @@ Collect memory usage details
 
 **Bases**: ['InBandDataCollector']
 
-**Link to code**: ../nodescraper/plugins/inband/memory/memory_collector.py
+**Link to code**: [memory_collector.py](../nodescraper/plugins/inband/memory/memory_collector.py)
 
 ### Class Variables
 
@@ -249,7 +249,7 @@ Collect NVMe details from the system.
 
 **Bases**: ['InBandDataCollector']
 
-**Link to code**: ../nodescraper/plugins/inband/nvme/nvme_collector.py
+**Link to code**: [nvme_collector.py](../nodescraper/plugins/inband/nvme/nvme_collector.py)
 
 ### Class Variables
 
@@ -280,7 +280,7 @@ Collect OS details
 
 **Bases**: ['InBandDataCollector']
 
-**Link to code**: ../nodescraper/plugins/inband/os/os_collector.py
+**Link to code**: [os_collector.py](../nodescraper/plugins/inband/os/os_collector.py)
 
 ### Class Variables
 
@@ -309,7 +309,7 @@ Collecting Package information from the system
 
 **Bases**: ['InBandDataCollector']
 
-**Link to code**: ../nodescraper/plugins/inband/package/package_collector.py
+**Link to code**: [package_collector.py](../nodescraper/plugins/inband/package/package_collector.py)
 
 ### Class Variables
 
@@ -339,7 +339,7 @@ Collect Process details
 
 **Bases**: ['InBandDataCollector']
 
-**Link to code**: ../nodescraper/plugins/inband/process/process_collector.py
+**Link to code**: [process_collector.py](../nodescraper/plugins/inband/process/process_collector.py)
 
 ### Class Variables
 
@@ -366,7 +366,7 @@ Collect ROCm version data
 
 **Bases**: ['InBandDataCollector']
 
-**Link to code**: ../nodescraper/plugins/inband/rocm/rocm_collector.py
+**Link to code**: [rocm_collector.py](../nodescraper/plugins/inband/rocm/rocm_collector.py)
 
 ### Class Variables
 
@@ -390,7 +390,7 @@ Collect disk usage details
 
 **Bases**: ['InBandDataCollector']
 
-**Link to code**: ../nodescraper/plugins/inband/storage/storage_collector.py
+**Link to code**: [storage_collector.py](../nodescraper/plugins/inband/storage/storage_collector.py)
 
 ### Class Variables
 
@@ -414,7 +414,7 @@ Collect sysctl kernel VM settings.
 
 **Bases**: ['InBandDataCollector']
 
-**Link to code**: ../nodescraper/plugins/inband/sysctl/sysctl_collector.py
+**Link to code**: [sysctl_collector.py](../nodescraper/plugins/inband/sysctl/sysctl_collector.py)
 
 ### Class Variables
 
@@ -436,7 +436,7 @@ Read syslog log
 
 **Bases**: ['InBandDataCollector']
 
-**Link to code**: ../nodescraper/plugins/inband/syslog/syslog_collector.py
+**Link to code**: [syslog_collector.py](../nodescraper/plugins/inband/syslog/syslog_collector.py)
 
 ### Class Variables
 
@@ -459,7 +459,7 @@ Collect last boot time and uptime from uptime command
 
 **Bases**: ['InBandDataCollector']
 
-**Link to code**: ../nodescraper/plugins/inband/uptime/uptime_collector.py
+**Link to code**: [uptime_collector.py](../nodescraper/plugins/inband/uptime/uptime_collector.py)
 
 ### Class Variables
 
@@ -478,7 +478,7 @@ UptimeDataModel
 
 ## BiosDataModel Model
 
-**Link to code**: ../nodescraper/plugins/inband/bios/biosdata.py
+**Link to code**: [biosdata.py](../nodescraper/plugins/inband/bios/biosdata.py)
 
 **Bases**: ['DataModel']
 
@@ -488,7 +488,7 @@ UptimeDataModel
 
 ## CmdlineDataModel Model
 
-**Link to code**: ../nodescraper/plugins/inband/cmdline/cmdlinedata.py
+**Link to code**: [cmdlinedata.py](../nodescraper/plugins/inband/cmdline/cmdlinedata.py)
 
 **Bases**: ['DataModel']
 
@@ -498,7 +498,7 @@ UptimeDataModel
 
 ## DimmDataModel Model
 
-**Link to code**: ../nodescraper/plugins/inband/dimm/dimmdata.py
+**Link to code**: [dimmdata.py](../nodescraper/plugins/inband/dimm/dimmdata.py)
 
 **Bases**: ['DataModel']
 
@@ -508,7 +508,7 @@ UptimeDataModel
 
 ## DkmsDataModel Model
 
-**Link to code**: ../nodescraper/plugins/inband/dkms/dkmsdata.py
+**Link to code**: [dkmsdata.py](../nodescraper/plugins/inband/dkms/dkmsdata.py)
 
 **Bases**: ['DataModel']
 
@@ -523,7 +523,7 @@ UptimeDataModel
 
 Data model for in band dmesg log
 
-**Link to code**: ../nodescraper/plugins/inband/dmesg/dmesgdata.py
+**Link to code**: [dmesgdata.py](../nodescraper/plugins/inband/dmesg/dmesgdata.py)
 
 **Bases**: ['DataModel']
 
@@ -537,7 +537,7 @@ Data model for in band dmesg log
 
 Data model for journal logs
 
-**Link to code**: ../nodescraper/plugins/inband/journal/journaldata.py
+**Link to code**: [journaldata.py](../nodescraper/plugins/inband/journal/journaldata.py)
 
 **Bases**: ['DataModel']
 
@@ -547,7 +547,7 @@ Data model for journal logs
 
 ## KernelDataModel Model
 
-**Link to code**: ../nodescraper/plugins/inband/kernel/kerneldata.py
+**Link to code**: [kerneldata.py](../nodescraper/plugins/inband/kernel/kerneldata.py)
 
 **Bases**: ['DataModel']
 
@@ -557,7 +557,7 @@ Data model for journal logs
 
 ## KernelModuleDataModel Model
 
-**Link to code**: ../nodescraper/plugins/inband/kernel_module/kernel_module_data.py
+**Link to code**: [kernel_module_data.py](../nodescraper/plugins/inband/kernel_module/kernel_module_data.py)
 
 **Bases**: ['DataModel']
 
@@ -567,7 +567,7 @@ Data model for journal logs
 
 ## MemoryDataModel Model
 
-**Link to code**: ../nodescraper/plugins/inband/memory/memorydata.py
+**Link to code**: [memorydata.py](../nodescraper/plugins/inband/memory/memorydata.py)
 
 **Bases**: ['DataModel']
 
@@ -578,7 +578,7 @@ Data model for journal logs
 
 ## NvmeDataModel Model
 
-**Link to code**: ../nodescraper/plugins/inband/nvme/nvmedata.py
+**Link to code**: [nvmedata.py](../nodescraper/plugins/inband/nvme/nvmedata.py)
 
 **Bases**: ['DataModel']
 
@@ -588,7 +588,7 @@ Data model for journal logs
 
 ## OsDataModel Model
 
-**Link to code**: ../nodescraper/plugins/inband/os/osdata.py
+**Link to code**: [osdata.py](../nodescraper/plugins/inband/os/osdata.py)
 
 **Bases**: ['DataModel']
 
@@ -603,7 +603,7 @@ Data model for journal logs
 
 Pacakge data contains the package data for the system
 
-**Link to code**: ../nodescraper/plugins/inband/package/packagedata.py
+**Link to code**: [packagedata.py](../nodescraper/plugins/inband/package/packagedata.py)
 
 **Bases**: ['DataModel']
 
@@ -613,7 +613,7 @@ Pacakge data contains the package data for the system
 
 ## ProcessDataModel Model
 
-**Link to code**: ../nodescraper/plugins/inband/process/processdata.py
+**Link to code**: [processdata.py](../nodescraper/plugins/inband/process/processdata.py)
 
 **Bases**: ['DataModel']
 
@@ -625,7 +625,7 @@ Pacakge data contains the package data for the system
 
 ## RocmDataModel Model
 
-**Link to code**: ../nodescraper/plugins/inband/rocm/rocmdata.py
+**Link to code**: [rocmdata.py](../nodescraper/plugins/inband/rocm/rocmdata.py)
 
 **Bases**: ['DataModel']
 
@@ -635,7 +635,7 @@ Pacakge data contains the package data for the system
 
 ## StorageDataModel Model
 
-**Link to code**: ../nodescraper/plugins/inband/storage/storagedata.py
+**Link to code**: [storagedata.py](../nodescraper/plugins/inband/storage/storagedata.py)
 
 **Bases**: ['DataModel']
 
@@ -645,7 +645,7 @@ Pacakge data contains the package data for the system
 
 ## SysctlDataModel Model
 
-**Link to code**: ../nodescraper/plugins/inband/sysctl/sysctldata.py
+**Link to code**: [sysctldata.py](../nodescraper/plugins/inband/sysctl/sysctldata.py)
 
 **Bases**: ['DataModel']
 
@@ -669,7 +669,7 @@ Pacakge data contains the package data for the system
 
 Data model for in band syslog logs
 
-**Link to code**: ../nodescraper/plugins/inband/syslog/syslogdata.py
+**Link to code**: [syslogdata.py](../nodescraper/plugins/inband/syslog/syslogdata.py)
 
 **Bases**: ['DataModel']
 
@@ -679,7 +679,7 @@ Data model for in band syslog logs
 
 ## UptimeDataModel Model
 
-**Link to code**: ../nodescraper/plugins/inband/uptime/uptimedata.py
+**Link to code**: [uptimedata.py](../nodescraper/plugins/inband/uptime/uptimedata.py)
 
 **Bases**: ['DataModel']
 
@@ -698,11 +698,7 @@ Check bios matches expected bios details
 
 **Bases**: ['DataAnalyzer']
 
-**Link to code**: ../nodescraper/plugins/inband/bios/bios_analyzer.py
-
-### Required Data
-
--
+**Link to code**: [bios_analyzer.py](../nodescraper/plugins/inband/bios/bios_analyzer.py)
 
 ## Data Analyzer Class CmdlineAnalyzer
 
@@ -712,11 +708,7 @@ Check cmdline matches expected kernel cmdline
 
 **Bases**: ['DataAnalyzer']
 
-**Link to code**: ../nodescraper/plugins/inband/cmdline/cmdline_analyzer.py
-
-### Required Data
-
--
+**Link to code**: [cmdline_analyzer.py](../nodescraper/plugins/inband/cmdline/cmdline_analyzer.py)
 
 ## Data Analyzer Class DkmsAnalyzer
 
@@ -726,11 +718,7 @@ Check dkms matches expected status and version
 
 **Bases**: ['DataAnalyzer']
 
-**Link to code**: ../nodescraper/plugins/inband/dkms/dkms_analyzer.py
-
-### Required Data
-
--
+**Link to code**: [dkms_analyzer.py](../nodescraper/plugins/inband/dkms/dkms_analyzer.py)
 
 ## Data Analyzer Class DmesgAnalyzer
 
@@ -740,15 +728,11 @@ Check dmesg for errors
 
 **Bases**: ['RegexAnalyzer']
 
-**Link to code**: ../nodescraper/plugins/inband/dmesg/dmesg_analyzer.py
+**Link to code**: [dmesg_analyzer.py](../nodescraper/plugins/inband/dmesg/dmesg_analyzer.py)
 
 ### Class Variables
 
 - **ERROR_REGEX**: `[ErrorRegex(regex=re.compile('(?:oom_kill_process.*)|(?:Out of memory.*)'), message='Out of memory error', event_category=<EventCategory.SW_DRIVER: 'SW_DRIVER'>, event_priority=<EventPriority.ERROR: 3>), ErrorRegex(regex=re.compile('IO_PAGE_FAULT'), message='I/O Page Fault', event_category=<EventCategory.SW_DRIVER: 'SW_DRIVER'>, event_priority=<EventPriority.ERROR: 3>), ErrorRegex(regex=re.compile('\\bkernel panic\\b.*', re.IGNORECASE), message='Kernel Panic', event_category=<EventCategory.SW_DRIVER: 'SW_DRIVER'>, event_priority=<EventPriority.ERROR: 3>), ErrorRegex(regex=re.compile('sq_intr'), message='SQ Interrupt', event_category=<EventCategory.SW_DRIVER: 'SW_DRIVER'>, event_priority=<EventPriority.ERROR: 3>), ErrorRegex(regex=re.compile('sram_ecc.*'), message='SRAM ECC', event_category=<EventCategory.SW_DRIVER: 'SW_DRIVER'>, event_priority=<EventPriority.ERROR: 3>), ErrorRegex(regex=re.compile('\\[amdgpu\\]\\] \\*ERROR\\* hw_init of IP block.*'), message='Failed to load driver. IP hardware init error.', event_category=<EventCategory.SW_DRIVER: 'SW_DRIVER'>, event_priority=<EventPriority.ERROR: 3>), ErrorRegex(regex=re.compile('\\[amdgpu\\]\\] \\*ERROR\\* sw_init of IP block.*'), message='Failed to load driver. IP software init error.', event_category=<EventCategory.SW_DRIVER: 'SW_DRIVER'>, event_priority=<EventPriority.ERROR: 3>), ErrorRegex(regex=re.compile('sched: RT throttling activated.*'), message='Real Time throttling activated', event_category=<EventCategory.SW_DRIVER: 'SW_DRIVER'>, event_priority=<EventPriority.ERROR: 3>), ErrorRegex(regex=re.compile('rcu_preempt detected stalls.*'), message='RCU preempt detected stalls', event_category=<EventCategory.SW_DRIVER: 'SW_DRIVER'>, event_priority=<EventPriority.ERROR: 3>), ErrorRegex(regex=re.compile('rcu_preempt self-detected stall.*'), message='RCU preempt self-detected stall', event_category=<EventCategory.SW_DRIVER: 'SW_DRIVER'>, event_priority=<EventPriority.ERROR: 3>), ErrorRegex(regex=re.compile('qcm fence wait loop timeout.*'), message='QCM fence timeout', event_category=<EventCategory.SW_DRIVER: 'SW_DRIVER'>, event_priority=<EventPriority.ERROR: 3>), ErrorRegex(regex=re.compile('(?:[\\w-]+(?:\\[[0-9.]+\\])?\\s+)?general protection fault[^\\n]*'), message='General protection fault', event_category=<EventCategory.SW_DRIVER: 'SW_DRIVER'>, event_priority=<EventPriority.ERROR: 3>), ErrorRegex(regex=re.compile('(?:segfault.*in .*\\[)|(?:[Ss]egmentation [Ff]ault.*)|(?:[Ss]egfault.*)'), message='Segmentation fault', event_category=<EventCategory.SW_DRIVER: 'SW_DRIVER'>, event_priority=<EventPriority.ERROR: 3>), ErrorRegex(regex=re.compile('amdgpu: Failed to disallow cf state.*'), message='Failed to disallow cf state', event_category=<EventCategory.SW_DRIVER: 'SW_DRIVER'>, event_priority=<EventPriority.ERROR: 3>), ErrorRegex(regex=re.compile('\\*ERROR\\* Failed to terminate tmr.*'), message='Failed to terminate tmr', event_category=<EventCategory.SW_DRIVER: 'SW_DRIVER'>, event_priority=<EventPriority.ERROR: 3>), ErrorRegex(regex=re.compile('\\*ERROR\\* suspend of IP block <\\w+> failed.*'), message='Suspend of IP block failed', event_category=<EventCategory.SW_DRIVER: 'SW_DRIVER'>, event_priority=<EventPriority.ERROR: 3>), ErrorRegex(regex=re.compile('(amdgpu \\w{4}:\\w{2}:\\w{2}\\.\\w:\\s+amdgpu:\\s+\\[\\S+\\]\\s*(?:retry|no-retry)? page fault[^\\n]*)(?:\\n[^\\n]*(amdgpu \\w{4}:\\w{2}:\\w{2}\\.\\w:\\s+amdgpu:[^\\n]*))?(?:\\n[^\\n]*(amdgpu \\w{4}:, re.MULTILINE), message='amdgpu Page Fault', event_category=<EventCategory.SW_DRIVER: 'SW_DRIVER'>, event_priority=<EventPriority.ERROR: 3>), ErrorRegex(regex=re.compile('page fault for address.*'), message='Page Fault', event_category=<EventCategory.OS: 'OS'>, event_priority=<EventPriority.ERROR: 3>), ErrorRegex(regex=re.compile('(?:amdgpu)(.*Fatal error during GPU init)|(Fatal error during GPU init)'), message='Fatal error during GPU init', event_category=<EventCategory.SW_DRIVER: 'SW_DRIVER'>, event_priority=<EventPriority.ERROR: 3>), ErrorRegex(regex=re.compile('(?:pcieport )(.*AER: aer_status.*)|(aer_status.*)'), message='PCIe AER Error', event_category=<EventCategory.SW_DRIVER: 'SW_DRIVER'>, event_priority=<EventPriority.ERROR: 3>), ErrorRegex(regex=re.compile('Failed to read journal file.*'), message='Failed to read journal file', event_category=<EventCategory.OS: 'OS'>, event_priority=<EventPriority.WARNING: 2>), ErrorRegex(regex=re.compile('journal corrupted or uncleanly shut down.*'), message='Journal file corrupted or uncleanly shut down', event_category=<EventCategory.OS: 'OS'>, event_priority=<EventPriority.WARNING: 2>), ErrorRegex(regex=re.compile('ACPI BIOS Error'), message='ACPI BIOS Error', event_category=<EventCategory.BIOS: 'BIOS'>, event_priority=<EventPriority.ERROR: 3>), ErrorRegex(regex=re.compile('ACPI Error'), message='ACPI Error', event_category=<EventCategory.BIOS: 'BIOS'>, event_priority=<EventPriority.WARNING: 2>), ErrorRegex(regex=re.compile('EXT4-fs error \\(device .*\\):'), message='Filesystem corrupted!', event_category=<EventCategory.OS: 'OS'>, event_priority=<EventPriority.ERROR: 3>), ErrorRegex(regex=re.compile('(Buffer I\\/O error on dev)(?:ice)? (\\w+)'), message='Error in buffered IO, check filesystem integrity', event_category=<EventCategory.IO: 'IO'>, event_priority=<EventPriority.ERROR: 3>), ErrorRegex(regex=re.compile('pcieport (\\w+:\\w+:\\w+\\.\\w+):\\s+(\\w+):\\s+(Slot\\(\\d+\\)):\\s+(Card not present)'), message='PCIe card no longer present', event_category=<EventCategory.IO: 'IO'>, event_priority=<EventPriority.ERROR: 3>), ErrorRegex(regex=re.compile('pcieport (\\w+:\\w+:\\w+\\.\\w+):\\s+(\\w+):\\s+(Slot\\(\\d+\\)):\\s+(Link Down)'), message='PCIe Link Down', event_category=<EventCategory.IO: 'IO'>, event_priority=<EventPriority.ERROR: 3>), ErrorRegex(regex=re.compile('pcieport (\\w+:\\w+:\\w+\\.\\w+):\\s+(\\w+):\\s+(current common clock configuration is inconsistent, reconfiguring)'), message='Mismatched clock configuration between PCIe device and host', event_category=<EventCategory.IO: 'IO'>, event_priority=<EventPriority.ERROR: 3>), ErrorRegex(regex=re.compile('(?:\\d{4}-\\d+-\\d+T\\d+:\\d+:\\d+,\\d+[+-]\\d+:\\d+)?(.* correctable hardware errors detected in total in \\w+ block.*)'), message='RAS Correctable Error', event_category=<EventCategory.RAS: 'RAS'>, event_priority=<EventPriority.ERROR: 3>), ErrorRegex(regex=re.compile('(?:\\d{4}-\\d+-\\d+T\\d+:\\d+:\\d+,\\d+[+-]\\d+:\\d+)?(.* uncorrectable hardware errors detected in \\w+ block.*)'), message='RAS Uncorrectable Error', event_category=<EventCategory.RAS: 'RAS'>, event_priority=<EventPriority.ERROR: 3>), ErrorRegex(regex=re.compile('(?:\\d{4}-\\d+-\\d+T\\d+:\\d+:\\d+,\\d+[+-]\\d+:\\d+)?(.* deferred hardware errors detected in \\w+ block.*)'), message='RAS Deferred Error', event_category=<EventCategory.RAS: 'RAS'>, event_priority=<EventPriority.ERROR: 3>), ErrorRegex(regex=re.compile('((?:\\[Hardware Error\\]:\\s+)?event severity: corrected.*)\\n.*(\\[Hardware Error\\]:\\s+Error \\d+, type: corrected.*)\\n.*(\\[Hardware Error\\]:\\s+section_type: PCIe error.*)'), message='RAS Corrected PCIe Error', event_category=<EventCategory.RAS: 'RAS'>, event_priority=<EventPriority.ERROR: 3>), ErrorRegex(regex=re.compile('(?:\\d{4}-\\d+-\\d+T\\d+:\\d+:\\d+,\\d+[+-]\\d+:\\d+)?(.*GPU reset begin.*)'), message='GPU Reset', event_category=<EventCategory.RAS: 'RAS'>, event_priority=<EventPriority.ERROR: 3>), ErrorRegex(regex=re.compile('(?:\\d{4}-\\d+-\\d+T\\d+:\\d+:\\d+,\\d+[+-]\\d+:\\d+)?(.*GPU reset(?:\\(\\d+\\))? failed.*)'), message='GPU reset failed', event_category=<EventCategory.RAS: 'RAS'>, event_priority=<EventPriority.ERROR: 3>), ErrorRegex(regex=re.compile('(Accelerator Check Architecture[^\\n]*)(?:\\n[^\\n]*){0,10}?(amdgpu[ 0-9a-fA-F:.]+:? [^\\n]*entry\\[\\d+\\]\\.STATUS=0x[0-9a-fA-F]+)(?:\\n[^\\n]*){0,5}?(amdgpu[ 0-9a-fA-F:.]+:? [^\\n]*entry\\[\\d+\\], re.MULTILINE), message='ACA Error', event_category=<EventCategory.RAS: 'RAS'>, event_priority=<EventPriority.ERROR: 3>), ErrorRegex(regex=re.compile('(Accelerator Check Architecture[^\\n]*)(?:\\n[^\\n]*){0,10}?(amdgpu[ 0-9a-fA-F:.]+:? [^\\n]*CONTROL=0x[0-9a-fA-F]+)(?:\\n[^\\n]*){0,5}?(amdgpu[ 0-9a-fA-F:.]+:? [^\\n]*STATUS=0x[0-9a-fA-F]+)(?:\\n[^\\, re.MULTILINE), message='ACA Error', event_category=<EventCategory.RAS: 'RAS'>, event_priority=<EventPriority.ERROR: 3>), ErrorRegex(regex=re.compile('\\[Hardware Error\\]:.+MC\\d+_STATUS.*(?:\\n.*){0,5}'), message='MCE Error', event_category=<EventCategory.RAS: 'RAS'>, event_priority=<EventPriority.ERROR: 3>), ErrorRegex(regex=re.compile('(?:\\d{4}-\\d+-\\d+T\\d+:\\d+:\\d+,\\d+[+-]\\d+:\\d+)? (.*Mode2 reset failed.*)'), message='Mode 2 Reset Failed', event_category=<EventCategory.RAS: 'RAS'>, event_priority=<EventPriority.ERROR: 3>), ErrorRegex(regex=re.compile('(?:\\d{4}-\\d+-\\d+T\\d+:\\d+:\\d+,\\d+[+-]\\d+:\\d+)?(.*\\[Hardware Error\\]: Corrected error.*)'), message='RAS Corrected Error', event_category=<EventCategory.RAS: 'RAS'>, event_priority=<EventPriority.ERROR: 3>), ErrorRegex(regex=re.compile('x86/cpu: SGX disabled by BIOS'), message='SGX Error', event_category=<EventCategory.BIOS: 'BIOS'>, event_priority=<EventPriority.WARNING: 2>), ErrorRegex(regex=re.compile('amdgpu \\w{4}:\\w{2}:\\w{2}.\\w: amdgpu: WARN: GPU is throttled.*'), message='GPU Throttled', event_category=<EventCategory.SW_DRIVER: 'SW_DRIVER'>, event_priority=<EventPriority.WARNING: 2>), ErrorRegex(regex=re.compile('(?:\\[[^\\]]+\\]\\s*)?LNetError:.*ko2iblnd:\\s*No matching interfaces', re.IGNORECASE), message='LNet: ko2iblnd has no matching interfaces', event_category=<EventCategory.IO: 'IO'>, event_priority=<EventPriority.WARNING: 2>), ErrorRegex(regex=re.compile('(?:\\[[^\\]]+\\]\\s*)?LNetError:\\s*.*Error\\s*-?\\d+\\s+starting up LNI\\s+\\w+', re.IGNORECASE), message='LNet: Error starting up LNI', event_category=<EventCategory.IO: 'IO'>, event_priority=<EventPriority.WARNING: 2>), ErrorRegex(regex=re.compile('LustreError:.*ptlrpc_init_portals\\(\\).*network initiali[sz]ation failed', re.IGNORECASE), message='Lustre: network initialisation failed', event_category=<EventCategory.IO: 'IO'>, event_priority=<EventPriority.WARNING: 2>)]`
-
-### Required Data
-
--
 
 ## Data Analyzer Class KernelAnalyzer
 
@@ -758,11 +742,7 @@ Check kernel matches expected versions
 
 **Bases**: ['DataAnalyzer']
 
-**Link to code**: ../nodescraper/plugins/inband/kernel/kernel_analyzer.py
-
-### Required Data
-
--
+**Link to code**: [kernel_analyzer.py](../nodescraper/plugins/inband/kernel/kernel_analyzer.py)
 
 ## Data Analyzer Class KernelModuleAnalyzer
 
@@ -772,11 +752,7 @@ Check kernel matches expected versions
 
 **Bases**: ['DataAnalyzer']
 
-**Link to code**: ../nodescraper/plugins/inband/kernel_module/kernel_module_analyzer.py
-
-### Required Data
-
--
+**Link to code**: [kernel_module_analyzer.py](../nodescraper/plugins/inband/kernel_module/kernel_module_analyzer.py)
 
 ## Data Analyzer Class MemoryAnalyzer
 
@@ -786,11 +762,7 @@ Check memory usage is within the maximum allowed used memory
 
 **Bases**: ['DataAnalyzer']
 
-**Link to code**: ../nodescraper/plugins/inband/memory/memory_analyzer.py
-
-### Required Data
-
--
+**Link to code**: [memory_analyzer.py](../nodescraper/plugins/inband/memory/memory_analyzer.py)
 
 ## Data Analyzer Class OsAnalyzer
 
@@ -800,11 +772,7 @@ Check os matches expected versions
 
 **Bases**: ['DataAnalyzer']
 
-**Link to code**: ../nodescraper/plugins/inband/os/os_analyzer.py
-
-### Required Data
-
--
+**Link to code**: [os_analyzer.py](../nodescraper/plugins/inband/os/os_analyzer.py)
 
 ## Data Analyzer Class PackageAnalyzer
 
@@ -814,11 +782,7 @@ Check the package version data against the expected package version data
 
 **Bases**: ['DataAnalyzer']
 
-**Link to code**: ../nodescraper/plugins/inband/package/package_analyzer.py
-
-### Required Data
-
--
+**Link to code**: [package_analyzer.py](../nodescraper/plugins/inband/package/package_analyzer.py)
 
 ## Data Analyzer Class ProcessAnalyzer
 
@@ -828,11 +792,7 @@ Check cpu and kfd processes are within allowed maximum cpu and gpu usage
 
 **Bases**: ['DataAnalyzer']
 
-**Link to code**: ../nodescraper/plugins/inband/process/process_analyzer.py
-
-### Required Data
-
--
+**Link to code**: [process_analyzer.py](../nodescraper/plugins/inband/process/process_analyzer.py)
 
 ## Data Analyzer Class RocmAnalyzer
 
@@ -842,11 +802,7 @@ Check ROCm matches expected versions
 
 **Bases**: ['DataAnalyzer']
 
-**Link to code**: ../nodescraper/plugins/inband/rocm/rocm_analyzer.py
-
-### Required Data
-
--
+**Link to code**: [rocm_analyzer.py](../nodescraper/plugins/inband/rocm/rocm_analyzer.py)
 
 ## Data Analyzer Class StorageAnalyzer
 
@@ -856,11 +812,7 @@ Check storage usage
 
 **Bases**: ['DataAnalyzer']
 
-**Link to code**: ../nodescraper/plugins/inband/storage/storage_analyzer.py
-
-### Required Data
-
--
+**Link to code**: [storage_analyzer.py](../nodescraper/plugins/inband/storage/storage_analyzer.py)
 
 ## Data Analyzer Class SysctlAnalyzer
 
@@ -870,11 +822,7 @@ Check sysctl matches expected sysctl details
 
 **Bases**: ['DataAnalyzer']
 
-**Link to code**: ../nodescraper/plugins/inband/sysctl/sysctl_analyzer.py
-
-### Required Data
-
--
+**Link to code**: [sysctl_analyzer.py](../nodescraper/plugins/inband/sysctl/sysctl_analyzer.py)
 
 # Analyzer Args
 
@@ -882,13 +830,11 @@ Check sysctl matches expected sysctl details
 
 **Bases**: ['AnalyzerArgs']
 
-**Link to code**: ../nodescraper/plugins/inband/bios/analyzer_args.py
+**Link to code**: [analyzer_args.py](../nodescraper/plugins/inband/bios/analyzer_args.py)
 
 ### Class Variables
 
 - **model_config**: `{'extra': 'forbid', 'exclude_none': True}`
-- **model_fields**: `{'exp_bios_version': FieldInfo(annotation=list[str], required=False, default_factory=list), 'regex_match': FieldInfo(annotation=bool, required=False, default=False)}`
-- **model_computed_fields**: `{}`
 
 ### Annotations / fields
 
@@ -899,13 +845,11 @@ Check sysctl matches expected sysctl details
 
 **Bases**: ['AnalyzerArgs']
 
-**Link to code**: ../nodescraper/plugins/inband/cmdline/analyzer_args.py
+**Link to code**: [analyzer_args.py](../nodescraper/plugins/inband/cmdline/analyzer_args.py)
 
 ### Class Variables
 
 - **model_config**: `{'extra': 'forbid', 'exclude_none': True}`
-- **model_fields**: `{'required_cmdline': FieldInfo(annotation=Union[str, list], required=False, default_factory=list), 'banned_cmdline': FieldInfo(annotation=Union[str, list], required=False, default_factory=list)}`
-- **model_computed_fields**: `{}`
 
 ### Annotations / fields
 
@@ -916,13 +860,11 @@ Check sysctl matches expected sysctl details
 
 **Bases**: ['AnalyzerArgs']
 
-**Link to code**: ../nodescraper/plugins/inband/dkms/analyzer_args.py
+**Link to code**: [analyzer_args.py](../nodescraper/plugins/inband/dkms/analyzer_args.py)
 
 ### Class Variables
 
 - **model_config**: `{'extra': 'forbid', 'exclude_none': True}`
-- **model_fields**: `{'dkms_status': FieldInfo(annotation=Union[str, list], required=False, default_factory=list), 'dkms_version': FieldInfo(annotation=Union[str, list], required=False, default_factory=list), 'regex_match': FieldInfo(annotation=bool, required=False, default=False)}`
-- **model_computed_fields**: `{}`
 
 ### Annotations / fields
 
@@ -934,13 +876,11 @@ Check sysctl matches expected sysctl details
 
 **Bases**: ['AnalyzerArgs']
 
-**Link to code**: ../nodescraper/plugins/inband/kernel/analyzer_args.py
+**Link to code**: [analyzer_args.py](../nodescraper/plugins/inband/kernel/analyzer_args.py)
 
 ### Class Variables
 
 - **model_config**: `{'extra': 'forbid', 'exclude_none': True}`
-- **model_fields**: `{'exp_kernel': FieldInfo(annotation=Union[str, list], required=False, default_factory=list), 'regex_match': FieldInfo(annotation=bool, required=False, default=False)}`
-- **model_computed_fields**: `{}`
 
 ### Annotations / fields
 
@@ -951,13 +891,11 @@ Check sysctl matches expected sysctl details
 
 **Bases**: ['AnalyzerArgs']
 
-**Link to code**: ../nodescraper/plugins/inband/kernel_module/analyzer_args.py
+**Link to code**: [analyzer_args.py](../nodescraper/plugins/inband/kernel_module/analyzer_args.py)
 
 ### Class Variables
 
 - **model_config**: `{'extra': 'forbid', 'exclude_none': True}`
-- **model_fields**: `{'kernel_modules': FieldInfo(annotation=dict[str, dict], required=False, default={}), 'regex_filter': FieldInfo(annotation=list[str], required=False, default=['amd'])}`
-- **model_computed_fields**: `{}`
 
 ### Annotations / fields
 
@@ -968,13 +906,11 @@ Check sysctl matches expected sysctl details
 
 **Bases**: ['AnalyzerArgs']
 
-**Link to code**: ../nodescraper/plugins/inband/os/analyzer_args.py
+**Link to code**: [analyzer_args.py](../nodescraper/plugins/inband/os/analyzer_args.py)
 
 ### Class Variables
 
 - **model_config**: `{'extra': 'forbid', 'exclude_none': True}`
-- **model_fields**: `{'exp_os': FieldInfo(annotation=Union[str, list], required=False, default_factory=list), 'exact_match': FieldInfo(annotation=bool, required=False, default=True)}`
-- **model_computed_fields**: `{}`
 
 ### Annotations / fields
 
@@ -985,13 +921,11 @@ Check sysctl matches expected sysctl details
 
 **Bases**: ['AnalyzerArgs']
 
-**Link to code**: ../nodescraper/plugins/inband/package/analyzer_args.py
+**Link to code**: [analyzer_args.py](../nodescraper/plugins/inband/package/analyzer_args.py)
 
 ### Class Variables
 
 - **model_config**: `{'extra': 'forbid', 'exclude_none': True}`
-- **model_fields**: `{'exp_package_ver': FieldInfo(annotation=dict[str, Union[str, NoneType]], required=False, default_factory=dict), 'regex_match': FieldInfo(annotation=bool, required=False, default=False)}`
-- **model_computed_fields**: `{}`
 
 ### Annotations / fields
 
@@ -1002,13 +936,11 @@ Check sysctl matches expected sysctl details
 
 **Bases**: ['AnalyzerArgs']
 
-**Link to code**: ../nodescraper/plugins/inband/process/analyzer_args.py
+**Link to code**: [analyzer_args.py](../nodescraper/plugins/inband/process/analyzer_args.py)
 
 ### Class Variables
 
 - **model_config**: `{'extra': 'forbid', 'exclude_none': True}`
-- **model_fields**: `{'max_kfd_processes': FieldInfo(annotation=int, required=False, default=0), 'max_cpu_usage': FieldInfo(annotation=float, required=False, default=20.0)}`
-- **model_computed_fields**: `{}`
 
 ### Annotations / fields
 
@@ -1019,13 +951,11 @@ Check sysctl matches expected sysctl details
 
 **Bases**: ['BaseModel']
 
-**Link to code**: ../nodescraper/plugins/inband/rocm/analyzer_args.py
+**Link to code**: [analyzer_args.py](../nodescraper/plugins/inband/rocm/analyzer_args.py)
 
 ### Class Variables
 
 - **model_config**: `{}`
-- **model_fields**: `{'exp_rocm': FieldInfo(annotation=Union[str, list], required=False, default_factory=list)}`
-- **model_computed_fields**: `{}`
 
 ### Annotations / fields
 
@@ -1035,13 +965,11 @@ Check sysctl matches expected sysctl details
 
 **Bases**: ['AnalyzerArgs']
 
-**Link to code**: ../nodescraper/plugins/inband/sysctl/analyzer_args.py
+**Link to code**: [analyzer_args.py](../nodescraper/plugins/inband/sysctl/analyzer_args.py)
 
 ### Class Variables
 
 - **model_config**: `{'extra': 'forbid', 'exclude_none': True}`
-- **model_fields**: `{'exp_vm_swappiness': FieldInfo(annotation=Union[int, NoneType], required=False, default=None), 'exp_vm_numa_balancing': FieldInfo(annotation=Union[int, NoneType], required=False, default=None), 'exp_vm_oom_kill_allocating_task': FieldInfo(annotation=Union[int, NoneType], required=False, default=None), 'exp_vm_compaction_proactiveness': FieldInfo(annotation=Union[int, NoneType], required=False, default=None), 'exp_vm_compact_unevictable_allowed': FieldInfo(annotation=Union[int, NoneType], required=False, default=None), 'exp_vm_extfrag_threshold': FieldInfo(annotation=Union[int, NoneType], required=False, default=None), 'exp_vm_zone_reclaim_mode': FieldInfo(annotation=Union[int, NoneType], required=False, default=None), 'exp_vm_dirty_background_ratio': FieldInfo(annotation=Union[int, NoneType], required=False, default=None), 'exp_vm_dirty_ratio': FieldInfo(annotation=Union[int, NoneType], required=False, default=None), 'exp_vm_dirty_writeback_centisecs': FieldInfo(annotation=Union[int, NoneType], required=False, default=None), 'exp_kernel_numa_balancing': FieldInfo(annotation=Union[int, NoneType], required=False, default=None)}`
-- **model_computed_fields**: `{}`
 
 ### Annotations / fields
 
