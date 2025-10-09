@@ -38,7 +38,7 @@ import sys
 from pathlib import Path
 from typing import Any, Iterable, List, Type
 
-LINK_BASE_DEFAULT = "../"
+LINK_BASE_DEFAULT = "https://github.com/amd/node-scraper/blob/HEAD/"
 REL_ROOT_DEFAULT = "nodescraper/plugins/inband"
 DEFAULT_ROOT_PACKAGE = "nodescraper.plugins"
 
@@ -309,7 +309,8 @@ def render_collector_section(col: type, link_base: str, rel_root: str | None) ->
     if desc:
         s += md_header("Description", 3) + desc + "\n\n"
     s += md_kv("Bases", str(bases_list(col)))
-    s += md_kv("Link to code", setup_link(col, link_base, rel_root))
+    _url = setup_link(col, link_base, rel_root)
+    s += md_kv("Link to code", f"[{Path(_url).name}]({_url})")
 
     exclude = {"__doc__", "__module__", "__weakref__", "__dict__"}
     cv = class_vars_dump(col, exclude)
@@ -341,22 +342,13 @@ def render_analyzer_section(an: type, link_base: str, rel_root: str | None) -> s
     if desc:
         s += md_header("Description", 3) + desc + "\n\n"
     s += md_kv("Bases", str(bases_list(an)))
-    s += md_kv("Link to code", setup_link(an, link_base, rel_root))
+    _url = setup_link(an, link_base, rel_root)
+    s += md_kv("Link to code", f"[{Path(_url).name}]({_url})")
 
     exclude = {"__doc__", "__module__", "__weakref__", "__dict__"}
     cv = class_vars_dump(an, exclude)
     if cv:
         s += md_header("Class Variables", 3) + md_list(cv)
-
-    req = get_attr(an, "REQUIRED_DATA", None)
-    s += md_header("Required Data", 3)
-    if req:
-        if isinstance(req, (list, tuple)):
-            s += ", ".join(getattr(m, "__name__", str(m)) for m in req) + "\n\n"
-        else:
-            s += getattr(req, "__name__", str(req)) + "\n\n"
-    else:
-        s += "-\n\n"
 
     return s
 
@@ -367,7 +359,8 @@ def render_model_section(model: type, link_base: str, rel_root: str | None) -> s
     s = hdr
     if desc:
         s += md_header("Description", 3) + desc + "\n\n"
-    s += md_kv("Link to code", setup_link(model, link_base, rel_root))
+    _url = setup_link(model, link_base, rel_root)
+    s += md_kv("Link to code", f"[{Path(_url).name}]({_url})")
     s += md_kv("Bases", str(bases_list(model)))
     anns = annotations_for_model(model)
     if anns:
@@ -382,12 +375,8 @@ def render_analyzer_args_section(args_cls: type, link_base: str, rel_root: str |
     if desc:
         s += md_header("Description", 3) + desc + "\n\n"
     s += md_kv("Bases", str(bases_list(args_cls)))
-    s += md_kv("Link to code", setup_link(args_cls, link_base, rel_root))
-
-    exclude = {"__doc__", "__module__", "__weakref__", "__dict__"}
-    cv = class_vars_dump(args_cls, exclude)
-    if cv:
-        s += md_header("Class Variables", 3) + md_list(cv)
+    _url = setup_link(args_cls, link_base, rel_root)
+    s += md_kv("Link to code", f"[{Path(_url).name}]({_url})")
 
     anns = get_attr(args_cls, "__annotations__", {}) or {}
     if anns:
