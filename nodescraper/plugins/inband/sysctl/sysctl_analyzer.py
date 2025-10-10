@@ -61,7 +61,6 @@ class SysctlAnalyzer(DataAnalyzer[SysctlDataModel, SysctlAnalyzerArgs]):
         if mismatches:
             self.result.status = ExecutionStatus.ERROR
             self.result.message = f"{len(mismatches)} sysctl parameter(s) mismatched."
-            self.result.message = "Sysctl parameters mismatch detected."
             self._log_event(
                 category=EventCategory.OS,
                 description="Sysctl mismatch detected",

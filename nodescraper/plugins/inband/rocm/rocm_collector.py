@@ -38,6 +38,10 @@ class RocmCollector(InBandDataCollector[RocmDataModel, None]):
     SUPPORTED_OS_FAMILY: set[OSFamily] = {OSFamily.LINUX}
 
     DATA_MODEL = RocmDataModel
+    CMD_VERSION_PATHS = [
+        "/opt/rocm/.info/version-rocm",
+        "/opt/rocm/.info/version",
+    ]
 
     def collect_data(self, args=None) -> tuple[TaskResult, Optional[RocmDataModel]]:
         """Collect ROCm version data from the system.
@@ -51,7 +55,7 @@ class RocmCollector(InBandDataCollector[RocmDataModel, None]):
         ]
 
         rocm_data = None
-        for path in version_paths:
+        for path in self.CMD_VERSION_PATHS:
             res = self._run_sut_cmd(f"grep . {path}")
             if res.exit_code == 0:
                 rocm_data = RocmDataModel(rocm_version=res.stdout)

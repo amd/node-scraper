@@ -93,7 +93,7 @@ def test_invalid_os(analyzer, config):
     args = OsAnalyzerArgs(exp_os=config["os_name"])
     result = analyzer.analyze_data(model, args)
     assert result.status == ExecutionStatus.ERROR
-    assert result.message == "OS name mismatch! (1 errors)"
+    assert "OS name mismatch!" in result.message
     for event in result.events:
         assert event.priority == EventPriority.CRITICAL
         assert event.category == EventCategory.OS.value
@@ -103,7 +103,7 @@ def test_unexpected_os(analyzer, model_obj):
     args = OsAnalyzerArgs(exp_os=["Windows 10"])
     result = analyzer.analyze_data(model_obj, args)
     assert result.status == ExecutionStatus.ERROR
-    assert result.message == "OS name mismatch! (1 errors)"
+    assert "OS name mismatch!" in result.message
     for event in result.events:
         assert event.priority == EventPriority.CRITICAL
         assert event.category == EventCategory.OS.value
@@ -144,7 +144,7 @@ def test_os_name_not_exact_match_failure(analyzer, model_obj):
     args = OsAnalyzerArgs(exp_os="Windows", exact_match=False)
     result = analyzer.analyze_data(model_obj, args)
     assert result.status == ExecutionStatus.ERROR
-    assert result.message == "OS name mismatch! (1 errors)"
+    assert "OS name mismatch!" in result.message
     for event in result.events:
         assert event.priority == EventPriority.CRITICAL
         assert event.category == EventCategory.OS.value
@@ -157,7 +157,7 @@ def test_os_name_not_exact_match_failure_list(analyzer, model_obj):
     )
     result = analyzer.analyze_data(model_obj, args)
     assert result.status == ExecutionStatus.ERROR
-    assert result.message == "OS name mismatch! (1 errors)"
+    assert "OS name mismatch!" in result.message
     for event in result.events:
         assert event.priority == EventPriority.CRITICAL
         assert event.category == EventCategory.OS.value

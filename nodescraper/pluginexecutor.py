@@ -58,9 +58,7 @@ class PluginExecutor:
             logger = logging.getLogger(DEFAULT_LOGGER)
         self.logger = logger
 
-        if plugin_registry is None:
-            plugin_registry = PluginRegistry()
-        self.plugin_registry = plugin_registry
+        self.plugin_registry = plugin_registry or PluginRegistry()
 
         if system_info is None:
             system_info = SystemInfo()
@@ -194,8 +192,6 @@ class PluginExecutor:
             self.logger.exception("Unexpected exception running plugin queue: %s", str(e))
         finally:
             self.logger.info("Closing connections")
-            for connection_manager in self.connection_library.values():
-                connection_manager.disconnect()
 
             if self.plugin_config.result_collators:
                 self.logger.info("Running result collators")
@@ -217,6 +213,8 @@ class PluginExecutor:
                         ],
                         **collator_args,
                     )
+            for connection_manager in self.connection_library.values():
+                connection_manager.disconnect()
 
         return plugin_results
 

@@ -119,19 +119,19 @@ class DataAnalyzer(Task, abc.ABC, Generic[TDataModel, TAnalyzeArg]):
             raise TypeError(f"No data model set for {cls.__name__}")
 
         if hasattr(cls, "analyze_data"):
-            cls.analyze_data = analyze_decorator(cls.analyze_data)
+            setattr(cls, "analyze_data", analyze_decorator(cls.analyze_data))  # noqa
 
     @abc.abstractmethod
     def analyze_data(
         self,
         data: TDataModel,
-        args: Optional[Union[TAnalyzeArg, dict]],
+        args: Optional[TAnalyzeArg],
     ) -> TaskResult:
         """Analyze the provided data and return a TaskResult
 
         Args:
             data (TDataModel): data to analyze
-            args (Optional[Union[TAnalyzeArg  , dict]]): Optional arguments for analysis, can be a model or dict
+            args (Optional[TAnalyzeArg]): Optional arguments for analysis. Dicts will be handled in the decorator"
 
         Returns:
             TaskResult: Task result containing the analysis outcome

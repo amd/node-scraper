@@ -56,6 +56,7 @@ class LocalShell(InBandConnection):
             command,
             encoding="utf-8",
             shell=True,
+            errors="replace",
             timeout=timeout,
             capture_output=True,
             check=False,

@@ -40,6 +40,9 @@ class ProcessCollector(InBandDataCollector[ProcessDataModel, ProcessCollectorArg
     SUPPORTED_OS_FAMILY: set[OSFamily] = {OSFamily.LINUX}
 
     DATA_MODEL = ProcessDataModel
+    CMD_KFD = "rocm-smi --showpids"
+    CMD_CPU_USAGE = "top -b -n 1"
+    CMD_PROCESS = "top -b -n 1 -o %CPU "
 
     def collect_data(
         self, args: Optional[ProcessCollectorArgs] = None
@@ -58,7 +61,7 @@ class ProcessCollector(InBandDataCollector[ProcessDataModel, ProcessCollectorArg
         process_data = ProcessDataModel()
         process_data.processes = []
 
-        kfd_process = self._run_sut_cmd("rocm-smi --showpids")
+        kfd_process = self._run_sut_cmd(self.CMD_KFD)
         if kfd_process.exit_code == 0:
             if "No KFD PIDs currently running" in kfd_process.stdout:
                 process_data.kfd_process = 0
@@ -70,7 +73,7 @@ class ProcessCollector(InBandDataCollector[ProcessDataModel, ProcessCollectorArg
                 )
                 process_data.kfd_process = len(kfd_process)
 
-        cpu_usage = self._run_sut_cmd("top -b -n 1")
+        cpu_usage = self._run_sut_cmd(self.CMD_CPU_USAGE)
         if cpu_usage.exit_code == 0:
             cpu_idle = (
                 [line for line in cpu_usage.stdout.splitlines() if "Cpu(s)" in line][0]
@@ -81,7 +84,7 @@ class ProcessCollector(InBandDataCollector[ProcessDataModel, ProcessCollectorArg
             process_data.cpu_usage = 100 - float(cpu_idle)
 
         processes = self._run_sut_cmd(
-            f"top -b -n 1 -o %CPU | sed -n '8,{args.top_n_process + 7}p'"
+            f"self.CMD_PROCESS | sed -n '8,{args.top_n_process + 7}p'"
         )  # Remove system header
         if processes.exit_code == 0:
             for line in processes.stdout.splitlines():

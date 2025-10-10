@@ -2,6 +2,26 @@
 Node Scraper is a tool which performs automated data collection and analysis for the purposes of
 system debug.
 
+## Table of Contents
+- [Installation](#installation)
+  - [Install From Source](#install-from-source)
+- [CLI Usage](#cli-usage)
+  - [Execution Methods](#execution-methods)
+    - [Example: Remote Execution](#example-remote-execution)
+    - [Example: connection_config.json](#example-connection_configjson)
+  - [Subcommands](#subcommands)
+    - ['describe' subcommand](#describe-subcommand)
+    - ['run-plugins' sub command](#run-plugins-sub-command)
+    - ['gen-plugin-config' sub command](#gen-plugin-config-sub-command)
+    - ['summary' sub command](#summary-sub-command)
+- [Configs](#configs)
+  - [Global args](#global-args)
+  - [Plugin config: `--plugin-configs` command](#plugin-config---plugin-configs-command)
+  - [Reference config: `gen-reference-config` command](#reference-config-gen-reference-config-command)
+- **Extending Node Scraper (integration & external plugins)** → See [EXTENDING.md](EXTENDING.md)
+- **Full view of the plugins with the associated collectors & analyzers as well as the commands
+invoked by collectors** -> See [docs/PLUGIN_DOC.md](docs/PLUGIN_DOC.md)
+
 ## Installation
 ### Install From Source
 Node Scraper requires Python 3.10+ for installation. After cloning this repository,
@@ -17,10 +37,9 @@ The Node Scraper CLI can be used to run Node Scraper plugins on a target system.
 options are available:
 
 ```sh
-usage: node-scraper [-h] [--sys-name STRING] [--sys-location {LOCAL,REMOTE}] [--sys-interaction-level {PASSIVE,INTERACTIVE,DISRUPTIVE}]
-                    [--sys-sku STRING] [--sys-platform STRING] [--plugin-configs [STRING ...]] [--system-config STRING]
-                    [--connection-config STRING] [--log-path STRING] [--log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}]
-                    [--gen-reference-config]
+usage: node-scraper [-h] [--sys-name STRING] [--sys-location {LOCAL,REMOTE}] [--sys-interaction-level {PASSIVE,INTERACTIVE,DISRUPTIVE}] [--sys-sku STRING]
+                    [--sys-platform STRING] [--plugin-configs [STRING ...]] [--system-config STRING] [--connection-config STRING] [--log-path STRING]
+                    [--log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}] [--gen-reference-config] [--skip-sudo]
                     {summary,run-plugins,describe,gen-plugin-config} ...
 
 node scraper CLI
@@ -39,8 +58,7 @@ options:
   --sys-location {LOCAL,REMOTE}
                         Location of target system (default: LOCAL)
   --sys-interaction-level {PASSIVE,INTERACTIVE,DISRUPTIVE}
-                        Specify system interaction level, used to determine the type of actions that plugins can perform (default:
-                        INTERACTIVE)
+                        Specify system interaction level, used to determine the type of actions that plugins can perform (default: INTERACTIVE)
   --sys-sku STRING      Manually specify SKU of system (default: None)
   --sys-platform STRING
                         Specify system platform (default: None)
@@ -55,16 +73,49 @@ options:
                         Change python log level (default: INFO)
   --gen-reference-config
                         Generate reference config from system. Writes to ./reference_config.json. (default: False)
+  --skip-sudo           Skip plugins that require sudo permissions (default: False)
 
 ```
 
-### Subcommmands
+### Execution Methods
+
+Node Scraper can operate in two modes: LOCAL and REMOTE, determined by the `--sys-location` argument.
+
+- **LOCAL** (default): Node Scraper is installed and run directly on the target system. All data collection and plugin execution occur locally.
+- **REMOTE**: Node Scraper runs on your local machine but targets a remote system over SSH. In this mode, Node Scraper does not need to be installed on the remote system; all commands are executed remotely via SSH.
+
+To use remote execution, specify `--sys-location REMOTE` and provide a connection configuration file with `--connection-config`.
+
+#### Example: Remote Execution
+
+```sh
+node-scraper --sys-name <remote_host> --sys-location REMOTE --connection-config ./connection_config.json run-plugins DmesgPlugin
+```
+
+##### Example: connection_config.json
+
+```json
+{
+    "InBandConnectionManager": {
+        "hostname": "remote_host.example.com",
+        "port": 22,
+        "username": "myuser",
+        "password": "mypassword",
+        "key_filename": "/path/to/private/key"
+    }
+}
+```
+
+**Notes:**
+- If using SSH keys, specify `key_filename` instead of `password`.
+- The remote user must have permissions to run the requested plugins and access required files. If needed, use the `--skip-sudo` argument to skip plugins requiring sudo.
+
+### Subcommands
 
 Plugins to run can be specified in two ways, using a plugin JSON config file or using the
 'run-plugins' sub command. These two options are not mutually exclusive and can be used together.
 
-
-1. **'describe' subcommand**
+#### **'describe' subcommand**
 
 You can use the `describe` subcommand to display details about built-in configs or plugins.
 List all built-in configs:
@@ -87,7 +138,7 @@ Show details for a specific plugin
 node-scraper describe plugin <plugin-name>
 ```
 
-2. **'run-plugins' sub command**
+#### **'run-plugins' sub command**
 The plugins to run and their associated arguments can also be specified directly on the CLI using
 the 'run-plugins' sub-command. Using this sub-command you can specify a plugin name followed by
 the arguments for that particular plugin. Multiple plugins can be specified at once.
@@ -133,7 +184,7 @@ Use plugin configs and 'run-plugins'
 node-scraper run-plugins BiosPlugin
 ```
 
-3. **'gen-plugin-config' sub command**
+#### **'gen-plugin-config' sub command**
 The 'gen-plugin-config' sub command can be used to generate a plugin config JSON file for a plugin
 or list of plugins that can then be customized. Plugin arguments which have default values will be
 prepopulated in the JSON file, arguments without default values will have a value of 'null'.
@@ -168,7 +219,7 @@ This would produce the following config:
 }
 ```
 
-4. **'summary' sub command**
+#### **'summary' sub command**
 The 'summary' subcommand can be used to combine results from multiple runs of node-scraper to a
 single summary.csv file. Sample run:
 ```sh
@@ -177,8 +228,7 @@ node-scraper summary --summary_path /<path_to_node-scraper_logs>
 This will generate a new file '/<path_to_node-scraper_logs>/summary.csv' file. This file will
 contain the results from all 'nodescraper.csv' files from '/<path_to_node-scarper_logs>'.
 
-
-### Plugin Configs
+### Configs
 A plugin JSON config should follow the structure of the plugin config model defined here.
 The globals field is a dictionary of global key-value pairs; values in globals will be passed to
 any plugin that supports the corresponding key. The plugins field should be a dictionary mapping
@@ -205,7 +255,21 @@ tabular format to the console.
 }
 ```
 
-1. **'--plugin-configs' command**
+#### Global args
+Global args can be used to skip sudo plugins or enable/disble either collection or analysis.
+Below is an example that skips sudo requiring plugins and disables analysis.
+
+```json
+  "global_args": {
+      "collection_args": {
+        "skip_sudo" : 1
+      },
+      "collection" : 1,
+      "analysis" : 0
+  },
+```
+
+#### Plugin config: **'--plugin-configs' command**
 A plugin config can be used to compare the system data against the config specifications:
 ```sh
 node-scraper --plugin-configs plugin_config.json
@@ -263,7 +327,7 @@ Here is an example of a comprehensive plugin config that specifies analyzer args
 }
 ```
 
-2. **'gen-reference-config' command**
+#### Reference config: **'gen-reference-config' command**
 This command can be used to generate a reference config that is populated with current system
 configurations. Plugins that use analyzer args (where applicable) will be populated with system
 data.

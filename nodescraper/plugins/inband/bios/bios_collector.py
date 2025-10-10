@@ -36,6 +36,8 @@ class BiosCollector(InBandDataCollector[BiosDataModel, None]):
     """Collect BIOS details"""
 
     DATA_MODEL = BiosDataModel
+    CMD_WINDOWS = "wmic bios get SMBIOSBIOSVersion /Value"
+    CMD = "sh -c 'cat /sys/devices/virtual/dmi/id/bios_version'"
 
     def collect_data(
         self,
@@ -50,13 +52,13 @@ class BiosCollector(InBandDataCollector[BiosDataModel, None]):
         bios = None
 
         if self.system_info.os_family == OSFamily.WINDOWS:
-            res = self._run_sut_cmd("wmic bios get SMBIOSBIOSVersion /Value")
+            res = self._run_sut_cmd(self.CMD_WINDOWS)
             if res.exit_code == 0:
                 bios = [line for line in res.stdout.splitlines() if "SMBIOSBIOSVersion=" in line][
                     0
                 ].split("=")[1]
         else:
-            res = self._run_sut_cmd("sh -c 'cat /sys/devices/virtual/dmi/id/bios_version'")
+            res = self._run_sut_cmd(self.CMD)
             if res.exit_code == 0:
                 bios = res.stdout
 

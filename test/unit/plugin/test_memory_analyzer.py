@@ -64,4 +64,4 @@ def test_windows_like_memory(analyzer):
     model = MemoryDataModel(mem_free="751720910848", mem_total="1013310287872")
     result = analyzer.analyze_data(model)
     assert result.status == ExecutionStatus.ERROR
-    assert "Memory usage is more than the maximum allowed used memory!" in result.message
+    assert "Memory usage exceeded max allowed!" in result.message

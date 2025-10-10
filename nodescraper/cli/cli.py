@@ -53,6 +53,13 @@ from nodescraper.models import SystemInfo
 from nodescraper.pluginexecutor import PluginExecutor
 from nodescraper.pluginregistry import PluginRegistry
 
+try:
+    import ext_nodescraper_plugins as ext_pkg
+
+    extra_pkgs = [ext_pkg]
+except ImportError:
+    extra_pkgs = []
+
 
 def build_parser(
     plugin_reg: PluginRegistry,
@@ -347,7 +354,8 @@ def main(arg_input: Optional[list[str]] = None):
     if arg_input is None:
         arg_input = sys.argv[1:]
 
-    plugin_reg = PluginRegistry()
+    plugin_reg = PluginRegistry(plugin_pkg=extra_pkgs)
+
     config_reg = ConfigRegistry()
     parser, plugin_subparser_map = build_parser(plugin_reg, config_reg)
 
@@ -441,6 +449,7 @@ def main(arg_input: Optional[list[str]] = None):
         connections=parsed_args.connection_config,
         system_info=system_info,
         log_path=log_path,
+        plugin_registry=plugin_reg,
     )
 
     try:

@@ -37,6 +37,8 @@ class KernelModuleCollector(InBandDataCollector[KernelModuleDataModel, None]):
     """Read kernel modules and associated parameters"""
 
     DATA_MODEL = KernelModuleDataModel
+    CMD_WINDOWS = "wmic os get Version /Value"
+    CMD = "cat /proc/modules"
 
     def parse_proc_modules(self, output: dict) -> dict:
         """Parse command output and return dict of modules
@@ -93,7 +95,7 @@ class KernelModuleCollector(InBandDataCollector[KernelModuleDataModel, None]):
             tuple[dict, CommandArtifact]: modules found and exit code
         """
         modules = {}
-        res = self._run_sut_cmd("cat /proc/modules")
+        res = self._run_sut_cmd(self.CMD)
         if res.exit_code != 0:
             self._log_event(
                 category=EventCategory.OS,
@@ -130,7 +132,7 @@ class KernelModuleCollector(InBandDataCollector[KernelModuleDataModel, None]):
         kernel_modules = {}
         km_data: KernelModuleDataModel | None = None
         if self.system_info.os_family == OSFamily.WINDOWS:
-            res = self._run_sut_cmd("wmic os get Version /Value")
+            res = self._run_sut_cmd(self.CMD_WINDOWS)
             if res.exit_code == 0:
                 for line in res.stdout.splitlines():
                     if line.startswith("Version="):

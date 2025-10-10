@@ -73,7 +73,8 @@ class Event(BaseModel):
         if timestamp.tzinfo is None or timestamp.tzinfo.utcoffset(timestamp) is None:
             raise ValueError("datetime must be timezone aware")
 
-        if timestamp.utcoffset() is not None and timestamp.utcoffset().total_seconds() != 0:
+        utc_offset = timestamp.utcoffset()
+        if utc_offset is not None and utc_offset.total_seconds() != 0:
             timestamp = timestamp.astimezone(datetime.timezone.utc)
 
         return timestamp
@@ -90,13 +91,13 @@ class Event(BaseModel):
         if isinstance(category, Enum):
             category = category.value
 
-        category = category.strip().upper()
+        category = str(category).strip().upper()
         category = re.sub(r"[\s-]", "_", category)
         return category
 
     @field_validator("priority", mode="before")
     @classmethod
-    def validate_priority(cls, priority: Optional[Union[str, EventPriority]]) -> EventPriority:
+    def validate_priority(cls, priority: Union[str, EventPriority]) -> EventPriority:
         """Allow priority to be set via string priority name
         Args:
             priority (Union[str, EventPriority]): event priority string or enum
@@ -105,16 +106,16 @@ class Event(BaseModel):
         Returns:
             EventPriority: priority enum
         """
-
         if isinstance(priority, str):
             try:
                 return getattr(EventPriority, priority.upper())
             except AttributeError as e:
                 raise ValueError(
-                    f"priority must be one of {[priority_enum.name for priority_enum in EventPriority]}"
+                    f"priority must be one of {[p.name for p in EventPriority]}"
                 ) from e
-
-        return priority
+        if isinstance(priority, EventPriority):
+            return priority
+        raise ValueError("priority must be an EventPriority or its name as a string")
 
     @field_serializer("priority")
     def serialize_priority(self, priority: EventPriority, _info) -> str:
