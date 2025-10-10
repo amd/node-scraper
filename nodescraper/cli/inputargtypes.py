@@ -26,14 +26,14 @@
 import argparse
 import json
 import types
-from typing import Generic, Type
+from typing import Generic, Optional, Type
 
 from pydantic import ValidationError
 
 from nodescraper.generictypes import TModelType
 
 
-def log_path_arg(log_path: str) -> str | None:
+def log_path_arg(log_path: str) -> Optional[str]:
     """Type function for a log path arg, allows 'none' to be specified to disable logging
 
     Args:
