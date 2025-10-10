@@ -25,7 +25,7 @@
 ###############################################################################
 import argparse
 import types
-from typing import Type
+from typing import Optional, Type
 
 from pydantic import BaseModel
 
@@ -75,14 +75,14 @@ class DynamicParserBuilder:
         return model_type_map
 
     @classmethod
-    def get_model_arg(cls, type_class_map: dict) -> Type[BaseModel] | None:
+    def get_model_arg(cls, type_class_map: dict) -> Optional[Type[BaseModel]]:
         """Get the first type which is a pydantic model from a type class map
 
         Args:
             type_class_map (dict): mapping of type classes
 
         Returns:
-            Type[BaseModel] | None: pydantic model type
+            Optional[Type[BaseModel]]: pydantic model type
         """
         return next(
             (

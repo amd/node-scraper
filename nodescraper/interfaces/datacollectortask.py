@@ -48,12 +48,12 @@ from .taskresulthook import TaskResultHook
 
 
 def collect_decorator(
-    func: Callable[..., tuple[TaskResult, TDataModel | None]],
-) -> Callable[..., tuple[TaskResult, TDataModel | None]]:
+    func: Callable[..., tuple[TaskResult, Optional[TDataModel]]],
+) -> Callable[..., tuple[TaskResult, Optional[TDataModel]]]:
     @wraps(func)
     def wrapper(
         collector: "DataCollector", args: Optional[TCollectArg] = None
-    ) -> tuple[TaskResult, TDataModel | None]:
+    ) -> tuple[TaskResult, Optional[TDataModel]]:
         collector.logger.info("Running data collector: %s", collector.__class__.__name__)
         collector.result = collector._init_result()
         try:
@@ -175,7 +175,7 @@ class DataCollector(Task, abc.ABC, Generic[TConnection, TDataModel, TCollectArg]
     @abc.abstractmethod
     def collect_data(
         self, args: Optional[TCollectArg] = None
-    ) -> tuple[TaskResult, TDataModel | None]:
+    ) -> tuple[TaskResult, Optional[TDataModel]]:
         """Collect data from a target system
 
         Returns:

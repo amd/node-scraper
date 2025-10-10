@@ -87,7 +87,7 @@ class DataPlugin(
             status=ExecutionStatus.NOT_RAN,
             message=f"Data analysis not ran for {self.__class__.__name__}",
         )
-        self._data: TDataModel | None = None
+        self._data: Optional[TDataModel] = None
 
     @classmethod
     def _validate_class_var(cls):
@@ -118,11 +118,11 @@ class DataPlugin(
         return super().is_valid()
 
     @property
-    def data(self) -> TDataModel | None:
+    def data(self) -> Optional[TDataModel]:
         """Retrieve data model
 
         Returns:
-            TDataModel | None: data model
+            Optional[TDataModel]: data model
         """
         return self._data
 

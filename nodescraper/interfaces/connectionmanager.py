@@ -113,7 +113,7 @@ class ConnectionManager(Task, Generic[TConnection, TConnectArg]):
             connection_args = connection_arg_model(**connection_args)
 
         self.connection_args = connection_args
-        self.connection: TConnection | None = None
+        self.connection: Optional[TConnection] = None
 
     def __init_subclass__(cls, **kwargs) -> None:
         super().__init_subclass__(**kwargs)

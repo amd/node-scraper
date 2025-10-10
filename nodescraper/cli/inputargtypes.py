@@ -25,7 +25,6 @@
 ###############################################################################
 import argparse
 import json
-import types
 from typing import Generic, Optional, Type
 
 from pydantic import ValidationError
@@ -40,7 +39,7 @@ def log_path_arg(log_path: str) -> Optional[str]:
         log_path (str): log path string
 
     Returns:
-        str | None: log path or None
+        Optional[str]: log path or None
     """
     if log_path.lower() == "none":
         return None
@@ -84,7 +83,7 @@ def dict_arg(str_input: str) -> dict:
 class ModelArgHandler(Generic[TModelType]):
     """Class to handle loading json files into pydantic models"""
 
-    def __init__(self, model: Type[TModelType]) -> types.NoneType:
+    def __init__(self, model: Type[TModelType]) -> None:
         self.model = model
 
     def process_file_arg(self, file_path: str) -> TModelType:
