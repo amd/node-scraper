@@ -77,7 +77,7 @@ class Task(abc.ABC):
         return self._max_event_priority_level
 
     @max_event_priority_level.setter
-    def max_event_priority_level(self, input_value: str | EventPriority):
+    def max_event_priority_level(self, input_value: Union[str, EventPriority]):
         if isinstance(input_value, str):
             value: EventPriority = getattr(EventPriority, input_value)
         elif isinstance(input_value, int):

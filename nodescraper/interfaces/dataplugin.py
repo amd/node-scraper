@@ -127,7 +127,7 @@ class DataPlugin(
         return self._data
 
     @data.setter
-    def data(self, data: Optional[str, dict, TDataModel]):
+    def data(self, data: Optional[Union[str, dict, TDataModel]]):
         if isinstance(data, (str, dict)):
             self._data = self.DATA_MODEL.import_model(data)
         elif not isinstance(data, self.DATA_MODEL):
@@ -148,9 +148,9 @@ class DataPlugin(
 
         Args:
             max_event_priority_level (Union[EventPriority, str], optional): priority limit for events. Defaults to EventPriority.CRITICAL.
-            system_interaction_level (SystemInteractionLevel | str, optional): system interaction level. Defaults to SystemInteractionLevel.INTERACTIVE.
+            system_interaction_level (Union[SystemInteractionLevel, str], optional): system interaction level. Defaults to SystemInteractionLevel.INTERACTIVE.
             preserve_connection (bool, optional): whether we should close the connection after data collection. Defaults to False.
-            collection_args (Optional[TCollectArg  |  dict], optional): args for data collection. Defaults to None.
+            collection_args (Optional[Union[TCollectArg  , dict]], optional): args for data collection. Defaults to None.
 
         Returns:
             TaskResult: task result for data collection
@@ -230,14 +230,14 @@ class DataPlugin(
     def analyze(
         self,
         max_event_priority_level: Optional[Union[EventPriority, str]] = EventPriority.CRITICAL,
-        analysis_args: Optional[TAnalyzeArg | dict] = None,
+        analysis_args: Optional[Union[TAnalyzeArg, dict]] = None,
         data: Optional[Union[str, dict, TDataModel]] = None,
     ) -> TaskResult:
         """Run data analyzer task
 
         Args:
             max_event_priority_level (Union[EventPriority, str], optional): priority limit for events. Defaults to EventPriority.CRITICAL.
-            analysis_args (Optional[TAnalyzeArg  |  dict], optional): args for data analysis. Defaults to None.
+            analysis_args (Optional[Union[TAnalyzeArg  , dict]], optional): args for data analysis. Defaults to None.
             data (Optional[Union[str, dict, TDataModel]], optional): data to analyze. Defaults to None.
 
         Returns:
@@ -279,11 +279,13 @@ class DataPlugin(
         collection: bool = True,
         analysis: bool = True,
         max_event_priority_level: Union[EventPriority, str] = EventPriority.CRITICAL,
-        system_interaction_level: SystemInteractionLevel | str = SystemInteractionLevel.INTERACTIVE,
+        system_interaction_level: Union[
+            SystemInteractionLevel, str
+        ] = SystemInteractionLevel.INTERACTIVE,
         preserve_connection: bool = False,
         data: Optional[Union[str, dict, TDataModel]] = None,
-        collection_args: Optional[TCollectArg | dict] = None,
-        analysis_args: Optional[TAnalyzeArg | dict] = None,
+        collection_args: Optional[Union[TCollectArg, dict]] = None,
+        analysis_args: Optional[Union[TAnalyzeArg, dict]] = None,
     ) -> PluginResult:
         """Run plugin
 
@@ -291,11 +293,11 @@ class DataPlugin(
             collection (bool, optional): Enable data collection. Defaults to True.
             analysis (bool, optional): Enable data analysis. Defaults to True.
             max_event_priority_level (Union[EventPriority, str], optional): Max priority level to assign to events. Defaults to EventPriority.CRITICAL.
-            system_interaction_level (SystemInteractionLevel | str, optional): System interaction level. Defaults to SystemInteractionLevel.INTERACTIVE.
+            system_interaction_level (Union[SystemInteractionLevel, str], optional): System interaction level. Defaults to SystemInteractionLevel.INTERACTIVE.
             preserve_connection (bool, optional): Whether to close the connection when data collection is complete. Defaults to False.
             data (Optional[Union[str, dict, TDataModel]], optional): Input data. Defaults to None.
-            collection_args (Optional[TCollectArg  |  dict], optional): Arguments for data collection. Defaults to None.
-            analysis_args (Optional[TAnalyzeArg  |  dict], optional): Arguments for data analysis. Defaults to None.
+            collection_args (Optional[Union[TCollectArg  , dict]], optional): Arguments for data collection. Defaults to None.
+            analysis_args (Optional[Union[TAnalyzeArg  , dict]], optional): Arguments for data analysis. Defaults to None.
 
         Returns:
             PluginResult: Plugin result

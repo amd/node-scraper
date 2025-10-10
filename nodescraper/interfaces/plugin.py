@@ -26,7 +26,7 @@
 import abc
 import inspect
 import logging
-from typing import Callable, Generic, Optional, Type
+from typing import Callable, Generic, Optional, Type, Union
 
 from nodescraper.constants import DEFAULT_LOGGER
 from nodescraper.models import PluginResult, SystemInfo
@@ -46,7 +46,7 @@ class PluginInterface(abc.ABC, Generic[TConnectionManager, TConnectArg]):
         system_info: Optional[SystemInfo] = None,
         logger: Optional[logging.Logger] = None,
         connection_manager: Optional[TConnectionManager] = None,
-        connection_args: Optional[TConnectArg | dict] = None,
+        connection_args: Optional[Union[TConnectArg, dict]] = None,
         task_result_hooks: Optional[list[TaskResultHook]] = None,
         log_path: Optional[str] = None,
         queue_callback: Optional[Callable] = None,
@@ -58,7 +58,7 @@ class PluginInterface(abc.ABC, Generic[TConnectionManager, TConnectArg]):
             system_info (Optional[SystemInfo], optional): system info object. Defaults to None.
             logger (Optional[logging.Logger], optional): python logger instance. Defaults to None.
             connection_manager (Optional[TConnectionManager], optional): connection manager instance. Defaults to None.
-            connection_args (Optional[TConnectArg  |  dict], optional): connection args. Defaults to None.
+            connection_args (Optional[Union[TConnectArg  , dict]], optional): connection args. Defaults to None.
             task_result_hooks (Optional[list[TaskResultHook]], optional): list of task result hooks. Defaults to None.
             log_path (Optional[str], optional): path for file system logs. Defaults to None.
             queue_callback (Optional[Callable], optional): function to add additional plugins to plugin executor queue. Defaults to None.

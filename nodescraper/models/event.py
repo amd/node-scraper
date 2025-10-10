@@ -99,7 +99,7 @@ class Event(BaseModel):
     def validate_priority(cls, priority: Optional[Union[str, EventPriority]]) -> EventPriority:
         """Allow priority to be set via string priority name
         Args:
-            priority (str | EventPriority): event priority string or enum
+            priority (Union[str, EventPriority]): event priority string or enum
         Raises:
             ValueError: if priority string is an invalid value
         Returns:

@@ -122,7 +122,9 @@ class DataCollector(Task, abc.ABC, Generic[TConnection, TDataModel, TCollectArg]
         system_info: SystemInfo,
         connection: TConnection,
         logger: Optional[logging.Logger] = None,
-        system_interaction_level: SystemInteractionLevel | str = SystemInteractionLevel.INTERACTIVE,
+        system_interaction_level: Union[
+            SystemInteractionLevel, str
+        ] = SystemInteractionLevel.INTERACTIVE,
         max_event_priority_level: Union[EventPriority, str] = EventPriority.CRITICAL,
         parent: Optional[str] = None,
         task_result_hooks: Optional[list[TaskResultHook]] = None,

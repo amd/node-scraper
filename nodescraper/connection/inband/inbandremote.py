@@ -25,7 +25,7 @@
 ###############################################################################
 import os
 import socket
-from typing import Type
+from typing import Type, Union
 
 import paramiko
 from paramiko.ssh_exception import (
@@ -98,7 +98,7 @@ class RemoteShell(InBandConnection):
     def read_file(
         self,
         filename: str,
-        encoding: str | None = "utf-8",
+        encoding: Union[str, None] = "utf-8",
         strip: bool = True,
     ) -> BaseFileArtifact:
         """Read a remote file into a BaseFileArtifact.

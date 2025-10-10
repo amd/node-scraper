@@ -92,7 +92,7 @@ class ConnectionManager(Task, Generic[TConnection, TConnectArg]):
         max_event_priority_level: Union[EventPriority, str] = EventPriority.CRITICAL,
         parent: Optional[str] = None,
         task_result_hooks: Optional[list[TaskResultHook], None] = None,
-        connection_args: Optional[TConnectArg | dict] = None,
+        connection_args: Optional[Union[TConnectArg, dict]] = None,
         **kwargs,
     ):
         super().__init__(
