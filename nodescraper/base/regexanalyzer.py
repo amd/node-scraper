@@ -59,14 +59,14 @@ class RegexAnalyzer(DataAnalyzer[TDataModel, TAnalyzeArg]):
     ) -> RegexEvent:
         """Build a RegexEvent object from a regex match and source.
 
-                Args:
-                    regex_obj (ErrorRegex): regex object containing the regex pattern, message, category, and priorit
-                    match (
+        Args:
+            regex_obj (ErrorRegex): regex object containing the regex pattern, message, category, and priorit
+            match (
         Union[str, list[str]]): matched content from the regex
                     source (str): descriptor for the content where the match was found
 
-                Returns:
-                    RegexEvent: an instance of RegexEvent containing the match details
+        Returns:
+            RegexEvent: an instance of RegexEvent containing the match details
         """
         return RegexEvent(
             description=regex_obj.message,
