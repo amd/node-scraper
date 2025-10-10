@@ -24,7 +24,6 @@
 #
 ###############################################################################
 import argparse
-import types
 from typing import Optional, Type
 
 from pydantic import BaseModel
@@ -59,7 +58,7 @@ class DynamicParserBuilder:
             }
 
             # skip args where generic type has been set to None
-            if types.NoneType in type_class_map:
+            if type(None) in type_class_map:
                 continue
 
             model_arg = self.get_model_arg(type_class_map)
@@ -164,7 +163,7 @@ class DynamicParserBuilder:
                 type_class.type_class: type_class for type_class in attr_data.type_classes
             }
 
-            if types.NoneType in type_class_map and len(attr_data.type_classes) == 1:
+            if type(None) in type_class_map and len(attr_data.type_classes) == 1:
                 continue
 
             self.add_argument(type_class_map, attr.replace("_", "-"), required)

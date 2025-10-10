@@ -23,7 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
-from typing import Optional
+from typing import Optional, Union
 
 from pydantic import BaseModel
 
@@ -36,4 +36,4 @@ class PluginResult(BaseModel):
     status: ExecutionStatus
     source: str
     message: Optional[str] = None
-    result_data: Optional[dict | BaseModel] = None
+    result_data: Optional[Union[dict, BaseModel]] = None

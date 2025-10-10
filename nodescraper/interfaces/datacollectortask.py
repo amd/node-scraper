@@ -27,7 +27,7 @@ import abc
 import inspect
 import logging
 from functools import wraps
-from typing import Callable, ClassVar, Generic, Optional, Type
+from typing import Callable, ClassVar, Generic, Optional, Type, Union
 
 from pydantic import BaseModel, ValidationError
 
@@ -123,7 +123,7 @@ class DataCollector(Task, abc.ABC, Generic[TConnection, TDataModel, TCollectArg]
         connection: TConnection,
         logger: Optional[logging.Logger] = None,
         system_interaction_level: SystemInteractionLevel | str = SystemInteractionLevel.INTERACTIVE,
-        max_event_priority_level: EventPriority | str = EventPriority.CRITICAL,
+        max_event_priority_level: Union[EventPriority, str] = EventPriority.CRITICAL,
         parent: Optional[str] = None,
         task_result_hooks: Optional[list[TaskResultHook]] = None,
         **kwargs,

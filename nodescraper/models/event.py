@@ -28,7 +28,7 @@ import logging
 import re
 import uuid
 from enum import Enum
-from typing import Optional
+from typing import Optional, Union
 
 from pydantic import BaseModel, Field, field_serializer, field_validator
 
@@ -80,7 +80,7 @@ class Event(BaseModel):
 
     @field_validator("category", mode="before")
     @classmethod
-    def validate_category(cls, category: str | Enum) -> str:
+    def validate_category(cls, category: Optional[Union[str, Enum]]) -> str:
         """ensure category is has consistent formatting
         Args:
             category (str | Enum): category string
@@ -96,7 +96,7 @@ class Event(BaseModel):
 
     @field_validator("priority", mode="before")
     @classmethod
-    def validate_priority(cls, priority: str | EventPriority) -> EventPriority:
+    def validate_priority(cls, priority: Optional[Union[str, EventPriority]]) -> EventPriority:
         """Allow priority to be set via string priority name
         Args:
             priority (str | EventPriority): event priority string or enum

@@ -24,7 +24,7 @@
 #
 ###############################################################################
 import logging
-from typing import Generic, Optional, Type
+from typing import Generic, Optional, Type, Union
 
 from nodescraper.enums import EventPriority, ExecutionStatus, SystemInteractionLevel
 from nodescraper.generictypes import TAnalyzeArg, TCollectArg, TDataModel
@@ -64,7 +64,7 @@ class DataPlugin(
         system_info: SystemInfo,
         logger: Optional[logging.Logger] = None,
         connection_manager: Optional[TConnectionManager] = None,
-        connection_args: Optional[TConnectArg | dict] = None,
+        connection_args: Optional[Union[TConnectArg, dict]] = None,
         task_result_hooks: Optional[list[TaskResultHook]] = None,
         log_path: Optional[str] = None,
         **kwargs,
@@ -127,7 +127,7 @@ class DataPlugin(
         return self._data
 
     @data.setter
-    def data(self, data: str | dict | TDataModel):
+    def data(self, data: Optional[str, dict, TDataModel]):
         if isinstance(data, (str, dict)):
             self._data = self.DATA_MODEL.import_model(data)
         elif not isinstance(data, self.DATA_MODEL):
@@ -137,15 +137,17 @@ class DataPlugin(
 
     def collect(
         self,
-        max_event_priority_level: EventPriority | str = EventPriority.CRITICAL,
-        system_interaction_level: SystemInteractionLevel | str = SystemInteractionLevel.INTERACTIVE,
+        max_event_priority_level: Optional[Union[EventPriority, str]] = EventPriority.CRITICAL,
+        system_interaction_level: Optional[
+            Union[SystemInteractionLevel, str]
+        ] = SystemInteractionLevel.INTERACTIVE,
         preserve_connection: bool = False,
-        collection_args: Optional[TCollectArg | dict] = None,
+        collection_args: Optional[Union[TCollectArg, dict]] = None,
     ) -> TaskResult:
         """Run data collector task
 
         Args:
-            max_event_priority_level (EventPriority | str, optional): priority limit for events. Defaults to EventPriority.CRITICAL.
+            max_event_priority_level (Union[EventPriority, str], optional): priority limit for events. Defaults to EventPriority.CRITICAL.
             system_interaction_level (SystemInteractionLevel | str, optional): system interaction level. Defaults to SystemInteractionLevel.INTERACTIVE.
             preserve_connection (bool, optional): whether we should close the connection after data collection. Defaults to False.
             collection_args (Optional[TCollectArg  |  dict], optional): args for data collection. Defaults to None.
@@ -227,16 +229,16 @@ class DataPlugin(
 
     def analyze(
         self,
-        max_event_priority_level: EventPriority | str = EventPriority.CRITICAL,
+        max_event_priority_level: Optional[Union[EventPriority, str]] = EventPriority.CRITICAL,
         analysis_args: Optional[TAnalyzeArg | dict] = None,
-        data: Optional[str | dict | TDataModel] = None,
+        data: Optional[Union[str, dict, TDataModel]] = None,
     ) -> TaskResult:
         """Run data analyzer task
 
         Args:
-            max_event_priority_level (EventPriority | str, optional): priority limit for events. Defaults to EventPriority.CRITICAL.
+            max_event_priority_level (Union[EventPriority, str], optional): priority limit for events. Defaults to EventPriority.CRITICAL.
             analysis_args (Optional[TAnalyzeArg  |  dict], optional): args for data analysis. Defaults to None.
-            data (Optional[str  |  dict  |  TDataModel], optional): data to analyze. Defaults to None.
+            data (Optional[Union[str, dict, TDataModel]], optional): data to analyze. Defaults to None.
 
         Returns:
             TaskResult: result of data analysis
@@ -276,10 +278,10 @@ class DataPlugin(
         self,
         collection: bool = True,
         analysis: bool = True,
-        max_event_priority_level: EventPriority | str = EventPriority.CRITICAL,
+        max_event_priority_level: Union[EventPriority, str] = EventPriority.CRITICAL,
         system_interaction_level: SystemInteractionLevel | str = SystemInteractionLevel.INTERACTIVE,
         preserve_connection: bool = False,
-        data: Optional[str | dict | TDataModel] = None,
+        data: Optional[Union[str, dict, TDataModel]] = None,
         collection_args: Optional[TCollectArg | dict] = None,
         analysis_args: Optional[TAnalyzeArg | dict] = None,
     ) -> PluginResult:
@@ -288,10 +290,10 @@ class DataPlugin(
         Args:
             collection (bool, optional): Enable data collection. Defaults to True.
             analysis (bool, optional): Enable data analysis. Defaults to True.
-            max_event_priority_level (EventPriority | str, optional): Max priority level to assign to events. Defaults to EventPriority.CRITICAL.
+            max_event_priority_level (Union[EventPriority, str], optional): Max priority level to assign to events. Defaults to EventPriority.CRITICAL.
             system_interaction_level (SystemInteractionLevel | str, optional): System interaction level. Defaults to SystemInteractionLevel.INTERACTIVE.
             preserve_connection (bool, optional): Whether to close the connection when data collection is complete. Defaults to False.
-            data (Optional[str  |  dict  |  TDataModel], optional): Input data. Defaults to None.
+            data (Optional[Union[str, dict, TDataModel]], optional): Input data. Defaults to None.
             collection_args (Optional[TCollectArg  |  dict], optional): Arguments for data collection. Defaults to None.
             analysis_args (Optional[TAnalyzeArg  |  dict], optional): Arguments for data analysis. Defaults to None.
 
