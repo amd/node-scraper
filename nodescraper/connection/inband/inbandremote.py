@@ -105,7 +105,7 @@ class RemoteShell(InBandConnection):
 
         Args:
             filename (str): Path to file on remote host
-            encoding (str | None, optional): If None, file is read as binary. If str, decode using that encoding. Defaults to "utf-8".
+            encoding Optional[Union[str, None]]: If None, file is read as binary. If str, decode using that encoding. Defaults to "utf-8".
             strip (bool): Strip whitespace for text files. Ignored for binary.
 
         Returns:

@@ -25,7 +25,6 @@
 ###############################################################################
 import enum
 import logging
-import types
 from typing import Any, Optional, Type, Union
 
 from pydantic import BaseModel
@@ -80,7 +79,7 @@ class ConfigBuilder:
         type_class_map = {
             type_class.type_class: type_class for type_class in type_data.type_classes
         }
-        if types.NoneType in type_class_map:
+        if type(None) in type_class_map:
             return
 
         model_arg = next(

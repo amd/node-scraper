@@ -92,7 +92,7 @@ class DmesgData(DataModel):
         """Load dmesg data
 
         Args:
-            model_input (dict | str): dmesg file name or dmesg data dict
+            model_input Union[dict, str]: dmesg file name or dmesg data dict
 
         Raises:
             ValueError: id model data has an invalid value

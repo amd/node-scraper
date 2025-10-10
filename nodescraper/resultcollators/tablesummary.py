@@ -51,7 +51,7 @@ class TableSummary(PluginResultCollator):
             border = f"+{'+'.join('-' * (width + 2) for width in column_widths)}+"
 
             def gen_row(row):
-                return f"|  {' | '.join(str(cell).ljust(width) for cell, width in zip(row, column_widths, strict=False))} |"
+                return f"|  {' | '.join(str(cell).ljust(width) for cell, width in zip(row, column_widths))} |"
 
             table = [border, gen_row(headers), border, *[gen_row(row) for row in rows], border]
             return "\n".join(table)
