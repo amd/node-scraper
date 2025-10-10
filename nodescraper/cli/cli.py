@@ -257,6 +257,7 @@ def build_parser(
             model_type_map = parser_builder.build_plugin_parser()
         except Exception as e:
             print(f"Exception building arg parsers for {plugin_name}: {str(e)}")  # noqa: T201
+            continue
         plugin_subparser_map[plugin_name] = (plugin_subparser, model_type_map)
 
     return parser, plugin_subparser_map

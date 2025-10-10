@@ -25,6 +25,7 @@
 ###############################################################################
 import os
 import re
+from typing import Union
 
 from nodescraper.models import DataModel
 from nodescraper.utils import get_unique_filename
@@ -87,7 +88,7 @@ class DmesgData(DataModel):
             log_file.write(self.dmesg_content)
 
     @classmethod
-    def import_model(cls, model_input: dict | str) -> "DmesgData":
+    def import_model(cls, model_input: Union[dict, str]) -> "DmesgData":
         """Load dmesg data
 
         Args:

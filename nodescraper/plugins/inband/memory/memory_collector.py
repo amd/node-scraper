@@ -24,6 +24,7 @@
 #
 ###############################################################################
 import re
+from typing import Optional
 
 from nodescraper.base import InBandDataCollector
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
@@ -37,12 +38,12 @@ class MemoryCollector(InBandDataCollector[MemoryDataModel, None]):
 
     DATA_MODEL = MemoryDataModel
 
-    def collect_data(self, args=None) -> tuple[TaskResult, MemoryDataModel | None]:
+    def collect_data(self, args=None) -> tuple[TaskResult, Optional[MemoryDataModel]]:
         """
         Collects memory usage details from the system.
 
         Returns:
-            tuple[TaskResult, MemoryDataModel | None]: tuple containing the task result and memory data model or None if data is not available.
+            tuple[TaskResult, Optional[MemoryDataModel]]: tuple containing the task result and memory data model or None if data is not available.
         """
         mem_free, mem_total = None, None
         if self.system_info.os_family == OSFamily.WINDOWS:

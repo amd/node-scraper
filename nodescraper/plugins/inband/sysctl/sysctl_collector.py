@@ -23,6 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
+from typing import Optional
 
 from nodescraper.base import InBandDataCollector
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
@@ -39,7 +40,7 @@ class SysctlCollector(InBandDataCollector[SysctlDataModel, None]):
     def collect_data(
         self,
         args=None,
-    ) -> tuple[TaskResult, SysctlDataModel | None]:
+    ) -> tuple[TaskResult, Optional[SysctlDataModel]]:
         """Collect sysctl VM tuning values from the system."""
         values = {}
 

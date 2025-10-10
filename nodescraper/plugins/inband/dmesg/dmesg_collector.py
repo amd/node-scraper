@@ -64,11 +64,11 @@ class DmesgCollector(InBandDataCollector[DmesgData, DmesgCollectorArgs]):
     def collect_data(
         self,
         args: Optional[DmesgCollectorArgs] = None,
-    ) -> tuple[TaskResult, DmesgData | None]:
+    ) -> tuple[TaskResult, Optional[DmesgData]]:
         """Collect dmesg data from the system
 
         Returns:
-            tuple[TaskResult, DmesgData | None]: tuple containing the result of the task and the dmesg data if available
+            tuple[TaskResult, Optional[DmesgData]]: tuple containing the result of the task and the dmesg data if available
         """
         if args is None:
             args = DmesgCollectorArgs()

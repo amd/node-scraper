@@ -25,6 +25,7 @@
 ###############################################################################
 import os
 import re
+from typing import Optional
 
 from pydantic import ValidationError
 
@@ -43,11 +44,11 @@ class NvmeCollector(InBandDataCollector[NvmeDataModel, None]):
     def collect_data(
         self,
         args=None,
-    ) -> tuple[TaskResult, NvmeDataModel | None]:
+    ) -> tuple[TaskResult, Optional[NvmeDataModel]]:
         """Collect detailed NVMe information from all NVMe devices.
 
         Returns:
-            tuple[TaskResult, NvmeDataModel | None]: Task result and data model with NVMe command outputs.
+            tuple[TaskResult, Optional[NvmeDataModel]]: Task result and data model with NVMe command outputs.
         """
         if self.system_info.os_family == OSFamily.WINDOWS:
             self._log_event(

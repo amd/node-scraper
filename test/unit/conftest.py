@@ -25,6 +25,7 @@
 ###############################################################################
 import logging
 from pathlib import Path
+from typing import Optional, Union
 from unittest.mock import MagicMock
 
 import pytest
@@ -91,7 +92,7 @@ def mock_analyzer():
         events: list[dict] = []
 
         def analyze_data(
-            self, data: DummyDataModel, args: DummyArg | dict | None = None
+            self, data: DummyDataModel, args: Optional[Union[DummyArg, dict]] = None
         ) -> TaskResult:
             self.result.status = ExecutionStatus.OK
             return self.result

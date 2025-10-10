@@ -41,7 +41,7 @@ class StorageCollector(InBandDataCollector[StorageDataModel, None]):
 
     def collect_data(
         self, args: Optional[StorageCollectorArgs] = None
-    ) -> tuple[TaskResult, StorageDataModel | None]:
+    ) -> tuple[TaskResult, Optional[StorageDataModel]]:
         """read storage usage data"""
         if args is None:
             args = StorageCollectorArgs()
