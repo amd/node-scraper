@@ -36,6 +36,7 @@ class JournalCollector(InBandDataCollector[JournalData, None]):
 
     SUPPORTED_OS_FAMILY = {OSFamily.LINUX}
     DATA_MODEL = JournalData
+    CMD = "journalctl --no-pager --system --output=short-iso"
 
     def _read_with_journalctl(self):
         """Read journal logs using journalctl
@@ -43,8 +44,7 @@ class JournalCollector(InBandDataCollector[JournalData, None]):
         Returns:
             str|None: system journal read
         """
-        cmd = "journalctl --no-pager --system --output=short-iso"
-        res = self._run_sut_cmd(cmd, sudo=True, log_artifact=False, strip=False)
+        res = self._run_sut_cmd(self.CMD, sudo=True, log_artifact=False, strip=False)
 
         if res.exit_code != 0:
             self._log_event(

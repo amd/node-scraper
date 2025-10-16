@@ -262,7 +262,7 @@ def test_collect_rotations_gz_failure(monkeypatch, system_info, conn_mock):
 
 def test_collect_data_integration(monkeypatch, system_info, conn_mock):
     def run_map(cmd, **kwargs):
-        if cmd == DmesgCollector.DMESG_CMD:
+        if cmd == DmesgCollector.CMD:
             return DummyRes(command=cmd, stdout="DMESG OUTPUT\n", exit_code=0)
         if cmd.startswith("ls -1 /var/log/dmesg"):
             return DummyRes(command=cmd, stdout="/var/log/dmesg\n", exit_code=0)

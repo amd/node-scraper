@@ -37,6 +37,9 @@ class DkmsCollector(InBandDataCollector[DkmsDataModel, None]):
 
     DATA_MODEL = DkmsDataModel
 
+    CMD_STATUS = "dkms status"
+    CMD_VERSION = "dkms --version"
+
     def collect_data(
         self,
         args=None,
@@ -49,8 +52,8 @@ class DkmsCollector(InBandDataCollector[DkmsDataModel, None]):
         """
 
         dkms_data = DkmsDataModel()
-        dkms_status = self._run_sut_cmd("dkms status")
-        dkms_version = self._run_sut_cmd("dkms --version")
+        dkms_status = self._run_sut_cmd(self.CMD_STATUS)
+        dkms_version = self._run_sut_cmd(self.CMD_VERSION)
 
         if dkms_status.exit_code == 0:
             dkms_data.status = dkms_status.stdout
