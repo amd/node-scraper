@@ -24,7 +24,7 @@ invoked by collectors** -> See [docs/PLUGIN_DOC.md](docs/PLUGIN_DOC.md)
 
 ## Installation
 ### Install From Source
-Node Scraper requires Python 3.10+ for installation. After cloning this repository,
+Node Scraper requires Python 3.9+ for installation. After cloning this repository,
 call dev-setup.sh script with 'source'. This script creates an editable install of Node Scraper in
 a python virtual environment and also configures the pre-commit hooks for the project.
 
