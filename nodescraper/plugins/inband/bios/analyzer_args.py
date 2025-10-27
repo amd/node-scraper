@@ -23,6 +23,8 @@
 # SOFTWARE.
 #
 ###############################################################################
+from typing import Union
+
 from pydantic import Field, field_validator
 
 from nodescraper.models import AnalyzerArgs
@@ -35,11 +37,11 @@ class BiosAnalyzerArgs(AnalyzerArgs):
 
     @field_validator("exp_bios_version", mode="before")
     @classmethod
-    def validate_exp_bios_version(cls, exp_bios_version: str | list) -> list:
+    def validate_exp_bios_version(cls, exp_bios_version: Union[str, list]) -> list:
         """support str or list input for exp_bios_version
 
         Args:
-            exp_bios_version (str | list): expected BIOS version(s) to match against
+            exp_bios_version (Union[str, list]): expected BIOS version(s) to match against
 
         Returns:
             list: a list of expected BIOS versions

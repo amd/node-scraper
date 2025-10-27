@@ -89,7 +89,7 @@ class TaskResult(BaseModel):
         return v
 
     @property
-    def duration(self) -> str | None:
+    def duration(self) -> Optional[str]:
         """return duration of time as a string
 
         Returns:

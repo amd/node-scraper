@@ -24,7 +24,7 @@
 #
 ###############################################################################
 import re
-from typing import Callable
+from typing import Callable, Optional
 
 from pydantic import ValidationError
 
@@ -47,11 +47,11 @@ class PackageCollector(InBandDataCollector[PackageDataModel, None]):
     CMD_DNF = "dnf list --installed"
     CMD_PACMAN = "pacman -Q"
 
-    def _detect_package_manager(self) -> Callable | None:
+    def _detect_package_manager(self) -> Optional[Callable]:
         """Detect the package manager based on the OS release information.
 
         Returns:
-            Callable | None: A callable function that dumps the packages for the detected package manager,
+            Optional[Callable]: A callable function that dumps the packages for the detected package manager,
             or None if the package manager is not supported.
         """
         package_manger_map: dict[str, Callable] = {
@@ -181,11 +181,11 @@ class PackageCollector(InBandDataCollector[PackageDataModel, None]):
         self.result.message = "Failed to run Package Manager command"
         self.result.status = ExecutionStatus.EXECUTION_FAILURE
 
-    def collect_data(self, args=None) -> tuple[TaskResult, PackageDataModel | None]:
+    def collect_data(self, args=None) -> tuple[TaskResult, Optional[PackageDataModel]]:
         """Collect package information from the system.
 
         Returns:
-            tuple[TaskResult, PackageDataModel | None]: tuple containing the task result and a PackageDataModel instance
+            tuple[TaskResult, Optional[PackageDataModel]]: tuple containing the task result and a PackageDataModel instance
             with the collected package information, or None if there was an error.
         """
         packages = {}

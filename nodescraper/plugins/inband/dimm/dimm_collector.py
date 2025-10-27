@@ -44,7 +44,7 @@ class DimmCollector(InBandDataCollector[DimmDataModel, DimmCollectorArgs]):
     def collect_data(
         self,
         args: Optional[DimmCollectorArgs] = None,
-    ) -> tuple[TaskResult, DimmDataModel | None]:
+    ) -> tuple[TaskResult, Optional[DimmDataModel]]:
         """Collect data on installed DIMMs"""
         if args is None:
             args = DimmCollectorArgs()

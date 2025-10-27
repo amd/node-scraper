@@ -23,6 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
+from typing import Optional
 
 from nodescraper.base import InBandDataCollector
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
@@ -41,11 +42,11 @@ class BiosCollector(InBandDataCollector[BiosDataModel, None]):
     def collect_data(
         self,
         args=None,
-    ) -> tuple[TaskResult, BiosDataModel | None]:
+    ) -> tuple[TaskResult, Optional[BiosDataModel]]:
         """Collect BIOS version information from the system.
 
         Returns:
-            tuple[TaskResult, BiosDataModel | None]: tuple containing the task result and an instance of BiosDataModel
+            tuple[TaskResult, Optional[BiosDataModel]]: tuple containing the task result and an instance of BiosDataModel
             or None if the BIOS version could not be determined.
         """
         bios = None

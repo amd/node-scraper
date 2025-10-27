@@ -23,6 +23,8 @@
 # SOFTWARE.
 #
 ###############################################################################
+from typing import Optional
+
 from nodescraper.base import InBandDataCollector
 from nodescraper.connection.inband.inband import CommandArtifact
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
@@ -120,12 +122,12 @@ class KernelModuleCollector(InBandDataCollector[KernelModuleDataModel, None]):
 
         return modules
 
-    def collect_data(self, args=None) -> tuple[TaskResult, KernelModuleDataModel | None]:
+    def collect_data(self, args=None) -> tuple[TaskResult, Optional[KernelModuleDataModel]]:
         """
         Collect kernel modules data.
 
         Returns:
-            tuple[TaskResult, KernelModuleDataModel | None]: tuple containing the task result and kernel data model or None if not found.
+            tuple[TaskResult, Optional[KernelModuleDataModel]]: tuple containing the task result and kernel data model or None if not found.
         """
         kernel_modules = {}
         km_data: KernelModuleDataModel | None = None
