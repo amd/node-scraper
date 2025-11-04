@@ -24,6 +24,7 @@
 #
 ###############################################################################
 import re
+from typing import Union
 
 from pydantic import BaseModel
 
@@ -36,7 +37,7 @@ from nodescraper.models.event import Event
 class ErrorRegex(BaseModel):
     regex: re.Pattern
     message: str
-    event_category: str | EventCategory = EventCategory.UNKNOWN
+    event_category: Union[str, EventCategory] = EventCategory.UNKNOWN
     event_priority: EventPriority = EventPriority.ERROR
 
 
@@ -54,14 +55,15 @@ class RegexAnalyzer(DataAnalyzer[TDataModel, TAnalyzeArg]):
     """Parent class for all regex based data analyzers."""
 
     def _build_regex_event(
-        self, regex_obj: ErrorRegex, match: str | list[str], source: str
+        self, regex_obj: ErrorRegex, match: Union[str, list[str]], source: str
     ) -> RegexEvent:
         """Build a RegexEvent object from a regex match and source.
 
         Args:
             regex_obj (ErrorRegex): regex object containing the regex pattern, message, category, and priorit
-            match (str | list[str]): matched content from the regex
-            source (str): descriptor for the content where the match was found
+            match (
+        Union[str, list[str]]): matched content from the regex
+                    source (str): descriptor for the content where the match was found
 
         Returns:
             RegexEvent: an instance of RegexEvent containing the match details

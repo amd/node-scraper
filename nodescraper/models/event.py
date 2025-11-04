@@ -28,7 +28,7 @@ import logging
 import re
 import uuid
 from enum import Enum
-from typing import Optional
+from typing import Optional, Union
 
 from pydantic import BaseModel, Field, field_serializer, field_validator
 
@@ -50,7 +50,7 @@ class Event(BaseModel):
     timestamp: datetime.datetime = Field(
         default_factory=lambda: datetime.datetime.now(datetime.timezone.utc)
     )
-    reporter: str = "ERROR_SCRAPER"
+    reporter: str = "NODE_SCRAPER"
     category: str
     description: str
     data: dict = Field(default_factory=dict)
@@ -73,14 +73,15 @@ class Event(BaseModel):
         if timestamp.tzinfo is None or timestamp.tzinfo.utcoffset(timestamp) is None:
             raise ValueError("datetime must be timezone aware")
 
-        if timestamp.utcoffset() is not None and timestamp.utcoffset().total_seconds() != 0:
+        utc_offset = timestamp.utcoffset()
+        if utc_offset is not None and utc_offset.total_seconds() != 0:
             timestamp = timestamp.astimezone(datetime.timezone.utc)
 
         return timestamp
 
     @field_validator("category", mode="before")
     @classmethod
-    def validate_category(cls, category: str | Enum) -> str:
+    def validate_category(cls, category: Optional[Union[str, Enum]]) -> str:
         """ensure category is has consistent formatting
         Args:
             category (str | Enum): category string
@@ -90,31 +91,31 @@ class Event(BaseModel):
         if isinstance(category, Enum):
             category = category.value
 
-        category = category.strip().upper()
+        category = str(category).strip().upper()
         category = re.sub(r"[\s-]", "_", category)
         return category
 
     @field_validator("priority", mode="before")
     @classmethod
-    def validate_priority(cls, priority: str | EventPriority) -> EventPriority:
+    def validate_priority(cls, priority: Union[str, EventPriority]) -> EventPriority:
         """Allow priority to be set via string priority name
         Args:
-            priority (str | EventPriority): event priority string or enum
+            priority (Union[str, EventPriority]): event priority string or enum
         Raises:
             ValueError: if priority string is an invalid value
         Returns:
             EventPriority: priority enum
         """
-
         if isinstance(priority, str):
             try:
                 return getattr(EventPriority, priority.upper())
             except AttributeError as e:
                 raise ValueError(
-                    f"priority must be one of {[priority_enum.name for priority_enum in EventPriority]}"
+                    f"priority must be one of {[p.name for p in EventPriority]}"
                 ) from e
-
-        return priority
+        if isinstance(priority, EventPriority):
+            return priority
+        raise ValueError("priority must be an EventPriority or its name as a string")
 
     @field_serializer("priority")
     def serialize_priority(self, priority: EventPriority, _info) -> str:

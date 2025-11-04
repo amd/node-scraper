@@ -23,6 +23,8 @@
 # SOFTWARE.
 #
 ###############################################################################
+from typing import Optional
+
 from nodescraper.base import InBandDataCollector
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.models import TaskResult
@@ -36,26 +38,45 @@ class RocmCollector(InBandDataCollector[RocmDataModel, None]):
     SUPPORTED_OS_FAMILY: set[OSFamily] = {OSFamily.LINUX}
 
     DATA_MODEL = RocmDataModel
+    CMD_VERSION_PATHS = [
+        "/opt/rocm/.info/version-rocm",
+        "/opt/rocm/.info/version",
+    ]
 
-    def collect_data(self, args=None) -> tuple[TaskResult, RocmDataModel | None]:
+    def collect_data(self, args=None) -> tuple[TaskResult, Optional[RocmDataModel]]:
         """Collect ROCm version data from the system.
 
         Returns:
-            tuple[TaskResult, RocmDataModel | None]: tuple containing the task result and ROCm data model if available.
+            tuple[TaskResult, Optional[RocmDataModel]]: tuple containing the task result and ROCm data model if available.
         """
-        res = self._run_sut_cmd("cat /opt/rocm/.info/version")
-        if res.exit_code == 0:
-            rocm_data = RocmDataModel(rocm_version=res.stdout)
-            self._log_event(
-                category="ROCM_VERSION_READ",
-                description="ROCm version data collected",
-                data=rocm_data.model_dump(),
-                priority=EventPriority.INFO,
-            )
-            self.result.message = f"ROCm: {rocm_data.model_dump()}"
-            self.result.status = ExecutionStatus.OK
+        version_paths = [
+            "/opt/rocm/.info/version-rocm",
+            "/opt/rocm/.info/version",
+        ]
+
+        rocm_data = None
+        for path in self.CMD_VERSION_PATHS:
+            res = self._run_sut_cmd(f"grep . {path}")
+            if res.exit_code == 0:
+                rocm_data = RocmDataModel(rocm_version=res.stdout)
+                self._log_event(
+                    category="ROCM_VERSION_READ",
+                    description="ROCm version data collected",
+                    data=rocm_data.model_dump(),
+                    priority=EventPriority.INFO,
+                )
+                self.result.message = f"ROCm: {rocm_data.model_dump()}"
+                self.result.status = ExecutionStatus.OK
+                break
         else:
-            rocm_data = None
+            self._log_event(
+                category=EventCategory.OS,
+                description=f"Unable to read ROCm version from {version_paths}",
+                data={"raw_output": res.stdout},
+                priority=EventPriority.ERROR,
+            )
+
+        if not rocm_data:
             self._log_event(
                 category=EventCategory.OS,
                 description="Error checking ROCm version",

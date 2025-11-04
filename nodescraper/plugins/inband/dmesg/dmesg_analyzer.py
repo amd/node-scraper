@@ -28,7 +28,7 @@ import re
 from typing import Optional
 
 from nodescraper.base.regexanalyzer import ErrorRegex, RegexAnalyzer
-from nodescraper.connection.inband import FileArtifact
+from nodescraper.connection.inband import TextFileArtifact
 from nodescraper.enums import EventCategory, EventPriority
 from nodescraper.models import Event, TaskResult
 
@@ -53,7 +53,7 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
             event_category=EventCategory.SW_DRIVER,
         ),
         ErrorRegex(
-            regex=re.compile(r"[Kk]ernel panic.*"),
+            regex=re.compile(r"\bkernel panic\b.*", re.IGNORECASE),
             message="Kernel Panic",
             event_category=EventCategory.SW_DRIVER,
         ),
@@ -98,9 +98,7 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
             event_category=EventCategory.SW_DRIVER,
         ),
         ErrorRegex(
-            regex=re.compile(
-                r"(?:[\w\d_-]*)(?:\[[\d.]*\])? (?:general protection fault)|(?:general protection fault.*)"
-            ),
+            regex=re.compile(r"(?:[\w-]+(?:\[[0-9.]+\])?\s+)?general protection fault[^\n]*"),
             message="General protection fault",
             event_category=EventCategory.SW_DRIVER,
         ),
@@ -129,18 +127,19 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
         ErrorRegex(
             regex=re.compile(
                 (
-                    r"(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:\s+\[\S+\]\s*(?:retry|no-retry)? page fault.*)"
-                    r"(?:\n.*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:.*))?"
-                    r"(?:\n.*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:.*))?"
-                    r"(?:\n.*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:.*))?"
-                    r"(?:\n.*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:.*))?"
-                    r"(?:\n.*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:.*))?"
-                    r"(?:\n.*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:.*))?"
-                    r"(?:\n.*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:.*))?"
-                    r"(?:\n.*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:.*))?"
-                    r"(?:\n.*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:.*))?"
-                    r"(?:\n.*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:.*))?"
-                )
+                    r"(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:\s+\[\S+\]\s*(?:retry|no-retry)? page fault[^\n]*)"
+                    r"(?:\n[^\n]*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:[^\n]*))?"
+                    r"(?:\n[^\n]*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:[^\n]*))?"
+                    r"(?:\n[^\n]*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:[^\n]*))?"
+                    r"(?:\n[^\n]*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:[^\n]*))?"
+                    r"(?:\n[^\n]*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:[^\n]*))?"
+                    r"(?:\n[^\n]*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:[^\n]*))?"
+                    r"(?:\n[^\n]*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:[^\n]*))?"
+                    r"(?:\n[^\n]*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:[^\n]*))?"
+                    r"(?:\n[^\n]*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:[^\n]*))?"
+                    r"(?:\n[^\n]*(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:[^\n]*))?"
+                ),
+                re.MULTILINE,
             ),
             message="amdgpu Page Fault",
             event_category=EventCategory.SW_DRIVER,
@@ -259,7 +258,52 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
             event_category=EventCategory.RAS,
         ),
         ErrorRegex(
-            regex=re.compile(r"Accelerator Check Architecture.*(?:\n.*){0,5}"),
+            regex=re.compile(
+                (
+                    r"(Accelerator Check Architecture[^\n]*)"
+                    r"(?:\n[^\n]*){0,10}?"
+                    r"(amdgpu[ 0-9a-fA-F:.]+:? [^\n]*entry\[\d+\]\.STATUS=0x[0-9a-fA-F]+)"
+                    r"(?:\n[^\n]*){0,5}?"
+                    r"(amdgpu[ 0-9a-fA-F:.]+:? [^\n]*entry\[\d+\]\.ADDR=0x[0-9a-fA-F]+)"
+                    r"(?:\n[^\n]*){0,5}?"
+                    r"(amdgpu[ 0-9a-fA-F:.]+:? [^\n]*entry\[\d+\]\.MISC0=0x[0-9a-fA-F]+)"
+                    r"(?:\n[^\n]*){0,5}?"
+                    r"(amdgpu[ 0-9a-fA-F:.]+:? [^\n]*entry\[\d+\]\.IPID=0x[0-9a-fA-F]+)"
+                    r"(?:\n[^\n]*){0,5}?"
+                    r"(amdgpu[ 0-9a-fA-F:.]+:? [^\n]*entry\[\d+\]\.SYND=0x[0-9a-fA-F]+-?)"
+                ),
+                re.MULTILINE,
+            ),
+            message="ACA Error",
+            event_category=EventCategory.RAS,
+        ),
+        ErrorRegex(
+            regex=re.compile(
+                (
+                    r"(Accelerator Check Architecture[^\n]*)"
+                    r"(?:\n[^\n]*){0,10}?"
+                    r"(amdgpu[ 0-9a-fA-F:.]+:? [^\n]*CONTROL=0x[0-9a-fA-F]+)"
+                    r"(?:\n[^\n]*){0,5}?"
+                    r"(amdgpu[ 0-9a-fA-F:.]+:? [^\n]*STATUS=0x[0-9a-fA-F]+)"
+                    r"(?:\n[^\n]*){0,5}?"
+                    r"(amdgpu[ 0-9a-fA-F:.]+:? [^\n]*ADDR=0x[0-9a-fA-F]+)"
+                    r"(?:\n[^\n]*){0,5}?"
+                    r"(amdgpu[ 0-9a-fA-F:.]+:? [^\n]*MISC=0x[0-9a-fA-F]+)"
+                    r"(?:\n[^\n]*){0,5}?"
+                    r"(amdgpu[ 0-9a-fA-F:.]+:? [^\n]*CONFIG=0x[0-9a-fA-F]+)"
+                    r"(?:\n[^\n]*){0,5}?"
+                    r"(amdgpu[ 0-9a-fA-F:.]+:? [^\n]*IPID=0x[0-9a-fA-F]+)"
+                    r"(?:\n[^\n]*){0,5}?"
+                    r"(amdgpu[ 0-9a-fA-F:.]+:? [^\n]*SYND=0x[0-9a-fA-F]+)"
+                    r"(?:\n[^\n]*){0,5}?"
+                    r"(amdgpu[ 0-9a-fA-F:.]+:? [^\n]*DESTAT=0x[0-9a-fA-F]+)"
+                    r"(?:\n[^\n]*){0,5}?"
+                    r"(amdgpu[ 0-9a-fA-F:.]+:? [^\n]*DEADDR=0x[0-9a-fA-F]+)"
+                    r"(?:\n[^\n]*){0,5}?"
+                    r"(amdgpu[ 0-9a-fA-F:.]+:? [^\n]*CONTROL_MASK=0x[0-9a-fA-F]+)"
+                ),
+                re.MULTILINE,
+            ),
             message="ACA Error",
             event_category=EventCategory.RAS,
         ),
@@ -292,6 +336,33 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
             regex=re.compile(r"amdgpu \w{4}:\w{2}:\w{2}.\w: amdgpu: WARN: GPU is throttled.*"),
             message="GPU Throttled",
             event_category=EventCategory.SW_DRIVER,
+            event_priority=EventPriority.WARNING,
+        ),
+        ErrorRegex(
+            regex=re.compile(
+                r"(?:\[[^\]]+\]\s*)?LNetError:.*ko2iblnd:\s*No matching interfaces",
+                re.IGNORECASE,
+            ),
+            message="LNet: ko2iblnd has no matching interfaces",
+            event_category=EventCategory.IO,
+            event_priority=EventPriority.WARNING,
+        ),
+        ErrorRegex(
+            regex=re.compile(
+                r"(?:\[[^\]]+\]\s*)?LNetError:\s*.*Error\s*-?\d+\s+starting up LNI\s+\w+",
+                re.IGNORECASE,
+            ),
+            message="LNet: Error starting up LNI",
+            event_category=EventCategory.IO,
+            event_priority=EventPriority.WARNING,
+        ),
+        ErrorRegex(
+            regex=re.compile(
+                r"LustreError:.*ptlrpc_init_portals\(\).*network initiali[sz]ation failed",
+                re.IGNORECASE,
+            ),
+            message="Lustre: network initialisation failed",
+            event_category=EventCategory.IO,
             event_priority=EventPriority.WARNING,
         ),
     ]
@@ -342,18 +413,25 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
             bool: return True if error is known
         """
         for regex_obj in self.ERROR_REGEX:
-            if regex_obj.regex.search(unknown_match):
-                return True
+            try:
+                if regex_obj.regex.search(unknown_match):
+                    return True
+            except re.error:
+                continue
 
-        # handle multline matches
         for event in known_err_events:
             known_match = event.data["match_content"]
             if isinstance(known_match, list):
                 for line in known_match:
-                    if unknown_match in line:
+                    if unknown_match == line or unknown_match in line or line in unknown_match:
                         return True
-            elif known_match in unknown_match:
-                return True
+            elif isinstance(known_match, str):
+                if (
+                    unknown_match == known_match
+                    or unknown_match in known_match
+                    or known_match in unknown_match
+                ):
+                    return True
         return False
 
     def analyze_data(
@@ -386,7 +464,7 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
                 args.analysis_range_end,
             )
             self.result.artifacts.append(
-                FileArtifact(filename="filtered_dmesg.log", contents=dmesg_content)
+                TextFileArtifact(filename="filtered_dmesg.log", contents=dmesg_content)
             )
         else:
             dmesg_content = data.dmesg_content

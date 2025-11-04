@@ -24,7 +24,7 @@
 #
 ###############################################################################
 import re
-from typing import Callable
+from typing import Callable, Optional
 
 from pydantic import ValidationError
 
@@ -41,12 +41,17 @@ class PackageCollector(InBandDataCollector[PackageDataModel, None]):
     """Collecting Package information from the system"""
 
     DATA_MODEL = PackageDataModel
+    CMD_WINDOWS = "wmic product get name,version"
+    CMD_RELEASE = "cat /etc/*release"
+    CMD_DPKG = "dpkg-query -W"
+    CMD_DNF = "dnf list --installed"
+    CMD_PACMAN = "pacman -Q"
 
-    def _detect_package_manager(self) -> Callable | None:
+    def _detect_package_manager(self) -> Optional[Callable]:
         """Detect the package manager based on the OS release information.
 
         Returns:
-            Callable | None: A callable function that dumps the packages for the detected package manager,
+            Optional[Callable]: A callable function that dumps the packages for the detected package manager,
             or None if the package manager is not supported.
         """
         package_manger_map: dict[str, Callable] = {
@@ -57,7 +62,7 @@ class PackageCollector(InBandDataCollector[PackageDataModel, None]):
             "centos": self._dump_fedora_centos_rhel_packages,
             "arch": self._dump_arch_packages,
         }
-        res = self._run_sut_cmd("cat /etc/*release")
+        res = self._run_sut_cmd(self.CMD_RELEASE)
         # search for the package manager key in the release file
         for os, package_manager in package_manger_map.items():
             package_search = re.findall(os, res.stdout, flags=re.IGNORECASE)
@@ -72,7 +77,7 @@ class PackageCollector(InBandDataCollector[PackageDataModel, None]):
             dict[str, str]: A dictionary with package names as keys and their versions as values.
         """
         MIN_SPLIT_LENGTH = 2
-        res = self._run_sut_cmd("wmic product get name,version")
+        res = self._run_sut_cmd(self.CMD_WINDOWS)
         packages = {}
         if res.exit_code != 0:
             self._handle_command_failure(res)
@@ -98,7 +103,7 @@ class PackageCollector(InBandDataCollector[PackageDataModel, None]):
         """
         MIN_SPLIT_LENGTH = 2
         MAX_SPLIT_LENGTH = 3
-        res = self._run_sut_cmd("dpkg-query -W")
+        res = self._run_sut_cmd(self.CMD_DPKG)
         packages = {}
         if res.exit_code != 0:
             self._handle_command_failure(res)
@@ -122,7 +127,7 @@ class PackageCollector(InBandDataCollector[PackageDataModel, None]):
         """
         MIN_SPLIT_LENGTH = 2
         MAX_SPLIT_LENGTH = 3
-        res = self._run_sut_cmd("dnf list --installed")
+        res = self._run_sut_cmd(self.CMD_DNF)
         packages = {}
         if res.exit_code != 0:
             self._handle_command_failure(res)
@@ -144,7 +149,7 @@ class PackageCollector(InBandDataCollector[PackageDataModel, None]):
             dict[str, str]: A dictionary with package names as keys and their versions as values.
         """
         EXPECTED_SPLIT_LENGTH = 2
-        res: CommandArtifact = self._run_sut_cmd("pacman -Q")
+        res: CommandArtifact = self._run_sut_cmd(self.CMD_PACMAN)
         packages = {}
         if res.exit_code != 0:
             self._handle_command_failure(res)
@@ -176,11 +181,11 @@ class PackageCollector(InBandDataCollector[PackageDataModel, None]):
         self.result.message = "Failed to run Package Manager command"
         self.result.status = ExecutionStatus.EXECUTION_FAILURE
 
-    def collect_data(self, args=None) -> tuple[TaskResult, PackageDataModel | None]:
+    def collect_data(self, args=None) -> tuple[TaskResult, Optional[PackageDataModel]]:
         """Collect package information from the system.
 
         Returns:
-            tuple[TaskResult, PackageDataModel | None]: tuple containing the task result and a PackageDataModel instance
+            tuple[TaskResult, Optional[PackageDataModel]]: tuple containing the task result and a PackageDataModel instance
             with the collected package information, or None if there was an error.
         """
         packages = {}

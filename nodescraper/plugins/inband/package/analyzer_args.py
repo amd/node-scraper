@@ -23,11 +23,18 @@
 # SOFTWARE.
 #
 ###############################################################################
-from pydantic import BaseModel, Field
+from typing import Dict, Optional
+
+from pydantic import Field
+
+from nodescraper.models import AnalyzerArgs
+from nodescraper.plugins.inband.package.packagedata import PackageDataModel
 
 
-class PackageAnalyzerArgs(BaseModel):
-    exp_package_ver: dict[str, str | None] = Field(default_factory=dict)
-    regex_match: bool = True
+class PackageAnalyzerArgs(AnalyzerArgs):
+    exp_package_ver: Dict[str, Optional[str]] = Field(default_factory=dict)
+    regex_match: bool = False
 
-    model_config = {"extra": "forbid"}
+    @classmethod
+    def build_from_model(cls, datamodel: PackageDataModel) -> "PackageAnalyzerArgs":
+        return cls(exp_package_ver=datamodel.version_info)

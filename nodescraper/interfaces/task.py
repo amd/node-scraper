@@ -27,7 +27,7 @@ import abc
 import copy
 import datetime
 import logging
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 from nodescraper.constants import DEFAULT_LOGGER
 from nodescraper.enums import EventCategory, EventPriority
@@ -51,7 +51,7 @@ class Task(abc.ABC):
         self,
         system_info: SystemInfo,
         logger: Optional[logging.Logger] = None,
-        max_event_priority_level: EventPriority | str = EventPriority.CRITICAL,
+        max_event_priority_level: Union[EventPriority, str] = EventPriority.CRITICAL,
         parent: Optional[str] = None,
         task_result_hooks: Optional[list[TaskResultHook]] = None,
         **kwargs: dict[str, Any],
@@ -77,11 +77,13 @@ class Task(abc.ABC):
         return self._max_event_priority_level
 
     @max_event_priority_level.setter
-    def max_event_priority_level(self, input_value: str | EventPriority):
+    def max_event_priority_level(self, input_value: Union[str, EventPriority]):
         if isinstance(input_value, str):
             value: EventPriority = getattr(EventPriority, input_value)
+        elif isinstance(input_value, int):
+            value = EventPriority(input_value)
         elif isinstance(input_value, EventPriority):
-            value: EventPriority = input_value
+            value: EventPriority = input_value  # type:ignore
         else:
             raise ValueError(f"Invalid type for max_event_priority_level: {type(input_value)}")
 
@@ -94,7 +96,7 @@ class Task(abc.ABC):
 
     def _build_event(
         self,
-        category: EventCategory | str,
+        category: Union[EventCategory, str],
         description: str,
         priority: EventPriority,
         data: Optional[dict] = None,
@@ -131,7 +133,7 @@ class Task(abc.ABC):
 
     def _log_event(
         self,
-        category: EventCategory | str,
+        category: Union[EventCategory, str],
         description: str,
         priority: EventPriority,
         data: Optional[dict] = None,

@@ -204,3 +204,78 @@ def test_page_fault(system_info):
     for event in res.events:
         assert event.priority == EventPriority.ERROR
         assert event.description == "amdgpu Page Fault"
+
+
+def test_lnet_and_lustre_boot_errors_are_warning_events(system_info):
+    dmesg_log = "\n".join(
+        [
+            "[  548.063411] LNetError: 2719:0:(o2iblnd.c:3327:kiblnd_startup()) ko2iblnd: No matching interfaces",
+            "[  548.073737] LNetError: 105-4: Error -100 starting up LNI o2ib",
+            "[Wed Jun 25 17:19:52 2025] LustreError: 2719:0:(events.c:639:ptlrpc_init_portals()) network initialisation failed",
+        ]
+    )
+
+    analyzer = DmesgAnalyzer(
+        system_info=system_info,
+    )
+    data = DmesgData(dmesg_content=dmesg_log)
+    result = analyzer.analyze_data(data, DmesgAnalyzerArgs())
+
+    by_msg = {e.description: e for e in result.events}
+
+    m1 = "LNet: ko2iblnd has no matching interfaces"
+    m2 = "LNet: Error starting up LNI"
+    m3 = "Lustre: network initialisation failed"
+
+    assert m1 in by_msg, f"Missing event: {m1}"
+    assert m2 in by_msg, f"Missing event: {m2}"
+    assert m3 in by_msg, f"Missing event: {m3}"
+
+    for m in (m1, m2, m3):
+        ev = by_msg[m]
+        assert ev.priority == EventPriority.WARNING, f"{m} should be WARNING"
+
+
+def test_aca(system_info):
+    aca_data1 = DmesgData(
+        dmesg_content=(
+            "kern  :err   : 2025-01-01T10:17:15,145363-04:00 amdgpu 0000:0c:00.0: amdgpu: [Hardware error] Accelerator Check Architecture events logged\n"
+            "kern  :err   : 2025-01-01T10:17:15,145363-04:00 amdgpu 0000:0c:00.0: amdgpu: [Hardware error] aca entry[00].STATUS=0x000000000000000f\n"
+            "kern  :err   : 2025-01-01T10:17:15,145363-04:00 amdgpu 0000:0c:00.0: amdgpu: [Hardware error] aca entry[00].ADDR=0x0000000000000000\n"
+            "kern  :err   : 2025-01-01T10:17:15,145363-04:00 amdgpu 0000:0c:00.0: amdgpu: [Hardware error] aca entry[00].MISC0=0x0000000000000000\n"
+            "kern  :err   : 2025-01-01T10:17:15,145363-04:00 amdgpu 0000:0c:00.0: amdgpu: [Hardware error] aca entry[00].IPID=0x0000000000000000\n"
+            "kern  :err   : 2025-01-01T10:17:15,145363-04:00 amdgpu 0000:0c:00.0: amdgpu: [Hardware error] aca entry[00].SYND=0x0000000000000000\n"
+        )
+    )
+
+    aca_data2 = DmesgData(
+        dmesg_content=(
+            "kern  :err   : 2025-01-01T17:53:23,028841-06:00 amdgpu 0000:48:00.0: {1}[Hardware Error]: Accelerator Check Architecture events logged\n"
+            "kern  :err   : 2025-01-01T17:53:23,028841-06:00 amdgpu 0000:48:00.0: {1}[Hardware Error]: ACA[01/01].CONTROL=0x000000000000000f\n"
+            "kern  :err   : 2025-01-01T17:53:23,028841-06:00 amdgpu 0000:48:00.0: {1}[Hardware Error]: ACA[01/01].STATUS=0x0000000000000000\n"
+            "kern  :err   : 2025-01-01T17:53:23,028841-06:00 amdgpu 0000:48:00.0: {1}[Hardware Error]: ACA[01/01].ADDR=0x0000000000000000\n"
+            "kern  :err   : 2025-01-01T17:53:23,028841-06:00 amdgpu 0000:48:00.0: {1}[Hardware Error]: ACA[01/01].MISC=0x0000000000000000\n"
+            "kern  :err   : 2025-01-01T17:53:23,028841-06:00 amdgpu 0000:48:00.0: {1}[Hardware Error]: ACA[01/01].CONFIG=0x0000000000000000\n"
+            "kern  :err   : 2025-01-01T17:53:23,028841-06:00 amdgpu 0000:48:00.0: {1}[Hardware Error]: ACA[01/01].IPID=0x0000000000000000\n"
+            "kern  :err   : 2025-01-01T17:53:23,028841-06:00 amdgpu 0000:48:00.0: {1}[Hardware Error]: ACA[01/01].SYND=0x0000000000000000\n"
+            "kern  :err   : 2025-01-01T17:53:23,028841-06:00 amdgpu 0000:48:00.0: {1}[Hardware Error]: ACA[01/01].DESTAT=0x0000000000000000\n"
+            "kern  :err   : 2025-01-01T17:53:23,028841-06:00 amdgpu 0000:48:00.0: {1}[Hardware Error]: ACA[01/01].DEADDR=0x0000000000000000\n"
+            "kern  :err   : 2025-01-01T17:53:23,028841-06:00 amdgpu 0000:48:00.0: {1}[Hardware Error]: ACA[01/01].CONTROL_MASK=0x0000000000000000\n"
+        )
+    )
+
+    analyzer = DmesgAnalyzer(
+        system_info=system_info,
+    )
+
+    res = analyzer.analyze_data(aca_data1)
+    assert res.status == ExecutionStatus.ERROR
+    assert len(res.events) == 1
+    assert res.events[0].description == "ACA Error"
+    assert res.events[0].priority == EventPriority.ERROR
+
+    res = analyzer.analyze_data(aca_data2)
+    assert res.status == ExecutionStatus.ERROR
+    assert len(res.events) == 1
+    assert res.events[0].description == "ACA Error"
+    assert res.events[0].priority == EventPriority.ERROR

@@ -23,17 +23,18 @@
 # SOFTWARE.
 #
 ###############################################################################
-from typing import Any
+from typing import Any, Union
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import Field, field_validator
+
+from nodescraper.models import AnalyzerArgs
+from nodescraper.plugins.inband.dkms.dkmsdata import DkmsDataModel
 
 
-class DkmsAnalyzerArgs(BaseModel):
-    dkms_status: str | list = Field(default_factory=list)
-    dkms_version: str | list = Field(default_factory=list)
+class DkmsAnalyzerArgs(AnalyzerArgs):
+    dkms_status: Union[str, list] = Field(default_factory=list)
+    dkms_version: Union[str, list] = Field(default_factory=list)
     regex_match: bool = False
-
-    model_config = {"extra": "forbid"}
 
     def model_post_init(self, __context: Any) -> None:
         if not self.dkms_status and not self.dkms_version:
@@ -41,11 +42,11 @@ class DkmsAnalyzerArgs(BaseModel):
 
     @field_validator("dkms_status", mode="before")
     @classmethod
-    def validate_dkms_status(cls, dkms_status: str | list) -> list:
+    def validate_dkms_status(cls, dkms_status: Union[str, list]) -> list:
         """support str or list input for dkms_status
 
         Args:
-            dkms_status (str | list): dkms status to check
+            dkms_status (Union[str, list]): dkms status to check
 
         Returns:
             list: list of dkms status
@@ -57,11 +58,11 @@ class DkmsAnalyzerArgs(BaseModel):
 
     @field_validator("dkms_version", mode="before")
     @classmethod
-    def validate_dkms_version(cls, dkms_version: str | list) -> list:
+    def validate_dkms_version(cls, dkms_version: Union[str, list]) -> list:
         """support str or list input for dkms_version
 
         Args:
-            dkms_version (str | list): dkms version to check
+            dkms_version (Union[str, list]): dkms version to check
 
         Returns:
             list: list of dkms version
@@ -70,3 +71,15 @@ class DkmsAnalyzerArgs(BaseModel):
             dkms_version = [dkms_version]
 
         return dkms_version
+
+    @classmethod
+    def build_from_model(cls, datamodel: DkmsDataModel) -> "DkmsAnalyzerArgs":
+        """build analyzer args from data model
+
+        Args:
+            datamodel (DkmsDataModel): data model for plugin
+
+        Returns:
+            DkmsAnalyzerArgs: instance of analyzer args class
+        """
+        return cls(dkms_status=datamodel.status, dkms_version=datamodel.version)

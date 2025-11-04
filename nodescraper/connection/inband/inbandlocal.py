@@ -26,7 +26,11 @@
 import os
 import subprocess
 
-from .inband import CommandArtifact, FileArtifact, InBandConnection
+from .inband import (
+    BaseFileArtifact,
+    CommandArtifact,
+    InBandConnection,
+)
 
 
 class LocalShell(InBandConnection):
@@ -52,6 +56,7 @@ class LocalShell(InBandConnection):
             command,
             encoding="utf-8",
             shell=True,
+            errors="replace",
             timeout=timeout,
             capture_output=True,
             check=False,
@@ -64,8 +69,10 @@ class LocalShell(InBandConnection):
             exit_code=res.returncode,
         )
 
-    def read_file(self, filename: str, encoding: str = "utf-8", strip: bool = True) -> FileArtifact:
-        """Read a local file into a FileArtifact
+    def read_file(
+        self, filename: str, encoding: str = "utf-8", strip: bool = True
+    ) -> BaseFileArtifact:
+        """Read a local file into a BaseFileArtifact
 
         Args:
             filename (str): filename
@@ -73,13 +80,14 @@ class LocalShell(InBandConnection):
             strip (bool): automatically strip file contents
 
         Returns:
-            FileArtifact: file artifact
+            BaseFileArtifact: file artifact
         """
-        contents = ""
-        with open(filename, "r", encoding=encoding) as local_file:
-            contents = local_file.read().strip()
+        with open(filename, "rb") as f:
+            raw_contents = f.read()
 
-        return FileArtifact(
+        return BaseFileArtifact.from_bytes(
             filename=os.path.basename(filename),
-            contents=contents.strip() if strip else contents,
+            raw_contents=raw_contents,
+            encoding=encoding,
+            strip=strip,
         )

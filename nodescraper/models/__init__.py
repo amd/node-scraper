@@ -23,6 +23,8 @@
 # SOFTWARE.
 #
 ###############################################################################
+from .analyzerargs import AnalyzerArgs
+from .collectorargs import CollectorArgs
 from .datamodel import DataModel
 from .datapluginresult import DataPluginResult
 from .event import Event
@@ -30,9 +32,11 @@ from .pluginconfig import PluginConfig
 from .pluginresult import PluginResult
 from .systeminfo import SystemInfo
 from .taskresult import TaskResult
-from .timerangeargs import TimeRangeAnalyisArgs
+from .timerangeargs import TimeRangeAnalysisArgs
 
 __all__ = [
+    "AnalyzerArgs",
+    "CollectorArgs",
     "DataModel",
     "TaskResult",
     "Event",
@@ -40,5 +44,5 @@ __all__ = [
     "PluginResult",
     "DataPluginResult",
     "PluginConfig",
-    "TimeRangeAnalyisArgs",
+    "TimeRangeAnalysisArgs",
 ]

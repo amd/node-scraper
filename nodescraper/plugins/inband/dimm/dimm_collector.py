@@ -23,26 +23,35 @@
 # SOFTWARE.
 #
 ###############################################################################
+from typing import Optional
+
 from nodescraper.base import InBandDataCollector
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.models import TaskResult
 
+from .collector_args import DimmCollectorArgs
 from .dimmdata import DimmDataModel
 
 
-class DimmCollector(InBandDataCollector[DimmDataModel, None]):
+class DimmCollector(InBandDataCollector[DimmDataModel, DimmCollectorArgs]):
     """Collect data on installed DIMMs"""
 
     DATA_MODEL = DimmDataModel
 
+    CMD_WINDOWS = "wmic memorychip get Capacity"
+    CMD = """sh -c 'dmidecode -t 17 | tr -s " " | grep -v "Volatile\\|None\\|Module" | grep Size' 2>/dev/null"""
+
     def collect_data(
         self,
-        args=None,
-    ) -> tuple[TaskResult, DimmDataModel | None]:
+        args: Optional[DimmCollectorArgs] = None,
+    ) -> tuple[TaskResult, Optional[DimmDataModel]]:
         """Collect data on installed DIMMs"""
+        if args is None:
+            args = DimmCollectorArgs()
+
         dimm_str = None
         if self.system_info.os_family == OSFamily.WINDOWS:
-            res = self._run_sut_cmd("wmic memorychip get Capacity")
+            res = self._run_sut_cmd(self.CMD_WINDOWS)
             if res.exit_code == 0:
                 capacities = {}
                 total = 0
@@ -59,10 +68,11 @@ class DimmCollector(InBandDataCollector[DimmDataModel, None]):
                 for capacity, count in capacities.items():
                     dimm_str += f"{count} x {capacity / 1024 / 1024:.2f}GB "
         else:
-            res = self._run_sut_cmd(
-                """sh -c 'dmidecode -t 17 | tr -s " " | grep -v "Volatile\\|None\\|Module" | grep Size' 2>/dev/null""",
-                sudo=True,
-            )
+            if args.skip_sudo:
+                self.result.message = "Skipping sudo plugin"
+                self.result.status = ExecutionStatus.NOT_RAN
+                return self.result, None
+            res = self._run_sut_cmd(self.CMD, sudo=True)
             if res.exit_code == 0:
                 total = 0
                 topology = {}

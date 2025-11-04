@@ -25,9 +25,9 @@
 ###############################################################################
 import datetime
 import logging
-from typing import Optional
+from typing import Any, Optional
 
-from pydantic import BaseModel, Field, field_serializer
+from pydantic import BaseModel, Field, field_serializer, field_validator
 
 from nodescraper.enums import EventPriority, ExecutionStatus
 
@@ -65,8 +65,31 @@ class TaskResult(BaseModel):
         """
         return status.name
 
+    @field_validator("status", mode="before")
+    @classmethod
+    def validate_status(cls, v: Any):
+        """Validator to ensure `status` is a valid ExecutionStatus enum.
+
+        Args:
+            v (Any): The input value to validate (can be str or ExecutionStatus).
+
+        Returns:
+            ExecutionStatus: The validated enum value.
+
+        Raises:
+            ValueError: If the string is not a valid enum name.
+        """
+        if isinstance(v, ExecutionStatus):
+            return v
+        if isinstance(v, str):
+            try:
+                return ExecutionStatus[v]
+            except KeyError as err:
+                raise ValueError(f"Unknown status name: {v!r}") from err
+        return v
+
     @property
-    def duration(self) -> str | None:
+    def duration(self) -> Optional[str]:
         """return duration of time as a string
 
         Returns:

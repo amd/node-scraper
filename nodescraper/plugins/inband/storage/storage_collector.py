@@ -24,11 +24,13 @@
 #
 ###############################################################################
 import re
+from typing import Optional
 
 from nodescraper.base import InBandDataCollector
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.models import TaskResult
 
+from .collector_args import StorageCollectorArgs
 from .storagedata import DeviceStorageData, StorageDataModel
 
 
@@ -36,14 +38,19 @@ class StorageCollector(InBandDataCollector[StorageDataModel, None]):
     """Collect disk usage details"""
 
     DATA_MODEL = StorageDataModel
+    CMD_WINDOWS = """wmic LogicalDisk Where DriveType="3" Get DeviceId,Size,FreeSpace"""
+    CMD = """sh -c 'df -lH -B1 | grep -v 'boot''"""
 
-    def collect_data(self, args: None = None) -> tuple[TaskResult, StorageDataModel | None]:
+    def collect_data(
+        self, args: Optional[StorageCollectorArgs] = None
+    ) -> tuple[TaskResult, Optional[StorageDataModel]]:
         """read storage usage data"""
+        if args is None:
+            args = StorageCollectorArgs()
+
         storage_data = {}
         if self.system_info.os_family == OSFamily.WINDOWS:
-            res = self._run_sut_cmd(
-                'wmic LogicalDisk Where DriveType="3" Get DeviceId,Size,FreeSpace'
-            )
+            res = self._run_sut_cmd(self.CMD_WINDOWS)
             if res.exit_code == 0:
                 for line in res.stdout.splitlines()[1:]:
                     if line:
@@ -55,7 +62,11 @@ class StorageCollector(InBandDataCollector[StorageDataModel, None]):
                             percent=round((int(size) - int(free_space)) / int(size) * 100, 2),
                         )
         else:
-            res = self._run_sut_cmd("""sh -c 'df -lH -B1 | grep -v 'boot''""", sudo=True)
+            if args.skip_sudo:
+                self.result.message = "Skipping sudo plugin"
+                self.result.status = ExecutionStatus.NOT_RAN
+                return self.result, None
+            res = self._run_sut_cmd(self.CMD, sudo=True)
             if res.exit_code == 0:
                 for line in res.stdout.splitlines()[1:]:
                     if line:

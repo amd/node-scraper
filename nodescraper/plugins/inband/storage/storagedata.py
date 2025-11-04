@@ -23,10 +23,10 @@
 # SOFTWARE.
 #
 ###############################################################################
-from pydantic import BaseModel, field_serializer
+from pydantic import BaseModel, field_serializer, field_validator
 
 from nodescraper.models import DataModel
-from nodescraper.utils import bytes_to_human_readable
+from nodescraper.utils import bytes_to_human_readable, convert_to_bytes
 
 
 class DeviceStorageData(BaseModel):
@@ -50,6 +50,20 @@ class DeviceStorageData(BaseModel):
     @field_serializer("percent")
     def serialize_percent(self, percent: float, _info) -> str:
         return f"{percent}%"
+
+    @field_validator("total", "free", "used", mode="before")
+    @classmethod
+    def parse_bytes_fields(cls, v):
+        if isinstance(v, str):
+            return convert_to_bytes(v)
+        return v
+
+    @field_validator("percent", mode="before")
+    @classmethod
+    def parse_percent_field(cls, v):
+        if isinstance(v, str) and v.endswith("%"):
+            return float(v.rstrip("%"))
+        return v
 
 
 class StorageDataModel(DataModel):

@@ -24,10 +24,10 @@
 #
 ###############################################################################
 import logging
-from typing import Generic, Optional
+from typing import Generic, Optional, Union
 
 from nodescraper.connection.inband import InBandConnection
-from nodescraper.connection.inband.inband import CommandArtifact, FileArtifact
+from nodescraper.connection.inband.inband import BaseFileArtifact, CommandArtifact
 from nodescraper.enums import EventPriority, OSFamily, SystemInteractionLevel
 from nodescraper.generictypes import TCollectArg, TDataModel
 from nodescraper.interfaces import DataCollector, TaskResultHook
@@ -49,7 +49,7 @@ class InBandDataCollector(
         connection: InBandConnection,
         logger: Optional[logging.Logger] = None,
         system_interaction_level: SystemInteractionLevel = SystemInteractionLevel.INTERACTIVE,
-        max_event_priority_level: EventPriority | str = EventPriority.CRITICAL,
+        max_event_priority_level: Union[EventPriority, str] = EventPriority.CRITICAL,
         parent: Optional[str] = None,
         task_result_hooks: Optional[list[TaskResultHook]] = None,
         **kwargs,
@@ -99,7 +99,7 @@ class InBandDataCollector(
 
     def _read_sut_file(
         self, filename: str, encoding="utf-8", strip: bool = True, log_artifact=True
-    ) -> FileArtifact:
+    ) -> BaseFileArtifact:
         """
         Read a file from the SUT and return its content.
 
@@ -110,7 +110,7 @@ class InBandDataCollector(
             log_artifact (bool, optional): whether we should log the contents of the file. Defaults to True.
 
         Returns:
-            FileArtifact: The content of the file read from the SUT, which includes the file name and content
+            BaseFileArtifact: The content of the file read from the SUT, which includes the file name and content
         """
         file_res = self.connection.read_file(filename=filename, encoding=encoding, strip=strip)
         if log_artifact:

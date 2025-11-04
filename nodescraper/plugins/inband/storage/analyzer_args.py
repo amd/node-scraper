@@ -34,5 +34,3 @@ class StorageAnalyzerArgs(BaseModel):
     ignore_devices: Optional[list[str]] = Field(default_factory=list)
     check_devices: Optional[list[str]] = Field(default_factory=list)
     regex_match: bool = False
-
-    model_config = {"extra": "forbid"}

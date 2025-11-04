@@ -25,11 +25,9 @@
 ###############################################################################
 from typing import Optional
 
-from nodescraper.models import TimeRangeAnalyisArgs
+from nodescraper.models import TimeRangeAnalysisArgs
 
 
-class DmesgAnalyzerArgs(TimeRangeAnalyisArgs):
+class DmesgAnalyzerArgs(TimeRangeAnalysisArgs):
     check_unknown_dmesg_errors: Optional[bool] = True
     exclude_category: Optional[set[str]] = None
-
-    model_config = {"extra": "forbid"}

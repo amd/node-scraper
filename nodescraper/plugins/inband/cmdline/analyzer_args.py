@@ -23,22 +23,25 @@
 # SOFTWARE.
 #
 ###############################################################################
-from pydantic import BaseModel, Field, field_validator
+from typing import Union
+
+from pydantic import Field, field_validator
+
+from nodescraper.models import AnalyzerArgs
+from nodescraper.plugins.inband.cmdline.cmdlinedata import CmdlineDataModel
 
 
-class CmdlineAnalyzerArgs(BaseModel):
-    required_cmdline: str | list = Field(default_factory=list)
-    banned_cmdline: str | list = Field(default_factory=list)
-
-    model_config = {"extra": "forbid"}
+class CmdlineAnalyzerArgs(AnalyzerArgs):
+    required_cmdline: Union[str, list] = Field(default_factory=list)
+    banned_cmdline: Union[str, list] = Field(default_factory=list)
 
     @field_validator("required_cmdline", mode="before")
     @classmethod
-    def validate_required_cmdline(cls, required_cmdline: str | list) -> list:
+    def validate_required_cmdline(cls, required_cmdline: Union[str, list]) -> list:
         """support str or list input for required_cmdline
 
         Args:
-            required_cmdline (str | list): required command line arguments
+            required_cmdline (Union[str, list]): required command line arguments
 
         Returns:
             list: list of required command line arguments
@@ -50,11 +53,11 @@ class CmdlineAnalyzerArgs(BaseModel):
 
     @field_validator("banned_cmdline", mode="before")
     @classmethod
-    def validate_banned_cmdline(cls, banned_cmdline: str | list) -> list:
+    def validate_banned_cmdline(cls, banned_cmdline: Union[str, list]) -> list:
         """support str or list input for banned_cmdline
 
         Args:
-            banned_cmdline (str | list): banned command line arguments
+            banned_cmdline (Union[str, list]): banned command line arguments
 
         Returns:
             list: a list of banned command line arguments
@@ -63,3 +66,15 @@ class CmdlineAnalyzerArgs(BaseModel):
             banned_cmdline = [banned_cmdline]
 
         return banned_cmdline
+
+    @classmethod
+    def build_from_model(cls, datamodel: CmdlineDataModel) -> "CmdlineAnalyzerArgs":
+        """build analyzer args from data model
+
+        Args:
+            datamodel (CmdlineDataModel): data model for plugin
+
+        Returns:
+            CmdlineAnalyzerArgs: instance of analyzer args class
+        """
+        return cls(required_cmdline=datamodel.cmdline)

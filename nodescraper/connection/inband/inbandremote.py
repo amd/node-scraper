@@ -25,7 +25,7 @@
 ###############################################################################
 import os
 import socket
-from typing import Type
+from typing import Type, Union
 
 import paramiko
 from paramiko.ssh_exception import (
@@ -34,7 +34,11 @@ from paramiko.ssh_exception import (
     SSHException,
 )
 
-from .inband import CommandArtifact, FileArtifact, InBandConnection
+from .inband import (
+    BaseFileArtifact,
+    CommandArtifact,
+    InBandConnection,
+)
 from .sshparams import SSHConnectionParams
 
 
@@ -53,6 +57,7 @@ class RemoteShell(InBandConnection):
     ) -> None:
         self.ssh_params = ssh_params
         self.client = paramiko.SSHClient()
+        self.client.load_system_host_keys()
         self.client.set_missing_host_key_policy(self.host_key_policy())
 
     def connect_ssh(self):
@@ -94,27 +99,26 @@ class RemoteShell(InBandConnection):
     def read_file(
         self,
         filename: str,
-        encoding="utf-8",
+        encoding: Union[str, None] = "utf-8",
         strip: bool = True,
-    ) -> FileArtifact:
-        """Read a remote file into a file artifact
+    ) -> BaseFileArtifact:
+        """Read a remote file into a BaseFileArtifact.
 
         Args:
-            filename (str): filename
-            encoding (str, optional): remote file encoding. Defaults to "utf-8".
-            strip (bool): automatically strip file contents
+            filename (str): Path to file on remote host
+            encoding Optional[Union[str, None]]: If None, file is read as binary. If str, decode using that encoding. Defaults to "utf-8".
+            strip (bool): Strip whitespace for text files. Ignored for binary.
 
         Returns:
-            FileArtifact: file artifact
+            BaseFileArtifact: Object representing file contents
         """
-        contents = ""
-
-        with self.client.open_sftp().open(filename) as remote_file:
-            contents = remote_file.read().decode(encoding=encoding, errors="ignore")
-
-        return FileArtifact(
+        with self.client.open_sftp().open(filename, "rb") as remote_file:
+            raw_contents = remote_file.read()
+        return BaseFileArtifact.from_bytes(
             filename=os.path.basename(filename),
-            contents=contents.strip() if strip else contents,
+            raw_contents=raw_contents,
+            encoding=encoding,
+            strip=strip,
         )
 
     def run_command(

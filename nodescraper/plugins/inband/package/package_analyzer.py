@@ -24,7 +24,7 @@
 #
 ###############################################################################
 import re
-from typing import Optional
+from typing import Optional, Pattern
 
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
 from nodescraper.interfaces import DataAnalyzer
@@ -43,14 +43,14 @@ class PackageAnalyzer(DataAnalyzer[PackageDataModel, PackageAnalyzerArgs]):
         self,
         package_data: dict[str, str],
         key_search: re.Pattern[str],
-        value_search: re.Pattern[str] | None,
+        value_search: Optional[Pattern[str]],
     ) -> bool:
         """Searches the package values for the key and value search patterns
 
         Args:
             package_data (dict[str, str]): a dictionary of package names and versions
             key_search (re.Pattern[str]): a compiled regex pattern to search for the package name
-            value_search (re.Pattern[str] | None): a compiled regex pattern to search for the package version, if None then any version is accepted
+            value_search (Optional[Pattern[str]]): a compiled regex pattern to search for the package version, if None then any version is accepted
 
         Returns:
             bool: A boolean indicating if the value was found
@@ -79,14 +79,15 @@ class PackageAnalyzer(DataAnalyzer[PackageDataModel, PackageAnalyzerArgs]):
         return value_found
 
     def package_regex_search(
-        self, package_data: dict[str, str], exp_packge_data: dict[str, str | None]
+        self, package_data: dict[str, str], exp_packge_data: dict[str, Optional[str]]
     ):
         """Searches the package data for the expected package and version using regex
 
         Args:
             package_data (dict[str, str]): a dictionary of package names and versions
-            exp_packge_data (dict[str, str  |  None]): a dictionary of expected package names and versions
+            exp_packge_data (dict[str, Optional[str]]): a dictionary of expected package names and versions
         """
+        not_found_keys = []
         for exp_key, exp_value in exp_packge_data.items():
             try:
                 if exp_value is not None:
@@ -109,6 +110,7 @@ class PackageAnalyzer(DataAnalyzer[PackageDataModel, PackageAnalyzerArgs]):
             key_found = self.regex_version_data(package_data, key_search, value_search)
 
             if not key_found:
+                not_found_keys.append(exp_key)
                 self._log_event(
                     EventCategory.APPLICATION,
                     f"Package {exp_key} not found in the package list",
@@ -120,16 +122,19 @@ class PackageAnalyzer(DataAnalyzer[PackageDataModel, PackageAnalyzerArgs]):
                         "found_version": None,
                     },
                 )
+        return not_found_keys
 
     def package_exact_match(
-        self, package_data: dict[str, str], exp_packge_data: dict[str, str | None]
+        self, package_data: dict[str, str], exp_packge_data: dict[str, Optional[str]]
     ):
         """Checks the package data for the expected package and version using exact match
 
         Args:
             package_data (dict[str, str]): a dictionary of package names and versions
-            exp_packge_data (dict[str, str  |  None]): a dictionary of expected package names and versions
+            exp_packge_data (dict[str, Optional[str]]): a dictionary of expected package names and versions
         """
+        not_found_match = []
+        not_found_version = []
         for exp_key, exp_value in exp_packge_data.items():
             self.logger.info(exp_key)
             version = package_data.get(exp_key)
@@ -137,6 +142,7 @@ class PackageAnalyzer(DataAnalyzer[PackageDataModel, PackageAnalyzerArgs]):
                 # allow any version when expected version is None
                 if version is None:
                     # package not found
+                    not_found_version.append((exp_key, version))
                     self._log_event(
                         EventCategory.APPLICATION,
                         f"Package {exp_key} not found in the package list",
@@ -149,6 +155,7 @@ class PackageAnalyzer(DataAnalyzer[PackageDataModel, PackageAnalyzerArgs]):
                         },
                     )
             elif version != exp_value:
+                not_found_match.append((exp_key, version))
                 self._log_event(
                     EventCategory.APPLICATION,
                     f"Package {exp_key} Version Mismatch, Expected {exp_key} but found {version}",
@@ -160,6 +167,7 @@ class PackageAnalyzer(DataAnalyzer[PackageDataModel, PackageAnalyzerArgs]):
                         "found_version": version,
                     },
                 )
+        return not_found_match, not_found_version
 
     def analyze_data(
         self, data: PackageDataModel, args: Optional[PackageAnalyzerArgs] = None
@@ -179,8 +187,15 @@ class PackageAnalyzer(DataAnalyzer[PackageDataModel, PackageAnalyzerArgs]):
             return self.result
 
         if args.regex_match:
-            self.package_regex_search(data.version_info, args.exp_package_ver)
+            not_found_keys = self.package_regex_search(data.version_info, args.exp_package_ver)
+            self.result.message = f"Packages not found: {not_found_keys}"
+            self.result.status = ExecutionStatus.ERROR
         else:
-            self.package_exact_match(data.version_info, args.exp_package_ver)
+            not_found_match, not_found_version = self.package_exact_match(
+                data.version_info, args.exp_package_ver
+            )
+            if not_found_match or not_found_version:
+                self.result.message = f"Package version missmatched. Missmatched versions: {not_found_match}, not found versions: {not_found_version}"
+                self.result.status = ExecutionStatus.ERROR
 
         return self.result

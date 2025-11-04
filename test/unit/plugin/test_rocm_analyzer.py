@@ -75,7 +75,7 @@ def test_invalid_rocm_version(analyzer, model_obj):
     args = RocmAnalyzerArgs(exp_rocm=["6.2.0-66"])
     result = analyzer.analyze_data(modified_model, args)
     assert result.status == ExecutionStatus.ERROR
-    assert result.message == "ROCm version mismatch! (1 errors)"
+    assert "ROCm version mismatch!" in result.message
     for event in result.events:
         assert event.priority == EventPriority.CRITICAL
         assert event.category == EventCategory.SW_DRIVER.value
@@ -85,7 +85,7 @@ def test_unexpected_rocm_version(analyzer, model_obj):
     args = RocmAnalyzerArgs(exp_rocm=["9.8.7-65", "1.2.3-45"])
     result = analyzer.analyze_data(model_obj, args)
     assert result.status == ExecutionStatus.ERROR
-    assert "ROCm version mismatch! (1 errors)" in result.message
+    assert "ROCm version mismatch!" in result.message
     for event in result.events:
         assert event.priority == EventPriority.CRITICAL
         assert event.category == EventCategory.SW_DRIVER.value

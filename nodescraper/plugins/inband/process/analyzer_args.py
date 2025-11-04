@@ -23,11 +23,23 @@
 # SOFTWARE.
 #
 ###############################################################################
-from pydantic import BaseModel
+
+from nodescraper.models import AnalyzerArgs
+from nodescraper.plugins.inband.process.processdata import ProcessDataModel
 
 
-class ProcessAnalyzerArgs(BaseModel):
+class ProcessAnalyzerArgs(AnalyzerArgs):
     max_kfd_processes: int = 0
-    max_cpu_usage: int = 20
+    max_cpu_usage: float = 20.0
 
-    model_config = {"extra": "forbid"}
+    @classmethod
+    def build_from_model(cls, datamodel: ProcessDataModel) -> "ProcessAnalyzerArgs":
+        """build analyzer args from data model
+
+        Args:
+            datamodel (ProcessDataModel): data model for plugin
+
+        Returns:
+            ProcessAnalyzerArgs: instance of analyzer args class
+        """
+        return cls(max_kfd_processes=datamodel.kfd_process, max_cpu_usage=datamodel.cpu_usage)

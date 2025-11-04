@@ -28,7 +28,7 @@ from __future__ import annotations
 import abc
 import inspect
 from functools import wraps
-from typing import Any, Callable, Generic, Optional, Type
+from typing import Any, Callable, Generic, Optional, Type, Union
 
 from pydantic import BaseModel, ValidationError
 
@@ -46,7 +46,7 @@ def analyze_decorator(func: Callable[..., TaskResult]) -> Callable[..., TaskResu
     def wrapper(
         analyzer: "DataAnalyzer",
         data: DataModel,
-        args: Optional[TAnalyzeArg | dict] = None,
+        args: Optional[Union[TAnalyzeArg, dict]] = None,
     ) -> TaskResult:
         analyzer.logger.info("Running data analyzer: %s", analyzer.__class__.__name__)
         analyzer.result = analyzer._init_result()
@@ -119,19 +119,19 @@ class DataAnalyzer(Task, abc.ABC, Generic[TDataModel, TAnalyzeArg]):
             raise TypeError(f"No data model set for {cls.__name__}")
 
         if hasattr(cls, "analyze_data"):
-            cls.analyze_data = analyze_decorator(cls.analyze_data)
+            setattr(cls, "analyze_data", analyze_decorator(cls.analyze_data))  # noqa
 
     @abc.abstractmethod
     def analyze_data(
         self,
         data: TDataModel,
-        args: Optional[TAnalyzeArg | dict],
+        args: Optional[TAnalyzeArg],
     ) -> TaskResult:
         """Analyze the provided data and return a TaskResult
 
         Args:
             data (TDataModel): data to analyze
-            args (Optional[TAnalyzeArg  |  dict]): Optional arguments for analysis, can be a model or dict
+            args (Optional[TAnalyzeArg]): Optional arguments for analysis. Dicts will be handled in the decorator"
 
         Returns:
             TaskResult: Task result containing the analysis outcome
