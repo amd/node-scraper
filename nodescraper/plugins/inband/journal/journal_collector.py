@@ -38,6 +38,7 @@ class JournalCollector(InBandDataCollector[JournalData, JournalCollectorArgs]):
 
     SUPPORTED_OS_FAMILY = {OSFamily.LINUX}
     DATA_MODEL = JournalData
+    CMD = "journalctl --no-pager --system --output=short-iso"
 
     def _read_with_journalctl(self, args: Optional[JournalCollectorArgs] = None):
         """Read journal logs using journalctl
@@ -45,18 +46,12 @@ class JournalCollector(InBandDataCollector[JournalData, JournalCollectorArgs]):
         Returns:
             str|None: system journal read
         """
-        boot_arg = ""
 
-        if args is not None:
-            try:
-                # Accept ints or numeric strings
-                boot_arg = f" -b {args.boot}"
-            except (TypeError, ValueError):
-                pass
+        if args is not None and args.boot:
+            boot_arg = f" -b {args.boot}"
+            self.CMD = f"journalctl --no-pager{boot_arg} --system --output=short-iso"
 
-        cmd = f"journalctl --no-pager{boot_arg} --system --output=short-iso"
-        res = self._run_sut_cmd(cmd, sudo=True, log_artifact=False, strip=False)
-        self.result.message = cmd
+        res = self._run_sut_cmd(self.CMD, sudo=True, log_artifact=False, strip=False)
 
         if res.exit_code != 0:
             self._log_event(
@@ -75,14 +70,14 @@ class JournalCollector(InBandDataCollector[JournalData, JournalCollectorArgs]):
     def collect_data(
         self,
         args: Optional[JournalCollectorArgs] = None,
-    ) -> tuple[TaskResult, JournalData | None]:
+    ) -> tuple[TaskResult, Optional[JournalData]]:
         """Collect journal logs
 
         Args:
             args (_type_, optional): Collection args. Defaults to None.
 
         Returns:
-            tuple[TaskResult, JournalData | None]: Tuple of results and data model or none.
+            tuple[TaskResult, Optional[JournalData]]: Tuple of results and data model or none.
         """
         if args is None:
             args = JournalCollectorArgs()

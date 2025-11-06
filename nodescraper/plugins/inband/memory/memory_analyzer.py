@@ -47,33 +47,52 @@ class MemoryAnalyzer(DataAnalyzer[MemoryDataModel, MemoryAnalyzerArgs]):
         Args:
             data (MemoryDataModel): memory data to analyze.
             args (Optional[MemoryAnalyzerArgs], optional): memory analysis arguments. Defaults to None.
-
         Returns:
             TaskResult: Result of the memory analysis containing the status and message.
         """
+
         if not args:
             args = MemoryAnalyzerArgs()
+
+        def _bytes_to_gb(n: float) -> float:
+            return n / (1024**3)
 
         free_memory = convert_to_bytes(data.mem_free)
         total_memory = convert_to_bytes(data.mem_total)
         used_memory = total_memory - free_memory
 
-        if total_memory > convert_to_bytes(args.memory_threshold):
-            max_allowed_used_mem = convert_to_bytes(args.memory_threshold) * args.ratio
+        threshold_bytes = convert_to_bytes(args.memory_threshold)
+
+        if total_memory > threshold_bytes:
+            base_bytes = threshold_bytes
+            base_source = "memory_threshold (max_expected)"
         else:
-            max_allowed_used_mem = total_memory * args.ratio
+            base_bytes = total_memory
+            base_source = "total_memory"
+
+        max_allowed_used_mem = base_bytes * args.ratio
+
+        used_gb = _bytes_to_gb(used_memory)
+        allowed_gb = _bytes_to_gb(max_allowed_used_mem)
+        base_gb = _bytes_to_gb(base_bytes)
 
         if used_memory < max_allowed_used_mem:
-            self.result.message = "Memory usage is within maximum allowed used memory"
+            self.result.message = (
+                f"Memory usage is within limit: Used {used_gb:.2f} GB "
+                f"(allowed {allowed_gb:.2f} GB; base={base_source} {base_gb:.2f} GB × ratio={args.ratio:.2f})"
+            )
             self.result.status = ExecutionStatus.OK
         else:
-            self.result.message = f"Memory usage exceeded max allowed! Used: {used_memory}, max allowed: {max_allowed_used_mem}"
+            self.result.message = (
+                f"Memory usage exceeded max allowed! Used {used_gb:.2f} GB, "
+                f"max allowed {allowed_gb:.2f} GB "
+                f"(base={base_source} {base_gb:.2f} GB × ratio={args.ratio:.2f})"
+            )
             self.result.status = ExecutionStatus.ERROR
             self._log_event(
                 category=EventCategory.OS,
-                description=f"{self.result.message}, Actual: {used_memory}",
+                description=self.result.message,
                 priority=EventPriority.CRITICAL,
-                console_log=True,
             )
 
         return self.result

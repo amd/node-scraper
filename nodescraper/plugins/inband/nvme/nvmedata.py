@@ -23,20 +23,22 @@
 # SOFTWARE.
 #
 ###############################################################################
+from typing import Optional
+
 from pydantic import BaseModel
 
 from nodescraper.models import DataModel
 
 
 class DeviceNvmeData(BaseModel):
-    smart_log: str | None = None
-    error_log: str | None = None
-    id_ctrl: str | None = None
-    id_ns: str | None = None
-    fw_log: str | None = None
-    self_test_log: str | None = None
-    get_log: str | None = None
-    telemetry_log: str | None = None
+    smart_log: Optional[str] = None
+    error_log: Optional[str] = None
+    id_ctrl: Optional[str] = None
+    id_ns: Optional[str] = None
+    fw_log: Optional[str] = None
+    self_test_log: Optional[str] = None
+    get_log: Optional[str] = None
+    telemetry_log: Optional[str] = None
 
 
 class NvmeDataModel(DataModel):

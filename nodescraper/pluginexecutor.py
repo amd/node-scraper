@@ -28,7 +28,7 @@ from __future__ import annotations
 import copy
 import logging
 from collections import deque
-from typing import Optional, Type
+from typing import Optional, Type, Union
 
 from pydantic import BaseModel
 
@@ -47,7 +47,7 @@ class PluginExecutor:
     def __init__(
         self,
         plugin_configs: list[PluginConfig],
-        connections: Optional[dict[str, dict | BaseModel]] = None,
+        connections: Optional[dict[str, Union[dict, BaseModel]]] = None,
         system_info: Optional[SystemInfo] = None,
         logger: Optional[logging.Logger] = None,
         plugin_registry: Optional[PluginRegistry] = None,
@@ -58,9 +58,7 @@ class PluginExecutor:
             logger = logging.getLogger(DEFAULT_LOGGER)
         self.logger = logger
 
-        if plugin_registry is None:
-            plugin_registry = PluginRegistry()
-        self.plugin_registry = plugin_registry
+        self.plugin_registry = plugin_registry or PluginRegistry()
 
         if system_info is None:
             system_info = SystemInfo()

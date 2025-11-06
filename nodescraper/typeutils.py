@@ -61,7 +61,7 @@ class TypeUtils:
             gen_base = class_type.__orig_bases__[0]
             class_org = get_origin(gen_base)
             args = get_args(gen_base)
-            generic_map = dict(zip(class_org.__parameters__, args, strict=False))
+            generic_map = dict(zip(class_org.__parameters__, args))
         else:
             generic_map = {}
 
@@ -122,9 +122,9 @@ class TypeUtils:
         origin = get_origin(input_type)
         if origin is None:
             return [TypeClass(type_class=input_type)]
-        if origin in [Union, types.UnionType]:
+        if origin is Union or getattr(types, "UnionType", None) is origin:
             type_classes = []
-            input_types = [arg for arg in input_type.__args__ if arg != types.NoneType]
+            input_types = [arg for arg in input_type.__args__ if arg is not type(None)]
             for type_item in input_types:
                 origin = get_origin(type_item)
                 if origin is None:
@@ -134,7 +134,7 @@ class TypeUtils:
                         TypeClass(
                             type_class=origin,
                             inner_type=next(
-                                (arg for arg in get_args(type_item) if arg != types.NoneType), None
+                                (arg for arg in get_args(type_item) if arg is not type(None)), None
                             ),
                         )
                     )
@@ -145,7 +145,7 @@ class TypeUtils:
                 TypeClass(
                     type_class=origin,
                     inner_type=next(
-                        (arg for arg in get_args(input_type) if arg != types.NoneType), None
+                        (arg for arg in get_args(input_type) if arg is not type(None)), None
                     ),
                 )
             ]

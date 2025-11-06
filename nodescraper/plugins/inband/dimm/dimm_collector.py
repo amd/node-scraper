@@ -38,17 +38,20 @@ class DimmCollector(InBandDataCollector[DimmDataModel, DimmCollectorArgs]):
 
     DATA_MODEL = DimmDataModel
 
+    CMD_WINDOWS = "wmic memorychip get Capacity"
+    CMD = """sh -c 'dmidecode -t 17 | tr -s " " | grep -v "Volatile\\|None\\|Module" | grep Size' 2>/dev/null"""
+
     def collect_data(
         self,
         args: Optional[DimmCollectorArgs] = None,
-    ) -> tuple[TaskResult, DimmDataModel | None]:
+    ) -> tuple[TaskResult, Optional[DimmDataModel]]:
         """Collect data on installed DIMMs"""
         if args is None:
             args = DimmCollectorArgs()
 
         dimm_str = None
         if self.system_info.os_family == OSFamily.WINDOWS:
-            res = self._run_sut_cmd("wmic memorychip get Capacity")
+            res = self._run_sut_cmd(self.CMD_WINDOWS)
             if res.exit_code == 0:
                 capacities = {}
                 total = 0
@@ -69,10 +72,7 @@ class DimmCollector(InBandDataCollector[DimmDataModel, DimmCollectorArgs]):
                 self.result.message = "Skipping sudo plugin"
                 self.result.status = ExecutionStatus.NOT_RAN
                 return self.result, None
-            res = self._run_sut_cmd(
-                """sh -c 'dmidecode -t 17 | tr -s " " | grep -v "Volatile\\|None\\|Module" | grep Size' 2>/dev/null""",
-                sudo=True,
-            )
+            res = self._run_sut_cmd(self.CMD, sudo=True)
             if res.exit_code == 0:
                 total = 0
                 topology = {}

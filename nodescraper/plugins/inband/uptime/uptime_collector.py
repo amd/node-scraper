@@ -24,6 +24,7 @@
 #
 ###############################################################################
 import re
+from typing import Optional
 
 from nodescraper.base import InBandDataCollector
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
@@ -39,20 +40,20 @@ class UptimeCollector(InBandDataCollector[UptimeDataModel, None]):
 
     SUPPORTED_OS_FAMILY: set[OSFamily] = {OSFamily.LINUX}
 
-    UPTIME_CMD = "uptime"
+    CMD = "uptime"
 
-    def collect_data(self, args=None) -> tuple[TaskResult, UptimeDataModel | None]:
+    def collect_data(self, args=None) -> tuple[TaskResult, Optional[UptimeDataModel]]:
         """Collect uptime data from the system.
 
         Returns:
-            tuple[TaskResult, UptimeDataModel | None]: tuple containing the task result and uptime data model or None if failed.
+            tuple[TaskResult, Optional[UptimeDataModel]]: tuple containing the task result and uptime data model or None if failed.
         """
 
         uptime_pattern = re.compile(
             r"(?P<current_time>\d{2}:\d{2}:\d{2})\s+" r"up\s+(?P<uptime>.+?),\s+\d+\s+users?"
         )
 
-        res = self._run_sut_cmd(self.UPTIME_CMD)
+        res = self._run_sut_cmd(self.CMD)
 
         if res.exit_code == 0:
             line = res.stdout.strip()

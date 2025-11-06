@@ -23,6 +23,8 @@
 # SOFTWARE.
 #
 ###############################################################################
+from typing import Union
+
 from pydantic import Field, field_validator
 
 from nodescraper.models import AnalyzerArgs
@@ -30,16 +32,16 @@ from nodescraper.plugins.inband.os.osdata import OsDataModel
 
 
 class OsAnalyzerArgs(AnalyzerArgs):
-    exp_os: str | list = Field(default_factory=list)
+    exp_os: Union[str, list] = Field(default_factory=list)
     exact_match: bool = True
 
     @field_validator("exp_os", mode="before")
     @classmethod
-    def validate_exp_os(cls, exp_os: str | list) -> list:
+    def validate_exp_os(cls, exp_os: Union[str, list]) -> list:
         """support str or list input for exp_os
 
         Args:
-            exp_os (str | list): exp_os input
+            exp_os (Union[str, list]): exp_os input
 
         Returns:
             list: exp_os list

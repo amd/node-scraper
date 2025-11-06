@@ -23,6 +23,8 @@
 # SOFTWARE.
 #
 ###############################################################################
+from typing import Optional
+
 from nodescraper.base import InBandDataCollector
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.models import TaskResult
@@ -36,12 +38,16 @@ class RocmCollector(InBandDataCollector[RocmDataModel, None]):
     SUPPORTED_OS_FAMILY: set[OSFamily] = {OSFamily.LINUX}
 
     DATA_MODEL = RocmDataModel
+    CMD_VERSION_PATHS = [
+        "/opt/rocm/.info/version-rocm",
+        "/opt/rocm/.info/version",
+    ]
 
-    def collect_data(self, args=None) -> tuple[TaskResult, RocmDataModel | None]:
+    def collect_data(self, args=None) -> tuple[TaskResult, Optional[RocmDataModel]]:
         """Collect ROCm version data from the system.
 
         Returns:
-            tuple[TaskResult, RocmDataModel | None]: tuple containing the task result and ROCm data model if available.
+            tuple[TaskResult, Optional[RocmDataModel]]: tuple containing the task result and ROCm data model if available.
         """
         version_paths = [
             "/opt/rocm/.info/version-rocm",
@@ -49,7 +55,7 @@ class RocmCollector(InBandDataCollector[RocmDataModel, None]):
         ]
 
         rocm_data = None
-        for path in version_paths:
+        for path in self.CMD_VERSION_PATHS:
             res = self._run_sut_cmd(f"grep . {path}")
             if res.exit_code == 0:
                 rocm_data = RocmDataModel(rocm_version=res.stdout)

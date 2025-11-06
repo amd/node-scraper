@@ -23,6 +23,8 @@
 # SOFTWARE.
 #
 ###############################################################################
+from typing import Optional
+
 from nodescraper.base import InBandDataCollector
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.models import TaskResult
@@ -34,26 +36,29 @@ class KernelCollector(InBandDataCollector[KernelDataModel, None]):
     """Read kernel version"""
 
     DATA_MODEL = KernelDataModel
+    CMD_WINDOWS = "wmic os get Version /Value"
+    CMD = "sh -c 'uname -r'"
 
     def collect_data(
         self,
         args=None,
-    ) -> tuple[TaskResult, KernelDataModel | None]:
+    ) -> tuple[TaskResult, Optional[KernelDataModel]]:
         """
         Collect kernel version data.
 
         Returns:
-            tuple[TaskResult, KernelDataModel | None]: tuple containing the task result and kernel data model or None if not found.
+            tuple[TaskResult, Optional[KernelDataModel]]: tuple containing the task result and kernel data model or None if not found.
         """
+
         kernel = None
         if self.system_info.os_family == OSFamily.WINDOWS:
-            res = self._run_sut_cmd("wmic os get Version /Value")
+            res = self._run_sut_cmd(self.CMD_WINDOWS)
             if res.exit_code == 0:
                 kernel = [line for line in res.stdout.splitlines() if "Version=" in line][0].split(
                     "="
                 )[1]
         else:
-            res = self._run_sut_cmd("sh -c 'uname -r'")
+            res = self._run_sut_cmd(self.CMD)
             if res.exit_code == 0:
                 kernel = res.stdout
 
