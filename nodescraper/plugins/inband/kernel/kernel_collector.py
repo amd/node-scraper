@@ -37,7 +37,7 @@ class KernelCollector(InBandDataCollector[KernelDataModel, None]):
 
     DATA_MODEL = KernelDataModel
     CMD_WINDOWS = "wmic os get Version /Value"
-    CMD = "sh -c 'uname -r'"
+    CMD = "sh -c 'uname -a'"
 
     def collect_data(
         self,
