@@ -47,11 +47,30 @@ class JournalCollector(InBandDataCollector[JournalData, JournalCollectorArgs]):
             str|None: system journal read
         """
 
-        if args is not None and args.boot:
-            boot_arg = f" -b {args.boot}"
-            self.CMD = f"journalctl --no-pager{boot_arg} --system --output=short-iso"
+        cmd = "journalctl --no-pager --system --output=short-iso"
+        try:
+            # safe check for args.boot
+            if args is not None and getattr(args, "boot", None):
+                cmd = f"journalctl --no-pager -b {args.boot} --system --output=short-iso"
 
-        res = self._run_sut_cmd(self.CMD, sudo=True, log_artifact=False, strip=False)
+            res = self._run_sut_cmd(cmd, sudo=True, log_artifact=False, strip=False)
+
+        except Exception as exc:
+
+            import traceback
+
+            tb = traceback.format_exc()
+            self._log_event(
+                category=EventCategory.OS,
+                description="Exception while running journalctl",
+                data={"command": cmd, "exception": str(exc), "traceback": tb},
+                priority=EventPriority.ERROR,
+                console_log=True,
+            )
+            # set result to error and return None so upstream code can continue
+            self.result.message = "Could not read journalctl data"
+            self.result.status = ExecutionStatus.ERROR
+            return None
 
         if res.exit_code != 0:
             self._log_event(
