@@ -29,5 +29,5 @@ from nodescraper.models import DataModel
 
 
 class KernelDataModel(DataModel):
-    kernel_info: str
-    kernel_version: Optional[str] = None
+    kernel_version: str
+    kernel_info: Optional[str] = None
