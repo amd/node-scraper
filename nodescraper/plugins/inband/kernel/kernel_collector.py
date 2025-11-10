@@ -73,6 +73,8 @@ class KernelCollector(InBandDataCollector[KernelDataModel, None]):
         """
 
         kernel = None
+        kernel_info = None
+
         if self.system_info.os_family == OSFamily.WINDOWS:
             res = self._run_sut_cmd(self.CMD_WINDOWS)
             if res.exit_code == 0:
@@ -82,9 +84,15 @@ class KernelCollector(InBandDataCollector[KernelDataModel, None]):
         else:
             res = self._run_sut_cmd(self.CMD)
             if res.exit_code == 0:
-                kernel = res.stdout
-                kernel_version = self._parse_kernel_version(kernel)
-
+                if res.stdout:
+                    kernel = res.stdout
+                    parts = kernel.split()
+                    if len(parts) == 1:
+                        kernel_info = None
+                    else:
+                        kernel_info = self._parse_kernel_version(kernel)
+                else:
+                    kernel = None
         if res.exit_code != 0:
             self._log_event(
                 category=EventCategory.OS,
@@ -95,7 +103,8 @@ class KernelCollector(InBandDataCollector[KernelDataModel, None]):
             )
 
         if kernel:
-            kernel_data = KernelDataModel(kernel_info=kernel, kernel_version=kernel_version)
+
+            kernel_data = KernelDataModel(kernel_version=kernel, kernel_info=kernel_info)
             self._log_event(
                 category="KERNEL_READ",
                 description="Kernel version read",
