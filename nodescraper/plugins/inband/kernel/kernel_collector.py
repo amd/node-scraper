@@ -23,6 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
+import re
 from typing import Optional
 
 from nodescraper.base import InBandDataCollector
@@ -38,6 +39,27 @@ class KernelCollector(InBandDataCollector[KernelDataModel, None]):
     DATA_MODEL = KernelDataModel
     CMD_WINDOWS = "wmic os get Version /Value"
     CMD = "sh -c 'uname -a'"
+
+    def _parse_kernel_version(self, uname_a: str) -> Optional[str]:
+        """ExtractS the kernel release (`uname -r`) from `uname -a` output.
+
+
+        The kernel_release is normally the 2nd index. If that
+        fails, fall back to a regex looking for a dotted release string.
+        """
+        if not uname_a:
+            return None
+
+        result = uname_a.strip().split()
+        if len(result) >= 3:
+            return result[2]
+
+        # if some change in output look for a version-like string (e.g. 4.18.0-553.el8_10.x86_64)
+        match = re.search(r"\d+\.\d+\.\d+[\w\-\.]*", uname_a)
+        if match:
+            return match.group(0)
+
+        return None
 
     def collect_data(
         self,
@@ -61,6 +83,7 @@ class KernelCollector(InBandDataCollector[KernelDataModel, None]):
             res = self._run_sut_cmd(self.CMD)
             if res.exit_code == 0:
                 kernel = res.stdout
+                kernel_version = self._parse_kernel_version(kernel)
 
         if res.exit_code != 0:
             self._log_event(
@@ -72,7 +95,7 @@ class KernelCollector(InBandDataCollector[KernelDataModel, None]):
             )
 
         if kernel:
-            kernel_data = KernelDataModel(kernel_version=kernel)
+            kernel_data = KernelDataModel(kernel_info=kernel, kernel_version=kernel_version)
             self._log_event(
                 category="KERNEL_READ",
                 description="Kernel version read",
