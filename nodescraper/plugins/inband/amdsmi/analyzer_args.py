@@ -37,8 +37,8 @@ class AmdSmiAnalyzerArgs(AnalyzerArgs):
     expected_memory_partition_mode: Optional[str] = None
     expected_compute_partition_mode: Optional[str] = None
     expected_pldm_version: Optional[str] = None
-    l0_to_recovery_count_error_threshold: Optional[int] = None
-    l0_to_recovery_count_warning_threshold: Optional[int] = None
+    l0_to_recovery_count_error_threshold: Optional[int] = 3
+    l0_to_recovery_count_warning_threshold: Optional[int] = 1
     vendorid_ep: Optional[str] = None
     vendorid_ep_vf: Optional[str] = None
     devid_ep: Optional[str] = None

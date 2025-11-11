@@ -24,7 +24,7 @@
 #
 ###############################################################################
 from collections import defaultdict
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from nodescraper.enums import EventCategory, EventPriority
 from nodescraper.interfaces import DataAnalyzer
@@ -39,9 +39,6 @@ class AmdSmiAnalyzer(DataAnalyzer[AmdSmiDataModel, None]):
 
     DATA_MODEL = AmdSmiDataModel
 
-    L0_TO_RECOVERY_COUNT_ERROR_THRESHOLD = 3
-    L0_TO_RECOVERY_COUNT_WARNING_THRESHOLD = 1
-
     def check_expected_max_power(
         self,
         amdsmi_static_data: list[AmdSmiStatic],
@@ -53,7 +50,7 @@ class AmdSmiAnalyzer(DataAnalyzer[AmdSmiDataModel, None]):
             amdsmi_static_data (list[AmdSmiStatic]): AmdSmiStatic data model
             expected_max_power (int): expected max power
         """
-        incorrect_max_power_gpus: dict[int, int | str | float] = {}
+        incorrect_max_power_gpus: dict[int, Union[int, str, float]] = {}
         for gpu in amdsmi_static_data:
             if gpu.limit is None or gpu.limit.max_power is None:
                 self._log_event(
@@ -104,9 +101,9 @@ class AmdSmiAnalyzer(DataAnalyzer[AmdSmiDataModel, None]):
         """
         bad_driver_gpus: list[int] = []
 
-        versions_by_gpu: dict[int, str | None] = {}
+        versions_by_gpu: dict[int, Optional[str]] = {}
         for gpu in amdsmi_static_data:
-            ver: str | None = None
+            ver: Optional[str] = None
             if gpu.driver is not None:
                 ver = gpu.driver.version
             versions_by_gpu[gpu.gpu] = ver
@@ -126,12 +123,12 @@ class AmdSmiAnalyzer(DataAnalyzer[AmdSmiDataModel, None]):
             )
 
     def expected_gpu_processes(
-        self, processes_data: list[Processes] | None, max_num_processes: int
+        self, processes_data: Optional[list[Processes]], max_num_processes: int
     ):
         """Check the number of GPU processes running
 
         Args:
-            processes_data (list[Processes] | None): list of processes per GPU
+            processes_data (Optional[list[Processes]]): list of processes per GPU
             max_num_processes (int): max number of expected processes
         """
         gpu_exceeds_num_processes: dict[int, int] = {}
@@ -172,7 +169,7 @@ class AmdSmiAnalyzer(DataAnalyzer[AmdSmiDataModel, None]):
         Args:
             amdsmi_static_data (list[AmdSmiStatic]): AmdSmiStatic data model
         """
-        consistancy_data: dict[str, set[str] | set[int]] = {
+        consistancy_data: dict[str, Union[set[str], set[int]]] = {
             "market_name": {gpu.asic.market_name for gpu in amdsmi_static_data},
             "vendor_id": {gpu.asic.vendor_id for gpu in amdsmi_static_data},
             "vendor_name": {gpu.asic.vendor_name for gpu in amdsmi_static_data},
@@ -190,7 +187,7 @@ class AmdSmiAnalyzer(DataAnalyzer[AmdSmiDataModel, None]):
                 self._log_event(
                     category=EventCategory.PLATFORM,
                     description=f"{key} is not consistent across all GPUs",
-                    priority=EventPriority.ERROR,
+                    priority=EventPriority.WARNING,
                     data={
                         "field": key,
                         "non_consistent_values": value,
@@ -200,26 +197,26 @@ class AmdSmiAnalyzer(DataAnalyzer[AmdSmiDataModel, None]):
     def check_static_data(
         self,
         amdsmi_static_data: list[AmdSmiStatic],
-        vendor_id: str | None,
-        subvendor_id: str | None,
-        device_id: tuple[str | None, str | None],
-        subsystem_id: tuple[str | None, str | None],
-        sku_name: str | None,
+        vendor_id: Optional[str],
+        subvendor_id: Optional[str],
+        device_id: tuple[Optional[str], Optional[str]],
+        subsystem_id: tuple[Optional[str], Optional[str]],
+        sku_name: Optional[str],
     ) -> None:
         """Check expected static data
 
         Args:
             amdsmi_static_data (list[AmdSmiStatic]): AmdSmiStatic data
-            vendor_id (str | None): expected vendor_id
-            subvendor_id (str | None): expected subvendor_id
-            device_id (tuple[str  |  None, str  |  None]): expected device_id
-            subsystem_id (tuple[str  |  None, str  |  None]): expected subsystem_id
-            sku_name (str | None): expected sku_name
+            vendor_id (Optional[str]): expected vendor_id
+            subvendor_id (Optional[str]): expected subvendor_id
+            device_id (tuple[Optional[str], Optional[str]]): expected device_id
+            subsystem_id (tuple[Optional[str], Optional[str]]): expected subsystem_id
+            sku_name (Optional[str]): expected sku_name
         """
 
         mismatches: list[tuple[int, str, str, str]] = []
 
-        expected_data: dict[str, str | None] = {
+        expected_data: Dict[str, Optional[str]] = {
             "vendor_id": vendor_id,
             "subvendor_id": subvendor_id,
             "vendor_name": "Advanced Micro Devices Inc",
@@ -311,14 +308,14 @@ class AmdSmiAnalyzer(DataAnalyzer[AmdSmiDataModel, None]):
 
     def check_pldm_version(
         self,
-        amdsmi_fw_data: list[Fw] | None,
-        expected_pldm_version: str | None,
+        amdsmi_fw_data: Optional[list[Fw]],
+        expected_pldm_version: Optional[str],
     ):
         """Check expected pldm version
 
         Args:
-            amdsmi_fw_data (list[Fw] | None): data model
-            expected_pldm_version (str | None): expected pldm version
+            amdsmi_fw_data (Optional[list[Fw]]): data model
+            expected_pldm_version (Optional[str]): expected pldm version
         """
         PLDM_STRING = "PLDM_BUNDLE"
         if amdsmi_fw_data is None or len(amdsmi_fw_data) == 0:
@@ -355,16 +352,16 @@ class AmdSmiAnalyzer(DataAnalyzer[AmdSmiDataModel, None]):
 
     def check_expected_memory_partition_mode(
         self,
-        partition_data: Partition | None,
-        expected_memory_partition_mode: str | None,
-        expected_compute_partition_mode: str | None,
+        partition_data: Optional[Partition],
+        expected_memory_partition_mode: Optional[str],
+        expected_compute_partition_mode: Optional[str],
     ):
         """Check expected mem partition mode
 
         Args:
-            partition_data (Partition | None): data model
-            expected_memory_partition_mode (str | None): expected mem partition mode
-            expected_compute_partition_mode (str | None): expected compute partition mode
+            partition_data (Optional[Partition]): data model
+            expected_memory_partition_mode (Optional[str]): expected mem partition mode
+            expected_compute_partition_mode (Optional[str]): expected compute partition mode
         """
         if partition_data is None:
             self._log_event(
@@ -428,13 +425,6 @@ class AmdSmiAnalyzer(DataAnalyzer[AmdSmiDataModel, None]):
 
         if args is None:
             args = AmdSmiAnalyzerArgs()
-
-        if args.l0_to_recovery_count_error_threshold is None:
-            args.l0_to_recovery_count_error_threshold = self.L0_TO_RECOVERY_COUNT_ERROR_THRESHOLD
-        if args.l0_to_recovery_count_warning_threshold is None:
-            args.l0_to_recovery_count_warning_threshold = (
-                self.L0_TO_RECOVERY_COUNT_WARNING_THRESHOLD
-            )
 
         if args.expected_gpu_processes:
             self.expected_gpu_processes(data.process, args.expected_gpu_processes)

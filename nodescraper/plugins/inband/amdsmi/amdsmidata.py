@@ -1,5 +1,5 @@
 import re
-from typing import Any, List, Mapping
+from typing import Any, List, Mapping, Optional, Union
 
 from pydantic import (
     BaseModel,
@@ -15,21 +15,21 @@ from nodescraper.utils import find_annotation_in_container
 _NUM_UNIT_RE = re.compile(r"^\s*([-+]?\d+(?:\.\d+)?)(?:\s*([A-Za-z%/][A-Za-z0-9%/._-]*))?\s*$")
 
 
-def na_to_none(values: int | str):
+def na_to_none(values: Union[int, str]):
     if values == "N/A":
         return None
     return values
 
 
-def na_to_none_list(values: List[int | str | None]) -> List[int | str | None]:
-    ret_list: List[int | str | None] = values.copy()
+def na_to_none_list(values: List[Union[int, str, None]]) -> List[Union[int, str, None]]:
+    ret_list: List[Union[int, str, None]] = values.copy()
     for i in range(len(ret_list)):
         if ret_list[i] == "N/A":
             ret_list[i] = None
     return ret_list
 
 
-def na_to_none_dict(values: object) -> dict[str, Any] | None:
+def na_to_none_dict(values: object) -> Optional[dict[str, Any]]:
     """Normalize mapping-like fields where 'N/A' or empty should become None.
     Accepts None; returns None for 'N/A'/'NA'/'' or non-mapping inputs."""
     if values is None:
@@ -63,7 +63,7 @@ class AmdSmiBaseModel(BaseModel):
     )
 
     def __init__(self, **data):
-        # Convert  int | str | float -> ValueUnit
+        # Convert  Union[int, str, float] -> ValueUnit
         for field_name, field_type in self.model_fields.items():
             annotation = field_type.annotation
             target_type, container = find_annotation_in_container(annotation, ValueUnit)
@@ -90,7 +90,7 @@ class ValueUnit(BaseModel):
       - "N/A" / "NA" / "" / None -> None
     """
 
-    value: int | float | str
+    value: Union[int, float, str]
     unit: str = ""
 
     @model_validator(mode="before")
@@ -139,17 +139,17 @@ class ValueUnit(BaseModel):
 
 # Process
 class ProcessMemoryUsage(BaseModel):
-    gtt_mem: ValueUnit | None
-    cpu_mem: ValueUnit | None
-    vram_mem: ValueUnit | None
+    gtt_mem: Optional[ValueUnit]
+    cpu_mem: Optional[ValueUnit]
+    vram_mem: Optional[ValueUnit]
 
     na_validator = field_validator("gtt_mem", "cpu_mem", "vram_mem", mode="before")(na_to_none)
 
 
 class ProcessUsage(BaseModel):
     # AMDSMI reports engine usage in nanoseconds
-    gfx: ValueUnit | None
-    enc: ValueUnit | None
+    gfx: Optional[ValueUnit]
+    enc: Optional[ValueUnit]
     na_validator = field_validator("gfx", "enc", mode="before")(na_to_none)
 
 
@@ -157,15 +157,15 @@ class ProcessInfo(BaseModel):
     name: str
     pid: int
 
-    mem: ValueUnit | None = None
+    mem: Optional[ValueUnit] = None
     memory_usage: ProcessMemoryUsage
     usage: ProcessUsage
-    cu_occupancy: ValueUnit | None = None
+    cu_occupancy: Optional[ValueUnit] = None
     na_validator = field_validator("mem", "cu_occupancy", mode="before")(na_to_none)
 
 
 class ProcessListItem(BaseModel):
-    process_info: ProcessInfo | str
+    process_info: Union[ProcessInfo, str]
 
 
 class Processes(BaseModel):
@@ -196,12 +196,12 @@ class AmdSmiListItem(BaseModel):
 class AmdSmiVersion(BaseModel):
     """Contains the versioning info for amd-smi"""
 
-    tool: str | None = None
-    version: str | None = None
-    amdsmi_library_version: str | None = None
-    rocm_version: str | None = None
-    amdgpu_version: str | None = None
-    amd_hsmp_driver_version: str | None = None
+    tool: Optional[str] = None
+    version: Optional[str] = None
+    amdsmi_library_version: Optional[str] = None
+    rocm_version: Optional[str] = None
+    amdgpu_version: Optional[str] = None
+    amd_hsmp_driver_version: Optional[str] = None
 
     @field_validator("*", mode="before")
     @classmethod
@@ -219,24 +219,24 @@ class PartitionAccelerator(BaseModel):
     """Accelerator partition data"""
 
     gpu_id: int
-    memory: str | None = None
-    accelerator_type: str | None = None
-    accelerator_profile_index: str | int | None = None
-    partition_id: int | None = None
+    memory: Optional[str] = None
+    accelerator_type: Optional[str] = None
+    accelerator_profile_index: Optional[Union[str, int]] = None
+    partition_id: Optional[int] = None
 
 
 class PartitionMemory(BaseModel):
     """Memory Partition data"""
 
     gpu_id: int
-    partition_type: str | None = None
+    partition_type: Optional[str] = None
 
 
 class PartitionCompute(BaseModel):
     """Compute Partition data"""
 
     gpu_id: int
-    partition_type: str | None = None
+    partition_type: Optional[str] = None
 
 
 class Partition(BaseModel):
@@ -263,8 +263,8 @@ class StaticAsic(BaseModel):
 
 class StaticBus(AmdSmiBaseModel):
     bdf: str
-    max_pcie_width: ValueUnit | None = None
-    max_pcie_speed: ValueUnit | None = None
+    max_pcie_width: Optional[ValueUnit] = None
+    max_pcie_speed: Optional[ValueUnit] = None
     pcie_interface_version: str = "unknown"
     slot_type: str = "unknown"
 
@@ -277,15 +277,15 @@ class StaticVbios(BaseModel):
 
 
 class StaticLimit(AmdSmiBaseModel):
-    max_power: ValueUnit | None
-    min_power: ValueUnit | None
-    socket_power: ValueUnit | None
-    slowdown_edge_temperature: ValueUnit | None
-    slowdown_hotspot_temperature: ValueUnit | None
-    slowdown_vram_temperature: ValueUnit | None
-    shutdown_edge_temperature: ValueUnit | None
-    shutdown_hotspot_temperature: ValueUnit | None
-    shutdown_vram_temperature: ValueUnit | None
+    max_power: Optional[ValueUnit]
+    min_power: Optional[ValueUnit]
+    socket_power: Optional[ValueUnit]
+    slowdown_edge_temperature: Optional[ValueUnit]
+    slowdown_hotspot_temperature: Optional[ValueUnit]
+    slowdown_vram_temperature: Optional[ValueUnit]
+    shutdown_edge_temperature: Optional[ValueUnit]
+    shutdown_hotspot_temperature: Optional[ValueUnit]
+    shutdown_vram_temperature: Optional[ValueUnit]
     na_validator = field_validator(
         "max_power",
         "min_power",
@@ -350,10 +350,10 @@ class StaticNuma(BaseModel):
 
 class StaticVram(AmdSmiBaseModel):
     type: str
-    vendor: str | None
-    size: ValueUnit | None
-    bit_width: ValueUnit | None
-    max_bandwidth: ValueUnit | None = None
+    vendor: Optional[str]
+    size: Optional[ValueUnit]
+    bit_width: Optional[ValueUnit]
+    max_bandwidth: Optional[ValueUnit] = None
     na_validator = field_validator("vendor", "size", "bit_width", "max_bandwidth", mode="before")(
         na_to_none
     )
@@ -362,7 +362,7 @@ class StaticVram(AmdSmiBaseModel):
 class StaticCacheInfoItem(AmdSmiBaseModel):
     cache: ValueUnit
     cache_properties: List[str]
-    cache_size: ValueUnit | None
+    cache_size: Optional[ValueUnit]
     cache_level: ValueUnit
     max_num_cu_shared: ValueUnit
     num_cache_instance: ValueUnit
@@ -375,8 +375,8 @@ class StaticFrequencyLevels(BaseModel):
     )
 
     Level_0: str = Field(..., alias="Level 0")
-    Level_1: str | None = Field(default=None, alias="Level 1")
-    Level_2: str | None = Field(default=None, alias="Level 2")
+    Level_1: Optional[str] = Field(default=None, alias="Level 1")
+    Level_2: Optional[str] = Field(default=None, alias="Level 2")
 
 
 class StaticClockData(BaseModel):
@@ -385,7 +385,7 @@ class StaticClockData(BaseModel):
     )
     frequency: StaticFrequencyLevels
 
-    current: int | None = Field(..., alias="current")
+    current: Optional[int] = Field(..., alias="current")
     na_validator = field_validator("current", mode="before")(na_to_none)
 
 
@@ -395,18 +395,18 @@ class AmdSmiStatic(BaseModel):
     gpu: int
     asic: StaticAsic
     bus: StaticBus
-    vbios: StaticVbios | None
-    limit: StaticLimit | None
-    driver: StaticDriver | None
+    vbios: Optional[StaticVbios]
+    limit: Optional[StaticLimit]
+    driver: Optional[StaticDriver]
     board: StaticBoard
-    soc_pstate: StaticSocPstate | None
-    xgmi_plpd: StaticXgmiPlpd | None
+    soc_pstate: Optional[StaticSocPstate]
+    xgmi_plpd: Optional[StaticXgmiPlpd]
     process_isolation: str
     numa: StaticNuma
     vram: StaticVram
     cache_info: List[StaticCacheInfoItem]
-    partition: StaticPartition | None = None
-    clock: StaticClockData | None = None
+    partition: Optional[StaticPartition] = None
+    clock: Optional[StaticClockData] = None
     na_validator_dict = field_validator("clock", mode="before")(na_to_none_dict)
     na_validator = field_validator("soc_pstate", "xgmi_plpd", "vbios", "limit", mode="before")(
         na_to_none
@@ -429,14 +429,14 @@ class AmdSmiDataModel(DataModel):
         populate_by_name=True,
     )
 
-    version: AmdSmiVersion | None = None
-    gpu_list: list[AmdSmiListItem] | None = Field(default_factory=list)
-    partition: Partition | None = None
-    process: list[Processes] | None = Field(default_factory=list)
-    firmware: list[Fw] | None = Field(default_factory=list)
-    static: list[AmdSmiStatic] | None = Field(default_factory=list)
+    version: Optional[AmdSmiVersion] = None
+    gpu_list: Optional[list[AmdSmiListItem]] = Field(default_factory=list)
+    partition: Optional[Partition] = None
+    process: Optional[list[Processes]] = Field(default_factory=list)
+    firmware: Optional[list[Fw]] = Field(default_factory=list)
+    static: Optional[list[AmdSmiStatic]] = Field(default_factory=list)
 
-    def get_list(self, gpu: int) -> AmdSmiListItem | None:
+    def get_list(self, gpu: int) -> Optional[AmdSmiListItem]:
         """Get the gpu list item for the given gpu id."""
         if self.gpu_list is None:
             return None
@@ -445,7 +445,7 @@ class AmdSmiDataModel(DataModel):
                 return item
         return None
 
-    def get_process(self, gpu: int) -> Processes | None:
+    def get_process(self, gpu: int) -> Optional[Processes]:
         """Get the process data for the given gpu id."""
         if self.process is None:
             return None
@@ -454,7 +454,7 @@ class AmdSmiDataModel(DataModel):
                 return item
         return None
 
-    def get_firmware(self, gpu: int) -> Fw | None:
+    def get_firmware(self, gpu: int) -> Optional[Fw]:
         """Get the firmware data for the given gpu id."""
         if self.firmware is None:
             return None
@@ -463,7 +463,7 @@ class AmdSmiDataModel(DataModel):
                 return item
         return None
 
-    def get_static(self, gpu: int) -> AmdSmiStatic | None:
+    def get_static(self, gpu: int) -> Optional[AmdSmiStatic]:
         """Get the static data for the given gpu id."""
         if self.static is None:
             return None
