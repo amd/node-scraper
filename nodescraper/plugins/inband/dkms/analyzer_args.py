@@ -23,7 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
-from typing import Any
+from typing import Any, Union
 
 from pydantic import Field, field_validator
 
@@ -32,8 +32,8 @@ from nodescraper.plugins.inband.dkms.dkmsdata import DkmsDataModel
 
 
 class DkmsAnalyzerArgs(AnalyzerArgs):
-    dkms_status: str | list = Field(default_factory=list)
-    dkms_version: str | list = Field(default_factory=list)
+    dkms_status: Union[str, list] = Field(default_factory=list)
+    dkms_version: Union[str, list] = Field(default_factory=list)
     regex_match: bool = False
 
     def model_post_init(self, __context: Any) -> None:
@@ -42,11 +42,11 @@ class DkmsAnalyzerArgs(AnalyzerArgs):
 
     @field_validator("dkms_status", mode="before")
     @classmethod
-    def validate_dkms_status(cls, dkms_status: str | list) -> list:
+    def validate_dkms_status(cls, dkms_status: Union[str, list]) -> list:
         """support str or list input for dkms_status
 
         Args:
-            dkms_status (str | list): dkms status to check
+            dkms_status (Union[str, list]): dkms status to check
 
         Returns:
             list: list of dkms status
@@ -58,11 +58,11 @@ class DkmsAnalyzerArgs(AnalyzerArgs):
 
     @field_validator("dkms_version", mode="before")
     @classmethod
-    def validate_dkms_version(cls, dkms_version: str | list) -> list:
+    def validate_dkms_version(cls, dkms_version: Union[str, list]) -> list:
         """support str or list input for dkms_version
 
         Args:
-            dkms_version (str | list): dkms version to check
+            dkms_version (Union[str, list]): dkms version to check
 
         Returns:
             list: list of dkms version

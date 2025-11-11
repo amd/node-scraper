@@ -25,7 +25,7 @@
 ###############################################################################
 import os
 import socket
-from typing import Type
+from typing import Type, Union
 
 import paramiko
 from paramiko.ssh_exception import (
@@ -99,14 +99,14 @@ class RemoteShell(InBandConnection):
     def read_file(
         self,
         filename: str,
-        encoding: str | None = "utf-8",
+        encoding: Union[str, None] = "utf-8",
         strip: bool = True,
     ) -> BaseFileArtifact:
         """Read a remote file into a BaseFileArtifact.
 
         Args:
             filename (str): Path to file on remote host
-            encoding (str | None, optional): If None, file is read as binary. If str, decode using that encoding. Defaults to "utf-8".
+            encoding Optional[Union[str, None]]: If None, file is read as binary. If str, decode using that encoding. Defaults to "utf-8".
             strip (bool): Strip whitespace for text files. Ignored for binary.
 
         Returns:

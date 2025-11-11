@@ -23,6 +23,8 @@
 # SOFTWARE.
 #
 ###############################################################################
+from typing import Dict, Optional
+
 from pydantic import Field
 
 from nodescraper.models import AnalyzerArgs
@@ -30,7 +32,7 @@ from nodescraper.plugins.inband.package.packagedata import PackageDataModel
 
 
 class PackageAnalyzerArgs(AnalyzerArgs):
-    exp_package_ver: dict[str, str | None] = Field(default_factory=dict)
+    exp_package_ver: Dict[str, Optional[str]] = Field(default_factory=dict)
     regex_match: bool = False
 
     @classmethod

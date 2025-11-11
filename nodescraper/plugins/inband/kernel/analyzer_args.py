@@ -23,6 +23,8 @@
 # SOFTWARE.
 #
 ###############################################################################
+from typing import Union
+
 from pydantic import Field, field_validator
 
 from nodescraper.models import AnalyzerArgs
@@ -30,16 +32,16 @@ from nodescraper.plugins.inband.kernel.kerneldata import KernelDataModel
 
 
 class KernelAnalyzerArgs(AnalyzerArgs):
-    exp_kernel: str | list = Field(default_factory=list)
+    exp_kernel: Union[str, list] = Field(default_factory=list)
     regex_match: bool = False
 
     @field_validator("exp_kernel", mode="before")
     @classmethod
-    def validate_exp_kernel(cls, exp_kernel: str | list) -> list:
+    def validate_exp_kernel(cls, exp_kernel: Union[str, list]) -> list:
         """support str or list input for exp_kernel
 
         Args:
-            exp_kernel (str | list): exp kernel input
+            exp_kernel (Union[str, list]): exp kernel input
 
         Returns:
             list: exp kernel list

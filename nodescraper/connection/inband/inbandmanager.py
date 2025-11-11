@@ -26,6 +26,7 @@
 from __future__ import annotations
 
 from logging import Logger
+from typing import Optional, Union
 
 from nodescraper.enums import (
     EventCategory,
@@ -50,11 +51,11 @@ class InBandConnectionManager(ConnectionManager[InBandConnection, SSHConnectionP
     def __init__(
         self,
         system_info: SystemInfo,
-        logger: Logger | None = None,
-        max_event_priority_level: EventPriority | str = EventPriority.CRITICAL,
-        parent: str | None = None,
-        task_result_hooks: list[TaskResultHook] | None = None,
-        connection_args: SSHConnectionParams | None = None,
+        logger: Optional[Logger] = None,
+        max_event_priority_level: Union[EventPriority, str] = EventPriority.CRITICAL,
+        parent: Optional[str] = None,
+        task_result_hooks: Optional[list[TaskResultHook]] = None,
+        connection_args: Optional[SSHConnectionParams] = None,
         **kwargs,
     ):
         super().__init__(

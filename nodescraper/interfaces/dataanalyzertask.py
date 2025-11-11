@@ -28,7 +28,7 @@ from __future__ import annotations
 import abc
 import inspect
 from functools import wraps
-from typing import Any, Callable, Generic, Optional, Type
+from typing import Any, Callable, Generic, Optional, Type, Union
 
 from pydantic import BaseModel, ValidationError
 
@@ -46,7 +46,7 @@ def analyze_decorator(func: Callable[..., TaskResult]) -> Callable[..., TaskResu
     def wrapper(
         analyzer: "DataAnalyzer",
         data: DataModel,
-        args: Optional[TAnalyzeArg | dict] = None,
+        args: Optional[Union[TAnalyzeArg, dict]] = None,
     ) -> TaskResult:
         analyzer.logger.info("Running data analyzer: %s", analyzer.__class__.__name__)
         analyzer.result = analyzer._init_result()

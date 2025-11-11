@@ -23,6 +23,8 @@
 # SOFTWARE.
 #
 ###############################################################################
+from typing import Optional
+
 from nodescraper.base import InBandDataCollector
 from nodescraper.enums import EventPriority, ExecutionStatus, OSFamily
 from nodescraper.models import TaskResult
@@ -43,12 +45,12 @@ class DkmsCollector(InBandDataCollector[DkmsDataModel, None]):
     def collect_data(
         self,
         args=None,
-    ) -> tuple[TaskResult, DkmsDataModel | None]:
+    ) -> tuple[TaskResult, Optional[DkmsDataModel]]:
         """
         Collect DKMS status and version information.
 
         Returns:
-            tuple[TaskResult, DkmsDataModel | None]: tuple containing the task result and DKMS data model if available.
+            tuple[TaskResult, Optional[DkmsDataModel]]: tuple containing the task result and DKMS data model if available.
         """
 
         dkms_data = DkmsDataModel()

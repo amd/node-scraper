@@ -27,7 +27,7 @@ import io
 import json
 import os
 import tarfile
-from typing import TypeVar
+from typing import TypeVar, Union
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -42,7 +42,7 @@ class FileModel(BaseModel):
 
     @field_validator("file_contents", mode="before")
     @classmethod
-    def file_contents_conformer(cls, value: io.BytesIO | str | bytes) -> bytes:
+    def file_contents_conformer(cls, value: Union[io.BytesIO, str, bytes]) -> bytes:
         if isinstance(value, io.BytesIO):
             return value.getvalue()
         if isinstance(value, str):
@@ -92,7 +92,7 @@ class DataModel(BaseModel):
         pass
 
     @classmethod
-    def import_model(cls: type[TDataModel], model_input: dict | str) -> TDataModel:
+    def import_model(cls: type[TDataModel], model_input: Union[dict, str]) -> TDataModel:
         """import a data model
         if the input is a string attempt to read data from file using the string as a file name
         if input is a dict, pass key value pairs directly to init function
@@ -100,7 +100,7 @@ class DataModel(BaseModel):
 
         Args:
             cls (type[DataModel]): Data model class
-            model_input (dict | str): model data input
+            model_input (Union[dict, str]): model data input
 
         Raises:
             ValueError: if model_input has an invalid type
