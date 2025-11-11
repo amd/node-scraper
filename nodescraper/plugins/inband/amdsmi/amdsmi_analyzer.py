@@ -441,12 +441,7 @@ class AmdSmiAnalyzer(DataAnalyzer[AmdSmiDataModel, None]):
                 self.check_expected_max_power(data.static, args.expected_max_power)
             if args.expected_driver_version:
                 self.check_expected_driver_version(data.static, args.expected_driver_version)
-            if args.expected_memory_partition_mode or args.expected_compute_partition_mode:
-                self.check_expected_memory_partition_mode(
-                    data.partition,
-                    args.expected_memory_partition_mode,
-                    args.expected_compute_partition_mode,
-                )
+
             self.static_consistancy_check(data.static)
             if (
                 self.system_info.sku
@@ -463,6 +458,13 @@ class AmdSmiAnalyzer(DataAnalyzer[AmdSmiDataModel, None]):
                     (args.devid_ep, args.devid_ep),
                     sku_name=args.sku_name,
                 )
+
+        if args.expected_memory_partition_mode or args.expected_compute_partition_mode:
+            self.check_expected_memory_partition_mode(
+                data.partition,
+                args.expected_memory_partition_mode,
+                args.expected_compute_partition_mode,
+            )
 
         if args.expected_pldm_version:
             self.check_pldm_version(data.firmware, args.expected_pldm_version)
