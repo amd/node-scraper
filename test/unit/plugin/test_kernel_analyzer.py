@@ -35,16 +35,19 @@ from nodescraper.plugins.inband.kernel.kerneldata import KernelDataModel
 
 @pytest.fixture
 def model_obj():
-    return KernelDataModel(kernel_version="5.13.0-30-generic")
+    return KernelDataModel(
+        kernel_version="Linux MockSystem 5.13.0-30-generic #1 XYZ Day Month 10 15:19:13 EDT 2024 x86_64 x86_64 x86_64 GNU/Linux",
+        kernel_info="5.13.0-30-generic",
+    )
 
 
 @pytest.fixture
 def config():
     return {
         "kernel_name": [
-            "5.13.0-30-generic",
-            "5.15.0-31-generic",
-            "5.18.0-32-generic",
+            "Linux MockSystem 5.13.0-30-generic #1 XYZ Day Month 10 15:19:13 EDT 2024 x86_64 x86_64 x86_64 GNU/Linux",
+            "Linux MockSystem1 5.15.0-31-generic #39 XYZA Day MonthX 10 24:19:13 IST 2024 x86_64 GNU/Linux",
+            "Linux MockSystem2 5.18.0-32-generic #178 XYZaB Day MonthY 10 15:06:11 PDT 2024 Linux",
         ],
         "invalid": "invalid",
     }
@@ -118,14 +121,14 @@ def test_invalid_kernel_config(system_info, model_obj, config):
 
 
 def test_match_regex(system_info, model_obj):
-    args = KernelAnalyzerArgs(exp_kernel=[r"5.13.\d-\d+-[\w]+"], regex_match=True)
+    args = KernelAnalyzerArgs(exp_kernel=[r".*5\.13\.\d+-\d+-[\w-]+.*"], regex_match=True)
     analyzer = KernelAnalyzer(system_info)
     result = analyzer.analyze_data(model_obj, args)
     assert result.status == ExecutionStatus.OK
 
 
 def test_mismatch_regex(system_info, model_obj):
-    args = KernelAnalyzerArgs(exp_kernel=[r"4.3.\d-\d+-[\w]+"], regex_match=True)
+    args = KernelAnalyzerArgs(exp_kernel=[r".*4\.13\.\d+-\d+-[\w-]+.*"], regex_match=True)
     analyzer = KernelAnalyzer(system_info)
     result = analyzer.analyze_data(model_obj, args)
 
