@@ -41,11 +41,14 @@ class KernelCollector(InBandDataCollector[KernelDataModel, None]):
     CMD = "sh -c 'uname -a'"
 
     def _parse_kernel_version(self, uname_a: str) -> Optional[str]:
-        """ExtractS the kernel release (`uname -r`) from `uname -a` output.
+        """Extract the kernel release from `uname -a` output.
 
+        Args:
+            uname_a (str): The full output string from the `uname -a` command.
 
-        The kernel_release is normally the 2nd index. If that
-        fails, fall back to a regex looking for a dotted release string.
+        Returns:
+            Optional[str]: The parsed kernel release (e.g., "5.13.0-30-generic")
+            if found, otherwise None.
         """
         if not uname_a:
             return None
@@ -73,7 +76,7 @@ class KernelCollector(InBandDataCollector[KernelDataModel, None]):
         """
 
         kernel = None
-        kernel_info = None
+        kernel_info = ""
 
         if self.system_info.os_family == OSFamily.WINDOWS:
             res = self._run_sut_cmd(self.CMD_WINDOWS)
@@ -86,11 +89,16 @@ class KernelCollector(InBandDataCollector[KernelDataModel, None]):
             if res.exit_code == 0:
                 if res.stdout:
                     kernel = res.stdout
-                    parts = kernel.split()
-                    if len(parts) == 1:
-                        kernel_info = None
-                    else:
-                        kernel_info = self._parse_kernel_version(kernel)
+                    parsed_info = self._parse_kernel_version(kernel)
+                    kernel_info = parsed_info if parsed_info is not None else ""
+                    if not kernel_info:
+                        self._log_event(
+                            category=EventCategory.OS,
+                            description="Could not extract kernel version from 'uname -a'",
+                            data={"command": res.command, "exit_code": res.exit_code},
+                            priority=EventPriority.ERROR,
+                            console_log=True,
+                        )
                 else:
                     kernel = None
         if res.exit_code != 0:

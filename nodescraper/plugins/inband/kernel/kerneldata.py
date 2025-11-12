@@ -23,11 +23,10 @@
 # SOFTWARE.
 #
 ###############################################################################
-from typing import Optional
 
 from nodescraper.models import DataModel
 
 
 class KernelDataModel(DataModel):
     kernel_version: str
-    kernel_info: Optional[str] = None
+    kernel_info: str
