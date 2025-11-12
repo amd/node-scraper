@@ -68,6 +68,7 @@ from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     StaticClockData,
     StaticDriver,
     StaticFrequencyLevels,
+    StaticLimit,
     StaticNuma,
     StaticPolicy,
     StaticSocPstate,
@@ -776,12 +777,23 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                 except Exception:
                     vram_size_b = None
 
+            # Calculate VRAM max bandwidth if possible
+            max_bandwidth = None
+            if vram_bits and kfd.get("memory_max_frequency"):
+                try:
+                    mem_freq_mhz = float(kfd["memory_max_frequency"])
+                    # Bandwidth (GB/s) = (bit_width * frequency_MHz) / 8000 Note: is this correct?
+                    bandwidth_gbs = (float(vram_bits) * mem_freq_mhz) / 8000.0
+                    max_bandwidth = self._valueunit(bandwidth_gbs, "GB/s")
+                except Exception:
+                    pass
+
             vram_model = StaticVram(
                 type=vram_type,
                 vendor=None if vram_vendor in (None, "", "N/A") else str(vram_vendor),
                 size=self._valueunit(vram_size_b, "B"),
                 bit_width=self._valueunit(vram_bits, "bit"),
-                max_bandwidth=None,
+                max_bandwidth=max_bandwidth,
             )
 
             soc_pstate_model = self._get_soc_pstate(h)
@@ -796,7 +808,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                         asic=asic_model,
                         bus=bus,
                         vbios=vbios_model,
-                        limit=None,
+                        limit=self._get_limit_info(h),
                         driver=driver_model,
                         board=board_model,
                         soc_pstate=soc_pstate_model,
@@ -805,7 +817,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                         numa=numa_model,
                         vram=vram_model,
                         cache_info=cache_info_model,
-                        partition=None,
+                        partition=None,  # Note: ?
                         clock=clock_model,
                     )
                 )
@@ -821,13 +833,13 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         return out
 
     def _get_soc_pstate(self, handle: Any) -> Optional[StaticSocPstate]:
-        """SOC pstate check
+        """Get SOC P-state (performance state) policy information for a GPU device.
 
         Args:
             handle (Any): GPU device handle
 
         Returns:
-            Optional[StaticSocPstate]: StaticSocPstate instance or None
+            Optional[StaticSocPstate]: SOC P-state policy data or None if unavailable
         """
         amdsmi = self._amdsmi_mod()
         fn = getattr(amdsmi, "amdsmi_get_soc_pstate", None)
@@ -883,13 +895,13 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             return None
 
     def _get_xgmi_plpd(self, handle: Any) -> Optional[StaticXgmiPlpd]:
-        """Check XGMI plpd
+        """Get XGMI Per-Link Power Down (PLPD) policy for a GPU device.
 
         Args:
             handle (Any): GPU device handle
 
         Returns:
-            Optional[StaticXgmiPlpd]: StaticXgmiPlpd instance or None
+            Optional[StaticXgmiPlpd]: XGMI PLPD policy data or None if unavailable
         """
         amdsmi = self._amdsmi_mod()
         fn = getattr(amdsmi, "amdsmi_get_xgmi_plpd", None)
@@ -945,13 +957,13 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             return None
 
     def _get_cache_info(self, handle: Any) -> list[StaticCacheInfoItem]:
-        """Check cache info
+        """Get GPU cache hierarchy information (L1, L2, L3, etc.).
 
         Args:
             handle (Any): GPU device handle
 
         Returns:
-            list[StaticCacheInfoItem]: list of StaticCacheInfoItem instances
+            list[StaticCacheInfoItem]: List of cache info items for each cache level
         """
         amdsmi = self._amdsmi_mod()
         raw = self._smi_try(amdsmi.amdsmi_get_gpu_cache_info, handle, default=None)
@@ -1007,8 +1019,38 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
 
         return out
 
+    def _get_limit_info(self, handle: Any) -> Optional[StaticLimit]:
+        """Get power cap and temperature limit information.
+
+        Args:
+            handle (Any): GPU device handle
+
+        Returns:
+            Optional[StaticLimit]: StaticLimit instance or None
+        """
+        amdsmi = self._amdsmi_mod()
+        fn = getattr(amdsmi, "amdsmi_get_power_cap_info", None)
+        if not callable(fn):
+            return None
+
+        data = self._smi_try(fn, handle, default=None)
+        if not isinstance(data, dict):
+            return None
+
+        return StaticLimit(
+            max_power=self._valueunit(data.get("power_cap"), "W"),
+            min_power=self._valueunit(data.get("min_power_cap"), "W"),
+            socket_power=self._valueunit(data.get("default_power_cap"), "W"),
+            slowdown_edge_temperature=self._valueunit(data.get("slowdown_temp"), "C"),
+            slowdown_hotspot_temperature=self._valueunit(data.get("slowdown_mem_temp"), "C"),
+            slowdown_vram_temperature=self._valueunit(data.get("slowdown_vram_temp"), "C"),
+            shutdown_edge_temperature=self._valueunit(data.get("shutdown_temp"), "C"),
+            shutdown_hotspot_temperature=self._valueunit(data.get("shutdown_mem_temp"), "C"),
+            shutdown_vram_temperature=self._valueunit(data.get("shutdown_vram_temp"), "C"),
+        )
+
     def _get_clock(self, handle: Any) -> Optional[StaticClockData]:
-        """Get clock info
+        """Get clock info using amdsmi_get_clock_info or fallback to amdsmi_get_clk_freq
 
         Args:
             handle (Any): GPU device handle
@@ -1017,9 +1059,23 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             Optional[StaticClockData]: StaticClockData instance or None
         """
         amdsmi = self._amdsmi_mod()
-        fn = getattr(amdsmi, "amdsmi_get_clk_freq", None)
         clk_type = getattr(amdsmi, "AmdSmiClkType", None)
-        if not callable(fn) or clk_type is None or not hasattr(clk_type, "SYS"):
+
+        if clk_type is None or not hasattr(clk_type, "SYS"):
+            return None
+
+        # Try amdsmi_get_clock_info API first
+        clock_info_fn = getattr(amdsmi, "amdsmi_get_clock_info", None)
+        if callable(clock_info_fn):
+            data = self._smi_try(clock_info_fn, handle, clk_type.SYS, default=None)
+            if isinstance(data, dict):
+                freqs_raw = data.get("clk_freq") or data.get("frequency")
+                if isinstance(freqs_raw, list) and freqs_raw:
+                    return self._process_clock_data(data, freqs_raw)
+
+        # Fallback to amdsmi_get_clk_freq API
+        fn = getattr(amdsmi, "amdsmi_get_clk_freq", None)
+        if not callable(fn):
             return None
 
         data = self._smi_try(fn, handle, clk_type.SYS, default=None)
@@ -1029,6 +1085,19 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         freqs_raw = data.get("frequency")
         if not isinstance(freqs_raw, list) or not freqs_raw:
             return None
+
+        return self._process_clock_data(data, freqs_raw)
+
+    def _process_clock_data(self, data: dict, freqs_raw: list) -> Optional[StaticClockData]:
+        """Process clock frequency data into StaticClockData model.
+
+        Args:
+            data (dict): Raw clock data from amdsmi API
+            freqs_raw (list): List of frequency values
+
+        Returns:
+            Optional[StaticClockData]: StaticClockData instance or None
+        """
 
         def _to_mhz(v: object) -> Optional[int]:
             x = self._to_number(v)
@@ -1079,11 +1148,10 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             return None
 
     def get_bad_pages(self) -> Optional[list[BadPages]]:
-        """
-        Collect bad page info per GPU and map to BadPages/PageData models.
+        """Collect bad page info per GPU and map to BadPages/PageData models.
 
         Returns:
-            List[BadPages] (one item per GPU) or None if no devices.
+            Optional[list[BadPages]]: List of bad pages (one per GPU) or None if no devices
         """
         amdsmi = self._amdsmi_mod()
         devices = self._get_handles()
@@ -1165,6 +1233,14 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         return out
 
     def get_metric(self) -> Optional[list[AmdSmiMetric]]:
+        """Collect runtime metric data from all GPU devices.
+
+        Collects usage, power, temperature, clocks, PCIe, fan, memory, ECC,
+        throttle, and voltage curve data from amdsmi_get_gpu_metrics_info.
+
+        Returns:
+            Optional[list[AmdSmiMetric]]: List of metric data per GPU or None if no devices
+        """
         amdsmi = self._amdsmi_mod()
         devices = self._get_handles()
         out: list[AmdSmiMetric] = []
@@ -1213,14 +1289,29 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                     jpeg_activity=[
                         self._valueunit(v, "%") for v in _as_list(raw.get("jpeg_activity"))
                     ],
-                    gfx_busy_inst=None,
-                    jpeg_busy=None,
-                    vcn_busy=None,
+                    gfx_busy_inst=None,  # Note: note avilable?
+                    jpeg_busy=None,  # Note: note avilable?
+                    vcn_busy=None,  # Note: note avilable?
                 )
 
                 # Power / Energy
+                # Get power from metrics_info
+                socket_power_val = self._valueunit(raw.get("average_socket_power"), "W")
+
+                # Try amdsmi_get_power_info if available and metrics is missing
+                if socket_power_val is None:
+                    power_info_fn = getattr(amdsmi, "amdsmi_get_power_info", None)
+                    if callable(power_info_fn):
+                        power_data = self._smi_try(power_info_fn, h, default=None)
+                        if isinstance(power_data, dict):
+                            socket_power_val = self._valueunit(
+                                power_data.get("current_socket_power")
+                                or power_data.get("average_socket_power"),
+                                "W",
+                            )
+
                 power = MetricPower(
-                    socket_power=self._valueunit(raw.get("average_socket_power"), "W"),
+                    socket_power=socket_power_val,
                     gfx_voltage=self._valueunit(raw.get("voltage_gfx"), "mV"),
                     soc_voltage=self._valueunit(raw.get("voltage_soc"), "mV"),
                     mem_voltage=self._valueunit(raw.get("voltage_mem"), "mV"),
@@ -1250,6 +1341,16 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                     float(speed_raw) / 10.0 if isinstance(speed_raw, (int, float)) else None
                 )
 
+                # Get PCIe throughput
+                throughput_fn = getattr(amdsmi, "amdsmi_get_gpu_pci_throughput", None)
+                bandwidth_sent = None
+                bandwidth_received = None
+                if callable(throughput_fn):
+                    throughput_data = self._smi_try(throughput_fn, h, default=None)
+                    if isinstance(throughput_data, dict):
+                        bandwidth_sent = _to_int_or_none(throughput_data.get("sent"))
+                        bandwidth_received = _to_int_or_none(throughput_data.get("received"))
+
                 pcie = MetricPcie(
                     width=_to_int_or_none(raw.get("pcie_link_width")),
                     speed=self._valueunit(speed_gtps, "GT/s"),
@@ -1259,39 +1360,88 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                     replay_roll_over_count=_to_int_or_none(raw.get("pcie_replay_rover_count_acc")),
                     nak_sent_count=_to_int_or_none(raw.get("pcie_nak_sent_count_acc")),
                     nak_received_count=_to_int_or_none(raw.get("pcie_nak_rcvd_count_acc")),
-                    current_bandwidth_sent=None,
-                    current_bandwidth_received=None,
+                    current_bandwidth_sent=bandwidth_sent,
+                    current_bandwidth_received=bandwidth_received,
                     max_packet_size=None,
                     lc_perf_other_end_recovery=None,
                 )
 
-                # Clocks
-                def _clk(cur_key: str, raw: dict = raw) -> MetricClockData:
+                # Clocks from clock_info API
+                clock_info_fn = getattr(amdsmi, "amdsmi_get_clock_info", None)
+                clk_type = getattr(amdsmi, "AmdSmiClkType", None)
+                clock_ranges = {}
+
+                if callable(clock_info_fn) and clk_type is not None:
+                    for clk_name, clk_enum_name in [
+                        ("GFX", "GFX"),
+                        ("SOC", "SYS"),
+                        ("UCLK", "MEM"),
+                        ("VCLK0", "VCLK0"),
+                        ("DCLK0", "DCLK0"),
+                        ("VCLK1", "VCLK1"),
+                        ("DCLK1", "DCLK1"),
+                    ]:
+                        clk_enum = getattr(clk_type, clk_enum_name, None)
+                        if clk_enum is not None:
+                            clk_data = self._smi_try(clock_info_fn, h, clk_enum, default=None)
+                            if isinstance(clk_data, dict):
+                                clock_ranges[clk_name] = {
+                                    "min": clk_data.get("min_clk"),
+                                    "max": clk_data.get("max_clk"),
+                                    "sleep": clk_data.get("sleep_clk")
+                                    or clk_data.get("deep_sleep_clk"),
+                                }
+
+                def _clk(
+                    cur_key: str,
+                    clk_name: str = "",
+                    raw: dict = raw,
+                    clock_ranges: dict = clock_ranges,
+                ) -> MetricClockData:
+                    ranges = clock_ranges.get(clk_name, {})
                     return MetricClockData(
                         clk=self._valueunit(raw.get(cur_key), "MHz"),
-                        min_clk=None,
-                        max_clk=None,
+                        min_clk=self._valueunit(ranges.get("min"), "MHz") if ranges else None,
+                        max_clk=self._valueunit(ranges.get("max"), "MHz") if ranges else None,
                         clk_locked=(
                             raw.get("gfxclk_lock_status") if cur_key == "current_gfxclk" else None
                         ),
-                        deep_sleep=None,
+                        deep_sleep=ranges.get("sleep") if ranges else None,
                     )
 
                 clock: dict[str, MetricClockData] = {
-                    "GFX": _clk("current_gfxclk"),
-                    "SOC": _clk("current_socclk"),
-                    "UCLK": _clk("current_uclk"),
-                    "VCLK0": _clk("current_vclk0"),
-                    "DCLK0": _clk("current_dclk0"),
-                    "VCLK1": _clk("current_vclk1"),
-                    "DCLK1": _clk("current_dclk1"),
+                    "GFX": _clk("current_gfxclk", "GFX"),
+                    "SOC": _clk("current_socclk", "SOC"),
+                    "UCLK": _clk("current_uclk", "UCLK"),
+                    "VCLK0": _clk("current_vclk0", "VCLK0"),
+                    "DCLK0": _clk("current_dclk0", "DCLK0"),
+                    "VCLK1": _clk("current_vclk1", "VCLK1"),
+                    "DCLK1": _clk("current_dclk1", "DCLK1"),
                 }
 
                 # Fan
+                fan_rpm = self._valueunit(raw.get("current_fan_speed"), "RPM")
+
+                # Get fan speed as percentage
+                fan_speed_fn = getattr(amdsmi, "amdsmi_get_gpu_fan_speed", None)
+                fan_speed_pct = None
+                if callable(fan_speed_fn):
+                    fan_speed_data = self._smi_try(fan_speed_fn, h, 0, default=None)
+                    if isinstance(fan_speed_data, (int, float)):
+                        fan_speed_pct = self._valueunit(fan_speed_data, "%")
+
+                # Get max fan speed
+                fan_max_fn = getattr(amdsmi, "amdsmi_get_gpu_fan_speed_max", None)
+                fan_max_rpm = None
+                if callable(fan_max_fn):
+                    fan_max_data = self._smi_try(fan_max_fn, h, 0, default=None)
+                    if isinstance(fan_max_data, (int, float)):
+                        fan_max_rpm = self._valueunit(fan_max_data, "RPM")
+
                 fan = MetricFan(
-                    rpm=self._valueunit(raw.get("current_fan_speed"), "RPM"),
-                    speed=None,
-                    max=None,
+                    rpm=fan_rpm,
+                    speed=fan_speed_pct,
+                    max=fan_max_rpm,
                     usage=None,
                 )
 
@@ -1310,7 +1460,13 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
 
                 mem_enum = getattr(amdsmi, "AmdSmiMemoryType", None)
                 vis_total_vu: Optional[ValueUnit] = None
+                vis_used_vu: Optional[ValueUnit] = None
+                vis_free_vu: Optional[ValueUnit] = None
                 gtt_total_vu: Optional[ValueUnit] = None
+                gtt_used_vu: Optional[ValueUnit] = None
+                gtt_free_vu: Optional[ValueUnit] = None
+
+                mem_usage_fn = getattr(amdsmi, "amdsmi_get_gpu_memory_usage", None)
 
                 if mem_enum is not None:
                     if total_vram_vu is None:
@@ -1320,19 +1476,47 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                         if vram_total_alt is not None:
                             total_vram_vu = self._valueunit(vram_total_alt, "B")
 
+                    # Visible VRAM total and usage
                     vis_total = self._smi_try(
                         amdsmi.amdsmi_get_gpu_memory_total, h, mem_enum.VIS_VRAM, default=None
                     )
                     if vis_total is not None:
                         vis_total_vu = self._valueunit(vis_total, "B")
 
+                        # Get visible VRAM usage
+                        if callable(mem_usage_fn):
+                            vis_used = self._smi_try(
+                                mem_usage_fn, h, mem_enum.VIS_VRAM, default=None
+                            )
+                            if vis_used is not None:
+                                vis_used_vu = self._valueunit(vis_used, "B")
+                                # Calculate free
+                                try:
+                                    free_val = max(0.0, float(vis_total) - float(vis_used))
+                                    vis_free_vu = self._valueunit(free_val, "B")
+                                except Exception:
+                                    pass
+
+                    # GTT total and usage
                     gtt_total = self._smi_try(
                         amdsmi.amdsmi_get_gpu_memory_total, h, mem_enum.GTT, default=None
                     )
                     if gtt_total is not None:
                         gtt_total_vu = self._valueunit(gtt_total, "B")
 
-                # Compute free if possible
+                        # Get GTT usage
+                        if callable(mem_usage_fn):
+                            gtt_used = self._smi_try(mem_usage_fn, h, mem_enum.GTT, default=None)
+                            if gtt_used is not None:
+                                gtt_used_vu = self._valueunit(gtt_used, "B")
+                                # Calculate free
+                                try:
+                                    free_val = max(0.0, float(gtt_total) - float(gtt_used))
+                                    gtt_free_vu = self._valueunit(free_val, "B")
+                                except Exception:
+                                    pass
+
+                # Compute free VRAM if possible
                 if free_vram_vu is None and total_vram_vu is not None and used_vram_vu is not None:
                     try:
                         free_num = max(0.0, float(total_vram_vu.value) - float(used_vram_vu.value))
@@ -1346,11 +1530,11 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                     used_vram=used_vram_vu,
                     free_vram=free_vram_vu,
                     total_visible_vram=vis_total_vu,
-                    used_visible_vram=None,
-                    free_visible_vram=None,
+                    used_visible_vram=vis_used_vu,
+                    free_visible_vram=vis_free_vu,
                     total_gtt=gtt_total_vu,
-                    used_gtt=None,
-                    free_gtt=None,
+                    used_gtt=gtt_used_vu,
+                    free_gtt=gtt_free_vu,
                 )
 
                 # ECC totals
@@ -1409,6 +1593,14 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         return out
 
     def _empty_metric(self, gpu_idx: int) -> AmdSmiMetric:
+        """Create an empty/default AmdSmiMetric instance when data collection fails.
+
+        Args:
+            gpu_idx (int): GPU index
+
+        Returns:
+            AmdSmiMetric: Metric instance with all fields set to None or empty values
+        """
         return AmdSmiMetric(
             gpu=gpu_idx,
             usage=MetricUsage(
@@ -1472,7 +1664,15 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             throttle=MetricThrottle(),
         )
 
-    def _get_voltage_curve(self, h) -> MetricVoltageCurve:
+    def _get_voltage_curve(self, h: Any) -> MetricVoltageCurve:
+        """Get GPU voltage curve (frequency/voltage points) for overdrive settings.
+
+        Args:
+            h (Any): GPU device handle
+
+        Returns:
+            MetricVoltageCurve: Voltage curve data with up to 3 frequency/voltage points
+        """
         amdsmi = self._amdsmi_mod()
         raw = self._smi_try(amdsmi.amdsmi_get_gpu_od_volt_info, h, default=None)
         if not isinstance(raw, dict):
@@ -1522,6 +1722,11 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         )
 
     def _empty_voltage_curve(self) -> MetricVoltageCurve:
+        """Create an empty MetricVoltageCurve with all points set to None.
+
+        Returns:
+            MetricVoltageCurve: Empty voltage curve instance
+        """
         return MetricVoltageCurve(
             point_0_frequency=None,
             point_0_voltage=None,
@@ -1531,16 +1736,30 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             point_2_voltage=None,
         )
 
-    def _as_first_plane(self, obj) -> list:
-        """Take a scalar/list/2D-list and return the first plane as a flat list."""
+    def _as_first_plane(self, obj: object) -> list:
+        """Take a scalar/list/2D-list and return the first plane as a flat list.
+
+        Args:
+            obj (object): Scalar, list, or 2D-list to process
+
+        Returns:
+            list: First plane as a flat list, or empty list if not a list
+        """
         if isinstance(obj, list):
             if obj and isinstance(obj[0], list):  # 2D
                 return obj[0]
             return obj
         return []
 
-    def _th_vu_list_pct(self, obj) -> Optional[MetricThrottleVu]:
-        """Return MetricThrottleVu with % ValueUnits for the first XCP plane."""
+    def _th_vu_list_pct(self, obj: object) -> Optional[MetricThrottleVu]:
+        """Return MetricThrottleVu with percentage ValueUnits for the first XCP plane.
+
+        Args:
+            obj (object): Object containing throttle data (scalar, list, or 2D-list)
+
+        Returns:
+            Optional[MetricThrottleVu]: MetricThrottleVu with percentage values or None
+        """
         arr = self._as_first_plane(obj)
         if not arr:
             return None
@@ -1548,8 +1767,15 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             xcp_0=[self._valueunit(v, "%") if v not in (None, "N/A") else "N/A" for v in arr]
         )
 
-    def _th_vu_list_raw(self, obj) -> Optional[MetricThrottleVu]:
-        """Return MetricThrottleVu with raw ints/strings for the first XCP plane."""
+    def _th_vu_list_raw(self, obj: object) -> Optional[MetricThrottleVu]:
+        """Return MetricThrottleVu with raw integers/strings for the first XCP plane.
+
+        Args:
+            obj (object): Object containing throttle data (scalar, list, or 2D-list)
+
+        Returns:
+            Optional[MetricThrottleVu]: MetricThrottleVu with raw values or None
+        """
         arr = self._as_first_plane(obj)
         if not arr:
             return None
@@ -1564,7 +1790,15 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             ]
         )
 
-    def get_throttle(self, h) -> MetricThrottle:
+    def get_throttle(self, h: Any) -> MetricThrottle:
+        """Get throttle/violation status data for a GPU device.
+
+        Args:
+            h (Any): GPU device handle
+
+        Returns:
+            MetricThrottle: Throttle metrics and violation status data
+        """
         amdsmi = self._amdsmi_mod()
         raw = self._smi_try(amdsmi.amdsmi_get_violation_status, h, default=None)
         if not isinstance(raw, dict):
@@ -1634,6 +1868,14 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         )
 
     def _flatten_2d(self, v: object) -> list[object]:
+        """Flatten a 2D list into a 1D list, or normalize scalars/None to lists.
+
+        Args:
+            v (object): Input value (scalar, list, or 2D-list)
+
+        Returns:
+            list[object]: Flattened list of objects
+        """
         if isinstance(v, list) and v and isinstance(v[0], list):
             out: list[object] = []
             for row in v:
@@ -1647,11 +1889,19 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
     def _coerce_throttle_value(
         self, v: object, unit: str = ""
     ) -> Optional[Union[MetricThrottleVu, ValueUnit]]:
-        """
-        Convert ints/floats/strings/lists/2D-lists/dicts into:
-          - ValueUnit
-          - MetricThrottleVu(xcp_0=[...])
-          - None for N/A/empty
+        """Convert various throttle data formats to ValueUnit or MetricThrottleVu.
+
+        Converts integers/floats/strings/lists/2D-lists/dicts into appropriate types:
+          - ValueUnit for scalar values
+          - MetricThrottleVu(xcp_0=[...]) for lists/arrays
+          - None for N/A or empty values
+
+        Args:
+            v (object): Input throttle value in various formats
+            unit (str, optional): Unit of measurement. Defaults to empty string.
+
+        Returns:
+            Optional[Union[MetricThrottleVu, ValueUnit]]: Coerced throttle value or None
         """
         if v in (None, "", "N/A"):
             return None
