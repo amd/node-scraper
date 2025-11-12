@@ -27,7 +27,7 @@ import os
 import re
 import traceback
 from enum import Enum
-from typing import Any, TypeVar, get_args, get_origin
+from typing import Any, TypeVar, Union, get_args, get_origin
 
 T = TypeVar("T")
 
@@ -173,14 +173,14 @@ def bytes_to_human_readable(input_bytes: int) -> str:
 
 def find_annotation_in_container(
     annotation, target_type
-) -> tuple[Any, list[Any]] | tuple[None, list[Any]]:
+) -> Union[tuple[Any, list[Any]], tuple[None, list[Any]]]:
     """Recursively search for a target type in an annotation and return the target type and the containers
     supported container types are generic types, Callable, Tuple, Union, Literal, Final, ClassVar
     and Annotated. If the target type is not found then None is returned.
 
     Examples:
        find_annotation_in_container(Union[int, str], int) -> int, [Union[int, str]]
-       find_annotation_in_container(int | dict[str, list[MyClass]], MyClass) -> MyClass, [list,dict,union]
+       find_annotation_in_container(Union[int, dict[str, list[MyClass]]], MyClass) -> MyClass, [list,dict,union]
        find_annotation_in_container(Union[int, str], MyClass) -> None, []
 
     Parameters
@@ -192,7 +192,7 @@ def find_annotation_in_container(
 
     Returns
     -------
-    tuple[Any, list[Any]] | tuple[None, []]
+    Union[tuple[Any, list[Any]], tuple[None, []]]
         The target type and the containers if found, otherwise None and an empty list.
     """
     containers: list[Any] = []

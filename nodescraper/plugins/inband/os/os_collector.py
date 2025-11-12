@@ -24,6 +24,7 @@
 #
 ###############################################################################
 import re
+from typing import Optional
 
 from nodescraper.base import InBandDataCollector
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
@@ -36,6 +37,11 @@ class OsCollector(InBandDataCollector[OsDataModel, None]):
     """Collect OS details"""
 
     DATA_MODEL = OsDataModel
+    CMD_VERSION_WINDOWS = "wmic os get Version /value"
+    CMD_VERSION = "cat /etc/*release | grep VERSION_ID"
+    CMD_WINDOWS = "wmic os get Caption /Value"
+    PRETTY_STR = "PRETTY_NAME"  # noqa: N806
+    CMD = f"sh -c '( lsb_release -ds || (cat /etc/*release | grep {PRETTY_STR}) || uname -om ) 2>/dev/null | head -n1'"
 
     def collect_version(self) -> str:
         """Collect OS version.
@@ -44,7 +50,7 @@ class OsCollector(InBandDataCollector[OsDataModel, None]):
             str: OS version string, empty string if not found.
         """
         if self.system_info.os_family == OSFamily.WINDOWS:
-            res = self._run_sut_cmd("wmic os get Version /value")
+            res = self._run_sut_cmd(self.CMD_VERSION_WINDOWS)
             if res.exit_code == 0:
                 os_version = re.search(r"Version=([\w\s\.]+)", res.stdout).group(1)
             else:
@@ -55,11 +61,10 @@ class OsCollector(InBandDataCollector[OsDataModel, None]):
                 )
                 os_version = ""
         else:
-            V_STR = "VERSION_ID"  # noqa: N806
-            res = self._run_sut_cmd(f"cat /etc/*release | grep {V_STR}")
+            res = self._run_sut_cmd(self.CMD_VERSION)
             if res.exit_code == 0:
                 os_version = res.stdout
-                os_version = os_version.removeprefix(f"{V_STR}=")
+                os_version = os_version.removeprefix("VERSION_ID=")
                 os_version = os_version.strip('" ')
             else:
                 self._log_event(
@@ -70,28 +75,24 @@ class OsCollector(InBandDataCollector[OsDataModel, None]):
                 os_version = ""
         return os_version
 
-    def collect_data(self, args=None) -> tuple[TaskResult, OsDataModel | None]:
+    def collect_data(self, args=None) -> tuple[TaskResult, Optional[OsDataModel]]:
         """Collect OS name and version.
 
         Returns:
-            tuple[TaskResult, OsDataModel | None]: tuple containing the task result and OS data model or None if not found.
+            tuple[TaskResult, Optional[OsDataModel]]: tuple containing the task result and OS data model or None if not found.
         """
         os_name = None
         if self.system_info.os_family == OSFamily.WINDOWS:
-            res = self._run_sut_cmd("wmic os get Caption /Value")
+            res = self._run_sut_cmd(self.CMD_WINDOWS)
             if res.exit_code == 0:
                 os_name = re.search(r"Caption=([\w\s]+)", res.stdout).group(1)
         else:
-            PRETTY_STR = "PRETTY_NAME"  # noqa: N806
-            res = self._run_sut_cmd(
-                f"sh -c '( lsb_release -ds || (cat /etc/*release | grep {PRETTY_STR}) || uname -om ) 2>/dev/null | head -n1'"
-            )
+            res = self._run_sut_cmd(self.CMD)
             # search for PRETTY_NAME in res
             if res.exit_code == 0:
-                if res.stdout.find(PRETTY_STR) != -1:
+                if res.stdout.find(self.PRETTY_STR) != -1:
                     os_name = res.stdout
-                    # remove the PRETTY_NAME string
-                    os_name = os_name.removeprefix(f"{PRETTY_STR}=")
+                    os_name = os_name.removeprefix(f"{self.PRETTY_STR}=")
                     # remove the ending/starting quotes and spaces
                     os_name = os_name.strip('" ')
                 else:
@@ -102,6 +103,7 @@ class OsCollector(InBandDataCollector[OsDataModel, None]):
                     description="OS name not found",
                     priority=EventPriority.ERROR,
                 )
+
         if os_name:
             os_version = self.collect_version()
             os_data = OsDataModel(

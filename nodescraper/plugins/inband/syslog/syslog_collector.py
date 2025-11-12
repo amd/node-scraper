@@ -23,6 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
+from typing import Optional
 
 from nodescraper.base import InBandDataCollector
 from nodescraper.connection.inband.inband import TextFileArtifact
@@ -40,11 +41,11 @@ class SyslogCollector(InBandDataCollector[SyslogData, None]):
 
     DATA_MODEL = SyslogData
 
-    SYSLOG_CMD = r"ls -1 /var/log/syslog* 2>/dev/null | grep -E '^/var/log/syslog(\.[0-9]+(\.gz)?)?$' || true"
+    CMD = r"ls -1 /var/log/syslog* 2>/dev/null | grep -E '^/var/log/syslog(\.[0-9]+(\.gz)?)?$' || true"
 
     def _collect_syslog_rotations(self) -> list[TextFileArtifact]:
         ret = []
-        list_res = self._run_sut_cmd(self.SYSLOG_CMD, sudo=True)
+        list_res = self._run_sut_cmd(self.CMD, sudo=True)
         paths = [p.strip() for p in (list_res.stdout or "").splitlines() if p.strip()]
         if not paths:
             self._log_event(
@@ -104,11 +105,11 @@ class SyslogCollector(InBandDataCollector[SyslogData, None]):
     def collect_data(
         self,
         args=None,
-    ) -> tuple[TaskResult, SyslogData | None]:
+    ) -> tuple[TaskResult, Optional[SyslogData]]:
         """Collect syslog data from the system
 
         Returns:
-            tuple[TaskResult | None]: tuple containing the result of the task and the syslog data if available
+            tuple[Optional[TaskResult, None]]: tuple containing the result of the task and the syslog data if available
         """
         syslog_logs = self._collect_syslog_rotations()
 

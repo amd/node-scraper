@@ -23,6 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
+from typing import Optional
 
 from nodescraper.base import InBandDataCollector
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
@@ -36,6 +37,7 @@ class JournalCollector(InBandDataCollector[JournalData, None]):
 
     SUPPORTED_OS_FAMILY = {OSFamily.LINUX}
     DATA_MODEL = JournalData
+    CMD = "journalctl --no-pager --system --output=short-iso"
 
     def _read_with_journalctl(self):
         """Read journal logs using journalctl
@@ -43,8 +45,7 @@ class JournalCollector(InBandDataCollector[JournalData, None]):
         Returns:
             str|None: system journal read
         """
-        cmd = "journalctl --no-pager --system --output=short-iso"
-        res = self._run_sut_cmd(cmd, sudo=True, log_artifact=False, strip=False)
+        res = self._run_sut_cmd(self.CMD, sudo=True, log_artifact=False, strip=False)
 
         if res.exit_code != 0:
             self._log_event(
@@ -60,14 +61,14 @@ class JournalCollector(InBandDataCollector[JournalData, None]):
 
         return res.stdout
 
-    def collect_data(self, args=None) -> tuple[TaskResult, JournalData | None]:
+    def collect_data(self, args=None) -> tuple[TaskResult, Optional[JournalData]]:
         """Collect journal logs
 
         Args:
             args (_type_, optional): Collection args. Defaults to None.
 
         Returns:
-            tuple[TaskResult, JournalData | None]: Tuple of results and data model or none.
+            tuple[TaskResult, Optional[JournalData, None]]: Tuple of results and data model or none.
         """
         journal_log = self._read_with_journalctl()
         if journal_log:

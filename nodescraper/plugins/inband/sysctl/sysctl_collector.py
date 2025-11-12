@@ -23,6 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
+from typing import Optional
 
 from nodescraper.base import InBandDataCollector
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
@@ -35,11 +36,12 @@ class SysctlCollector(InBandDataCollector[SysctlDataModel, None]):
     """Collect sysctl kernel VM settings."""
 
     DATA_MODEL = SysctlDataModel
+    CMD = "sysctl -n"
 
     def collect_data(
         self,
         args=None,
-    ) -> tuple[TaskResult, SysctlDataModel | None]:
+    ) -> tuple[TaskResult, Optional[SysctlDataModel]]:
         """Collect sysctl VM tuning values from the system."""
         values = {}
 
@@ -54,7 +56,7 @@ class SysctlCollector(InBandDataCollector[SysctlDataModel, None]):
 
         for field_name in SysctlDataModel.model_fields:
             sysctl_key = field_name.replace("_", ".", 1)
-            res = self._run_sut_cmd(f"sysctl -n {sysctl_key}")
+            res = self._run_sut_cmd(f"{self.CMD} {sysctl_key}")
 
             if res.exit_code == 0:
                 try:

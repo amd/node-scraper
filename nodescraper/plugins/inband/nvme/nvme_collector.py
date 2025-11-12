@@ -25,6 +25,7 @@
 ###############################################################################
 import os
 import re
+from typing import Optional
 
 from pydantic import ValidationError
 
@@ -39,15 +40,28 @@ class NvmeCollector(InBandDataCollector[NvmeDataModel, None]):
     """Collect NVMe details from the system."""
 
     DATA_MODEL = NvmeDataModel
+    CMD_LINUX = {
+        "smart_log": "nvme smart-log {dev}",
+        "error_log": "nvme error-log {dev} --log-entries=256",
+        "id_ctrl": "nvme id-ctrl {dev}",
+        "id_ns": "nvme id-ns {dev}{ns}",
+        "fw_log": "nvme fw-log {dev}",
+        "self_test_log": "nvme self-test-log {dev}",
+        "get_log": "nvme get-log {dev} --log-id=6 --log-len=512",
+        "telemetry_log": "nvme telemetry-log {dev} --output-file={dev}_{f_name}",
+    }
+    CMD_TEMPLATES = list(CMD_LINUX.values())
+
+    TELEMETRY_FILENAME = "telemetry_log.bin"
 
     def collect_data(
         self,
         args=None,
-    ) -> tuple[TaskResult, NvmeDataModel | None]:
+    ) -> tuple[TaskResult, Optional[NvmeDataModel]]:
         """Collect detailed NVMe information from all NVMe devices.
 
         Returns:
-            tuple[TaskResult, NvmeDataModel | None]: Task result and data model with NVMe command outputs.
+            tuple[TaskResult, Optional[NvmeDataModel]]: Task result and data model with NVMe command outputs.
         """
         if self.system_info.os_family == OSFamily.WINDOWS:
             self._log_event(
@@ -71,25 +85,20 @@ class NvmeCollector(InBandDataCollector[NvmeDataModel, None]):
             return self.result, None
 
         all_device_data = {}
-        f_name = "telemetry_log.bin"
+        f_name = self.TELEMETRY_FILENAME
 
         for dev in nvme_devices:
             device_data = {}
-            commands = {
-                "smart_log": f"nvme smart-log {dev}",
-                "error_log": f"nvme error-log {dev} --log-entries=256",
-                "id_ctrl": f"nvme id-ctrl {dev}",
-                "id_ns": f"nvme id-ns {dev}n1",
-                "fw_log": f"nvme fw-log {dev}",
-                "self_test_log": f"nvme self-test-log {dev}",
-                "get_log": f"nvme get-log {dev} --log-id=6 --log-len=512",
-                "telemetry_log": f"nvme telemetry-log {dev} --output-file={dev}_{f_name}",
+            ns_suffix = "n1"
+            cmd_map = {
+                k: v.format(dev=dev, ns=ns_suffix, f_name=f_name) for k, v in self.CMD_LINUX.items()
             }
 
-            for key, cmd in commands.items():
+            for key, cmd in cmd_map.items():
                 res = self._run_sut_cmd(cmd, sudo=True)
                 if "--output-file" in cmd:
                     _ = self._read_sut_file(filename=f"{dev}_{f_name}", encoding=None)
+
                 if res.exit_code == 0:
                     device_data[key] = res.stdout
                 else:
@@ -128,6 +137,7 @@ class NvmeCollector(InBandDataCollector[NvmeDataModel, None]):
             self.result.status = ExecutionStatus.OK
             return self.result, nvme_data
         else:
+
             self._log_event(
                 category=EventCategory.SW_DRIVER,
                 description="Failed to collect any NVMe data",
