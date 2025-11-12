@@ -25,9 +25,12 @@
 ###############################################################################
 from typing import Optional
 
+from pydantic import ValidationError
+
 from nodescraper.base import InBandDataCollector
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.models import TaskResult
+from nodescraper.utils import get_exception_details
 
 from .collector_args import JournalCollectorArgs
 from .journaldata import JournalData
@@ -55,15 +58,11 @@ class JournalCollector(InBandDataCollector[JournalData, JournalCollectorArgs]):
 
             res = self._run_sut_cmd(cmd, sudo=True, log_artifact=False, strip=False)
 
-        except Exception as exc:
-
-            import traceback
-
-            tb = traceback.format_exc()
+        except ValidationError as val_err:
             self._log_event(
                 category=EventCategory.OS,
                 description="Exception while running journalctl",
-                data={"command": cmd, "exception": str(exc), "traceback": tb},
+                data=get_exception_details(val_err),
                 priority=EventPriority.ERROR,
                 console_log=True,
             )
