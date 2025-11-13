@@ -332,14 +332,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             bdf = self._smi_try(amdsmi.amdsmi_get_gpu_device_bdf, h, default="") or ""
             uuid = self._smi_try(amdsmi.amdsmi_get_gpu_device_uuid, h, default="") or ""
             kfd = self._smi_try(amdsmi.amdsmi_get_gpu_kfd_info, h, default={}) or {}
-
-            kfd = self._smi_try(amdsmi.amdsmi_get_gpu_kfd_info, h, default={}) or {}
             partition_id = 0
-            if isinstance(kfd, dict):
-                try:
-                    partition_id = int(kfd.get("current_partition_id", 0) or 0)
-                except Exception:
-                    partition_id = 0
 
             try:
                 out.append(
@@ -772,12 +765,9 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                     numa_node = int(kfd.get("node_id", 0) or 0)
                 except Exception:
                     numa_node = 0
-                try:
-                    affinity = int(kfd.get("cpu_affinity", 0) or 0)
-                except Exception:
-                    affinity = 0
             else:
-                numa_node, affinity = 0, 0
+                numa_node = 0
+            affinity = 0
             numa_model = StaticNuma(node=numa_node, affinity=affinity)
 
             # VRAM
@@ -1039,13 +1029,13 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         return out
 
     def _get_limit_info(self, handle: Any) -> Optional[StaticLimit]:
-        """Get power cap and temperature limit information.
+        """Get power cap limit information.
 
         Args:
             handle (Any): GPU device handle
 
         Returns:
-            Optional[StaticLimit]: StaticLimit instance or None
+            Optional[StaticLimit]: StaticLimit instance with power cap data or None
         """
         amdsmi = self._amdsmi_mod()
         fn = getattr(amdsmi, "amdsmi_get_power_cap_info", None)
@@ -1060,12 +1050,6 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             max_power=self._valueunit(data.get("power_cap"), "W"),
             min_power=self._valueunit(data.get("min_power_cap"), "W"),
             socket_power=self._valueunit(data.get("default_power_cap"), "W"),
-            slowdown_edge_temperature=self._valueunit(data.get("slowdown_temp"), "C"),
-            slowdown_hotspot_temperature=self._valueunit(data.get("slowdown_mem_temp"), "C"),
-            slowdown_vram_temperature=self._valueunit(data.get("slowdown_vram_temp"), "C"),
-            shutdown_edge_temperature=self._valueunit(data.get("shutdown_temp"), "C"),
-            shutdown_hotspot_temperature=self._valueunit(data.get("shutdown_mem_temp"), "C"),
-            shutdown_vram_temperature=self._valueunit(data.get("shutdown_vram_temp"), "C"),
         )
 
     def _get_clock(self, handle: Any) -> Optional[StaticClockData]:

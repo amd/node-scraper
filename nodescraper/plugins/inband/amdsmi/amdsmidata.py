@@ -66,7 +66,7 @@ class AmdSmiBaseModel(BaseModel):
 
     def __init__(self, **data):
         # Convert  Union[int, str, float] -> ValueUnit
-        for field_name, field_type in self.model_fields.items():
+        for field_name, field_type in self.__class__.model_fields.items():
             annotation = field_type.annotation
             target_type, container = find_annotation_in_container(annotation, ValueUnit)
             if target_type is None:
@@ -279,15 +279,15 @@ class StaticVbios(BaseModel):
 
 
 class StaticLimit(AmdSmiBaseModel):
-    max_power: Optional[ValueUnit]
-    min_power: Optional[ValueUnit]
-    socket_power: Optional[ValueUnit]
-    slowdown_edge_temperature: Optional[ValueUnit]
-    slowdown_hotspot_temperature: Optional[ValueUnit]
-    slowdown_vram_temperature: Optional[ValueUnit]
-    shutdown_edge_temperature: Optional[ValueUnit]
-    shutdown_hotspot_temperature: Optional[ValueUnit]
-    shutdown_vram_temperature: Optional[ValueUnit]
+    max_power: Optional[ValueUnit] = None
+    min_power: Optional[ValueUnit] = None
+    socket_power: Optional[ValueUnit] = None
+    slowdown_edge_temperature: Optional[ValueUnit] = None
+    slowdown_hotspot_temperature: Optional[ValueUnit] = None
+    slowdown_vram_temperature: Optional[ValueUnit] = None
+    shutdown_edge_temperature: Optional[ValueUnit] = None
+    shutdown_hotspot_temperature: Optional[ValueUnit] = None
+    shutdown_vram_temperature: Optional[ValueUnit] = None
     na_validator = field_validator(
         "max_power",
         "min_power",

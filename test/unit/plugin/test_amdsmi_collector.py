@@ -81,8 +81,6 @@ def make_fake_amdsmi(
     m.amdsmi_get_gpu_kfd_info = lambda h: {
         "kfd_id": 7,
         "node_id": 3,
-        "cpu_affinity": 0xFF,
-        "current_partition_id": 0,
     }
     m.amdsmi_get_gpu_board_info = lambda h: {
         "vbios_name": "vbiosA",
@@ -150,6 +148,35 @@ def make_fake_amdsmi(
         }
 
     m.amdsmi_get_clk_freq = amdsmi_get_clk_freq
+
+    m.amdsmi_get_gpu_bad_page_info = lambda h: {"page_list": []}
+
+    m.amdsmi_get_gpu_metrics_info = lambda h: {
+        "temperature_hotspot": 55,
+        "temperature_mem": 50,
+        "average_socket_power": 150,
+        "current_gfxclk": 1500,
+        "current_uclk": 1000,
+    }
+
+    m.amdsmi_get_gpu_od_volt_info = lambda h: {
+        "curve": {"vc_points": [{"frequency": 1500, "voltage": 850}]}
+    }
+
+    m.amdsmi_get_gpu_vram_usage = lambda h: {
+        "vram_used": 1024 * 1024 * 1024,
+        "vram_total": 64 * 1024 * 1024 * 1024,
+    }
+
+    m.amdsmi_get_gpu_memory_total = lambda h, mem_type: 64 * 1024 * 1024 * 1024
+
+    m.amdsmi_get_gpu_total_ecc_count = lambda h: {"correctable_count": 0, "uncorrectable_count": 0}
+
+    m.amdsmi_get_violation_status = lambda h: {
+        "acc_counter": 0,
+        "acc_prochot_thrm": 0,
+        "acc_ppt_pwr": 0,
+    }
 
     m.amdsmi_get_fw_info = lambda h: {
         "fw_list": [
