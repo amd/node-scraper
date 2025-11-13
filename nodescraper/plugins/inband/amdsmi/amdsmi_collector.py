@@ -32,14 +32,21 @@ from nodescraper.base.inbandcollectortask import InBandDataCollector
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.models import TaskResult
 from nodescraper.plugins.inband.amdsmi.amdsmidata import (
+    AccessTable,
     AmdSmiDataModel,
     AmdSmiListItem,
     AmdSmiMetric,
     AmdSmiStatic,
     AmdSmiVersion,
+    AtomicsTable,
     BadPages,
+    BiDirectionalTable,
+    CoherentTable,
+    DmaTable,
     Fw,
     FwListItem,
+    LinkStatusTable,
+    LinkTypes,
     MetricClockData,
     MetricEccTotals,
     MetricEnergy,
@@ -75,7 +82,13 @@ from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     StaticVbios,
     StaticVram,
     StaticXgmiPlpd,
+    Topo,
+    TopoLink,
     ValueUnit,
+    XgmiLink,
+    XgmiLinkMetrics,
+    XgmiLinks,
+    XgmiMetrics,
 )
 from nodescraper.utils import get_exception_details, get_exception_traceback
 
@@ -234,6 +247,9 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             gpu_list = self.get_gpu_list()
             statics = self.get_static()
             metric = self.get_metric()
+            xgmi_metrics = self.get_xgmi_metrics()
+            xgmi_links = self.get_xgmi_links()
+            topology = self.get_topology()
         except Exception as e:
             self.logger.error(e)
             self._log_event(
@@ -253,9 +269,12 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                 gpu_list=gpu_list,
                 process=processes,
                 partition=partition,
+                topology=topology,
                 firmware=firmware,
                 static=statics,
                 metric=metric,
+                xgmi_metric=xgmi_metrics,
+                xgmi_link=xgmi_links,
             )
         except ValidationError as e:
             self.logger.warning("Validation err: %s", e)
@@ -1866,6 +1885,387 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             low_utilization_violation_activity=self._th_vu_list_pct(per_low_util),
             total_gfx_clk_below_host_limit_violation_activity=self._th_vu_list_pct(per_gfx_total),
         )
+
+    def get_xgmi_metrics(self) -> list[XgmiMetrics]:
+        """Collect XGMI link metrics for all GPU devices.
+
+        Returns:
+            list[XgmiMetrics]: List of XGMI metrics for each GPU
+        """
+        amdsmi = self._amdsmi_mod()
+        handles = self._get_handles()
+        if not handles:
+            return []
+
+        link_metrics_fn = getattr(amdsmi, "amdsmi_get_link_metrics", None)
+        if not callable(link_metrics_fn):
+            return []
+
+        xgmi_metrics_list = []
+        for idx, h in enumerate(handles):
+            try:
+                data = self._smi_try(link_metrics_fn, h, default=None)
+                if not isinstance(data, dict):
+                    continue
+
+                # Get GPU info (BDF)
+                bdf = self._smi_try(amdsmi.amdsmi_get_gpu_device_bdf, h, default="")
+                if not isinstance(bdf, str):
+                    bdf = f"unknown_{idx}"
+
+                # Extract link metrics
+                bit_rate_val = data.get("bit_rate")
+                max_bandwidth_val = data.get("max_bandwidth")
+
+                # Process links
+                links_data = data.get("links", [])
+                if not isinstance(links_data, list):
+                    links_data = []
+
+                xgmi_links = []
+                for link_data in links_data:
+                    if not isinstance(link_data, dict):
+                        continue
+
+                    link_bdf = link_data.get("bdf", "")
+                    read_val = link_data.get("read")
+                    write_val = link_data.get("write")
+
+                    xgmi_link = XgmiLink(
+                        gpu=idx,
+                        bdf=link_bdf if isinstance(link_bdf, str) else "",
+                        read=self._valueunit(read_val, "KB"),
+                        write=self._valueunit(write_val, "KB"),
+                    )
+                    xgmi_links.append(xgmi_link)
+
+                # Get link type name
+                link_type_val = data.get("link_type", 0)
+                link_type_name = "UNKNOWN"
+                link_type_enum = getattr(amdsmi, "AmdSmiLinkType", None)
+                if link_type_enum:
+                    if link_type_val == getattr(link_type_enum, "AMDSMI_LINK_TYPE_XGMI", None):
+                        link_type_name = "XGMI"
+                    elif link_type_val == getattr(link_type_enum, "AMDSMI_LINK_TYPE_PCIE", None):
+                        link_type_name = "PCIE"
+                    elif link_type_val == getattr(
+                        link_type_enum, "AMDSMI_LINK_TYPE_INTERNAL", None
+                    ):
+                        link_type_name = "INTERNAL"
+                    elif link_type_val == getattr(
+                        link_type_enum, "AMDSMI_LINK_TYPE_NOT_APPLICABLE", None
+                    ):
+                        link_type_name = "NOT_APPLICABLE"
+
+                link_metrics = XgmiLinkMetrics(
+                    bit_rate=self._valueunit(bit_rate_val, "Gbps"),
+                    max_bandwidth=self._valueunit(max_bandwidth_val, "GB/s"),
+                    link_type=link_type_name,
+                    links=xgmi_links,
+                )
+
+                xgmi_metric = XgmiMetrics(
+                    gpu=idx,
+                    bdf=bdf,
+                    link_metrics=link_metrics,
+                )
+                xgmi_metrics_list.append(xgmi_metric)
+
+            except Exception as e:
+                self.logger.debug(f"Error collecting XGMI metrics for GPU {idx}: {e}")
+                continue
+
+        return xgmi_metrics_list
+
+    def get_xgmi_links(self) -> list[XgmiLinks]:
+        """Collect XGMI link status/topology information for all GPU devices.
+
+        Returns:
+            list[XgmiLinks]: List of XGMI link status for each GPU
+        """
+        amdsmi = self._amdsmi_mod()
+        handles = self._get_handles()
+        if not handles:
+            return []
+
+        # Check for topology functions
+        topo_get_link_type_fn = getattr(amdsmi, "amdsmi_topo_get_link_type", None)
+        if not callable(topo_get_link_type_fn):
+            return []
+
+        xgmi_links_list = []
+        for idx, h in enumerate(handles):
+            try:
+                bdf = self._smi_try(amdsmi.amdsmi_get_gpu_device_bdf, h, default="")
+                if not isinstance(bdf, str):
+                    bdf = f"unknown_{idx}"
+
+                # Collect link status for all other GPUs
+                link_status_list = []
+                for other_idx, other_h in enumerate(handles):
+                    if idx == other_idx:
+                        link_status_list.append(LinkStatusTable.DISABLED)
+                        continue
+
+                    try:
+                        link_type = self._smi_try(topo_get_link_type_fn, h, other_h, default=None)
+                        # Determine link based on type as per API example
+                        link_type_enum = getattr(amdsmi, "AmdSmiLinkType", None)
+                        if link_type_enum and link_type is not None:
+                            if link_type == getattr(link_type_enum, "AMDSMI_LINK_TYPE_XGMI", None):
+                                link_status_list.append(LinkStatusTable.UP)
+                            elif link_type == getattr(
+                                link_type_enum, "AMDSMI_LINK_TYPE_NOT_APPLICABLE", None
+                            ):
+                                link_status_list.append(LinkStatusTable.DISABLED)
+                            else:
+                                link_status_list.append(LinkStatusTable.DOWN)
+                        else:
+                            link_status_list.append(LinkStatusTable.DISABLED)
+                    except Exception:
+                        link_status_list.append(LinkStatusTable.DISABLED)
+
+                xgmi_link = XgmiLinks(
+                    gpu=idx,
+                    bdf=bdf,
+                    link_status=link_status_list,
+                )
+                xgmi_links_list.append(xgmi_link)
+
+            except Exception as e:
+                self.logger.debug(f"Error collecting XGMI link status for GPU {idx}: {e}")
+                continue
+
+        return xgmi_links_list
+
+    def get_topology(self) -> list[Topo]:
+        """Collect GPU topology information for all GPU devices.
+
+        Returns:
+            list[Topo]: List of topology information for each GPU
+        """
+        amdsmi = self._amdsmi_mod()
+        handles = self._get_handles()
+        if not handles:
+            return []
+
+        topo_fn = getattr(amdsmi, "amdsmi_get_gpu_topology", None)
+        topo_get_link_type_fn = getattr(amdsmi, "amdsmi_topo_get_link_type", None)
+        topo_get_link_weight_fn = getattr(amdsmi, "amdsmi_topo_get_link_weight", None)
+        get_minmax_bw_fn = getattr(amdsmi, "amdsmi_get_minmax_bandwidth_between_processors", None)
+
+        topology_list = []
+        for idx, h in enumerate(handles):
+            try:
+                bdf = self._smi_try(amdsmi.amdsmi_get_gpu_device_bdf, h, default="")
+                if not isinstance(bdf, str):
+                    bdf = f"unknown_{idx}"
+
+                topo_links = []
+
+                # If amdsmi_get_gpu_topology is available, use it
+                if callable(topo_fn):
+                    topo_data = self._smi_try(topo_fn, h, default=None)
+                    if isinstance(topo_data, dict):
+                        # Process topology data if it contains link information
+                        links_data = topo_data.get("links", [])
+                        if isinstance(links_data, list):
+                            for link_data in links_data:
+                                if not isinstance(link_data, dict):
+                                    continue
+                                topo_link = self._process_topo_link(amdsmi, idx, link_data)
+                                if topo_link:
+                                    topo_links.append(topo_link)
+
+                # Fallback: collect topology using individual API calls
+                if not topo_links and callable(topo_get_link_type_fn):
+                    for other_idx, other_h in enumerate(handles):
+                        try:
+                            other_bdf = self._smi_try(
+                                amdsmi.amdsmi_get_gpu_device_bdf, other_h, default=""
+                            )
+                            if not isinstance(other_bdf, str):
+                                other_bdf = f"unknown_{other_idx}"
+
+                            # Get link type and hops
+                            link_info = self._smi_try(
+                                topo_get_link_type_fn, h, other_h, default=None
+                            )
+                            if isinstance(link_info, dict):
+                                link_type_val = link_info.get("type")
+                                num_hops = link_info.get("hops", 0)
+                            else:
+                                link_type_val = link_info
+                                num_hops = 0
+
+                            # Determine link type
+                            link_type_enum = getattr(amdsmi, "AmdSmiLinkType", None)
+                            if idx == other_idx:
+                                link_type = LinkTypes.SELF
+                                link_status = AccessTable.ENABLED
+                            elif link_type_enum and link_type_val is not None:
+                                if link_type_val == getattr(
+                                    link_type_enum, "AMDSMI_LINK_TYPE_XGMI", None
+                                ):
+                                    link_type = LinkTypes.XGMI
+                                    link_status = AccessTable.ENABLED
+                                elif link_type_val == getattr(
+                                    link_type_enum, "AMDSMI_LINK_TYPE_PCIE", None
+                                ):
+                                    link_type = LinkTypes.PCIE
+                                    link_status = AccessTable.ENABLED
+                                else:
+                                    link_type = LinkTypes.PCIE
+                                    link_status = AccessTable.DISABLED
+                            else:
+                                continue
+
+                            # Get link weight
+                            weight = 0
+                            if callable(topo_get_link_weight_fn):
+                                weight_val = self._smi_try(
+                                    topo_get_link_weight_fn, h, other_h, default=None
+                                )
+                                if isinstance(weight_val, (int, float)):
+                                    weight = int(weight_val)
+
+                            # Get bandwidth
+                            bandwidth = "0-0"
+                            if callable(get_minmax_bw_fn):
+                                bw_data = self._smi_try(get_minmax_bw_fn, h, other_h, default=None)
+                                if isinstance(bw_data, dict):
+                                    min_bw = bw_data.get("min_bandwidth", 0)
+                                    max_bw = bw_data.get("max_bandwidth", 0)
+                                    bandwidth = f"{min_bw}-{max_bw}"
+
+                            # Create topology link
+                            topo_link = TopoLink(
+                                gpu=other_idx,
+                                bdf=other_bdf,
+                                weight=weight,
+                                link_status=link_status,
+                                link_type=link_type,
+                                num_hops=num_hops if isinstance(num_hops, int) else 0,
+                                bandwidth=bandwidth,
+                            )
+                            topo_links.append(topo_link)
+
+                        except Exception as e:
+                            self.logger.debug(
+                                f"Error collecting topology link from GPU {idx} to {other_idx}: {e}"
+                            )
+                            continue
+
+                if topo_links:
+                    topo = Topo(
+                        gpu=idx,
+                        bdf=bdf,
+                        links=topo_links,
+                    )
+                    topology_list.append(topo)
+
+            except Exception as e:
+                self.logger.debug(f"Error collecting topology for GPU {idx}: {e}")
+                continue
+
+        return topology_list
+
+    def _process_topo_link(self, amdsmi: Any, src_idx: int, link_data: dict) -> Optional[TopoLink]:
+        """Process topology link data from amdsmi_get_gpu_topology.
+
+        Args:
+            amdsmi (Any): AMD SMI module
+            src_idx (int): Source GPU index
+            link_data (dict): Link data from topology API
+
+        Returns:
+            Optional[TopoLink]: Processed topology link or None
+        """
+        try:
+            dst_idx = link_data.get("gpu", link_data.get("index", 0))
+            dst_bdf = link_data.get("bdf", f"unknown_{dst_idx}")
+            weight = link_data.get("weight", 0)
+            num_hops = link_data.get("hops", link_data.get("num_hops", 0))
+
+            # Parse link type
+            link_type_str = link_data.get("link_type", link_data.get("type", "")).upper()
+            if "XGMI" in link_type_str:
+                link_type = LinkTypes.XGMI
+            elif "PCIE" in link_type_str or "PCI" in link_type_str:
+                link_type = LinkTypes.PCIE
+            elif src_idx == dst_idx or "SELF" in link_type_str:
+                link_type = LinkTypes.SELF
+            else:
+                link_type = LinkTypes.PCIE
+
+            # Parse link status
+            link_status_str = link_data.get("status", link_data.get("link_status", "")).upper()
+            if "ENABLED" in link_status_str or "UP" in link_status_str:
+                link_status = AccessTable.ENABLED
+            else:
+                link_status = AccessTable.DISABLED
+
+            # Parse bandwidth
+            bandwidth = "0-0"
+            bw_data = link_data.get("bandwidth")
+            if isinstance(bw_data, dict):
+                min_bw = bw_data.get("min", 0)
+                max_bw = bw_data.get("max", 0)
+                bandwidth = f"{min_bw}-{max_bw}"
+            elif isinstance(bw_data, str):
+                bandwidth = bw_data
+
+            # Parse optional fields
+            coherent = None
+            coherent_str = str(link_data.get("coherent", "")).upper()
+            if "C" in coherent_str and "NC" not in coherent_str:
+                coherent = CoherentTable.COHERANT
+            elif "NC" in coherent_str:
+                coherent = CoherentTable.NON_COHERANT
+            elif "SELF" in coherent_str:
+                coherent = CoherentTable.SELF
+
+            atomics = None
+            atomics_str = str(link_data.get("atomics", ""))
+            if "64,32" in atomics_str or "64, 32" in atomics_str:
+                atomics = AtomicsTable.TRUE
+            elif "32" in atomics_str:
+                atomics = AtomicsTable.THIRTY_TWO
+            elif "64" in atomics_str:
+                atomics = AtomicsTable.SIXTY_FOUR
+            elif "SELF" in atomics_str.upper():
+                atomics = AtomicsTable.SELF
+
+            dma = None
+            dma_val = link_data.get("dma")
+            if dma_val is True or str(dma_val).upper() in ("TRUE", "T"):
+                dma = DmaTable.TRUE
+            elif str(dma_val).upper() == "SELF":
+                dma = DmaTable.SELF
+
+            bi_dir = None
+            bi_dir_val = link_data.get("bi_directional", link_data.get("bidirectional"))
+            if bi_dir_val is True or str(bi_dir_val).upper() in ("TRUE", "T"):
+                bi_dir = BiDirectionalTable.TRUE
+            elif str(bi_dir_val).upper() == "SELF":
+                bi_dir = BiDirectionalTable.SELF
+
+            return TopoLink(
+                gpu=dst_idx if isinstance(dst_idx, int) else 0,
+                bdf=dst_bdf if isinstance(dst_bdf, str) else "",
+                weight=weight if isinstance(weight, int) else 0,
+                link_status=link_status,
+                link_type=link_type,
+                num_hops=num_hops if isinstance(num_hops, int) else 0,
+                bandwidth=bandwidth,
+                coherent=coherent,
+                atomics=atomics,
+                dma=dma,
+                bi_dir=bi_dir,
+            )
+        except Exception as e:
+            self.logger.debug(f"Error processing topology link data: {e}")
+            return None
 
     def _flatten_2d(self, v: object) -> list[object]:
         """Flatten a 2D list into a 1D list, or normalize scalars/None to lists.

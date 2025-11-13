@@ -1,10 +1,12 @@
 import re
+from enum import Enum
 from typing import Any, List, Mapping, Optional, Union
 
 from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    computed_field,
     field_validator,
     model_validator,
 )
@@ -751,6 +753,133 @@ class AmdSmiMetric(BaseModel):
         return value
 
 
+### LINK DATA ###
+
+
+class LinkStatusTable(Enum):
+    UP = "U"
+    DOWN = "D"
+    DISABLED = "X"
+
+
+class BiDirectionalTable(Enum):
+    SELF = "SELF"
+    TRUE = "T"
+
+
+class DmaTable(Enum):
+    SELF = "SELF"
+    TRUE = "T"
+
+
+class AtomicsTable(Enum):
+    SELF = "SELF"
+    TRUE = "64,32"
+    THIRTY_TWO = "32"
+    SIXTY_FOUR = "64"
+
+
+class LinkTypes(Enum):
+    XGMI = "XGMI"
+    PCIE = "PCIE"
+    SELF = "SELF"
+
+
+class AccessTable(Enum):
+    ENABLED = "ENABLED"
+    DISABLED = "DISABLED"
+
+
+# XGMI
+class XgmiLink(BaseModel):
+    gpu: int
+    bdf: str
+    read: Optional[ValueUnit]
+    write: Optional[ValueUnit]
+    na_validator = field_validator("read", "write", mode="before")(na_to_none)
+
+
+class XgmiLinkMetrics(BaseModel):
+    bit_rate: Optional[ValueUnit]
+    max_bandwidth: Optional[ValueUnit]
+    link_type: str
+    links: List[XgmiLink]
+    na_validator = field_validator("max_bandwidth", "bit_rate", mode="before")(na_to_none)
+
+
+class XgmiMetrics(BaseModel):
+    gpu: int
+    bdf: str
+    link_metrics: XgmiLinkMetrics
+
+
+class XgmiLinks(BaseModel):
+    gpu: int
+    bdf: str
+    link_status: list[LinkStatusTable]
+
+
+class CoherentTable(Enum):
+    COHERANT = "C"
+    NON_COHERANT = "NC"
+    SELF = "SELF"
+
+
+# TOPO
+
+
+class TopoLink(BaseModel):
+    gpu: int
+    bdf: str
+    weight: int
+    link_status: AccessTable
+    link_type: LinkTypes
+    num_hops: int
+    bandwidth: str
+    # The below fields are sometimes missing, so we use Optional
+    coherent: Optional[CoherentTable] = None
+    atomics: Optional[AtomicsTable] = None
+    dma: Optional[DmaTable] = None
+    bi_dir: Optional[BiDirectionalTable] = None
+
+    @computed_field
+    def bandwidth_from(self) -> Optional[int]:
+        """Get the bandwidth from the link."""
+        bw_split = self.bandwidth.split("-")
+        if len(bw_split) == 2:
+            return int(bw_split[0])
+        else:
+            # If the bandwidth is not in the expected format, return None
+            return None
+
+    @computed_field
+    def bandwidth_to(self) -> Optional[int]:
+        """Get the bandwidth to the link."""
+        bw_split = self.bandwidth.split("-")
+        if len(bw_split) == 2:
+            return int(bw_split[1])
+        else:
+            # If the bandwidth is not in the expected format, return None
+            return None
+
+
+class Topo(BaseModel):
+    gpu: int
+    bdf: str
+    links: List[TopoLink]
+
+
+class AmdSmiTstData(BaseModel):
+    "Summary of amdsmitst results, with list and count of passing/skipped/failed tests"
+
+    passed_tests: list[str] = Field(default_factory=list)
+    skipped_tests: list[str] = Field(default_factory=list)
+    failed_tests: list[str] = Field(default_factory=list)
+    passed_test_count: int = 0
+    skipped_test_count: int = 0
+    failed_test_count: int = 0
+
+
 class AmdSmiDataModel(DataModel):
     """Data model for amd-smi data.
 
@@ -771,10 +900,14 @@ class AmdSmiDataModel(DataModel):
     gpu_list: Optional[list[AmdSmiListItem]] = Field(default_factory=list)
     partition: Optional[Partition] = None
     process: Optional[list[Processes]] = Field(default_factory=list)
+    topology: Optional[list[Topo]] = Field(default_factory=list)
     firmware: Optional[list[Fw]] = Field(default_factory=list)
     bad_pages: Optional[list[BadPages]] = Field(default_factory=list)
     static: Optional[list[AmdSmiStatic]] = Field(default_factory=list)
     metric: Optional[list[AmdSmiMetric]] = Field(default_factory=list)
+    xgmi_metric: Optional[list[XgmiMetrics]] = Field(default_factory=list)
+    xgmi_link: Optional[list[XgmiLinks]] = Field(default_factory=list)
+    amdsmitst_data: AmdSmiTstData = Field(default_factory=AmdSmiTstData)
 
     def get_list(self, gpu: int) -> Optional[AmdSmiListItem]:
         """Get the gpu list item for the given gpu id."""
