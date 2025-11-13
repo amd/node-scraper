@@ -292,14 +292,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             bdf = self._smi_try(amdsmi.amdsmi_get_gpu_device_bdf, h, default="") or ""
             uuid = self._smi_try(amdsmi.amdsmi_get_gpu_device_uuid, h, default="") or ""
             kfd = self._smi_try(amdsmi.amdsmi_get_gpu_kfd_info, h, default={}) or {}
-
-            kfd = self._smi_try(amdsmi.amdsmi_get_gpu_kfd_info, h, default={}) or {}
             partition_id = 0
-            if isinstance(kfd, dict):
-                try:
-                    partition_id = int(kfd.get("current_partition_id", 0) or 0)
-                except Exception:
-                    partition_id = 0
 
             try:
                 out.append(
@@ -692,12 +685,9 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                     numa_node = int(kfd.get("node_id", 0) or 0)
                 except Exception:
                     numa_node = 0
-                try:
-                    affinity = int(kfd.get("cpu_affinity", 0) or 0)
-                except Exception:
-                    affinity = 0
             else:
-                numa_node, affinity = 0, 0
+                numa_node = 0
+            affinity = 0
             numa_model = StaticNuma(node=numa_node, affinity=affinity)
 
             # VRAM

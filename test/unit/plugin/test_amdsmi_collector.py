@@ -1,7 +1,7 @@
 import importlib
 import sys
 import types
-from typing import Tuple
+from typing import Optional, Tuple
 
 import pytest
 
@@ -29,7 +29,7 @@ class AmdSmiTimeoutError(_BaseAmdSmiError): ...
 
 def make_fake_amdsmi(
     *,
-    handles: Tuple[object, ...] | None = None,
+    handles: Optional[Tuple[object, ...]] = None,
     lib_version="1.2.3",
     rocm_version="6.1.0",
     pcie_static=True,
@@ -81,8 +81,6 @@ def make_fake_amdsmi(
     m.amdsmi_get_gpu_kfd_info = lambda h: {
         "kfd_id": 7,
         "node_id": 3,
-        "cpu_affinity": 0xFF,
-        "current_partition_id": 0,
     }
     m.amdsmi_get_gpu_board_info = lambda h: {
         "vbios_name": "vbiosA",
