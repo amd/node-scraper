@@ -1010,13 +1010,13 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         return out
 
     def _get_limit_info(self, handle: Any) -> Optional[StaticLimit]:
-        """Get power cap and temperature limit information.
+        """Get power cap limit information.
 
         Args:
             handle (Any): GPU device handle
 
         Returns:
-            Optional[StaticLimit]: StaticLimit instance or None
+            Optional[StaticLimit]: StaticLimit instance with power cap data or None
         """
         amdsmi = self._amdsmi_mod()
         fn = getattr(amdsmi, "amdsmi_get_power_cap_info", None)
@@ -1031,12 +1031,6 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             max_power=self._valueunit(data.get("power_cap"), "W"),
             min_power=self._valueunit(data.get("min_power_cap"), "W"),
             socket_power=self._valueunit(data.get("default_power_cap"), "W"),
-            slowdown_edge_temperature=self._valueunit(data.get("slowdown_temp"), "C"),
-            slowdown_hotspot_temperature=self._valueunit(data.get("slowdown_mem_temp"), "C"),
-            slowdown_vram_temperature=self._valueunit(data.get("slowdown_vram_temp"), "C"),
-            shutdown_edge_temperature=self._valueunit(data.get("shutdown_temp"), "C"),
-            shutdown_hotspot_temperature=self._valueunit(data.get("shutdown_mem_temp"), "C"),
-            shutdown_vram_temperature=self._valueunit(data.get("shutdown_vram_temp"), "C"),
         )
 
     def _get_clock(self, handle: Any) -> Optional[StaticClockData]:

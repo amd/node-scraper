@@ -277,15 +277,15 @@ class StaticVbios(BaseModel):
 
 
 class StaticLimit(AmdSmiBaseModel):
-    max_power: Optional[ValueUnit]
-    min_power: Optional[ValueUnit]
-    socket_power: Optional[ValueUnit]
-    slowdown_edge_temperature: Optional[ValueUnit]
-    slowdown_hotspot_temperature: Optional[ValueUnit]
-    slowdown_vram_temperature: Optional[ValueUnit]
-    shutdown_edge_temperature: Optional[ValueUnit]
-    shutdown_hotspot_temperature: Optional[ValueUnit]
-    shutdown_vram_temperature: Optional[ValueUnit]
+    max_power: Optional[ValueUnit] = None
+    min_power: Optional[ValueUnit] = None
+    socket_power: Optional[ValueUnit] = None
+    slowdown_edge_temperature: Optional[ValueUnit] = None
+    slowdown_hotspot_temperature: Optional[ValueUnit] = None
+    slowdown_vram_temperature: Optional[ValueUnit] = None
+    shutdown_edge_temperature: Optional[ValueUnit] = None
+    shutdown_hotspot_temperature: Optional[ValueUnit] = None
+    shutdown_vram_temperature: Optional[ValueUnit] = None
     na_validator = field_validator(
         "max_power",
         "min_power",
