@@ -64,7 +64,7 @@ class AmdSmiBaseModel(BaseModel):
 
     def __init__(self, **data):
         # Convert  Union[int, str, float] -> ValueUnit
-        for field_name, field_type in self.model_fields.items():
+        for field_name, field_type in self.__class__.model_fields.items():
             annotation = field_type.annotation
             target_type, container = find_annotation_in_container(annotation, ValueUnit)
             if target_type is None:
