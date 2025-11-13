@@ -38,11 +38,7 @@ from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     AmdSmiMetric,
     AmdSmiStatic,
     AmdSmiVersion,
-    AtomicsTable,
     BadPages,
-    BiDirectionalTable,
-    CoherentTable,
-    DmaTable,
     Fw,
     FwListItem,
     LinkStatusTable,
@@ -2033,7 +2029,6 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         if not handles:
             return []
 
-        topo_fn = getattr(amdsmi, "amdsmi_get_gpu_topology", None)
         topo_get_link_type_fn = getattr(amdsmi, "amdsmi_topo_get_link_type", None)
         topo_get_link_weight_fn = getattr(amdsmi, "amdsmi_topo_get_link_weight", None)
         get_minmax_bw_fn = getattr(amdsmi, "amdsmi_get_minmax_bandwidth_between_processors", None)
@@ -2047,22 +2042,8 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
 
                 topo_links = []
 
-                # If amdsmi_get_gpu_topology is available, use it
-                if callable(topo_fn):
-                    topo_data = self._smi_try(topo_fn, h, default=None)
-                    if isinstance(topo_data, dict):
-                        # Process topology data if it contains link information
-                        links_data = topo_data.get("links", [])
-                        if isinstance(links_data, list):
-                            for link_data in links_data:
-                                if not isinstance(link_data, dict):
-                                    continue
-                                topo_link = self._process_topo_link(amdsmi, idx, link_data)
-                                if topo_link:
-                                    topo_links.append(topo_link)
-
-                # Fallback: collect topology using individual API calls
-                if not topo_links and callable(topo_get_link_type_fn):
+                # Collect topology using individual API calls
+                if callable(topo_get_link_type_fn):
                     for other_idx, other_h in enumerate(handles):
                         try:
                             other_bdf = self._smi_try(
@@ -2153,103 +2134,6 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                 continue
 
         return topology_list
-
-    def _process_topo_link(self, amdsmi: Any, src_idx: int, link_data: dict) -> Optional[TopoLink]:
-        """Process topology link data from amdsmi_get_gpu_topology.
-
-        Args:
-            amdsmi (Any): AMD SMI module
-            src_idx (int): Source GPU index
-            link_data (dict): Link data from topology API
-
-        Returns:
-            Optional[TopoLink]: Processed topology link or None
-        """
-        try:
-            dst_idx = link_data.get("gpu", link_data.get("index", 0))
-            dst_bdf = link_data.get("bdf", f"unknown_{dst_idx}")
-            weight = link_data.get("weight", 0)
-            num_hops = link_data.get("hops", link_data.get("num_hops", 0))
-
-            # Parse link type
-            link_type_str = link_data.get("link_type", link_data.get("type", "")).upper()
-            if "XGMI" in link_type_str:
-                link_type = LinkTypes.XGMI
-            elif "PCIE" in link_type_str or "PCI" in link_type_str:
-                link_type = LinkTypes.PCIE
-            elif src_idx == dst_idx or "SELF" in link_type_str:
-                link_type = LinkTypes.SELF
-            else:
-                link_type = LinkTypes.PCIE
-
-            # Parse link status
-            link_status_str = link_data.get("status", link_data.get("link_status", "")).upper()
-            if "ENABLED" in link_status_str or "UP" in link_status_str:
-                link_status = AccessTable.ENABLED
-            else:
-                link_status = AccessTable.DISABLED
-
-            # Parse bandwidth
-            bandwidth = "0-0"
-            bw_data = link_data.get("bandwidth")
-            if isinstance(bw_data, dict):
-                min_bw = bw_data.get("min", 0)
-                max_bw = bw_data.get("max", 0)
-                bandwidth = f"{min_bw}-{max_bw}"
-            elif isinstance(bw_data, str):
-                bandwidth = bw_data
-
-            # Parse optional fields
-            coherent = None
-            coherent_str = str(link_data.get("coherent", "")).upper()
-            if "C" in coherent_str and "NC" not in coherent_str:
-                coherent = CoherentTable.COHERANT
-            elif "NC" in coherent_str:
-                coherent = CoherentTable.NON_COHERANT
-            elif "SELF" in coherent_str:
-                coherent = CoherentTable.SELF
-
-            atomics = None
-            atomics_str = str(link_data.get("atomics", ""))
-            if "64,32" in atomics_str or "64, 32" in atomics_str:
-                atomics = AtomicsTable.TRUE
-            elif "32" in atomics_str:
-                atomics = AtomicsTable.THIRTY_TWO
-            elif "64" in atomics_str:
-                atomics = AtomicsTable.SIXTY_FOUR
-            elif "SELF" in atomics_str.upper():
-                atomics = AtomicsTable.SELF
-
-            dma = None
-            dma_val = link_data.get("dma")
-            if dma_val is True or str(dma_val).upper() in ("TRUE", "T"):
-                dma = DmaTable.TRUE
-            elif str(dma_val).upper() == "SELF":
-                dma = DmaTable.SELF
-
-            bi_dir = None
-            bi_dir_val = link_data.get("bi_directional", link_data.get("bidirectional"))
-            if bi_dir_val is True or str(bi_dir_val).upper() in ("TRUE", "T"):
-                bi_dir = BiDirectionalTable.TRUE
-            elif str(bi_dir_val).upper() == "SELF":
-                bi_dir = BiDirectionalTable.SELF
-
-            return TopoLink(
-                gpu=dst_idx if isinstance(dst_idx, int) else 0,
-                bdf=dst_bdf if isinstance(dst_bdf, str) else "",
-                weight=weight if isinstance(weight, int) else 0,
-                link_status=link_status,
-                link_type=link_type,
-                num_hops=num_hops if isinstance(num_hops, int) else 0,
-                bandwidth=bandwidth,
-                coherent=coherent,
-                atomics=atomics,
-                dma=dma,
-                bi_dir=bi_dir,
-            )
-        except Exception as e:
-            self.logger.debug(f"Error processing topology link data: {e}")
-            return None
 
     def _flatten_2d(self, v: object) -> list[object]:
         """Flatten a 2D list into a 1D list, or normalize scalars/None to lists.
