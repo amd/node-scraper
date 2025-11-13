@@ -81,8 +81,6 @@ def make_fake_amdsmi(
     m.amdsmi_get_gpu_kfd_info = lambda h: {
         "kfd_id": 7,
         "node_id": 3,
-        "cpu_affinity": 0xFF,
-        "current_partition_id": 0,
     }
     m.amdsmi_get_gpu_board_info = lambda h: {
         "vbios_name": "vbiosA",
