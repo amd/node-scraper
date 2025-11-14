@@ -36,7 +36,7 @@ import os
 import pkgutil
 import sys
 from pathlib import Path
-from typing import Any, Iterable, List, Type
+from typing import Any, Iterable, List, Optional, Type
 
 LINK_BASE_DEFAULT = "https://github.com/amd/node-scraper/blob/HEAD/"
 REL_ROOT_DEFAULT = "nodescraper/plugins/inband"
@@ -50,7 +50,7 @@ def get_attr(obj: Any, name: str, default: Any = None) -> Any:
         return default
 
 
-def _slice_from_rel_root(p: Path, rel_root: str | None) -> str | None:
+def _slice_from_rel_root(p: Path, rel_root: Optional[str]) -> Optional[str]:
     if not rel_root:
         return None
     parts = list(p.parts)
@@ -63,7 +63,7 @@ def _slice_from_rel_root(p: Path, rel_root: str | None) -> str | None:
     return None
 
 
-def setup_link(class_data, link_base: str, rel_root: str | None) -> str:
+def setup_link(class_data, link_base: str, rel_root: Optional[str]) -> str:
     try:
         file_location = Path(inspect.getfile(class_data)).resolve()
     except Exception:
@@ -80,7 +80,7 @@ def setup_link(class_data, link_base: str, rel_root: str | None) -> str:
     return base + rel_path
 
 
-def get_own_doc(cls: type) -> str | None:
+def get_own_doc(cls: type) -> Optional[str]:
     """
     Return only the __doc__ defined in the class itself, ignore inheritance.
     """
@@ -224,6 +224,61 @@ def extract_cmds_from_classvars(collector_cls: type) -> List[str]:
     return cmds
 
 
+def extract_regexes_and_args_from_analyzer(
+    analyzer_cls: type, args_cls: Optional[type]
+) -> List[str]:
+    """Extract regex patterns and analyzer args from analyzer class"""
+    if not inspect.isclass(analyzer_cls):
+        return []
+
+    output: List[str] = []
+
+    # Check for ERROR_REGEX class variable (used by RegexAnalyzer subclasses like DmesgAnalyzer)
+    error_regex = get_attr(analyzer_cls, "ERROR_REGEX", None)
+    if error_regex and isinstance(error_regex, list):
+        output.append("**Built-in Regexes:**")
+        for item in error_regex[:5]:  # Show first 5 in table
+            # ErrorRegex objects have regex, message, event_category attributes
+            if hasattr(item, "regex"):
+                pattern = getattr(item.regex, "pattern", None)
+                message = getattr(item, "message", "")
+                if pattern:
+                    # Truncate long patterns
+                    pattern_str = pattern if len(pattern) < 50 else pattern[:47] + "..."
+                    output.append(f"- {message}: `{pattern_str}`")
+            elif hasattr(item, "pattern"):
+                pattern_str = item.pattern if len(item.pattern) < 50 else item.pattern[:47] + "..."
+                output.append(f"- `{pattern_str}`")
+        if len(error_regex) > 5:
+            output.append(f"- *...and {len(error_regex) - 5} more regex patterns*")
+
+    # Check for other regex-related attributes
+    for attr in dir(analyzer_cls):
+        if "REGEX" in attr.upper() and not attr.startswith("_"):
+            val = get_attr(analyzer_cls, attr, default=None)
+            if val is None or attr == "ERROR_REGEX":  # Already handled above
+                continue
+
+            if hasattr(val, "pattern"):
+                output.append(f"**{attr}**: `{val.pattern}`")
+            elif isinstance(val, str):
+                output.append(f"**{attr}**: `{val}`")
+
+    # Extract analyzer args if provided
+    if inspect.isclass(args_cls):
+        anns = get_attr(args_cls, "__annotations__", {}) or {}
+        if anns:
+            output.append("**Analyzer Args:**")
+            for key, value in list(anns.items())[:5]:  # Show first 5 args
+                # Format the type annotation
+                type_str = str(value).replace("typing.", "")
+                output.append(f"- `{key}`: {type_str}")
+            if len(anns) > 5:
+                output.append(f"- *...and {len(anns) - 5} more args*")
+
+    return output
+
+
 def md_header(text: str, level: int = 2) -> str:
     return f"{'#' * level} {text}\n\n"
 
@@ -279,14 +334,21 @@ def generate_plugin_table_rows(plugins: List[type]) -> List[List[str]]:
                     seen.add(key)
                     uniq.append(c)
             cmds = uniq
+
+        # Extract regexes and args from analyzer
+        regex_and_args = []
+        if inspect.isclass(an):
+            regex_and_args = extract_regexes_and_args_from_analyzer(an, args)
+
         rows.append(
             [
                 f"{p.__module__}.{p.__name__}",
+                "<br>".join(cmds) if cmds else "-",
+                "<br>".join(regex_and_args) if regex_and_args else "-",
                 link_anchor(dm, "model") if inspect.isclass(dm) else "-",
                 link_anchor(col, "collector") if inspect.isclass(col) else "-",
                 link_anchor(an, "analyzer") if inspect.isclass(an) else "-",
                 link_anchor(args, "args") if inspect.isclass(args) else "-",
-                "<br>".join(cmds) if cmds else "-",
             ]
         )
     return rows
@@ -302,7 +364,7 @@ def render_table(headers: List[str], rows: List[List[str]]) -> str:
     return "".join(out)
 
 
-def render_collector_section(col: type, link_base: str, rel_root: str | None) -> str:
+def render_collector_section(col: type, link_base: str, rel_root: Optional[str]) -> str:
     hdr = md_header(f"Collector Class {col.__name__}", 2)
     desc = sanitize_doc(get_own_doc(col) or "")
     s = hdr
@@ -335,7 +397,7 @@ def render_collector_section(col: type, link_base: str, rel_root: str | None) ->
     return s
 
 
-def render_analyzer_section(an: type, link_base: str, rel_root: str | None) -> str:
+def render_analyzer_section(an: type, link_base: str, rel_root: Optional[str]) -> str:
     hdr = md_header(f"Data Analyzer Class {an.__name__}", 2)
     desc = sanitize_doc(get_own_doc(an) or "")
     s = hdr
@@ -350,10 +412,21 @@ def render_analyzer_section(an: type, link_base: str, rel_root: str | None) -> s
     if cv:
         s += md_header("Class Variables", 3) + md_list(cv)
 
+    # Add regex patterns if present (pass None for args_cls since we don't have context here)
+    regex_info = extract_regexes_and_args_from_analyzer(an, None)
+    if regex_info:
+        s += md_header("Regex Patterns", 3)
+        if len(regex_info) > 10:
+            s += f"*{len(regex_info)} items defined*\n\n"
+            s += md_list(regex_info[:10])
+            s += f"*...and {len(regex_info) - 10} more items*\n\n"
+        else:
+            s += md_list(regex_info)
+
     return s
 
 
-def render_model_section(model: type, link_base: str, rel_root: str | None) -> str:
+def render_model_section(model: type, link_base: str, rel_root: Optional[str]) -> str:
     hdr = md_header(f"{model.__name__} Model", 2)
     desc = sanitize_doc(get_own_doc(model) or "")
     s = hdr
@@ -368,7 +441,7 @@ def render_model_section(model: type, link_base: str, rel_root: str | None) -> s
     return s
 
 
-def render_analyzer_args_section(args_cls: type, link_base: str, rel_root: str | None) -> str:
+def render_analyzer_args_section(args_cls: type, link_base: str, rel_root: Optional[str]) -> str:
     hdr = md_header(f"Analyzer Args Class {args_cls.__name__}", 2)
     desc = sanitize_doc(get_own_doc(args_cls) or "")
     s = hdr
@@ -418,7 +491,15 @@ def main():
     plugins.sort(key=lambda c: f"{c.__module__}.{c.__name__}".lower())
 
     rows = generate_plugin_table_rows(plugins)
-    headers = ["Plugin", "DataModel", "Collector", "Analyzer", "AnalyzerArgs", "Cmd(s)"]
+    headers = [
+        "Plugin",
+        "Collection",
+        "Analysis",
+        "DataModel",
+        "Collector",
+        "Analyzer",
+        "AnalyzerArgs",
+    ]
 
     collectors, analyzers, models, args_classes = [], [], [], []
     seen_c, seen_a, seen_m, seen_args = set(), set(), set(), set()
