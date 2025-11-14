@@ -261,7 +261,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                 category=EventCategory.APPLICATION,
                 description="Failed to read AMD SMI versions",
                 data={"exception": get_exception_traceback(e)},
-                priority=EventPriority.WARNING,
+                priority=EventPriority.INFO,
             )
             return None
 
@@ -1028,6 +1028,10 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         amdsmi = self._amdsmi_mod()
         try:
             amdsmi.amdsmi_init(amdsmi.AmdSmiInitFlags.INIT_AMD_GPUS)  # type: ignore[attr-defined]
+            version = self._get_amdsmi_version()
+            if version is not None:
+                self.logger.info("amdsmi version: %s", version.version)
+                self.logger.info("ROCm version: %s", version.rocm_version)
             amd_smi_data = self._get_amdsmi_data()
 
             if amd_smi_data is None:
