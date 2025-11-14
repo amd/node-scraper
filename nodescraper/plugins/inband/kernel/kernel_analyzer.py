@@ -68,23 +68,23 @@ class KernelAnalyzer(DataAnalyzer[KernelDataModel, KernelAnalyzerArgs]):
                         priority=EventPriority.ERROR,
                     )
                     continue
-                if regex_data.match(data.kernel_version):
+                if regex_data.match(data.kernel_info):
                     self.result.message = "Kernel matches expected"
                     self.result.status = ExecutionStatus.OK
                     return self.result
-            elif data.kernel_version == kernel:
+            elif data.kernel_info == kernel:
                 self.result.message = "Kernel matches expected"
                 self.result.status = ExecutionStatus.OK
                 return self.result
 
         self.result.message = (
-            f"Kernel mismatch! Expected: {args.exp_kernel}, actual: {data.kernel_version}"
+            f"Kernel mismatch! Expected: {args.exp_kernel}, actual: {data.kernel_info}"
         )
         self.result.status = ExecutionStatus.ERROR
         self._log_event(
             category=EventCategory.OS,
             description=f"{self.result.message}",
-            data={"expected": args.exp_kernel, "actual": data.kernel_version},
+            data={"expected": args.exp_kernel, "actual": data.kernel_info},
             priority=EventPriority.CRITICAL,
             console_log=True,
         )
