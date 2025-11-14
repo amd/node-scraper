@@ -23,8 +23,10 @@
 # SOFTWARE.
 #
 ###############################################################################
+
 from nodescraper.models import DataModel
 
 
 class KernelDataModel(DataModel):
-    kernel_version: str
+    kernel_info: str
+    kernel_version: str | None = None

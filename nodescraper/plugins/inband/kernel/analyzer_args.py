@@ -61,4 +61,4 @@ class KernelAnalyzerArgs(AnalyzerArgs):
         Returns:
             KernelAnalyzerArgs: instance of analyzer args class
         """
-        return cls(exp_kernel=datamodel.kernel_version)
+        return cls(exp_kernel=datamodel.kernel_info)
