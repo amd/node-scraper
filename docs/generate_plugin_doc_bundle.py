@@ -237,7 +237,7 @@ def extract_regexes_and_args_from_analyzer(
     error_regex = get_attr(analyzer_cls, "ERROR_REGEX", None)
     if error_regex and isinstance(error_regex, list):
         output.append("**Built-in Regexes:**")
-        for item in error_regex[:5]:  # Show first 5 in table
+        for item in error_regex:  # Show all regexes
             # ErrorRegex objects have regex, message, event_category attributes
             if hasattr(item, "regex"):
                 pattern = getattr(item.regex, "pattern", None)
@@ -249,8 +249,6 @@ def extract_regexes_and_args_from_analyzer(
             elif hasattr(item, "pattern"):
                 pattern_str = item.pattern if len(item.pattern) < 50 else item.pattern[:47] + "..."
                 output.append(f"- `{pattern_str}`")
-        if len(error_regex) > 5:
-            output.append(f"- *...and {len(error_regex) - 5} more regex patterns*")
 
     # Check for other regex-related attributes
     for attr in dir(analyzer_cls):
@@ -269,12 +267,10 @@ def extract_regexes_and_args_from_analyzer(
         anns = get_attr(args_cls, "__annotations__", {}) or {}
         if anns:
             output.append("**Analyzer Args:**")
-            for key, value in list(anns.items())[:5]:  # Show first 5 args
+            for key, value in anns.items():  # Show all args
                 # Format the type annotation
                 type_str = str(value).replace("typing.", "")
                 output.append(f"- `{key}`: {type_str}")
-            if len(anns) > 5:
-                output.append(f"- *...and {len(anns) - 5} more args*")
 
     return output
 
@@ -342,7 +338,7 @@ def generate_plugin_table_rows(plugins: List[type]) -> List[List[str]]:
 
         rows.append(
             [
-                f"{p.__module__}.{p.__name__}",
+                p.__name__,
                 "<br>".join(cmds) if cmds else "-",
                 "<br>".join(regex_and_args) if regex_and_args else "-",
                 link_anchor(dm, "model") if inspect.isclass(dm) else "-",
