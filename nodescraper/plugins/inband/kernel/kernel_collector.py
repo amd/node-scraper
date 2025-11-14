@@ -76,31 +76,28 @@ class KernelCollector(InBandDataCollector[KernelDataModel, None]):
         """
 
         kernel = None
-        kernel_info = ""
+        kernel_info = None
 
         if self.system_info.os_family == OSFamily.WINDOWS:
             res = self._run_sut_cmd(self.CMD_WINDOWS)
             if res.exit_code == 0:
-                kernel = [line for line in res.stdout.splitlines() if "Version=" in line][0].split(
-                    "="
-                )[1]
+                kernel_info = [line for line in res.stdout.splitlines() if "Version=" in line][
+                    0
+                ].split("=")[1]
         else:
             res = self._run_sut_cmd(self.CMD)
             if res.exit_code == 0:
-                if res.stdout:
-                    kernel = res.stdout
-                    parsed_info = self._parse_kernel_version(kernel)
-                    kernel_info = parsed_info if parsed_info is not None else ""
-                    if not kernel_info:
-                        self._log_event(
-                            category=EventCategory.OS,
-                            description="Could not extract kernel version from 'uname -a'",
-                            data={"command": res.command, "exit_code": res.exit_code},
-                            priority=EventPriority.ERROR,
-                            console_log=True,
-                        )
-                else:
-                    kernel = None
+                kernel_info = res.stdout
+                kernel = self._parse_kernel_version(kernel_info)
+                if not kernel:
+                    self._log_event(
+                        category=EventCategory.OS,
+                        description="Could not extract kernel version from 'uname -a'",
+                        data={"command": res.command, "exit_code": res.exit_code},
+                        priority=EventPriority.ERROR,
+                        console_log=True,
+                    )
+
         if res.exit_code != 0:
             self._log_event(
                 category=EventCategory.OS,
@@ -110,9 +107,9 @@ class KernelCollector(InBandDataCollector[KernelDataModel, None]):
                 console_log=True,
             )
 
-        if kernel:
+        if kernel_info:
 
-            kernel_data = KernelDataModel(kernel_version=kernel, kernel_info=kernel_info)
+            kernel_data = KernelDataModel(kernel_info=kernel_info, kernel_version=kernel)
             self._log_event(
                 category="KERNEL_READ",
                 description="Kernel version read",
@@ -122,6 +119,10 @@ class KernelCollector(InBandDataCollector[KernelDataModel, None]):
         else:
             kernel_data = None
 
-        self.result.message = f"Kernel: {kernel}" if kernel else "Kernel not found"
-        self.result.status = ExecutionStatus.OK if kernel else ExecutionStatus.ERROR
+        self.result.message = (
+            "Kernel not found"
+            if not kernel_info
+            else f"Kernel info: {kernel_info} | Kernel version: {kernel if kernel else 'Kernel version not found'}"
+        )
+        self.result.status = ExecutionStatus.OK if kernel_info else ExecutionStatus.ERROR
         return self.result, kernel_data
