@@ -237,7 +237,7 @@ def extract_regexes_and_args_from_analyzer(
     error_regex = get_attr(analyzer_cls, "ERROR_REGEX", None)
     if error_regex and isinstance(error_regex, list):
         output.append("**Built-in Regexes:**")
-        for item in error_regex:  # Show all regexes
+        for item in error_regex:
             # ErrorRegex objects have regex, message, event_category attributes
             if hasattr(item, "regex"):
                 pattern = getattr(item.regex, "pattern", None)
@@ -254,7 +254,7 @@ def extract_regexes_and_args_from_analyzer(
     for attr in dir(analyzer_cls):
         if "REGEX" in attr.upper() and not attr.startswith("_"):
             val = get_attr(analyzer_cls, attr, default=None)
-            if val is None or attr == "ERROR_REGEX":  # Already handled above
+            if val is None or attr == "ERROR_REGEX":
                 continue
 
             if hasattr(val, "pattern"):
@@ -267,7 +267,7 @@ def extract_regexes_and_args_from_analyzer(
         anns = get_attr(args_cls, "__annotations__", {}) or {}
         if anns:
             output.append("**Analyzer Args:**")
-            for key, value in anns.items():  # Show all args
+            for key, value in anns.items():
                 # Format the type annotation
                 type_str = str(value).replace("typing.", "")
                 output.append(f"- `{key}`: {type_str}")
@@ -308,7 +308,20 @@ def class_vars_dump(cls: type, exclude: set) -> List[str]:
             continue
         if callable(val) or isinstance(val, (staticmethod, classmethod, property)):
             continue
-        out.append(f"**{name}**: `{val}`")
+
+        # Format list values with each item on a new line
+        if isinstance(val, list) and len(val) > 0:
+            val_str = str(val)
+            if len(val_str) > 200:
+                formatted_items = []
+                for item in val:
+                    formatted_items.append(f"  {item}")
+                formatted_list = "[\n" + ",\n".join(formatted_items) + "\n]"
+                out.append(f"**{name}**: `{formatted_list}`")
+            else:
+                out.append(f"**{name}**: `{val}`")
+        else:
+            out.append(f"**{name}**: `{val}`")
     return out
 
 
@@ -413,10 +426,7 @@ def render_analyzer_section(an: type, link_base: str, rel_root: Optional[str]) -
         s += md_header("Regex Patterns", 3)
         if len(regex_info) > 10:
             s += f"*{len(regex_info)} items defined*\n\n"
-            s += md_list(regex_info[:10])
-            s += f"*...and {len(regex_info) - 10} more items*\n\n"
-        else:
-            s += md_list(regex_info)
+        s += md_list(regex_info)
 
     return s
 
