@@ -344,7 +344,6 @@ def generate_plugin_table_rows(plugins: List[type]) -> List[List[str]]:
                 link_anchor(dm, "model") if inspect.isclass(dm) else "-",
                 link_anchor(col, "collector") if inspect.isclass(col) else "-",
                 link_anchor(an, "analyzer") if inspect.isclass(an) else "-",
-                link_anchor(args, "args") if inspect.isclass(args) else "-",
             ]
         )
     return rows
@@ -494,7 +493,6 @@ def main():
         "DataModel",
         "Collector",
         "Analyzer",
-        "AnalyzerArgs",
     ]
 
     collectors, analyzers, models, args_classes = [], [], [], []
