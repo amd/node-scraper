@@ -388,18 +388,15 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                     enc=self._valueunit(eu.get("enc"), "ns"),
                 )
 
-                cu_occ = self._valueunit(entry.get("cu_occupancy"), "")
-
                 try:
                     plist.append(
                         ProcessListItem(
                             process_info=ProcessInfo(
                                 name=str(name),
                                 pid=pid,
-                                mem=mem_vu,
                                 memory_usage=mem_usage,
+                                mem_usage=mem_vu,
                                 usage=usage,
-                                cu_occupancy=cu_occ,
                             )
                         )
                     )
@@ -525,7 +522,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                     ver = e.get("fw_version")
                     normalized.append(
                         FwListItem(
-                            fw_name="" if fid is None else str(fid),
+                            fw_id="" if fid is None else str(fid),
                             fw_version="" if ver is None else str(ver),
                         )
                     )
@@ -593,6 +590,22 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             )
 
             # ASIC
+            oam_id_raw = asic.get("oam_id")
+            if oam_id_raw in (None, "", "N/A"):
+                oam_id_val: Union[int, str] = "N/A"
+            elif isinstance(oam_id_raw, str):
+                oam_id_val = oam_id_raw
+            else:
+                oam_id_val = int(oam_id_raw) if oam_id_raw is not None else "N/A"
+
+            num_cu_raw = asic.get("num_compute_units")
+            if num_cu_raw in (None, "", "N/A"):
+                num_cu_val: Union[int, str] = "N/A"
+            elif isinstance(num_cu_raw, str):
+                num_cu_val = num_cu_raw
+            else:
+                num_cu_val = int(num_cu_raw) if num_cu_raw is not None else "N/A"
+
             asic_model = StaticAsic(
                 market_name=self._normalize(
                     asic.get("market_name") or asic.get("asic_name"), default=""
@@ -604,8 +617,8 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                 subsystem_id=str(asic.get("subsystem_id", "")),
                 rev_id=str(asic.get("rev_id", "")),
                 asic_serial=str(asic.get("asic_serial", "")),
-                oam_id=int(asic.get("oam_id", 0) or 0),
-                num_compute_units=int(asic.get("num_compute_units", 0) or 0),
+                oam_id=oam_id_val,
+                num_compute_units=num_cu_val,
                 target_graphics_version=str(asic.get("target_graphics_version", "")),
             )
 
@@ -621,12 +634,14 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             )
 
             # Driver
-            driver_model = None
-            if driver:
-                driver_model = StaticDriver(
-                    name=self._normalize(driver.get("driver_name"), default="unknown"),
-                    version=self._normalize(driver.get("driver_version"), default="unknown"),
-                )
+            driver_model = StaticDriver(
+                name=self._normalize(
+                    driver.get("driver_name") if driver else None, default="unknown"
+                ),
+                version=self._normalize(
+                    driver.get("driver_version") if driver else None, default="unknown"
+                ),
+            )
 
             # VBIOS
             vbios_model: Optional[StaticVbios] = None
@@ -640,8 +655,15 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
 
             # NUMA
             numa_node = int(numa.get("node", 0) or 0)
-            affinity = int(numa.get("affinity", 0) or 0)
-            numa_model = StaticNuma(node=numa_node, affinity=affinity)
+            affinity_raw = numa.get("affinity")
+            if affinity_raw in (None, "", "N/A"):
+                affinity_val: Union[int, str] = "N/A"
+            elif isinstance(affinity_raw, str):
+                affinity_val = affinity_raw
+            else:
+                affinity_val = int(affinity_raw) if affinity_raw is not None else "N/A"
+
+            numa_model = StaticNuma(node=numa_node, affinity=affinity_val)
 
             # VRAM
             vram_type = str(vram.get("vram_type", "") or "unknown")
@@ -672,7 +694,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             cache_info_model = self._parse_cache_info(cache)
 
             # Clock
-            clock_model = self._parse_clock(clock)
+            clock_dict_model = self._parse_clock_dict(clock)
 
             try:
                 out.append(
@@ -691,7 +713,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                         vram=vram_model,
                         cache_info=cache_info_model,
                         partition=None,
-                        clock=clock_model,
+                        clock=clock_dict_model,
                     )
                 )
             except ValidationError as e:
@@ -928,9 +950,32 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                 {"Level 0": level0, "Level 1": level1, "Level 2": level2}
             )
 
-            return StaticClockData(frequency=levels, current=current)
+            # Use the alias "current level" as defined in the model
+            return StaticClockData.model_validate(
+                {"frequency_levels": levels, "current level": current}
+            )
         except ValidationError:
             return None
+
+    def _parse_clock_dict(self, data: dict) -> Optional[dict[str, Union[StaticClockData, None]]]:
+        """Parse clock data into dictionary structure
+
+        Args:
+            data (dict): Clock data from amd-smi
+
+        Returns:
+            Optional[dict[str, Union[StaticClockData, None]]]: dictionary of clock data or None
+        """
+        if not isinstance(data, dict):
+            return None
+
+        clock_dict: dict[str, Union[StaticClockData, None]] = {}
+
+        clock_data = self._parse_clock(data)
+        if clock_data:
+            clock_dict["clk"] = clock_data
+
+        return clock_dict if clock_dict else None
 
     def collect_data(
         self,

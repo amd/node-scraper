@@ -277,7 +277,7 @@ def test_get_process(collector):
     p0 = procs[0].process_list[0].process_info
     assert p0.name == "python"
     assert p0.pid == 4242
-    assert p0.mem is not None and p0.mem.unit == "B"
+    assert p0.mem_usage is not None and p0.mem_usage.unit == "B"
     assert p0.usage.gfx is not None and p0.usage.gfx.unit == "ns"
 
     p1 = procs[0].process_list[1].process_info
@@ -300,7 +300,7 @@ def test_get_firmware(collector):
     assert fw is not None and len(fw) == 1
     assert fw[0].gpu == 0
     assert len(fw[0].fw_list) == 2
-    assert fw[0].fw_list[0].fw_name == "SMU"
+    assert fw[0].fw_list[0].fw_id == "SMU"
     assert fw[0].fw_list[0].fw_version == "55.33"
 
 
@@ -335,7 +335,9 @@ def test_get_static(collector):
     assert cache.cache_properties
 
     if s.clock is not None:
-        assert s.clock.frequency is not None
+        assert isinstance(s.clock, dict)
+        if "clk" in s.clock and s.clock["clk"] is not None:
+            assert s.clock["clk"].frequency_levels is not None
 
 
 def test_cache_properties_parsing(collector):

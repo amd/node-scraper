@@ -177,7 +177,7 @@ class AmdSmiAnalyzer(DataAnalyzer[AmdSmiDataModel, None]):
             "subsystem_id": {gpu.asic.subsystem_id for gpu in amdsmi_static_data},
             "device_id": {gpu.asic.device_id for gpu in amdsmi_static_data},
             "rev_id": {gpu.asic.rev_id for gpu in amdsmi_static_data},
-            "num_compute_units": {gpu.asic.num_compute_units for gpu in amdsmi_static_data},
+            "num_compute_units": {str(gpu.asic.num_compute_units) for gpu in amdsmi_static_data},
             "target_graphics_version": {
                 gpu.asic.target_graphics_version for gpu in amdsmi_static_data
             },
@@ -330,10 +330,13 @@ class AmdSmiAnalyzer(DataAnalyzer[AmdSmiDataModel, None]):
         pldm_missing_gpus: list[int] = []
         for fw_data in amdsmi_fw_data:
             gpu = fw_data.gpu
+            if isinstance(fw_data.fw_list, str):
+                pldm_missing_gpus.append(gpu)
+                continue
             for fw_info in fw_data.fw_list:
-                if PLDM_STRING == fw_info.fw_name and expected_pldm_version != fw_info.fw_version:
+                if PLDM_STRING == fw_info.fw_id and expected_pldm_version != fw_info.fw_version:
                     mismatched_gpus.append(gpu)
-                if PLDM_STRING == fw_info.fw_name:
+                if PLDM_STRING == fw_info.fw_id:
                     break
             else:
                 pldm_missing_gpus.append(gpu)
