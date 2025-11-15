@@ -339,8 +339,8 @@ def generate_plugin_table_rows(plugins: List[type]) -> List[List[str]]:
         rows.append(
             [
                 p.__name__,
-                "<br>".join(cmds) if cmds else "-",
-                "<br>".join(regex_and_args) if regex_and_args else "-",
+                "<br>".join(cmds).replace("|", "\\|") if cmds else "-",
+                "<br>".join(regex_and_args).replace("|", "\\|") if regex_and_args else "-",
                 link_anchor(dm, "model") if inspect.isclass(dm) else "-",
                 link_anchor(col, "collector") if inspect.isclass(col) else "-",
                 link_anchor(an, "analyzer") if inspect.isclass(an) else "-",
