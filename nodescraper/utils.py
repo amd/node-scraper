@@ -27,7 +27,7 @@ import os
 import re
 import traceback
 from enum import Enum
-from typing import TypeVar
+from typing import Any, TypeVar, Union, get_args, get_origin
 
 T = TypeVar("T")
 
@@ -169,6 +169,50 @@ def bytes_to_human_readable(input_bytes: int) -> str:
 
     gb = round(mb / 1000, 2)
     return f"{gb}GB"
+
+
+def find_annotation_in_container(
+    annotation, target_type
+) -> Union[tuple[Any, list[Any]], tuple[None, list[Any]]]:
+    """Recursively search for a target type in an annotation and return the target type and the containers
+    supported container types are generic types, Callable, Tuple, Union, Literal, Final, ClassVar
+    and Annotated. If the target type is not found then None is returned.
+
+    Examples:
+       find_annotation_in_container(Union[int, str], int) -> int, [Union[int, str]]
+       find_annotation_in_container(Union[int, dict[str, list[MyClass]]], MyClass) -> MyClass, [list,dict,union]
+       find_annotation_in_container(Union[int, str], MyClass) -> None, []
+
+    Parameters
+    ----------
+    annotation : type
+        A type annotation to search for the target type in.
+    target_type : type
+        The target type to search for.
+
+    Returns
+    -------
+    Union[tuple[Any, list[Any]], tuple[None, []]]
+        The target type and the containers if found, otherwise None and an empty list.
+    """
+    containers: list[Any] = []
+    origin = get_origin(annotation)
+    args = get_args(annotation)
+    if len(args) == 0 and issubclass(annotation, target_type):
+        return annotation, containers
+    if isinstance(args, tuple):
+        for item in args:
+            item_args = get_args(item)
+            if len(item_args) > 0:
+                result, container = find_annotation_in_container(item, target_type)
+                containers += container
+                if result:
+                    containers.append(origin)
+                    return result, containers
+            if len(get_args(item)) == 0 and issubclass(item, target_type):
+                containers.append(origin)
+                return item, containers
+    return None, []
 
 
 def shell_quote(s: str) -> str:
