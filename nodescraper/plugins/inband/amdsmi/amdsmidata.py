@@ -2,6 +2,7 @@ import re
 from typing import Any, List, Mapping, Optional, Union
 
 from pydantic import (
+    AliasChoices,
     BaseModel,
     ConfigDict,
     Field,
@@ -156,12 +157,10 @@ class ProcessUsage(BaseModel):
 class ProcessInfo(BaseModel):
     name: str
     pid: int
-
-    mem: Optional[ValueUnit] = None
     memory_usage: ProcessMemoryUsage
+    mem_usage: Optional[ValueUnit]
     usage: ProcessUsage
-    cu_occupancy: Optional[ValueUnit] = None
-    na_validator = field_validator("mem", "cu_occupancy", mode="before")(na_to_none)
+    na_validator = field_validator("mem_usage", mode="before")(na_to_none)
 
 
 class ProcessListItem(BaseModel):
@@ -175,13 +174,13 @@ class Processes(BaseModel):
 
 # FW
 class FwListItem(BaseModel):
+    fw_id: str
     fw_version: str
-    fw_name: str
 
 
 class Fw(BaseModel):
     gpu: int
-    fw_list: List[FwListItem]
+    fw_list: Union[List[FwListItem], str]
 
 
 class AmdSmiListItem(BaseModel):
@@ -256,8 +255,8 @@ class StaticAsic(BaseModel):
     subsystem_id: str
     rev_id: str
     asic_serial: str
-    oam_id: int
-    num_compute_units: int
+    oam_id: Union[int, str]  # can be N/A
+    num_compute_units: Union[int, str]  # can be N/A
     target_graphics_version: str
 
 
@@ -320,8 +319,11 @@ class StaticBoard(BaseModel):
 
 
 class StaticPartition(BaseModel):
+    # The name for compute_partition has changed we will support both for now
 
-    compute_partition: str
+    compute_partition: str = Field(
+        validation_alias=AliasChoices("compute_partition", "accelerator_partition")
+    )
     memory_partition: str
     partition_id: int
 
@@ -345,7 +347,7 @@ class StaticXgmiPlpd(BaseModel):
 
 class StaticNuma(BaseModel):
     node: int
-    affinity: int
+    affinity: Union[int, str]  # can be N/A
 
 
 class StaticVram(AmdSmiBaseModel):
@@ -383,10 +385,10 @@ class StaticClockData(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
     )
-    frequency: StaticFrequencyLevels
+    frequency_levels: StaticFrequencyLevels
 
-    current: Optional[int] = Field(..., alias="current")
-    na_validator = field_validator("current", mode="before")(na_to_none)
+    current_level: Optional[int] = Field(..., alias="current level")
+    na_validator = field_validator("current_level", mode="before")(na_to_none)
 
 
 class AmdSmiStatic(BaseModel):
@@ -397,7 +399,7 @@ class AmdSmiStatic(BaseModel):
     bus: StaticBus
     vbios: Optional[StaticVbios]
     limit: Optional[StaticLimit]
-    driver: Optional[StaticDriver]
+    driver: StaticDriver
     board: StaticBoard
     soc_pstate: Optional[StaticSocPstate]
     xgmi_plpd: Optional[StaticXgmiPlpd]
@@ -405,8 +407,8 @@ class AmdSmiStatic(BaseModel):
     numa: StaticNuma
     vram: StaticVram
     cache_info: List[StaticCacheInfoItem]
-    partition: Optional[StaticPartition] = None
-    clock: Optional[StaticClockData] = None
+    partition: Optional[StaticPartition] = None  # This has been removed in Amd-smi 26.0.0+d30a0afe+
+    clock: Optional[dict[str, Union[StaticClockData, None]]] = None
     na_validator_dict = field_validator("clock", mode="before")(na_to_none_dict)
     na_validator = field_validator("soc_pstate", "xgmi_plpd", "vbios", "limit", mode="before")(
         na_to_none
