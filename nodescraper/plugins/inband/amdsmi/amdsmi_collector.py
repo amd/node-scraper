@@ -99,20 +99,58 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             Optional[str]: stdout from command or None on error
         """
         cmd_ret = self._run_sut_cmd(f"{self.AMD_SMI_EXE} {cmd}")
+
+        # Check for known warnings that can be ignored
+        is_group_warning = (
+            "User is missing the following required groups" in cmd_ret.stderr
+            or "User is missing the following required groups" in cmd_ret.stdout
+        )
+
+        # Log warning if user is missing group
         if cmd_ret.stderr != "" or cmd_ret.exit_code != 0:
-            self._log_event(
-                category=EventCategory.APPLICATION,
-                description="Error running amd-smi command",
-                data={
-                    "command": cmd,
-                    "exit_code": cmd_ret.exit_code,
-                    "stderr": cmd_ret.stderr,
-                },
-                priority=EventPriority.ERROR,
-                console_log=True,
-            )
-            return None
-        return cmd_ret.stdout
+            if not is_group_warning:
+                self._log_event(
+                    category=EventCategory.APPLICATION,
+                    description="Error running amd-smi command",
+                    data={
+                        "command": cmd,
+                        "exit_code": cmd_ret.exit_code,
+                        "stderr": cmd_ret.stderr,
+                    },
+                    priority=EventPriority.ERROR,
+                    console_log=True,
+                )
+                return None
+            else:
+                self._log_event(
+                    category=EventCategory.APPLICATION,
+                    description="amd-smi warning (continuing): User missing required groups",
+                    data={
+                        "command": cmd,
+                        "warning": cmd_ret.stderr or cmd_ret.stdout,
+                    },
+                    priority=EventPriority.WARNING,
+                    console_log=False,
+                )
+
+        stdout = cmd_ret.stdout
+        if is_group_warning and stdout:
+            lines = stdout.split("\n")
+            cleaned_lines = [
+                line
+                for line in lines
+                if not any(
+                    warn in line
+                    for warn in [
+                        "RuntimeError:",
+                        "WARNING: User is missing",
+                        "Please add user to these groups",
+                    ]
+                )
+            ]
+            stdout = "\n".join(cleaned_lines).strip()
+
+        return stdout
 
     def _run_amd_smi_dict(self, cmd: str) -> Optional[Union[dict, list[dict]]]:
         """Run amd-smi command with json output
@@ -132,7 +170,10 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                 self._log_event(
                     category=EventCategory.APPLICATION,
                     description=f"Error parsing command: `{cmd}` json data",
-                    data={"cmd": cmd, "exception": get_exception_traceback(e)},
+                    data={
+                        "cmd": cmd,
+                        "exception": get_exception_traceback(e),
+                    },
                     priority=EventPriority.ERROR,
                     console_log=True,
                 )
