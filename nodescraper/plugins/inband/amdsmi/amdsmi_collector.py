@@ -100,15 +100,33 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         """
         cmd_ret = self._run_sut_cmd(f"{self.AMD_SMI_EXE} {cmd}")
 
-        # Check for known warnings that can be ignored
+        # Check for known warnings and errors that can be handled
         is_group_warning = (
             "User is missing the following required groups" in cmd_ret.stderr
             or "User is missing the following required groups" in cmd_ret.stdout
         )
 
+        # Check for known amd-smi internal bugs
+        is_amdsmi_internal_error = any(
+            pattern in cmd_ret.stderr for pattern in ["KeyError:", "AttributeError:", "IndexError:"]
+        )
+
         # Log warning if user is missing group
         if cmd_ret.stderr != "" or cmd_ret.exit_code != 0:
-            if not is_group_warning:
+            if is_amdsmi_internal_error:
+                self._log_event(
+                    category=EventCategory.SW_DRIVER,
+                    description="amd-smi internal error detected",
+                    data={
+                        "command": cmd,
+                        "exit_code": cmd_ret.exit_code,
+                        "stderr": cmd_ret.stderr,
+                    },
+                    priority=EventPriority.WARNING,
+                    console_log=True,
+                )
+                return None
+            elif not is_group_warning:
                 self._log_event(
                     category=EventCategory.APPLICATION,
                     description="Error running amd-smi command",
@@ -595,7 +613,23 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         """
         ret = self._run_amd_smi_dict("static -g all")
         if not ret:
-            return []
+            self.logger.info("Bulk static query failed, attempting per-GPU fallback")
+            gpu_list = self.get_gpu_list()
+            if gpu_list:
+                fallback_data: list[dict] = []
+                for gpu in gpu_list:
+                    gpu_data = self._run_amd_smi_dict(f"static -g {gpu.gpu}")
+                    if gpu_data:
+                        if isinstance(gpu_data, dict):
+                            fallback_data.append(gpu_data)
+                        elif isinstance(gpu_data, list):
+                            fallback_data.extend(gpu_data)
+                if fallback_data:
+                    ret = fallback_data
+                else:
+                    return []
+            else:
+                return []
 
         if isinstance(ret, dict) and "gpu_data" in ret:
             ret = ret["gpu_data"]
