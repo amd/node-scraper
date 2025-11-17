@@ -23,6 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
+from datetime import datetime
 from typing import Optional
 
 from nodescraper.models import AnalyzerArgs
@@ -44,3 +45,5 @@ class AmdSmiAnalyzerArgs(AnalyzerArgs):
     devid_ep: Optional[str] = None
     devid_ep_vf: Optional[str] = None
     sku_name: Optional[str] = None
+    analysis_range_start: Optional[datetime] = None
+    analysis_range_end: Optional[datetime] = None
