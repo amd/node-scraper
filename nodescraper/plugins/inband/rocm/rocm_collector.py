@@ -23,6 +23,8 @@
 # SOFTWARE.
 #
 ###############################################################################
+from typing import Optional
+
 from nodescraper.base import InBandDataCollector
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.models import TaskResult
@@ -41,11 +43,11 @@ class RocmCollector(InBandDataCollector[RocmDataModel, None]):
         "/opt/rocm/.info/version",
     ]
 
-    def collect_data(self, args=None) -> tuple[TaskResult, RocmDataModel | None]:
+    def collect_data(self, args=None) -> tuple[TaskResult, Optional[RocmDataModel]]:
         """Collect ROCm version data from the system.
 
         Returns:
-            tuple[TaskResult, RocmDataModel | None]: tuple containing the task result and ROCm data model if available.
+            tuple[TaskResult, Optional[RocmDataModel]]: tuple containing the task result and ROCm data model if available.
         """
         version_paths = [
             "/opt/rocm/.info/version-rocm",

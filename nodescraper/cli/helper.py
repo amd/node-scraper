@@ -267,7 +267,7 @@ def parse_gen_plugin_config(
         sys.exit(1)
 
 
-def log_system_info(log_path: str | None, system_info: SystemInfo, logger: logging.Logger):
+def log_system_info(log_path: Optional[str], system_info: SystemInfo, logger: logging.Logger):
     """dump system info object to json log
 
     Args:
@@ -480,12 +480,12 @@ def dump_to_csv(all_rows: list, filename: str, fieldnames: list[str], logger: lo
     logger.info("Data written to csv file: %s", filename)
 
 
-def generate_summary(search_path: str, output_path: str | None, logger: logging.Logger):
+def generate_summary(search_path: str, output_path: Optional[str], logger: logging.Logger):
     """Concatenate csv files into 1 summary csv file
 
     Args:
         search_path (str): Path for previous runs
-        output_path (str | None): Path for new summary csv file
+        output_path (Optional[str]): Path for new summary csv file
         logger (logging.Logger): instance of logger
     """
 

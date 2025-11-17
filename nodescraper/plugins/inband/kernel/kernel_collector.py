@@ -23,6 +23,8 @@
 # SOFTWARE.
 #
 ###############################################################################
+from typing import Optional
+
 from nodescraper.base import InBandDataCollector
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.models import TaskResult
@@ -40,12 +42,12 @@ class KernelCollector(InBandDataCollector[KernelDataModel, None]):
     def collect_data(
         self,
         args=None,
-    ) -> tuple[TaskResult, KernelDataModel | None]:
+    ) -> tuple[TaskResult, Optional[KernelDataModel]]:
         """
         Collect kernel version data.
 
         Returns:
-            tuple[TaskResult, KernelDataModel | None]: tuple containing the task result and kernel data model or None if not found.
+            tuple[TaskResult, Optional[KernelDataModel]]: tuple containing the task result and kernel data model or None if not found.
         """
 
         kernel = None

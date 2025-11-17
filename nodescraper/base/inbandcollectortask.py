@@ -24,7 +24,7 @@
 #
 ###############################################################################
 import logging
-from typing import Generic, Optional
+from typing import Generic, Optional, Union
 
 from nodescraper.connection.inband import InBandConnection
 from nodescraper.connection.inband.inband import BaseFileArtifact, CommandArtifact
@@ -49,7 +49,7 @@ class InBandDataCollector(
         connection: InBandConnection,
         logger: Optional[logging.Logger] = None,
         system_interaction_level: SystemInteractionLevel = SystemInteractionLevel.INTERACTIVE,
-        max_event_priority_level: EventPriority | str = EventPriority.CRITICAL,
+        max_event_priority_level: Union[EventPriority, str] = EventPriority.CRITICAL,
         parent: Optional[str] = None,
         task_result_hooks: Optional[list[TaskResultHook]] = None,
         **kwargs,

@@ -24,6 +24,7 @@
 #
 ###############################################################################
 import re
+from typing import Optional
 
 from nodescraper.base import InBandDataCollector
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
@@ -74,11 +75,11 @@ class OsCollector(InBandDataCollector[OsDataModel, None]):
                 os_version = ""
         return os_version
 
-    def collect_data(self, args=None) -> tuple[TaskResult, OsDataModel | None]:
+    def collect_data(self, args=None) -> tuple[TaskResult, Optional[OsDataModel]]:
         """Collect OS name and version.
 
         Returns:
-            tuple[TaskResult, OsDataModel | None]: tuple containing the task result and OS data model or None if not found.
+            tuple[TaskResult, Optional[OsDataModel]]: tuple containing the task result and OS data model or None if not found.
         """
         os_name = None
         if self.system_info.os_family == OSFamily.WINDOWS:

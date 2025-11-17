@@ -131,5 +131,4 @@ if __name__ == "__main__":
 ```
 
 ## external plugins
-External plugins can be added and installed in the same env as node-scraper plugins. Find an
-example of an external plugin in **`/docs/node-scraper-external`**
+External plugins can be added and installed in the same env as node-scraper plugins. See -> [docs/node-scraper-external/README.md](docs/node-scraper-external/README.md)

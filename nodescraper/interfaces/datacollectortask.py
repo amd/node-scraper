@@ -27,7 +27,7 @@ import abc
 import inspect
 import logging
 from functools import wraps
-from typing import Callable, ClassVar, Generic, Optional, Type
+from typing import Callable, ClassVar, Generic, Optional, Type, Union
 
 from pydantic import BaseModel, ValidationError
 
@@ -48,12 +48,12 @@ from .taskresulthook import TaskResultHook
 
 
 def collect_decorator(
-    func: Callable[..., tuple[TaskResult, TDataModel | None]],
-) -> Callable[..., tuple[TaskResult, TDataModel | None]]:
+    func: Callable[..., tuple[TaskResult, Optional[TDataModel]]],
+) -> Callable[..., tuple[TaskResult, Optional[TDataModel]]]:
     @wraps(func)
     def wrapper(
         collector: "DataCollector", args: Optional[TCollectArg] = None
-    ) -> tuple[TaskResult, TDataModel | None]:
+    ) -> tuple[TaskResult, Optional[TDataModel]]:
         collector.logger.info("Running data collector: %s", collector.__class__.__name__)
         collector.result = collector._init_result()
         try:
@@ -122,8 +122,10 @@ class DataCollector(Task, abc.ABC, Generic[TConnection, TDataModel, TCollectArg]
         system_info: SystemInfo,
         connection: TConnection,
         logger: Optional[logging.Logger] = None,
-        system_interaction_level: SystemInteractionLevel | str = SystemInteractionLevel.INTERACTIVE,
-        max_event_priority_level: EventPriority | str = EventPriority.CRITICAL,
+        system_interaction_level: Union[
+            SystemInteractionLevel, str
+        ] = SystemInteractionLevel.INTERACTIVE,
+        max_event_priority_level: Union[EventPriority, str] = EventPriority.CRITICAL,
         parent: Optional[str] = None,
         task_result_hooks: Optional[list[TaskResultHook]] = None,
         **kwargs,
@@ -175,7 +177,7 @@ class DataCollector(Task, abc.ABC, Generic[TConnection, TDataModel, TCollectArg]
     @abc.abstractmethod
     def collect_data(
         self, args: Optional[TCollectArg] = None
-    ) -> tuple[TaskResult, TDataModel | None]:
+    ) -> tuple[TaskResult, Optional[TDataModel]]:
         """Collect data from a target system
 
         Returns:

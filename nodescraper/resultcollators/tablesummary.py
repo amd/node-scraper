@@ -24,6 +24,7 @@
 #
 ###############################################################################
 from textwrap import wrap
+from typing import Optional
 
 from nodescraper.interfaces import PluginResultCollator
 from nodescraper.models import PluginResult, TaskResult
@@ -44,15 +45,15 @@ class TableSummary(PluginResultCollator):
 
         def gen_str_table(
             headers: list[str],
-            rows: list[list[str | None]],
-            max_widths: dict[str, int] | None = None,
+            rows: list[list[Optional[str]]],
+            max_widths: Optional[dict[str, int]] = None,
         ) -> str:
             """Wrap cells
 
             Args:
                 headers (list[str]): table header
-                rows (list[list[str  |  None]]): table rows
-                max_widths (dict[str, int] | None, optional): width per col. Defaults to None.
+                rows (Optional[list[list[str]]]): table rows
+                max_widths (Optional[dict[str, int]], optional): width per col. Defaults to None.
 
             Returns:
                 str: wrapped texed
@@ -105,11 +106,7 @@ class TableSummary(PluginResultCollator):
             border = "+" + "+".join("-" * (w + 2) for w in col_widths) + "+"
 
             def render_physical_row(parts: list[str]) -> str:
-                return (
-                    "| "
-                    + " | ".join(p.ljust(w) for p, w in zip(parts, col_widths, strict=False))
-                    + " |"
-                )
+                return "| " + " | ".join(p.ljust(w) for p, w in zip(parts, col_widths)) + " |"
 
             table_lines: list[str] = [border, render_physical_row(headers), border]
             for wrow in wrapped_rows:
@@ -124,7 +121,7 @@ class TableSummary(PluginResultCollator):
 
         tables = ""
         if connection_results:
-            conn_rows: list[list[str | None]] = []
+            conn_rows: list[list[Optional[str]]] = []
             for connection_result in connection_results:
                 conn_rows.append(
                     [
@@ -142,7 +139,7 @@ class TableSummary(PluginResultCollator):
             tables += f"\n\n{table}"
 
         if plugin_results:
-            plug_rows: list[list[str | None]] = []
+            plug_rows: list[list[Optional[str]]] = []
             for plugin_result in plugin_results:
                 plug_rows.append(
                     [

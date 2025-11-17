@@ -23,6 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
+from typing import Optional
 
 from nodescraper.base import InBandDataCollector
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
@@ -60,14 +61,14 @@ class JournalCollector(InBandDataCollector[JournalData, None]):
 
         return res.stdout
 
-    def collect_data(self, args=None) -> tuple[TaskResult, JournalData | None]:
+    def collect_data(self, args=None) -> tuple[TaskResult, Optional[JournalData]]:
         """Collect journal logs
 
         Args:
             args (_type_, optional): Collection args. Defaults to None.
 
         Returns:
-            tuple[TaskResult, JournalData | None]: Tuple of results and data model or none.
+            tuple[TaskResult, Optional[JournalData, None]]: Tuple of results and data model or none.
         """
         journal_log = self._read_with_journalctl()
         if journal_log:

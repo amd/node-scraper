@@ -23,7 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
-from typing import Generic, Optional, TypeVar
+from typing import Generic, Optional, TypeVar, Union
 
 from pydantic import BaseModel
 
@@ -37,7 +37,7 @@ class TestGenericBase(Generic[T]):
     def __init__(self, generic_type: T):
         self.generic_type = generic_type
 
-    def test_func(self, arg: list[str], arg2: bool | str, arg3: Optional[int] = None) -> T:
+    def test_func(self, arg: list[str], arg2: Union[bool, str], arg3: Optional[int] = None) -> T:
         return self.generic_type
 
 

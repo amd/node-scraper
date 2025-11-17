@@ -23,6 +23,8 @@
 # SOFTWARE.
 #
 ###############################################################################
+from typing import Union
+
 from pydantic import Field, field_validator
 
 from nodescraper.models import AnalyzerArgs
@@ -30,16 +32,16 @@ from nodescraper.plugins.inband.cmdline.cmdlinedata import CmdlineDataModel
 
 
 class CmdlineAnalyzerArgs(AnalyzerArgs):
-    required_cmdline: str | list = Field(default_factory=list)
-    banned_cmdline: str | list = Field(default_factory=list)
+    required_cmdline: Union[str, list] = Field(default_factory=list)
+    banned_cmdline: Union[str, list] = Field(default_factory=list)
 
     @field_validator("required_cmdline", mode="before")
     @classmethod
-    def validate_required_cmdline(cls, required_cmdline: str | list) -> list:
+    def validate_required_cmdline(cls, required_cmdline: Union[str, list]) -> list:
         """support str or list input for required_cmdline
 
         Args:
-            required_cmdline (str | list): required command line arguments
+            required_cmdline (Union[str, list]): required command line arguments
 
         Returns:
             list: list of required command line arguments
@@ -51,11 +53,11 @@ class CmdlineAnalyzerArgs(AnalyzerArgs):
 
     @field_validator("banned_cmdline", mode="before")
     @classmethod
-    def validate_banned_cmdline(cls, banned_cmdline: str | list) -> list:
+    def validate_banned_cmdline(cls, banned_cmdline: Union[str, list]) -> list:
         """support str or list input for banned_cmdline
 
         Args:
-            banned_cmdline (str | list): banned command line arguments
+            banned_cmdline (Union[str, list]): banned command line arguments
 
         Returns:
             list: a list of banned command line arguments

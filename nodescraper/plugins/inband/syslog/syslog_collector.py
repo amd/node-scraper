@@ -23,6 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
+from typing import Optional
 
 from nodescraper.base import InBandDataCollector
 from nodescraper.connection.inband.inband import TextFileArtifact
@@ -104,11 +105,11 @@ class SyslogCollector(InBandDataCollector[SyslogData, None]):
     def collect_data(
         self,
         args=None,
-    ) -> tuple[TaskResult, SyslogData | None]:
+    ) -> tuple[TaskResult, Optional[SyslogData]]:
         """Collect syslog data from the system
 
         Returns:
-            tuple[TaskResult | None]: tuple containing the result of the task and the syslog data if available
+            tuple[Optional[TaskResult, None]]: tuple containing the result of the task and the syslog data if available
         """
         syslog_logs = self._collect_syslog_rotations()
 
