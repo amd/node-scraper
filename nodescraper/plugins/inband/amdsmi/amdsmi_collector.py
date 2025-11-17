@@ -61,7 +61,7 @@ from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     StaticXgmiPlpd,
     ValueUnit,
 )
-from nodescraper.utils import get_exception_details, get_exception_traceback
+from nodescraper.utils import get_exception_traceback
 
 
 class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
@@ -100,15 +100,33 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         """
         cmd_ret = self._run_sut_cmd(f"{self.AMD_SMI_EXE} {cmd}")
 
-        # Check for known warnings that can be ignored
+        # Check for known warnings and errors that can be handled
         is_group_warning = (
             "User is missing the following required groups" in cmd_ret.stderr
             or "User is missing the following required groups" in cmd_ret.stdout
         )
 
+        # Check for known amd-smi internal bugs
+        is_amdsmi_internal_error = any(
+            pattern in cmd_ret.stderr for pattern in ["KeyError:", "AttributeError:", "IndexError:"]
+        )
+
         # Log warning if user is missing group
         if cmd_ret.stderr != "" or cmd_ret.exit_code != 0:
-            if not is_group_warning:
+            if is_amdsmi_internal_error:
+                self._log_event(
+                    category=EventCategory.SW_DRIVER,
+                    description="amd-smi internal error detected",
+                    data={
+                        "command": cmd,
+                        "exit_code": cmd_ret.exit_code,
+                        "stderr": cmd_ret.stderr,
+                    },
+                    priority=EventPriority.WARNING,
+                    console_log=True,
+                )
+                return None
+            elif not is_group_warning:
                 self._log_event(
                     category=EventCategory.APPLICATION,
                     description="Error running amd-smi command",
@@ -294,12 +312,12 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                 firmware=firmware,
                 static=statics,
             )
-        except ValidationError as e:
-            self.logger.warning("Validation err: %s", e)
+        except ValidationError as err:
+            self.logger.warning("Validation err: %s", err)
             self._log_event(
                 category=EventCategory.APPLICATION,
                 description="Failed to build AmdSmiDataModel",
-                data=get_exception_details(e),
+                data={"errors": err.errors(include_url=False)},
                 priority=EventPriority.ERROR,
             )
             return None
@@ -325,11 +343,11 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                 amdsmi_library_version=version_data.get("amdsmi_library_version", ""),
                 rocm_version=version_data.get("rocm_version", ""),
             )
-        except ValidationError as e:
+        except ValidationError as err:
             self._log_event(
                 category=EventCategory.APPLICATION,
                 description="Failed to build AmdSmiVersion",
-                data=get_exception_details(e),
+                data={"errors": err.errors(include_url=False)},
                 priority=EventPriority.WARNING,
             )
             return None
@@ -368,11 +386,11 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                         partition_id=_to_int(item.get("partition_id", 0)),
                     )
                 )
-            except ValidationError as e:
+            except ValidationError as err:
                 self._log_event(
                     category=EventCategory.APPLICATION,
                     description="Failed to build AmdSmiListItem",
-                    data={"exception": get_exception_traceback(e), "item": item},
+                    data={"errors": err.errors(include_url=False), "item": item},
                     priority=EventPriority.WARNING,
                 )
 
@@ -441,12 +459,12 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                             )
                         )
                     )
-                except ValidationError as e:
+                except ValidationError as err:
                     self._log_event(
                         category=EventCategory.APPLICATION,
                         description="Failed to build ProcessListItem; skipping entry",
                         data={
-                            "exception": get_exception_traceback(e),
+                            "errors": err.errors(include_url=False),
                             "gpu_index": gpu_idx,
                             "entry": repr(entry),
                         },
@@ -456,11 +474,11 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
 
             try:
                 out.append(Processes(gpu=gpu_idx, process_list=plist))
-            except ValidationError as e:
+            except ValidationError as err:
                 self._log_event(
                     category=EventCategory.APPLICATION,
                     description="Failed to build Processes",
-                    data={"exception": get_exception_traceback(e), "gpu_index": gpu_idx},
+                    data={"errors": err.errors(include_url=False), "gpu_index": gpu_idx},
                     priority=EventPriority.WARNING,
                 )
 
@@ -492,12 +510,12 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                 memparts.append(
                     PartitionMemory(gpu_id=gpu_idx, partition_type=str(mem_pt) if mem_pt else None)
                 )
-            except ValidationError as e:
+            except ValidationError as err:
                 self._log_event(
                     category=EventCategory.APPLICATION,
                     description="Failed to build PartitionMemory",
                     data={
-                        "exception": get_exception_traceback(e),
+                        "errors": err.errors(include_url=False),
                         "gpu_index": gpu_idx,
                         "data": mem_pt,
                     },
@@ -510,12 +528,12 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                         gpu_id=gpu_idx, partition_type=str(comp_pt) if comp_pt else None
                     )
                 )
-            except ValidationError as e:
+            except ValidationError as err:
                 self._log_event(
                     category=EventCategory.APPLICATION,
                     description="Failed to build PartitionCompute",
                     data={
-                        "exception": get_exception_traceback(e),
+                        "errors": err.errors(include_url=False),
                         "gpu_index": gpu_idx,
                         "data": comp_pt,
                     },
@@ -524,11 +542,11 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
 
         try:
             return Partition(memory_partition=memparts, compute_partition=computeparts)
-        except ValidationError as e:
+        except ValidationError as err:
             self._log_event(
                 category=EventCategory.APPLICATION,
                 description="Failed to build Partition",
-                data={"exception": get_exception_traceback(e)},
+                data={"errors": err.errors(include_url=False)},
                 priority=EventPriority.WARNING,
             )
             return None
@@ -577,11 +595,11 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
 
             try:
                 out.append(Fw(gpu=gpu_idx, fw_list=normalized))
-            except ValidationError as e:
+            except ValidationError as err:
                 self._log_event(
                     category=EventCategory.APPLICATION,
                     description="Failed to build Fw",
-                    data={"exception": get_exception_traceback(e), "gpu_index": gpu_idx},
+                    data={"errors": err.errors(include_url=False), "gpu_index": gpu_idx},
                     priority=EventPriority.WARNING,
                 )
 
@@ -595,7 +613,23 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         """
         ret = self._run_amd_smi_dict("static -g all")
         if not ret:
-            return []
+            self.logger.info("Bulk static query failed, attempting per-GPU fallback")
+            gpu_list = self.get_gpu_list()
+            if gpu_list:
+                fallback_data: list[dict] = []
+                for gpu in gpu_list:
+                    gpu_data = self._run_amd_smi_dict(f"static -g {gpu.gpu}")
+                    if gpu_data:
+                        if isinstance(gpu_data, dict):
+                            fallback_data.append(gpu_data)
+                        elif isinstance(gpu_data, list):
+                            fallback_data.extend(gpu_data)
+                if fallback_data:
+                    ret = fallback_data
+                else:
+                    return []
+            else:
+                return []
 
         if isinstance(ret, dict) and "gpu_data" in ret:
             ret = ret["gpu_data"]
@@ -757,12 +791,12 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                         clock=clock_dict_model,
                     )
                 )
-            except ValidationError as e:
-                self.logger.error(e)
+            except ValidationError as err:
+                self.logger.error(err)
                 self._log_event(
                     category=EventCategory.APPLICATION,
                     description="Failed to build AmdSmiStatic",
-                    data={"exception": get_exception_traceback(e), "gpu_index": gpu_idx},
+                    data={"errors": err.errors(include_url=False), "gpu_index": gpu_idx},
                     priority=EventPriority.WARNING,
                 )
 
@@ -920,11 +954,11 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                         num_cache_instance=num_cache_instance,
                     )
                 )
-            except ValidationError as ve:
+            except ValidationError as err:
                 self._log_event(
                     category=EventCategory.APPLICATION,
                     description="Bad cache info entry from amd-smi; skipping",
-                    data={"entry": repr(e), "exception": get_exception_traceback(ve)},
+                    data={"entry": repr(e), "errors": err.errors(include_url=False)},
                     priority=EventPriority.WARNING,
                 )
                 continue
