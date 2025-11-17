@@ -30,7 +30,15 @@ from nodescraper.enums import EventCategory, EventPriority
 from nodescraper.interfaces import DataAnalyzer
 from nodescraper.models import TaskResult
 
-from .amdsmidata import AmdSmiDataModel, AmdSmiStatic, Fw, Partition, Processes
+from .amdsmidata import (
+    AmdSmiDataModel,
+    AmdSmiMetric,
+    AmdSmiStatic,
+    EccData,
+    Fw,
+    Partition,
+    Processes,
+)
 from .analyzer_args import AmdSmiAnalyzerArgs
 
 
@@ -121,6 +129,223 @@ class AmdSmiAnalyzer(DataAnalyzer[AmdSmiDataModel, None]):
                     "expected_driver_version": expected_driver_version,
                 },
             )
+
+    def check_amdsmi_metric_pcie(
+        self,
+        amdsmi_metric_data: list[AmdSmiMetric],
+        l0_to_recovery_count_error_threshold: int,
+        l0_to_recovery_count_warning_threshold: int,
+    ):
+        """Check PCIe metrics for link errors
+
+        Checks for PCIe link width, speed, replays, recoveries, and NAKs.
+        Expected width/speeds should come from SKU info.
+
+        Args:
+            amdsmi_metric_data (list[AmdSmiMetric]): AmdSmiMetric data model
+            l0_to_recovery_count_error_threshold (int): Threshold for error events
+            l0_to_recovery_count_warning_threshold (int): Threshold for warning events
+        """
+        for metric in amdsmi_metric_data:
+            pcie_data = metric.pcie
+            gpu = metric.gpu
+
+            if pcie_data.width is not None and pcie_data.width != 16:
+                self._log_event(
+                    category=EventCategory.IO,
+                    description=f"GPU: {gpu} PCIe width is not x16",
+                    priority=EventPriority.ERROR,
+                    data={"gpu": gpu, "pcie_width": pcie_data.width, "expected": 16},
+                    console_log=True,
+                )
+
+            if pcie_data.speed is not None and pcie_data.speed.value is not None:
+                try:
+                    speed_val = float(pcie_data.speed.value)
+                    if speed_val != 32.0:
+                        self._log_event(
+                            category=EventCategory.IO,
+                            description=f"GPU: {gpu} PCIe link speed is not Gen5 (32 GT/s)",
+                            priority=EventPriority.ERROR,
+                            data={"gpu": gpu, "pcie_speed": speed_val, "expected": 32.0},
+                            console_log=True,
+                        )
+                except (ValueError, TypeError):
+                    pass
+
+            if pcie_data.replay_count is not None and pcie_data.replay_count > 0:
+                self._log_event(
+                    category=EventCategory.IO,
+                    description=f"GPU: {gpu} has PCIe replay count: {pcie_data.replay_count}",
+                    priority=EventPriority.WARNING,
+                    data={"gpu": gpu, "replay_count": pcie_data.replay_count},
+                    console_log=True,
+                )
+
+            if (
+                pcie_data.replay_roll_over_count is not None
+                and pcie_data.replay_roll_over_count > 0
+            ):
+                self._log_event(
+                    category=EventCategory.IO,
+                    description=f"GPU: {gpu} has PCIe replay rollover count: {pcie_data.replay_roll_over_count}",
+                    priority=EventPriority.WARNING,
+                    data={"gpu": gpu, "replay_roll_over_count": pcie_data.replay_roll_over_count},
+                    console_log=True,
+                )
+
+            if pcie_data.l0_to_recovery_count is not None:
+                if pcie_data.l0_to_recovery_count > l0_to_recovery_count_error_threshold:
+                    self._log_event(
+                        category=EventCategory.IO,
+                        description=f"GPU: {gpu} has {pcie_data.l0_to_recovery_count} L0 recoveries",
+                        priority=EventPriority.ERROR,
+                        data={
+                            "gpu": gpu,
+                            "l0_to_recovery_count": pcie_data.l0_to_recovery_count,
+                            "error_threshold": l0_to_recovery_count_error_threshold,
+                        },
+                        console_log=True,
+                    )
+                elif pcie_data.l0_to_recovery_count > l0_to_recovery_count_warning_threshold:
+                    self._log_event(
+                        category=EventCategory.IO,
+                        description=f"GPU: {gpu} has {pcie_data.l0_to_recovery_count} L0 recoveries",
+                        priority=EventPriority.WARNING,
+                        data={
+                            "gpu": gpu,
+                            "l0_to_recovery_count": pcie_data.l0_to_recovery_count,
+                            "warning_threshold": l0_to_recovery_count_warning_threshold,
+                        },
+                        console_log=True,
+                    )
+
+            if pcie_data.nak_sent_count is not None and pcie_data.nak_sent_count > 0:
+                self._log_event(
+                    category=EventCategory.IO,
+                    description=f"GPU: {gpu} has sent {pcie_data.nak_sent_count} PCIe NAKs",
+                    priority=EventPriority.WARNING,
+                    data={"gpu": gpu, "nak_sent_count": pcie_data.nak_sent_count},
+                    console_log=True,
+                )
+
+            if pcie_data.nak_received_count is not None and pcie_data.nak_received_count > 0:
+                self._log_event(
+                    category=EventCategory.IO,
+                    description=f"GPU: {gpu} has received {pcie_data.nak_received_count} PCIe NAKs",
+                    priority=EventPriority.WARNING,
+                    data={"gpu": gpu, "nak_received_count": pcie_data.nak_received_count},
+                    console_log=True,
+                )
+
+    def check_amdsmi_metric_ecc_totals(self, amdsmi_metric_data: list[AmdSmiMetric]):
+        """Check ECC totals for all GPUs
+
+        Raises errors for uncorrectable errors, warnings for correctable and deferred.
+
+        Args:
+            amdsmi_metric_data (list[AmdSmiMetric]): AmdSmiMetric data model
+        """
+        for metric in amdsmi_metric_data:
+            ecc_totals = metric.ecc
+            gpu = metric.gpu
+
+            ecc_checks: list[tuple[EventPriority, Optional[int], str]] = [
+                (
+                    EventPriority.WARNING,
+                    ecc_totals.total_correctable_count,
+                    "Total correctable ECC errors",
+                ),
+                (
+                    EventPriority.ERROR,
+                    ecc_totals.total_uncorrectable_count,
+                    "Total uncorrectable ECC errors",
+                ),
+                (
+                    EventPriority.WARNING,
+                    ecc_totals.total_deferred_count,
+                    "Total deferred ECC errors",
+                ),
+                (
+                    EventPriority.WARNING,
+                    ecc_totals.cache_correctable_count,
+                    "Cache correctable ECC errors",
+                ),
+                (
+                    EventPriority.ERROR,
+                    ecc_totals.cache_uncorrectable_count,
+                    "Cache uncorrectable ECC errors",
+                ),
+            ]
+
+            for priority, count, desc in ecc_checks:
+                if count is not None and count > 0:
+                    self._log_event(
+                        category=EventCategory.RAS,
+                        description=f"GPU: {gpu} has {desc}: {count}",
+                        priority=priority,
+                        data={"gpu": gpu, "error_count": count, "error_type": desc},
+                        console_log=True,
+                    )
+
+    def check_amdsmi_metric_ecc(self, amdsmi_metric_data: list[AmdSmiMetric]):
+        """Check ECC counts in all blocks for all GPUs
+
+        Raises errors for uncorrectable errors, warnings for correctable and deferred.
+
+        Args:
+            amdsmi_metric_data (list[AmdSmiMetric]): AmdSmiMetric data model
+        """
+        for metric in amdsmi_metric_data:
+            gpu = metric.gpu
+            ecc_blocks = metric.ecc_blocks
+
+            # Skip if ecc_blocks is a string (e.g., "N/A") or empty
+            if isinstance(ecc_blocks, str) or not ecc_blocks:
+                continue
+
+            for block_name, ecc_data in ecc_blocks.items():
+                if not isinstance(ecc_data, EccData):
+                    continue
+
+                if ecc_data.correctable_count is not None and ecc_data.correctable_count > 0:
+                    self._log_event(
+                        category=EventCategory.RAS,
+                        description=f"GPU: {gpu} has correctable ECC errors in block {block_name}",
+                        priority=EventPriority.WARNING,
+                        data={
+                            "gpu": gpu,
+                            "block": block_name,
+                            "correctable_count": ecc_data.correctable_count,
+                        },
+                        console_log=True,
+                    )
+
+                if ecc_data.uncorrectable_count is not None and ecc_data.uncorrectable_count > 0:
+                    self._log_event(
+                        category=EventCategory.RAS,
+                        description=f"GPU: {gpu} has uncorrectable ECC errors in block {block_name}",
+                        priority=EventPriority.ERROR,
+                        data={
+                            "gpu": gpu,
+                            "block": block_name,
+                            "uncorrectable_count": ecc_data.uncorrectable_count,
+                        },
+                        console_log=True,
+                    )
+
+                if ecc_data.deferred_count is not None and ecc_data.deferred_count > 0:
+                    self._log_event(
+                        category=EventCategory.RAS,
+                        description=f"GPU: {gpu} has deferred ECC errors in block {block_name}",
+                        priority=EventPriority.WARNING,
+                        data={
+                            "gpu": gpu,
+                            "block": block_name,
+                            "deferred_count": ecc_data.deferred_count,
+                        },
+                        console_log=True,
+                    )
 
     def expected_gpu_processes(
         self, processes_data: Optional[list[Processes]], max_num_processes: int
@@ -426,6 +651,16 @@ class AmdSmiAnalyzer(DataAnalyzer[AmdSmiDataModel, None]):
 
         if args is None:
             args = AmdSmiAnalyzerArgs()
+
+        if data.metric is not None and len(data.metric) > 0:
+            if args.l0_to_recovery_count_error_threshold is not None:
+                self.check_amdsmi_metric_pcie(
+                    data.metric,
+                    args.l0_to_recovery_count_error_threshold,
+                    args.l0_to_recovery_count_warning_threshold or 1,
+                )
+            self.check_amdsmi_metric_ecc_totals(data.metric)
+            self.check_amdsmi_metric_ecc(data.metric)
 
         if args.expected_gpu_processes:
             self.expected_gpu_processes(data.process, args.expected_gpu_processes)
