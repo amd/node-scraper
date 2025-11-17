@@ -66,7 +66,6 @@ class JournalCollector(InBandDataCollector[JournalData, JournalCollectorArgs]):
                 priority=EventPriority.ERROR,
                 console_log=True,
             )
-            # set result to error and return None so upstream code can continue
             self.result.message = "Could not read journalctl data"
             self.result.status = ExecutionStatus.ERROR
             return None
