@@ -23,8 +23,8 @@
 # SOFTWARE.
 #
 ###############################################################################
-import importlib
-from typing import Any, Callable, Optional, Union, cast
+import json
+from typing import Any, Optional, Union
 
 from pydantic import ValidationError
 
@@ -34,25 +34,10 @@ from nodescraper.models import TaskResult
 from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     AmdSmiDataModel,
     AmdSmiListItem,
-    AmdSmiMetric,
     AmdSmiStatic,
     AmdSmiVersion,
-    BadPages,
     Fw,
     FwListItem,
-    MetricClockData,
-    MetricEccTotals,
-    MetricEnergy,
-    MetricFan,
-    MetricMemUsage,
-    MetricPcie,
-    MetricPower,
-    MetricTemperature,
-    MetricThrottle,
-    MetricThrottleVu,
-    MetricUsage,
-    MetricVoltageCurve,
-    PageData,
     Partition,
     PartitionCompute,
     PartitionMemory,
@@ -68,7 +53,6 @@ from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     StaticClockData,
     StaticDriver,
     StaticFrequencyLevels,
-    StaticLimit,
     StaticNuma,
     StaticPolicy,
     StaticSocPstate,
@@ -77,26 +61,142 @@ from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     StaticXgmiPlpd,
     ValueUnit,
 )
-from nodescraper.utils import get_exception_details, get_exception_traceback
+from nodescraper.utils import get_exception_traceback
 
 
 class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
     """Class for collection of inband tool amd-smi data."""
 
+    AMD_SMI_EXE = "amd-smi"
+
     SUPPORTED_OS_FAMILY: set[OSFamily] = {OSFamily.LINUX}
 
     DATA_MODEL = AmdSmiDataModel
 
-    _amdsmi: Optional[Any] = None  # dynamic import
+    CMD_VERSION = "amd-smi version --json"
+    CMD_LIST = "amd-smi list --json"
+    CMD_PROCESS = "amd-smi process --json"
+    CMD_PARTITION = "amd-smi partition --json"
+    CMD_FIRMWARE = "amd-smi firmware --json"
+    CMD_STATIC = "amd-smi static -g all --json"
 
-    def _amdsmi_mod(self) -> Any:
-        """Check for amdsmi installation
+    def _check_amdsmi_installed(self) -> bool:
+        """Check if amd-smi is installed
 
         Returns:
-            Any: local instance of amdsmi module
+            bool: True if amd-smi is installed, False otherwise
         """
-        assert self._amdsmi is not None, "amdsmi module not bound"
-        return self._amdsmi
+        cmd_ret = self._run_sut_cmd("which amd-smi")
+        return bool(cmd_ret.exit_code == 0 and "no amd-smi in" not in cmd_ret.stdout)
+
+    def _run_amd_smi(self, cmd: str) -> Optional[str]:
+        """Run amd-smi command
+
+        Args:
+            cmd (str): command arguments to pass to amd-smi
+
+        Returns:
+            Optional[str]: stdout from command or None on error
+        """
+        cmd_ret = self._run_sut_cmd(f"{self.AMD_SMI_EXE} {cmd}")
+
+        # Check for known warnings and errors that can be handled
+        is_group_warning = (
+            "User is missing the following required groups" in cmd_ret.stderr
+            or "User is missing the following required groups" in cmd_ret.stdout
+        )
+
+        # Check for known amd-smi internal errors
+        is_amdsmi_internal_error = any(
+            pattern in cmd_ret.stderr for pattern in ["KeyError:", "AttributeError:", "IndexError:"]
+        )
+
+        # Log warning if user is missing group
+        if cmd_ret.stderr != "" or cmd_ret.exit_code != 0:
+            if is_amdsmi_internal_error:
+                self._log_event(
+                    category=EventCategory.SW_DRIVER,
+                    description="amd-smi internal error detected",
+                    data={
+                        "command": cmd,
+                        "exit_code": cmd_ret.exit_code,
+                        "stderr": cmd_ret.stderr,
+                    },
+                    priority=EventPriority.WARNING,
+                    console_log=True,
+                )
+                return None
+            elif not is_group_warning:
+                self._log_event(
+                    category=EventCategory.APPLICATION,
+                    description="Error running amd-smi command",
+                    data={
+                        "command": cmd,
+                        "exit_code": cmd_ret.exit_code,
+                        "stderr": cmd_ret.stderr,
+                    },
+                    priority=EventPriority.ERROR,
+                    console_log=True,
+                )
+                return None
+            else:
+                self._log_event(
+                    category=EventCategory.APPLICATION,
+                    description="amd-smi warning (continuing): User missing required groups",
+                    data={
+                        "command": cmd,
+                        "warning": cmd_ret.stderr or cmd_ret.stdout,
+                    },
+                    priority=EventPriority.WARNING,
+                    console_log=False,
+                )
+
+        stdout = cmd_ret.stdout
+        if is_group_warning and stdout:
+            lines = stdout.split("\n")
+            cleaned_lines = [
+                line
+                for line in lines
+                if not any(
+                    warn in line
+                    for warn in [
+                        "RuntimeError:",
+                        "WARNING: User is missing",
+                        "Please add user to these groups",
+                    ]
+                )
+            ]
+            stdout = "\n".join(cleaned_lines).strip()
+
+        return stdout
+
+    def _run_amd_smi_dict(self, cmd: str) -> Optional[Union[dict, list[dict]]]:
+        """Run amd-smi command with json output
+
+        Args:
+            cmd (str): command arguments to pass to amd-smi
+
+        Returns:
+            Optional[Union[dict, list[dict]]]: parsed JSON output or None on error
+        """
+        cmd += " --json"
+        cmd_ret = self._run_amd_smi(cmd)
+        if cmd_ret:
+            try:
+                return json.loads(cmd_ret)
+            except json.JSONDecodeError as e:
+                self._log_event(
+                    category=EventCategory.APPLICATION,
+                    description=f"Error parsing command: `{cmd}` json data",
+                    data={
+                        "cmd": cmd,
+                        "exception": get_exception_traceback(e),
+                    },
+                    priority=EventPriority.ERROR,
+                    console_log=True,
+                )
+                return None
+        return None
 
     def _to_number(self, v: object) -> Optional[Union[int, float]]:
         """Helper function to return number from str, float or "N/A"
@@ -179,46 +279,6 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
 
         return s
 
-    def _bind_amdsmi_or_log(self) -> bool:
-        """Bind to local amdsmi lib or log that it is not found
-
-        Returns:
-            bool: True if module is found, false otherwise
-        """
-        if getattr(self, "_amdsmi", None) is not None:
-            return True
-        try:
-            self._amdsmi = importlib.import_module("amdsmi")
-            return True
-        except Exception as e:
-            self._log_event(
-                category=EventCategory.APPLICATION,
-                description="Failed to import amdsmi package, please ensure amdsmi is installed and Python bindings are available",
-                data={"exception": get_exception_traceback(e)},
-                priority=EventPriority.ERROR,
-                console_log=True,
-            )
-            return False
-
-    def _get_handles(self) -> list[Any]:
-        """Get amdsmi handles
-
-        Returns:
-            list[Any]: list of processor handles
-        """
-        amdsmi = self._amdsmi_mod()
-        try:
-            return amdsmi.amdsmi_get_processor_handles()
-        except amdsmi.AmdSmiException as e:  # type: ignore[attr-defined]
-            self._log_event(
-                category=EventCategory.APPLICATION,
-                description="amdsmi_get_processor_handles failed",
-                data={"exception": get_exception_traceback(e)},
-                priority=EventPriority.ERROR,
-                console_log=True,
-            )
-            return []
-
     def _get_amdsmi_data(self) -> Optional[AmdSmiDataModel]:
         """Fill in information for AmdSmi data model
 
@@ -227,15 +287,12 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         """
         try:
             version = self._get_amdsmi_version()
-            bad_pages = self.get_bad_pages()
             processes = self.get_process()
             partition = self.get_partition()
             firmware = self.get_firmware()
             gpu_list = self.get_gpu_list()
             statics = self.get_static()
-            metric = self.get_metric()
         except Exception as e:
-            self.logger.error(e)
             self._log_event(
                 category=EventCategory.APPLICATION,
                 description="Error running amd-smi sub commands",
@@ -249,58 +306,63 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         try:
             return AmdSmiDataModel(
                 version=version,
-                bad_pages=bad_pages,
                 gpu_list=gpu_list,
                 process=processes,
                 partition=partition,
                 firmware=firmware,
                 static=statics,
-                metric=metric,
             )
-        except ValidationError as e:
-            self.logger.warning("Validation err: %s", e)
+        except ValidationError as err:
+            self.logger.warning("Validation err: %s", err)
             self._log_event(
                 category=EventCategory.APPLICATION,
                 description="Failed to build AmdSmiDataModel",
-                data=get_exception_details(e),
+                data={"errors": err.errors(include_url=False)},
                 priority=EventPriority.ERROR,
             )
             return None
 
     def _get_amdsmi_version(self) -> Optional[AmdSmiVersion]:
-        """Check amdsmi library version
+        """Get amdsmi version and data
 
         Returns:
-            Optional[AmdSmiVersion]: version of the library
+            Optional[AmdSmiVersion]: version information or None on error
         """
-        amdsmi = self._amdsmi_mod()
+        ret = self._run_amd_smi_dict("version")
+        if not ret or not isinstance(ret, list) or len(ret) == 0:
+            return None
+
+        version_data = ret[0] if isinstance(ret, list) else ret
+        if not isinstance(version_data, dict):
+            return None
+
         try:
-            lib_ver = amdsmi.amdsmi_get_lib_version() or ""
-            rocm_ver = amdsmi.amdsmi_get_rocm_version() or ""
-        except amdsmi.AmdSmiException as e:  # type: ignore[attr-defined]
+            return AmdSmiVersion(
+                tool="amdsmi",
+                version=version_data.get("amdsmi_library_version", ""),
+                amdsmi_library_version=version_data.get("amdsmi_library_version", ""),
+                rocm_version=version_data.get("rocm_version", ""),
+            )
+        except ValidationError as err:
             self._log_event(
                 category=EventCategory.APPLICATION,
-                description="Failed to read AMD SMI versions",
-                data={"exception": get_exception_traceback(e)},
+                description="Failed to build AmdSmiVersion",
+                data={"errors": err.errors(include_url=False)},
                 priority=EventPriority.WARNING,
             )
             return None
 
-        return AmdSmiVersion(
-            tool="amdsmi",
-            version=lib_ver,
-            amdsmi_library_version=lib_ver,
-            rocm_version=rocm_ver,
-        )
-
     def get_gpu_list(self) -> Optional[list[AmdSmiListItem]]:
-        """Get GPU information from amdsmi lib
+        """Get GPU information from amd-smi list command
 
         Returns:
             Optional[list[AmdSmiListItem]]: list of GPU info items
         """
-        amdsmi = self._amdsmi_mod()
-        devices = self._get_handles()
+        ret = self._run_amd_smi_dict("list")
+        if not ret:
+            return []
+
+        gpu_data = ret if isinstance(ret, list) else [ret]
         out: list[AmdSmiListItem] = []
 
         def _to_int(x: Any, default: int = 0) -> int:
@@ -309,28 +371,26 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             except Exception:
                 return default
 
-        for idx, h in enumerate(devices):
-            bdf = self._smi_try(amdsmi.amdsmi_get_gpu_device_bdf, h, default="") or ""
-            uuid = self._smi_try(amdsmi.amdsmi_get_gpu_device_uuid, h, default="") or ""
-            kfd = self._smi_try(amdsmi.amdsmi_get_gpu_kfd_info, h, default={}) or {}
-            partition_id = 0
+        for item in gpu_data:
+            if not isinstance(item, dict):
+                continue
 
             try:
                 out.append(
                     AmdSmiListItem(
-                        gpu=idx,
-                        bdf=bdf,
-                        uuid=uuid,
-                        kfd_id=_to_int(kfd.get("kfd_id", 0)) if isinstance(kfd, dict) else 0,
-                        node_id=_to_int(kfd.get("node_id", 0)) if isinstance(kfd, dict) else 0,
-                        partition_id=partition_id,
+                        gpu=_to_int(item.get("gpu", 0)),
+                        bdf=str(item.get("bdf", "")),
+                        uuid=str(item.get("uuid", "")),
+                        kfd_id=_to_int(item.get("kfd_id", 0)),
+                        node_id=_to_int(item.get("node_id", 0)),
+                        partition_id=_to_int(item.get("partition_id", 0)),
                     )
                 )
-            except ValidationError as e:
+            except ValidationError as err:
                 self._log_event(
                     category=EventCategory.APPLICATION,
                     description="Failed to build AmdSmiListItem",
-                    data={"exception": get_exception_traceback(e), "gpu_index": idx},
+                    data={"errors": err.errors(include_url=False), "item": item},
                     priority=EventPriority.WARNING,
                 )
 
@@ -342,101 +402,83 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         Returns:
             Optional[list[Processes]]: list of GPU processes
         """
-        amdsmi = self._amdsmi_mod()
-        devices = self._get_handles()
+        ret = self._run_amd_smi_dict("process")
+        if not ret:
+            return []
+
+        process_data = ret if isinstance(ret, list) else [ret]
         out: list[Processes] = []
 
-        for idx, h in enumerate(devices):
-            try:
-                raw_list = self._smi_try(amdsmi.amdsmi_get_gpu_process_list, h, default=[]) or []
-                plist: list[ProcessListItem] = []
+        for item in process_data:
+            if not isinstance(item, dict):
+                continue
 
-                for entry in raw_list:
-                    if not isinstance(entry, dict):
-                        plist.append(ProcessListItem(process_info=str(entry)))
-                        continue
+            gpu_idx = int(item.get("gpu", 0)) if item.get("gpu") not in (None, "") else 0
+            process_list_raw = item.get("process_list", [])
+            if not isinstance(process_list_raw, list):
+                continue
 
-                    raw_name = entry.get("name", None)
-                    name = (
-                        None
-                        if (raw_name is None or str(raw_name).strip().upper() == "N/A")
-                        else str(raw_name)
-                    )
+            plist: list[ProcessListItem] = []
 
-                    pid_val = entry.get("pid", 0)
-                    try:
-                        pid = int(pid_val) if pid_val not in (None, "") else 0
-                    except Exception:
-                        pid = 0
+            for entry in process_list_raw:
+                if not isinstance(entry, dict):
+                    plist.append(ProcessListItem(process_info=str(entry)))
+                    continue
 
-                    # memory_usage block
-                    mu = entry.get("memory_usage") or {}
-                    gtt_mem_vu = self._valueunit(mu.get("gtt_mem"), "B")
-                    cpu_mem_vu = self._valueunit(mu.get("cpu_mem"), "B")
-                    vram_mem_vu = self._valueunit(mu.get("vram_mem"), "B")
+                name = entry.get("name", "N/A")
+                pid_val = entry.get("pid", 0)
+                try:
+                    pid = int(pid_val) if pid_val not in (None, "") else 0
+                except Exception:
+                    pid = 0
 
-                    # mem
-                    mem_vu = self._valueunit(entry.get("mem"), "B")
-                    if mem_vu is None and vram_mem_vu is not None:
-                        mem_vu = vram_mem_vu
+                mem_vu = self._valueunit(entry.get("mem"), "B")
 
-                    if (not mu) and mem_vu is not None and vram_mem_vu is None:
-                        vram_mem_vu = mem_vu
+                mu = entry.get("memory_usage") or {}
+                mem_usage = ProcessMemoryUsage(
+                    gtt_mem=self._valueunit(mu.get("gtt_mem"), "B"),
+                    cpu_mem=self._valueunit(mu.get("cpu_mem"), "B"),
+                    vram_mem=self._valueunit(mu.get("vram_mem"), "B"),
+                )
 
-                    mem_usage = ProcessMemoryUsage(
-                        gtt_mem=gtt_mem_vu,
-                        cpu_mem=cpu_mem_vu,
-                        vram_mem=vram_mem_vu,
-                    )
-
-                    # engine_usage
-                    eu = entry.get("engine_usage") or {}
-                    gfx_vu = self._valueunit(eu.get("gfx"), "ns") or self._valueunit(0, "ns")
-                    enc_vu = self._valueunit(eu.get("enc"), "ns") or self._valueunit(0, "ns")
-                    usage = ProcessUsage(gfx=gfx_vu, enc=enc_vu)
-
-                    cu_occ = self._valueunit(entry.get("cu_occupancy"), "")
-
-                    try:
-                        plist.append(
-                            ProcessListItem(
-                                process_info=ProcessInfo(
-                                    name=name if name is not None else "N/A",
-                                    pid=pid,
-                                    mem=mem_vu,
-                                    memory_usage=mem_usage,
-                                    usage=usage,
-                                    cu_occupancy=cu_occ,
-                                )
-                            )
-                        )
-                    except ValidationError as e:
-                        self._log_event(
-                            category=EventCategory.APPLICATION,
-                            description="Failed to build ProcessListItem; skipping entry",
-                            data={
-                                "exception": get_exception_traceback(e),
-                                "gpu_index": idx,
-                                "entry": repr(entry),
-                            },
-                            priority=EventPriority.WARNING,
-                        )
-                        continue
+                eu = entry.get("engine_usage") or {}
+                usage = ProcessUsage(
+                    gfx=self._valueunit(eu.get("gfx"), "ns"),
+                    enc=self._valueunit(eu.get("enc"), "ns"),
+                )
 
                 try:
-                    out.append(Processes(gpu=idx, process_list=plist))
-                except ValidationError as e:
+                    plist.append(
+                        ProcessListItem(
+                            process_info=ProcessInfo(
+                                name=str(name),
+                                pid=pid,
+                                memory_usage=mem_usage,
+                                mem_usage=mem_vu,
+                                usage=usage,
+                            )
+                        )
+                    )
+                except ValidationError as err:
                     self._log_event(
                         category=EventCategory.APPLICATION,
-                        description="Failed to build Processes",
-                        data={"exception": get_exception_traceback(e), "gpu_index": idx},
+                        description="Failed to build ProcessListItem; skipping entry",
+                        data={
+                            "errors": err.errors(include_url=False),
+                            "gpu_index": gpu_idx,
+                            "entry": repr(entry),
+                        },
                         priority=EventPriority.WARNING,
                     )
-            except amdsmi.AmdSmiException as e:  # type: ignore[attr-defined]
+                    continue
+
+            try:
+                out.append(Processes(gpu=gpu_idx, process_list=plist))
+            except ValidationError as err:
                 self._log_event(
                     category=EventCategory.APPLICATION,
-                    description="Process collection failed",
-                    data={"exception": get_exception_traceback(e), "gpu_index": idx},
+                    description="Failed to build Processes",
+                    data={"errors": err.errors(include_url=False), "gpu_index": gpu_idx},
                     priority=EventPriority.WARNING,
                 )
 
@@ -448,26 +490,33 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         Returns:
             Optional[Partition]: Partition data if available
         """
-        amdsmi = self._amdsmi_mod()
-        devices = self._get_handles()
+        ret = self._run_amd_smi_dict("partition")
+        if not ret:
+            return None
+
+        partition_data = ret if isinstance(ret, list) else [ret]
         memparts: list[PartitionMemory] = []
         computeparts: list[PartitionCompute] = []
 
-        for idx, h in enumerate(devices):
-            mem_pt = self._smi_try(amdsmi.amdsmi_get_gpu_memory_partition, h, default=None)
-            comp_pt = self._smi_try(amdsmi.amdsmi_get_gpu_compute_partition, h, default=None)
+        for item in partition_data:
+            if not isinstance(item, dict):
+                continue
+
+            gpu_idx = int(item.get("gpu", 0)) if item.get("gpu") not in (None, "") else 0
+            mem_pt = item.get("memory_partition")
+            comp_pt = item.get("compute_partition")
 
             try:
                 memparts.append(
-                    PartitionMemory(gpu_id=idx, partition_type=cast(Optional[str], mem_pt))
+                    PartitionMemory(gpu_id=gpu_idx, partition_type=str(mem_pt) if mem_pt else None)
                 )
-            except ValidationError as e:
+            except ValidationError as err:
                 self._log_event(
                     category=EventCategory.APPLICATION,
                     description="Failed to build PartitionMemory",
                     data={
-                        "exception": get_exception_traceback(e),
-                        "gpu_index": idx,
+                        "errors": err.errors(include_url=False),
+                        "gpu_index": gpu_idx,
                         "data": mem_pt,
                     },
                     priority=EventPriority.WARNING,
@@ -475,15 +524,17 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
 
             try:
                 computeparts.append(
-                    PartitionCompute(gpu_id=idx, partition_type=cast(Optional[str], comp_pt))
+                    PartitionCompute(
+                        gpu_id=gpu_idx, partition_type=str(comp_pt) if comp_pt else None
+                    )
                 )
-            except ValidationError as e:
+            except ValidationError as err:
                 self._log_event(
                     category=EventCategory.APPLICATION,
                     description="Failed to build PartitionCompute",
                     data={
-                        "exception": get_exception_traceback(e),
-                        "gpu_index": idx,
+                        "errors": err.errors(include_url=False),
+                        "gpu_index": gpu_idx,
                         "data": comp_pt,
                     },
                     priority=EventPriority.WARNING,
@@ -491,11 +542,11 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
 
         try:
             return Partition(memory_partition=memparts, compute_partition=computeparts)
-        except ValidationError as e:
+        except ValidationError as err:
             self._log_event(
                 category=EventCategory.APPLICATION,
                 description="Failed to build Partition",
-                data={"exception": get_exception_traceback(e)},
+                data={"errors": err.errors(include_url=False)},
                 priority=EventPriority.WARNING,
             )
             return None
@@ -506,29 +557,31 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         Returns:
             Optional[list[Fw]]: List of firmware info per GPU
         """
-        amdsmi = self._amdsmi_mod()
-        devices = self._get_handles()
+        ret = self._run_amd_smi_dict("firmware")
+        if not ret:
+            return []
+
+        firmware_data = ret if isinstance(ret, list) else [ret]
         out: list[Fw] = []
 
-        for idx, h in enumerate(devices):
-            raw = self._smi_try(amdsmi.amdsmi_get_fw_info, h, default=None)
-            if (
-                not isinstance(raw, dict)
-                or "fw_list" not in raw
-                or not isinstance(raw["fw_list"], list)
-            ):
+        for item in firmware_data:
+            if not isinstance(item, dict):
                 continue
 
-            items = raw["fw_list"]
+            gpu_idx = int(item.get("gpu", 0)) if item.get("gpu") not in (None, "") else 0
+            fw_list_raw = item.get("fw_list", [])
+
+            if not isinstance(fw_list_raw, list):
+                continue
 
             normalized: list[FwListItem] = []
-            for e in items:
+            for e in fw_list_raw:
                 if isinstance(e, dict):
                     fid = e.get("fw_name")
                     ver = e.get("fw_version")
                     normalized.append(
                         FwListItem(
-                            fw_name="" if fid is None else str(fid),
+                            fw_id="" if fid is None else str(fid),
                             fw_version="" if ver is None else str(ver),
                         )
                     )
@@ -541,153 +594,93 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                     )
 
             try:
-                out.append(Fw(gpu=idx, fw_list=normalized))
-            except ValidationError as e:
+                out.append(Fw(gpu=gpu_idx, fw_list=normalized))
+            except ValidationError as err:
                 self._log_event(
                     category=EventCategory.APPLICATION,
                     description="Failed to build Fw",
-                    data={"exception": get_exception_traceback(e), "gpu_index": idx},
+                    data={"errors": err.errors(include_url=False), "gpu_index": gpu_idx},
                     priority=EventPriority.WARNING,
                 )
 
         return out
 
-    def _smi_try(self, fn: Callable[..., Any], *a: Any, default: Any = None, **kw: Any) -> Any:
-        """Helper function to check if amdsmi lib call is available
-
-        Args:
-            fn (Callable[..., Any]): amdsmi lib function to call
-            *a (Any): variable positional arguments to pass to the function
-            default (Any, optional): default return value. Defaults to None.
-            **kw (Any): variable keyword arguments to pass to the function
-
-        Returns:
-            Any: result of function call or default value on error
-        """
-        amdsmi = self._amdsmi_mod()
-        try:
-            return fn(*a, **kw)
-        except amdsmi.AmdSmiException as e:  # type: ignore[attr-defined]
-            fn_name = getattr(fn, "__name__", str(fn))
-            self.logger.warning(
-                "%s(%s) raised AmdSmiException: %s",
-                fn_name,
-                ", ".join(repr(x) for x in a),
-                e,
-            )
-
-            code = getattr(e, "ret_code", None)
-            if code is None:
-                try:
-                    code = int(e.args[0]) if getattr(e, "args", None) else None
-                except Exception:
-                    code = None
-
-            CODE2NAME = {
-                1: "AMDSMI_STATUS_SUCCESS",
-                2: "AMDSMI_STATUS_NOT_SUPPORTED",
-                3: "AMDSMI_STATUS_PERMISSION",
-                4: "AMDSMI_STATUS_OUT_OF_RESOURCES",
-                5: "AMDSMI_STATUS_INIT_ERROR",
-                6: "AMDSMI_STATUS_INPUT_OUT_OF_BOUNDS",
-                7: "AMDSMI_STATUS_NOT_FOUND",
-            }
-            name = CODE2NAME.get(code, "unknown") if isinstance(code, int) else "unknown"
-
-            common_data = {
-                "function": fn_name,
-                "args": [repr(x) for x in a],
-                "status_name": name,
-                "status_code": code,
-                "exception": get_exception_traceback(e),
-            }
-
-            if name in ("AMDSMI_STATUS_NOT_SUPPORTED", "AMDSMI_STATUS_NOT_FOUND"):
-                self._log_event(
-                    category=EventCategory.APPLICATION,
-                    description=f"{fn_name} not supported on this device/mode (status={name}, code={code})",
-                    data=common_data,
-                    priority=EventPriority.WARNING,
-                )
-                return default
-
-            if name == "AMDSMI_STATUS_PERMISSION":
-                self._log_event(
-                    category=EventCategory.APPLICATION,
-                    description=(
-                        f"{fn_name} permission denied "
-                        f"(need access to /dev/kfd & render nodes, or root for RAS). "
-                        f"status={name}, code={code}"
-                    ),
-                    data=common_data,
-                    priority=EventPriority.WARNING,
-                )
-                return default
-
-            self._log_event(
-                category=EventCategory.APPLICATION,
-                description=f"{fn_name} failed (status={name}, code={code})",
-                data=common_data,
-                priority=EventPriority.WARNING,
-            )
-            return default
-
     def get_static(self) -> Optional[list[AmdSmiStatic]]:
-        """Get Static info from amdsmi lib
+        """Get Static info from amd-smi static command
 
         Returns:
             Optional[list[AmdSmiStatic]]: list of AmdSmiStatic instances or empty list
         """
-        amdsmi = self._amdsmi_mod()
-        devices = self._get_handles()
-        if not devices:
-            return []
+        ret = self._run_amd_smi_dict("static -g all")
+        if not ret:
+            self.logger.info("Bulk static query failed, attempting per-GPU fallback")
+            gpu_list = self.get_gpu_list()
+            if gpu_list:
+                fallback_data: list[dict] = []
+                for gpu in gpu_list:
+                    gpu_data = self._run_amd_smi_dict(f"static -g {gpu.gpu}")
+                    if gpu_data:
+                        if isinstance(gpu_data, dict):
+                            fallback_data.append(gpu_data)
+                        elif isinstance(gpu_data, list):
+                            fallback_data.extend(gpu_data)
+                if fallback_data:
+                    ret = fallback_data
+                else:
+                    return []
+            else:
+                return []
 
-        pcie_fn = getattr(amdsmi, "amdsmi_get_pcie_info", None)
+        if isinstance(ret, dict) and "gpu_data" in ret:
+            ret = ret["gpu_data"]
 
+        static_data = ret if isinstance(ret, list) else [ret]
         out: list[AmdSmiStatic] = []
 
-        for idx, h in enumerate(devices):
-            board = self._smi_try(amdsmi.amdsmi_get_gpu_board_info, h, default={}) or {}
-            asic = self._smi_try(amdsmi.amdsmi_get_gpu_asic_info, h, default={}) or {}
-            bdf = self._smi_try(amdsmi.amdsmi_get_gpu_device_bdf, h, default="") or ""
-            kfd = self._smi_try(amdsmi.amdsmi_get_gpu_kfd_info, h, default={}) or {}
+        for item in static_data:
+            if not isinstance(item, dict) or "gpu" not in item:
+                continue
+
+            gpu_idx = int(item.get("gpu", 0)) if item.get("gpu") not in (None, "") else 0
+
+            asic = item.get("asic", {}) or {}
+            board = item.get("board", {}) or {}
+            bus = item.get("bus", {}) or {}
+            vbios = item.get("vbios", {}) or {}
+            driver = item.get("driver", {}) or {}
+            numa = item.get("numa", {}) or {}
+            vram = item.get("vram", {}) or {}
+            cache = item.get("cache", {}) or {}
+            clock = item.get("clock", {}) or {}
+            soc_pstate = item.get("soc_pstate", {}) or {}
+            xgmi_plpd = item.get("xgmi_plpd", {}) or {}
 
             # Bus / PCIe
-            bus = StaticBus(
-                bdf=bdf,
-                max_pcie_width=None,
-                max_pcie_speed=None,
-                pcie_interface_version="unknown",
-                slot_type="Unknown",
+            bus_model = StaticBus(
+                bdf=str(bus.get("bdf", "")),
+                max_pcie_width=self._valueunit(bus.get("max_pcie_width"), "x"),
+                max_pcie_speed=self._valueunit(bus.get("max_pcie_speed"), "GT/s"),
+                pcie_interface_version=self._normalize(bus.get("pcie_interface_version")),
+                slot_type=self._normalize(bus.get("slot_type"), slot_type=True),
             )
 
-            if callable(pcie_fn):
-                p = self._smi_try(pcie_fn, h, default={}) or {}
-                d = p.get("pcie_static", p) if isinstance(p, dict) else {}
-
-                if isinstance(d, dict):
-                    max_w = d.get("max_pcie_width")
-                    max_s = d.get("max_pcie_speed")
-                    pcie_ver = d.get("pcie_interface_version")
-
-                    # MT/s -> GT/s
-                    ms_val = self._to_number(max_s)
-                    gtps = (
-                        (cast(float, ms_val) / 1000.0)
-                        if (isinstance(ms_val, (int, float)) and ms_val >= 1000)
-                        else ms_val
-                    )
-
-                    bus = StaticBus(
-                        bdf=bdf,
-                        max_pcie_width=self._valueunit(max_w, "x"),
-                        max_pcie_speed=self._valueunit(gtps, "GT/s"),
-                        pcie_interface_version=self._normalize(pcie_ver),
-                        slot_type=self._normalize(d.get("slot_type"), slot_type=True),
-                    )
-
             # ASIC
+            oam_id_raw = asic.get("oam_id")
+            if oam_id_raw in (None, "", "N/A"):
+                oam_id_val: Union[int, str] = "N/A"
+            elif isinstance(oam_id_raw, str):
+                oam_id_val = oam_id_raw
+            else:
+                oam_id_val = int(oam_id_raw) if oam_id_raw is not None else "N/A"
+
+            num_cu_raw = asic.get("num_compute_units")
+            if num_cu_raw in (None, "", "N/A"):
+                num_cu_val: Union[int, str] = "N/A"
+            elif isinstance(num_cu_raw, str):
+                num_cu_val = num_cu_raw
+            else:
+                num_cu_val = int(num_cu_raw) if num_cu_raw is not None else "N/A"
+
             asic_model = StaticAsic(
                 market_name=self._normalize(
                     asic.get("market_name") or asic.get("asic_name"), default=""
@@ -699,8 +692,8 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                 subsystem_id=str(asic.get("subsystem_id", "")),
                 rev_id=str(asic.get("rev_id", "")),
                 asic_serial=str(asic.get("asic_serial", "")),
-                oam_id=int(asic.get("oam_id", 0) or 0),
-                num_compute_units=int(asic.get("num_compute_units", 0) or 0),
+                oam_id=oam_id_val,
+                num_compute_units=num_cu_val,
                 target_graphics_version=str(asic.get("target_graphics_version", "")),
             )
 
@@ -716,89 +709,76 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             )
 
             # Driver
-            driver_model = None
-            drv_fn = getattr(amdsmi, "amdsmi_get_gpu_driver_info", None)
-            if callable(drv_fn):
-                drv = self._smi_try(drv_fn, h, default={}) or {}
-                driver_model = StaticDriver(
-                    name=self._normalize(drv.get("driver_name"), default="unknown"),
-                    version=self._normalize(drv.get("driver_version"), default="unknown"),
-                )
+            driver_model = StaticDriver(
+                name=self._normalize(
+                    driver.get("driver_name") if driver else None, default="unknown"
+                ),
+                version=self._normalize(
+                    driver.get("driver_version") if driver else None, default="unknown"
+                ),
+            )
 
             # VBIOS
-            vb = {
-                k: board[k]
-                for k in ("vbios_name", "vbios_build_date", "vbios_part_number", "vbios_version")
-                if k in board
-            }
             vbios_model: Optional[StaticVbios] = None
-            if vb:
+            if vbios:
                 vbios_model = StaticVbios(
-                    name=str(vb.get("vbios_name", "")),
-                    build_date=str(vb.get("vbios_build_date", "")),
-                    part_number=str(vb.get("vbios_part_number", "")),
-                    version=str(vb.get("vbios_version", "")),
+                    name=str(vbios.get("vbios_name", "")),
+                    build_date=str(vbios.get("vbios_build_date", "")),
+                    part_number=str(vbios.get("vbios_part_number", "")),
+                    version=str(vbios.get("vbios_version", "")),
                 )
 
             # NUMA
-            if isinstance(kfd, dict):
-                try:
-                    numa_node = int(kfd.get("node_id", 0) or 0)
-                except Exception:
-                    numa_node = 0
+            numa_node = int(numa.get("node", 0) or 0)
+            affinity_raw = numa.get("affinity")
+            if affinity_raw in (None, "", "N/A"):
+                affinity_val: Union[int, str] = "N/A"
+            elif isinstance(affinity_raw, str):
+                affinity_val = affinity_raw
             else:
-                numa_node = 0
-            affinity = 0
-            numa_model = StaticNuma(node=numa_node, affinity=affinity)
+                affinity_val = int(affinity_raw) if affinity_raw is not None else "N/A"
+
+            numa_model = StaticNuma(node=numa_node, affinity=affinity_val)
 
             # VRAM
-            vram_type = str(asic.get("vram_type", "") or "unknown")
-            vram_vendor = asic.get("vram_vendor")
-            vram_bits = asic.get("vram_bit_width")
+            vram_type = str(vram.get("vram_type", "") or "unknown")
+            vram_vendor = vram.get("vram_vendor")
+            vram_bits = vram.get("vram_bit_width")
             vram_size_b: Optional[int] = None
-            if asic.get("vram_size_bytes") is not None:
+            if vram.get("vram_size_mb") is not None:
                 try:
-                    vram_size_b = int(asic["vram_size_bytes"])
+                    vram_size_b = int(vram["vram_size_mb"]) * 1024 * 1024
                 except Exception:
                     vram_size_b = None
-            elif asic.get("vram_size_mb") is not None:
-                try:
-                    vram_size_b = int(asic["vram_size_mb"]) * 1024 * 1024
-                except Exception:
-                    vram_size_b = None
-
-            # Calculate VRAM max bandwidth if possible
-            max_bandwidth = None
-            if vram_bits and kfd.get("memory_max_frequency"):
-                try:
-                    mem_freq_mhz = float(kfd["memory_max_frequency"])
-                    # Bandwidth (GB/s) = (bit_width * frequency_MHz) / 8000 Note: is this correct?
-                    bandwidth_gbs = (float(vram_bits) * mem_freq_mhz) / 8000.0
-                    max_bandwidth = self._valueunit(bandwidth_gbs, "GB/s")
-                except Exception:
-                    pass
 
             vram_model = StaticVram(
                 type=vram_type,
                 vendor=None if vram_vendor in (None, "", "N/A") else str(vram_vendor),
                 size=self._valueunit(vram_size_b, "B"),
                 bit_width=self._valueunit(vram_bits, "bit"),
-                max_bandwidth=max_bandwidth,
+                max_bandwidth=None,
             )
 
-            soc_pstate_model = self._get_soc_pstate(h)
-            xgmi_plpd_model = self._get_xgmi_plpd(h)
-            cache_info_model = self._get_cache_info(h)
-            clock_model = self._get_clock(h)
+            # SOC P-state
+            soc_pstate_model = self._parse_soc_pstate(soc_pstate)
+
+            # XGMI PLPD
+            xgmi_plpd_model = self._parse_xgmi_plpd(xgmi_plpd)
+
+            # Cache info
+            cache_info_model = self._parse_cache_info(cache)
+
+            # Clock
+            clock_dict_model = self._parse_clock_dict(clock)
 
             try:
                 out.append(
                     AmdSmiStatic(
-                        gpu=idx,
+                        gpu=gpu_idx,
                         asic=asic_model,
-                        bus=bus,
+                        bus=bus_model,
                         vbios=vbios_model,
-                        limit=self._get_limit_info(h),
+                        limit=None,
                         driver=driver_model,
                         board=board_model,
                         soc_pstate=soc_pstate_model,
@@ -807,41 +787,30 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                         numa=numa_model,
                         vram=vram_model,
                         cache_info=cache_info_model,
-                        partition=None,  # Note: ?
-                        clock=clock_model,
+                        partition=None,
+                        clock=clock_dict_model,
                     )
                 )
-            except ValidationError as e:
-                self.logger.error(e)
+            except ValidationError as err:
+                self.logger.error(err)
                 self._log_event(
                     category=EventCategory.APPLICATION,
                     description="Failed to build AmdSmiStatic",
-                    data={"exception": get_exception_traceback(e), "gpu_index": idx},
+                    data={"errors": err.errors(include_url=False), "gpu_index": gpu_idx},
                     priority=EventPriority.WARNING,
                 )
 
         return out
 
-    def _get_soc_pstate(self, handle: Any) -> Optional[StaticSocPstate]:
-        """Get SOC P-state (performance state) policy information for a GPU device.
+    def _parse_soc_pstate(self, data: dict) -> Optional[StaticSocPstate]:
+        """Parse SOC P-state data
 
         Args:
-            handle (Any): GPU device handle
+            data (dict): SOC P-state data from amd-smi
 
         Returns:
-            Optional[StaticSocPstate]: SOC P-state policy data or None if unavailable
+            Optional[StaticSocPstate]: StaticSocPstate instance or None
         """
-        amdsmi = self._amdsmi_mod()
-        fn = getattr(amdsmi, "amdsmi_get_soc_pstate", None)
-        if not callable(fn):
-            self._log_event(
-                category=EventCategory.APPLICATION,
-                description="amdsmi_get_soc_pstate not exposed by amdsmi build",
-                priority=EventPriority.WARNING,
-            )
-            return None
-
-        data = self._smi_try(fn, handle, default=None)
         if not isinstance(data, dict):
             return None
 
@@ -884,26 +853,15 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         except ValidationError:
             return None
 
-    def _get_xgmi_plpd(self, handle: Any) -> Optional[StaticXgmiPlpd]:
-        """Get XGMI Per-Link Power Down (PLPD) policy for a GPU device.
+    def _parse_xgmi_plpd(self, data: dict) -> Optional[StaticXgmiPlpd]:
+        """Parse XGMI PLPD data
 
         Args:
-            handle (Any): GPU device handle
+            data (dict): XGMI PLPD data from amd-smi
 
         Returns:
-            Optional[StaticXgmiPlpd]: XGMI PLPD policy data or None if unavailable
+            Optional[StaticXgmiPlpd]: StaticXgmiPlpd instance or None
         """
-        amdsmi = self._amdsmi_mod()
-        fn = getattr(amdsmi, "amdsmi_get_xgmi_plpd", None)
-        if not callable(fn):
-            self._log_event(
-                category=EventCategory.APPLICATION,
-                description="XGMI PLPD not exposed by this amdsmi build",
-                priority=EventPriority.WARNING,
-            )
-            return None
-
-        data = self._smi_try(fn, handle, default=None)
         if not isinstance(data, dict):
             return None
 
@@ -946,21 +904,19 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         except ValidationError:
             return None
 
-    def _get_cache_info(self, handle: Any) -> list[StaticCacheInfoItem]:
-        """Get GPU cache hierarchy information (L1, L2, L3, etc.).
+    def _parse_cache_info(self, data: dict) -> list[StaticCacheInfoItem]:
+        """Parse cache info data
 
         Args:
-            handle (Any): GPU device handle
+            data (dict): Cache data from amd-smi
 
         Returns:
-            list[StaticCacheInfoItem]: List of cache info items for each cache level
+            list[StaticCacheInfoItem]: list of StaticCacheInfoItem instances
         """
-        amdsmi = self._amdsmi_mod()
-        raw = self._smi_try(amdsmi.amdsmi_get_gpu_cache_info, handle, default=None)
-        if not isinstance(raw, dict) or not isinstance(raw.get("cache"), list):
+        if not isinstance(data, dict) or not isinstance(data.get("cache"), list):
             return []
 
-        items = raw["cache"]
+        items = data["cache"]
 
         def _as_list_str(v: Any) -> list[str]:
             if isinstance(v, list):
@@ -998,90 +954,32 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                         num_cache_instance=num_cache_instance,
                     )
                 )
-            except ValidationError as ve:
+            except ValidationError as err:
                 self._log_event(
                     category=EventCategory.APPLICATION,
-                    description="Bad cache info entry from AMDSMI; skipping",
-                    data={"entry": repr(e), "exception": get_exception_traceback(ve)},
+                    description="Bad cache info entry from amd-smi; skipping",
+                    data={"entry": repr(e), "errors": err.errors(include_url=False)},
                     priority=EventPriority.WARNING,
                 )
                 continue
 
         return out
 
-    def _get_limit_info(self, handle: Any) -> Optional[StaticLimit]:
-        """Get power cap limit information.
+    def _parse_clock(self, data: dict) -> Optional[StaticClockData]:
+        """Parse clock data
 
         Args:
-            handle (Any): GPU device handle
-
-        Returns:
-            Optional[StaticLimit]: StaticLimit instance with power cap data or None
-        """
-        amdsmi = self._amdsmi_mod()
-        fn = getattr(amdsmi, "amdsmi_get_power_cap_info", None)
-        if not callable(fn):
-            return None
-
-        data = self._smi_try(fn, handle, default=None)
-        if not isinstance(data, dict):
-            return None
-
-        return StaticLimit(
-            max_power=self._valueunit(data.get("power_cap"), "W"),
-            min_power=self._valueunit(data.get("min_power_cap"), "W"),
-            socket_power=self._valueunit(data.get("default_power_cap"), "W"),
-        )
-
-    def _get_clock(self, handle: Any) -> Optional[StaticClockData]:
-        """Get clock info using amdsmi_get_clock_info or fallback to amdsmi_get_clk_freq
-
-        Args:
-            handle (Any): GPU device handle
+            data (dict): Clock data from amd-smi
 
         Returns:
             Optional[StaticClockData]: StaticClockData instance or None
         """
-        amdsmi = self._amdsmi_mod()
-        clk_type = getattr(amdsmi, "AmdSmiClkType", None)
-
-        if clk_type is None or not hasattr(clk_type, "SYS"):
-            return None
-
-        # Try amdsmi_get_clock_info API first
-        clock_info_fn = getattr(amdsmi, "amdsmi_get_clock_info", None)
-        if callable(clock_info_fn):
-            data = self._smi_try(clock_info_fn, handle, clk_type.SYS, default=None)
-            if isinstance(data, dict):
-                freqs_raw = data.get("clk_freq") or data.get("frequency")
-                if isinstance(freqs_raw, list) and freqs_raw:
-                    return self._process_clock_data(data, freqs_raw)
-
-        # Fallback to amdsmi_get_clk_freq API
-        fn = getattr(amdsmi, "amdsmi_get_clk_freq", None)
-        if not callable(fn):
-            return None
-
-        data = self._smi_try(fn, handle, clk_type.SYS, default=None)
         if not isinstance(data, dict):
             return None
 
         freqs_raw = data.get("frequency")
         if not isinstance(freqs_raw, list) or not freqs_raw:
             return None
-
-        return self._process_clock_data(data, freqs_raw)
-
-    def _process_clock_data(self, data: dict, freqs_raw: list) -> Optional[StaticClockData]:
-        """Process clock frequency data into StaticClockData model.
-
-        Args:
-            data (dict): Raw clock data from amdsmi API
-            freqs_raw (list): List of frequency values
-
-        Returns:
-            Optional[StaticClockData]: StaticClockData instance or None
-        """
 
         def _to_mhz(v: object) -> Optional[int]:
             x = self._to_number(v)
@@ -1127,810 +1025,32 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                 {"Level 0": level0, "Level 1": level1, "Level 2": level2}
             )
 
-            return StaticClockData(frequency=levels, current=current)
+            # Use the alias "current level" as defined in the model
+            return StaticClockData.model_validate(
+                {"frequency_levels": levels, "current level": current}
+            )
         except ValidationError:
             return None
 
-    def get_bad_pages(self) -> Optional[list[BadPages]]:
-        """Collect bad page info per GPU and map to BadPages/PageData models.
+    def _parse_clock_dict(self, data: dict) -> Optional[dict[str, Union[StaticClockData, None]]]:
+        """Parse clock data into dictionary structure
+
+        Args:
+            data (dict): Clock data from amd-smi
 
         Returns:
-            Optional[list[BadPages]]: List of bad pages (one per GPU) or None if no devices
+            Optional[dict[str, Union[StaticClockData, None]]]: dictionary of clock data or None
         """
-        amdsmi = self._amdsmi_mod()
-        devices = self._get_handles()
-        if not devices:
+        if not isinstance(data, dict):
             return None
 
-        out: list[BadPages] = []
+        clock_dict: dict[str, Union[StaticClockData, None]] = {}
 
-        for idx, h in enumerate(devices):
-            raw = self._smi_try(amdsmi.amdsmi_get_gpu_bad_page_info, h, default=[]) or []
-            pages: list[PageData] = []
+        clock_data = self._parse_clock(data)
+        if clock_data:
+            clock_dict["clk"] = clock_data
 
-            if isinstance(raw, list):
-                for entry in raw:
-                    if not isinstance(entry, dict):
-                        continue
-
-                    pa = entry.get("page_address")
-                    ps = entry.get("page_size")
-                    st = entry.get("status")
-                    val = entry.get("value")
-
-                    page_address: Union[int, str]
-                    if isinstance(pa, (int, str)):
-                        page_address = pa
-                    else:
-                        page_address = str(pa)
-
-                    page_size: Union[int, str]
-                    if isinstance(ps, (int, str)):
-                        page_size = ps
-                    else:
-                        page_size = str(ps)
-
-                    status = "" if st in (None, "N/A") else str(st)
-
-                    value_i: Optional[int] = None
-                    if isinstance(val, int):
-                        value_i = val
-                    elif isinstance(val, str):
-                        s = val.strip()
-                        try:
-                            value_i = int(s, 0)
-                        except Exception:
-                            value_i = None
-
-                    try:
-                        pages.append(
-                            PageData(
-                                page_address=page_address,
-                                page_size=page_size,
-                                status=status,
-                                value=value_i,
-                            )
-                        )
-                    except ValidationError as e:
-                        self._log_event(
-                            category=EventCategory.APPLICATION,
-                            description="Failed to build PageData; skipping entry",
-                            data={
-                                "exception": get_exception_traceback(e),
-                                "gpu_index": idx,
-                                "entry": repr(entry),
-                            },
-                            priority=EventPriority.WARNING,
-                        )
-                        continue
-
-            try:
-                out.append(BadPages(gpu=idx, retired=pages))
-            except ValidationError as e:
-                self._log_event(
-                    category=EventCategory.APPLICATION,
-                    description="Failed to build BadPages",
-                    data={"exception": get_exception_traceback(e), "gpu_index": idx},
-                    priority=EventPriority.WARNING,
-                )
-
-        return out
-
-    def get_metric(self) -> Optional[list[AmdSmiMetric]]:
-        """Collect runtime metric data from all GPU devices.
-
-        Collects usage, power, temperature, clocks, PCIe, fan, memory, ECC,
-        throttle, and voltage curve data from amdsmi_get_gpu_metrics_info.
-
-        Returns:
-            Optional[list[AmdSmiMetric]]: List of metric data per GPU or None if no devices
-        """
-        amdsmi = self._amdsmi_mod()
-        devices = self._get_handles()
-        out: list[AmdSmiMetric] = []
-
-        def _to_int_or_none(v: object) -> Optional[int]:
-            n = self._to_number(v)
-            if n is None:
-                return None
-            try:
-                return int(n)
-            except Exception:
-                try:
-                    return int(float(n))
-                except Exception:
-                    return None
-
-        def _as_list(v: object) -> list[object]:
-            if isinstance(v, list):
-                return v
-            return (
-                [] if v in (None, "N/A") else [v] if not isinstance(v, (dict, tuple, set)) else []
-            )
-
-        for idx, h in enumerate(devices):
-            raw = self._smi_try(amdsmi.amdsmi_get_gpu_metrics_info, h, default=None)
-
-            if not isinstance(raw, dict):
-                self._log_event(
-                    category=EventCategory.APPLICATION,
-                    description="amdsmi_get_gpu_metrics_info returned no dict; using empty metric",
-                    data={"gpu_index": idx, "type": type(raw).__name__},
-                    priority=EventPriority.WARNING,
-                )
-                out.append(self._empty_metric(idx))
-                continue
-
-            try:
-                # Usage
-                usage = MetricUsage(
-                    gfx_activity=self._valueunit(raw.get("average_gfx_activity"), "%"),
-                    umc_activity=self._valueunit(raw.get("average_umc_activity"), "%"),
-                    mm_activity=self._valueunit(raw.get("average_mm_activity"), "%"),
-                    vcn_activity=[
-                        self._valueunit(v, "%") for v in _as_list(raw.get("vcn_activity"))
-                    ],
-                    jpeg_activity=[
-                        self._valueunit(v, "%") for v in _as_list(raw.get("jpeg_activity"))
-                    ],
-                    gfx_busy_inst=None,  # Note: note avilable?
-                    jpeg_busy=None,  # Note: note avilable?
-                    vcn_busy=None,  # Note: note avilable?
-                )
-
-                # Power / Energy
-                # Get power from metrics_info
-                socket_power_val = self._valueunit(raw.get("average_socket_power"), "W")
-
-                # Try amdsmi_get_power_info if available and metrics is missing
-                if socket_power_val is None:
-                    power_info_fn = getattr(amdsmi, "amdsmi_get_power_info", None)
-                    if callable(power_info_fn):
-                        power_data = self._smi_try(power_info_fn, h, default=None)
-                        if isinstance(power_data, dict):
-                            socket_power_val = self._valueunit(
-                                power_data.get("current_socket_power")
-                                or power_data.get("average_socket_power"),
-                                "W",
-                            )
-
-                power = MetricPower(
-                    socket_power=socket_power_val,
-                    gfx_voltage=self._valueunit(raw.get("voltage_gfx"), "mV"),
-                    soc_voltage=self._valueunit(raw.get("voltage_soc"), "mV"),
-                    mem_voltage=self._valueunit(raw.get("voltage_mem"), "mV"),
-                    throttle_status=(
-                        str(raw.get("throttle_status"))
-                        if raw.get("throttle_status") is not None
-                        else None
-                    ),
-                    power_management=self._normalize(
-                        raw.get("indep_throttle_status"), default="unknown"
-                    ),
-                )
-                energy = MetricEnergy(
-                    total_energy_consumption=self._valueunit(raw.get("energy_accumulator"), "uJ")
-                )
-
-                # Temperature
-                temperature = MetricTemperature(
-                    edge=self._valueunit(raw.get("temperature_edge"), "C"),
-                    hotspot=self._valueunit(raw.get("temperature_hotspot"), "C"),
-                    mem=self._valueunit(raw.get("temperature_mem"), "C"),
-                )
-
-                # PCIe
-                speed_raw = self._to_number(raw.get("pcie_link_speed"))
-                speed_gtps = (
-                    float(speed_raw) / 10.0 if isinstance(speed_raw, (int, float)) else None
-                )
-
-                # Get PCIe throughput
-                throughput_fn = getattr(amdsmi, "amdsmi_get_gpu_pci_throughput", None)
-                bandwidth_sent = None
-                bandwidth_received = None
-                if callable(throughput_fn):
-                    throughput_data = self._smi_try(throughput_fn, h, default=None)
-                    if isinstance(throughput_data, dict):
-                        bandwidth_sent = _to_int_or_none(throughput_data.get("sent"))
-                        bandwidth_received = _to_int_or_none(throughput_data.get("received"))
-
-                pcie = MetricPcie(
-                    width=_to_int_or_none(raw.get("pcie_link_width")),
-                    speed=self._valueunit(speed_gtps, "GT/s"),
-                    bandwidth=self._valueunit(raw.get("pcie_bandwidth_inst"), "GB/s"),
-                    replay_count=_to_int_or_none(raw.get("pcie_replay_count_acc")),
-                    l0_to_recovery_count=_to_int_or_none(raw.get("pcie_l0_to_recov_count_acc")),
-                    replay_roll_over_count=_to_int_or_none(raw.get("pcie_replay_rover_count_acc")),
-                    nak_sent_count=_to_int_or_none(raw.get("pcie_nak_sent_count_acc")),
-                    nak_received_count=_to_int_or_none(raw.get("pcie_nak_rcvd_count_acc")),
-                    current_bandwidth_sent=bandwidth_sent,
-                    current_bandwidth_received=bandwidth_received,
-                    max_packet_size=None,
-                    lc_perf_other_end_recovery=None,
-                )
-
-                # Clocks from clock_info API
-                clock_info_fn = getattr(amdsmi, "amdsmi_get_clock_info", None)
-                clk_type = getattr(amdsmi, "AmdSmiClkType", None)
-                clock_ranges = {}
-
-                if callable(clock_info_fn) and clk_type is not None:
-                    for clk_name, clk_enum_name in [
-                        ("GFX", "GFX"),
-                        ("SOC", "SYS"),
-                        ("UCLK", "MEM"),
-                        ("VCLK0", "VCLK0"),
-                        ("DCLK0", "DCLK0"),
-                        ("VCLK1", "VCLK1"),
-                        ("DCLK1", "DCLK1"),
-                    ]:
-                        clk_enum = getattr(clk_type, clk_enum_name, None)
-                        if clk_enum is not None:
-                            clk_data = self._smi_try(clock_info_fn, h, clk_enum, default=None)
-                            if isinstance(clk_data, dict):
-                                clock_ranges[clk_name] = {
-                                    "min": clk_data.get("min_clk"),
-                                    "max": clk_data.get("max_clk"),
-                                    "sleep": clk_data.get("sleep_clk")
-                                    or clk_data.get("deep_sleep_clk"),
-                                }
-
-                def _clk(
-                    cur_key: str,
-                    clk_name: str = "",
-                    raw: dict = raw,
-                    clock_ranges: dict = clock_ranges,
-                ) -> MetricClockData:
-                    ranges = clock_ranges.get(clk_name, {})
-                    return MetricClockData(
-                        clk=self._valueunit(raw.get(cur_key), "MHz"),
-                        min_clk=self._valueunit(ranges.get("min"), "MHz") if ranges else None,
-                        max_clk=self._valueunit(ranges.get("max"), "MHz") if ranges else None,
-                        clk_locked=(
-                            raw.get("gfxclk_lock_status") if cur_key == "current_gfxclk" else None
-                        ),
-                        deep_sleep=ranges.get("sleep") if ranges else None,
-                    )
-
-                clock: dict[str, MetricClockData] = {
-                    "GFX": _clk("current_gfxclk", "GFX"),
-                    "SOC": _clk("current_socclk", "SOC"),
-                    "UCLK": _clk("current_uclk", "UCLK"),
-                    "VCLK0": _clk("current_vclk0", "VCLK0"),
-                    "DCLK0": _clk("current_dclk0", "DCLK0"),
-                    "VCLK1": _clk("current_vclk1", "VCLK1"),
-                    "DCLK1": _clk("current_dclk1", "DCLK1"),
-                }
-
-                # Fan
-                fan_rpm = self._valueunit(raw.get("current_fan_speed"), "RPM")
-
-                # Get fan speed as percentage
-                fan_speed_fn = getattr(amdsmi, "amdsmi_get_gpu_fan_speed", None)
-                fan_speed_pct = None
-                if callable(fan_speed_fn):
-                    fan_speed_data = self._smi_try(fan_speed_fn, h, 0, default=None)
-                    if isinstance(fan_speed_data, (int, float)):
-                        fan_speed_pct = self._valueunit(fan_speed_data, "%")
-
-                # Get max fan speed
-                fan_max_fn = getattr(amdsmi, "amdsmi_get_gpu_fan_speed_max", None)
-                fan_max_rpm = None
-                if callable(fan_max_fn):
-                    fan_max_data = self._smi_try(fan_max_fn, h, 0, default=None)
-                    if isinstance(fan_max_data, (int, float)):
-                        fan_max_rpm = self._valueunit(fan_max_data, "RPM")
-
-                fan = MetricFan(
-                    rpm=fan_rpm,
-                    speed=fan_speed_pct,
-                    max=fan_max_rpm,
-                    usage=None,
-                )
-
-                # Voltage curve
-                voltage_curve = self._get_voltage_curve(h) or self._empty_voltage_curve()
-
-                # Memory usage
-                total_vram_vu: Optional[ValueUnit] = None
-                used_vram_vu: Optional[ValueUnit] = None
-                free_vram_vu: Optional[ValueUnit] = None
-
-                vram_usage = self._smi_try(amdsmi.amdsmi_get_gpu_vram_usage, h, default=None)
-                if isinstance(vram_usage, dict):
-                    used_vram_vu = self._valueunit(vram_usage.get("vram_used"), "B")
-                    total_vram_vu = self._valueunit(vram_usage.get("vram_total"), "B")
-
-                mem_enum = getattr(amdsmi, "AmdSmiMemoryType", None)
-                vis_total_vu: Optional[ValueUnit] = None
-                vis_used_vu: Optional[ValueUnit] = None
-                vis_free_vu: Optional[ValueUnit] = None
-                gtt_total_vu: Optional[ValueUnit] = None
-                gtt_used_vu: Optional[ValueUnit] = None
-                gtt_free_vu: Optional[ValueUnit] = None
-
-                mem_usage_fn = getattr(amdsmi, "amdsmi_get_gpu_memory_usage", None)
-
-                if mem_enum is not None:
-                    if total_vram_vu is None:
-                        vram_total_alt = self._smi_try(
-                            amdsmi.amdsmi_get_gpu_memory_total, h, mem_enum.VRAM, default=None
-                        )
-                        if vram_total_alt is not None:
-                            total_vram_vu = self._valueunit(vram_total_alt, "B")
-
-                    # Visible VRAM total and usage
-                    vis_total = self._smi_try(
-                        amdsmi.amdsmi_get_gpu_memory_total, h, mem_enum.VIS_VRAM, default=None
-                    )
-                    if vis_total is not None:
-                        vis_total_vu = self._valueunit(vis_total, "B")
-
-                        # Get visible VRAM usage
-                        if callable(mem_usage_fn):
-                            vis_used = self._smi_try(
-                                mem_usage_fn, h, mem_enum.VIS_VRAM, default=None
-                            )
-                            if vis_used is not None:
-                                vis_used_vu = self._valueunit(vis_used, "B")
-                                # Calculate free
-                                try:
-                                    free_val = max(0.0, float(vis_total) - float(vis_used))
-                                    vis_free_vu = self._valueunit(free_val, "B")
-                                except Exception:
-                                    pass
-
-                    # GTT total and usage
-                    gtt_total = self._smi_try(
-                        amdsmi.amdsmi_get_gpu_memory_total, h, mem_enum.GTT, default=None
-                    )
-                    if gtt_total is not None:
-                        gtt_total_vu = self._valueunit(gtt_total, "B")
-
-                        # Get GTT usage
-                        if callable(mem_usage_fn):
-                            gtt_used = self._smi_try(mem_usage_fn, h, mem_enum.GTT, default=None)
-                            if gtt_used is not None:
-                                gtt_used_vu = self._valueunit(gtt_used, "B")
-                                # Calculate free
-                                try:
-                                    free_val = max(0.0, float(gtt_total) - float(gtt_used))
-                                    gtt_free_vu = self._valueunit(free_val, "B")
-                                except Exception:
-                                    pass
-
-                # Compute free VRAM if possible
-                if free_vram_vu is None and total_vram_vu is not None and used_vram_vu is not None:
-                    try:
-                        free_num = max(0.0, float(total_vram_vu.value) - float(used_vram_vu.value))
-                        free_vram_vu = self._valueunit(free_num, "B")
-                    except Exception:
-                        pass
-
-                # Build mem_usage
-                mem_usage = MetricMemUsage(
-                    total_vram=total_vram_vu,
-                    used_vram=used_vram_vu,
-                    free_vram=free_vram_vu,
-                    total_visible_vram=vis_total_vu,
-                    used_visible_vram=vis_used_vu,
-                    free_visible_vram=vis_free_vu,
-                    total_gtt=gtt_total_vu,
-                    used_gtt=gtt_used_vu,
-                    free_gtt=gtt_free_vu,
-                )
-
-                # ECC totals
-                ecc_raw = self._smi_try(amdsmi.amdsmi_get_gpu_total_ecc_count, h, default=None)
-                if isinstance(ecc_raw, dict):
-                    ecc = MetricEccTotals(
-                        total_correctable_count=_to_int_or_none(ecc_raw.get("correctable_count")),
-                        total_uncorrectable_count=_to_int_or_none(
-                            ecc_raw.get("uncorrectable_count")
-                        ),
-                        total_deferred_count=_to_int_or_none(ecc_raw.get("deferred_count")),
-                        cache_correctable_count=None,
-                        cache_uncorrectable_count=None,
-                    )
-                else:
-                    ecc = MetricEccTotals(
-                        total_correctable_count=None,
-                        total_uncorrectable_count=None,
-                        total_deferred_count=None,
-                        cache_correctable_count=None,
-                        cache_uncorrectable_count=None,
-                    )
-
-                # Throttle
-                throttle = self.get_throttle(h) or MetricThrottle()
-
-                out.append(
-                    AmdSmiMetric(
-                        gpu=idx,
-                        usage=usage,
-                        power=power,
-                        clock=clock,
-                        temperature=temperature,
-                        pcie=pcie,
-                        ecc=ecc,
-                        ecc_blocks={},
-                        fan=fan,
-                        voltage_curve=voltage_curve,
-                        perf_level=None,
-                        xgmi_err=None,
-                        energy=energy,
-                        mem_usage=mem_usage,
-                        throttle=throttle,
-                    )
-                )
-            except ValidationError as e:
-                self.logger.warning(e)
-                self._log_event(
-                    category=EventCategory.APPLICATION,
-                    description="Failed to build AmdSmiMetric; using empty metric",
-                    data={"exception": get_exception_traceback(e), "gpu_index": idx},
-                    priority=EventPriority.WARNING,
-                )
-                out.append(self._empty_metric(idx))
-
-        return out
-
-    def _empty_metric(self, gpu_idx: int) -> AmdSmiMetric:
-        """Create an empty/default AmdSmiMetric instance when data collection fails.
-
-        Args:
-            gpu_idx (int): GPU index
-
-        Returns:
-            AmdSmiMetric: Metric instance with all fields set to None or empty values
-        """
-        return AmdSmiMetric(
-            gpu=gpu_idx,
-            usage=MetricUsage(
-                gfx_activity=None,
-                umc_activity=None,
-                mm_activity=None,
-                vcn_activity=[],
-                jpeg_activity=[],
-                gfx_busy_inst=None,
-                jpeg_busy=None,
-                vcn_busy=None,
-            ),
-            power=MetricPower(
-                socket_power=None,
-                gfx_voltage=None,
-                soc_voltage=None,
-                mem_voltage=None,
-                throttle_status=None,
-                power_management=None,
-            ),
-            clock={},
-            temperature=MetricTemperature(edge=None, hotspot=None, mem=None),
-            pcie=MetricPcie(
-                width=None,
-                speed=None,
-                bandwidth=None,
-                replay_count=None,
-                l0_to_recovery_count=None,
-                replay_roll_over_count=None,
-                nak_sent_count=None,
-                nak_received_count=None,
-                current_bandwidth_sent=None,
-                current_bandwidth_received=None,
-                max_packet_size=None,
-                lc_perf_other_end_recovery=None,
-            ),
-            ecc=MetricEccTotals(
-                total_correctable_count=None,
-                total_uncorrectable_count=None,
-                total_deferred_count=None,
-                cache_correctable_count=None,
-                cache_uncorrectable_count=None,
-            ),
-            ecc_blocks={},
-            fan=MetricFan(speed=None, max=None, rpm=None, usage=None),
-            voltage_curve=self._empty_voltage_curve(),
-            perf_level=None,
-            xgmi_err=None,
-            energy=None,
-            mem_usage=MetricMemUsage(
-                total_vram=None,
-                used_vram=None,
-                free_vram=None,
-                total_visible_vram=None,
-                used_visible_vram=None,
-                free_visible_vram=None,
-                total_gtt=None,
-                used_gtt=None,
-                free_gtt=None,
-            ),
-            throttle=MetricThrottle(),
-        )
-
-    def _get_voltage_curve(self, h: Any) -> MetricVoltageCurve:
-        """Get GPU voltage curve (frequency/voltage points) for overdrive settings.
-
-        Args:
-            h (Any): GPU device handle
-
-        Returns:
-            MetricVoltageCurve: Voltage curve data with up to 3 frequency/voltage points
-        """
-        amdsmi = self._amdsmi_mod()
-        raw = self._smi_try(amdsmi.amdsmi_get_gpu_od_volt_info, h, default=None)
-        if not isinstance(raw, dict):
-            return self._empty_voltage_curve()
-
-        try:
-            num_regions = int(raw.get("num_regions", 0) or 0)
-        except Exception:
-            num_regions = 0
-        if num_regions == 0:
-            return self._empty_voltage_curve()
-
-        curve = raw.get("curve") or {}
-        pts = curve.get("vc_points") or raw.get("vc_points") or []
-        if not isinstance(pts, list) or len(pts) == 0:
-            return self._empty_voltage_curve()
-
-        def _pt_get(d: object, *names: str) -> Optional[object]:
-            if not isinstance(d, dict):
-                return None
-            for n in names:
-                if n in d:
-                    return d.get(n)
-            lower = {str(k).lower(): v for k, v in d.items()}
-            for n in names:
-                v = lower.get(n.lower())
-                if v is not None:
-                    return v
-            return None
-
-        def _extract_point(p: object) -> tuple[Optional[object], Optional[object]]:
-            clk = _pt_get(p, "clk_value", "frequency", "freq", "clk", "sclk")
-            volt = _pt_get(p, "volt_value", "voltage", "volt", "mV")
-            return clk, volt
-
-        p0_clk, p0_volt = _extract_point(pts[0]) if len(pts) >= 1 else (None, None)
-        p1_clk, p1_volt = _extract_point(pts[1]) if len(pts) >= 2 else (None, None)
-        p2_clk, p2_volt = _extract_point(pts[2]) if len(pts) >= 3 else (None, None)
-
-        return MetricVoltageCurve(
-            point_0_frequency=self._valueunit(p0_clk, "MHz"),
-            point_0_voltage=self._valueunit(p0_volt, "mV"),
-            point_1_frequency=self._valueunit(p1_clk, "MHz"),
-            point_1_voltage=self._valueunit(p1_volt, "mV"),
-            point_2_frequency=self._valueunit(p2_clk, "MHz"),
-            point_2_voltage=self._valueunit(p2_volt, "mV"),
-        )
-
-    def _empty_voltage_curve(self) -> MetricVoltageCurve:
-        """Create an empty MetricVoltageCurve with all points set to None.
-
-        Returns:
-            MetricVoltageCurve: Empty voltage curve instance
-        """
-        return MetricVoltageCurve(
-            point_0_frequency=None,
-            point_0_voltage=None,
-            point_1_frequency=None,
-            point_1_voltage=None,
-            point_2_frequency=None,
-            point_2_voltage=None,
-        )
-
-    def _as_first_plane(self, obj: object) -> list:
-        """Take a scalar/list/2D-list and return the first plane as a flat list.
-
-        Args:
-            obj (object): Scalar, list, or 2D-list to process
-
-        Returns:
-            list: First plane as a flat list, or empty list if not a list
-        """
-        if isinstance(obj, list):
-            if obj and isinstance(obj[0], list):  # 2D
-                return obj[0]
-            return obj
-        return []
-
-    def _th_vu_list_pct(self, obj: object) -> Optional[MetricThrottleVu]:
-        """Return MetricThrottleVu with percentage ValueUnits for the first XCP plane.
-
-        Args:
-            obj (object): Object containing throttle data (scalar, list, or 2D-list)
-
-        Returns:
-            Optional[MetricThrottleVu]: MetricThrottleVu with percentage values or None
-        """
-        arr = self._as_first_plane(obj)
-        if not arr:
-            return None
-        return MetricThrottleVu(
-            xcp_0=[self._valueunit(v, "%") if v not in (None, "N/A") else "N/A" for v in arr]
-        )
-
-    def _th_vu_list_raw(self, obj: object) -> Optional[MetricThrottleVu]:
-        """Return MetricThrottleVu with raw integers/strings for the first XCP plane.
-
-        Args:
-            obj (object): Object containing throttle data (scalar, list, or 2D-list)
-
-        Returns:
-            Optional[MetricThrottleVu]: MetricThrottleVu with raw values or None
-        """
-        arr = self._as_first_plane(obj)
-        if not arr:
-            return None
-        return MetricThrottleVu(
-            xcp_0=[
-                (
-                    str(int(v))
-                    if isinstance(v, (int, float, str)) and str(v).strip().isdigit()
-                    else str(v) if v not in (None, "N/A") else None
-                )
-                for v in arr
-            ]
-        )
-
-    def get_throttle(self, h: Any) -> MetricThrottle:
-        """Get throttle/violation status data for a GPU device.
-
-        Args:
-            h (Any): GPU device handle
-
-        Returns:
-            MetricThrottle: Throttle metrics and violation status data
-        """
-        amdsmi = self._amdsmi_mod()
-        raw = self._smi_try(amdsmi.amdsmi_get_violation_status, h, default=None)
-        if not isinstance(raw, dict):
-            return MetricThrottle()
-
-        acc_counter = raw.get("acc_counter")
-        prochot_acc = raw.get("acc_prochot_thrm")
-        ppt_acc = raw.get("acc_ppt_pwr")
-        socket_thrm_acc = raw.get("acc_socket_thrm")
-        vr_thrm_acc = raw.get("acc_vr_thrm")
-        hbm_thrm_acc = raw.get("acc_hbm_thrm")
-
-        acc_gfx_pwr = raw.get("acc_gfx_clk_below_host_limit_pwr")
-        acc_gfx_thm = raw.get("acc_gfx_clk_below_host_limit_thm")
-        acc_low_util = raw.get("acc_low_utilization")
-        acc_gfx_total = raw.get("acc_gfx_clk_below_host_limit_total")
-
-        act_prochot = raw.get("active_prochot_thrm")
-        act_ppt = raw.get("active_ppt_pwr")
-        act_socket = raw.get("active_socket_thrm")
-        act_vr = raw.get("active_vr_thrm")
-        act_hbm = raw.get("active_hbm_thrm")
-        act_gfx_pwr = raw.get("active_gfx_clk_below_host_limit_pwr")
-        act_gfx_thm = raw.get("active_gfx_clk_below_host_limit_thm")
-        act_low_util = raw.get("active_low_utilization")
-        act_gfx_total = raw.get("active_gfx_clk_below_host_limit_total")
-
-        per_prochot = raw.get("per_prochot_thrm")
-        per_ppt = raw.get("per_ppt_pwr")
-        per_socket = raw.get("per_socket_thrm")
-        per_vr = raw.get("per_vr_thrm")
-        per_hbm = raw.get("per_hbm_thrm")
-        per_gfx_pwr = raw.get("per_gfx_clk_below_host_limit_pwr")
-        per_gfx_thm = raw.get("per_gfx_clk_below_host_limit_thm")
-        per_low_util = raw.get("per_low_utilization")
-        per_gfx_total = raw.get("per_gfx_clk_below_host_limit_total")
-
-        return MetricThrottle(
-            accumulation_counter=self._valueunit(acc_counter, ""),  # unitless counter
-            prochot_accumulated=self._th_vu_list_raw(prochot_acc),
-            ppt_accumulated=self._th_vu_list_raw(ppt_acc),
-            socket_thermal_accumulated=self._th_vu_list_raw(socket_thrm_acc),
-            vr_thermal_accumulated=self._th_vu_list_raw(vr_thrm_acc),
-            hbm_thermal_accumulated=self._th_vu_list_raw(hbm_thrm_acc),
-            gfx_clk_below_host_limit_power_accumulated=self._th_vu_list_raw(acc_gfx_pwr),
-            gfx_clk_below_host_limit_thermal_accumulated=self._th_vu_list_raw(acc_gfx_thm),
-            low_utilization_accumulated=self._th_vu_list_raw(acc_low_util),
-            total_gfx_clk_below_host_limit_accumulated=self._th_vu_list_raw(acc_gfx_total),
-            prochot_violation_status=self._th_vu_list_raw(act_prochot),
-            ppt_violation_status=self._th_vu_list_raw(act_ppt),
-            socket_thermal_violation_status=self._th_vu_list_raw(act_socket),
-            vr_thermal_violation_status=self._th_vu_list_raw(act_vr),
-            hbm_thermal_violation_status=self._th_vu_list_raw(act_hbm),
-            gfx_clk_below_host_limit_power_violation_status=self._th_vu_list_raw(act_gfx_pwr),
-            gfx_clk_below_host_limit_thermal_violation_status=self._th_vu_list_raw(act_gfx_thm),
-            low_utilization_violation_status=self._th_vu_list_raw(act_low_util),
-            total_gfx_clk_below_host_limit_violation_status=self._th_vu_list_raw(act_gfx_total),
-            prochot_violation_activity=self._valueunit(per_prochot, "%"),
-            ppt_violation_activity=self._valueunit(per_ppt, "%"),
-            socket_thermal_violation_activity=self._valueunit(per_socket, "%"),
-            vr_thermal_violation_activity=self._valueunit(per_vr, "%"),
-            hbm_thermal_violation_activity=self._valueunit(per_hbm, "%"),
-            gfx_clk_below_host_limit_power_violation_activity=self._th_vu_list_pct(per_gfx_pwr),
-            gfx_clk_below_host_limit_thermal_violation_activity=self._th_vu_list_pct(per_gfx_thm),
-            low_utilization_violation_activity=self._th_vu_list_pct(per_low_util),
-            total_gfx_clk_below_host_limit_violation_activity=self._th_vu_list_pct(per_gfx_total),
-        )
-
-    def _flatten_2d(self, v: object) -> list[object]:
-        """Flatten a 2D list into a 1D list, or normalize scalars/None to lists.
-
-        Args:
-            v (object): Input value (scalar, list, or 2D-list)
-
-        Returns:
-            list[object]: Flattened list of objects
-        """
-        if isinstance(v, list) and v and isinstance(v[0], list):
-            out: list[object] = []
-            for row in v:
-                if isinstance(row, list):
-                    out.extend(row)
-                else:
-                    out.append(row)
-            return out
-        return v if isinstance(v, list) else [v] if v not in (None, "N/A") else []
-
-    def _coerce_throttle_value(
-        self, v: object, unit: str = ""
-    ) -> Optional[Union[MetricThrottleVu, ValueUnit]]:
-        """Convert various throttle data formats to ValueUnit or MetricThrottleVu.
-
-        Converts integers/floats/strings/lists/2D-lists/dicts into appropriate types:
-          - ValueUnit for scalar values
-          - MetricThrottleVu(xcp_0=[...]) for lists/arrays
-          - None for N/A or empty values
-
-        Args:
-            v (object): Input throttle value in various formats
-            unit (str, optional): Unit of measurement. Defaults to empty string.
-
-        Returns:
-            Optional[Union[MetricThrottleVu, ValueUnit]]: Coerced throttle value or None
-        """
-        if v in (None, "", "N/A"):
-            return None
-
-        if isinstance(v, (int, float)):
-            return ValueUnit(value=v, unit=unit)
-        if isinstance(v, str):
-            s = v.strip()
-            if not s or s.upper() == "N/A":
-                return None
-            try:
-                return ValueUnit(value=int(s, 0), unit=unit)
-            except Exception:
-                try:
-                    return ValueUnit(value=float(s), unit=unit)
-                except Exception:
-                    return MetricThrottleVu(xcp_0=[s])
-
-        if isinstance(v, list):
-            flat = self._flatten_2d(v)
-            return MetricThrottleVu(
-                xcp_0=cast(Optional[list[Optional[Union[ValueUnit, str]]]], flat if flat else None)
-            )
-
-        if isinstance(v, dict):
-            if "xcp_0" in v and isinstance(v["xcp_0"], list):
-                return MetricThrottleVu(
-                    xcp_0=cast(
-                        Optional[list[Optional[Union[ValueUnit, str]]]],
-                        self._flatten_2d(v["xcp_0"]),
-                    )
-                )
-            val = v.get("value")
-            if isinstance(val, dict):
-                for maybe_list in val.values():
-                    if isinstance(maybe_list, list):
-                        return MetricThrottleVu(
-                            xcp_0=cast(
-                                Optional[list[Optional[Union[ValueUnit, str]]]],
-                                self._flatten_2d(maybe_list),
-                            )
-                        )
-            return MetricThrottleVu(xcp_0=[str(v)])
-
-        return MetricThrottleVu(xcp_0=[str(v)])
+        return clock_dict if clock_dict else None
 
     def collect_data(
         self,
@@ -1945,13 +1065,22 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             tuple[TaskResult, Optional[AmdSmiDataModel]]: task result and collected data model
         """
 
-        if not self._bind_amdsmi_or_log():
+        if not self._check_amdsmi_installed():
+            self._log_event(
+                category=EventCategory.APPLICATION,
+                description="amd-smi is not installed",
+                priority=EventPriority.WARNING,
+                console_log=True,
+            )
             self.result.status = ExecutionStatus.NOT_RAN
             return self.result, None
 
-        amdsmi = self._amdsmi_mod()
         try:
-            amdsmi.amdsmi_init(amdsmi.AmdSmiInitFlags.INIT_AMD_GPUS)  # type: ignore[attr-defined]
+            version = self._get_amdsmi_version()
+            if version is not None:
+                self.logger.info("amd-smi version: %s", version.version)
+                self.logger.info("ROCm version: %s", version.rocm_version)
+
             amd_smi_data = self._get_amdsmi_data()
 
             if amd_smi_data is None:
@@ -1968,8 +1097,3 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             )
             self.result.status = ExecutionStatus.EXECUTION_FAILURE
             return self.result, None
-        finally:
-            try:
-                amdsmi.amdsmi_shut_down()
-            except Exception:
-                pass

@@ -313,6 +313,7 @@ def test_expected_gpu_processes_success(mock_analyzer):
                         name="test_process",
                         pid=1234,
                         memory_usage=ProcessMemoryUsage(gtt_mem=None, cpu_mem=None, vram_mem=None),
+                        mem_usage=None,
                         usage=ProcessUsage(gfx=None, enc=None),
                     )
                 ),
@@ -321,6 +322,7 @@ def test_expected_gpu_processes_success(mock_analyzer):
                         name="test_process2",
                         pid=5678,
                         memory_usage=ProcessMemoryUsage(gtt_mem=None, cpu_mem=None, vram_mem=None),
+                        mem_usage=None,
                         usage=ProcessUsage(gfx=None, enc=None),
                     )
                 ),
@@ -346,6 +348,7 @@ def test_expected_gpu_processes_exceeds(mock_analyzer):
                         name=f"process_{i}",
                         pid=i,
                         memory_usage=ProcessMemoryUsage(gtt_mem=None, cpu_mem=None, vram_mem=None),
+                        mem_usage=None,
                         usage=ProcessUsage(gfx=None, enc=None),
                     )
                 )
@@ -449,7 +452,7 @@ def test_check_pldm_version_success(mock_analyzer):
         Fw(
             gpu=0,
             fw_list=[
-                FwListItem(fw_name="PLDM_BUNDLE", fw_version="1.2.3"),
+                FwListItem(fw_id="PLDM_BUNDLE", fw_version="1.2.3"),
             ],
         ),
     ]
@@ -467,7 +470,7 @@ def test_check_pldm_version_mismatch(mock_analyzer):
         Fw(
             gpu=0,
             fw_list=[
-                FwListItem(fw_name="PLDM_BUNDLE", fw_version="1.2.3"),
+                FwListItem(fw_id="PLDM_BUNDLE", fw_version="1.2.3"),
             ],
         ),
     ]
@@ -486,7 +489,7 @@ def test_check_pldm_version_missing(mock_analyzer):
         Fw(
             gpu=0,
             fw_list=[
-                FwListItem(fw_name="OTHER_FW", fw_version="1.0.0"),
+                FwListItem(fw_id="OTHER_FW", fw_version="1.0.0"),
             ],
         ),
     ]
@@ -502,15 +505,14 @@ def test_check_expected_memory_partition_mode_success(mock_analyzer):
     analyzer = mock_analyzer
 
     partition_data = Partition(
-        memory=[
+        memory_partition=[
             PartitionMemory(gpu_id=0, partition_type="NPS1"),
             PartitionMemory(gpu_id=1, partition_type="NPS1"),
         ],
-        compute=[
+        compute_partition=[
             PartitionCompute(gpu_id=0, partition_type="SPX"),
             PartitionCompute(gpu_id=1, partition_type="SPX"),
         ],
-        accelerator=[],
     )
 
     analyzer.check_expected_memory_partition_mode(partition_data, "NPS1", "SPX")
@@ -523,15 +525,14 @@ def test_check_expected_memory_partition_mode_mismatch(mock_analyzer):
     analyzer = mock_analyzer
 
     partition_data = Partition(
-        memory=[
+        memory_partition=[
             PartitionMemory(gpu_id=0, partition_type="NPS1"),
             PartitionMemory(gpu_id=1, partition_type="NPS4"),
         ],
-        compute=[
+        compute_partition=[
             PartitionCompute(gpu_id=0, partition_type="SPX"),
             PartitionCompute(gpu_id=1, partition_type="SPX"),
         ],
-        accelerator=[],
     )
 
     analyzer.check_expected_memory_partition_mode(partition_data, "NPS1", "SPX")
@@ -565,6 +566,7 @@ def test_analyze_data_full_workflow(mock_analyzer):
                             memory_usage=ProcessMemoryUsage(
                                 gtt_mem=None, cpu_mem=None, vram_mem=None
                             ),
+                            mem_usage=None,
                             usage=ProcessUsage(gfx=None, enc=None),
                         )
                     ),
@@ -572,7 +574,7 @@ def test_analyze_data_full_workflow(mock_analyzer):
             ),
         ],
         firmware=[
-            Fw(gpu=0, fw_list=[FwListItem(fw_name="PLDM_BUNDLE", fw_version="1.2.3")]),
+            Fw(gpu=0, fw_list=[FwListItem(fw_id="PLDM_BUNDLE", fw_version="1.2.3")]),
         ],
         partition=None,
         gpu_list=None,
