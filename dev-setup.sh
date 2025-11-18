@@ -5,7 +5,7 @@ if [ ! -d "venv" ]; then
     python3 -m venv venv || { echo "Failed to create venv. Try: sudo apt install python3-venv"; exit 1; }
 fi
 
-# Activate venv
+# Activate the desired venv
 source venv/bin/activate
 
 # Install package
