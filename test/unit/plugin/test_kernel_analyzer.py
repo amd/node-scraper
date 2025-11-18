@@ -45,9 +45,9 @@ def model_obj():
 def config():
     return {
         "kernel_name": [
-            "Linux MockSystem 5.13.0-30-generic #1 XYZ Day Month 10 15:19:13 EDT 2024 x86_64 x86_64 x86_64 GNU/Linux",
-            "Linux MockSystem1 5.15.0-31-generic #39 XYZA Day MonthX 10 24:19:13 IST 2024 x86_64 GNU/Linux",
-            "Linux MockSystem2 5.18.0-32-generic #178 XYZaB Day MonthY 10 15:06:11 PDT 2024 Linux",
+            "5.13.0-30-generic",
+            "5.15.0-31-generic",
+            "5.18.0-32-generic",
         ],
         "invalid": "invalid",
     }
@@ -86,7 +86,7 @@ def test_no_config_data(system_info, model_obj):
 
 def test_invalid_kernel(system_info, model_obj, config):
     args = KernelAnalyzerArgs(exp_kernel=config["kernel_name"])
-    model_obj.kernel_info = "some_invalid"
+    model_obj.kernel_version = "some_invalid"
 
     analyzer = KernelAnalyzer(system_info)
     result = analyzer.analyze_data(model_obj, args=args)
