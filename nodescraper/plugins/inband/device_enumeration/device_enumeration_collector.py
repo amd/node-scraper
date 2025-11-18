@@ -23,19 +23,34 @@
 # SOFTWARE.
 #
 ###############################################################################
-
+from typing import Optional
 
 from nodescraper.base import InBandDataCollector
 from nodescraper.connection.inband.inband import CommandArtifact
-from nodescraper.enums import EventCategory, EventPriority, OSFamily
-from nodescraper.models import TaskResult, TaskStatus
-from nodescraper.plugins.inband.devenumdata import DeviceEnumerationDataModel
+from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
+from nodescraper.models import TaskResult
+
+from .deviceenumdata import DeviceEnumerationDataModel
 
 
-class DeviceEnumerationCollector(InBandDataCollector[DeviceEnumerationDataModel]):
+class DeviceEnumerationCollector(InBandDataCollector[DeviceEnumerationDataModel, None]):
     """Collect CPU and GPU count"""
 
     DATA_MODEL = DeviceEnumerationDataModel
+
+    # Linux commands
+    CMD_CPU_COUNT_LINUX = "lscpu | grep Socket | awk '{ print $2 }'"
+    CMD_GPU_COUNT_LINUX = "lspci -d 1002: | grep -i 'VGA\\|Display\\|3D' | wc -l"
+    CMD_VF_COUNT_LINUX = "lspci -d 1002: | grep -i 'Virtual Function' | wc -l"
+
+    # Windows commands
+    CMD_CPU_COUNT_WINDOWS = (
+        'powershell -Command "(Get-WmiObject -Class Win32_Processor | Measure-Object).Count"'
+    )
+    CMD_GPU_COUNT_WINDOWS = 'powershell -Command "(wmic path win32_VideoController get name | findstr AMD | Measure-Object).Count"'
+    CMD_VF_COUNT_WINDOWS = (
+        'powershell -Command "(Get-VMHostPartitionableGpu | Measure-Object).Count"'
+    )
 
     def _warning(
         self,
@@ -55,7 +70,7 @@ class DeviceEnumerationCollector(InBandDataCollector[DeviceEnumerationDataModel]
             priority=EventPriority.WARNING,
         )
 
-    def collect_data(self, args=None) -> tuple[TaskResult, DeviceEnumerationDataModel | None]:
+    def collect_data(self, args=None) -> tuple[TaskResult, Optional[DeviceEnumerationDataModel]]:
         """
         Read CPU and GPU count
         On Linux, use lscpu and lspci
@@ -63,22 +78,18 @@ class DeviceEnumerationCollector(InBandDataCollector[DeviceEnumerationDataModel]
         """
         device_enum = None
         if self.system_info.os_family == OSFamily.LINUX:
-            baremetal_device_id = self.system_info.devid_ep
-            sriov_device_id = self.system_info.devid_ep_vf
+            # Count CPU sockets
+            cpu_count_res = self._run_sut_cmd(self.CMD_CPU_COUNT_LINUX)
 
-            cpu_count_res = self._run_system_command("lscpu | grep Socket | awk '{ print $2 }'")
-            gpu_count_res = self._run_system_command(f"lspci -d :{baremetal_device_id} | wc -l")
-            vf_count_res = self._run_system_command(f"lspci -d :{sriov_device_id} | wc -l")
+            # Count all AMD GPUs (vendor ID 1002)
+            gpu_count_res = self._run_sut_cmd(self.CMD_GPU_COUNT_LINUX)
+
+            # Count AMD Virtual Functions
+            vf_count_res = self._run_sut_cmd(self.CMD_VF_COUNT_LINUX)
         else:
-            cpu_count_res = self._run_system_command(
-                'powershell -Command "(Get-WmiObject -Class Win32_Processor | Measure-Object).Count"'
-            )
-            gpu_count_res = self._run_system_command(
-                'powershell -Command "(wmic path win32_VideoController get name | findstr AMD | Measure-Object).Count"'
-            )
-            vf_count_res = self._run_system_command(
-                'powershell -Command "(Get-VMHostPartitionableGpu | Measure-Object).Count"'
-            )
+            cpu_count_res = self._run_sut_cmd(self.CMD_CPU_COUNT_WINDOWS)
+            gpu_count_res = self._run_sut_cmd(self.CMD_GPU_COUNT_WINDOWS)
+            vf_count_res = self._run_sut_cmd(self.CMD_VF_COUNT_WINDOWS)
         cpu_count, gpu_count, vf_count = [None, None, None]
 
         if cpu_count_res.exit_code == 0:
@@ -111,10 +122,10 @@ class DeviceEnumerationCollector(InBandDataCollector[DeviceEnumerationDataModel]
                 priority=EventPriority.INFO,
             )
             self.result.message = f"Device Enumeration: {device_enum.model_dump(exclude_none=True)}"
-            self.result.status = TaskStatus.OK
+            self.result.status = ExecutionStatus.OK
         else:
             self.result.message = "Device Enumeration info not found"
-            self.result.status = TaskStatus.EXECUTION_FAILURE
+            self.result.status = ExecutionStatus.EXECUTION_FAILURE
             self._log_event(
                 category=EventCategory.SW_DRIVER,
                 description=self.result.message,

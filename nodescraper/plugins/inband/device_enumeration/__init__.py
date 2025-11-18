@@ -23,3 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
+from .analyzer_args import DeviceEnumerationAnalyzerArgs
+from .device_enumeration_plugin import DeviceEnumerationPlugin
+
+__all__ = ["DeviceEnumerationPlugin", "DeviceEnumerationAnalyzerArgs"]

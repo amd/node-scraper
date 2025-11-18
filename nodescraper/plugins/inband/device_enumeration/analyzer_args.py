@@ -23,17 +23,17 @@
 # SOFTWARE.
 #
 ###############################################################################
+from typing import Optional, Union
 
 from nodescraper.models import AnalyzerArgs
-from nodescraper.plugins.inband.device_enumeration.deviceenumdata import (
-    DeviceEnumerationDataModel,
-)
+
+from .deviceenumdata import DeviceEnumerationDataModel
 
 
 class DeviceEnumerationAnalyzerArgs(AnalyzerArgs):
-    cpu_count: list | int = (None,)
-    gpu_count: list | int = (None,)
-    vf_count: list | int = (None,)
+    cpu_count: Optional[Union[list[int], int]] = None
+    gpu_count: Optional[Union[list[int], int]] = None
+    vf_count: Optional[Union[list[int], int]] = None
 
     @classmethod
     def build_from_model(
@@ -47,4 +47,8 @@ class DeviceEnumerationAnalyzerArgs(AnalyzerArgs):
         Returns:
             DeviceEnumerationAnalyzerArgs: instance of analyzer args class
         """
-        return cls(exp_bios_version=datamodel.bios_version)
+        return cls(
+            cpu_count=datamodel.cpu_count,
+            gpu_count=datamodel.gpu_count,
+            vf_count=datamodel.vf_count,
+        )

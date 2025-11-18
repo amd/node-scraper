@@ -23,10 +23,12 @@
 # SOFTWARE.
 #
 ###############################################################################
+from typing import Optional
+
 from nodescraper.models import DataModel
 
 
 class DeviceEnumerationDataModel(DataModel):
-    cpu_count: int | None = None
-    gpu_count: int | None = None
-    vf_count: int | None = None
+    cpu_count: Optional[int] = None
+    gpu_count: Optional[int] = None
+    vf_count: Optional[int] = None

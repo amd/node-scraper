@@ -22,13 +22,15 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 #
-###########################
+###############################################################################
+from typing import Optional
 
-from errorscraper.event import EventCategory, EventPriority
-
+from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
 from nodescraper.interfaces import DataAnalyzer
-from nodescraper.models import TaskResult, TaskStatus
-from nodescraper.plugins.inband.deviceenumdata import DeviceEnumerationDataModel
+from nodescraper.models import TaskResult
+
+from .analyzer_args import DeviceEnumerationAnalyzerArgs
+from .deviceenumdata import DeviceEnumerationDataModel
 
 
 class DeviceEnumerationAnalyzer(
@@ -45,22 +47,20 @@ class DeviceEnumerationAnalyzer(
 
         if not args:
             self.result.message = "Expected Device Enumeration expected data not provided"
-            self.result.status = TaskStatus.NOT_RAN
+            self.result.status = ExecutionStatus.NOT_RAN
             return self.result
 
-        if isinstance(args.cpu_count, int):
-            cpu_count = [args.cpu_count]
-        if isinstance(args.gpu_count, int):
-            gpu_count = [args.gpu_count]
-        if isinstance(args.vf_count, int):
-            vf_count = [args.vf_count]
+        # Convert to lists if integers, otherwise use as-is
+        cpu_count = [args.cpu_count] if isinstance(args.cpu_count, int) else args.cpu_count
+        gpu_count = [args.gpu_count] if isinstance(args.gpu_count, int) else args.gpu_count
+        vf_count = [args.vf_count] if isinstance(args.vf_count, int) else args.vf_count
 
         checks = {}
-        if cpu_count not in [None, []]:
+        if cpu_count is not None and cpu_count != []:
             checks["cpu_count"] = cpu_count
-        if gpu_count not in [None, []]:
+        if gpu_count is not None and gpu_count != []:
             checks["gpu_count"] = gpu_count
-        if vf_count not in [None, []]:
+        if vf_count is not None and vf_count != []:
             checks["vf_count"] = vf_count
 
         self.result.message = ""
@@ -69,7 +69,7 @@ class DeviceEnumerationAnalyzer(
             if actual_count not in accepted_counts:
                 message = f"Expected {check} in {accepted_counts}, but got {actual_count}. "
                 self.result.message += message
-                self.result.status = TaskStatus.ERRORS_DETECTED
+                self.result.status = ExecutionStatus.ERROR
                 self._log_event(
                     category=EventCategory.PLATFORM,
                     description=message,
@@ -78,7 +78,7 @@ class DeviceEnumerationAnalyzer(
                     console_log=True,
                 )
         if self.result.message == "":
-            self.result.status = TaskStatus.OK
+            self.result.status = ExecutionStatus.OK
             self.result.message = f"Device Enumeration validated on {checks.keys()}."
 
         return self.result

@@ -28,7 +28,7 @@ from nodescraper.base import InBandDataPlugin
 from .analyzer_args import DeviceEnumerationAnalyzerArgs
 from .device_enumeration_analyzer import DeviceEnumerationAnalyzer
 from .device_enumeration_collector import DeviceEnumerationCollector
-from .device_enumerationdata import DeviceEnumerationDataModel
+from .deviceenumdata import DeviceEnumerationDataModel
 
 
 class DeviceEnumerationPlugin(
