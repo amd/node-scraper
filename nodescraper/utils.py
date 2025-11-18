@@ -23,11 +23,12 @@
 # SOFTWARE.
 #
 ###############################################################################
+import inspect
 import os
 import re
 import traceback
 from enum import Enum
-from typing import TypeVar
+from typing import List, Optional, Set, Type, TypeVar
 
 T = TypeVar("T")
 
@@ -201,3 +202,153 @@ def nice_rotated_name(path: str, stem: str, prefix: str = "rotated_") -> str:
 
     middle = base[:-3] if base.endswith(".gz") else base
     return f"{prefix}{middle}.log"
+
+
+def apply_bit_mask(in_hex: str, bit_mask_hex: str) -> Optional[str]:
+    """Extracts bit offset from bit mask, applies the bit mask and offset.
+
+    Args:
+        in_hex (str): Hexadecimal input
+        bit_mask (str): Hexadecimal bit mask
+
+    Returns:
+        str: hexadecimal output after applying bit mask and offset
+    """
+    if not is_hex(hex_in=in_hex) or not is_hex(hex_in=bit_mask_hex):
+        return None
+    in_dec = hex_to_int(in_hex)
+    bit_mask_dec = hex_to_int(bit_mask_hex)
+    bit_offset = get_bit_offset(bit_mask_hex)
+    if in_dec is None or bit_mask_dec is None or bit_offset is None:
+        return None
+    out_dec = (in_dec & bit_mask_dec) >> bit_offset
+    return hex(out_dec)
+
+
+def apply_bit_mask_int(in_int: int, bit_mask_int: int) -> Optional[int]:
+    """Extracts bit offset from bit mask, applies the bit mask and offset.
+
+    Args:
+        in_int (int): integer input
+        bit_mask_int (int): integer bit mask
+
+    Returns:
+        int: integer output after applying bit mask and offset
+    """
+    out_int = (in_int & bit_mask_int) >> get_bit_offset_int(bit_mask_int)
+    return out_int
+
+
+def get_bit_offset_int(bit_mask: int) -> int:
+    """Extracts the bit offset from bit mask.
+    For ex, bit_mask = 0x0010 (hex) -> 0b00010000 (bin)
+    Returns bit offset of 4 (bit position of the "1")
+
+    Args:
+        bit_mask (int): hex bit mask
+
+    Returns:
+        int: bit offset
+    """
+    bit_pos = 0
+    while bit_mask > 0:
+        if bit_mask % 2 == 1:
+            return bit_pos
+        bit_mask = bit_mask >> 1
+        bit_pos += 1
+
+    return 0
+
+
+def get_bit_offset(bit_mask: str) -> Optional[int]:
+    """Extracts the bit offset from bit mask.
+    For ex, bit_mask = "0010" (hex) -> 0b00010000 (bin)
+    Returns bit offset of 4 (bit position of the "1")
+
+    Args:
+        bit_mask (str): hex bit mask
+
+    Returns:
+        int: bit offset
+    """
+    bit_mask_int = hex_to_int(bit_mask)
+    bit_pos = 0
+    if bit_mask_int is None:
+        return None
+    while bit_mask_int > 0:
+        if bit_mask_int % 2 == 1:
+            return bit_pos
+        bit_mask_int = bit_mask_int >> 1
+        bit_pos += 1
+
+    return 0
+
+
+def get_all_subclasses(cls: Type[T]) -> Set[Type[T]]:
+    """Get an iterable with all subclasses of this class (not including this class)
+    Subclasses are presented in no particular order
+
+    Returns:
+        An iterable of all subclasses of this class
+    """
+    subclasses: Set[Type[T]] = set()
+    for subclass in cls.__subclasses__():
+        subclasses = subclasses.union(get_all_subclasses(subclass))
+        if not inspect.isabstract(subclass):
+            subclasses.add(subclass)
+    return subclasses
+
+
+def get_subclass(
+    class_name: str, class_type: Type[T], sub_classes: Optional[List[Type[T]]]
+) -> Optional[Type[T]]:
+    """get a subclass with a given name
+
+    Args:
+        class_name (str): target sub class name
+        class_type (Type[T]): class type
+        sub_classes (Optional[List[Type[T]]]): list of sub classes to check
+
+    Returns:
+        Optional[Type[T]]: sub class or None if no sub class with target name is found
+    """
+    if not sub_classes:
+        sub_classes = list(get_all_subclasses(class_type))
+
+    for sub_class in sub_classes:
+        if sub_class.__name__ == class_name:
+            return sub_class
+    return None
+
+
+def hex_to_int(hex_in: str) -> int | None:
+    """Converts given hex string to int
+
+    Args:
+        hex_in: hexadecimal string
+
+    Returns:
+        int: hexadecimal converted to int
+    """
+    try:
+        if not is_hex(hex_in):
+            return None
+        return int(hex_in, 16)
+    except TypeError:
+        return None
+
+
+def is_hex(hex_in: str) -> bool:
+    """Returns True or False based on whether the input hexadecimal is indeed hexadecimal
+
+    Args:
+        hex_in: hexadecimal string
+
+    Returns:
+        bool: True/False whether the input hexadecimal is indeed hexadecimal
+    """
+    if not hex_in:
+        return False
+
+    hex_pattern = re.compile(r"^(0x)?[0-9a-fA-F]+$")
+    return bool(hex_pattern.fullmatch(hex_in))
