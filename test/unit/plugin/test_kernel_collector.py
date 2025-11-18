@@ -53,7 +53,9 @@ def test_run_windows(collector, conn_mock):
 
     result, data = collector.collect_data()
 
-    assert data == KernelDataModel(kernel_info="10.0.19041.1237", kernel_version=None)
+    assert data == KernelDataModel(
+        kernel_info="Version=10.0.19041.1237", kernel_version="10.0.19041.1237"
+    )
     assert result.status == ExecutionStatus.OK
 
 

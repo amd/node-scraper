@@ -1,3 +1,5 @@
+from typing import Optional
+
 from nodescraper.base import InBandDataCollector
 from nodescraper.enums import ExecutionStatus
 from nodescraper.models import TaskResult
@@ -9,7 +11,7 @@ class SampleCollector(InBandDataCollector[SampleDataModel, None]):
 
     DATA_MODEL = SampleDataModel
 
-    def collect_data(self, args=None) -> tuple[TaskResult, SampleDataModel | None]:
+    def collect_data(self, args=None) -> tuple[TaskResult, Optional[SampleDataModel]]:
         sample_data = SampleDataModel(some_str="example123")
         self.result.message = "Collector ran successfully"
         self.result.status = ExecutionStatus.OK

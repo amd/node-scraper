@@ -81,9 +81,10 @@ class KernelCollector(InBandDataCollector[KernelDataModel, None]):
         if self.system_info.os_family == OSFamily.WINDOWS:
             res = self._run_sut_cmd(self.CMD_WINDOWS)
             if res.exit_code == 0:
-                kernel_info = [line for line in res.stdout.splitlines() if "Version=" in line][
-                    0
-                ].split("=")[1]
+                kernel_info = res.stdout
+                kernel = [line for line in res.stdout.splitlines() if "Version=" in line][0].split(
+                    "="
+                )[1]
         else:
             res = self._run_sut_cmd(self.CMD)
             if res.exit_code == 0:
@@ -107,7 +108,7 @@ class KernelCollector(InBandDataCollector[KernelDataModel, None]):
                 console_log=True,
             )
 
-        if kernel_info:
+        if kernel_info and kernel:
 
             kernel_data = KernelDataModel(kernel_info=kernel_info, kernel_version=kernel)
             self._log_event(
