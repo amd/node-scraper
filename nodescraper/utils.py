@@ -321,7 +321,7 @@ def get_subclass(
     return None
 
 
-def hex_to_int(hex_in: str) -> int | None:
+def hex_to_int(hex_in: str) -> Optional[int]:
     """Converts given hex string to int
 
     Args:

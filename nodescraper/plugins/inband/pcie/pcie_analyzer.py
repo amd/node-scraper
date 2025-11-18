@@ -29,7 +29,7 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from nodescraper.enums import EventCategory, EventPriority
 from nodescraper.interfaces import DataAnalyzer
-from nodescraper.models import DataModel, TaskResult
+from nodescraper.models import TaskResult
 from nodescraper.utils import get_exception_traceback
 
 from ..device_enumeration.deviceenumdata import DeviceEnumerationDataModel
@@ -125,7 +125,7 @@ class PcieAnalyzer(DataAnalyzer):
 
     """
 
-    DATA_MODEL = {PcieDataModel, DeviceEnumerationDataModel}
+    DATA_MODEL = PcieDataModel
 
     GPU_BRIDGE_USP_ID = "0x1501"
     GPU_BRIDGE_DSP_ID = "0x1500"
@@ -932,15 +932,15 @@ class PcieAnalyzer(DataAnalyzer):
             )
 
     def analyze_data(
-        self, data: Dict[Type[DataModel], DataModel], args: Optional[PcieAnalyzerArgs] = None
+        self, data: PcieDataModel, args: Optional[PcieAnalyzerArgs] = None
     ) -> TaskResult:
         """Check PCIe data for errors by analyzing the PCIe register space and
         checking the enumeration of the GPUs and optional SR-IOV VFs
 
         Parameters
         ----------
-        data : Dict[Type[DataModel], DataModel]
-            Data library containing PCIe data model and optionally device enumeration data
+        data : PcieDataModel
+            PCIe data model containing collected PCIe configuration space data
         args : Optional[PcieAnalyzerArgs], optional
             Analyzer arguments containing expected values for validation, by default None
 
@@ -1013,17 +1013,11 @@ class PcieAnalyzer(DataAnalyzer):
             )
             return self.result
 
-        # Extract PCIe data from data library
-        pcie_data: PcieDataModel = data[PcieDataModel]
+        # Use PCIe data directly
+        pcie_data: PcieDataModel = data
 
-        # Extract device enumeration data if available
-        device_enum_data: Optional[DeviceEnumerationDataModel] = data.get(
-            DeviceEnumerationDataModel, None
-        )
-
-        # Check GPU counts if device enumeration data is available
-        if device_enum_data is not None:
-            self.check_gpu_counts(pcie_data, device_enum_data, exp_gpu_count_override)
+        # TODO: Device enumeration check disabled - requires data_library support
+        # The check_gpu_counts() need a mechanism to pass DeviceEnumerationDataModel&PcieDataModel
 
         if pcie_data.pcie_cfg_space == {} and pcie_data.vf_pcie_cfg_space == {}:
             # If both of the PCIe Configuration spaces are
