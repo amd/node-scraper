@@ -42,6 +42,9 @@ class RocmCollector(InBandDataCollector[RocmDataModel, None]):
         "/opt/rocm/.info/version-rocm",
         "/opt/rocm/.info/version",
     ]
+    CMD_ROCMINFO = "rocminfo"
+    CMD_ROCM_VERSIONED_PATHS = "ls -v -d /opt/rocm-[3-7]* | tail -1"
+    CMD_ROCM_ALL_PATHS = "ls -v -d /opt/rocm*"
 
     def collect_data(self, args=None) -> tuple[TaskResult, Optional[RocmDataModel]]:
         """Collect ROCm version data from the system.
@@ -59,6 +62,22 @@ class RocmCollector(InBandDataCollector[RocmDataModel, None]):
             res = self._run_sut_cmd(f"grep . {path}")
             if res.exit_code == 0:
                 rocm_data = RocmDataModel(rocm_version=res.stdout)
+
+                # Collect rocminfo output
+                rocminfo_res = self._run_sut_cmd(self.CMD_ROCMINFO)
+                if rocminfo_res.exit_code == 0:
+                    rocm_data.rocminfo = rocminfo_res.stdout
+
+                # Collect latest versioned ROCm path (rocm-[3-7]*)
+                versioned_path_res = self._run_sut_cmd(self.CMD_ROCM_VERSIONED_PATHS)
+                if versioned_path_res.exit_code == 0:
+                    rocm_data.rocm_latest_versioned_path = versioned_path_res.stdout
+
+                # Collect all ROCm paths
+                all_paths_res = self._run_sut_cmd(self.CMD_ROCM_ALL_PATHS)
+                if all_paths_res.exit_code == 0:
+                    rocm_data.rocm_all_paths = all_paths_res.stdout
+
                 self._log_event(
                     category="ROCM_VERSION_READ",
                     description="ROCm version data collected",
