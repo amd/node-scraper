@@ -23,6 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
+import re
 from typing import Optional
 
 from nodescraper.base import InBandDataCollector
@@ -46,6 +47,12 @@ class RocmCollector(InBandDataCollector[RocmDataModel, None]):
     CMD_ROCM_VERSIONED_PATHS = "ls -v -d /opt/rocm-[3-7]* | tail -1"
     CMD_ROCM_ALL_PATHS = "ls -v -d /opt/rocm*"
 
+    @staticmethod
+    def _strip_ansi_codes(text: str) -> str:
+        """Remove ANSI escape codes from text."""
+        ansi_escape = re.compile(r"\x1b\[[0-9;]*m")
+        return ansi_escape.sub("", text)
+
     def collect_data(self, args=None) -> tuple[TaskResult, Optional[RocmDataModel]]:
         """Collect ROCm version data from the system.
 
@@ -63,28 +70,48 @@ class RocmCollector(InBandDataCollector[RocmDataModel, None]):
             if res.exit_code == 0:
                 rocm_data = RocmDataModel(rocm_version=res.stdout)
 
-                # Collect rocminfo output
+                # Collect rocminfo output as list of lines with ANSI codes stripped
                 rocminfo_res = self._run_sut_cmd(self.CMD_ROCMINFO)
                 if rocminfo_res.exit_code == 0:
-                    rocm_data.rocminfo = rocminfo_res.stdout
+                    # Split into lines and strip ANSI codes from each line
+                    rocm_data.rocminfo = [
+                        self._strip_ansi_codes(line)
+                        for line in rocminfo_res.stdout.strip().split("\n")
+                    ]
 
                 # Collect latest versioned ROCm path (rocm-[3-7]*)
                 versioned_path_res = self._run_sut_cmd(self.CMD_ROCM_VERSIONED_PATHS)
                 if versioned_path_res.exit_code == 0:
-                    rocm_data.rocm_latest_versioned_path = versioned_path_res.stdout
+                    rocm_data.rocm_latest_versioned_path = versioned_path_res.stdout.strip()
 
-                # Collect all ROCm paths
+                # Collect all ROCm paths as list
                 all_paths_res = self._run_sut_cmd(self.CMD_ROCM_ALL_PATHS)
                 if all_paths_res.exit_code == 0:
-                    rocm_data.rocm_all_paths = all_paths_res.stdout
+                    rocm_data.rocm_all_paths = [
+                        path.strip()
+                        for path in all_paths_res.stdout.strip().split("\n")
+                        if path.strip()
+                    ]
+
+                # Create concise summary for logging
+                log_summary = {
+                    "rocm_version": rocm_data.rocm_version,
+                    "rocminfo_lines_collected": (
+                        len(rocm_data.rocminfo) if rocm_data.rocminfo else 0
+                    ),
+                    "rocm_latest_versioned_path": rocm_data.rocm_latest_versioned_path,
+                    "rocm_paths_count": (
+                        len(rocm_data.rocm_all_paths) if rocm_data.rocm_all_paths else 0
+                    ),
+                }
 
                 self._log_event(
                     category="ROCM_VERSION_READ",
                     description="ROCm version data collected",
-                    data=rocm_data.model_dump(),
+                    data=log_summary,
                     priority=EventPriority.INFO,
                 )
-                self.result.message = f"ROCm: {rocm_data.model_dump()}"
+                self.result.message = f"ROCm version: {rocm_data.rocm_version}, Latest path: {rocm_data.rocm_latest_versioned_path}"
                 self.result.status = ExecutionStatus.OK
                 break
         else:
