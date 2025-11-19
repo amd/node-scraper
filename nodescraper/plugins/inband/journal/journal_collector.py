@@ -25,27 +25,50 @@
 ###############################################################################
 from typing import Optional
 
+from pydantic import ValidationError
+
 from nodescraper.base import InBandDataCollector
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.models import TaskResult
+from nodescraper.utils import get_exception_details
 
+from .collector_args import JournalCollectorArgs
 from .journaldata import JournalData
 
 
-class JournalCollector(InBandDataCollector[JournalData, None]):
+class JournalCollector(InBandDataCollector[JournalData, JournalCollectorArgs]):
     """Read journal log via journalctl."""
 
     SUPPORTED_OS_FAMILY = {OSFamily.LINUX}
     DATA_MODEL = JournalData
     CMD = "journalctl --no-pager --system --output=short-iso"
 
-    def _read_with_journalctl(self):
+    def _read_with_journalctl(self, args: Optional[JournalCollectorArgs] = None):
         """Read journal logs using journalctl
 
         Returns:
             str|None: system journal read
         """
-        res = self._run_sut_cmd(self.CMD, sudo=True, log_artifact=False, strip=False)
+
+        cmd = "journalctl --no-pager --system --output=short-iso"
+        try:
+            # safe check for args.boot
+            if args is not None and getattr(args, "boot", None):
+                cmd = f"journalctl --no-pager -b {args.boot} --system --output=short-iso"
+
+            res = self._run_sut_cmd(cmd, sudo=True, log_artifact=False, strip=False)
+
+        except ValidationError as val_err:
+            self._log_event(
+                category=EventCategory.OS,
+                description="Exception while running journalctl",
+                data=get_exception_details(val_err),
+                priority=EventPriority.ERROR,
+                console_log=True,
+            )
+            self.result.message = "Could not read journalctl data"
+            self.result.status = ExecutionStatus.ERROR
+            return None
 
         if res.exit_code != 0:
             self._log_event(
@@ -61,16 +84,22 @@ class JournalCollector(InBandDataCollector[JournalData, None]):
 
         return res.stdout
 
-    def collect_data(self, args=None) -> tuple[TaskResult, Optional[JournalData]]:
+    def collect_data(
+        self,
+        args: Optional[JournalCollectorArgs] = None,
+    ) -> tuple[TaskResult, Optional[JournalData]]:
         """Collect journal logs
 
         Args:
             args (_type_, optional): Collection args. Defaults to None.
 
         Returns:
-            tuple[TaskResult, Optional[JournalData, None]]: Tuple of results and data model or none.
+            tuple[TaskResult, Optional[JournalData]]: Tuple of results and data model or none.
         """
-        journal_log = self._read_with_journalctl()
+        if args is None:
+            args = JournalCollectorArgs()
+
+        journal_log = self._read_with_journalctl(args)
         if journal_log:
             data = JournalData(journal_log=journal_log)
             self.result.message = self.result.message or "Journal data collected"
