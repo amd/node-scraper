@@ -1,17 +1,12 @@
-#!/bin/bash
-
-# Create venv if not present
+# Create venv if not already present
 if [ ! -d "venv" ]; then
-    python3 -m venv venv || { echo "Failed to create venv. Try: sudo apt install python3-venv"; exit 1; }
+    python3 -m pip install venv
+    python3 -m venv venv
 fi
 
 # Activate the desired venv
 source venv/bin/activate
 
-# Install package
 python3 -m pip install --editable .[dev] --upgrade
 
-# Install pre-commit hooks if available
-if command -v pre-commit &> /dev/null; then
-    pre-commit install
-fi
+pre-commit install
