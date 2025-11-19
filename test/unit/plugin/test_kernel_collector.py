@@ -53,7 +53,9 @@ def test_run_windows(collector, conn_mock):
 
     result, data = collector.collect_data()
 
-    assert data == KernelDataModel(kernel_version="10.0.19041.1237")
+    assert data == KernelDataModel(
+        kernel_info="Version=10.0.19041.1237", kernel_version="10.0.19041.1237"
+    )
     assert result.status == ExecutionStatus.OK
 
 
@@ -61,14 +63,17 @@ def test_run_linux(collector, conn_mock):
     collector.system_info.os_family = OSFamily.LINUX
     conn_mock.run_command.return_value = CommandArtifact(
         exit_code=0,
-        stdout="5.4.0-88-generic",
+        stdout="Linux MockSystem 5.13.0-30-generic #1 XYZ Day Month 10 15:19:13 EDT 2024 x86_64 x86_64 x86_64 GNU/Linux",
         stderr="",
-        command="sh -c 'uname -r'",
+        command="sh -c 'uname -a'",
     )
 
     result, data = collector.collect_data()
 
-    assert data == KernelDataModel(kernel_version="5.4.0-88-generic")
+    assert data == KernelDataModel(
+        kernel_info="Linux MockSystem 5.13.0-30-generic #1 XYZ Day Month 10 15:19:13 EDT 2024 x86_64 x86_64 x86_64 GNU/Linux",
+        kernel_version="5.13.0-30-generic",
+    )
     assert result.status == ExecutionStatus.OK
 
 
