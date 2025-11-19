@@ -38,12 +38,10 @@ class DeviceEnumerationCollector(InBandDataCollector[DeviceEnumerationDataModel,
 
     DATA_MODEL = DeviceEnumerationDataModel
 
-    # Linux commands
     CMD_CPU_COUNT_LINUX = "lscpu | grep Socket | awk '{ print $2 }'"
-    CMD_GPU_COUNT_LINUX = "lspci -d 1002: | grep -i 'VGA\\|Display\\|3D' | wc -l"
-    CMD_VF_COUNT_LINUX = "lspci -d 1002: | grep -i 'Virtual Function' | wc -l"
+    CMD_GPU_COUNT_LINUX = "lspci -d {vendorid_ep}: | grep -i 'VGA\\|Display\\|3D' | wc -l"
+    CMD_VF_COUNT_LINUX = "lspci -d {vendorid_ep}: | grep -i 'Virtual Function' | wc -l"
 
-    # Windows commands
     CMD_CPU_COUNT_WINDOWS = (
         'powershell -Command "(Get-WmiObject -Class Win32_Processor | Measure-Object).Count"'
     )
@@ -81,11 +79,14 @@ class DeviceEnumerationCollector(InBandDataCollector[DeviceEnumerationDataModel,
             # Count CPU sockets
             cpu_count_res = self._run_sut_cmd(self.CMD_CPU_COUNT_LINUX)
 
-            # Count all AMD GPUs (vendor ID 1002)
-            gpu_count_res = self._run_sut_cmd(self.CMD_GPU_COUNT_LINUX)
+            # Count all AMD GPUs
+            vendor_id = format(self.system_info.vendorid_ep, "x")
+            gpu_count_res = self._run_sut_cmd(
+                self.CMD_GPU_COUNT_LINUX.format(vendorid_ep=vendor_id)
+            )
 
             # Count AMD Virtual Functions
-            vf_count_res = self._run_sut_cmd(self.CMD_VF_COUNT_LINUX)
+            vf_count_res = self._run_sut_cmd(self.CMD_VF_COUNT_LINUX.format(vendorid_ep=vendor_id))
         else:
             cpu_count_res = self._run_sut_cmd(self.CMD_CPU_COUNT_WINDOWS)
             gpu_count_res = self._run_sut_cmd(self.CMD_GPU_COUNT_WINDOWS)
