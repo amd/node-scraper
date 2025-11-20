@@ -27,6 +27,7 @@ import re
 from typing import Optional
 
 from nodescraper.base import InBandDataCollector
+from nodescraper.connection.inband import TextFileArtifact
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.models import TaskResult
 
@@ -79,6 +80,11 @@ class RocmCollector(InBandDataCollector[RocmDataModel, None]):
                         for line in rocminfo_res.stdout.strip().split("\n")
                     ]
 
+                    # Add rocminfo output as a text file artifact
+                    self.result.artifacts.append(
+                        TextFileArtifact(filename="rocminfo.log", contents=rocminfo_res.stdout)
+                    )
+
                 # Collect latest versioned ROCm path (rocm-[3-7]*)
                 versioned_path_res = self._run_sut_cmd(self.CMD_ROCM_VERSIONED_PATHS)
                 if versioned_path_res.exit_code == 0:
@@ -93,25 +99,13 @@ class RocmCollector(InBandDataCollector[RocmDataModel, None]):
                         if path.strip()
                     ]
 
-                # Create concise summary for logging
-                log_summary = {
-                    "rocm_version": rocm_data.rocm_version,
-                    "rocminfo_lines_collected": (
-                        len(rocm_data.rocminfo) if rocm_data.rocminfo else 0
-                    ),
-                    "rocm_latest_versioned_path": rocm_data.rocm_latest_versioned_path,
-                    "rocm_paths_count": (
-                        len(rocm_data.rocm_all_paths) if rocm_data.rocm_all_paths else 0
-                    ),
-                }
-
                 self._log_event(
                     category="ROCM_VERSION_READ",
                     description="ROCm version data collected",
-                    data=log_summary,
+                    data=rocm_data.model_dump(include={"rocm_version"}),
                     priority=EventPriority.INFO,
                 )
-                self.result.message = f"ROCm version: {rocm_data.rocm_version}, Latest path: {rocm_data.rocm_latest_versioned_path}"
+                self.result.message = f"ROCm version: {rocm_data.rocm_version}"
                 self.result.status = ExecutionStatus.OK
                 break
         else:
