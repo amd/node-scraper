@@ -24,7 +24,7 @@
 #
 ###############################################################################
 import re
-from typing import List, Optional
+from typing import List
 
 from pydantic import field_validator
 
@@ -33,9 +33,9 @@ from nodescraper.models import DataModel
 
 class RocmDataModel(DataModel):
     rocm_version: str
-    rocminfo: Optional[List[str]] = None
-    rocm_latest_versioned_path: Optional[str] = None
-    rocm_all_paths: Optional[List[str]] = None
+    rocminfo: List[str] = []
+    rocm_latest_versioned_path: str = ""
+    rocm_all_paths: List[str] = []
 
     @field_validator("rocm_version")
     @classmethod
