@@ -33,12 +33,8 @@ class AnalyzerArgs(BaseModel):
 
     This class provides automatic string stripping for all string values
     in analyzer args. All analyzer args classes should inherit from this
-    instead of BaseModel directly.
+    directly.
 
-    The strip_string_values validator runs in mode="before", which means
-    it executes before any field validators in child classes. This ensures
-    all string inputs are cleaned of leading/trailing whitespace before
-    any further processing.
     """
 
     model_config = {"extra": "forbid", "exclude_none": True}
@@ -53,9 +49,6 @@ class AnalyzerArgs(BaseModel):
         - Lists: strips strings in lists
         - Dicts: strips string values in dicts
         - Other types: left unchanged
-
-        Runs in mode="before" to ensure stripping happens before any
-        field validators execute in child classes.
 
         Args:
             data: The input data to validate
