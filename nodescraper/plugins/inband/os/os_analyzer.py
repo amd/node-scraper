@@ -54,8 +54,8 @@ class OsAnalyzer(DataAnalyzer[OsDataModel, OsAnalyzerArgs]):
             return self.result
 
         for os_name in args.exp_os:
-            if (str(os_name).strip() == data.os_name and args.exact_match) or (
-                str(os_name).strip() in data.os_name and not args.exact_match
+            if (os_name == data.os_name and args.exact_match) or (
+                os_name in data.os_name and not args.exact_match
             ):
                 self.result.message = "OS name matches expected"
                 self.result.status = ExecutionStatus.OK

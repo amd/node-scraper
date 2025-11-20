@@ -157,7 +157,7 @@ class PackageAnalyzer(DataAnalyzer[PackageDataModel, PackageAnalyzerArgs]):
             elif exp_value is None:
                 # allow any version when expected version is None
                 continue
-            elif version != str(exp_value).strip():
+            elif version != exp_value:
                 not_found_match.append((exp_key, version))
                 self._log_event(
                     EventCategory.APPLICATION,

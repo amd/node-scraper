@@ -83,7 +83,7 @@ class DkmsAnalyzer(DataAnalyzer[DkmsDataModel, DkmsAnalyzerArgs]):
                         )
                     if regex_data.match(actual_value):
                         break
-                elif actual_value == str(accepted_value).strip():
+                elif actual_value == accepted_value:
                     break
             else:
                 expected_values.append(accepted_values)

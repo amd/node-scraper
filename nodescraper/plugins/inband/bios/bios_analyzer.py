@@ -75,7 +75,7 @@ class BiosAnalyzer(DataAnalyzer[BiosDataModel, BiosAnalyzerArgs]):
                     self.result.message = "Bios data matches expected"
                     self.result.status = ExecutionStatus.OK
                     return self.result
-            elif data.bios_version == str(bios_version).strip():
+            elif data.bios_version == bios_version:
                 self.result.message = "Bios data matches expected"
                 self.result.status = ExecutionStatus.OK
                 return self.result
