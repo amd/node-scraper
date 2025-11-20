@@ -58,13 +58,13 @@ class RocmAnalyzer(DataAnalyzer[RocmDataModel, RocmAnalyzerArgs]):
             return self.result
 
         for rocm_version in args.exp_rocm:
-            if data.rocm_version == rocm_version:
+            if data.rocm_version == str(rocm_version).strip():
                 self.result.message = "ROCm version matches expected"
                 self.result.status = ExecutionStatus.OK
                 return self.result
 
         self.result.message = (
-            f"ROCm version mismatch! Expected: {rocm_version}, actual: {args.exp_rocm}"
+            f"ROCm version mismatch! Expected: {args.exp_rocm}, actual: {data.rocm_version}"
         )
         self.result.status = ExecutionStatus.ERROR
         self._log_event(

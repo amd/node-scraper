@@ -72,7 +72,7 @@ class KernelAnalyzer(DataAnalyzer[KernelDataModel, KernelAnalyzerArgs]):
                     self.result.message = "Kernel matches expected"
                     self.result.status = ExecutionStatus.OK
                     return self.result
-            elif data.kernel_version == kernel:
+            elif data.kernel_version == str(kernel).strip():
                 self.result.message = "Kernel matches expected"
                 self.result.status = ExecutionStatus.OK
                 return self.result

@@ -66,7 +66,7 @@ class StorageAnalyzer(DataAnalyzer[StorageDataModel, StorageAnalyzerArgs]):
                     continue
                 if device_regex.match(device_name):
                     return True
-            elif device_name == exp_device:
+            elif device_name == str(exp_device).strip():
                 return True
         return False
 
