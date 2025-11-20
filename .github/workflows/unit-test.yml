@@ -17,19 +17,16 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
-    - name: Install package
-      run: |
-        ./dev-setup.sh
-
     - name: Install xmllint
       run: |
         apt-get update
         apt-get install -y libxml2-utils bc
 
-
-    - name: Run unit tests with coverage
+    - name: Install package and run unit tests with coverage
       id: extract_coverage
+      shell: bash
       run: |
+        source ./dev-setup.sh
         pytest test/unit -s --cov=nodescraper --cov-report=xml --cov-report=term --cov-fail-under=70 --maxfail=1 --disable-warnings -v
 
     - name: Print coverage
