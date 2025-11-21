@@ -58,6 +58,7 @@ class PackageAnalyzer(DataAnalyzer[PackageDataModel, PackageAnalyzerArgs]):
 
         value_found = False
         for name, version in package_data.items():
+            self.logger.debug("Package data: %s, %s", name, version)
             key_search_res = key_search.search(name)
             if key_search_res:
                 value_found = True
@@ -79,16 +80,16 @@ class PackageAnalyzer(DataAnalyzer[PackageDataModel, PackageAnalyzerArgs]):
         return value_found
 
     def package_regex_search(
-        self, package_data: dict[str, str], exp_packge_data: dict[str, Optional[str]]
+        self, package_data: dict[str, str], exp_package_data: dict[str, Optional[str]]
     ):
         """Searches the package data for the expected package and version using regex
 
         Args:
             package_data (dict[str, str]): a dictionary of package names and versions
-            exp_packge_data (dict[str, Optional[str]]): a dictionary of expected package names and versions
+            exp_package_data (dict[str, Optional[str]]): a dictionary of expected package names and versions
         """
         not_found_keys = []
-        for exp_key, exp_value in exp_packge_data.items():
+        for exp_key, exp_value in exp_package_data.items():
             try:
                 if exp_value is not None:
                     value_search = re.compile(exp_value)
@@ -125,44 +126,46 @@ class PackageAnalyzer(DataAnalyzer[PackageDataModel, PackageAnalyzerArgs]):
         return not_found_keys
 
     def package_exact_match(
-        self, package_data: dict[str, str], exp_packge_data: dict[str, Optional[str]]
+        self, package_data: dict[str, str], exp_package_data: dict[str, Optional[str]]
     ):
         """Checks the package data for the expected package and version using exact match
 
         Args:
             package_data (dict[str, str]): a dictionary of package names and versions
-            exp_packge_data (dict[str, Optional[str]]): a dictionary of expected package names and versions
+            exp_package_data (dict[str, Optional[str]]): a dictionary of expected package names and versions
         """
         not_found_match = []
         not_found_version = []
-        for exp_key, exp_value in exp_packge_data.items():
-            self.logger.info(exp_key)
+        for exp_key, exp_value in exp_package_data.items():
+            self.logger.info("Expected value: %s, %s", exp_key, exp_value)
             version = package_data.get(exp_key)
-            if exp_value is None:
+            self.logger.info("Found version: %s", version)
+            if version is None:
+                # package not found
+                not_found_version.append((exp_key, exp_value))
+                self._log_event(
+                    EventCategory.APPLICATION,
+                    f"Package {exp_key} not found in the package list",
+                    EventPriority.ERROR,
+                    {
+                        "expected_package": exp_key,
+                        "found_package": None,
+                        "expected_version": exp_value,
+                        "found_version": None,
+                    },
+                )
+            elif exp_value is None:
                 # allow any version when expected version is None
-                if version is None:
-                    # package not found
-                    not_found_version.append((exp_key, version))
-                    self._log_event(
-                        EventCategory.APPLICATION,
-                        f"Package {exp_key} not found in the package list",
-                        EventPriority.ERROR,
-                        {
-                            "expected_package": exp_key,
-                            "found_package": None,
-                            "expected_version": exp_value,
-                            "found_version": None,
-                        },
-                    )
+                continue
             elif version != exp_value:
                 not_found_match.append((exp_key, version))
                 self._log_event(
                     EventCategory.APPLICATION,
-                    f"Package {exp_key} Version Mismatch, Expected {exp_key} but found {version}",
+                    f"Package {exp_key} Version Mismatch, Expected {exp_value} but found {version}",
                     EventPriority.ERROR,
                     {
                         "expected_package": exp_key,
-                        "found_package": exp_key if version else None,
+                        "found_package": exp_key,
                         "expected_version": exp_value,
                         "found_version": version,
                     },
@@ -191,6 +194,7 @@ class PackageAnalyzer(DataAnalyzer[PackageDataModel, PackageAnalyzerArgs]):
             self.result.message = f"Packages not found: {not_found_keys}"
             self.result.status = ExecutionStatus.ERROR
         else:
+            self.logger.info("Expected packages: %s", list(args.exp_package_ver.keys()))
             not_found_match, not_found_version = self.package_exact_match(
                 data.version_info, args.exp_package_ver
             )
