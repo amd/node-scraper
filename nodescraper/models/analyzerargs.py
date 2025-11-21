@@ -23,11 +23,60 @@
 # SOFTWARE.
 #
 ###############################################################################
-from pydantic import BaseModel
+from typing import Any
+
+from pydantic import BaseModel, model_validator
 
 
 class AnalyzerArgs(BaseModel):
+    """Base class for all analyzer arguments.
+
+    This class provides automatic string stripping for all string values
+    in analyzer args. All analyzer args classes should inherit from this
+    directly.
+
+    """
+
     model_config = {"extra": "forbid", "exclude_none": True}
+
+    @model_validator(mode="before")
+    @classmethod
+    def strip_string_values(cls, data: Any) -> Any:
+        """Strip whitespace from all string values in analyzer args.
+
+        This validator recursively processes:
+        - String values: strips whitespace
+        - Lists: strips strings in lists
+        - Dicts: strips string values in dicts
+        - Other types: left unchanged
+
+        Args:
+            data: The input data to validate
+
+        Returns:
+            The data with all string values stripped
+        """
+        if isinstance(data, dict):
+            return {k: cls._strip_value(v) for k, v in data.items()}
+        return data
+
+    @classmethod
+    def _strip_value(cls, value: Any) -> Any:
+        """Recursively strip string values.
+
+        Args:
+            value: The value to process
+
+        Returns:
+            The processed value
+        """
+        if isinstance(value, str):
+            return value.strip()
+        elif isinstance(value, list):
+            return [cls._strip_value(item) for item in value]
+        elif isinstance(value, dict):
+            return {k: cls._strip_value(v) for k, v in value.items()}
+        return value
 
     @classmethod
     def build_from_model(cls, datamodel):
