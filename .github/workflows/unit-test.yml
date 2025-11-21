@@ -12,7 +12,7 @@ permissions:
 jobs:
   run_tests:
     runs-on: [ self-hosted ]
-    container: python:3.10
+    container: python:3.9
 
     steps:
     - uses: actions/checkout@v3
