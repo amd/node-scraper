@@ -206,7 +206,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                         try:
                             obj, end_idx = decoder.raw_decode(cmd_ret_stripped, idx)
                             json_objects.append(obj)
-                            idx += end_idx
+                            idx = end_idx
                         except json.JSONDecodeError:
                             break
 
@@ -529,7 +529,15 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         memparts: list[PartitionMemory] = []
         computeparts: list[PartitionCompute] = []
 
+        # Flatten multi-JSON results (partition command returns multiple JSON arrays)
+        flattened_data = []
         for item in partition_data:
+            if isinstance(item, list):
+                flattened_data.extend(item)
+            elif isinstance(item, dict):
+                flattened_data.append(item)
+
+        for item in flattened_data:
             if not isinstance(item, dict):
                 continue
 
