@@ -35,10 +35,12 @@ from .amdsmidata import (
     AmdSmiDataModel,
     AmdSmiMetric,
     AmdSmiStatic,
+    AmdSmiTstData,
     EccData,
     Fw,
     Partition,
     Processes,
+    XgmiMetrics,
 )
 from .analyzer_args import AmdSmiAnalyzerArgs
 from .cper import CperAnalysisTaskMixin
@@ -637,6 +639,97 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                 },
             )
 
+    def check_expected_xgmi_link_speed(
+        self,
+        xgmi_metric: Optional[List[XgmiMetrics]],
+        expected_xgmi_speed: Optional[List[float]] = None,
+    ):
+        """Check the XGMI link speed for all GPUs
+
+        Args:
+            xgmi_metric (Optional[List[XgmiMetrics]]): XGMI metrics data
+            expected_xgmi_speed (Optional[List[float]]): List of expected XGMI speeds (GT/s)
+        """
+        if xgmi_metric is None or len(xgmi_metric) == 0:
+            self._log_event(
+                category=EventCategory.IO,
+                description="XGMI link speed data is not available and cannot be checked",
+                priority=EventPriority.WARNING,
+                data={"xgmi_metric": xgmi_metric},
+            )
+            return
+
+        if expected_xgmi_speed is None or len(expected_xgmi_speed) == 0:
+            self._log_event(
+                category=EventCategory.IO,
+                description="Expected XGMI speed not configured, skipping XGMI link speed check",
+                priority=EventPriority.WARNING,
+            )
+            return
+
+        for xgmi_data in xgmi_metric:
+            link_metric = xgmi_data.link_metrics
+            try:
+                if link_metric.bit_rate is None or link_metric.bit_rate.value is None:
+                    self._log_event(
+                        category=EventCategory.IO,
+                        description="XGMI link speed is not available",
+                        priority=EventPriority.ERROR,
+                        data={
+                            "gpu": xgmi_data.gpu,
+                            "xgmi_bit_rate": (
+                                link_metric.bit_rate.unit if link_metric.bit_rate else "N/A"
+                            ),
+                        },
+                    )
+                    continue
+
+                xgmi_float = float(link_metric.bit_rate.value)
+            except ValueError:
+                self._log_event(
+                    category=EventCategory.IO,
+                    description="XGMI link speed is not a valid number",
+                    priority=EventPriority.ERROR,
+                    data={
+                        "gpu": xgmi_data.gpu,
+                        "xgmi_bit_rate": (
+                            link_metric.bit_rate.value if link_metric.bit_rate else "N/A"
+                        ),
+                    },
+                )
+                continue
+
+            if xgmi_float not in expected_xgmi_speed:
+                self._log_event(
+                    category=EventCategory.IO,
+                    description="XGMI link speed is not as expected",
+                    priority=EventPriority.ERROR,
+                    data={
+                        "gpu": xgmi_data.gpu,
+                        "xgmi_bit_rate": xgmi_float,
+                        "expected_xgmi_speed": expected_xgmi_speed,
+                    },
+                    console_log=True,
+                )
+
+    def check_amdsmitst(self, amdsmitst_data: AmdSmiTstData):
+        """Check AMD SMI test results
+
+        Args:
+            amdsmitst_data (AmdSmiTstData): AMD SMI test data
+        """
+        if amdsmitst_data.failed_test_count > 0:
+            self._log_event(
+                category=EventCategory.APPLICATION,
+                description=f"{amdsmitst_data.failed_test_count} failed tests running amdsmitst",
+                priority=EventPriority.ERROR,
+                data={
+                    "failed_test_count": amdsmitst_data.failed_test_count,
+                    "failed_tests": amdsmitst_data.failed_tests,
+                },
+                console_log=True,
+            )
+
     def analyze_data(
         self, data: AmdSmiDataModel, args: Optional[AmdSmiAnalyzerArgs] = None
     ) -> TaskResult:
@@ -716,5 +809,13 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                 analysis_range_start=args.analysis_range_start,
                 analysis_range_end=args.analysis_range_end,
             )
+
+        if data.xgmi_metric and len(data.xgmi_metric) > 0:
+            self.check_expected_xgmi_link_speed(
+                data.xgmi_metric, expected_xgmi_speed=args.expected_xgmi_speed
+            )
+
+        if data.amdsmitst_data and data.amdsmitst_data.failed_test_count > 0:
+            self.check_amdsmitst(data.amdsmitst_data)
 
         return self.result

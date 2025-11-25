@@ -45,5 +45,6 @@ class AmdSmiAnalyzerArgs(AnalyzerArgs):
     devid_ep: Optional[str] = None
     devid_ep_vf: Optional[str] = None
     sku_name: Optional[str] = None
+    expected_xgmi_speed: Optional[list[float]] = None
     analysis_range_start: Optional[datetime] = None
     analysis_range_end: Optional[datetime] = None
