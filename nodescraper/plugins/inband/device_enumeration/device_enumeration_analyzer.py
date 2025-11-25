@@ -45,10 +45,8 @@ class DeviceEnumerationAnalyzer(
         self, data: DeviceEnumerationDataModel, args: Optional[DeviceEnumerationAnalyzerArgs] = None
     ) -> TaskResult:
 
-        if not args:
-            self.result.message = "Expected Device Enumeration expected data not provided"
-            self.result.status = ExecutionStatus.NOT_RAN
-            return self.result
+        if args is None:
+            args = DeviceEnumerationAnalyzerArgs()
 
         # Convert to lists if integers, otherwise use as-is
         cpu_count = [args.cpu_count] if isinstance(args.cpu_count, int) else args.cpu_count

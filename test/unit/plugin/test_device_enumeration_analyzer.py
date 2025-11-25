@@ -75,12 +75,12 @@ def test_analyze_passing_windows(system_info, device_enumeration_analyzer, devic
 
 
 def test_analyze_no_args(device_enumeration_analyzer, device_enumeration_data):
-    """Test with no analyzer args provided"""
+    """Test with no analyzer args provided - should skip all checks"""
 
     result = device_enumeration_analyzer.analyze_data(data=device_enumeration_data, args=None)
 
-    assert result.status == ExecutionStatus.NOT_RAN
-    assert "Expected Device Enumeration expected data not provided" in result.message
+    assert result.status == ExecutionStatus.OK
+    assert "Device Enumeration validated" in result.message
     assert len(result.events) == 0
 
 
