@@ -3,7 +3,8 @@
   "plugins": {
     "KernelPlugin": {
       "analysis_args": {
-        "exp_kernel": "5.11-generic"
+        "exp_kernel": "5.11-generic",
+        "regex_match": false
       }
     }
   },

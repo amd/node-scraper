@@ -3,7 +3,8 @@
   "plugins": {
     "BiosPlugin": {
       "analysis_args": {
-        "exp_bios_version": "3.5"
+        "exp_bios_version": "3.5",
+        "regex_match": false
       }
     }
   },

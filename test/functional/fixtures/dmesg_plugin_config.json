@@ -1,7 +1,12 @@
 {
   "global_args": {},
   "plugins": {
-    "DmesgPlugin": {}
+    "DmesgPlugin": {
+      "analysis_args": {
+        "check_unknown_dmesg_errors": true,
+        "exclude_category": null
+      }
+    }
   },
   "result_collators": {},
   "name": "DmesgPlugin config",

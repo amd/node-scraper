@@ -3,8 +3,8 @@
   "plugins": {
     "CmdlinePlugin": {
       "analysis_args": {
-        "cmdline": "imgurl=test NODE=nodename selinux=0 serial console=ttyS1,115200 console=tty0",
-        "required_cmdline": "selinux=0"
+        "required_cmdline": "selinux=0",
+        "banned_cmdline": []
       }
     }
   },
