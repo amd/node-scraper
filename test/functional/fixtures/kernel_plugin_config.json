@@ -1,0 +1,13 @@
+{
+  "global_args": {},
+  "plugins": {
+    "KernelPlugin": {
+      "analysis_args": {
+        "exp_kernel": "5.11-generic"
+      }
+    }
+  },
+  "result_collators": {},
+  "name": "KernelPlugin config",
+  "desc": "Config for testing KernelPlugin"
+}

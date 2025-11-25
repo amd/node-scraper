@@ -1,0 +1,9 @@
+{
+  "global_args": {},
+  "plugins": {
+    "MemoryPlugin": {}
+  },
+  "result_collators": {},
+  "name": "MemoryPlugin config",
+  "desc": "Config for testing MemoryPlugin"
+}

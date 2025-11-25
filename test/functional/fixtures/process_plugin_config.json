@@ -1,0 +1,9 @@
+{
+  "global_args": {},
+  "plugins": {
+    "ProcessPlugin": {}
+  },
+  "result_collators": {},
+  "name": "ProcessPlugin config",
+  "desc": "Config for testing ProcessPlugin"
+}

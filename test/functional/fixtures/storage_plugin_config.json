@@ -1,0 +1,9 @@
+{
+  "global_args": {},
+  "plugins": {
+    "StoragePlugin": {}
+  },
+  "result_collators": {},
+  "name": "StoragePlugin config",
+  "desc": "Config for testing StoragePlugin"
+}

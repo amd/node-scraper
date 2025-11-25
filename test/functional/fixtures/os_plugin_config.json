@@ -1,0 +1,13 @@
+{
+  "global_args": {},
+  "plugins": {
+    "OsPlugin": {
+      "analysis_args": {
+        "exp_os": "Ubuntu 22.04.2 LTS"
+      }
+    }
+  },
+  "result_collators": {},
+  "name": "OsPlugin config",
+  "desc": "Config for testing OsPlugin"
+}

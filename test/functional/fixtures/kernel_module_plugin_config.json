@@ -1,0 +1,9 @@
+{
+  "global_args": {},
+  "plugins": {
+    "KernelModulePlugin": {}
+  },
+  "result_collators": {},
+  "name": "KernelModulePlugin config",
+  "desc": "Config for testing KernelModulePlugin"
+}

@@ -1,0 +1,13 @@
+{
+  "global_args": {},
+  "plugins": {
+    "BiosPlugin": {
+      "analysis_args": {
+        "exp_bios_version": "3.5"
+      }
+    }
+  },
+  "result_collators": {},
+  "name": "BiosPlugin config",
+  "desc": "Config for testing BiosPlugin"
+}
