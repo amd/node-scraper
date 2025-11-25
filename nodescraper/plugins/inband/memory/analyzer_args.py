@@ -23,9 +23,9 @@
 # SOFTWARE.
 #
 ###############################################################################
-from pydantic import BaseModel
+from nodescraper.models.analyzerargs import AnalyzerArgs
 
 
-class MemoryAnalyzerArgs(BaseModel):
+class MemoryAnalyzerArgs(AnalyzerArgs):
     ratio: float = 0.66
     memory_threshold: str = "30Gi"

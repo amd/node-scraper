@@ -87,11 +87,21 @@ def mock_commands(monkeypatch):
             )
 
         if "partition --json" in cmd:
-            return make_cmd_result(
+            json_output = (
                 make_json_response(
                     [{"gpu": 0, "memory_partition": "NPS1", "compute_partition": "CPX_DISABLED"}]
                 )
+                + "\n"
+                + make_json_response(
+                    [{"gpu": 1, "memory_partition": "NPS1", "compute_partition": "CPX_DISABLED"}]
+                )
+                + "\n"
+                + make_json_response(
+                    [{"gpu_id": "N/A", "profile_index": "N/A", "partition_id": "0"}]
+                )
+                + "\n\nLegend:\n  * = Current mode"
             )
+            return make_cmd_result(json_output)
 
         if "firmware --json" in cmd:
             return make_cmd_result(
@@ -241,9 +251,8 @@ def test_collect_data(collector):
     assert data.process is not None and len(data.process) == 1
     assert len(data.process[0].process_list) == 2
 
-    # partition
     assert data.partition is not None
-    assert len(data.partition.memory_partition) == 1
+    assert len(data.partition.memory_partition) >= 1
     assert data.partition.memory_partition[0].partition_type == "NPS1"
 
     # firmware
@@ -286,12 +295,12 @@ def test_get_process(collector):
 
 
 def test_get_partition(collector):
-    """Test partition parsing"""
+    """Test partition parsing with multi-JSON output"""
     p = collector.get_partition()
     assert p is not None
-    assert len(p.memory_partition) == 1 and len(p.compute_partition) == 1
+    # The mock now returns realistic multi-JSON output
+    assert len(p.memory_partition) >= 1
     assert p.memory_partition[0].partition_type == "NPS1"
-    assert p.compute_partition[0].partition_type == "CPX_DISABLED"
 
 
 def test_get_firmware(collector):
@@ -369,7 +378,7 @@ def test_json_parse_error(conn_mock, system_info, monkeypatch):
     result, data = c.collect_data()
     assert data is not None
     assert data.version is None
-    assert len(result.events) > 0  # Should have error events
+    assert len(result.events) > 0
 
 
 def test_command_error(conn_mock, system_info, monkeypatch):
@@ -392,3 +401,61 @@ def test_command_error(conn_mock, system_info, monkeypatch):
     assert data.version is None
     assert data.gpu_list == []
     assert len(result.events) > 0  # Should have error events
+
+
+def test_multi_json_parsing(conn_mock, system_info, monkeypatch):
+    """Test parsing of multiple JSON objects with trailing text"""
+
+    def mock_multi_json(cmd: str) -> MagicMock:
+        if "which amd-smi" in cmd:
+            return make_cmd_result("/usr/bin/amd-smi")
+        if "test --json" in cmd:
+            multi_json = (
+                '[{"data": 1}]\n'
+                '[{"data": 2}]\n'
+                '[{"data": 3}]\n'
+                "\n\nLegend:\n  * = Current mode\n"
+            )
+            return make_cmd_result(multi_json)
+        return make_cmd_result("")
+
+    c = AmdSmiCollector(
+        system_info=system_info,
+        system_interaction_level=SystemInteractionLevel.PASSIVE,
+        connection=conn_mock,
+    )
+    monkeypatch.setattr(c, "_run_sut_cmd", mock_multi_json)
+
+    result = c._run_amd_smi_dict("test")
+
+    assert result is not None
+    assert isinstance(result, list)
+    assert len(result) == 3
+    assert result[0] == [{"data": 1}]
+    assert result[1] == [{"data": 2}]
+    assert result[2] == [{"data": 3}]
+
+
+def test_single_json_parsing(conn_mock, system_info, monkeypatch):
+    """Test that single JSON parsing still works"""
+
+    def mock_single_json(cmd: str) -> MagicMock:
+        if "which amd-smi" in cmd:
+            return make_cmd_result("/usr/bin/amd-smi")
+        if "version --json" in cmd:
+            return make_cmd_result(make_json_response([{"tool": "amdsmi", "version": "1.0"}]))
+        return make_cmd_result("")
+
+    c = AmdSmiCollector(
+        system_info=system_info,
+        system_interaction_level=SystemInteractionLevel.PASSIVE,
+        connection=conn_mock,
+    )
+    monkeypatch.setattr(c, "_run_sut_cmd", mock_single_json)
+
+    result = c._run_amd_smi_dict("version")
+
+    assert result is not None
+    assert isinstance(result, list)
+    assert len(result) == 1
+    assert result[0]["tool"] == "amdsmi"

@@ -191,19 +191,50 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         cmd_ret = self._run_amd_smi(cmd)
         if cmd_ret:
             try:
+                # Try to parse as single JSON first
                 return json.loads(cmd_ret)
             except json.JSONDecodeError as e:
-                self._log_event(
-                    category=EventCategory.APPLICATION,
-                    description=f"Error parsing command: `{cmd}` json data",
-                    data={
-                        "cmd": cmd,
-                        "exception": get_exception_traceback(e),
-                    },
-                    priority=EventPriority.ERROR,
-                    console_log=True,
-                )
-                return None
+                # try to extract and parse multiple JSON objects
+                try:
+                    json_objects = []
+                    decoder = json.JSONDecoder()
+                    idx = 0
+                    cmd_ret_stripped = cmd_ret.strip()
+
+                    while idx < len(cmd_ret_stripped):
+                        while idx < len(cmd_ret_stripped) and cmd_ret_stripped[idx].isspace():
+                            idx += 1
+
+                        if idx >= len(cmd_ret_stripped):
+                            break
+
+                        if cmd_ret_stripped[idx] not in ["{", "["]:
+                            break
+
+                        try:
+                            obj, end_idx = decoder.raw_decode(cmd_ret_stripped, idx)
+                            json_objects.append(obj)
+                            idx = end_idx
+                        except json.JSONDecodeError:
+                            break
+
+                    if json_objects:
+                        return json_objects if len(json_objects) > 1 else json_objects[0]
+                    else:
+                        raise
+
+                except Exception:
+                    self._log_event(
+                        category=EventCategory.APPLICATION,
+                        description=f"Error parsing command: `{cmd}` json data",
+                        data={
+                            "cmd": cmd,
+                            "exception": get_exception_traceback(e),
+                        },
+                        priority=EventPriority.ERROR,
+                        console_log=True,
+                    )
+                    return None
         return None
 
     def _to_number(self, v: object) -> Optional[Union[int, float]]:
@@ -508,7 +539,15 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         memparts: list[PartitionMemory] = []
         computeparts: list[PartitionCompute] = []
 
+        # Flatten multi-JSON results (partition command returns multiple JSON arrays)
+        flattened_data = []
         for item in partition_data:
+            if isinstance(item, list):
+                flattened_data.extend(item)
+            elif isinstance(item, dict):
+                flattened_data.append(item)
+
+        for item in flattened_data:
             if not isinstance(item, dict):
                 continue
 
