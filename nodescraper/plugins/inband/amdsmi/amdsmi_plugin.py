@@ -23,16 +23,21 @@
 # SOFTWARE.
 #
 ###############################################################################
-from typing import Optional
+from nodescraper.base import InBandDataPlugin
 
-from pydantic import Field
+from .amdsmi_analyzer import AmdSmiAnalyzer
+from .amdsmi_collector import AmdSmiCollector
+from .amdsmidata import AmdSmiDataModel
+from .analyzer_args import AmdSmiAnalyzerArgs
 
-from nodescraper.models.analyzerargs import AnalyzerArgs
 
+class AmdSmiPlugin(InBandDataPlugin[AmdSmiDataModel, None, AmdSmiAnalyzerArgs]):
+    """Plugin for collection and analysis of amdsmi data"""
 
-class StorageAnalyzerArgs(AnalyzerArgs):
-    min_required_free_space_abs: Optional[str] = None
-    min_required_free_space_prct: Optional[int] = None
-    ignore_devices: Optional[list[str]] = Field(default_factory=list)
-    check_devices: Optional[list[str]] = Field(default_factory=list)
-    regex_match: bool = False
+    DATA_MODEL = AmdSmiDataModel
+
+    COLLECTOR = AmdSmiCollector
+
+    ANALYZER = AmdSmiAnalyzer
+
+    ANALYZER_ARGS = AmdSmiAnalyzerArgs
