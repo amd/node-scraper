@@ -45,9 +45,11 @@ class DeviceEnumerationAnalyzer(
         self, data: DeviceEnumerationDataModel, args: Optional[DeviceEnumerationAnalyzerArgs] = None
     ) -> TaskResult:
 
-        if not args:
-            self.result.message = "Expected Device Enumeration expected data not provided"
+        if args is None:
             self.result.status = ExecutionStatus.NOT_RAN
+            self.result.message = (
+                "Expected Device Enumeration data not provided, skipping analysis."
+            )
             return self.result
 
         # Convert to lists if integers, otherwise use as-is
