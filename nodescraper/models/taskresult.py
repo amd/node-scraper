@@ -103,28 +103,28 @@ class TaskResult(BaseModel):
         return duration
 
     def _get_event_summary(self) -> str:
-        """Get summary string for artifacts
+        """Get summary string for events
 
         Returns:
-            str: artifact summary
+            str: event summary with counts and descriptions
         """
-        error_count = 0
-        warning_count = 0
+        error_msgs = []
+        warning_msgs = []
 
         for event in self.events:
             if event.priority == EventPriority.WARNING:
-                warning_count += 1
+                warning_msgs.append(event.description)
             elif event.priority >= EventPriority.ERROR:
-                error_count += 1
+                error_msgs.append(event.description)
 
-        summary_list = []
+        summary_parts = []
 
-        if warning_count:
-            summary_list.append(f"{warning_count} warnings")
-        if error_count:
-            summary_list.append(f"{error_count} errors")
+        if warning_msgs:
+            summary_parts.append(f"{len(warning_msgs)} warnings: {', '.join(warning_msgs)}")
+        if error_msgs:
+            summary_parts.append(f"{len(error_msgs)} errors: {', '.join(error_msgs)}")
 
-        return "|".join(summary_list)
+        return "; ".join(summary_parts)
 
     def _update_status(self) -> None:
         """Update overall status based on event priority"""
