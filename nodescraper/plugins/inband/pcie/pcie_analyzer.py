@@ -32,8 +32,7 @@ from nodescraper.interfaces import DataAnalyzer
 from nodescraper.models import TaskResult
 from nodescraper.utils import get_exception_traceback
 
-from ..device_enumeration.deviceenumdata import DeviceEnumerationDataModel
-from .analyzer_args import PcieAnalyzerArgs
+from .analyzer_args import PcieAnalyzerArgs, normalize_to_dict
 from .pcie_data import (
     BdfStr,
     CorrErrMaskReg,
@@ -282,29 +281,6 @@ class PcieAnalyzer(DataAnalyzer):
 
         return bdf_cap_struct_dict
 
-    def check_gpu_count(
-        self, gpu_count: Optional[int], expected_gpu_count: Optional[int], error_desc: str
-    ):
-        """Checks the number of GPUs detected by the system
-        Args:
-            gpu_count (int): number of GPUs detected
-            expected_gpu_count (int): expected number of GPUs
-
-        Returns:
-            None
-        """
-
-        if expected_gpu_count is not None and expected_gpu_count != gpu_count:
-            self._log_event(
-                category=EventCategory.IO,
-                description=error_desc,
-                priority=EventPriority.ERROR,
-                data={"gpu_count": gpu_count, "expected_gpus": expected_gpu_count},
-            )
-            self.result.message += (
-                f"{error_desc} - Detected {gpu_count} GPUs, expected {expected_gpu_count} GPUs. "
-            )
-
     def check_link_status(
         self,
         bdf_pcie_express_dict: Dict[str, PcieExp],
@@ -348,8 +324,12 @@ class PcieAnalyzer(DataAnalyzer):
                     )
                     continue
 
-                sv_mask = 0b1 << (lnk_stat_reg.curr_lnk_speed.get_val() - 1)
-                link_speed = sv_gen_speed[sv_mask & lnk_cap_2_reg.supported_lnk_speed_vec.get_val()]
+                curr_speed = lnk_stat_reg.curr_lnk_speed.get_val()
+                supported_vec = lnk_cap_2_reg.supported_lnk_speed_vec.get_val()
+                if curr_speed is None or supported_vec is None:
+                    continue
+                sv_mask = 0b1 << (curr_speed - 1)
+                link_speed = sv_gen_speed[sv_mask & supported_vec]
 
                 if link_speed != exp_speed:
                     self._log_event(
@@ -421,9 +401,15 @@ class PcieAnalyzer(DataAnalyzer):
                     "bdf": bdf,
                     "reg_name": stat_reg.__class__.__name__,
                     "field_desc": stat_field.desc,
-                    "stat": hex(pcie_field_stat_value),
-                    "mask": hex(pcie_field_mask_value),
-                    "sev": hex(pcie_field_sev_value),
+                    "stat": (
+                        hex(pcie_field_stat_value) if pcie_field_stat_value is not None else "None"
+                    ),
+                    "mask": (
+                        hex(pcie_field_mask_value) if pcie_field_mask_value is not None else "None"
+                    ),
+                    "sev": (
+                        hex(pcie_field_sev_value) if pcie_field_sev_value is not None else "None"
+                    ),
                 }
                 if pcie_field_stat_value != 0:
                     # Error detected
@@ -485,12 +471,13 @@ class PcieAnalyzer(DataAnalyzer):
                 sorted_stat_fields,
                 sorted_mask_fields,
             ):
-                if stat_field.get_val() != 0:
+                stat_val = stat_field.get_val()
+                if stat_val is not None and stat_val != 0:
                     err_dict = {
                         "bdf": bdf,
                         "reg_description": stat_reg.desc,
                         "field_description": stat_field.desc,
-                        "bit_field_val": hex(stat_field.get_val()),
+                        "bit_field_val": hex(stat_val),
                     }
                     if mask_field.get_val() == 1:
                         self._log_event(
@@ -609,7 +596,10 @@ class PcieAnalyzer(DataAnalyzer):
         }
         for bdf, pcie_exp in bdf_pcie_express_dict.items():
             dev_ctrl_reg = pcie_exp.dev_ctrl_reg
-            max_payload_size = encoding[dev_ctrl_reg.mps.get_val()]
+            mps_val = dev_ctrl_reg.mps.get_val()
+            if mps_val is None:
+                continue
+            max_payload_size = encoding[mps_val]
             if exp_max_payload_size is not None and max_payload_size != exp_max_payload_size:
                 self._log_event(
                     category=EventCategory.IO,
@@ -622,7 +612,10 @@ class PcieAnalyzer(DataAnalyzer):
                     },
                 )
 
-            max_rd_req_size = encoding[dev_ctrl_reg.max_rd_req_size.get_val()]
+            max_rd_req_val = dev_ctrl_reg.max_rd_req_size.get_val()
+            if max_rd_req_val is None:
+                continue
+            max_rd_req_size = encoding[max_rd_req_val]
             if max_rd_req_size is not None and max_rd_req_size != exp_max_rd_req_size:
                 self._log_event(
                     category=EventCategory.IO,
@@ -681,6 +674,8 @@ class PcieAnalyzer(DataAnalyzer):
                 par_mismatch_stat,
                 retimer_fst_par_mismatch_stat,
             ]:
+                if parity_register.val is None:
+                    continue
                 par_bad_lanes = [
                     1 if (parity_register.val >> bit) & 1 else 0 for bit in range(0, 32)
                 ]
@@ -854,7 +849,7 @@ class PcieAnalyzer(DataAnalyzer):
     @staticmethod
     def filter_pcie_data_by_device_id(
         bdf_cfg_space_dict: Dict[BdfStr, PcieCfgSpace],
-        device_ids: Set[Optional[int]],
+        device_ids: Set[int],
     ) -> Dict[BdfStr, PcieCfgSpace]:
         """Filters the PCIe data by device ID
 
@@ -875,49 +870,36 @@ class PcieAnalyzer(DataAnalyzer):
                 new_cfg_space_dict[bdf] = pcie_data
         return new_cfg_space_dict
 
-    def check_gpu_counts(
+    def check_gpu_count(
         self,
         pcie_data: PcieDataModel,
-        device_enum_data: DeviceEnumerationDataModel,
-        exp_gpu_count_override: Optional[int] = None,
+        expected_gpu_count: Optional[int] = None,
     ):
-        """Check if GPU counts from PCIe data match device enumeration data
+        """Check if GPU count from PCIe data matches expected count
 
         Parameters
         ----------
         pcie_data : PcieDataModel
             PCIe data model containing collected PCIe configuration space data
-        device_enum_data : DeviceEnumerationDataModel
-            Device enumeration data containing GPU counts from the system
-        exp_gpu_count_override : Optional[int], optional
-            Expected GPU count override, by default None
+        expected_gpu_count : Optional[int], optional
+            Expected GPU count, by default None (no check performed)
         """
-        # Count AMD GPUs (vendor ID 0x1002) from PCIe data
+        if expected_gpu_count is None:
+            return
+
         gpu_count_from_pcie = 0
         for cfg_space in pcie_data.pcie_cfg_space.values():
             vendor_id = cfg_space.type_0_configuration.vendor_id.val
-            if vendor_id == 0x1002:  # AMD vendor ID
+            if vendor_id == self.system_info.vendorid_ep:
                 gpu_count_from_pcie += 1
 
-        # Get GPU count from device enumeration
-        gpu_count_from_enum = (
-            device_enum_data.gpu_count if device_enum_data.gpu_count is not None else 0
-        )
-
-        # Use override if provided, otherwise use enumeration count
-        expected_gpu_count = (
-            exp_gpu_count_override if exp_gpu_count_override is not None else gpu_count_from_enum
-        )
-
-        # Compare counts
         if gpu_count_from_pcie != expected_gpu_count:
             self._log_event(
                 category=EventCategory.IO,
-                description="GPU count mismatch between PCIe and device enumeration",
+                description="GPU count mismatch",
                 priority=EventPriority.ERROR,
                 data={
                     "gpu_count_from_pcie": gpu_count_from_pcie,
-                    "gpu_count_from_enumeration": gpu_count_from_enum,
                     "expected_gpu_count": expected_gpu_count,
                 },
             )
@@ -949,7 +931,6 @@ class PcieAnalyzer(DataAnalyzer):
         TaskResult
             Result of the analysis
         """
-        # Extract parameters from args or use defaults
         if args is None:
             args = PcieAnalyzerArgs()
 
@@ -957,29 +938,15 @@ class PcieAnalyzer(DataAnalyzer):
         exp_width = args.exp_width
         exp_sriov_count = args.exp_sriov_count
         exp_gpu_count_override = args.exp_gpu_count_override
-        exp_max_payload_size = args.exp_max_payload_size
-        exp_max_rd_req_size = args.exp_max_rd_req_size
-        exp_ten_bit_tag_req_en = args.exp_ten_bit_tag_req_en
-
-        # If single integer values are provided, they apply to all AMD GPUs (vendor 1002)
-        # vendor ID 0x1002 as generic key when single values are provided
-        if exp_max_payload_size is None:
-            exp_max_payload_size = {}
-        elif isinstance(exp_max_payload_size, int):
-            # Apply to all AMD devices by using vendor ID as key
-            exp_max_payload_size = {0x1002: exp_max_payload_size}
-
-        if exp_max_rd_req_size is None:
-            exp_max_rd_req_size = {}
-        elif isinstance(exp_max_rd_req_size, int):
-            # Apply to all AMD devices by using vendor ID as key
-            exp_max_rd_req_size = {0x1002: exp_max_rd_req_size}
-
-        if exp_ten_bit_tag_req_en is None:
-            exp_ten_bit_tag_req_en = {}
-        elif isinstance(exp_ten_bit_tag_req_en, int):
-            # Apply to all AMD devices by using vendor ID as key
-            exp_ten_bit_tag_req_en = {0x1002: exp_ten_bit_tag_req_en}
+        exp_max_payload_size = normalize_to_dict(
+            args.exp_max_payload_size, self.system_info.vendorid_ep
+        )
+        exp_max_rd_req_size = normalize_to_dict(
+            args.exp_max_rd_req_size, self.system_info.vendorid_ep
+        )
+        exp_ten_bit_tag_req_en = normalize_to_dict(
+            args.exp_ten_bit_tag_req_en, self.system_info.vendorid_ep
+        )
         try:
             pcie_input_data = PcieAnalyzerInputModel(
                 exp_speed=exp_speed,
@@ -1013,11 +980,7 @@ class PcieAnalyzer(DataAnalyzer):
             )
             return self.result
 
-        # Use PCIe data directly
         pcie_data: PcieDataModel = data
-
-        # TODO: Device enumeration check disabled - requires data_library support
-        # The check_gpu_counts() need a mechanism to pass DeviceEnumerationDataModel&PcieDataModel
 
         if pcie_data.pcie_cfg_space == {} and pcie_data.vf_pcie_cfg_space == {}:
             # If both of the PCIe Configuration spaces are
@@ -1041,12 +1004,11 @@ class PcieAnalyzer(DataAnalyzer):
             exp_width=exp_width,
         )
 
-        # Collect all AMD GPU device IDs from the PCIe data (vendor 1002)
         amd_device_ids = set()
         for cfg_space in pcie_data.pcie_cfg_space.values():
             vendor_id = cfg_space.type_0_configuration.vendor_id.val
             device_id = cfg_space.type_0_configuration.device_id.val
-            if vendor_id == 0x1002 and device_id is not None:  # AMD vendor ID
+            if vendor_id == self.system_info.vendorid_ep and device_id is not None:
                 amd_device_ids.add(device_id)
 
         # Filter PCIe data for AMD GPUs
@@ -1055,18 +1017,20 @@ class PcieAnalyzer(DataAnalyzer):
             device_ids=amd_device_ids,
         )
 
-        # Get AMD VF device IDs
         amd_vf_device_ids = set()
-        for cfg_space in pcie_data.vf_pcie_cfg_space.values():
-            vendor_id = cfg_space.type_0_configuration.vendor_id.val
-            device_id = cfg_space.type_0_configuration.device_id.val
-            if vendor_id == 0x1002 and device_id is not None:  # AMD vendor ID
-                amd_vf_device_ids.add(device_id)
+        if pcie_data.vf_pcie_cfg_space is not None:
+            for cfg_space in pcie_data.vf_pcie_cfg_space.values():
+                vendor_id = cfg_space.type_0_configuration.vendor_id.val
+                device_id = cfg_space.type_0_configuration.device_id.val
+                if vendor_id == self.system_info.vendorid_ep and device_id is not None:
+                    amd_vf_device_ids.add(device_id)
 
-        oam_vf_pcie_data = self.filter_pcie_data_by_device_id(
-            bdf_cfg_space_dict=pcie_data.vf_pcie_cfg_space,
-            device_ids=amd_vf_device_ids,
-        )
+            oam_vf_pcie_data = self.filter_pcie_data_by_device_id(
+                bdf_cfg_space_dict=pcie_data.vf_pcie_cfg_space,
+                device_ids=amd_vf_device_ids,
+            )
+        else:
+            oam_vf_pcie_data = {}
 
         # Include bridge/retimer devices (0x1500, 0x1501)
         us_ds_retimer = self.filter_pcie_data_by_device_id(
@@ -1084,12 +1048,12 @@ class PcieAnalyzer(DataAnalyzer):
             + list(pcie_input_data.exp_ten_bit_tag_req_en.keys())
         )
         for device_id_to_check in dev_ids:
-            cfg_space = self.filter_pcie_data_by_device_id(
+            cfg_space_filtered = self.filter_pcie_data_by_device_id(
                 bdf_cfg_space_dict=pcie_data.pcie_cfg_space,
                 device_ids={device_id_to_check},
             )
             self.check_pcie_exp_capability_structure_config(
-                cfg_space,
+                cfg_space_filtered,
                 pcie_input_data.exp_max_payload_size.get(device_id_to_check),
                 pcie_input_data.exp_max_rd_req_size.get(device_id_to_check),
                 pcie_input_data.exp_ten_bit_tag_req_en.get(device_id_to_check),
@@ -1101,7 +1065,6 @@ class PcieAnalyzer(DataAnalyzer):
         self.check_ecap_16gt_regs(bdf_cfg_space_dict=ubb_data)
         self.check_ecap_sec_pci_regs(bdf_cfg_space_dict=ubb_data)
 
-        # PCIe device consistency checks - run if we have any AMD devices
         if amd_device_ids:
             self.device_consistancy_chk(
                 bdf_cfg_space_dict=ubb_data,
@@ -1112,4 +1075,7 @@ class PcieAnalyzer(DataAnalyzer):
                 description="No AMD GPU devices found, skipping device consistency check",
                 priority=EventPriority.INFO,
             )
+
+        self.check_gpu_count(pcie_data, exp_gpu_count_override)
+
         return self.result

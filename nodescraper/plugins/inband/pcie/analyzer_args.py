@@ -48,3 +48,16 @@ class PcieAnalyzerArgs(AnalyzerArgs):
     exp_max_payload_size: Optional[Union[Dict[int, int], int]] = None
     exp_max_rd_req_size: Optional[Union[Dict[int, int], int]] = None
     exp_ten_bit_tag_req_en: Optional[Union[Dict[int, int], int]] = None
+
+
+def normalize_to_dict(
+    value: Optional[Union[Dict[int, int], int]], vendorid_ep: int
+) -> Dict[int, int]:
+    """Normalize int or dict values to dict format using vendorid_ep as key for int values"""
+    if value is None:
+        return {}
+    if isinstance(value, int):
+        return {vendorid_ep: value}
+    if isinstance(value, dict):
+        return value
+    return {}

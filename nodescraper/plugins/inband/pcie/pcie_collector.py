@@ -96,7 +96,11 @@ class PcieCollector(InBandDataCollector[PcieDataModel, None]):
         Returns:
             dict[str, list[str]]: Dictionary with 'vendor_id', 'device_ids', and 'vf_device_ids'
         """
-        result = {"vendor_id": "1002", "device_ids": [], "vf_device_ids": []}
+        result: dict[str, list[str]] = {
+            "vendor_id": ["1002"],
+            "device_ids": [],
+            "vf_device_ids": [],
+        }
 
         res = self._run_sut_cmd(self.CMD_LSPCI_AMD_DEVICES, sudo=False, log_artifact=False)
         if res.exit_code == 0 and res.stdout:
@@ -462,11 +466,11 @@ class PcieCollector(InBandDataCollector[PcieDataModel, None]):
             if cap_addr >= 0x100:
                 cap_enum: Enum = ExtendedCapabilityEnum(cap_id)
             else:
-                cap_enum: Enum = CapabilityEnum(cap_id)
+                cap_enum = CapabilityEnum(cap_id)
             cap_cls = self.get_cap_struct(cap_enum)
             if cap_cls is None:
                 continue
-            cap_obj = cap_cls()
+            cap_obj = cap_cls()  # type: ignore[call-arg]
             reg_data = {}
             for register_name, register in cap_obj.iter_regs():
                 reg_data[register_name] = self.read_register(
@@ -476,7 +480,7 @@ class PcieCollector(InBandDataCollector[PcieDataModel, None]):
             cap_obj.offset = cap_addr
             cap_structure[cap_enum] = cap_obj
 
-        return cap_structure
+        return cap_structure  # type: ignore[return-value]
 
     def get_cfg_by_bdf(self, bdf: str, sudo=True) -> PcieCfgSpace:
         """Will fill out a PcieCfgSpace object with the PCIe configuration space for a given BDF"""
@@ -527,12 +531,12 @@ class PcieCollector(InBandDataCollector[PcieDataModel, None]):
         cap = self.get_cap_cfg(cap_data, config_data)
         ecap = self.get_cap_cfg(ecap_data, config_data)
         return PcieCfgSpace(
-            type_0_configuration=type0,
-            type_1_configuration=type1,
-            capability_pointers=cap_data,
-            extended_capability_pointers=ecap_data,
-            cap_structure=cap,
-            ecap_structure=ecap,
+            type_0_configuration=type0,  # type: ignore[arg-type]
+            type_1_configuration=type1,  # type: ignore[arg-type]
+            capability_pointers=cap_data,  # type: ignore[arg-type]
+            extended_capability_pointers=ecap_data,  # type: ignore[arg-type]
+            cap_structure=cap,  # type: ignore[arg-type]
+            ecap_structure=ecap,  # type: ignore[arg-type]
         )
 
     def _log_pcie_artifacts(
@@ -566,7 +570,11 @@ class PcieCollector(InBandDataCollector[PcieDataModel, None]):
         minimum_system_interaction_level_required_for_sudo = SystemInteractionLevel.INTERACTIVE
 
         try:
-            if self.system_interaction_level >= minimum_system_interaction_level_required_for_sudo:
+            if (
+                isinstance(self.system_interaction_level, SystemInteractionLevel)
+                and self.system_interaction_level
+                >= minimum_system_interaction_level_required_for_sudo
+            ):
                 use_sudo = True
             else:
                 use_sudo = False
@@ -576,7 +584,9 @@ class PcieCollector(InBandDataCollector[PcieDataModel, None]):
 
             # Detect AMD device IDs dynamically from the system
             detected_devices = self._detect_amd_device_ids()
-            vendor_id = detected_devices["vendor_id"]
+            vendor_id = (
+                detected_devices["vendor_id"][0] if detected_devices["vendor_id"] else "1002"
+            )
             device_ids = detected_devices["device_ids"]
             vf_device_ids = detected_devices["vf_device_ids"]
 

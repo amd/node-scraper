@@ -177,7 +177,7 @@ class PcieBitField(BaseModel):
         else:
             self.val = apply_bit_mask_int(reg_val, self.bit_mask)
 
-    def get_val(self) -> int:
+    def get_val(self) -> Optional[int]:
         """Returns the value of the bit field"""
         return self.val
 
@@ -1885,16 +1885,17 @@ class PcieCfgSpace(BaseModel):
             The structure if it exists, otherwise None
         """
         if struct == Type0Configuration:
-            return self.type_0_configuration
+            return self.type_0_configuration  # type: ignore[return-value]
         if struct == Type1Configuration:
-            return self.type_1_configuration
+            return self.type_1_configuration  # type: ignore[return-value]
 
-        cap = self.cap_structure.get(struct.cap_id, None)
-        if cap:
-            return cap
-        ecap = self.ecap_structure.get(struct.cap_id, None)
-        if ecap:
-            return ecap
+        if hasattr(struct, "cap_id"):
+            cap = self.cap_structure.get(struct.cap_id, None)  # type: ignore[attr-defined]
+            if cap:
+                return cap  # type: ignore[return-value]
+            ecap = self.ecap_structure.get(struct.cap_id, None)  # type: ignore[attr-defined]
+            if ecap:
+                return ecap  # type: ignore[return-value]
         return None
 
     @field_validator("extended_capability_pointers", mode="before")
@@ -1912,7 +1913,7 @@ class PcieCfgSpace(BaseModel):
         dict[Enum, int]
             The dictionary with Enum keys
         """
-        dict_out = {}
+        dict_out: Dict[Enum, int] = {}
         for k, v in dict_in.items():
             if isinstance(k, str):
                 dict_out[ExtendedCapabilityEnum(int(k))] = v
@@ -1933,7 +1934,7 @@ class PcieCfgSpace(BaseModel):
         dict[Enum, int]
             The dictionary with Enum keys
         """
-        dict_out = {}
+        dict_out: Dict[Enum, int] = {}
         for k, v in dict_in.items():
             if isinstance(k, str):
                 dict_out[CapabilityEnum(int(k))] = v
@@ -1947,7 +1948,7 @@ class PcieCfgSpace(BaseModel):
         cls, cap_in: Dict[Union[int, str, CapabilityEnum], SerializeAsAny[PcieCapStructure]]
     ) -> Dict[CapabilityEnum, PcieCapStructure]:
         """This adjust's a generic PcieCapStructure dict into a specific PcieCapStructure and therefore populating all registers and fields"""
-        return cls.conform_json_dict_to_cap_struct(cap_in, CapabilityEnum)
+        return cls.conform_json_dict_to_cap_struct(cap_in, CapabilityEnum)  # type: ignore[arg-type, return-value]
 
     @field_validator("ecap_structure", mode="before")
     @classmethod
@@ -1956,7 +1957,7 @@ class PcieCfgSpace(BaseModel):
         ecap_in: Dict[Union[int, str, ExtendedCapabilityEnum], SerializeAsAny[PcieCapStructure]],
     ) -> Dict[ExtendedCapabilityEnum, PcieCapStructure]:
         """This adjust's a generic PcieCapStructure dict into a specific PcieCapStructure and therefore populating all registers and fields"""
-        return cls.conform_json_dict_to_cap_struct(ecap_in, ExtendedCapabilityEnum)
+        return cls.conform_json_dict_to_cap_struct(ecap_in, ExtendedCapabilityEnum)  # type: ignore[arg-type, return-value]
 
     @classmethod
     def conform_json_dict_to_cap_struct(
@@ -1991,7 +1992,7 @@ class PcieCfgSpace(BaseModel):
                 cls = cap_id_to_class(enum)
                 cap_out[enum] = cls(**v)
             else:
-                cap_out[k] = v
+                cap_out[k] = v  # type: ignore[index]
         return cap_out
 
 
@@ -2013,4 +2014,4 @@ class PcieDataModel(DataModel):
     """
 
     pcie_cfg_space: Dict[BdfStr, PcieCfgSpace]
-    vf_pcie_cfg_space: Dict[BdfStr, PcieCfgSpace] = None
+    vf_pcie_cfg_space: Optional[Dict[BdfStr, PcieCfgSpace]] = None
