@@ -312,7 +312,7 @@ class StatusRegister(PcieRegister):
 
     offset: int = 0x06
     width: int = 16
-    desc: str = "7.5.1.1.4 Status Register (Offset 06h)"
+    desc: str = "Status Register"
     immed_readiness: PcieBitField = PcieBitField(bit_mask=(1 << 0), desc="Immediate Readiness")
     int_stat: PcieBitField = PcieBitField(bit_mask=(1 << 3), desc="Interrupt Status")
     cap_list: PcieBitField = PcieBitField(bit_mask=(1 << 4), desc="Capabilities List")
@@ -424,7 +424,7 @@ class SecStatusRegister(PcieRegister):
 
     offset: int = 0x1E
     width: int = 16
-    desc: str = "7.5.1.3.7 Secondary Status Register (Offset 1Eh)"
+    desc: str = "Secondary Status Register"
     sixty_six_mhz_cap: PcieBitField = PcieBitField(bit_mask=(1 << 5), desc="66 MHz Capable")
     fast_b2b_trans_cap: PcieBitField = PcieBitField(
         bit_mask=(1 << 7), desc="Fast Back-to-Back Transactions Capable"
@@ -696,7 +696,7 @@ class DevCtrlRegister(PcieRegister):
 class DevStatRegister(PcieRegister):
     offset: int = 0x0A
     width: int = 16
-    desc: str = "7.5.3.5 Device Status Register (Offset 0Ah)"
+    desc: str = "Device Status Register"
     corr_err_det: PcieBitField = PcieBitField(bit_mask=(1 << 0), desc="Correctable Error Detected")
     non_fatal_err_det: PcieBitField = PcieBitField(
         bit_mask=(1 << 1), desc="Non-Fatal Error Detected"
@@ -740,7 +740,7 @@ class LinkStatRegister(PcieRegister):
 
     offset: int = 0x12
     width: int = 16
-    desc: str = "7.5.3.8 Link Status Register (Offset 12h)"
+    desc: str = "Link Status Register"
     curr_lnk_speed: PcieBitField = PcieBitField(bit_mask=(0b1111 << 0), desc="Current Link Speed")
     neg_lnk_width: PcieBitField = PcieBitField(
         bit_mask=(0b111111 << 4), desc="Negotiated Link Width"
@@ -892,7 +892,7 @@ class UncorrErrStatReg(PcieRegister):
 
     offset: int = 0x04
     width: int = 32
-    desc: str = "7.8.4.2 Uncorrectable Error Status Register (Offset 04h)"
+    desc: str = "Uncorrectable Error Status Register"
     dlnk_protocol_err_stat: PcieBitField = PcieBitField(
         bit_mask=(1 << 4), desc="Data Link Protocol Error Status"
     )
@@ -1043,7 +1043,7 @@ class CorrErrStatReg(PcieRegister):
 
     offset: int = 0x10
     width: int = 32
-    desc: str = "7.8.4.5 Correctable Error Status Register (Offset 10h)"
+    desc: str = "Correctable Error Status Register"
     rx_err_stat: PcieBitField = PcieBitField(bit_mask=(1 << 0), desc="Receiver Error Status")
     bad_tlp_stat: PcieBitField = PcieBitField(bit_mask=(1 << 6), desc="Bad TLP Status")
     bad_dllp_stat: PcieBitField = PcieBitField(bit_mask=(1 << 7), desc="Bad DLLP Status")
@@ -1137,7 +1137,7 @@ class RootErrStatReg(PcieRegister):
 
     offset: int = 0x30
     width: int = 32
-    desc: str = "7.8.4.10 Root Error Status Register (Offset 30h)"
+    desc: str = "Root Error Status Register"
     err_cor_rcvd: PcieBitField = PcieBitField(bit_mask=(1 << 0), desc="ERR_COR Received")
     multi_err_cor_rcvd: PcieBitField = PcieBitField(
         bit_mask=(1 << 1), desc="Multiple ERR_COR Received"
@@ -1386,7 +1386,7 @@ class ECapLtr(PcieCapStructure):
 class LaneErrorStatReg(PcieRegister):
     """Lane error status register"""
 
-    desc: str = "7.7.3.3 Lane Error Status Register (Offset 08h)"
+    desc: str = "Lane Error Status Register"
     offset: int = 0x08
     width: int = 32
     lane0_err_stat: PcieBitField = PcieBitField(
@@ -1518,7 +1518,7 @@ class Phy16GtEcapStat(PcieRegister):
 
     offset: int = 0x0C
     width: int = 32
-    desc: str = "7.7.5.4 16.0 GT/s Status Register (Offset 0Ch)"
+    desc: str = "16.0 GT/s Status Register"
     eq_16gt_cpl: PcieBitField = PcieBitField(
         bit_mask=(1 << 0), desc="Equalization 16.0 GT/s Complete"
     )
@@ -1542,7 +1542,7 @@ class ParityMisMatchStat16GT(PcieRegister):
     pos: int = 10
     width: int = 32
     offset: int = 0x10
-    desc: str = "7.7.5.5 16.0 GT/s Local Data Parity Mismatch Status Register (Offset 10h)"
+    desc: str = "16.0 GT/s Local Data Parity Mismatch Status Register"
 
 
 class RetimerFstPartiyRetimerMismatchStat16gt(PcieRegister):
@@ -1551,7 +1551,7 @@ class RetimerFstPartiyRetimerMismatchStat16gt(PcieRegister):
     pos: int = 14
     width: int = 32
     offset: int = 0x14
-    desc: str = "7.7.5.6 16.0 GT/s First Retimer Data Parity Mismatch Status Register (Offset 14h)"
+    desc: str = "16.0 GT/s First Retimer Data Parity Mismatch Status Register"
 
 
 class RetimerSecPartiyRetimerMismatchStat16gt(PcieRegister):
@@ -1560,7 +1560,7 @@ class RetimerSecPartiyRetimerMismatchStat16gt(PcieRegister):
     pos: int = 18
     width: int = 32
     offset: int = 0x18
-    desc: str = "7.7.5.7 16.0 GT/s Second Retimer Data Parity Mismatch Status Register (Offset 18h)"
+    desc: str = "16.0 GT/s Second Retimer Data Parity Mismatch Status Register"
 
 
 class EqCtl16Gt0(PcieRegister):
@@ -1696,7 +1696,7 @@ class Phy32GtStatReg(PcieRegister):
 
     offset: int = 0x0C
     width: int = 32
-    desc: str = "7.7.6.4  32.0 GT/s Status Register (Offset 08h)"
+    desc: str = "32.0 GT/s Status Register"
     eq_32gt_cpl: PcieBitField = PcieBitField(
         bit_mask=(1 << 0), desc="Equalization 32.0 GT/s Complete"
     )

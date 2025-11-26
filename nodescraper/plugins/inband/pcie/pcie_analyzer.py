@@ -367,9 +367,9 @@ class PcieAnalyzer(DataAnalyzer):
     ):
         """
         Checks the following AER uncorrectable error registers
-        - 7.8.4.2 Uncorrectable Error Status Register (Offset 04h)
-        - 7.8.4.3 Uncorrectable Error Mask Register (Offset 08h)
-        - 7.8.4.4 Uncorrectable Error Severity Register (Offset 0Ch)
+        - Uncorrectable Error Status Register
+        - Uncorrectable Error Mask Register
+        - Uncorrectable Error Severity Register
 
         Args:
             bdf_cfg_space_dict (dict[BdfStr, PcieCfgSpace]):
@@ -450,8 +450,8 @@ class PcieAnalyzer(DataAnalyzer):
     ):
         """
         Checks the following AER correctable error registers
-        - 7.8.4.5 Correctable Error Status Register (Offset 10h)
-        - 7.8.4.6 Correctable Error Mask Register (Offset 14h)
+        - Correctable Error Status Register
+        - Correctable Error Mask Register
 
         Args:
             bdf_cfg_space_dict (dict[BdfStr, PcieCfgSpace]):
@@ -496,7 +496,7 @@ class PcieAnalyzer(DataAnalyzer):
 
     def check_pcie_device_status_errors(self, bdf_pcie_express_dict: Dict[str, PcieExp]):
         """
-        Checks PCIe baseline error reported in 7.5.3.5 Device Status Register (Offset 0Ah)
+        Checks PCIe baseline error reported in Device Status Register
         Reference: 9.4.1 Baseline Error Reporting
 
         Args:
@@ -532,7 +532,7 @@ class PcieAnalyzer(DataAnalyzer):
 
     def check_pcie_status_errors(self, bdf_cfg_space_dict: Dict[BdfStr, PcieCfgSpace]):
         """
-        Checks PCIe baseline error reported in 7.5.1.1.4 Status Register (Offset 06h)
+        Checks PCIe baseline error reported in Status Registe
         Reference: 9.4.1 Baseline Error Reporting
 
         Args:
