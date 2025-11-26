@@ -108,21 +108,33 @@ class TaskResult(BaseModel):
         Returns:
             str: event summary with counts and descriptions
         """
-        error_msgs = []
-        warning_msgs = []
+        error_msg_counts: dict[str, int] = {}
+        warning_msg_counts: dict[str, int] = {}
 
         for event in self.events:
             if event.priority == EventPriority.WARNING:
-                warning_msgs.append(event.description)
+                warning_msg_counts[event.description] = (
+                    warning_msg_counts.get(event.description, 0) + 1
+                )
             elif event.priority >= EventPriority.ERROR:
-                error_msgs.append(event.description)
+                error_msg_counts[event.description] = error_msg_counts.get(event.description, 0) + 1
 
         summary_parts = []
 
-        if warning_msgs:
-            summary_parts.append(f"{len(warning_msgs)} warnings: {', '.join(warning_msgs)}")
-        if error_msgs:
-            summary_parts.append(f"{len(error_msgs)} errors: {', '.join(error_msgs)}")
+        if warning_msg_counts:
+            total_warnings = sum(warning_msg_counts.values())
+            warning_details = [
+                f"{msg} (x{count})" if count > 1 else msg
+                for msg, count in warning_msg_counts.items()
+            ]
+            summary_parts.append(f"{total_warnings} warnings: {', '.join(warning_details)}")
+
+        if error_msg_counts:
+            total_errors = sum(error_msg_counts.values())
+            error_details = [
+                f"{msg} (x{count})" if count > 1 else msg for msg, count in error_msg_counts.items()
+            ]
+            summary_parts.append(f"{total_errors} errors: {', '.join(error_details)}")
 
         return "; ".join(summary_parts)
 
