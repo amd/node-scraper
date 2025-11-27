@@ -23,68 +23,354 @@
 # SOFTWARE.
 #
 ###############################################################################
-import copy
+from unittest.mock import MagicMock
 
 import pytest
 
 from nodescraper.enums.eventcategory import EventCategory
-from nodescraper.enums.eventpriority import EventPriority
 from nodescraper.enums.executionstatus import ExecutionStatus
-from nodescraper.plugins.inband.rocm.analyzer_args import RocmAnalyzerArgs
-from nodescraper.plugins.inband.rocm.rocm_analyzer import RocmAnalyzer
-from nodescraper.plugins.inband.rocm.rocmdata import RocmDataModel
+from nodescraper.enums.systeminteraction import SystemInteractionLevel
+from nodescraper.plugins.inband.rocm.rocm_collector import RocmCollector
 
 
 @pytest.fixture
-def model_obj():
-    return RocmDataModel(rocm_version="6.2.0-66")
-
-
-@pytest.fixture
-def analyzer(system_info):
-    return RocmAnalyzer(system_info=system_info)
-
-
-def test_all_good_data(analyzer, model_obj):
-    args = RocmAnalyzerArgs(exp_rocm=["6.2.0-66"])
-    result = analyzer.analyze_data(model_obj, args=args)
-    assert result.status == ExecutionStatus.OK
-    assert result.message == "ROCm version matches expected"
-    assert all(
-        event.priority not in [EventPriority.WARNING, EventPriority.ERROR, EventPriority.CRITICAL]
-        for event in result.events
+def collector(system_info, conn_mock):
+    return RocmCollector(
+        system_info=system_info,
+        system_interaction_level=SystemInteractionLevel.PASSIVE,
+        connection=conn_mock,
     )
 
 
-def test_no_config_data(analyzer, model_obj):
-    result = analyzer.analyze_data(model_obj)
-    assert result.status == ExecutionStatus.NOT_RAN
+def test_collect_rocm_version_success(collector):
+    """Test successful collection of ROCm version from version-rocm file"""
+    collector._run_sut_cmd = MagicMock(
+        return_value=MagicMock(
+            exit_code=0,
+            stdout="6.2.0-66",
+            command="grep . /opt/rocm/.info/version-rocm",
+        )
+    )
+
+    result, data = collector.collect_data()
+
+    assert result.status == ExecutionStatus.OK
+    assert data is not None
+    assert data.rocm_version == "6.2.0-66"
+    assert "ROCm version: 6.2.0-66" in result.message
 
 
-def test_invalid_rocm_version(analyzer, model_obj):
-    modified_model = copy.deepcopy(model_obj)
-    modified_model.rocm_version = "some_invalid_version"
-    args = RocmAnalyzerArgs(exp_rocm=["6.2.0-66"])
-    result = analyzer.analyze_data(modified_model, args=args)
+def test_collect_rocm_version_fallback(collector):
+    """Test fallback to version file when version-rocm fails"""
+    collector._run_sut_cmd = MagicMock(
+        side_effect=[
+            MagicMock(exit_code=1, stdout="", command="grep . /opt/rocm/.info/version-rocm"),
+            MagicMock(exit_code=0, stdout="6.2.0-66", command="grep . /opt/rocm/.info/version"),
+        ]
+    )
+
+    result, data = collector.collect_data()
+
+    assert result.status == ExecutionStatus.OK
+    assert data is not None
+    assert data.rocm_version == "6.2.0-66"
+
+
+def test_collect_rocm_version_not_found(collector):
+    """Test when ROCm version cannot be found"""
+    collector._run_sut_cmd = MagicMock(
+        return_value=MagicMock(
+            exit_code=1,
+            stdout="",
+            stderr="No such file or directory",
+            command="grep . /opt/rocm/.info/version-rocm",
+        )
+    )
+
+    result, data = collector.collect_data()
 
     assert result.status == ExecutionStatus.ERROR
-    assert "ROCm version mismatch!" in result.message
-    for event in result.events:
-        assert event.priority == EventPriority.CRITICAL
-        assert event.category == EventCategory.SW_DRIVER.value
+    assert data is None
+    assert "ROCm version not found" in result.message
+    assert any(event.category == EventCategory.OS.value for event in result.events)
 
 
-def test_unexpected_rocm_version(analyzer, model_obj):
-    args = RocmAnalyzerArgs(exp_rocm=["9.8.7-65", "1.2.3-45"])
-    result = analyzer.analyze_data(model_obj, args=args)
+def test_collect_all_rocm_data(collector):
+    """Test collection of all ROCm data including tech support commands"""
+    # Mock all command outputs in sequence
+    collector._run_sut_cmd = MagicMock(
+        side_effect=[
+            # ROCm version
+            MagicMock(exit_code=0, stdout="6.2.0-66"),
+            # Latest versioned path
+            MagicMock(exit_code=0, stdout="/opt/rocm-7.1.0"),
+            # All ROCm paths
+            MagicMock(exit_code=0, stdout="/opt/rocm\n/opt/rocm-6.2.0\n/opt/rocm-7.1.0"),
+            # rocminfo output
+            MagicMock(
+                exit_code=0,
+                stdout="ROCk module is loaded\nAgent 1\n  Name:                    AMD Instinct MI300X\n  Marketing Name:          MI300X",
+            ),
+            # ld.so.conf entries
+            MagicMock(
+                exit_code=0,
+                stdout="/etc/ld.so.conf.d/rocm.conf:/opt/rocm/lib\n/etc/ld.so.conf.d/rocm.conf:/opt/rocm/lib64",
+            ),
+            # ROCm libraries from ldconfig
+            MagicMock(
+                exit_code=0,
+                stdout="librocm_smi64.so.7 (libc6,x86-64) => /opt/rocm/lib/librocm_smi64.so.7\nlibhsa-runtime64.so.1 (libc6,x86-64) => /opt/rocm/lib/libhsa-runtime64.so.1",
+            ),
+            # Environment variables
+            MagicMock(
+                exit_code=0,
+                stdout="ROCM_PATH=/opt/rocm\nHIP_VISIBLE_DEVICES=0,1\nHSA_OVERRIDE_GFX_VERSION=11.0.0",
+            ),
+            # clinfo output
+            MagicMock(
+                exit_code=0,
+                stdout="Platform #0: AMD Accelerated Parallel Processing\n  Device #0: gfx942:sramecc+:xnack-",
+            ),
+            # KFD process list
+            MagicMock(exit_code=0, stdout="1234\n5678"),
+        ]
+    )
 
-    assert result.status == ExecutionStatus.ERROR
-    assert "ROCm version mismatch!" in result.message
-    for event in result.events:
-        assert event.priority == EventPriority.CRITICAL
-        assert event.category == EventCategory.SW_DRIVER.value
+    result, data = collector.collect_data()
+
+    # Verify result status
+    assert result.status == ExecutionStatus.OK
+    assert data is not None
+
+    # Verify ROCm version
+    assert data.rocm_version == "6.2.0-66"
+
+    # Verify ROCm latest path
+    assert data.rocm_latest_versioned_path == "/opt/rocm-7.1.0"
+
+    # Verify all ROCm paths
+    assert data.rocm_all_paths == ["/opt/rocm", "/opt/rocm-6.2.0", "/opt/rocm-7.1.0"]
+
+    # Verify rocminfo output
+    assert len(data.rocminfo) == 4
+    assert "ROCk module is loaded" in data.rocminfo[0]
+    assert "AMD Instinct MI300X" in data.rocminfo[2]
+
+    # Verify ld.so.conf entries
+    assert len(data.ld_conf_rocm) == 2
+    assert "/etc/ld.so.conf.d/rocm.conf:/opt/rocm/lib" in data.ld_conf_rocm
+
+    # Verify ROCm libraries
+    assert len(data.rocm_libs) == 2
+    assert any("librocm_smi64" in lib for lib in data.rocm_libs)
+    assert any("libhsa-runtime64" in lib for lib in data.rocm_libs)
+
+    # Verify environment variables
+    assert len(data.env_vars) == 3
+    assert "ROCM_PATH=/opt/rocm" in data.env_vars
+    assert "HIP_VISIBLE_DEVICES=0,1" in data.env_vars
+
+    # Verify clinfo output
+    assert len(data.clinfo) == 2
+    assert "AMD Accelerated Parallel Processing" in data.clinfo[0]
+
+    # Verify KFD process list
+    assert len(data.kfd_proc) == 2
+    assert "1234" in data.kfd_proc
+    assert "5678" in data.kfd_proc
+
+    # Verify artifact was created
+    assert len(result.artifacts) == 1
+    assert result.artifacts[0].filename == "rocminfo.log"
+    assert "ROCMNFO OUTPUT" in result.artifacts[0].contents
+    assert "CLINFO OUTPUT" in result.artifacts[0].contents
 
 
-def test_invalid_user_config(analyzer, model_obj):
-    result = analyzer.analyze_data(model_obj, None)
-    assert result.status == ExecutionStatus.NOT_RAN
+def test_collect_with_ansi_codes_stripped(collector):
+    """Test that ANSI escape codes are stripped from rocminfo and clinfo"""
+    collector._run_sut_cmd = MagicMock(
+        side_effect=[
+            # ROCm version
+            MagicMock(exit_code=0, stdout="6.2.0-66"),
+            # Latest versioned path
+            MagicMock(exit_code=0, stdout="/opt/rocm-7.1.0"),
+            # All ROCm paths
+            MagicMock(exit_code=0, stdout="/opt/rocm"),
+            # rocminfo with ANSI codes
+            MagicMock(exit_code=0, stdout="\x1b[32mAgent 1\x1b[0m\n\x1b[33mName: MI300X\x1b[0m"),
+            # Other commands return empty
+            MagicMock(exit_code=1, stdout=""),  # ld.so.conf
+            MagicMock(exit_code=1, stdout=""),  # rocm_libs
+            MagicMock(exit_code=1, stdout=""),  # env_vars
+            # clinfo with ANSI codes
+            MagicMock(exit_code=0, stdout="\x1b[1mPlatform #0\x1b[0m: AMD"),
+            MagicMock(exit_code=1, stdout=""),  # kfd_proc
+        ]
+    )
+
+    result, data = collector.collect_data()
+
+    assert result.status == ExecutionStatus.OK
+
+    # Verify ANSI codes are stripped from rocminfo
+    assert len(data.rocminfo) == 2
+    assert "\x1b" not in data.rocminfo[0]
+    assert "\x1b" not in data.rocminfo[1]
+    assert "Agent 1" in data.rocminfo[0]
+    assert "Name: MI300X" in data.rocminfo[1]
+
+    # Verify ANSI codes are stripped from clinfo
+    assert len(data.clinfo) == 1
+    assert "\x1b" not in data.clinfo[0]
+    assert "Platform #0: AMD" in data.clinfo[0]
+
+
+def test_collect_with_clinfo_failure(collector):
+    """Test that clinfo failure is handled gracefully and captured in artifact"""
+    collector._run_sut_cmd = MagicMock(
+        side_effect=[
+            # ROCm version
+            MagicMock(exit_code=0, stdout="6.2.0-66"),
+            # Latest versioned path
+            MagicMock(exit_code=0, stdout="/opt/rocm-7.1.0"),
+            # All ROCm paths
+            MagicMock(exit_code=0, stdout="/opt/rocm"),
+            # rocminfo success
+            MagicMock(exit_code=0, stdout="ROCk module loaded"),
+            # Other commands
+            MagicMock(exit_code=1, stdout=""),
+            MagicMock(exit_code=1, stdout=""),
+            MagicMock(exit_code=1, stdout=""),
+            # clinfo failure
+            MagicMock(
+                exit_code=1,
+                stdout="",
+                stderr="clinfo: command not found",
+                command="/opt/rocm-7.1.0/opencl/bin/*/clinfo",
+            ),
+            # kfd_proc
+            MagicMock(exit_code=0, stdout=""),
+        ]
+    )
+
+    result, data = collector.collect_data()
+
+    assert result.status == ExecutionStatus.OK
+    assert data.clinfo == []
+
+    # Verify artifact contains error information
+    assert len(result.artifacts) == 1
+    artifact_content = result.artifacts[0].contents
+    assert "CLINFO OUTPUT" in artifact_content
+    assert "Exit Code: 1" in artifact_content
+    assert "clinfo: command not found" in artifact_content
+
+
+def test_collect_minimal_data(collector):
+    """Test collection when only version is available"""
+    collector._run_sut_cmd = MagicMock(
+        side_effect=[
+            # ROCm version
+            MagicMock(exit_code=0, stdout="6.2.0-66"),
+            # All subsequent commands fail
+            MagicMock(exit_code=1, stdout=""),  # latest path
+            MagicMock(exit_code=1, stdout=""),  # all paths
+            MagicMock(exit_code=1, stdout=""),  # rocminfo
+            MagicMock(exit_code=1, stdout=""),  # ld.so.conf
+            MagicMock(exit_code=1, stdout=""),  # rocm_libs
+            MagicMock(exit_code=1, stdout=""),  # env_vars
+            MagicMock(exit_code=1, stdout=""),  # clinfo
+            MagicMock(exit_code=1, stdout=""),  # kfd_proc
+        ]
+    )
+
+    result, data = collector.collect_data()
+
+    assert result.status == ExecutionStatus.OK
+    assert data is not None
+    assert data.rocm_version == "6.2.0-66"
+
+    # Verify optional fields have default values
+    assert data.rocm_latest_versioned_path == ""
+    assert data.rocm_all_paths == []
+    assert data.rocminfo == []
+    assert data.ld_conf_rocm == []
+    assert data.rocm_libs == []
+    assert data.env_vars == []
+    assert data.clinfo == []
+    assert data.kfd_proc == []
+
+
+def test_collect_empty_list_handling(collector):
+    """Test that empty stdout results in empty lists, not lists with empty strings"""
+    collector._run_sut_cmd = MagicMock(
+        side_effect=[
+            # ROCm version
+            MagicMock(exit_code=0, stdout="6.2.0-66"),
+            # Latest versioned path (empty)
+            MagicMock(exit_code=0, stdout=""),
+            # All ROCm paths (empty)
+            MagicMock(exit_code=0, stdout=""),
+            # rocminfo (empty)
+            MagicMock(exit_code=0, stdout=""),
+            # Other commands return empty strings
+            MagicMock(exit_code=0, stdout=""),
+            MagicMock(exit_code=0, stdout=""),
+            MagicMock(exit_code=0, stdout=""),
+            MagicMock(exit_code=0, stdout=""),
+            MagicMock(exit_code=0, stdout=""),
+        ]
+    )
+
+    result, data = collector.collect_data()
+
+    assert result.status == ExecutionStatus.OK
+
+    # Verify empty lists don't contain empty strings
+    assert data.rocm_all_paths == []
+    assert data.rocminfo == []
+    assert data.ld_conf_rocm == []
+    assert data.rocm_libs == []
+    assert data.env_vars == []
+    assert data.clinfo == []
+    assert data.kfd_proc == []
+
+
+def test_rocm_path_determination(collector):
+    """Test that rocm_path is correctly determined for subsequent commands"""
+    # Test with latest versioned path available
+    collector._run_sut_cmd = MagicMock(
+        side_effect=[
+            MagicMock(exit_code=0, stdout="6.2.0-66"),
+            MagicMock(exit_code=0, stdout="/opt/rocm-7.1.0"),
+            MagicMock(exit_code=0, stdout="/opt/rocm"),
+            MagicMock(exit_code=0, stdout="rocminfo output"),
+            MagicMock(exit_code=1, stdout=""),
+            MagicMock(exit_code=1, stdout=""),
+            MagicMock(exit_code=1, stdout=""),
+            MagicMock(exit_code=0, stdout="clinfo output"),
+            MagicMock(exit_code=1, stdout=""),
+        ]
+    )
+
+    result, data = collector.collect_data()
+
+    # The collector should use /opt/rocm-7.1.0 as rocm_path
+    # We can verify this by checking that rocminfo and clinfo were successfully collected
+    assert data.rocm_latest_versioned_path == "/opt/rocm-7.1.0"
+    assert len(data.rocminfo) > 0
+    assert len(data.clinfo) > 0
+
+
+def test_invalid_rocm_version_format(collector):
+    """Test that invalid ROCm version format raises validation error"""
+    collector._run_sut_cmd = MagicMock(
+        return_value=MagicMock(
+            exit_code=0,
+            stdout="invalid_version_format",
+        )
+    )
+
+    # Should raise ValueError due to pydantic validation
+    with pytest.raises(ValueError, match="ROCm version has invalid format"):
+        result, data = collector.collect_data()
