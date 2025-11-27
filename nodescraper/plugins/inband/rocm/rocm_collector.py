@@ -30,6 +30,17 @@ from nodescraper.base import InBandDataCollector
 from nodescraper.connection.inband import TextFileArtifact
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.models import TaskResult
+from nodescraper.utils import (
+    CMD_CLINFO,
+    CMD_ENV_VARS,
+    CMD_KFD_PROC,
+    CMD_LD_CONF,
+    CMD_ROCM_DIRS,
+    CMD_ROCM_LATEST,
+    CMD_ROCM_LIBS,
+    CMD_ROCMINFO,
+    CMD_VERSION_PATHS,
+)
 
 from .rocmdata import RocmDataModel
 
@@ -40,18 +51,6 @@ class RocmCollector(InBandDataCollector[RocmDataModel, None]):
     SUPPORTED_OS_FAMILY: set[OSFamily] = {OSFamily.LINUX}
 
     DATA_MODEL = RocmDataModel
-    CMD_VERSION_PATHS = [
-        "/opt/rocm/.info/version-rocm",
-        "/opt/rocm/.info/version",
-    ]
-    CMD_ROCMINFO = "{rocm_path}/bin/rocminfo"
-    CMD_ROCM_LATEST = "ls -v -d /opt/rocm-[3-7]* | tail -1"
-    CMD_ROCM_DIRS = "ls -v -d /opt/rocm*"
-    CMD_LD_CONF = "grep -i -E 'rocm' /etc/ld.so.conf.d/*"
-    CMD_ROCM_LIBS = "ldconfig -p | grep -i -E 'rocm'"
-    CMD_ENV_VARS = "env | grep -Ei 'rocm|hsa|hip|mpi|openmp|ucx|miopen'"
-    CMD_CLINFO = "{rocm_path}/opencl/bin/*/clinfo"
-    CMD_KFD_PROC = "ls /sys/class/kfd/kfd/proc/"
 
     @staticmethod
     def _strip_ansi_codes(text: str) -> str:
@@ -73,29 +72,36 @@ class RocmCollector(InBandDataCollector[RocmDataModel, None]):
         Returns:
             tuple[TaskResult, Optional[RocmDataModel]]: tuple containing the task result and ROCm data model if available.
         """
-        version_paths = [
-            "/opt/rocm/.info/version-rocm",
-            "/opt/rocm/.info/version",
-        ]
-
         rocm_data = None
-        for path in self.CMD_VERSION_PATHS:
+        for path in CMD_VERSION_PATHS:
             res = self._run_sut_cmd(f"grep . {path}")
             if res.exit_code == 0:
-                rocm_data = RocmDataModel(rocm_version=res.stdout)
-                self._log_event(
-                    category="ROCM_VERSION_READ",
-                    description="ROCm version data collected",
-                    data=rocm_data.model_dump(include={"rocm_version"}),
-                    priority=EventPriority.INFO,
-                )
-                self.result.message = f"ROCm version: {rocm_data.rocm_version}"
-                self.result.status = ExecutionStatus.OK
-                break
+                try:
+                    rocm_data = RocmDataModel(rocm_version=res.stdout)
+                    self._log_event(
+                        category="ROCM_VERSION_READ",
+                        description="ROCm version data collected",
+                        data=rocm_data.model_dump(include={"rocm_version"}),
+                        priority=EventPriority.INFO,
+                    )
+                    self.result.message = f"ROCm version: {rocm_data.rocm_version}"
+                    self.result.status = ExecutionStatus.OK
+                    break
+                except ValueError as e:
+                    self._log_event(
+                        category=EventCategory.OS,
+                        description=f"Invalid ROCm version format: {res.stdout}",
+                        data={"version": res.stdout, "error": str(e)},
+                        priority=EventPriority.ERROR,
+                        console_log=True,
+                    )
+                    self.result.message = f"Invalid ROCm version format: {res.stdout}"
+                    self.result.status = ExecutionStatus.ERROR
+                    return self.result, None
         else:
             self._log_event(
                 category=EventCategory.OS,
-                description=f"Unable to read ROCm version from {version_paths}",
+                description=f"Unable to read ROCm version from {CMD_VERSION_PATHS}",
                 data={"raw_output": res.stdout},
                 priority=EventPriority.ERROR,
             )
@@ -103,12 +109,12 @@ class RocmCollector(InBandDataCollector[RocmDataModel, None]):
         # Collect additional ROCm data if version was found
         if rocm_data:
             # Collect latest versioned ROCm path (rocm-[3-7]*)
-            versioned_path_res = self._run_sut_cmd(self.CMD_ROCM_LATEST)
+            versioned_path_res = self._run_sut_cmd(CMD_ROCM_LATEST)
             if versioned_path_res.exit_code == 0:
                 rocm_data.rocm_latest_versioned_path = versioned_path_res.stdout.strip()
 
             # Collect all ROCm paths as list
-            all_paths_res = self._run_sut_cmd(self.CMD_ROCM_DIRS)
+            all_paths_res = self._run_sut_cmd(CMD_ROCM_DIRS)
             if all_paths_res.exit_code == 0:
                 rocm_data.rocm_all_paths = [
                     path.strip()
@@ -120,7 +126,7 @@ class RocmCollector(InBandDataCollector[RocmDataModel, None]):
             rocm_path = rocm_data.rocm_latest_versioned_path or "/opt/rocm"
 
             # Collect rocminfo output as list of lines with ANSI codes stripped
-            rocminfo_cmd = self.CMD_ROCMINFO.format(rocm_path=rocm_path)
+            rocminfo_cmd = CMD_ROCMINFO.format(rocm_path=rocm_path)
             rocminfo_res = self._run_sut_cmd(rocminfo_cmd)
             rocminfo_artifact_content = ""
             if rocminfo_res.exit_code == 0:
@@ -134,14 +140,14 @@ class RocmCollector(InBandDataCollector[RocmDataModel, None]):
                 rocminfo_artifact_content += rocminfo_res.stdout
 
             # Collect ld.so.conf ROCm entries
-            ld_conf_res = self._run_sut_cmd(self.CMD_LD_CONF)
+            ld_conf_res = self._run_sut_cmd(CMD_LD_CONF)
             if ld_conf_res.exit_code == 0:
                 rocm_data.ld_conf_rocm = [
                     line.strip() for line in ld_conf_res.stdout.strip().split("\n") if line.strip()
                 ]
 
             # Collect ROCm libraries from ldconfig
-            rocm_libs_res = self._run_sut_cmd(self.CMD_ROCM_LIBS)
+            rocm_libs_res = self._run_sut_cmd(CMD_ROCM_LIBS)
             if rocm_libs_res.exit_code == 0:
                 rocm_data.rocm_libs = [
                     line.strip()
@@ -150,14 +156,14 @@ class RocmCollector(InBandDataCollector[RocmDataModel, None]):
                 ]
 
             # Collect ROCm-related environment variables
-            env_vars_res = self._run_sut_cmd(self.CMD_ENV_VARS)
+            env_vars_res = self._run_sut_cmd(CMD_ENV_VARS)
             if env_vars_res.exit_code == 0:
                 rocm_data.env_vars = [
                     line.strip() for line in env_vars_res.stdout.strip().split("\n") if line.strip()
                 ]
 
             # Collect clinfo output
-            clinfo_cmd = self.CMD_CLINFO.format(rocm_path=rocm_path)
+            clinfo_cmd = CMD_CLINFO.format(rocm_path=rocm_path)
             clinfo_res = self._run_sut_cmd(clinfo_cmd)
 
             # Always append clinfo section to artifact, even if empty or failed
@@ -188,7 +194,7 @@ class RocmCollector(InBandDataCollector[RocmDataModel, None]):
                 )
 
             # Collect KFD process list
-            kfd_proc_res = self._run_sut_cmd(self.CMD_KFD_PROC)
+            kfd_proc_res = self._run_sut_cmd(CMD_KFD_PROC)
             if kfd_proc_res.exit_code == 0:
                 rocm_data.kfd_proc = [
                     proc.strip() for proc in kfd_proc_res.stdout.strip().split("\n") if proc.strip()

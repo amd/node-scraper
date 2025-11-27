@@ -77,7 +77,7 @@ class RocmAnalyzer(DataAnalyzer[RocmDataModel, RocmAnalyzerArgs]):
             )
             return self.result
 
-        # validate rocm_latest if provided in args (only if version check passed)
+        # validate rocm_latest if provided in args
         if args.exp_rocm_latest:
             if data.rocm_latest_versioned_path != args.exp_rocm_latest:
                 self.result.message = f"ROCm latest path mismatch! Expected: {args.exp_rocm_latest}, actual: {data.rocm_latest_versioned_path}"
