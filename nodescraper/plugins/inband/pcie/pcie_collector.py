@@ -87,7 +87,7 @@ class PcieCollector(InBandDataCollector[PcieDataModel, None]):
     CMD_LSPCI_PATH = "lspci -PP"
     CMD_LSPCI_HEX_SUDO = "lspci -xxxx"
     CMD_LSPCI_HEX = "lspci -x"
-    CMD_LSPCI_AMD_DEVICES = "lspci -d 1002: -nn"
+    CMD_LSPCI_AMD_DEVICES = "lspci -d {vendor_id}: -nn"
     CMD_LSPCI_PATH_DEVICE = "lspci -PP -d {vendor_id}:{dev_id}"
 
     def _detect_amd_device_ids(self) -> dict[str, list[str]]:
@@ -96,16 +96,21 @@ class PcieCollector(InBandDataCollector[PcieDataModel, None]):
         Returns:
             dict[str, list[str]]: Dictionary with 'vendor_id', 'device_ids', and 'vf_device_ids'
         """
+        vendor_id_hex = format(self.system_info.vendorid_ep, "x")
         result: dict[str, list[str]] = {
-            "vendor_id": ["1002"],
+            "vendor_id": [vendor_id_hex],
             "device_ids": [],
             "vf_device_ids": [],
         }
 
-        res = self._run_sut_cmd(self.CMD_LSPCI_AMD_DEVICES, sudo=False, log_artifact=False)
+        res = self._run_sut_cmd(
+            self.CMD_LSPCI_AMD_DEVICES.format(vendor_id=vendor_id_hex),
+            sudo=False,
+            log_artifact=False,
+        )
         if res.exit_code == 0 and res.stdout:
             # Pattern: [vendor:device]
-            device_id_pattern = r"\[1002:([0-9a-fA-F]{4})\]"
+            device_id_pattern = rf"\[{vendor_id_hex}:([0-9a-fA-F]{{4}})\]"
             # Pattern to detect VF in description
             vf_pattern = r"Virtual Function"
 
@@ -585,7 +590,9 @@ class PcieCollector(InBandDataCollector[PcieDataModel, None]):
             # Detect AMD device IDs dynamically from the system
             detected_devices = self._detect_amd_device_ids()
             vendor_id = (
-                detected_devices["vendor_id"][0] if detected_devices["vendor_id"] else "1002"
+                detected_devices["vendor_id"][0]
+                if detected_devices["vendor_id"]
+                else format(self.system_info.vendorid_ep, "x")
             )
             device_ids = detected_devices["device_ids"]
             vf_device_ids = detected_devices["vf_device_ids"]
