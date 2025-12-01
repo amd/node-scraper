@@ -4,20 +4,21 @@ name: Code Quality Check
 permissions:
   contents: read
 
-on: [pull_request]
+on:
+  - pull_request
+  - workflow_dispatch
 
 jobs:
   pre-commit:
     runs-on: [ self-hosted ]
-    container: python:3.10
+    container: python:3.9
 
     steps:
       - uses: actions/checkout@v3
-      - name: setup environment
+      - name: setup environment and run pre-commit hooks
+        shell: bash
         run: |
-          ./dev-setup.sh
-      - name: run pre-commit hooks
-        run: |
+          source ./dev-setup.sh
           pre-commit run --all-files --show-diff-on-failure --color=always
       - name: Print message on failure
         if: failure()

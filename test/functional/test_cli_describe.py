@@ -23,16 +23,33 @@
 # SOFTWARE.
 #
 ###############################################################################
-from typing import Optional
-
-from pydantic import Field
-
-from nodescraper.models.analyzerargs import AnalyzerArgs
+"""Functional tests for CLI describe command."""
 
 
-class StorageAnalyzerArgs(AnalyzerArgs):
-    min_required_free_space_abs: Optional[str] = None
-    min_required_free_space_prct: Optional[int] = None
-    ignore_devices: Optional[list[str]] = Field(default_factory=list)
-    check_devices: Optional[list[str]] = Field(default_factory=list)
-    regex_match: bool = False
+def test_describe_command_list_plugins(run_cli_command):
+    """Test that describe command can list all plugins."""
+    result = run_cli_command(["describe", "plugin"])
+
+    assert result.returncode == 0
+    assert len(result.stdout) > 0
+    output = result.stdout.lower()
+    assert "available plugins" in output or "biosplugin" in output or "kernelplugin" in output
+
+
+def test_describe_command_single_plugin(run_cli_command):
+    """Test that describe command can describe a single plugin."""
+    result = run_cli_command(["describe", "plugin", "BiosPlugin"])
+
+    assert result.returncode == 0
+    assert len(result.stdout) > 0
+    output = result.stdout.lower()
+    assert "bios" in output
+
+
+def test_describe_invalid_plugin(run_cli_command):
+    """Test that describe command handles invalid plugin gracefully."""
+    result = run_cli_command(["describe", "plugin", "NonExistentPlugin"])
+
+    assert result.returncode != 0
+    output = (result.stdout + result.stderr).lower()
+    assert "error" in output or "not found" in output or "invalid" in output

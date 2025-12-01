@@ -32,6 +32,27 @@ a python virtual environment and also configures the pre-commit hooks for the pr
 source dev-setup.sh
 ```
 
+Alternatively, follow these manual steps:
+
+### 1. Virtual Environment (Optional)
+```sh
+python3 -m venv venv
+source venv/bin/activate
+```
+On Debian/Ubuntu, you may need: `sudo apt install python3-venv`
+
+### 2. Install from Source (Required)
+```sh
+python3 -m pip install --editable .[dev] --upgrade
+```
+This installs Node Scraper in editable mode with development dependencies. To verify: `node-scraper --help`
+
+### 3. Git Hooks (Optional)
+```sh
+pre-commit install
+```
+Sets up pre-commit hooks for code quality checks. On Debian/Ubuntu, you may need: `sudo apt install pre-commit`
+
 ## CLI Usage
 The Node Scraper CLI can be used to run Node Scraper plugins on a target system. The following CLI
 options are available:

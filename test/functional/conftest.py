@@ -23,16 +23,35 @@
 # SOFTWARE.
 #
 ###############################################################################
-from typing import Optional
+"""Shared fixtures for functional tests."""
 
-from pydantic import Field
+import subprocess
+import sys
+from typing import List
 
-from nodescraper.models.analyzerargs import AnalyzerArgs
+import pytest
 
 
-class StorageAnalyzerArgs(AnalyzerArgs):
-    min_required_free_space_abs: Optional[str] = None
-    min_required_free_space_prct: Optional[int] = None
-    ignore_devices: Optional[list[str]] = Field(default_factory=list)
-    check_devices: Optional[list[str]] = Field(default_factory=list)
-    regex_match: bool = False
+@pytest.fixture
+def run_cli_command():
+    """Fixture that returns a function to run CLI commands."""
+
+    def _run_command(args: List[str], check: bool = False):
+        """Run a node-scraper CLI command.
+
+        Args:
+            args: List of command-line arguments
+            check: If True, raise CalledProcessError on non-zero exit
+
+        Returns:
+            subprocess.CompletedProcess instance
+        """
+        cmd = [sys.executable, "-m", "nodescraper.cli.cli"] + args
+        return subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=check,
+        )
+
+    return _run_command

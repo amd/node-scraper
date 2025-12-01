@@ -23,16 +23,4 @@
 # SOFTWARE.
 #
 ###############################################################################
-from typing import Optional
-
-from pydantic import Field
-
-from nodescraper.models.analyzerargs import AnalyzerArgs
-
-
-class StorageAnalyzerArgs(AnalyzerArgs):
-    min_required_free_space_abs: Optional[str] = None
-    min_required_free_space_prct: Optional[int] = None
-    ignore_devices: Optional[list[str]] = Field(default_factory=list)
-    check_devices: Optional[list[str]] = Field(default_factory=list)
-    regex_match: bool = False
+"""Functional tests for node-scraper."""
