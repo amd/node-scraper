@@ -33,6 +33,7 @@ from nodescraper.plugins.inband.rocm.rocmdata import RocmDataModel
 
 class RocmAnalyzerArgs(AnalyzerArgs):
     exp_rocm: Union[str, list] = Field(default_factory=list)
+    exp_rocm_latest: str = Field(default="")
 
     @field_validator("exp_rocm", mode="before")
     @classmethod

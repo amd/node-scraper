@@ -61,17 +61,40 @@ class RocmAnalyzer(DataAnalyzer[RocmDataModel, RocmAnalyzerArgs]):
             if data.rocm_version == rocm_version:
                 self.result.message = "ROCm version matches expected"
                 self.result.status = ExecutionStatus.OK
-                return self.result
+                break
+        else:
+            # No matching version found
+            self.result.message = (
+                f"ROCm version mismatch! Expected: {args.exp_rocm}, actual: {data.rocm_version}"
+            )
+            self.result.status = ExecutionStatus.ERROR
+            self._log_event(
+                category=EventCategory.SW_DRIVER,
+                description=f"{self.result.message}",
+                data={"expected": args.exp_rocm, "actual": data.rocm_version},
+                priority=EventPriority.CRITICAL,
+                console_log=True,
+            )
+            return self.result
 
-        self.result.message = (
-            f"ROCm version mismatch! Expected: {args.exp_rocm}, actual: {data.rocm_version}"
-        )
-        self.result.status = ExecutionStatus.ERROR
-        self._log_event(
-            category=EventCategory.SW_DRIVER,
-            description=f"{self.result.message}",
-            data={"expected": args.exp_rocm, "actual": data.rocm_version},
-            priority=EventPriority.CRITICAL,
-            console_log=True,
-        )
+        # validate rocm_latest if provided in args
+        if args.exp_rocm_latest:
+            if data.rocm_latest_versioned_path != args.exp_rocm_latest:
+                self.result.message = f"ROCm latest path mismatch! Expected: {args.exp_rocm_latest}, actual: {data.rocm_latest_versioned_path}"
+                self.result.status = ExecutionStatus.ERROR
+                self._log_event(
+                    category=EventCategory.SW_DRIVER,
+                    description=f"{self.result.message}",
+                    data={
+                        "expected": args.exp_rocm_latest,
+                        "actual": data.rocm_latest_versioned_path,
+                    },
+                    priority=EventPriority.CRITICAL,
+                    console_log=True,
+                )
+                return self.result
+            else:
+                # Update message to include rocm_latest validation result
+                self.result.message = f"ROCm version matches expected. ROCm latest path validated: {data.rocm_latest_versioned_path}"
+
         return self.result
