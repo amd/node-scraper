@@ -52,18 +52,13 @@ class DeviceEnumerationAnalyzer(
             )
             return self.result
 
-        # Convert to lists if integers, otherwise use as-is
-        cpu_count = [args.cpu_count] if isinstance(args.cpu_count, int) else args.cpu_count
-        gpu_count = [args.gpu_count] if isinstance(args.gpu_count, int) else args.gpu_count
-        vf_count = [args.vf_count] if isinstance(args.vf_count, int) else args.vf_count
-
         checks = {}
-        if cpu_count is not None and cpu_count != []:
-            checks["cpu_count"] = cpu_count
-        if gpu_count is not None and gpu_count != []:
-            checks["gpu_count"] = gpu_count
-        if vf_count is not None and vf_count != []:
-            checks["vf_count"] = vf_count
+        if args.cpu_count is not None and args.cpu_count != []:
+            checks["cpu_count"] = args.cpu_count
+        if args.gpu_count is not None and args.gpu_count != []:
+            checks["gpu_count"] = args.gpu_count
+        if args.vf_count is not None and args.vf_count != []:
+            checks["vf_count"] = args.vf_count
 
         self.result.message = ""
         for check, accepted_counts in checks.items():

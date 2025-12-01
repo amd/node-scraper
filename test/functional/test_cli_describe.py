@@ -23,42 +23,33 @@
 # SOFTWARE.
 #
 ###############################################################################
-from typing import Union
-
-from pydantic import Field, field_validator
-
-from nodescraper.models.analyzerargs import AnalyzerArgs
-from nodescraper.plugins.inband.rocm.rocmdata import RocmDataModel
+"""Functional tests for CLI describe command."""
 
 
-class RocmAnalyzerArgs(AnalyzerArgs):
-    exp_rocm: Union[str, list] = Field(default_factory=list)
-    exp_rocm_latest: str = Field(default="")
+def test_describe_command_list_plugins(run_cli_command):
+    """Test that describe command can list all plugins."""
+    result = run_cli_command(["describe", "plugin"])
 
-    @field_validator("exp_rocm", mode="before")
-    @classmethod
-    def validate_exp_rocm(cls, exp_rocm: Union[str, list]) -> list:
-        """support str or list input for exp_rocm
+    assert result.returncode == 0
+    assert len(result.stdout) > 0
+    output = result.stdout.lower()
+    assert "available plugins" in output or "biosplugin" in output or "kernelplugin" in output
 
-        Args:
-            exp_rocm (Union[str, list]): exp_rocm input
 
-        Returns:
-            list: exp_rocm list
-        """
-        if isinstance(exp_rocm, str):
-            exp_rocm = [exp_rocm]
+def test_describe_command_single_plugin(run_cli_command):
+    """Test that describe command can describe a single plugin."""
+    result = run_cli_command(["describe", "plugin", "BiosPlugin"])
 
-        return exp_rocm
+    assert result.returncode == 0
+    assert len(result.stdout) > 0
+    output = result.stdout.lower()
+    assert "bios" in output
 
-    @classmethod
-    def build_from_model(cls, datamodel: RocmDataModel) -> "RocmAnalyzerArgs":
-        """build analyzer args from data model
 
-        Args:
-            datamodel (RocmDataModel): data model for plugin
+def test_describe_invalid_plugin(run_cli_command):
+    """Test that describe command handles invalid plugin gracefully."""
+    result = run_cli_command(["describe", "plugin", "NonExistentPlugin"])
 
-        Returns:
-            RocmAnalyzerArgs: instance of analyzer args class
-        """
-        return cls(exp_rocm=datamodel.rocm_version)
+    assert result.returncode != 0
+    output = (result.stdout + result.stderr).lower()
+    assert "error" in output or "not found" in output or "invalid" in output

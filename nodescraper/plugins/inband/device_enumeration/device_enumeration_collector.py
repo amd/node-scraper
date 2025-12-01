@@ -74,7 +74,6 @@ class DeviceEnumerationCollector(InBandDataCollector[DeviceEnumerationDataModel,
         On Linux, use lscpu and lspci
         On Windows, use WMI and hyper-v cmdlets
         """
-        device_enum = None
         if self.system_info.os_family == OSFamily.LINUX:
             # Count CPU sockets
             cpu_count_res = self._run_sut_cmd(self.CMD_CPU_COUNT_LINUX)
@@ -91,20 +90,21 @@ class DeviceEnumerationCollector(InBandDataCollector[DeviceEnumerationDataModel,
             cpu_count_res = self._run_sut_cmd(self.CMD_CPU_COUNT_WINDOWS)
             gpu_count_res = self._run_sut_cmd(self.CMD_GPU_COUNT_WINDOWS)
             vf_count_res = self._run_sut_cmd(self.CMD_VF_COUNT_WINDOWS)
-        cpu_count, gpu_count, vf_count = [None, None, None]
+
+        device_enum = DeviceEnumerationDataModel()
 
         if cpu_count_res.exit_code == 0:
-            cpu_count = int(cpu_count_res.stdout)
+            device_enum.cpu_count = int(cpu_count_res.stdout)
         else:
             self._warning(description="Cannot determine CPU count", command=cpu_count_res)
 
         if gpu_count_res.exit_code == 0:
-            gpu_count = int(gpu_count_res.stdout)
+            device_enum.gpu_count = int(gpu_count_res.stdout)
         else:
             self._warning(description="Cannot determine GPU count", command=gpu_count_res)
 
         if vf_count_res.exit_code == 0:
-            vf_count = int(vf_count_res.stdout)
+            device_enum.vf_count = int(vf_count_res.stdout)
         else:
             self._warning(
                 description="Cannot determine VF count",
@@ -112,10 +112,7 @@ class DeviceEnumerationCollector(InBandDataCollector[DeviceEnumerationDataModel,
                 category=EventCategory.SW_DRIVER,
             )
 
-        if cpu_count or gpu_count or vf_count:
-            device_enum = DeviceEnumerationDataModel(
-                cpu_count=cpu_count, gpu_count=gpu_count, vf_count=vf_count
-            )
+        if device_enum.cpu_count or device_enum.gpu_count or device_enum.vf_count:
             self._log_event(
                 category=EventCategory.PLATFORM,
                 description=f"Counted {device_enum.cpu_count} CPUs, {device_enum.gpu_count} GPUs, {device_enum.vf_count} VFs",
@@ -124,6 +121,7 @@ class DeviceEnumerationCollector(InBandDataCollector[DeviceEnumerationDataModel,
             )
             self.result.message = f"Device Enumeration: {device_enum.model_dump(exclude_none=True)}"
             self.result.status = ExecutionStatus.OK
+            return self.result, device_enum
         else:
             self.result.message = "Device Enumeration info not found"
             self.result.status = ExecutionStatus.EXECUTION_FAILURE
@@ -132,5 +130,4 @@ class DeviceEnumerationCollector(InBandDataCollector[DeviceEnumerationDataModel,
                 description=self.result.message,
                 priority=EventPriority.CRITICAL,
             )
-
-        return self.result, device_enum
+            return self.result, None

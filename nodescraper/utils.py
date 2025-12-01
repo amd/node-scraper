@@ -396,3 +396,17 @@ def is_hex(hex_in: str) -> bool:
 
     hex_pattern = re.compile(r"^(0x)?[0-9a-fA-F]+$")
     return bool(hex_pattern.fullmatch(hex_in))
+
+
+def strip_ansi_codes(text: str) -> str:
+    """
+    Remove ANSI escape codes from text.
+
+    Args:
+        text (str): The text string containing ANSI escape codes.
+
+    Returns:
+        str: The text with ANSI escape codes removed.
+    """
+    ansi_escape = re.compile(r"\x1b\[[0-9;]*m")
+    return ansi_escape.sub("", text)
