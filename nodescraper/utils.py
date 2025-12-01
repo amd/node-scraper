@@ -203,16 +203,15 @@ def nice_rotated_name(path: str, stem: str, prefix: str = "rotated_") -> str:
     return f"{prefix}{middle}.log"
 
 
-# ROCm Plugin Command Constants
-CMD_VERSION_PATHS = [
-    "/opt/rocm/.info/version-rocm",
-    "/opt/rocm/.info/version",
-]
-CMD_ROCMINFO = "{rocm_path}/bin/rocminfo"
-CMD_ROCM_LATEST = "ls -v -d /opt/rocm-[3-7]* | tail -1"
-CMD_ROCM_DIRS = "ls -v -d /opt/rocm*"
-CMD_LD_CONF = "grep -i -E 'rocm' /etc/ld.so.conf.d/*"
-CMD_ROCM_LIBS = "ldconfig -p | grep -i -E 'rocm'"
-CMD_ENV_VARS = "env | grep -Ei 'rocm|hsa|hip|mpi|openmp|ucx|miopen'"
-CMD_CLINFO = "{rocm_path}/opencl/bin/*/clinfo"
-CMD_KFD_PROC = "ls /sys/class/kfd/kfd/proc/"
+def strip_ansi_codes(text: str) -> str:
+    """
+    Remove ANSI escape codes from text.
+
+    Args:
+        text (str): The text string containing ANSI escape codes.
+
+    Returns:
+        str: The text with ANSI escape codes removed.
+    """
+    ansi_escape = re.compile(r"\x1b\[[0-9;]*m")
+    return ansi_escape.sub("", text)
