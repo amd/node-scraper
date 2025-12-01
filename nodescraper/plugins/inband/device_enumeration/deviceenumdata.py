@@ -23,22 +23,12 @@
 # SOFTWARE.
 #
 ###############################################################################
-
-import platform
 from typing import Optional
 
-from pydantic import BaseModel, Field
-
-from nodescraper.enums import OSFamily, SystemLocation
+from nodescraper.models import DataModel
 
 
-class SystemInfo(BaseModel):
-    """System object used to store data about System"""
-
-    name: str = platform.node()
-    os_family: OSFamily = OSFamily.UNKNOWN
-    sku: Optional[str] = None
-    platform: Optional[str] = None
-    metadata: Optional[dict] = Field(default_factory=dict)
-    location: Optional[SystemLocation] = SystemLocation.LOCAL
-    vendorid_ep: int = 0x1002
+class DeviceEnumerationDataModel(DataModel):
+    cpu_count: Optional[int] = None
+    gpu_count: Optional[int] = None
+    vf_count: Optional[int] = None

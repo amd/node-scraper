@@ -23,22 +23,23 @@
 # SOFTWARE.
 #
 ###############################################################################
+from nodescraper.base import InBandDataPlugin
 
-import platform
-from typing import Optional
-
-from pydantic import BaseModel, Field
-
-from nodescraper.enums import OSFamily, SystemLocation
+from .analyzer_args import DeviceEnumerationAnalyzerArgs
+from .device_enumeration_analyzer import DeviceEnumerationAnalyzer
+from .device_enumeration_collector import DeviceEnumerationCollector
+from .deviceenumdata import DeviceEnumerationDataModel
 
 
-class SystemInfo(BaseModel):
-    """System object used to store data about System"""
+class DeviceEnumerationPlugin(
+    InBandDataPlugin[DeviceEnumerationDataModel, None, DeviceEnumerationAnalyzerArgs]
+):
+    """Plugin for collection and analysis of BIOS data"""
 
-    name: str = platform.node()
-    os_family: OSFamily = OSFamily.UNKNOWN
-    sku: Optional[str] = None
-    platform: Optional[str] = None
-    metadata: Optional[dict] = Field(default_factory=dict)
-    location: Optional[SystemLocation] = SystemLocation.LOCAL
-    vendorid_ep: int = 0x1002
+    DATA_MODEL = DeviceEnumerationDataModel
+
+    COLLECTOR = DeviceEnumerationCollector
+
+    ANALYZER = DeviceEnumerationAnalyzer
+
+    ANALYZER_ARGS = DeviceEnumerationAnalyzerArgs
