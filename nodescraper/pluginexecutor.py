@@ -173,12 +173,6 @@ class PluginExecutor:
                         global_run_args = self.apply_global_args_to_plugin(
                             plugin_inst, plugin_class, self.plugin_config.global_args
                         )
-                        # Merge analysis_args and collection_args instead of replacing
-                        for args_key in ["analysis_args", "collection_args"]:
-                            if args_key in global_run_args and args_key in run_payload:
-                                # Merge: global args override plugin-specific args
-                                run_payload[args_key].update(global_run_args[args_key])
-                                del global_run_args[args_key]
                         run_payload.update(global_run_args)
                     except ValueError as ve:
                         self.logger.error(
