@@ -33,7 +33,6 @@ from typing import Optional, Type, Union
 from pydantic import BaseModel
 
 from nodescraper.constants import DEFAULT_LOGGER
-from nodescraper.enums import ExecutionStatus
 from nodescraper.interfaces import ConnectionManager, DataPlugin, PluginInterface
 from nodescraper.models import PluginConfig, SystemInfo
 from nodescraper.models.pluginresult import PluginResult
@@ -120,13 +119,6 @@ class PluginExecutor:
                 plugin_name, plugin_args = plugin_queue.popleft()
                 if plugin_name not in self.plugin_registry.plugins:
                     self.logger.error("Unable to find registered plugin for name %s", plugin_name)
-                    plugin_results.append(
-                        PluginResult(
-                            status=ExecutionStatus.ERROR,
-                            source=plugin_name,
-                            message=f"Plugin '{plugin_name}' not found in registry",
-                        )
-                    )
                     continue
 
                 plugin_class = self.plugin_registry.plugins[plugin_name]
@@ -147,13 +139,6 @@ class PluginExecutor:
                         self.logger.error(
                             "Unable to find registered connection manager class for %s that is required by",
                             connection_manager_class.__name__,
-                        )
-                        plugin_results.append(
-                            PluginResult(
-                                status=ExecutionStatus.ERROR,
-                                source=plugin_name,
-                                message=f"Connection manager '{connection_manager_class.__name__}' not found in registry",
-                            )
                         )
                         continue
 
@@ -200,13 +185,6 @@ class PluginExecutor:
                             "Invalid global_args for plugin %s: %s. Skipping plugin.",
                             plugin_name,
                             str(ve),
-                        )
-                        plugin_results.append(
-                            PluginResult(
-                                status=ExecutionStatus.ERROR,
-                                source=plugin_name,
-                                message=f"Invalid global_args for plugin: {str(ve)}",
-                            )
                         )
                         continue
 

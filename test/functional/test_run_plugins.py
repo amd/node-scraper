@@ -100,3 +100,16 @@ def test_run_plugin_with_invalid_name(run_cli_command):
     assert "running default config" in output.lower() or "NodeStatus" in output
     # Verify it didn't crash
     assert "Data written to csv file" in output
+
+
+def test_run_comma_separated_plugins_with_invalid(run_cli_command):
+    """Test that comma-separated plugins run valid ones and ignore invalid ones."""
+    result = run_cli_command(["run-plugins", "AmdSmiPlugin,SomePlugin"], check=False)
+
+    output = result.stdout + result.stderr
+    # Check that warning was logged for invalid plugin
+    assert "Invalid plugin name(s) ignored: SomePlugin" in output
+    # Check that AmdSmiPlugin actually ran
+    assert "Running plugin AmdSmiPlugin" in output
+    # Verify it didn't crash
+    assert "Data written to csv file" in output

@@ -338,7 +338,18 @@ def process_args(
         else:
             cur_plugin = None
             for arg in plugin_args:
-                if arg in plugin_names:
+                # Handle comma-separated plugin names (but not arguments)
+                if not arg.startswith("-") and "," in arg:
+                    # Split comma-separated plugin names
+                    for potential_plugin in arg.split(","):
+                        potential_plugin = potential_plugin.strip()
+                        if potential_plugin in plugin_names:
+                            plugin_arg_map[potential_plugin] = []
+                            cur_plugin = potential_plugin
+                        elif potential_plugin:
+                            # Track invalid plugin names to log event later
+                            invalid_plugins.append(potential_plugin)
+                elif arg in plugin_names:
                     plugin_arg_map[arg] = []
                     cur_plugin = arg
                 elif cur_plugin:
