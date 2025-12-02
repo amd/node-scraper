@@ -23,42 +23,12 @@
 # SOFTWARE.
 #
 ###############################################################################
-from typing import Union
+from typing import Optional
 
-from pydantic import Field, field_validator
-
-from nodescraper.models.analyzerargs import AnalyzerArgs
-from nodescraper.plugins.inband.rocm.rocmdata import RocmDataModel
+from nodescraper.models import DataModel
 
 
-class RocmAnalyzerArgs(AnalyzerArgs):
-    exp_rocm: Union[str, list] = Field(default_factory=list)
-    exp_rocm_latest: str = Field(default="")
-
-    @field_validator("exp_rocm", mode="before")
-    @classmethod
-    def validate_exp_rocm(cls, exp_rocm: Union[str, list]) -> list:
-        """support str or list input for exp_rocm
-
-        Args:
-            exp_rocm (Union[str, list]): exp_rocm input
-
-        Returns:
-            list: exp_rocm list
-        """
-        if isinstance(exp_rocm, str):
-            exp_rocm = [exp_rocm]
-
-        return exp_rocm
-
-    @classmethod
-    def build_from_model(cls, datamodel: RocmDataModel) -> "RocmAnalyzerArgs":
-        """build analyzer args from data model
-
-        Args:
-            datamodel (RocmDataModel): data model for plugin
-
-        Returns:
-            RocmAnalyzerArgs: instance of analyzer args class
-        """
-        return cls(exp_rocm=datamodel.rocm_version)
+class DeviceEnumerationDataModel(DataModel):
+    cpu_count: Optional[int] = None
+    gpu_count: Optional[int] = None
+    vf_count: Optional[int] = None
