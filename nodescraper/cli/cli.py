@@ -327,6 +327,7 @@ def process_args(
         plugin_arg_index = -1
 
     plugin_arg_map = {}
+    invalid_plugins = []
     if plugin_arg_index != -1 and plugin_arg_index != len(raw_arg_input) - 1:
         top_level_args = raw_arg_input[: plugin_arg_index + 1]
         plugin_args = raw_arg_input[plugin_arg_index + 1 :]
@@ -342,7 +343,10 @@ def process_args(
                     cur_plugin = arg
                 elif cur_plugin:
                     plugin_arg_map[cur_plugin].append(arg)
-    return (top_level_args, plugin_arg_map)
+                elif not arg.startswith("-"):
+                    # Track invalid plugin names to log event later
+                    invalid_plugins.append(arg)
+    return (top_level_args, plugin_arg_map, invalid_plugins)
 
 
 def main(arg_input: Optional[list[str]] = None):
@@ -360,7 +364,9 @@ def main(arg_input: Optional[list[str]] = None):
     parser, plugin_subparser_map = build_parser(plugin_reg, config_reg)
 
     try:
-        top_level_args, plugin_arg_map = process_args(arg_input, list(plugin_subparser_map.keys()))
+        top_level_args, plugin_arg_map, invalid_plugins = process_args(
+            arg_input, list(plugin_subparser_map.keys())
+        )
 
         parsed_args = parser.parse_args(top_level_args)
         system_info = get_system_info(parsed_args)
@@ -379,6 +385,13 @@ def main(arg_input: Optional[list[str]] = None):
         logger = setup_logger(parsed_args.log_level, log_path)
         if log_path:
             logger.info("Log path: %s", log_path)
+
+        # Log warning if invalid plugin names were provided
+        if invalid_plugins:
+            logger.warning(
+                "Invalid plugin name(s) ignored: %s. Use 'describe plugin' to list available plugins.",
+                ", ".join(invalid_plugins),
+            )
 
         if parsed_args.subcmd == "summary":
             generate_summary(parsed_args.search_path, parsed_args.output_path, logger)

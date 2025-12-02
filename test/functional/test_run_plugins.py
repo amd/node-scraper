@@ -88,9 +88,15 @@ def test_run_all_plugins_together(run_cli_command, all_plugins, tmp_path):
 
 
 def test_run_plugin_with_invalid_name(run_cli_command):
-    """Test that running a non-existent plugin fails gracefully."""
+    """Test that running a non-existent plugin logs a warning and falls back to default config."""
     result = run_cli_command(["run-plugins", "NonExistentPlugin"], check=False)
 
-    assert result.returncode != 0
-    output = (result.stdout + result.stderr).lower()
-    assert "error" in output or "invalid" in output or "not found" in output
+    # Invalid plugin is ignored and default config runs instead
+    # Exit code depends on whether default config plugins succeed
+    output = result.stdout + result.stderr
+    # Check that warning was logged for invalid plugin
+    assert "Invalid plugin name(s) ignored: NonExistentPlugin" in output
+    # Check that default config was used
+    assert "running default config" in output.lower() or "NodeStatus" in output
+    # Verify it didn't crash
+    assert "Data written to csv file" in output
