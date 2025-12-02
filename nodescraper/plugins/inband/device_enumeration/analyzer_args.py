@@ -23,42 +23,51 @@
 # SOFTWARE.
 #
 ###############################################################################
-from typing import Union
+from typing import Any, Optional
 
-from pydantic import Field, field_validator
+from pydantic import field_validator
 
-from nodescraper.models.analyzerargs import AnalyzerArgs
-from nodescraper.plugins.inband.rocm.rocmdata import RocmDataModel
+from nodescraper.models import AnalyzerArgs
+
+from .deviceenumdata import DeviceEnumerationDataModel
 
 
-class RocmAnalyzerArgs(AnalyzerArgs):
-    exp_rocm: Union[str, list] = Field(default_factory=list)
-    exp_rocm_latest: str = Field(default="")
+class DeviceEnumerationAnalyzerArgs(AnalyzerArgs):
+    cpu_count: Optional[list[int]] = None
+    gpu_count: Optional[list[int]] = None
+    vf_count: Optional[list[int]] = None
 
-    @field_validator("exp_rocm", mode="before")
+    @field_validator("cpu_count", "gpu_count", "vf_count", mode="before")
     @classmethod
-    def validate_exp_rocm(cls, exp_rocm: Union[str, list]) -> list:
-        """support str or list input for exp_rocm
+    def normalize_to_list(cls, v: Any) -> Optional[list[int]]:
+        """Convert single integer values to lists for consistent handling.
 
         Args:
-            exp_rocm (Union[str, list]): exp_rocm input
+            v: The input value (can be int, list[int], or None).
 
         Returns:
-            list: exp_rocm list
+            Optional[list[int]]: The normalized list value or None.
         """
-        if isinstance(exp_rocm, str):
-            exp_rocm = [exp_rocm]
-
-        return exp_rocm
+        if v is None:
+            return None
+        if isinstance(v, int):
+            return [v]
+        return v
 
     @classmethod
-    def build_from_model(cls, datamodel: RocmDataModel) -> "RocmAnalyzerArgs":
+    def build_from_model(
+        cls, datamodel: DeviceEnumerationDataModel
+    ) -> "DeviceEnumerationAnalyzerArgs":
         """build analyzer args from data model
 
         Args:
-            datamodel (RocmDataModel): data model for plugin
+            datamodel (DeviceEnumerationDataModel): data model for plugin
 
         Returns:
-            RocmAnalyzerArgs: instance of analyzer args class
+            DeviceEnumerationAnalyzerArgs: instance of analyzer args class
         """
-        return cls(exp_rocm=datamodel.rocm_version)
+        return cls(
+            cpu_count=[datamodel.cpu_count] if datamodel.cpu_count is not None else None,
+            gpu_count=[datamodel.gpu_count] if datamodel.gpu_count is not None else None,
+            vf_count=[datamodel.vf_count] if datamodel.vf_count is not None else None,
+        )
