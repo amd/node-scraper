@@ -34,10 +34,11 @@ from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSF
 from nodescraper.models import TaskResult
 from nodescraper.utils import get_exception_details
 
+from .analyzer_args import PackageAnalyzerArgs
 from .packagedata import PackageDataModel
 
 
-class PackageCollector(InBandDataCollector[PackageDataModel, None]):
+class PackageCollector(InBandDataCollector[PackageDataModel, PackageAnalyzerArgs]):
     """Collecting Package information from the system"""
 
     DATA_MODEL = PackageDataModel
@@ -181,8 +182,33 @@ class PackageCollector(InBandDataCollector[PackageDataModel, None]):
         self.result.message = "Failed to run Package Manager command"
         self.result.status = ExecutionStatus.EXECUTION_FAILURE
 
-    def collect_data(self, args=None) -> tuple[TaskResult, Optional[PackageDataModel]]:
+    def _filter_rocm_packages(self, packages: dict[str, str], rocm_pattern: str) -> dict[str, str]:
+        """Filter ROCm-related packages from a package dictionary.
+
+        This method searches package names for ROCm-related patterns and returns
+        only the matching packages.
+
+        Args:
+            packages (dict[str, str]): Dictionary with package names as keys and versions as values.
+            rocm_pattern (str): Regex pattern to match ROCm-related package names.
+
+        Returns:
+            dict[str, str]: Filtered dictionary containing only ROCm-related packages.
+        """
+        rocm_packages = {}
+        pattern = re.compile(rocm_pattern, re.IGNORECASE)
+        for package_name, version in packages.items():
+            if pattern.search(package_name):
+                rocm_packages[package_name] = version
+        return rocm_packages
+
+    def collect_data(
+        self, args: Optional[PackageAnalyzerArgs] = None
+    ) -> tuple[TaskResult, Optional[PackageDataModel]]:
         """Collect package information from the system.
+
+        Args:
+            args (Optional[PackageAnalyzerArgs]): Optional arguments containing ROCm regex pattern.
 
         Returns:
             tuple[TaskResult, Optional[PackageDataModel]]: tuple containing the task result and a PackageDataModel instance
@@ -205,6 +231,20 @@ class PackageCollector(InBandDataCollector[PackageDataModel, None]):
             self.result.message = "Unsupported OS"
             self.result.status = ExecutionStatus.NOT_RAN
             return self.result, None
+
+        # Filter and log ROCm packages if on Linux
+        if self.system_info.os_family == OSFamily.LINUX and packages:
+            # Get ROCm pattern from args or use default
+            rocm_pattern = args.rocm_regex if args else PackageAnalyzerArgs().rocm_regex
+            rocm_packages = self._filter_rocm_packages(packages, rocm_pattern)
+            if rocm_packages:
+                self._log_event(
+                    category=EventCategory.OS,
+                    description=f"Found {len(rocm_packages)} ROCm-related packages installed",
+                    priority=EventPriority.INFO,
+                    data={"rocm_packages": sorted(rocm_packages.keys())},
+                )
+
         try:
             package_model = PackageDataModel(version_info=packages)
         except ValidationError as val_err:

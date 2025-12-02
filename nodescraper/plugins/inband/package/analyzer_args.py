@@ -34,6 +34,9 @@ from nodescraper.plugins.inband.package.packagedata import PackageDataModel
 class PackageAnalyzerArgs(AnalyzerArgs):
     exp_package_ver: Dict[str, Optional[str]] = Field(default_factory=dict)
     regex_match: bool = False
+    rocm_regex: str = (
+        r"ocl-icd|kfdtest|llvm-amd|miopen|half|hip|hcc|hsa|rocm|atmi|comgr|composa|amd-smi|aomp|amdgpu|rock|mivision|migraph|rocprofiler|roctracer|rocbl|hipify|rocsol|rocthr|rocff|rocalu|rocprim|rocrand|rccl|rocspar|rdc|rocwmma|rpp|openmp|amdfwflash|ocl|opencl"
+    )
 
     @classmethod
     def build_from_model(cls, datamodel: PackageDataModel) -> "PackageAnalyzerArgs":
