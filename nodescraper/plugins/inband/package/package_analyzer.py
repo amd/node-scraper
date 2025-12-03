@@ -44,7 +44,7 @@ class PackageAnalyzer(DataAnalyzer[PackageDataModel, PackageAnalyzerArgs]):
         package_data: dict[str, str],
         key_search: re.Pattern[str],
         value_search: Optional[Pattern[str]],
-    ) -> bool:
+    ) -> tuple[bool, list[tuple[str, str, str]]]:
         """Searches the package values for the key and value search patterns
 
         Args:
@@ -53,10 +53,12 @@ class PackageAnalyzer(DataAnalyzer[PackageDataModel, PackageAnalyzerArgs]):
             value_search (Optional[Pattern[str]]): a compiled regex pattern to search for the package version, if None then any version is accepted
 
         Returns:
-            bool: A boolean indicating if the value was found
+            tuple: (value_found, version_mismatches) where value_found is a bool and
+                   version_mismatches is a list of (package_name, expected_pattern, found_version) tuples
         """
 
         value_found = False
+        version_mismatches = []
         for name, version in package_data.items():
             self.logger.debug("Package data: %s, %s", name, version)
             key_search_res = key_search.search(name)
@@ -66,6 +68,7 @@ class PackageAnalyzer(DataAnalyzer[PackageDataModel, PackageAnalyzerArgs]):
                     continue
                 value_search_res = value_search.search(version)
                 if not value_search_res:
+                    version_mismatches.append((name, value_search.pattern, version))
                     self._log_event(
                         EventCategory.APPLICATION,
                         f"Package {key_search.pattern} Version Mismatch, Expected {value_search.pattern} but found {version}",
@@ -77,7 +80,7 @@ class PackageAnalyzer(DataAnalyzer[PackageDataModel, PackageAnalyzerArgs]):
                             "found_version": version,
                         },
                     )
-        return value_found
+        return value_found, version_mismatches
 
     def package_regex_search(
         self, package_data: dict[str, str], exp_package_data: dict[str, Optional[str]]
@@ -87,8 +90,14 @@ class PackageAnalyzer(DataAnalyzer[PackageDataModel, PackageAnalyzerArgs]):
         Args:
             package_data (dict[str, str]): a dictionary of package names and versions
             exp_package_data (dict[str, Optional[str]]): a dictionary of expected package names and versions
+
+        Returns:
+            tuple: (not_found_keys, regex_errors, version_mismatches) containing lists of errors
         """
         not_found_keys = []
+        regex_errors = []
+        version_mismatches = []
+
         for exp_key, exp_value in exp_package_data.items():
             try:
                 if exp_value is not None:
@@ -96,7 +105,8 @@ class PackageAnalyzer(DataAnalyzer[PackageDataModel, PackageAnalyzerArgs]):
                 else:
                     value_search = None
                 key_search = re.compile(exp_key)
-            except re.error:
+            except re.error as e:
+                regex_errors.append((exp_key, exp_value, str(e)))
                 self._log_event(
                     EventCategory.RUNTIME,
                     f"Regex Compile Error either {exp_key} {exp_value}",
@@ -108,10 +118,13 @@ class PackageAnalyzer(DataAnalyzer[PackageDataModel, PackageAnalyzerArgs]):
                 )
                 continue
 
-            key_found = self.regex_version_data(package_data, key_search, value_search)
+            key_found, mismatches = self.regex_version_data(package_data, key_search, value_search)
+
+            # Collect version mismatches
+            version_mismatches.extend(mismatches)
 
             if not key_found:
-                not_found_keys.append(exp_key)
+                not_found_keys.append((exp_key, exp_value))
                 self._log_event(
                     EventCategory.APPLICATION,
                     f"Package {exp_key} not found in the package list",
@@ -123,7 +136,8 @@ class PackageAnalyzer(DataAnalyzer[PackageDataModel, PackageAnalyzerArgs]):
                         "found_version": None,
                     },
                 )
-        return not_found_keys
+
+        return not_found_keys, regex_errors, version_mismatches
 
     def package_exact_match(
         self, package_data: dict[str, str], exp_package_data: dict[str, Optional[str]]
@@ -190,9 +204,43 @@ class PackageAnalyzer(DataAnalyzer[PackageDataModel, PackageAnalyzerArgs]):
             return self.result
 
         if args.regex_match:
-            not_found_keys = self.package_regex_search(data.version_info, args.exp_package_ver)
-            self.result.message = f"Packages not found: {not_found_keys}"
-            self.result.status = ExecutionStatus.ERROR
+            not_found_keys, regex_errors, version_mismatches = self.package_regex_search(
+                data.version_info, args.exp_package_ver
+            )
+
+            # Adding details for err message
+            error_parts = []
+            if not_found_keys:
+                packages_detail = ", ".join(
+                    [
+                        f"'{pkg}' (expected version: {ver if ver else 'any'})"
+                        for pkg, ver in not_found_keys
+                    ]
+                )
+                error_parts.append(f"Packages not found: {packages_detail}")
+
+            if regex_errors:
+                regex_detail = ", ".join(
+                    [f"'{pkg}' pattern (version: {ver})" for pkg, ver, _ in regex_errors]
+                )
+                error_parts.append(f"Regex compile errors: {regex_detail}")
+
+            if version_mismatches:
+                version_detail = ", ".join(
+                    [
+                        f"'{pkg}' (expected: {exp}, found: {found})"
+                        for pkg, exp, found in version_mismatches
+                    ]
+                )
+                error_parts.append(f"Version mismatches: {version_detail}")
+
+            total_errors = len(not_found_keys) + len(regex_errors) + len(version_mismatches)
+            if total_errors > 0:
+                self.result.message = f"{'; '.join(error_parts)} ({total_errors} error{'s' if total_errors != 1 else ''})"
+                self.result.status = ExecutionStatus.ERROR
+            else:
+                self.result.message = "All packages found and versions matched"
+                self.result.status = ExecutionStatus.OK
         else:
             self.logger.info("Expected packages: %s", list(args.exp_package_ver.keys()))
             not_found_match, not_found_version = self.package_exact_match(

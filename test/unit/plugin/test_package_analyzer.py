@@ -89,4 +89,23 @@ def test_data_version_regex(package_analyzer, default_data_lib):
         regex_match=True,
     )
     res = package_analyzer.analyze_data(default_data_lib, args=args)
+    assert res.status == ExecutionStatus.OK
+    assert res.message == "All packages found and versions matched"
+
+
+def test_data_multiple_errors_regex(package_analyzer, default_data_lib):
+    """Test that detailed error messages are shown for multiple package errors"""
+    args = PackageAnalyzerArgs(
+        exp_package_ver={
+            "missing-package": None,
+            "test-ubuntu-package\\.x86_64": "2\\.\\d+",
+            "another-missing": "1\\.0",
+        },
+        regex_match=True,
+    )
+    res = package_analyzer.analyze_data(default_data_lib, args=args)
     assert res.status == ExecutionStatus.ERROR
+    assert "missing-package" in res.message
+    assert "another-missing" in res.message
+    assert "test-ubuntu-package.x86_64" in res.message
+    assert "3 error" in res.message
