@@ -79,7 +79,6 @@ class MemoryCollector(InBandDataCollector[MemoryDataModel, None]):
                 console_log=True,
             )
 
-        # Collect lsmem data (Linux only)
         lsmem_data = None
         if self.system_info.os_family != OSFamily.WINDOWS:
             lsmem_cmd = self._run_sut_cmd(self.CMD_LSMEM)
@@ -101,7 +100,7 @@ class MemoryCollector(InBandDataCollector[MemoryDataModel, None]):
                         "stderr": lsmem_cmd.stderr,
                     },
                     priority=EventPriority.WARNING,
-                    console_log=True,
+                    console_log=False,
                 )
 
         if mem_free and mem_total:
@@ -114,7 +113,7 @@ class MemoryCollector(InBandDataCollector[MemoryDataModel, None]):
                 data=mem_data.model_dump(),
                 priority=EventPriority.INFO,
             )
-            self.result.message = f"Memory: {mem_data.model_dump()}"
+            self.result.message = f"Memory: mem_free={mem_free}, mem_total={mem_total}"
             self.result.status = ExecutionStatus.OK
         else:
             mem_data = None
@@ -142,7 +141,7 @@ class MemoryCollector(InBandDataCollector[MemoryDataModel, None]):
             if not line:
                 continue
 
-            # Parse memory range lines (e.g., "0x0000000000000000-0x000000007fffffff   2G online       yes   0-15")
+            # Parse mem range lines (sample: "0x0000000000000000-0x000000007fffffff   2G online       yes   0-15")
             if line.startswith("0x"):
                 parts = line.split()
                 if len(parts) >= 4:
