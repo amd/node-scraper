@@ -238,9 +238,11 @@ class PackageCollector(InBandDataCollector[PackageDataModel, PackageAnalyzerArgs
             rocm_pattern = args.rocm_regex if args else PackageAnalyzerArgs().rocm_regex
             rocm_packages = self._filter_rocm_packages(packages, rocm_pattern)
             if rocm_packages:
+                self.result.message = f"Found {len(rocm_packages)} ROCm-related packages installed as per given regex: {rocm_pattern}"
+                self.result.status = ExecutionStatus.ERROR
                 self._log_event(
                     category=EventCategory.OS,
-                    description=f"Found {len(rocm_packages)} ROCm-related packages installed",
+                    description=f"Found {len(rocm_packages)} ROCm-related packages installed as per given regex: {rocm_pattern}",
                     priority=EventPriority.INFO,
                     data={"rocm_packages": sorted(rocm_packages.keys())},
                 )
