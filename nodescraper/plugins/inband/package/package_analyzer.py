@@ -236,7 +236,7 @@ class PackageAnalyzer(DataAnalyzer[PackageDataModel, PackageAnalyzerArgs]):
 
             total_errors = len(not_found_keys) + len(regex_errors) + len(version_mismatches)
             if total_errors > 0:
-                self.result.message = f"{'; '.join(error_parts)} ({total_errors} error{'s' if total_errors != 1 else ''})"
+                self.result.message = f"{'; '.join(error_parts)}"
                 self.result.status = ExecutionStatus.ERROR
             else:
                 self.result.message = "All packages found and versions matched"

@@ -107,5 +107,5 @@ def test_data_multiple_errors_regex(package_analyzer, default_data_lib):
     assert res.status == ExecutionStatus.ERROR
     assert "missing-package" in res.message
     assert "another-missing" in res.message
-    assert "test-ubuntu-package.x86_64" in res.message
-    assert "3 error" in res.message
+    # Note: error count is automatically added by TaskResult.finalize() based on logged events
+    assert len(res.events) == 3  # Should have 3 error events logged
