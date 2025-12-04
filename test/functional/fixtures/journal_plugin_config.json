@@ -1,0 +1,13 @@
+{
+  "global_args": {},
+  "plugins": {
+    "JournalPlugin": {
+      "collection_args": {
+        "boot": 2
+      }
+    }
+  },
+  "result_collators": {},
+  "name": "JournalPlugin config",
+  "desc": "Config for testing JournalPlugin"
+}

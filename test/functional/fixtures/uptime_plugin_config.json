@@ -1,0 +1,9 @@
+{
+  "global_args": {},
+  "plugins": {
+    "UptimePlugin": {}
+  },
+  "result_collators": {},
+  "name": "UptimePlugin config",
+  "desc": "Config for testing UptimePlugin"
+}

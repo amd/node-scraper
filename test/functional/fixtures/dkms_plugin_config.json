@@ -1,0 +1,15 @@
+{
+  "global_args": {},
+  "plugins": {
+    "DkmsPlugin": {
+      "analysis_args": {
+        "dkms_status": "amdgpu/6.11",
+        "dkms_version": "dkms-3.1",
+        "regex_match": true
+      }
+    }
+  },
+  "result_collators": {},
+  "name": "DkmsPlugin config",
+  "desc": "Config for testing DkmsPlugin"
+}
