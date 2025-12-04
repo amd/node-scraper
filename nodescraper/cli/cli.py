@@ -32,6 +32,7 @@ import platform
 import sys
 from typing import Optional
 
+import nodescraper
 from nodescraper.cli.constants import DEFAULT_CONFIG, META_VAR_MAP
 from nodescraper.cli.dynamicparserbuilder import DynamicParserBuilder
 from nodescraper.cli.helper import (
@@ -77,6 +78,12 @@ def build_parser(
     parser = argparse.ArgumentParser(
         description="node scraper CLI",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {nodescraper.__version__}",
     )
 
     parser.add_argument(
