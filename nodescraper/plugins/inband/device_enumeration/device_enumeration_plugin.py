@@ -23,10 +23,23 @@
 # SOFTWARE.
 #
 ###############################################################################
+from nodescraper.base import InBandDataPlugin
 
-from importlib.metadata import PackageNotFoundError, version
+from .analyzer_args import DeviceEnumerationAnalyzerArgs
+from .device_enumeration_analyzer import DeviceEnumerationAnalyzer
+from .device_enumeration_collector import DeviceEnumerationCollector
+from .deviceenumdata import DeviceEnumerationDataModel
 
-try:
-    __version__ = version("node-scraper")
-except PackageNotFoundError:
-    __version__ = "unknown"
+
+class DeviceEnumerationPlugin(
+    InBandDataPlugin[DeviceEnumerationDataModel, None, DeviceEnumerationAnalyzerArgs]
+):
+    """Plugin for collection and analysis of BIOS data"""
+
+    DATA_MODEL = DeviceEnumerationDataModel
+
+    COLLECTOR = DeviceEnumerationCollector
+
+    ANALYZER = DeviceEnumerationAnalyzer
+
+    ANALYZER_ARGS = DeviceEnumerationAnalyzerArgs

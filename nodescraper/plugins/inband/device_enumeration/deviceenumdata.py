@@ -23,10 +23,12 @@
 # SOFTWARE.
 #
 ###############################################################################
+from typing import Optional
 
-from importlib.metadata import PackageNotFoundError, version
+from nodescraper.models import DataModel
 
-try:
-    __version__ = version("node-scraper")
-except PackageNotFoundError:
-    __version__ = "unknown"
+
+class DeviceEnumerationDataModel(DataModel):
+    cpu_count: Optional[int] = None
+    gpu_count: Optional[int] = None
+    vf_count: Optional[int] = None
