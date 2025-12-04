@@ -51,6 +51,9 @@ def test_collect_linux(system_info, device_enumeration_collector):
     """Test linux typical output"""
     system_info.os_family = OSFamily.LINUX
 
+    lscpu_output = "Architecture:        x86_64\nCPU(s):              64\nSocket(s):           2"
+    lshw_output = "*-cpu\n  product: AMD EPYC 1234 64-Core Processor"
+
     device_enumeration_collector._run_sut_cmd = MagicMock(
         side_effect=[
             MagicMock(
@@ -71,12 +74,30 @@ def test_collect_linux(system_info, device_enumeration_collector):
                 stderr="",
                 command="lspci -d 1002: | grep -i 'Virtual Function' | wc -l",
             ),
+            MagicMock(
+                exit_code=0,
+                stdout=lscpu_output,
+                stderr="",
+                command="/usr/bin/lscpu",
+            ),
+            MagicMock(
+                exit_code=0,
+                stdout=lshw_output,
+                stderr="",
+                command="lshw",
+            ),
         ]
     )
 
     result, data = device_enumeration_collector.collect_data()
     assert result.status == ExecutionStatus.OK
-    assert data == DeviceEnumerationDataModel(cpu_count=2, gpu_count=8, vf_count=0)
+    assert data == DeviceEnumerationDataModel(
+        cpu_count=2, gpu_count=8, vf_count=0, lscpu_output=lscpu_output, lshw_output=lshw_output
+    )
+    assert (
+        len([a for a in result.artifacts if hasattr(a, "filename") and a.filename == "lshw.txt"])
+        == 1
+    )
 
 
 def test_collect_windows(system_info, device_enumeration_collector):
@@ -134,6 +155,18 @@ def test_collect_error(system_info, device_enumeration_collector):
                 stdout="some output",
                 stderr="command failed",
                 command="lspci -d 1002: | grep -i 'Virtual Function' | wc -l",
+            ),
+            MagicMock(
+                exit_code=1,
+                stdout="",
+                stderr="command failed",
+                command="/usr/bin/lscpu",
+            ),
+            MagicMock(
+                exit_code=1,
+                stdout="",
+                stderr="command failed",
+                command="lshw",
             ),
         ]
     )

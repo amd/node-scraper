@@ -32,3 +32,5 @@ class DeviceEnumerationDataModel(DataModel):
     cpu_count: Optional[int] = None
     gpu_count: Optional[int] = None
     vf_count: Optional[int] = None
+    lscpu_output: Optional[str] = None
+    lshw_output: Optional[str] = None
