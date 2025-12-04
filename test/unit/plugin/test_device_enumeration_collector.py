@@ -58,9 +58,9 @@ def test_collect_linux(system_info, device_enumeration_collector):
         side_effect=[
             MagicMock(
                 exit_code=0,
-                stdout="2",
+                stdout=lscpu_output,
                 stderr="",
-                command="lscpu | grep Socket | awk '{ print $2 }'",
+                command="/usr/bin/lscpu",
             ),
             MagicMock(
                 exit_code=0,
@@ -73,12 +73,6 @@ def test_collect_linux(system_info, device_enumeration_collector):
                 stdout="0",
                 stderr="",
                 command="lspci -d 1002: | grep -i 'Virtual Function' | wc -l",
-            ),
-            MagicMock(
-                exit_code=0,
-                stdout=lscpu_output,
-                stderr="",
-                command="/usr/bin/lscpu",
             ),
             MagicMock(
                 exit_code=0,
@@ -140,9 +134,9 @@ def test_collect_error(system_info, device_enumeration_collector):
         side_effect=[
             MagicMock(
                 exit_code=1,
-                stdout="some output",
+                stdout="",
                 stderr="command failed",
-                command="lscpu | grep Socket | awk '{ print $2 }'",
+                command="/usr/bin/lscpu",
             ),
             MagicMock(
                 exit_code=1,
@@ -155,12 +149,6 @@ def test_collect_error(system_info, device_enumeration_collector):
                 stdout="some output",
                 stderr="command failed",
                 command="lspci -d 1002: | grep -i 'Virtual Function' | wc -l",
-            ),
-            MagicMock(
-                exit_code=1,
-                stdout="",
-                stderr="command failed",
-                command="/usr/bin/lscpu",
             ),
             MagicMock(
                 exit_code=1,
