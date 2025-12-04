@@ -1,0 +1,17 @@
+{
+  "global_args": {},
+  "plugins": {
+    "StoragePlugin": {
+      "analysis_args": {
+        "min_required_free_space_abs": null,
+        "min_required_free_space_prct": null,
+        "ignore_devices": [],
+        "check_devices": [],
+        "regex_match": false
+      }
+    }
+  },
+  "result_collators": {},
+  "name": "StoragePlugin config",
+  "desc": "Config for testing StoragePlugin"
+}

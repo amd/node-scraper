@@ -1,0 +1,16 @@
+{
+  "global_args": {},
+  "plugins": {
+    "PackagePlugin": {
+      "analysis_args": {
+        "exp_package_ver": {
+          "gcc": "11.4.0"
+        },
+        "regex_match": false
+      }
+    }
+  },
+  "result_collators": {},
+  "name": "PackagePlugin config",
+  "desc": "Config for testing PackagePlugin"
+}

@@ -1,0 +1,9 @@
+{
+  "global_args": {},
+  "plugins": {
+    "NvmePlugin": {}
+  },
+  "result_collators": {},
+  "name": "NvmePlugin config",
+  "desc": "Config for testing NvmePlugin"
+}

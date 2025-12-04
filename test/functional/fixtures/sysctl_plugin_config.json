@@ -1,0 +1,23 @@
+{
+  "global_args": {},
+  "plugins": {
+    "SysctlPlugin": {
+      "analysis_args": {
+        "exp_vm_swappiness": null,
+        "exp_vm_numa_balancing": null,
+        "exp_vm_oom_kill_allocating_task": null,
+        "exp_vm_compaction_proactiveness": null,
+        "exp_vm_compact_unevictable_allowed": null,
+        "exp_vm_extfrag_threshold": null,
+        "exp_vm_zone_reclaim_mode": null,
+        "exp_vm_dirty_background_ratio": null,
+        "exp_vm_dirty_ratio": null,
+        "exp_vm_dirty_writeback_centisecs": null,
+        "exp_kernel_numa_balancing": null
+      }
+    }
+  },
+  "result_collators": {},
+  "name": "SysctlPlugin config",
+  "desc": "Config for testing SysctlPlugin"
+}
