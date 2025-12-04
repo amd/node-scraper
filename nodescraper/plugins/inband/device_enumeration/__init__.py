@@ -23,10 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
+from .analyzer_args import DeviceEnumerationAnalyzerArgs
+from .device_enumeration_plugin import DeviceEnumerationPlugin
 
-from importlib.metadata import PackageNotFoundError, version
-
-try:
-    __version__ = version("node-scraper")
-except PackageNotFoundError:
-    __version__ = "unknown"
+__all__ = ["DeviceEnumerationPlugin", "DeviceEnumerationAnalyzerArgs"]
