@@ -298,7 +298,6 @@ def test_get_partition(collector):
     """Test partition parsing with multi-JSON output"""
     p = collector.get_partition()
     assert p is not None
-    # The mock now returns realistic multi-JSON output
     assert len(p.memory_partition) >= 1
     assert p.memory_partition[0].partition_type == "NPS1"
 
@@ -400,7 +399,7 @@ def test_command_error(conn_mock, system_info, monkeypatch):
     assert data is not None
     assert data.version is None
     assert data.gpu_list == []
-    assert len(result.events) > 0  # Should have error events
+    assert len(result.events) > 0
 
 
 def test_multi_json_parsing(conn_mock, system_info, monkeypatch):
