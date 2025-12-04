@@ -26,7 +26,7 @@
 from typing import Optional
 
 from nodescraper.base import InBandDataCollector
-from nodescraper.connection.inband.inband import TextFileArtifact
+from nodescraper.connection.inband.inband import CommandArtifact, TextFileArtifact
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.models import TaskResult
 
@@ -50,6 +50,23 @@ class DeviceEnumerationCollector(InBandDataCollector[DeviceEnumerationDataModel,
     CMD_VF_COUNT_WINDOWS = (
         'powershell -Command "(Get-VMHostPartitionableGpu | Measure-Object).Count"'
     )
+
+    def _warning(
+        self,
+        description: str,
+        command: CommandArtifact,
+        category: EventCategory = EventCategory.PLATFORM,
+    ):
+        self._log_event(
+            category=category,
+            description=description,
+            data={
+                "command": command.command,
+                "exit_code": command.exit_code,
+                "stderr": command.stderr,
+            },
+            priority=EventPriority.WARNING,
+        )
 
     def collect_data(self, args=None) -> tuple[TaskResult, Optional[DeviceEnumerationDataModel]]:
         """
@@ -87,15 +104,9 @@ class DeviceEnumerationCollector(InBandDataCollector[DeviceEnumerationDataModel,
                             device_enum.cpu_count = int(line.split(":")[1].strip())
                             break
                         except (ValueError, IndexError):
-                            self._log_event(
-                                category=EventCategory.PLATFORM,
+                            self._warning(
                                 description="Cannot parse CPU count from lscpu output",
-                                data={
-                                    "command": lscpu_res.command,
-                                    "exit_code": lscpu_res.exit_code,
-                                    "stderr": lscpu_res.stderr,
-                                },
-                                priority=EventPriority.WARNING,
+                                command=lscpu_res,
                             )
                 device_enum.lscpu_output = lscpu_res.stdout
                 self._log_event(
@@ -104,57 +115,25 @@ class DeviceEnumerationCollector(InBandDataCollector[DeviceEnumerationDataModel,
                     priority=EventPriority.INFO,
                 )
             else:
-                self._log_event(
-                    category=EventCategory.PLATFORM,
-                    description="Cannot collect lscpu output",
-                    data={
-                        "command": lscpu_res.command,
-                        "exit_code": lscpu_res.exit_code,
-                        "stderr": lscpu_res.stderr,
-                    },
-                    priority=EventPriority.WARNING,
-                )
+                self._warning(description="Cannot collect lscpu output", command=lscpu_res)
         else:
             if cpu_count_res.exit_code == 0:
                 device_enum.cpu_count = int(cpu_count_res.stdout)
             else:
-                self._log_event(
-                    category=EventCategory.PLATFORM,
-                    description="Cannot determine CPU count",
-                    data={
-                        "command": cpu_count_res.command,
-                        "exit_code": cpu_count_res.exit_code,
-                        "stderr": cpu_count_res.stderr,
-                    },
-                    priority=EventPriority.WARNING,
-                )
+                self._warning(description="Cannot determine CPU count", command=cpu_count_res)
 
         if gpu_count_res.exit_code == 0:
             device_enum.gpu_count = int(gpu_count_res.stdout)
         else:
-            self._log_event(
-                category=EventCategory.PLATFORM,
-                description="Cannot determine GPU count",
-                data={
-                    "command": gpu_count_res.command,
-                    "exit_code": gpu_count_res.exit_code,
-                    "stderr": gpu_count_res.stderr,
-                },
-                priority=EventPriority.WARNING,
-            )
+            self._warning(description="Cannot determine GPU count", command=gpu_count_res)
 
         if vf_count_res.exit_code == 0:
             device_enum.vf_count = int(vf_count_res.stdout)
         else:
-            self._log_event(
-                category=EventCategory.SW_DRIVER,
+            self._warning(
                 description="Cannot determine VF count",
-                data={
-                    "command": vf_count_res.command,
-                    "exit_code": vf_count_res.exit_code,
-                    "stderr": vf_count_res.stderr,
-                },
-                priority=EventPriority.WARNING,
+                command=vf_count_res,
+                category=EventCategory.SW_DRIVER,
             )
 
         # Collect lshw output on Linux
@@ -170,16 +149,7 @@ class DeviceEnumerationCollector(InBandDataCollector[DeviceEnumerationDataModel,
                     priority=EventPriority.INFO,
                 )
             else:
-                self._log_event(
-                    category=EventCategory.PLATFORM,
-                    description="Cannot collect lshw output",
-                    data={
-                        "command": lshw_res.command,
-                        "exit_code": lshw_res.exit_code,
-                        "stderr": lshw_res.stderr,
-                    },
-                    priority=EventPriority.WARNING,
-                )
+                self._warning(description="Cannot collect lshw output", command=lshw_res)
 
         if device_enum.cpu_count or device_enum.gpu_count or device_enum.vf_count:
             log_data = device_enum.model_dump(
