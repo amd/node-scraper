@@ -1,0 +1,13 @@
+{
+  "global_args": {},
+  "plugins": {
+    "RocmPlugin": {
+      "analysis_args": {
+        "exp_rocm": "7.0.0-38"
+      }
+    }
+  },
+  "result_collators": {},
+  "name": "RocmPlugin config",
+  "desc": "Config for testing RocmPlugin"
+}

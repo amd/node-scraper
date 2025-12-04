@@ -1,0 +1,14 @@
+{
+  "global_args": {},
+  "plugins": {
+    "KernelModulePlugin": {
+      "analysis_args": {
+        "kernel_modules": {},
+        "regex_filter": ["amd"]
+      }
+    }
+  },
+  "result_collators": {},
+  "name": "KernelModulePlugin config",
+  "desc": "Config for testing KernelModulePlugin"
+}

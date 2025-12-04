@@ -1,0 +1,14 @@
+{
+  "global_args": {},
+  "plugins": {
+    "MemoryPlugin": {
+      "analysis_args": {
+        "ratio": 0.66,
+        "memory_threshold": "30Gi"
+      }
+    }
+  },
+  "result_collators": {},
+  "name": "MemoryPlugin config",
+  "desc": "Config for testing MemoryPlugin"
+}
