@@ -2,6 +2,9 @@
   "global_args": {},
   "plugins": {
     "PackagePlugin": {
+      "collection_args": {
+        "rocm_regex": "rocm|hip|hsa|amdgpu"
+      },
       "analysis_args": {
         "exp_package_ver": {
           "gcc": "11.4.0"
