@@ -1,0 +1,9 @@
+{
+  "global_args": {},
+  "plugins": {
+    "DimmPlugin": {}
+  },
+  "result_collators": {},
+  "name": "DimmPlugin config",
+  "desc": "Config for testing DimmPlugin"
+}
