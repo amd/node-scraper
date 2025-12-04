@@ -1,0 +1,14 @@
+{
+  "global_args": {},
+  "plugins": {
+    "CmdlinePlugin": {
+      "analysis_args": {
+        "required_cmdline": "selinux=0",
+        "banned_cmdline": []
+      }
+    }
+  },
+  "result_collators": {},
+  "name": "CmdlinePlugin config",
+  "desc": "Config for testing CmdlinePlugin"
+}
