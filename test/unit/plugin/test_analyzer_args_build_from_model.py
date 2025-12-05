@@ -93,7 +93,10 @@ def test_device_enumeration_analyzer_args_build_from_model_with_none():
 
 def test_kernel_analyzer_args_build_from_model():
     """Test KernelAnalyzerArgs.build_from_model includes all fields"""
-    datamodel = KernelDataModel(kernel_info="5.15.0-56-generic", kernel_version="5.15.0-56-generic")
+    datamodel = KernelDataModel(
+        kernel_info="Linux hostname 5.15.0-56-generic #62-Ubuntu SMP x86_64 GNU/Linux",
+        kernel_version="5.15.0-56-generic",
+    )
     args = KernelAnalyzerArgs.build_from_model(datamodel)
 
     assert isinstance(args, KernelAnalyzerArgs)
