@@ -12,7 +12,7 @@ on:
 
 jobs:
   generate_docs:
-    runs-on: ubuntu-latest
+    runs-on: [ self-hosted ]
     # To disable this workflow, set DISABLE_AUTO_DOCS to 'true' in repository variables
     if: vars.DISABLE_AUTO_DOCS != 'true'
 
