@@ -12,38 +12,34 @@ on:
 
 jobs:
   generate_docs:
+    runs-on: ubuntu-latest
+    # To disable this workflow, set DISABLE_AUTO_DOCS to 'true' in repository variables
+    if: vars.DISABLE_AUTO_DOCS != 'true'
 
-    runs-on: 'Docker-in-Docker'
-    container: python:3.10
-    env:
-      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
-      BRANCH_NAME: ${{ github.ref_name }}
     steps:
-    - name: Code checkout
-      run: |
-        rm -rf node-scraper
-        git clone -b ${BRANCH_NAME} https://${GITHUB_PAT}@github.com/amd/node-scraper.git node-scraper
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.9'
 
     - name: Install dependencies
-      run: |
-        cd node-scraper
-        ./dev-setup.sh
+      run: ./dev-setup.sh
 
     - name: Run plugin documentation generator
       run: |
-        cd node-scraper/docs
-        python generate_plugin_doc_bundle.py --package nodescraper.plugins.inband --output PLUGIN_DOC.md
+        python docs/generate_plugin_doc_bundle.py \
+          --package nodescraper.plugins.inband \
+          --output docs/PLUGIN_DOC.md
 
-    - name: Commit documentation changes
+    - name: Commit and push changes
       run: |
         git config --global user.name "github-actions[bot]"
-        git config --global user.email "<>"
-        cd node-scraper
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
         git add docs/PLUGIN_DOC.md
-        git commit -m "Updated plugin documentation" || echo "No changes to plugin documentation"
+        git diff --staged --quiet || git commit -m "docs: Update plugin documentation [automated]"
         git push
-
-    - name: Clean up
-      if: always()
-      run: |
-        rm -rf node-scraper
