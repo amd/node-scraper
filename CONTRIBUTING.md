@@ -54,11 +54,10 @@ When creating a PR, use the following process.
 
 ### Pre-commit hooks
 
-This repository uses [pre-commit](https://pre-commit.com/) to automatically format code and generate documentation. When you commit changes to plugin files, the hooks will:
+This repository uses [pre-commit](https://pre-commit.com/) to automatically format code. When you commit changes to plugin files, the hooks will:
 
 1. Run code formatters (ruff, black)
 2. Run type checking (mypy)
-3. Automatically regenerate plugin documentation (`docs/PLUGIN_DOC.md`)
 
 #### Setup
 
@@ -90,7 +89,4 @@ You can also run hooks manually:
 ```bash
 # Run all hooks on all files
 pre-commit run --all-files
-
-# Run a specific hook
-pre-commit run generate-plugin-docs --all-files
 ```
