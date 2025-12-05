@@ -1,0 +1,43 @@
+# Workflow to run plugin documentation generation then commit the updated changes
+
+name: Plugin Documentation Generator
+
+permissions:
+  contents: write
+
+on:
+  workflow_dispatch:
+
+jobs:
+  generate_docs:
+    runs-on: [ self-hosted ]
+    # To disable this workflow, set DISABLE_AUTO_DOCS to 'true' in repository variables
+    if: vars.DISABLE_AUTO_DOCS != 'true'
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.9'
+
+    - name: Install dependencies
+      run: ./dev-setup.sh
+
+    - name: Run plugin documentation generator
+      run: |
+        python docs/generate_plugin_doc_bundle.py \
+          --package nodescraper.plugins.inband \
+          --output docs/PLUGIN_DOC.md
+
+    - name: Commit and push changes
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        git add docs/PLUGIN_DOC.md
+        git diff --staged --quiet || git commit -m "docs: Update plugin documentation [automated]"
+        git push
