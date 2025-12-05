@@ -3,7 +3,8 @@
   "plugins": {
     "PackagePlugin": {
       "collection_args": {
-        "rocm_regex": "rocm|hip|hsa|amdgpu"
+        "rocm_regex": "rocm|hip|hsa|amdgpu",
+        "enable_rocm_regex": true
       },
       "analysis_args": {
         "exp_package_ver": {

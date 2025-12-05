@@ -236,21 +236,26 @@ class PackageCollector(InBandDataCollector[PackageDataModel, PackageAnalyzerArgs
         if self.system_info.os_family == OSFamily.LINUX and packages:
             # Get ROCm pattern from args or use default
             rocm_pattern = args.rocm_regex if args else PackageAnalyzerArgs().rocm_regex
+            self.logger.info("Using rocm_pattern: %s", rocm_pattern)
             rocm_packages = self._filter_rocm_packages(packages, rocm_pattern)
             if rocm_packages:
-                self.result.message = (
-                    f"Found {len(rocm_packages)} ROCm-related packages installed as per given regex"
-                )
+                self.result.message = f"Found {len(rocm_packages)} ROCm-related packages installed"
                 self.result.status = ExecutionStatus.OK
                 self._log_event(
                     category=EventCategory.OS,
-                    description=f"Found {len(rocm_packages)} ROCm-related packages installed as per given regex: {rocm_pattern}",
+                    description=f"Found {len(rocm_packages)} ROCm-related packages installed",
                     priority=EventPriority.INFO,
                     data={"rocm_packages": sorted(rocm_packages.keys())},
                 )
 
+        # Extract rocm_regex and enable_rocm_regex from args if provided
+        rocm_regex = args.rocm_regex if args else ""
+        enable_rocm_regex = getattr(args, "enable_rocm_regex", False) if args else False
+
         try:
-            package_model = PackageDataModel(version_info=packages)
+            package_model = PackageDataModel(
+                version_info=packages, rocm_regex=rocm_regex, enable_rocm_regex=enable_rocm_regex
+            )
         except ValidationError as val_err:
             self._log_event(
                 category=EventCategory.RUNTIME,
