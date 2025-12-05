@@ -21,12 +21,3 @@ repos:
       - id: mypy
         args: [--install-types, --non-interactive, --explicit-package-bases, --allow-redefinition]
         language: system
-  - repo: local
-    hooks:
-      - id: generate-plugin-docs
-        name: Generate Plugin Documentation
-        entry: bash -c 'python docs/generate_plugin_doc_bundle.py --package nodescraper.plugins.inband --output docs/PLUGIN_DOC.md && git add docs/PLUGIN_DOC.md'
-        language: system
-        files: ^nodescraper/plugins/inband/.*\.py$
-        pass_filenames: false
-        always_run: false

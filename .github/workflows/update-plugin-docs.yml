@@ -1,0 +1,46 @@
+# Workflow to run plugin documentation generation then commit the updated changes
+
+name: Plugin Documentation Generator
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * *'
+
+jobs:
+  generate_docs:
+
+    runs-on: 'Docker-in-Docker'
+    container: python:3.10
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      BRANCH_NAME: ${{ github.ref_name }}
+    steps:
+    - name: Code checkout
+      run: |
+        rm -rf node-scraper
+        git clone -b ${BRANCH_NAME} https://${GITHUB_PAT}@github.com/amd/node-scraper.git node-scraper
+
+    - name: Install dependencies
+      run: |
+        cd node-scraper
+        ./dev-setup.sh
+
+    - name: Run plugin documentation generator
+      run: |
+        cd node-scraper/docs
+        python generate_plugin_doc_bundle.py --package nodescraper.plugins.inband --output PLUGIN_DOC.md
+
+    - name: Commit documentation changes
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "<>"
+        cd node-scraper
+        git add docs/PLUGIN_DOC.md
+        git commit -m "Updated plugin documentation" || echo "No changes to plugin documentation"
+        git push
+
+    - name: Clean up
+      if: always()
+      run: |
+        rm -rf node-scraper
