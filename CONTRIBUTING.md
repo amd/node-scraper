@@ -94,15 +94,3 @@ pre-commit run --all-files
 # Run a specific hook
 pre-commit run generate-plugin-docs --all-files
 ```
-
-#### Plugin documentation
-
-The `generate-plugin-docs` hook automatically regenerates `docs/PLUGIN_DOC.md` whenever plugin files in `nodescraper/plugins/inband/` are modified. This ensures the documentation stays in sync with the code.
-
-If plugins are added or modified, the documentation will be automatically updated on the next commit.
-
-### Documentation
-
-Submit Node Scraper documentation changes to our
-[documentation](https://github.com/amd/node-scraper/blob/development/README.md). You must update
-documentation related to any new feature or API contribution.
