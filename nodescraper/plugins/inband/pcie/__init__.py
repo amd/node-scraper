@@ -23,10 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
+from .analyzer_args import PcieAnalyzerArgs
+from .pcie_plugin import PciePlugin
 
-from importlib.metadata import PackageNotFoundError, version
-
-try:
-    __version__ = version("node-scraper")
-except PackageNotFoundError:
-    __version__ = "unknown"
+__all__ = ["PciePlugin", "PcieAnalyzerArgs"]

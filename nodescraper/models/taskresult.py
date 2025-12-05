@@ -103,28 +103,40 @@ class TaskResult(BaseModel):
         return duration
 
     def _get_event_summary(self) -> str:
-        """Get summary string for artifacts
+        """Get summary string for events
 
         Returns:
-            str: artifact summary
+            str: event summary with counts and descriptions
         """
-        error_count = 0
-        warning_count = 0
+        error_msg_counts: dict[str, int] = {}
+        warning_msg_counts: dict[str, int] = {}
 
         for event in self.events:
             if event.priority == EventPriority.WARNING:
-                warning_count += 1
+                warning_msg_counts[event.description] = (
+                    warning_msg_counts.get(event.description, 0) + 1
+                )
             elif event.priority >= EventPriority.ERROR:
-                error_count += 1
+                error_msg_counts[event.description] = error_msg_counts.get(event.description, 0) + 1
 
-        summary_list = []
+        summary_parts = []
 
-        if warning_count:
-            summary_list.append(f"{warning_count} warnings")
-        if error_count:
-            summary_list.append(f"{error_count} errors")
+        if warning_msg_counts:
+            total_warnings = sum(warning_msg_counts.values())
+            warning_details = [
+                f"{msg} (x{count})" if count > 1 else msg
+                for msg, count in warning_msg_counts.items()
+            ]
+            summary_parts.append(f"{total_warnings} warnings: {', '.join(warning_details)}")
 
-        return "|".join(summary_list)
+        if error_msg_counts:
+            total_errors = sum(error_msg_counts.values())
+            error_details = [
+                f"{msg} (x{count})" if count > 1 else msg for msg, count in error_msg_counts.items()
+            ]
+            summary_parts.append(f"{total_errors} errors: {', '.join(error_details)}")
+
+        return "; ".join(summary_parts)
 
     def _update_status(self) -> None:
         """Update overall status based on event priority"""

@@ -23,10 +23,21 @@
 # SOFTWARE.
 #
 ###############################################################################
+from nodescraper.base import InBandDataPlugin
 
-from importlib.metadata import PackageNotFoundError, version
+from .analyzer_args import PcieAnalyzerArgs
+from .pcie_analyzer import PcieAnalyzer
+from .pcie_collector import PcieCollector
+from .pcie_data import PcieDataModel
 
-try:
-    __version__ = version("node-scraper")
-except PackageNotFoundError:
-    __version__ = "unknown"
+
+class PciePlugin(InBandDataPlugin[PcieDataModel, None, PcieAnalyzerArgs]):
+    """Plugin for collection and analysis of PCIe data"""
+
+    DATA_MODEL = PcieDataModel
+
+    COLLECTOR = PcieCollector
+
+    ANALYZER = PcieAnalyzer
+
+    ANALYZER_ARGS = PcieAnalyzerArgs
