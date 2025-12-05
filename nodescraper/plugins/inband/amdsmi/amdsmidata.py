@@ -65,7 +65,7 @@ class AmdSmiBaseModel(BaseModel):
 
     def __init__(self, **data):
         # Convert  Union[int, str, float] -> ValueUnit
-        for field_name, field_type in self.model_fields.items():
+        for field_name, field_type in self.__class__.model_fields.items():
             annotation = field_type.annotation
             target_type, container = find_annotation_in_container(annotation, ValueUnit)
             if target_type is None:
@@ -276,15 +276,15 @@ class StaticVbios(BaseModel):
 
 
 class StaticLimit(AmdSmiBaseModel):
-    max_power: Optional[ValueUnit]
-    min_power: Optional[ValueUnit]
-    socket_power: Optional[ValueUnit]
-    slowdown_edge_temperature: Optional[ValueUnit]
-    slowdown_hotspot_temperature: Optional[ValueUnit]
-    slowdown_vram_temperature: Optional[ValueUnit]
-    shutdown_edge_temperature: Optional[ValueUnit]
-    shutdown_hotspot_temperature: Optional[ValueUnit]
-    shutdown_vram_temperature: Optional[ValueUnit]
+    max_power: Optional[ValueUnit] = None
+    min_power: Optional[ValueUnit] = None
+    socket_power: Optional[ValueUnit] = None
+    slowdown_edge_temperature: Optional[ValueUnit] = None
+    slowdown_hotspot_temperature: Optional[ValueUnit] = None
+    slowdown_vram_temperature: Optional[ValueUnit] = None
+    shutdown_edge_temperature: Optional[ValueUnit] = None
+    shutdown_hotspot_temperature: Optional[ValueUnit] = None
+    shutdown_vram_temperature: Optional[ValueUnit] = None
     na_validator = field_validator(
         "max_power",
         "min_power",
@@ -415,6 +415,342 @@ class AmdSmiStatic(BaseModel):
     )
 
 
+# PAGES
+class PageData(BaseModel):
+    page_address: Union[int, str]
+    page_size: Union[int, str]
+    status: str
+    value: Optional[int]
+
+
+class BadPages(BaseModel):
+    gpu: int
+    retired: list[PageData]
+
+
+# Metric Data
+class MetricUsage(BaseModel):
+    gfx_activity: Optional[ValueUnit]
+    umc_activity: Optional[ValueUnit]
+    mm_activity: Optional[ValueUnit]
+    vcn_activity: list[Optional[Union[ValueUnit, str]]]
+    jpeg_activity: list[Optional[Union[ValueUnit, str]]]
+    gfx_busy_inst: Optional[dict[str, list[Optional[Union[ValueUnit, str]]]]]
+    jpeg_busy: Optional[dict[str, list[Optional[Union[ValueUnit, str]]]]]
+    vcn_busy: Optional[dict[str, list[Optional[Union[ValueUnit, str]]]]]
+    na_validator_list = field_validator("vcn_activity", "jpeg_activity", mode="before")(
+        na_to_none_list
+    )
+    na_validator = field_validator(
+        "gfx_activity",
+        "umc_activity",
+        "mm_activity",
+        "gfx_busy_inst",
+        "jpeg_busy",
+        "vcn_busy",
+        mode="before",
+    )(na_to_none)
+
+
+class MetricPower(BaseModel):
+    socket_power: Optional[ValueUnit]
+    gfx_voltage: Optional[ValueUnit]
+    soc_voltage: Optional[ValueUnit]
+    mem_voltage: Optional[ValueUnit]
+    throttle_status: Optional[str]
+    power_management: Optional[str]
+    na_validator = field_validator(
+        "socket_power",
+        "gfx_voltage",
+        "soc_voltage",
+        "mem_voltage",
+        "throttle_status",
+        "power_management",
+        mode="before",
+    )(na_to_none)
+
+
+class MetricClockData(BaseModel):
+    clk: Optional[ValueUnit]
+    min_clk: Optional[ValueUnit]
+    max_clk: Optional[ValueUnit]
+    clk_locked: Optional[Union[int, str, dict]]
+    deep_sleep: Optional[Union[int, str, dict]]
+    na_validator = field_validator(
+        "clk", "min_clk", "max_clk", "clk_locked", "deep_sleep", mode="before"
+    )(na_to_none)
+
+
+class MetricTemperature(BaseModel):
+    edge: Optional[ValueUnit]
+    hotspot: Optional[ValueUnit]
+    mem: Optional[ValueUnit]
+    na_validator = field_validator("edge", "hotspot", "mem", mode="before")(na_to_none)
+
+
+class MetricPcie(BaseModel):
+    width: Optional[int]
+    speed: Optional[ValueUnit]
+    bandwidth: Optional[ValueUnit]
+    replay_count: Optional[int]
+    l0_to_recovery_count: Optional[int]
+    replay_roll_over_count: Optional[int]
+    nak_sent_count: Optional[int]
+    nak_received_count: Optional[int]
+    current_bandwidth_sent: Optional[int]
+    current_bandwidth_received: Optional[int]
+    max_packet_size: Optional[int]
+    lc_perf_other_end_recovery: Optional[int]
+    na_validator = field_validator(
+        "width",
+        "speed",
+        "bandwidth",
+        "replay_count",
+        "l0_to_recovery_count",
+        "replay_roll_over_count",
+        "nak_sent_count",
+        "nak_received_count",
+        "current_bandwidth_sent",
+        "current_bandwidth_received",
+        "max_packet_size",
+        "lc_perf_other_end_recovery",
+        mode="before",
+    )(na_to_none)
+
+
+class MetricEccTotals(BaseModel):
+    total_correctable_count: Optional[int]
+    total_uncorrectable_count: Optional[int]
+    total_deferred_count: Optional[int]
+    cache_correctable_count: Optional[int]
+    cache_uncorrectable_count: Optional[int]
+    na_validator = field_validator(
+        "total_correctable_count",
+        "total_uncorrectable_count",
+        "total_deferred_count",
+        "cache_correctable_count",
+        "cache_uncorrectable_count",
+        mode="before",
+    )(na_to_none)
+
+
+class MetricErrorCounts(BaseModel):
+    correctable_count: Optional[str]
+    uncorrectable_count: Optional[str]
+    deferred_count: Optional[str]
+    na_validator = field_validator(
+        "correctable_count", "uncorrectable_count", "deferred_count", mode="before"
+    )(na_to_none)
+
+
+class MetricFan(BaseModel):
+    speed: Optional[ValueUnit]
+    max: Optional[ValueUnit]
+    rpm: Optional[ValueUnit]
+    usage: Optional[ValueUnit]
+    na_validator = field_validator("speed", "max", "rpm", "usage", mode="before")(na_to_none)
+
+
+class MetricVoltageCurve(BaseModel):
+    point_0_frequency: Optional[ValueUnit]
+    point_0_voltage: Optional[ValueUnit]
+    point_1_frequency: Optional[ValueUnit]
+    point_1_voltage: Optional[ValueUnit]
+    point_2_frequency: Optional[ValueUnit]
+    point_2_voltage: Optional[ValueUnit]
+
+    na_validator = field_validator(
+        "point_0_frequency",
+        "point_0_voltage",
+        "point_1_frequency",
+        "point_1_voltage",
+        "point_2_frequency",
+        "point_2_voltage",
+        mode="before",
+    )(na_to_none)
+
+
+class MetricEnergy(BaseModel):
+    total_energy_consumption: Optional[ValueUnit]
+    na_validator = field_validator("total_energy_consumption", mode="before")(na_to_none)
+
+
+class MetricMemUsage(BaseModel):
+    total_vram: Optional[ValueUnit]
+    used_vram: Optional[ValueUnit]
+    free_vram: Optional[ValueUnit]
+    total_visible_vram: Optional[ValueUnit]
+    used_visible_vram: Optional[ValueUnit]
+    free_visible_vram: Optional[ValueUnit]
+    total_gtt: Optional[ValueUnit]
+    used_gtt: Optional[ValueUnit]
+    free_gtt: Optional[ValueUnit]
+    na_validator = field_validator(
+        "total_vram",
+        "used_vram",
+        "free_vram",
+        "total_visible_vram",
+        "used_visible_vram",
+        "free_visible_vram",
+        "total_gtt",
+        "used_gtt",
+        "free_gtt",
+        mode="before",
+    )(na_to_none)
+
+
+class MetricThrottleVu(BaseModel):
+    xcp_0: Optional[list[Optional[Union[ValueUnit, str]]]] = None
+    # Deprecated below
+    value: Optional[dict[str, list[Union[int, str]]]] = Field(deprecated=True, default=None)
+    unit: str = Field(deprecated=True, default="")
+
+
+class MetricThrottle(AmdSmiBaseModel):
+    accumulation_counter: Optional[Union[MetricThrottleVu, ValueUnit]] = None
+
+    gfx_clk_below_host_limit_accumulated: Optional[Union[MetricThrottleVu, ValueUnit]] = None
+    gfx_clk_below_host_limit_power_accumulated: Optional[Union[MetricThrottleVu, ValueUnit]] = None
+    gfx_clk_below_host_limit_power_violation_activity: Optional[
+        Union[MetricThrottleVu, ValueUnit]
+    ] = None
+    gfx_clk_below_host_limit_power_violation_status: Optional[
+        Union[MetricThrottleVu, ValueUnit]
+    ] = None
+    gfx_clk_below_host_limit_violation_activity: Optional[Union[MetricThrottleVu, ValueUnit]] = None
+    gfx_clk_below_host_limit_violation_accumulated: Optional[Union[MetricThrottleVu, ValueUnit]] = (
+        None
+    )
+    gfx_clk_below_host_limit_violation_status: Optional[Union[MetricThrottleVu, ValueUnit]] = None
+    gfx_clk_below_host_limit_thermal_violation_accumulated: Optional[
+        Union[MetricThrottleVu, ValueUnit]
+    ] = None
+    gfx_clk_below_host_limit_thermal_violation_activity: Optional[
+        Union[MetricThrottleVu, ValueUnit]
+    ] = None
+    gfx_clk_below_host_limit_thermal_violation_status: Optional[
+        Union[MetricThrottleVu, ValueUnit]
+    ] = None
+    gfx_clk_below_host_limit_thermal_accumulated: Optional[Union[MetricThrottleVu, ValueUnit]] = (
+        None
+    )
+
+    hbm_thermal_accumulated: Optional[Union[MetricThrottleVu, ValueUnit]] = None
+    hbm_thermal_violation_activity: Optional[Union[MetricThrottleVu, ValueUnit]] = None
+    hbm_thermal_violation_status: Optional[Union[MetricThrottleVu, ValueUnit]] = None
+    low_utilization_violation_accumulated: Optional[Union[MetricThrottleVu, ValueUnit]] = None
+    low_utilization_violation_activity: Optional[Union[MetricThrottleVu, ValueUnit]] = None
+    low_utilization_violation_status: Optional[Union[MetricThrottleVu, ValueUnit]] = None
+    ppt_accumulated: Optional[Union[MetricThrottleVu, ValueUnit]] = None
+    ppt_violation_activity: Optional[Union[MetricThrottleVu, ValueUnit]] = None
+    ppt_violation_status: Optional[Union[MetricThrottleVu, ValueUnit]] = None
+    prochot_accumulated: Optional[Union[MetricThrottleVu, ValueUnit]] = None
+    prochot_violation_activity: Optional[Union[MetricThrottleVu, ValueUnit]] = None
+    prochot_violation_status: Optional[Union[MetricThrottleVu, ValueUnit]] = None
+    socket_thermal_accumulated: Optional[Union[MetricThrottleVu, ValueUnit]] = None
+    socket_thermal_violation_activity: Optional[Union[MetricThrottleVu, ValueUnit]] = None
+    socket_thermal_violation_status: Optional[Union[MetricThrottleVu, ValueUnit]] = None
+    vr_thermal_accumulated: Optional[Union[MetricThrottleVu, ValueUnit]] = None
+    vr_thermal_violation_activity: Optional[Union[MetricThrottleVu, ValueUnit]] = None
+    vr_thermal_violation_status: Optional[Union[MetricThrottleVu, ValueUnit]] = None
+
+    total_gfx_clk_below_host_limit_accumulated: Optional[Union[MetricThrottleVu, ValueUnit]] = None
+    low_utilization_accumulated: Optional[Union[MetricThrottleVu, ValueUnit]] = None
+    total_gfx_clk_below_host_limit_violation_status: Optional[
+        Union[MetricThrottleVu, ValueUnit]
+    ] = None
+    total_gfx_clk_below_host_limit_violation_activity: Optional[
+        Union[MetricThrottleVu, ValueUnit]
+    ] = None
+
+    na_validator = field_validator(
+        "accumulation_counter",
+        "gfx_clk_below_host_limit_accumulated",
+        "gfx_clk_below_host_limit_power_accumulated",
+        "gfx_clk_below_host_limit_power_violation_activity",
+        "gfx_clk_below_host_limit_power_violation_status",
+        "gfx_clk_below_host_limit_violation_activity",
+        "gfx_clk_below_host_limit_violation_accumulated",
+        "gfx_clk_below_host_limit_violation_status",
+        "gfx_clk_below_host_limit_thermal_violation_accumulated",
+        "gfx_clk_below_host_limit_thermal_violation_activity",
+        "gfx_clk_below_host_limit_thermal_violation_status",
+        "gfx_clk_below_host_limit_thermal_accumulated",
+        "hbm_thermal_accumulated",
+        "hbm_thermal_violation_activity",
+        "hbm_thermal_violation_status",
+        "low_utilization_violation_accumulated",
+        "low_utilization_violation_activity",
+        "low_utilization_violation_status",
+        "ppt_accumulated",
+        "ppt_violation_activity",
+        "ppt_violation_status",
+        "prochot_accumulated",
+        "prochot_violation_activity",
+        "prochot_violation_status",
+        "socket_thermal_accumulated",
+        "socket_thermal_violation_activity",
+        "socket_thermal_violation_status",
+        "vr_thermal_accumulated",
+        "vr_thermal_violation_activity",
+        "vr_thermal_violation_status",
+        "total_gfx_clk_below_host_limit_accumulated",
+        "low_utilization_accumulated",
+        "total_gfx_clk_below_host_limit_violation_status",
+        "total_gfx_clk_below_host_limit_violation_activity",
+        mode="before",
+    )(na_to_none)
+
+
+class EccData(BaseModel):
+    "ECC counts collected per ecc block"
+
+    correctable_count: Optional[int] = 0
+    uncorrectable_count: Optional[int] = 0
+    deferred_count: Optional[int] = 0
+
+    na_validator = field_validator(
+        "correctable_count", "uncorrectable_count", "deferred_count", mode="before"
+    )(na_to_none)
+
+
+class AmdSmiMetric(BaseModel):
+    gpu: int
+    usage: MetricUsage
+    power: MetricPower
+    clock: dict[str, MetricClockData]
+    temperature: MetricTemperature
+    pcie: MetricPcie
+    ecc: MetricEccTotals
+    ecc_blocks: Union[dict[str, EccData], str]
+    fan: MetricFan
+    voltage_curve: Optional[MetricVoltageCurve]
+    perf_level: Optional[Union[str, dict]]
+    xgmi_err: Optional[Union[str, dict]]
+    energy: Optional[MetricEnergy]
+    mem_usage: MetricMemUsage
+    throttle: MetricThrottle
+
+    na_validator = field_validator("xgmi_err", "perf_level", mode="before")(na_to_none)
+
+    @field_validator("ecc_blocks", mode="before")
+    @classmethod
+    def validate_ecc_blocks(cls, value: Union[dict[str, EccData], str]) -> dict[str, EccData]:
+        """Validate the ecc_blocks field."""
+        if isinstance(value, str):
+            # If it's a string, we assume it's "N/A" and return an empty dict
+            return {}
+        return value
+
+    @field_validator("energy", mode="before")
+    @classmethod
+    def validate_energy(cls, value: Optional[Any]) -> Optional[MetricEnergy]:
+        """Validate the energy field."""
+        if value == "N/A" or value is None:
+            return None
+        return value
+
+
 class AmdSmiDataModel(DataModel):
     """Data model for amd-smi data.
 
@@ -436,7 +772,9 @@ class AmdSmiDataModel(DataModel):
     partition: Optional[Partition] = None
     process: Optional[list[Processes]] = Field(default_factory=list)
     firmware: Optional[list[Fw]] = Field(default_factory=list)
+    bad_pages: Optional[list[BadPages]] = Field(default_factory=list)
     static: Optional[list[AmdSmiStatic]] = Field(default_factory=list)
+    metric: Optional[list[AmdSmiMetric]] = Field(default_factory=list)
 
     def get_list(self, gpu: int) -> Optional[AmdSmiListItem]:
         """Get the gpu list item for the given gpu id."""
@@ -470,6 +808,15 @@ class AmdSmiDataModel(DataModel):
         if self.static is None:
             return None
         for item in self.static:
+            if item.gpu == gpu:
+                return item
+        return None
+
+    def get_bad_pages(self, gpu: int) -> Optional[BadPages]:
+        """Get the bad pages data for the given gpu id."""
+        if self.bad_pages is None:
+            return None
+        for item in self.bad_pages:
             if item.gpu == gpu:
                 return item
         return None
