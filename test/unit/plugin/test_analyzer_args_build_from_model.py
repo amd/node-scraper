@@ -48,6 +48,8 @@ from nodescraper.plugins.inband.kernel_module.analyzer_args import (
 from nodescraper.plugins.inband.kernel_module.kernel_module_data import (
     KernelModuleDataModel,
 )
+from nodescraper.plugins.inband.memory.analyzer_args import MemoryAnalyzerArgs
+from nodescraper.plugins.inband.memory.memorydata import MemoryDataModel
 from nodescraper.plugins.inband.os.analyzer_args import OsAnalyzerArgs
 from nodescraper.plugins.inband.os.osdata import OsDataModel
 from nodescraper.plugins.inband.package.analyzer_args import PackageAnalyzerArgs
@@ -207,3 +209,12 @@ def test_kernel_module_analyzer_args_build_from_model():
     assert "amd_iommu" in args.kernel_modules
     assert "other_module" not in args.kernel_modules
     assert args.regex_filter == []
+
+
+def test_memory_analyzer_args_build_from_model():
+    """Test MemoryAnalyzerArgs.build_from_model includes all fields"""
+    datamodel = MemoryDataModel(mem_free="128Gi", mem_total="256Gi")
+    args = MemoryAnalyzerArgs.build_from_model(datamodel)
+
+    assert isinstance(args, MemoryAnalyzerArgs)
+    assert args.memory_threshold == "256Gi"

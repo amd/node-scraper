@@ -25,7 +25,21 @@
 ###############################################################################
 from nodescraper.models.analyzerargs import AnalyzerArgs
 
+from .memorydata import MemoryDataModel
+
 
 class MemoryAnalyzerArgs(AnalyzerArgs):
     ratio: float = 0.66
     memory_threshold: str = "30Gi"
+
+    @classmethod
+    def build_from_model(cls, datamodel: MemoryDataModel) -> "MemoryAnalyzerArgs":
+        """build analyzer args from data model
+
+        Args:
+            datamodel (MemoryDataModel): data model for plugin
+
+        Returns:
+            MemoryAnalyzerArgs: instance of analyzer args class
+        """
+        return cls(memory_threshold=datamodel.mem_total)

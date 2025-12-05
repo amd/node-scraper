@@ -234,6 +234,7 @@ def test_reference_config_with_analysis_args(run_cli_command, tmp_path):
         "DkmsPlugin",
         "KernelPlugin",
         "KernelModulePlugin",
+        "MemoryPlugin",
         "OsPlugin",
         "PackagePlugin",
         "ProcessPlugin",
