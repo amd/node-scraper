@@ -25,6 +25,7 @@ jobs:
 
     - name: Run plugin documentation generator
       run: |
+        source venv/bin/activate
         python docs/generate_plugin_doc_bundle.py \
           --package nodescraper.plugins.inband \
           --output docs/PLUGIN_DOC.md
