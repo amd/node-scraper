@@ -823,8 +823,8 @@ class for collection of PCIe data.
 
 ### Model annotations and fields
 
-- **pcie_cfg_space**: `typing.Dict[typing.Annotated[str, AfterValidator(func=<function validate_bdf at 0x7f07358a9bd0>)], nodescraper.plugins.inband.pcie.pcie_data.PcieCfgSpace]`
-- **vf_pcie_cfg_space**: `typing.Optional[typing.Dict[typing.Annotated[str, AfterValidator(func=<function validate_bdf at 0x7f07358a9bd0>)], nodescraper.plugins.inband.pcie.pcie_data.PcieCfgSpace]]`
+- **pcie_cfg_space**: `typing.Dict[typing.Annotated[str, AfterValidator(func=<function validate_bdf at 0x7f378b729430>)], nodescraper.plugins.inband.pcie.pcie_data.PcieCfgSpace]`
+- **vf_pcie_cfg_space**: `typing.Optional[typing.Dict[typing.Annotated[str, AfterValidator(func=<function validate_bdf at 0x7f378b729430>)], nodescraper.plugins.inband.pcie.pcie_data.PcieCfgSpace]]`
 
 ## ProcessDataModel Model
 
