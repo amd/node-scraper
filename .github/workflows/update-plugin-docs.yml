@@ -7,6 +7,8 @@ permissions:
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * *'
 
 jobs:
   generate_docs:
@@ -20,24 +22,25 @@ jobs:
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.9'
-
     - name: Install dependencies
       run: ./dev-setup.sh
 
     - name: Run plugin documentation generator
       run: |
+        source venv/bin/activate
         python docs/generate_plugin_doc_bundle.py \
           --package nodescraper.plugins.inband \
           --output docs/PLUGIN_DOC.md
 
+    - name: Format documentation with pre-commit
+      run: |
+        source venv/bin/activate
+        pre-commit run --files docs/PLUGIN_DOC.md || true
+
     - name: Commit and push changes
       run: |
-        git config --global user.name "github-actions[bot]"
-        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
         git add docs/PLUGIN_DOC.md
-        git diff --staged --quiet || git commit -m "docs: Update plugin documentation [automated]"
+        git diff --staged --quiet || git commit --no-verify -m "docs: Update plugin documentation [automated]"
         git push
