@@ -31,7 +31,9 @@ from nodescraper.plugins.inband.amdsmi.amdsmi_analyzer import AmdSmiAnalyzer
 from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     AmdSmiDataModel,
     AmdSmiStatic,
+    AmdSmiTstData,
     AmdSmiVersion,
+    EccState,
     Fw,
     FwListItem,
     Partition,
@@ -48,8 +50,11 @@ from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     StaticDriver,
     StaticLimit,
     StaticNuma,
+    StaticRas,
     StaticVram,
     ValueUnit,
+    XgmiLinkMetrics,
+    XgmiMetrics,
 )
 from nodescraper.plugins.inband.amdsmi.analyzer_args import AmdSmiAnalyzerArgs
 
@@ -204,6 +209,14 @@ def create_static_gpu(
             fru_id="",
             product_name="",
             manufacturer_name="",
+        ),
+        ras=StaticRas(
+            eeprom_version="1.0",
+            parity_schema=EccState.ENABLED,
+            single_bit_schema=EccState.ENABLED,
+            double_bit_schema=EccState.ENABLED,
+            poison_schema=EccState.ENABLED,
+            ecc_block_state={},
         ),
         soc_pstate=None,
         xgmi_plpd=None,
@@ -540,6 +553,167 @@ def test_check_expected_memory_partition_mode_mismatch(mock_analyzer):
     assert len(analyzer.result.events) >= 0
 
 
+def test_check_expected_xgmi_link_speed_success(mock_analyzer):
+    """Test check_expected_xgmi_link_speed passes when XGMI speed matches."""
+    analyzer = mock_analyzer
+
+    xgmi_data = [
+        XgmiMetrics(
+            gpu=0,
+            bdf="0000:01:00.0",
+            link_metrics=XgmiLinkMetrics(
+                bit_rate=ValueUnit(value=32.0, unit="GT/s"),
+                max_bandwidth=None,
+                link_type="XGMI",
+                links=[],
+            ),
+        ),
+        XgmiMetrics(
+            gpu=1,
+            bdf="0000:02:00.0",
+            link_metrics=XgmiLinkMetrics(
+                bit_rate=ValueUnit(value=32.0, unit="GT/s"),
+                max_bandwidth=None,
+                link_type="XGMI",
+                links=[],
+            ),
+        ),
+    ]
+
+    analyzer.check_expected_xgmi_link_speed(xgmi_data, expected_xgmi_speed=[32.0])
+
+    assert len(analyzer.result.events) == 0
+
+
+def test_check_expected_xgmi_link_speed_mismatch(mock_analyzer):
+    """Test check_expected_xgmi_link_speed logs error when speed doesn't match."""
+    analyzer = mock_analyzer
+
+    xgmi_data = [
+        XgmiMetrics(
+            gpu=0,
+            bdf="0000:01:00.0",
+            link_metrics=XgmiLinkMetrics(
+                bit_rate=ValueUnit(value=25.0, unit="GT/s"),
+                max_bandwidth=None,
+                link_type="XGMI",
+                links=[],
+            ),
+        ),
+    ]
+
+    analyzer.check_expected_xgmi_link_speed(xgmi_data, expected_xgmi_speed=[32.0])
+
+    assert len(analyzer.result.events) == 1
+    assert analyzer.result.events[0].category == "IO"
+    assert analyzer.result.events[0].priority == EventPriority.ERROR
+    assert "XGMI link speed is not as expected" in analyzer.result.events[0].description
+
+
+def test_check_expected_xgmi_link_speed_multiple_valid_speeds(mock_analyzer):
+    """Test check_expected_xgmi_link_speed with multiple valid speeds."""
+    analyzer = mock_analyzer
+
+    xgmi_data = [
+        XgmiMetrics(
+            gpu=0,
+            bdf="0000:01:00.0",
+            link_metrics=XgmiLinkMetrics(
+                bit_rate=ValueUnit(value=36.0, unit="GT/s"),
+                max_bandwidth=None,
+                link_type="XGMI",
+                links=[],
+            ),
+        ),
+        XgmiMetrics(
+            gpu=1,
+            bdf="0000:02:00.0",
+            link_metrics=XgmiLinkMetrics(
+                bit_rate=ValueUnit(value=38.0, unit="GT/s"),
+                max_bandwidth=None,
+                link_type="XGMI",
+                links=[],
+            ),
+        ),
+    ]
+
+    analyzer.check_expected_xgmi_link_speed(xgmi_data, expected_xgmi_speed=[36.0, 38.0])
+
+    assert len(analyzer.result.events) == 0
+
+
+def test_check_expected_xgmi_link_speed_no_data(mock_analyzer):
+    """Test check_expected_xgmi_link_speed handles missing XGMI data."""
+    analyzer = mock_analyzer
+
+    analyzer.check_expected_xgmi_link_speed(None, expected_xgmi_speed=[32.0])
+
+    assert len(analyzer.result.events) == 1
+    assert analyzer.result.events[0].priority == EventPriority.WARNING
+    assert "XGMI link speed data is not available" in analyzer.result.events[0].description
+
+
+def test_check_expected_xgmi_link_speed_missing_bit_rate(mock_analyzer):
+    """Test check_expected_xgmi_link_speed handles missing bit rate value."""
+    analyzer = mock_analyzer
+
+    xgmi_data = [
+        XgmiMetrics(
+            gpu=0,
+            bdf="0000:01:00.0",
+            link_metrics=XgmiLinkMetrics(
+                bit_rate=None,
+                max_bandwidth=None,
+                link_type="XGMI",
+                links=[],
+            ),
+        ),
+    ]
+
+    analyzer.check_expected_xgmi_link_speed(xgmi_data, expected_xgmi_speed=[32.0])
+
+    assert len(analyzer.result.events) == 1
+    assert analyzer.result.events[0].priority == EventPriority.ERROR
+    assert "XGMI link speed is not available" in analyzer.result.events[0].description
+
+
+def test_check_amdsmitst_success(mock_analyzer):
+    """Test check_amdsmitst passes when no tests failed."""
+    analyzer = mock_analyzer
+
+    tst_data = AmdSmiTstData(
+        passed_tests=["test1", "test2", "test3"],
+        skipped_tests=[],
+        failed_tests=[],
+        failed_test_count=0,
+    )
+
+    analyzer.check_amdsmitst(tst_data)
+
+    assert len(analyzer.result.events) == 0
+
+
+def test_check_amdsmitst_failures(mock_analyzer):
+    """Test check_amdsmitst logs error when tests failed."""
+    analyzer = mock_analyzer
+
+    tst_data = AmdSmiTstData(
+        passed_tests=["test1", "test2"],
+        skipped_tests=["test3"],
+        failed_tests=["test4", "test5"],
+        failed_test_count=2,
+    )
+
+    analyzer.check_amdsmitst(tst_data)
+
+    assert len(analyzer.result.events) == 1
+    assert analyzer.result.events[0].category == "APPLICATION"
+    assert analyzer.result.events[0].priority == EventPriority.ERROR
+    assert "2 failed tests running amdsmitst" in analyzer.result.events[0].description
+    assert analyzer.result.events[0].data["failed_test_count"] == 2
+    assert analyzer.result.events[0].data["failed_tests"] == ["test4", "test5"]
+
+
 def test_analyze_data_full_workflow(mock_analyzer):
     """Test full analyze_data workflow with various checks."""
     analyzer = mock_analyzer
@@ -578,12 +752,31 @@ def test_analyze_data_full_workflow(mock_analyzer):
         ],
         partition=None,
         gpu_list=None,
+        xgmi_metric=[
+            XgmiMetrics(
+                gpu=0,
+                bdf="0000:01:00.0",
+                link_metrics=XgmiLinkMetrics(
+                    bit_rate=ValueUnit(value=32.0, unit="GT/s"),
+                    max_bandwidth=None,
+                    link_type="XGMI",
+                    links=[],
+                ),
+            ),
+        ],
+        amdsmitst_data=AmdSmiTstData(
+            passed_tests=["test1", "test2"],
+            skipped_tests=[],
+            failed_tests=[],
+            failed_test_count=0,
+        ),
     )
 
     args = AmdSmiAnalyzerArgs(
         expected_max_power=550,
         expected_driver_version="1.2.3",
         expected_gpu_processes=10,
+        expected_xgmi_speed=[32.0],
     )
 
     result = analyzer.analyze_data(data, args)
