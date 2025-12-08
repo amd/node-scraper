@@ -16,8 +16,15 @@ jobs:
     runs-on: [ self-hosted ]
     # To disable this workflow, set DISABLE_AUTO_DOCS to 'true' in repository variables
     if: vars.DISABLE_AUTO_DOCS != 'true'
+    env:
+      HOME: /tmp/github-actions-home
 
     steps:
+    - name: Setup HOME directory
+      run: |
+        mkdir -p /tmp/github-actions-home
+        export HOME=/tmp/github-actions-home
+
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
