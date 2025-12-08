@@ -23,19 +23,24 @@
 # SOFTWARE.
 #
 ###############################################################################
+import io
 import json
-from typing import Any, Optional, Union
+import re
+from tarfile import TarFile
+from typing import Any, Dict, List, Optional, Union
 
 from pydantic import ValidationError
 
 from nodescraper.base.inbandcollectortask import InBandDataCollector
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.models import TaskResult
+from nodescraper.models.datamodel import FileModel
 from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     AmdSmiDataModel,
     AmdSmiListItem,
     AmdSmiStatic,
     AmdSmiVersion,
+    EccState,
     Fw,
     FwListItem,
     Partition,
@@ -55,6 +60,7 @@ from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     StaticFrequencyLevels,
     StaticNuma,
     StaticPolicy,
+    StaticRas,
     StaticSocPstate,
     StaticVbios,
     StaticVram,
@@ -73,12 +79,14 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
 
     DATA_MODEL = AmdSmiDataModel
 
-    CMD_VERSION = "amd-smi version --json"
-    CMD_LIST = "amd-smi list --json"
-    CMD_PROCESS = "amd-smi process --json"
-    CMD_PARTITION = "amd-smi partition --json"
-    CMD_FIRMWARE = "amd-smi firmware --json"
-    CMD_STATIC = "amd-smi static -g all --json"
+    CMD_VERSION = "version --json"
+    CMD_LIST = "list --json"
+    CMD_PROCESS = "process --json"
+    CMD_PARTITION = "partition --json"
+    CMD_FIRMWARE = "firmware --json"
+    CMD_STATIC = "static -g all --json"
+    CMD_STATIC_GPU = "static -g {gpu_id} --json"
+    CMD_RAS = "ras --cper --folder={folder}"
 
     def _check_amdsmi_installed(self) -> bool:
         """Check if amd-smi is installed
@@ -323,6 +331,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             firmware = self.get_firmware()
             gpu_list = self.get_gpu_list()
             statics = self.get_static()
+            cper_data = self.get_cper_data()
         except Exception as e:
             self._log_event(
                 category=EventCategory.APPLICATION,
@@ -342,6 +351,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                 partition=partition,
                 firmware=firmware,
                 static=statics,
+                cper_data=cper_data,
             )
         except ValidationError as err:
             self.logger.warning("Validation err: %s", err)
@@ -359,7 +369,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         Returns:
             Optional[AmdSmiVersion]: version information or None on error
         """
-        ret = self._run_amd_smi_dict("version")
+        ret = self._run_amd_smi_dict(self.CMD_VERSION)
         if not ret or not isinstance(ret, list) or len(ret) == 0:
             return None
 
@@ -389,7 +399,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         Returns:
             Optional[list[AmdSmiListItem]]: list of GPU info items
         """
-        ret = self._run_amd_smi_dict("list")
+        ret = self._run_amd_smi_dict(self.CMD_LIST)
         if not ret:
             return []
 
@@ -433,7 +443,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         Returns:
             Optional[list[Processes]]: list of GPU processes
         """
-        ret = self._run_amd_smi_dict("process")
+        ret = self._run_amd_smi_dict(self.CMD_PROCESS)
         if not ret:
             return []
 
@@ -521,7 +531,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         Returns:
             Optional[Partition]: Partition data if available
         """
-        ret = self._run_amd_smi_dict("partition")
+        ret = self._run_amd_smi_dict(self.CMD_PARTITION)
         if not ret:
             return None
 
@@ -596,7 +606,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         Returns:
             Optional[list[Fw]]: List of firmware info per GPU
         """
-        ret = self._run_amd_smi_dict("firmware")
+        ret = self._run_amd_smi_dict(self.CMD_FIRMWARE)
         if not ret:
             return []
 
@@ -650,14 +660,14 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
         Returns:
             Optional[list[AmdSmiStatic]]: list of AmdSmiStatic instances or empty list
         """
-        ret = self._run_amd_smi_dict("static -g all")
+        ret = self._run_amd_smi_dict(self.CMD_STATIC)
         if not ret:
             self.logger.info("Bulk static query failed, attempting per-GPU fallback")
             gpu_list = self.get_gpu_list()
             if gpu_list:
                 fallback_data: list[dict] = []
                 for gpu in gpu_list:
-                    gpu_data = self._run_amd_smi_dict(f"static -g {gpu.gpu}")
+                    gpu_data = self._run_amd_smi_dict(self.CMD_STATIC_GPU.format(gpu_id=gpu.gpu))
                     if gpu_data:
                         if isinstance(gpu_data, dict):
                             fallback_data.append(gpu_data)
@@ -689,6 +699,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             driver = item.get("driver", {}) or {}
             numa = item.get("numa", {}) or {}
             vram = item.get("vram", {}) or {}
+            ras = item.get("ras", {}) or {}
             cache = item.get("cache", {}) or {}
             clock = item.get("clock", {}) or {}
             soc_pstate = item.get("soc_pstate", {}) or {}
@@ -804,6 +815,9 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             # XGMI PLPD
             xgmi_plpd_model = self._parse_xgmi_plpd(xgmi_plpd)
 
+            # RAS
+            ras_model = self._parse_ras(ras)
+
             # Cache info
             cache_info_model = self._parse_cache_info(cache)
 
@@ -820,6 +834,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                         limit=None,
                         driver=driver_model,
                         board=board_model,
+                        ras=ras_model,
                         soc_pstate=soc_pstate_model,
                         xgmi_plpd=xgmi_plpd_model,
                         process_isolation="",
@@ -942,6 +957,73 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             )
         except ValidationError:
             return None
+
+    def _parse_ras(self, data: dict) -> StaticRas:
+        """Parse RAS/ECC data
+
+        Args:
+            data (dict): RAS data from amd-smi
+
+        Returns:
+            StaticRas: StaticRas instance with default values if data is missing
+        """
+        if not isinstance(data, dict):
+            # Return default RAS data
+            return StaticRas(
+                eeprom_version="N/A",
+                parity_schema=EccState.NA,
+                single_bit_schema=EccState.NA,
+                double_bit_schema=EccState.NA,
+                poison_schema=EccState.NA,
+                ecc_block_state={},
+            )
+
+        def _to_ecc_state(value: Any) -> EccState:
+            """Convert string to EccState enum"""
+            if not value or not isinstance(value, str):
+                return EccState.NA
+            try:
+                return EccState(value.upper())
+            except (ValueError, AttributeError):
+                return EccState.NA
+
+        eeprom_version = str(data.get("eeprom_version", "N/A") or "N/A")
+        parity_schema = _to_ecc_state(data.get("parity_schema"))
+        single_bit_schema = _to_ecc_state(data.get("single_bit_schema"))
+        double_bit_schema = _to_ecc_state(data.get("double_bit_schema"))
+        poison_schema = _to_ecc_state(data.get("poison_schema"))
+
+        ecc_block_state = data.get("ecc_block_state", {})
+        ecc_block_state_final: Union[Dict[str, EccState], str]
+        if isinstance(ecc_block_state, dict):
+            parsed_blocks = {}
+            for block_name, block_state in ecc_block_state.items():
+                parsed_blocks[block_name] = _to_ecc_state(block_state)
+            ecc_block_state_final = parsed_blocks
+        elif isinstance(ecc_block_state, str):
+            ecc_block_state_final = ecc_block_state
+        else:
+            ecc_block_state_final = {}
+
+        try:
+            return StaticRas(
+                eeprom_version=eeprom_version,
+                parity_schema=parity_schema,
+                single_bit_schema=single_bit_schema,
+                double_bit_schema=double_bit_schema,
+                poison_schema=poison_schema,
+                ecc_block_state=ecc_block_state_final,
+            )
+        except ValidationError:
+            # Return default if validation fails
+            return StaticRas(
+                eeprom_version="N/A",
+                parity_schema=EccState.NA,
+                single_bit_schema=EccState.NA,
+                double_bit_schema=EccState.NA,
+                poison_schema=EccState.NA,
+                ecc_block_state={},
+            )
 
     def _parse_cache_info(self, data: dict) -> list[StaticCacheInfoItem]:
         """Parse cache info data
@@ -1090,6 +1172,99 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             clock_dict["clk"] = clock_data
 
         return clock_dict if clock_dict else None
+
+    def get_cper_data(self) -> List[FileModel]:
+        """Collect CPER data from amd-smi ras command
+
+        Returns:
+            list[FileModel]: List of CPER files or empty list if not supported/available
+        """
+        try:
+            AMD_SMI_CPER_FOLDER = "/tmp/amd_smi_cper"
+            # Ensure the cper folder exists but is empty
+            self._run_sut_cmd(
+                f"mkdir -p {AMD_SMI_CPER_FOLDER} && rm -f {AMD_SMI_CPER_FOLDER}/*.cper && rm -f {AMD_SMI_CPER_FOLDER}/*.json",
+                sudo=False,
+            )
+            # Run amd-smi ras command with sudo to collect CPER data
+            cper_cmd_ret = self._run_sut_cmd(
+                f"{self.AMD_SMI_EXE} {self.CMD_RAS.format(folder=AMD_SMI_CPER_FOLDER)}",
+                sudo=True,
+            )
+            if cper_cmd_ret.exit_code != 0:
+                # Command failed, return empty list
+                return []
+            cper_cmd = cper_cmd_ret.stdout
+            # search that a CPER is actually created here
+            regex_cper_search = re.findall(r"(\w+\.cper)", cper_cmd)
+            if not regex_cper_search:
+                # Early exit if no CPER files were created
+                return []
+            # tar the cper folder
+            self._run_sut_cmd(
+                f"tar -czf {AMD_SMI_CPER_FOLDER}.tar.gz -C {AMD_SMI_CPER_FOLDER} .",
+                sudo=True,
+            )
+            # Load the tar files
+            cper_zip = self._read_sut_file(
+                f"{AMD_SMI_CPER_FOLDER}.tar.gz", encoding=None, strip=False, log_artifact=True
+            )
+            # Since encoding=None, this returns BinaryFileArtifact which has contents: bytes
+            if hasattr(cper_zip, "contents"):
+                io_bytes = io.BytesIO(cper_zip.contents)  # type: ignore[attr-defined]
+            else:
+                return []
+            del cper_zip  # Free memory after reading the file
+            try:
+                with TarFile.open(fileobj=io_bytes, mode="r:gz") as tar_file:
+                    cper_data = []
+                    for member in tar_file.getmembers():
+                        if member.isfile() and member.name.endswith(".cper"):
+                            file_content = tar_file.extractfile(member)
+                            if file_content is not None:
+                                # Decode the content, ignoring errors to avoid issues with binary data
+                                # that may not be valid UTF-8
+                                file_content_bytes = file_content.read()
+                            else:
+                                file_content_bytes = b""
+                            cper_data.append(
+                                FileModel(file_contents=file_content_bytes, file_name=member.name)
+                            )
+                # Since we do not log the cper data in the data model create an event informing the user if CPER created
+                if cper_data:
+                    self._log_event(
+                        category=EventCategory.APPLICATION,
+                        description="CPER data has been extracted from amd-smi",
+                        data={
+                            "cper_count": len(cper_data),
+                        },
+                        priority=EventPriority.INFO,
+                    )
+            except Exception as e:
+                self._log_event(
+                    category=EventCategory.APPLICATION,
+                    description="Error extracting cper data",
+                    data={
+                        "exception": get_exception_traceback(e),
+                    },
+                    priority=EventPriority.ERROR,
+                    console_log=True,
+                )
+                return []
+            return cper_data
+        except Exception as e:
+            # If any unexpected error occurs during CPER collection, log it and return empty list
+            # This ensures CPER collection failures don't break the entire data collection
+            self._log_event(
+                category=EventCategory.APPLICATION,
+                description="Error collecting CPER data",
+                data={
+                    "exception": get_exception_traceback(e),
+                },
+                priority=EventPriority.WARNING,
+                console_log=False,
+            )
+            return []
 
     def collect_data(
         self,

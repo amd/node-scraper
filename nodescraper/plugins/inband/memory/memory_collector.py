@@ -42,6 +42,7 @@ class MemoryCollector(InBandDataCollector[MemoryDataModel, None]):
         "wmic OS get FreePhysicalMemory /Value; wmic ComputerSystem get TotalPhysicalMemory /Value"
     )
     CMD = "free -b"
+    CMD_LSMEM = "/usr/bin/lsmem"
 
     def collect_data(self, args=None) -> tuple[TaskResult, Optional[MemoryDataModel]]:
         """
@@ -78,15 +79,41 @@ class MemoryCollector(InBandDataCollector[MemoryDataModel, None]):
                 console_log=True,
             )
 
+        lsmem_data = None
+        if self.system_info.os_family != OSFamily.WINDOWS:
+            lsmem_cmd = self._run_sut_cmd(self.CMD_LSMEM)
+            if lsmem_cmd.exit_code == 0:
+                lsmem_data = self._parse_lsmem_output(lsmem_cmd.stdout)
+                self._log_event(
+                    category=EventCategory.OS,
+                    description="lsmem output collected",
+                    data=lsmem_data,
+                    priority=EventPriority.INFO,
+                )
+            else:
+                self._log_event(
+                    category=EventCategory.OS,
+                    description="Error running lsmem command",
+                    data={
+                        "command": lsmem_cmd.command,
+                        "exit_code": lsmem_cmd.exit_code,
+                        "stderr": lsmem_cmd.stderr,
+                    },
+                    priority=EventPriority.WARNING,
+                    console_log=False,
+                )
+
         if mem_free and mem_total:
-            mem_data = MemoryDataModel(mem_free=mem_free, mem_total=mem_total)
+            mem_data = MemoryDataModel(
+                mem_free=mem_free, mem_total=mem_total, lsmem_output=lsmem_data
+            )
             self._log_event(
                 category=EventCategory.OS,
                 description="Free and total memory read",
                 data=mem_data.model_dump(),
                 priority=EventPriority.INFO,
             )
-            self.result.message = f"Memory: {mem_data.model_dump()}"
+            self.result.message = f"Memory: mem_free={mem_free}, mem_total={mem_total}"
             self.result.status = ExecutionStatus.OK
         else:
             mem_data = None
@@ -94,3 +121,46 @@ class MemoryCollector(InBandDataCollector[MemoryDataModel, None]):
             self.result.status = ExecutionStatus.ERROR
 
         return self.result, mem_data
+
+    def _parse_lsmem_output(self, output: str) -> dict:
+        """
+        Parse lsmem command output into a structured dictionary.
+
+        Args:
+            output: Raw stdout from lsmem command
+
+        Returns:
+            dict: Parsed lsmem data with memory blocks and summary information
+        """
+        lines = output.strip().split("\n")
+        memory_blocks = []
+        summary = {}
+
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+
+            # Parse mem range lines (sample: "0x0000000000000000-0x000000007fffffff   2G online       yes   0-15")
+            if line.startswith("0x"):
+                parts = line.split()
+                if len(parts) >= 4:
+                    memory_blocks.append(
+                        {
+                            "range": parts[0],
+                            "size": parts[1],
+                            "state": parts[2],
+                            "removable": parts[3] if len(parts) > 3 else None,
+                            "block": parts[4] if len(parts) > 4 else None,
+                        }
+                    )
+            # Parse summary lines
+            elif ":" in line:
+                key, value = line.split(":", 1)
+                summary[key.strip().lower().replace(" ", "_")] = value.strip()
+
+        return {
+            "raw_output": output,
+            "memory_blocks": memory_blocks,
+            "summary": summary,
+        }
