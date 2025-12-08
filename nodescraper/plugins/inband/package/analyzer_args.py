@@ -34,18 +34,15 @@ from nodescraper.plugins.inband.package.packagedata import PackageDataModel
 class PackageAnalyzerArgs(AnalyzerArgs):
     exp_package_ver: Dict[str, Optional[str]] = Field(default_factory=dict)
     regex_match: bool = False
-    rocm_regex: str = (
-        r"ocl-icd|kfdtest|llvm-amd|miopen|half|hip|hcc|hsa|rocm|atmi|comgr|composa|amd-smi|aomp|amdgpu|rock|mivision|migraph|rocprofiler|roctracer|rocbl|hipify|rocsol|rocthr|rocff|rocalu|rocprim|rocrand|rccl|rocspar|rdc|rocwmma|rpp|openmp|amdfwflash|ocl|opencl"
-    )
+    # rocm_regex is optional and should be specified in plugin_config.json if needed
+    rocm_regex: Optional[str] = None
     enable_rocm_regex: bool = False
 
     @classmethod
     def build_from_model(cls, datamodel: PackageDataModel) -> "PackageAnalyzerArgs":
         # Use custom rocm_regex from collection_args if enable_rocm_regex is true
+        rocm_regex = None
         if datamodel.enable_rocm_regex and datamodel.rocm_regex:
             rocm_regex = datamodel.rocm_regex
-        else:
-            # Use default rocm_regex
-            rocm_regex = PackageAnalyzerArgs().rocm_regex
 
         return cls(exp_package_ver=datamodel.version_info, rocm_regex=rocm_regex)

@@ -224,40 +224,6 @@ def test_bad_splits_ubuntu(collector, conn_mock, command_results):
     assert res.status == ExecutionStatus.OK
 
 
-def test_rocm_package_filtering_default_regex(collector, conn_mock, command_results):
-    """Test ROCm package filtering with default regex pattern."""
-    # Mock Ubuntu system with ROCm packages
-    ubuntu_packages = """rocm-core 5.7.0
-                    hip-runtime-amd 5.7.0
-                    hsa-rocr 1.9.0
-                    amdgpu-dkms 6.3.6
-                    gcc 11.4.0
-                    python3 3.10.12"""
-
-    conn_mock.run_command.side_effect = [
-        CommandArtifact(
-            command="",
-            exit_code=0,
-            stdout=command_results["ubuntu_rel"],
-            stderr="",
-        ),
-        CommandArtifact(
-            command="",
-            exit_code=0,
-            stdout=ubuntu_packages,
-            stderr="",
-        ),
-    ]
-
-    res, data = collector.collect_data()
-    assert res.status == ExecutionStatus.OK
-    # Check that ROCm packages are found
-    assert "rocm" in res.message.lower()
-    assert data is not None
-    # Verify all packages are collected
-    assert len(data.version_info) == 6
-
-
 def test_rocm_package_filtering_custom_regex(collector, conn_mock, command_results):
     """Test ROCm package filtering with custom regex pattern."""
     from nodescraper.plugins.inband.package.analyzer_args import PackageAnalyzerArgs

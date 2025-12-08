@@ -232,24 +232,29 @@ class PackageCollector(InBandDataCollector[PackageDataModel, PackageAnalyzerArgs
             self.result.status = ExecutionStatus.NOT_RAN
             return self.result, None
 
-        # Filter and log ROCm packages if on Linux
+        # Filter and log ROCm packages if on Linux and rocm_regex is provided
         if self.system_info.os_family == OSFamily.LINUX and packages:
-            # Get ROCm pattern from args or use default
-            rocm_pattern = args.rocm_regex if args else PackageAnalyzerArgs().rocm_regex
-            self.logger.info("Using rocm_pattern: %s", rocm_pattern)
-            rocm_packages = self._filter_rocm_packages(packages, rocm_pattern)
-            if rocm_packages:
-                self.result.message = f"Found {len(rocm_packages)} ROCm-related packages installed"
-                self.result.status = ExecutionStatus.OK
-                self._log_event(
-                    category=EventCategory.OS,
-                    description=f"Found {len(rocm_packages)} ROCm-related packages installed",
-                    priority=EventPriority.INFO,
-                    data={"rocm_packages": sorted(rocm_packages.keys())},
-                )
+            # Get ROCm pattern from args if provided
+            rocm_pattern = args.rocm_regex if args else None
+            if rocm_pattern:
+                self.logger.info("Using rocm_pattern: %s", rocm_pattern)
+                rocm_packages = self._filter_rocm_packages(packages, rocm_pattern)
+                if rocm_packages:
+                    self.result.message = (
+                        f"Found {len(rocm_packages)} ROCm-related packages installed"
+                    )
+                    self.result.status = ExecutionStatus.OK
+                    self._log_event(
+                        category=EventCategory.OS,
+                        description=f"Found {len(rocm_packages)} ROCm-related packages installed",
+                        priority=EventPriority.INFO,
+                        data={"rocm_packages": sorted(rocm_packages.keys())},
+                    )
+            else:
+                self.logger.info("No rocm_regex provided, skipping ROCm package filtering")
 
         # Extract rocm_regex and enable_rocm_regex from args if provided
-        rocm_regex = args.rocm_regex if args else ""
+        rocm_regex = args.rocm_regex if (args and args.rocm_regex) else ""
         enable_rocm_regex = getattr(args, "enable_rocm_regex", False) if args else False
 
         try:
