@@ -115,12 +115,12 @@ def test_system_info_builder():
         (
             ["--sys-name", "test-sys", "--sys-sku", "test-sku"],
             ["TestPlugin1", "TestPlugin2"],
-            (["--sys-name", "test-sys", "--sys-sku", "test-sku"], {}),
+            (["--sys-name", "test-sys", "--sys-sku", "test-sku"], {}, []),
         ),
         (
             ["--sys-name", "test-sys", "--sys-sku", "test-sku", "run-plugins", "-h"],
             ["TestPlugin1", "TestPlugin2"],
-            (["--sys-name", "test-sys", "--sys-sku", "test-sku", "run-plugins", "-h"], {}),
+            (["--sys-name", "test-sys", "--sys-sku", "test-sku", "run-plugins", "-h"], {}, []),
         ),
         (
             [
@@ -143,6 +143,7 @@ def test_system_info_builder():
                     "TestPlugin1": ["--plugin1_arg", "test-val1"],
                     "TestPlugin2": ["--plugin2_arg", "test-val2"],
                 },
+                [],
             ),
         ),
     ],
