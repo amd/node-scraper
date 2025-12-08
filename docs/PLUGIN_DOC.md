@@ -4,7 +4,7 @@
 
 | Plugin | Collection | Analysis | DataModel | Collector | Analyzer |
 | --- | --- | --- | --- | --- | --- |
-| AmdSmiPlugin | amd-smi firmware --json<br>amd-smi list --json<br>amd-smi partition --json<br>amd-smi process --json<br>amd-smi static -g all --json<br>amd-smi version --json | **Analyzer Args:**<br>- `check_static_data`: bool<br>- `expected_gpu_processes`: Optional[int]<br>- `expected_max_power`: Optional[int]<br>- `expected_driver_version`: Optional[str]<br>- `expected_memory_partition_mode`: Optional[str]<br>- `expected_compute_partition_mode`: Optional[str]<br>- `expected_pldm_version`: Optional[str]<br>- `l0_to_recovery_count_error_threshold`: Optional[int]<br>- `l0_to_recovery_count_warning_threshold`: Optional[int]<br>- `vendorid_ep`: Optional[str]<br>- `vendorid_ep_vf`: Optional[str]<br>- `devid_ep`: Optional[str]<br>- `devid_ep_vf`: Optional[str]<br>- `sku_name`: Optional[str] | [AmdSmiDataModel](#AmdSmiDataModel-Model) | [AmdSmiCollector](#Collector-Class-AmdSmiCollector) | [AmdSmiAnalyzer](#Data-Analyzer-Class-AmdSmiAnalyzer) |
+| AmdSmiPlugin | firmware --json<br>list --json<br>partition --json<br>process --json<br>ras --cper --folder={folder}<br>static -g all --json<br>static -g {gpu_id} --json<br>version --json | **Analyzer Args:**<br>- `check_static_data`: bool<br>- `expected_gpu_processes`: Optional[int]<br>- `expected_max_power`: Optional[int]<br>- `expected_driver_version`: Optional[str]<br>- `expected_memory_partition_mode`: Optional[str]<br>- `expected_compute_partition_mode`: Optional[str]<br>- `expected_pldm_version`: Optional[str]<br>- `l0_to_recovery_count_error_threshold`: Optional[int]<br>- `l0_to_recovery_count_warning_threshold`: Optional[int]<br>- `vendorid_ep`: Optional[str]<br>- `vendorid_ep_vf`: Optional[str]<br>- `devid_ep`: Optional[str]<br>- `devid_ep_vf`: Optional[str]<br>- `sku_name`: Optional[str]<br>- `expected_xgmi_speed`: Optional[list[float]]<br>- `analysis_range_start`: Optional[datetime.datetime]<br>- `analysis_range_end`: Optional[datetime.datetime] | [AmdSmiDataModel](#AmdSmiDataModel-Model) | [AmdSmiCollector](#Collector-Class-AmdSmiCollector) | [AmdSmiAnalyzer](#Data-Analyzer-Class-AmdSmiAnalyzer) |
 | BiosPlugin | sh -c 'cat /sys/devices/virtual/dmi/id/bios_version'<br>wmic bios get SMBIOSBIOSVersion /Value | **Analyzer Args:**<br>- `exp_bios_version`: list[str]<br>- `regex_match`: bool | [BiosDataModel](#BiosDataModel-Model) | [BiosCollector](#Collector-Class-BiosCollector) | [BiosAnalyzer](#Data-Analyzer-Class-BiosAnalyzer) |
 | CmdlinePlugin | cat /proc/cmdline | **Analyzer Args:**<br>- `required_cmdline`: Union[str, list]<br>- `banned_cmdline`: Union[str, list] | [CmdlineDataModel](#CmdlineDataModel-Model) | [CmdlineCollector](#Collector-Class-CmdlineCollector) | [CmdlineAnalyzer](#Data-Analyzer-Class-CmdlineAnalyzer) |
 | DeviceEnumerationPlugin | lscpu \| grep Socket \| awk '{ print $2 }'<br>powershell -Command "(Get-WmiObject -Class Win32_Processor \| Measure-Object).Count"<br>lspci -d {vendorid_ep}: \| grep -i 'VGA\\|Display\\|3D' \| wc -l<br>powershell -Command "(wmic path win32_VideoController get name \| findstr AMD \| Measure-Object).Count"<br>lspci -d {vendorid_ep}: \| grep -i 'Virtual Function' \| wc -l<br>powershell -Command "(Get-VMHostPartitionableGpu \| Measure-Object).Count" | **Analyzer Args:**<br>- `cpu_count`: Optional[list[int]]<br>- `gpu_count`: Optional[list[int]]<br>- `vf_count`: Optional[list[int]] | [DeviceEnumerationDataModel](#DeviceEnumerationDataModel-Model) | [DeviceEnumerationCollector](#Collector-Class-DeviceEnumerationCollector) | [DeviceEnumerationAnalyzer](#Data-Analyzer-Class-DeviceEnumerationAnalyzer) |
@@ -14,7 +14,7 @@
 | JournalPlugin | journalctl --no-pager --system --output=short-iso | - | [JournalData](#JournalData-Model) | [JournalCollector](#Collector-Class-JournalCollector) | - |
 | KernelPlugin | sh -c 'uname -a'<br>wmic os get Version /Value | **Analyzer Args:**<br>- `exp_kernel`: Union[str, list]<br>- `regex_match`: bool | [KernelDataModel](#KernelDataModel-Model) | [KernelCollector](#Collector-Class-KernelCollector) | [KernelAnalyzer](#Data-Analyzer-Class-KernelAnalyzer) |
 | KernelModulePlugin | cat /proc/modules<br>wmic os get Version /Value | **Analyzer Args:**<br>- `kernel_modules`: dict[str, dict]<br>- `regex_filter`: list[str] | [KernelModuleDataModel](#KernelModuleDataModel-Model) | [KernelModuleCollector](#Collector-Class-KernelModuleCollector) | [KernelModuleAnalyzer](#Data-Analyzer-Class-KernelModuleAnalyzer) |
-| MemoryPlugin | free -b<br>wmic OS get FreePhysicalMemory /Value; wmic ComputerSystem get TotalPhysicalMemory /Value | - | [MemoryDataModel](#MemoryDataModel-Model) | [MemoryCollector](#Collector-Class-MemoryCollector) | [MemoryAnalyzer](#Data-Analyzer-Class-MemoryAnalyzer) |
+| MemoryPlugin | free -b<br>/usr/bin/lsmem<br>wmic OS get FreePhysicalMemory /Value; wmic ComputerSystem get TotalPhysicalMemory /Value | - | [MemoryDataModel](#MemoryDataModel-Model) | [MemoryCollector](#Collector-Class-MemoryCollector) | [MemoryAnalyzer](#Data-Analyzer-Class-MemoryAnalyzer) |
 | NvmePlugin | nvme smart-log {dev}<br>nvme error-log {dev} --log-entries=256<br>nvme id-ctrl {dev}<br>nvme id-ns {dev}{ns}<br>nvme fw-log {dev}<br>nvme self-test-log {dev}<br>nvme get-log {dev} --log-id=6 --log-len=512<br>nvme telemetry-log {dev} --output-file={dev}_{f_name} | - | [NvmeDataModel](#NvmeDataModel-Model) | [NvmeCollector](#Collector-Class-NvmeCollector) | - |
 | OsPlugin | sh -c '( lsb_release -ds \|\| (cat /etc/*release \| grep PRETTY_NAME) \|\| uname -om ) 2>/dev/null \| head -n1'<br>cat /etc/*release \| grep VERSION_ID<br>wmic os get Version /value<br>wmic os get Caption /Value | **Analyzer Args:**<br>- `exp_os`: Union[str, list]<br>- `exact_match`: bool | [OsDataModel](#OsDataModel-Model) | [OsCollector](#Collector-Class-OsCollector) | [OsAnalyzer](#Data-Analyzer-Class-OsAnalyzer) |
 | PackagePlugin | dnf list --installed<br>dpkg-query -W<br>pacman -Q<br>cat /etc/*release<br>wmic product get name,version | **Analyzer Args:**<br>- `exp_package_ver`: Dict[str, Optional[str]]<br>- `regex_match`: bool | [PackageDataModel](#PackageDataModel-Model) | [PackageCollector](#Collector-Class-PackageCollector) | [PackageAnalyzer](#Data-Analyzer-Class-PackageAnalyzer) |
@@ -42,12 +42,14 @@ Class for collection of inband tool amd-smi data.
 
 - **AMD_SMI_EXE**: `amd-smi`
 - **SUPPORTED_OS_FAMILY**: `{<OSFamily.LINUX: 3>}`
-- **CMD_VERSION**: `amd-smi version --json`
-- **CMD_LIST**: `amd-smi list --json`
-- **CMD_PROCESS**: `amd-smi process --json`
-- **CMD_PARTITION**: `amd-smi partition --json`
-- **CMD_FIRMWARE**: `amd-smi firmware --json`
-- **CMD_STATIC**: `amd-smi static -g all --json`
+- **CMD_VERSION**: `version --json`
+- **CMD_LIST**: `list --json`
+- **CMD_PROCESS**: `process --json`
+- **CMD_PARTITION**: `partition --json`
+- **CMD_FIRMWARE**: `firmware --json`
+- **CMD_STATIC**: `static -g all --json`
+- **CMD_STATIC_GPU**: `static -g {gpu_id} --json`
+- **CMD_RAS**: `ras --cper --folder={folder}`
 
 ### Provides Data
 
@@ -55,12 +57,14 @@ AmdSmiDataModel
 
 ### Commands
 
-- amd-smi firmware --json
-- amd-smi list --json
-- amd-smi partition --json
-- amd-smi process --json
-- amd-smi static -g all --json
-- amd-smi version --json
+- firmware --json
+- list --json
+- partition --json
+- process --json
+- ras --cper --folder={folder}
+- static -g all --json
+- static -g {gpu_id} --json
+- version --json
 
 ## Collector Class BiosCollector
 
@@ -300,6 +304,7 @@ Collect memory usage details
 
 - **CMD_WINDOWS**: `wmic OS get FreePhysicalMemory /Value; wmic ComputerSystem get TotalPhysicalMemory /Value`
 - **CMD**: `free -b`
+- **CMD_LSMEM**: `/usr/bin/lsmem`
 
 ### Provides Data
 
@@ -308,6 +313,7 @@ MemoryDataModel
 ### Commands
 
 - free -b
+- /usr/bin/lsmem
 - wmic OS get FreePhysicalMemory /Value; wmic ComputerSystem get TotalPhysicalMemory /Value
 
 ## Collector Class NvmeCollector
@@ -646,10 +652,15 @@ Data model for amd-smi data.
 - **gpu_list**: `Optional[list[nodescraper.plugins.inband.amdsmi.amdsmidata.AmdSmiListItem]]`
 - **partition**: `Optional[nodescraper.plugins.inband.amdsmi.amdsmidata.Partition]`
 - **process**: `Optional[list[nodescraper.plugins.inband.amdsmi.amdsmidata.Processes]]`
+- **topology**: `Optional[list[nodescraper.plugins.inband.amdsmi.amdsmidata.Topo]]`
 - **firmware**: `Optional[list[nodescraper.plugins.inband.amdsmi.amdsmidata.Fw]]`
 - **bad_pages**: `Optional[list[nodescraper.plugins.inband.amdsmi.amdsmidata.BadPages]]`
 - **static**: `Optional[list[nodescraper.plugins.inband.amdsmi.amdsmidata.AmdSmiStatic]]`
 - **metric**: `Optional[list[nodescraper.plugins.inband.amdsmi.amdsmidata.AmdSmiMetric]]`
+- **xgmi_metric**: `Optional[list[nodescraper.plugins.inband.amdsmi.amdsmidata.XgmiMetrics]]`
+- **xgmi_link**: `Optional[list[nodescraper.plugins.inband.amdsmi.amdsmidata.XgmiLinks]]`
+- **cper_data**: `Optional[list[nodescraper.models.datamodel.FileModel]]`
+- **amdsmitst_data**: `nodescraper.plugins.inband.amdsmi.amdsmidata.AmdSmiTstData`
 
 ## BiosDataModel Model
 
@@ -763,6 +774,7 @@ Data model for journal logs
 
 - **mem_free**: `str`
 - **mem_total**: `str`
+- **lsmem_output**: `Optional[dict]`
 
 ## NvmeDataModel Model
 
@@ -915,7 +927,11 @@ Data model for in band syslog logs
 
 ## Data Analyzer Class AmdSmiAnalyzer
 
-**Bases**: ['DataAnalyzer']
+### Description
+
+Check AMD SMI Application data for PCIe, ECC errors, CPER data, and analyze amdsmitst metrics
+
+**Bases**: ['CperAnalysisTaskMixin', 'DataAnalyzer']
 
 **Link to code**: [amdsmi_analyzer.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/amdsmi/amdsmi_analyzer.py)
 
@@ -1213,6 +1229,9 @@ Check sysctl matches expected sysctl details
 - **devid_ep**: `Optional[str]`
 - **devid_ep_vf**: `Optional[str]`
 - **sku_name**: `Optional[str]`
+- **expected_xgmi_speed**: `Optional[list[float]]`
+- **analysis_range_start**: `Optional[datetime.datetime]`
+- **analysis_range_end**: `Optional[datetime.datetime]`
 
 ## Analyzer Args Class BiosAnalyzerArgs
 
