@@ -1,3 +1,28 @@
+###############################################################################
+#
+# MIT License
+#
+# Copyright (c) 2025 Advanced Micro Devices, Inc.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+#
+###############################################################################
 from types import SimpleNamespace
 
 import pytest
@@ -70,6 +95,7 @@ def test_collect_data_linux_success(linux_collector):
     seq = [
         make_artifact("cat /proc/modules", 0, "m1 0 0 - Live\n"),
         make_artifact("ls /sys/module/m1/parameters", 1, ""),
+        make_artifact("modinfo amdgpu", 0, "filename: /lib/modules/amdgpu.ko\nversion: 1.0"),
     ]
     linux_collector._run_sut_cmd = lambda cmd, seq=seq: seq.pop(0)
 
@@ -82,6 +108,9 @@ def test_collect_data_linux_success(linux_collector):
     assert evt.priority == EventPriority.INFO.value
     assert result.message == "1 kernel modules collected"
     assert data.kernel_modules == {"m1": {"parameters": {}}}
+    assert any(
+        a.filename == "modinfo_amdgpu.txt" for a in result.artifacts if hasattr(a, "filename")
+    )
 
 
 def test_collect_data_linux_error(linux_collector):

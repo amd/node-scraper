@@ -26,6 +26,7 @@
 from typing import Optional
 
 from nodescraper.base import InBandDataCollector
+from nodescraper.connection.inband import TextFileArtifact
 from nodescraper.connection.inband.inband import CommandArtifact
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.models import TaskResult
@@ -39,6 +40,7 @@ class KernelModuleCollector(InBandDataCollector[KernelModuleDataModel, None]):
     DATA_MODEL = KernelModuleDataModel
     CMD_WINDOWS = "wmic os get Version /Value"
     CMD = "cat /proc/modules"
+    CMD_MODINFO_AMDGPU = "modinfo amdgpu"
 
     def parse_proc_modules(self, output: dict) -> dict:
         """Parse command output and return dict of modules
@@ -142,6 +144,24 @@ class KernelModuleCollector(InBandDataCollector[KernelModuleDataModel, None]):
 
         else:
             kernel_modules = self.collect_all_module_info()
+
+            # Collect modinfo amdgpu output as artifact
+            modinfo_res = self._run_sut_cmd(self.CMD_MODINFO_AMDGPU)
+            if modinfo_res.exit_code == 0 and modinfo_res.stdout:
+                self.result.artifacts.append(
+                    TextFileArtifact(filename="modinfo_amdgpu.txt", contents=modinfo_res.stdout)
+                )
+            else:
+                self._log_event(
+                    category=EventCategory.OS,
+                    description="Could not collect modinfo amdgpu output",
+                    data={
+                        "command": modinfo_res.command,
+                        "exit_code": modinfo_res.exit_code,
+                        "stderr": modinfo_res.stderr,
+                    },
+                    priority=EventPriority.WARNING,
+                )
 
         if kernel_modules:
             km_data = KernelModuleDataModel(kernel_modules=kernel_modules)
