@@ -23,9 +23,12 @@
 # SOFTWARE.
 #
 ###############################################################################
+from typing import Optional
+
 from nodescraper.models import DataModel
 
 
 class MemoryDataModel(DataModel):
     mem_free: str
     mem_total: str
+    lsmem_output: Optional[dict] = None

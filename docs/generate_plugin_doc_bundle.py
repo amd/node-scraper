@@ -269,7 +269,7 @@ def extract_regexes_and_args_from_analyzer(
             output.append("**Analyzer Args:**")
             for key, value in anns.items():
                 # Format the type annotation
-                type_str = str(value).replace("typing.", "")
+                type_str = format_type_annotation(value)
                 output.append(f"- `{key}`: {type_str}")
 
     return output
@@ -294,9 +294,23 @@ def bases_list(cls: type) -> List[str]:
         return []
 
 
+def format_type_annotation(type_ann: Any) -> str:
+    """
+    Format a type annotation for documentation, removing non-deterministic content like function memory addresses.
+    """
+    import re
+
+    type_str = str(type_ann)
+    type_str = type_str.replace("typing.", "")
+    type_str = re.sub(r"<function\s+(\w+)\s+at\s+0x[0-9a-fA-F]+>", r"\1", type_str)
+    type_str = re.sub(r"<bound method\s+(\S+)\s+of\s+.+?>", r"\1", type_str)
+    type_str = re.sub(r"<class '([^']+)'>", r"\1", type_str)
+    return type_str
+
+
 def annotations_for_model(model_cls: type) -> List[str]:
     anns = get_attr(model_cls, "__annotations__", {}) or {}
-    return [f"**{k}**: `{v}`" for k, v in anns.items()]
+    return [f"**{k}**: `{format_type_annotation(v)}`" for k, v in anns.items()]
 
 
 def class_vars_dump(cls: type, exclude: set) -> List[str]:
@@ -458,7 +472,7 @@ def render_analyzer_args_section(args_cls: type, link_base: str, rel_root: Optio
 
     anns = get_attr(args_cls, "__annotations__", {}) or {}
     if anns:
-        ann_items = [f"**{k}**: `{v}`" for k, v in anns.items()]
+        ann_items = [f"**{k}**: `{format_type_annotation(v)}`" for k, v in anns.items()]
         s += md_header("Annotations / fields", 3) + md_list(ann_items)
     return s
 
