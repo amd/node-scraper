@@ -25,7 +25,7 @@
 ###############################################################################
 import io
 from collections import defaultdict
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Optional, Union
 
 from nodescraper.enums import EventCategory, EventPriority
 from nodescraper.interfaces import DataAnalyzer
@@ -53,16 +53,16 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
 
     def check_expected_max_power(
         self,
-        amdsmi_static_data: List[AmdSmiStatic],
+        amdsmi_static_data: list[AmdSmiStatic],
         expected_max_power: int,
     ):
         """Check against expected max power
 
         Args:
-            amdsmi_static_data (List[AmdSmiStatic]): AmdSmiStatic data model
+            amdsmi_static_data (list[AmdSmiStatic]): AmdSmiStatic data model
             expected_max_power (int): expected max power
         """
-        incorrect_max_power_gpus: Dict[int, Union[int, str, float]] = {}
+        incorrect_max_power_gpus: dict[int, Union[int, str, float]] = {}
         for gpu in amdsmi_static_data:
             if gpu.limit is None or gpu.limit.max_power is None:
                 self._log_event(
@@ -102,18 +102,18 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
 
     def check_expected_driver_version(
         self,
-        amdsmi_static_data: List[AmdSmiStatic],
+        amdsmi_static_data: list[AmdSmiStatic],
         expected_driver_version: str,
     ) -> None:
         """Check expectecd driver version
 
         Args:
-            amdsmi_static_data (List[AmdSmiStatic]): AmdSmiStatic data model
+            amdsmi_static_data (list[AmdSmiStatic]): AmdSmiStatic data model
             expected_driver_version (str): expected driver version
         """
-        bad_driver_gpus: List[int] = []
+        bad_driver_gpus: list[int] = []
 
-        versions_by_gpu: Dict[int, Optional[str]] = {}
+        versions_by_gpu: dict[int, Optional[str]] = {}
         for gpu in amdsmi_static_data:
             ver: Optional[str] = None
             if gpu.driver is not None:
@@ -136,7 +136,7 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
 
     def check_amdsmi_metric_pcie(
         self,
-        amdsmi_metric_data: List[AmdSmiMetric],
+        amdsmi_metric_data: list[AmdSmiMetric],
         l0_to_recovery_count_error_threshold: int,
         l0_to_recovery_count_warning_threshold: int,
     ):
@@ -146,7 +146,7 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
         Expected width/speeds should come from SKU info.
 
         Args:
-            amdsmi_metric_data (List[AmdSmiMetric]): AmdSmiMetric data model
+            amdsmi_metric_data (list[AmdSmiMetric]): AmdSmiMetric data model
             l0_to_recovery_count_error_threshold (int): Threshold for error events
             l0_to_recovery_count_warning_threshold (int): Threshold for warning events
         """
@@ -242,19 +242,19 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                     console_log=True,
                 )
 
-    def check_amdsmi_metric_ecc_totals(self, amdsmi_metric_data: List[AmdSmiMetric]):
+    def check_amdsmi_metric_ecc_totals(self, amdsmi_metric_data: list[AmdSmiMetric]):
         """Check ECC totals for all GPUs
 
         Raises errors for uncorrectable errors, warnings for correctable and deferred.
 
         Args:
-            amdsmi_metric_data (List[AmdSmiMetric]): AmdSmiMetric data model
+            amdsmi_metric_data (list[AmdSmiMetric]): AmdSmiMetric data model
         """
         for metric in amdsmi_metric_data:
             ecc_totals = metric.ecc
             gpu = metric.gpu
 
-            ecc_checks: List[tuple[EventPriority, Optional[int], str]] = [
+            ecc_checks: list[tuple[EventPriority, Optional[int], str]] = [
                 (
                     EventPriority.WARNING,
                     ecc_totals.total_correctable_count,
@@ -292,13 +292,13 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                         console_log=True,
                     )
 
-    def check_amdsmi_metric_ecc(self, amdsmi_metric_data: List[AmdSmiMetric]):
+    def check_amdsmi_metric_ecc(self, amdsmi_metric_data: list[AmdSmiMetric]):
         """Check ECC counts in all blocks for all GPUs
 
         Raises errors for uncorrectable errors, warnings for correctable and deferred.
 
         Args:
-            amdsmi_metric_data (List[AmdSmiMetric]): AmdSmiMetric data model
+            amdsmi_metric_data (list[AmdSmiMetric]): AmdSmiMetric data model
         """
         for metric in amdsmi_metric_data:
             gpu = metric.gpu
@@ -352,15 +352,15 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                     )
 
     def expected_gpu_processes(
-        self, processes_data: Optional[List[Processes]], max_num_processes: int
+        self, processes_data: Optional[list[Processes]], max_num_processes: int
     ):
         """Check the number of GPU processes running
 
         Args:
-            processes_data (Optional[List[Processes]]): list of processes per GPU
+            processes_data (Optional[list[Processes]]): list of processes per GPU
             max_num_processes (int): max number of expected processes
         """
-        gpu_exceeds_num_processes: Dict[int, int] = {}
+        gpu_exceeds_num_processes: dict[int, int] = {}
         if processes_data is None or len(processes_data) == 0:
             self._log_event(
                 category=EventCategory.PLATFORM,
@@ -392,13 +392,13 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                 console_log=True,
             )
 
-    def static_consistancy_check(self, amdsmi_static_data: List[AmdSmiStatic]):
+    def static_consistancy_check(self, amdsmi_static_data: list[AmdSmiStatic]):
         """Check consistency of expected data
 
         Args:
-            amdsmi_static_data (List[AmdSmiStatic]): AmdSmiStatic data model
+            amdsmi_static_data (list[AmdSmiStatic]): AmdSmiStatic data model
         """
-        consistancy_data: Dict[str, Union[set[str], set[int]]] = {
+        consistancy_data: dict[str, Union[set[str], set[int]]] = {
             "market_name": {gpu.asic.market_name for gpu in amdsmi_static_data},
             "vendor_id": {gpu.asic.vendor_id for gpu in amdsmi_static_data},
             "vendor_name": {gpu.asic.vendor_name for gpu in amdsmi_static_data},
@@ -425,7 +425,7 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
 
     def check_static_data(
         self,
-        amdsmi_static_data: List[AmdSmiStatic],
+        amdsmi_static_data: list[AmdSmiStatic],
         vendor_id: Optional[str],
         subvendor_id: Optional[str],
         device_id: tuple[Optional[str], Optional[str]],
@@ -435,7 +435,7 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
         """Check expected static data
 
         Args:
-            amdsmi_static_data (List[AmdSmiStatic]): AmdSmiStatic data
+            amdsmi_static_data (list[AmdSmiStatic]): AmdSmiStatic data
             vendor_id (Optional[str]): expected vendor_id
             subvendor_id (Optional[str]): expected subvendor_id
             device_id (tuple[Optional[str], Optional[str]]): expected device_id
@@ -443,9 +443,9 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
             sku_name (Optional[str]): expected sku_name
         """
 
-        mismatches: List[tuple[int, str, str, str]] = []
+        mismatches: list[tuple[int, str, str, str]] = []
 
-        expected_data: Dict[str, Optional[str]] = {
+        expected_data: dict[str, Optional[str]] = {
             "vendor_id": vendor_id,
             "subvendor_id": subvendor_id,
             "vendor_name": "Advanced Micro Devices Inc",
@@ -453,7 +453,7 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
         }
 
         for gpu_data in amdsmi_static_data:
-            collected_data: Dict[str, str] = {
+            collected_data: dict[str, str] = {
                 "vendor_id": gpu_data.asic.vendor_id,
                 "subvendor_id": gpu_data.asic.subvendor_id,
                 "vendor_name": gpu_data.asic.vendor_name,
@@ -504,24 +504,24 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
 
     def _format_static_mismatch_payload(
         self,
-        mismatches: List[tuple[int, str, str, str]],
-    ) -> Dict[str, Any]:
+        mismatches: list[tuple[int, str, str, str]],
+    ) -> dict[str, Any]:
         """Helper function for pretty printing mismatch in expected data
 
         Args:
-            mismatches (List[tuple[int, str, str, str]]): mismatched data per GPU
+            mismatches (list[tuple[int, str, str, str]]): mismatched data per GPU
 
         Returns:
-            Dict[str, Any]: dict of mismatched data per GPU
+            dict[str, Any]: dict of mismatched data per GPU
         """
-        per_gpu: Dict[int, List[Dict[str, str]]] = defaultdict(list)
+        per_gpu: dict[int, list[dict[str, str]]] = defaultdict(list)
         field_set: set[str] = set()
 
         for gpu, field, expected, actual in mismatches:
             field_set.add(field)
             per_gpu[gpu].append({"field": field, "expected": expected, "actual": actual})
 
-        per_gpu_list: List[Dict[str, Any]] = [
+        per_gpu_list: list[dict[str, Any]] = [
             {"gpu": gpu, "mismatches": entries}
             for gpu, entries in sorted(per_gpu.items(), key=lambda kv: kv[0])
         ]
@@ -537,13 +537,13 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
 
     def check_pldm_version(
         self,
-        amdsmi_fw_data: Optional[List[Fw]],
+        amdsmi_fw_data: Optional[list[Fw]],
         expected_pldm_version: Optional[str],
     ):
         """Check expected pldm version
 
         Args:
-            amdsmi_fw_data (Optional[List[Fw]]): data model
+            amdsmi_fw_data (Optional[list[Fw]]): data model
             expected_pldm_version (Optional[str]): expected pldm version
         """
         PLDM_STRING = "PLDM_BUNDLE"
@@ -555,8 +555,8 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                 data={"amdsmi_fw_data": amdsmi_fw_data},
             )
             return
-        mismatched_gpus: List[int] = []
-        pldm_missing_gpus: List[int] = []
+        mismatched_gpus: list[int] = []
+        pldm_missing_gpus: list[int] = []
         for fw_data in amdsmi_fw_data:
             gpu = fw_data.gpu
             if isinstance(fw_data.fw_list, str):
@@ -641,14 +641,14 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
 
     def check_expected_xgmi_link_speed(
         self,
-        xgmi_metric: Optional[List[XgmiMetrics]],
-        expected_xgmi_speed: Optional[List[float]] = None,
+        xgmi_metric: Optional[list[XgmiMetrics]],
+        expected_xgmi_speed: Optional[list[float]] = None,
     ):
         """Check the XGMI link speed for all GPUs
 
         Args:
-            xgmi_metric (Optional[List[XgmiMetrics]]): XGMI metrics data
-            expected_xgmi_speed (Optional[List[float]]): List of expected XGMI speeds (GT/s)
+            xgmi_metric (Optional[list[XgmiMetrics]]): XGMI metrics data
+            expected_xgmi_speed (Optional[list[float]]): List of expected XGMI speeds (GT/s)
         """
         if xgmi_metric is None or len(xgmi_metric) == 0:
             self._log_event(

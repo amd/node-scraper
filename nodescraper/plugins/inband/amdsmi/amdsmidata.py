@@ -25,7 +25,7 @@
 ###############################################################################
 import re
 from enum import Enum
-from typing import Any, Dict, List, Mapping, Optional, Union
+from typing import Any, Mapping, Optional, Union
 
 from pydantic import (
     AliasChoices,
@@ -49,15 +49,15 @@ def na_to_none(values: Union[int, str]):
     return values
 
 
-def na_to_none_list(values: List[Union[int, str, None]]) -> List[Union[int, str, None]]:
-    ret_list: List[Union[int, str, None]] = values.copy()
+def na_to_none_list(values: list[Union[int, str, None]]) -> list[Union[int, str, None]]:
+    ret_list: list[Union[int, str, None]] = values.copy()
     for i in range(len(ret_list)):
         if ret_list[i] == "N/A":
             ret_list[i] = None
     return ret_list
 
 
-def na_to_none_dict(values: object) -> Optional[Dict[str, Any]]:
+def na_to_none_dict(values: object) -> Optional[dict[str, Any]]:
     """Normalize mapping-like fields where 'N/A' or empty should become None.
     Accepts None; returns None for 'N/A'/'NA'/'' or non-mapping inputs."""
     if values is None:
@@ -67,7 +67,7 @@ def na_to_none_dict(values: object) -> Optional[Dict[str, Any]]:
     if not isinstance(values, Mapping):
         return None
 
-    out: Dict[str, Any] = {}
+    out: dict[str, Any] = {}
     for k, v in values.items():
         if isinstance(v, str) and v.strip().upper() in {"N/A", "NA", ""}:
             out[k] = None
@@ -207,7 +207,7 @@ class ProcessListItem(BaseModel):
 
 class Processes(BaseModel):
     gpu: int
-    process_list: List[ProcessListItem]
+    process_list: list[ProcessListItem]
 
 
 # FW
@@ -218,7 +218,7 @@ class FwListItem(BaseModel):
 
 class Fw(BaseModel):
     gpu: int
-    fw_list: Union[List[FwListItem], str]
+    fw_list: Union[list[FwListItem], str]
 
 
 class AmdSmiListItem(BaseModel):
@@ -279,8 +279,8 @@ class PartitionCompute(BaseModel):
 class Partition(BaseModel):
     """Contains the partition info for amd-smi"""
 
-    memory_partition: List[PartitionMemory] = Field(default_factory=list)
-    compute_partition: List[PartitionCompute] = Field(default_factory=list)
+    memory_partition: list[PartitionMemory] = Field(default_factory=list)
+    compute_partition: list[PartitionCompute] = Field(default_factory=list)
 
 
 ### STATIC DATA ###
@@ -362,7 +362,7 @@ class StaticRas(BaseModel):
     single_bit_schema: EccState
     double_bit_schema: EccState
     poison_schema: EccState
-    ecc_block_state: Union[Dict[str, EccState], str]
+    ecc_block_state: Union[dict[str, EccState], str]
 
 
 class StaticPartition(BaseModel):
@@ -383,13 +383,13 @@ class StaticPolicy(BaseModel):
 class StaticSocPstate(BaseModel):
     num_supported: int
     current_id: int
-    policies: List[StaticPolicy]
+    policies: list[StaticPolicy]
 
 
 class StaticXgmiPlpd(BaseModel):
     num_supported: int
     current_id: int
-    plpds: List[StaticPolicy]
+    plpds: list[StaticPolicy]
 
 
 class StaticNuma(BaseModel):
@@ -410,7 +410,7 @@ class StaticVram(AmdSmiBaseModel):
 
 class StaticCacheInfoItem(AmdSmiBaseModel):
     cache: ValueUnit
-    cache_properties: List[str]
+    cache_properties: list[str]
     cache_size: Optional[ValueUnit]
     cache_level: ValueUnit
     max_num_cu_shared: ValueUnit
@@ -454,9 +454,9 @@ class AmdSmiStatic(BaseModel):
     process_isolation: str
     numa: StaticNuma
     vram: StaticVram
-    cache_info: List[StaticCacheInfoItem]
+    cache_info: list[StaticCacheInfoItem]
     partition: Optional[StaticPartition] = None  # This has been removed in Amd-smi 26.0.0+d30a0afe+
-    clock: Optional[Dict[str, Union[StaticClockData, None]]] = None
+    clock: Optional[dict[str, Union[StaticClockData, None]]] = None
     na_validator_dict = field_validator("clock", mode="before")(na_to_none_dict)
     na_validator = field_validator("soc_pstate", "xgmi_plpd", "vbios", "limit", mode="before")(
         na_to_none
@@ -473,7 +473,7 @@ class PageData(BaseModel):
 
 class BadPages(BaseModel):
     gpu: int
-    retired: List[PageData]
+    retired: list[PageData]
 
 
 # Metric Data
@@ -481,11 +481,11 @@ class MetricUsage(BaseModel):
     gfx_activity: Optional[ValueUnit]
     umc_activity: Optional[ValueUnit]
     mm_activity: Optional[ValueUnit]
-    vcn_activity: List[Optional[Union[ValueUnit, str]]]
-    jpeg_activity: List[Optional[Union[ValueUnit, str]]]
-    gfx_busy_inst: Optional[Dict[str, List[Optional[Union[ValueUnit, str]]]]]
-    jpeg_busy: Optional[Dict[str, List[Optional[Union[ValueUnit, str]]]]]
-    vcn_busy: Optional[Dict[str, List[Optional[Union[ValueUnit, str]]]]]
+    vcn_activity: list[Optional[Union[ValueUnit, str]]]
+    jpeg_activity: list[Optional[Union[ValueUnit, str]]]
+    gfx_busy_inst: Optional[dict[str, list[Optional[Union[ValueUnit, str]]]]]
+    jpeg_busy: Optional[dict[str, list[Optional[Union[ValueUnit, str]]]]]
+    vcn_busy: Optional[dict[str, list[Optional[Union[ValueUnit, str]]]]]
     na_validator_list = field_validator("vcn_activity", "jpeg_activity", mode="before")(
         na_to_none_list
     )
@@ -648,9 +648,9 @@ class MetricMemUsage(BaseModel):
 
 
 class MetricThrottleVu(BaseModel):
-    xcp_0: Optional[List[Optional[Union[ValueUnit, str]]]] = None
+    xcp_0: Optional[list[Optional[Union[ValueUnit, str]]]] = None
     # Deprecated below
-    value: Optional[Dict[str, List[Union[int, str]]]] = Field(deprecated=True, default=None)
+    value: Optional[dict[str, list[Union[int, str]]]] = Field(deprecated=True, default=None)
     unit: str = Field(deprecated=True, default="")
 
 
@@ -766,15 +766,15 @@ class AmdSmiMetric(BaseModel):
     gpu: int
     usage: MetricUsage
     power: MetricPower
-    clock: Dict[str, MetricClockData]
+    clock: dict[str, MetricClockData]
     temperature: MetricTemperature
     pcie: MetricPcie
     ecc: MetricEccTotals
-    ecc_blocks: Union[Dict[str, EccData], str]
+    ecc_blocks: Union[dict[str, EccData], str]
     fan: MetricFan
     voltage_curve: Optional[MetricVoltageCurve]
-    perf_level: Optional[Union[str, Dict]]
-    xgmi_err: Optional[Union[str, Dict]]
+    perf_level: Optional[Union[str, dict]]
+    xgmi_err: Optional[Union[str, dict]]
     energy: Optional[MetricEnergy]
     mem_usage: MetricMemUsage
     throttle: MetricThrottle
@@ -783,7 +783,7 @@ class AmdSmiMetric(BaseModel):
 
     @field_validator("ecc_blocks", mode="before")
     @classmethod
-    def validate_ecc_blocks(cls, value: Union[Dict[str, EccData], str]) -> Dict[str, EccData]:
+    def validate_ecc_blocks(cls, value: Union[dict[str, EccData], str]) -> dict[str, EccData]:
         """Validate the ecc_blocks field."""
         if isinstance(value, str):
             # If it's a string, we assume it's "N/A" and return an empty dict
@@ -849,7 +849,7 @@ class XgmiLinkMetrics(BaseModel):
     bit_rate: Optional[ValueUnit]
     max_bandwidth: Optional[ValueUnit]
     link_type: str
-    links: List[XgmiLink]
+    links: list[XgmiLink]
     na_validator = field_validator("max_bandwidth", "bit_rate", mode="before")(na_to_none)
 
 
@@ -862,7 +862,7 @@ class XgmiMetrics(BaseModel):
 class XgmiLinks(BaseModel):
     gpu: int
     bdf: str
-    link_status: List[LinkStatusTable]
+    link_status: list[LinkStatusTable]
 
 
 class CoherentTable(Enum):
@@ -912,15 +912,15 @@ class TopoLink(BaseModel):
 class Topo(BaseModel):
     gpu: int
     bdf: str
-    links: List[TopoLink]
+    links: list[TopoLink]
 
 
 class AmdSmiTstData(BaseModel):
     "Summary of amdsmitst results, with list and count of passing/skipped/failed tests"
 
-    passed_tests: List[str] = Field(default_factory=list)
-    skipped_tests: List[str] = Field(default_factory=list)
-    failed_tests: List[str] = Field(default_factory=list)
+    passed_tests: list[str] = Field(default_factory=list)
+    skipped_tests: list[str] = Field(default_factory=list)
+    failed_tests: list[str] = Field(default_factory=list)
     passed_test_count: int = 0
     skipped_test_count: int = 0
     failed_test_count: int = 0
@@ -943,17 +943,17 @@ class AmdSmiDataModel(DataModel):
     )
 
     version: Optional[AmdSmiVersion] = None
-    gpu_list: Optional[List[AmdSmiListItem]] = Field(default_factory=list)
+    gpu_list: Optional[list[AmdSmiListItem]] = Field(default_factory=list)
     partition: Optional[Partition] = None
-    process: Optional[List[Processes]] = Field(default_factory=list)
-    topology: Optional[List[Topo]] = Field(default_factory=list)
-    firmware: Optional[List[Fw]] = Field(default_factory=list)
-    bad_pages: Optional[List[BadPages]] = Field(default_factory=list)
-    static: Optional[List[AmdSmiStatic]] = Field(default_factory=list)
-    metric: Optional[List[AmdSmiMetric]] = Field(default_factory=list)
-    xgmi_metric: Optional[List[XgmiMetrics]] = Field(default_factory=list)
-    xgmi_link: Optional[List[XgmiLinks]] = Field(default_factory=list)
-    cper_data: Optional[List[FileModel]] = Field(default_factory=list)
+    process: Optional[list[Processes]] = Field(default_factory=list)
+    topology: Optional[list[Topo]] = Field(default_factory=list)
+    firmware: Optional[list[Fw]] = Field(default_factory=list)
+    bad_pages: Optional[list[BadPages]] = Field(default_factory=list)
+    static: Optional[list[AmdSmiStatic]] = Field(default_factory=list)
+    metric: Optional[list[AmdSmiMetric]] = Field(default_factory=list)
+    xgmi_metric: Optional[list[XgmiMetrics]] = Field(default_factory=list)
+    xgmi_link: Optional[list[XgmiLinks]] = Field(default_factory=list)
+    cper_data: Optional[list[FileModel]] = Field(default_factory=list)
     amdsmitst_data: AmdSmiTstData = Field(default_factory=AmdSmiTstData)
 
     def get_list(self, gpu: int) -> Optional[AmdSmiListItem]:
