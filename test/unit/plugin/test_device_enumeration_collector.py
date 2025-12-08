@@ -60,7 +60,7 @@ def test_collect_linux(system_info, device_enumeration_collector):
                 exit_code=0,
                 stdout=lscpu_output,
                 stderr="",
-                command="/usr/bin/lscpu",
+                command="lscpu",
             ),
             MagicMock(
                 exit_code=0,
@@ -136,7 +136,7 @@ def test_collect_error(system_info, device_enumeration_collector):
                 exit_code=1,
                 stdout="",
                 stderr="command failed",
-                command="/usr/bin/lscpu",
+                command="lscpu",
             ),
             MagicMock(
                 exit_code=1,
