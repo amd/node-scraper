@@ -26,7 +26,7 @@
 from typing import Optional
 
 from nodescraper.base import InBandDataCollector
-from nodescraper.connection.inband.inband import CommandArtifact
+from nodescraper.connection.inband.inband import CommandArtifact, TextFileArtifact
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.models import TaskResult
 
@@ -38,9 +38,10 @@ class DeviceEnumerationCollector(InBandDataCollector[DeviceEnumerationDataModel,
 
     DATA_MODEL = DeviceEnumerationDataModel
 
-    CMD_CPU_COUNT_LINUX = "lscpu | grep Socket | awk '{ print $2 }'"
     CMD_GPU_COUNT_LINUX = "lspci -d {vendorid_ep}: | grep -i 'VGA\\|Display\\|3D' | wc -l"
     CMD_VF_COUNT_LINUX = "lspci -d {vendorid_ep}: | grep -i 'Virtual Function' | wc -l"
+    CMD_LSCPU_LINUX = "lscpu"
+    CMD_LSHW_LINUX = "lshw"
 
     CMD_CPU_COUNT_WINDOWS = (
         'powershell -Command "(Get-WmiObject -Class Win32_Processor | Measure-Object).Count"'
@@ -61,9 +62,8 @@ class DeviceEnumerationCollector(InBandDataCollector[DeviceEnumerationDataModel,
             description=description,
             data={
                 "command": command.command,
-                "stdout": command.stdout,
-                "stderr": command.stderr,
                 "exit_code": command.exit_code,
+                "stderr": command.stderr,
             },
             priority=EventPriority.WARNING,
         )
@@ -75,8 +75,7 @@ class DeviceEnumerationCollector(InBandDataCollector[DeviceEnumerationDataModel,
         On Windows, use WMI and hyper-v cmdlets
         """
         if self.system_info.os_family == OSFamily.LINUX:
-            # Count CPU sockets
-            cpu_count_res = self._run_sut_cmd(self.CMD_CPU_COUNT_LINUX)
+            lscpu_res = self._run_sut_cmd(self.CMD_LSCPU_LINUX, log_artifact=False)
 
             # Count all AMD GPUs
             vendor_id = format(self.system_info.vendorid_ep, "x")
@@ -86,6 +85,9 @@ class DeviceEnumerationCollector(InBandDataCollector[DeviceEnumerationDataModel,
 
             # Count AMD Virtual Functions
             vf_count_res = self._run_sut_cmd(self.CMD_VF_COUNT_LINUX.format(vendorid_ep=vendor_id))
+
+            # Collect lshw output
+            lshw_res = self._run_sut_cmd(self.CMD_LSHW_LINUX, sudo=True, log_artifact=False)
         else:
             cpu_count_res = self._run_sut_cmd(self.CMD_CPU_COUNT_WINDOWS)
             gpu_count_res = self._run_sut_cmd(self.CMD_GPU_COUNT_WINDOWS)
@@ -93,10 +95,32 @@ class DeviceEnumerationCollector(InBandDataCollector[DeviceEnumerationDataModel,
 
         device_enum = DeviceEnumerationDataModel()
 
-        if cpu_count_res.exit_code == 0:
-            device_enum.cpu_count = int(cpu_count_res.stdout)
+        if self.system_info.os_family == OSFamily.LINUX:
+            if lscpu_res.exit_code == 0 and lscpu_res.stdout:
+                # Extract socket count from lscpu output
+                for line in lscpu_res.stdout.splitlines():
+                    if line.startswith("Socket(s):"):
+                        try:
+                            device_enum.cpu_count = int(line.split(":")[1].strip())
+                            break
+                        except (ValueError, IndexError):
+                            self._warning(
+                                description="Cannot parse CPU count from lscpu output",
+                                command=lscpu_res,
+                            )
+                device_enum.lscpu_output = lscpu_res.stdout
+                self._log_event(
+                    category=EventCategory.PLATFORM,
+                    description="Collected lscpu output",
+                    priority=EventPriority.INFO,
+                )
+            else:
+                self._warning(description="Cannot collect lscpu output", command=lscpu_res)
         else:
-            self._warning(description="Cannot determine CPU count", command=cpu_count_res)
+            if cpu_count_res.exit_code == 0:
+                device_enum.cpu_count = int(cpu_count_res.stdout)
+            else:
+                self._warning(description="Cannot determine CPU count", command=cpu_count_res)
 
         if gpu_count_res.exit_code == 0:
             device_enum.gpu_count = int(gpu_count_res.stdout)
@@ -112,14 +136,33 @@ class DeviceEnumerationCollector(InBandDataCollector[DeviceEnumerationDataModel,
                 category=EventCategory.SW_DRIVER,
             )
 
+        # Collect lshw output on Linux
+        if self.system_info.os_family == OSFamily.LINUX:
+            if lshw_res.exit_code == 0 and lshw_res.stdout:
+                device_enum.lshw_output = lshw_res.stdout
+                self.result.artifacts.append(
+                    TextFileArtifact(filename="lshw.txt", contents=lshw_res.stdout)
+                )
+                self._log_event(
+                    category=EventCategory.PLATFORM,
+                    description="Collected lshw output",
+                    priority=EventPriority.INFO,
+                )
+            else:
+                self._warning(description="Cannot collect lshw output", command=lshw_res)
+
         if device_enum.cpu_count or device_enum.gpu_count or device_enum.vf_count:
+            log_data = device_enum.model_dump(
+                exclude_none=True,
+                exclude={"lscpu_output", "lshw_output", "task_name", "task_type", "parent"},
+            )
             self._log_event(
                 category=EventCategory.PLATFORM,
                 description=f"Counted {device_enum.cpu_count} CPUs, {device_enum.gpu_count} GPUs, {device_enum.vf_count} VFs",
-                data=device_enum.model_dump(exclude_none=True),
+                data=log_data,
                 priority=EventPriority.INFO,
             )
-            self.result.message = f"Device Enumeration: {device_enum.model_dump(exclude_none=True)}"
+            self.result.message = f"Device Enumeration: {log_data}"
             self.result.status = ExecutionStatus.OK
             return self.result, device_enum
         else:
