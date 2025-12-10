@@ -23,7 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
-from typing import Optional
+from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -50,8 +50,8 @@ class NetworkInterface(BaseModel):
     mtu: Optional[int] = None  # Maximum Transmission Unit
     qdisc: Optional[str] = None  # Queuing discipline
     mac_address: Optional[str] = None  # MAC/hardware address
-    flags: list[str] = Field(default_factory=list)  # ["UP", "BROADCAST", "MULTICAST"]
-    addresses: list[IpAddress] = Field(default_factory=list)  # IP addresses on this interface
+    flags: List[str] = Field(default_factory=list)  # ["UP", "BROADCAST", "MULTICAST"]
+    addresses: List[IpAddress] = Field(default_factory=list)  # IP addresses on this interface
 
 
 class Route(BaseModel):
@@ -87,13 +87,13 @@ class Neighbor(BaseModel):
     device: Optional[str] = None  # Network interface
     mac_address: Optional[str] = None  # Link layer (MAC) address
     state: Optional[str] = None  # "REACHABLE", "STALE", "DELAY", "PROBE", "FAILED", "INCOMPLETE"
-    flags: list[str] = Field(default_factory=list)  # Additional flags like "router", "proxy"
+    flags: List[str] = Field(default_factory=list)  # Additional flags like "router", "proxy"
 
 
 class NetworkDataModel(DataModel):
     """Complete network configuration data"""
 
-    interfaces: list[NetworkInterface] = Field(default_factory=list)
-    routes: list[Route] = Field(default_factory=list)
-    rules: list[RoutingRule] = Field(default_factory=list)
-    neighbors: list[Neighbor] = Field(default_factory=list)
+    interfaces: List[NetworkInterface] = Field(default_factory=list)
+    routes: List[Route] = Field(default_factory=list)
+    rules: List[RoutingRule] = Field(default_factory=list)
+    neighbors: List[Neighbor] = Field(default_factory=list)

@@ -24,7 +24,7 @@
 #
 ###############################################################################
 import re
-from typing import Optional
+from typing import List, Optional, Tuple
 
 from nodescraper.base import InBandDataCollector
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
@@ -49,7 +49,7 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
     CMD_RULE = "ip rule show"
     CMD_NEIGHBOR = "ip neighbor show"
 
-    def _parse_ip_addr(self, output: str) -> list[NetworkInterface]:
+    def _parse_ip_addr(self, output: str) -> List[NetworkInterface]:
         """Parse 'ip addr show' output into NetworkInterface objects.
 
         Args:
@@ -78,7 +78,7 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
                 current_interface = ifname
 
                 # Extract flags
-                flags: list[str] = []
+                flags: List[str] = []
                 if "<" in line:
                     flag_match = re.search(r"<([^>]+)>", line)
                     if flag_match:
@@ -89,16 +89,20 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
                 qdisc = None
                 state = None
 
+                # Known keyword-value pairs
+                keyword_value_pairs = ["mtu", "qdisc", "state"]
+
                 for i, part in enumerate(parts):
-                    if part == "mtu" and i + 1 < len(parts):
-                        try:
-                            mtu = int(parts[i + 1])
-                        except ValueError:
-                            pass
-                    elif part == "qdisc" and i + 1 < len(parts):
-                        qdisc = parts[i + 1]
-                    elif part == "state" and i + 1 < len(parts):
-                        state = parts[i + 1]
+                    if part in keyword_value_pairs and i + 1 < len(parts):
+                        if part == "mtu":
+                            try:
+                                mtu = int(parts[i + 1])
+                            except ValueError:
+                                pass
+                        elif part == "qdisc":
+                            qdisc = parts[i + 1]
+                        elif part == "state":
+                            state = parts[i + 1]
 
                 interfaces[ifname] = NetworkInterface(
                     name=ifname,
@@ -165,7 +169,7 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
 
         return list(interfaces.values())
 
-    def _parse_ip_route(self, output: str) -> list[Route]:
+    def _parse_ip_route(self, output: str) -> List[Route]:
         """Parse 'ip route show' output into Route objects.
 
         Args:
@@ -190,32 +194,33 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
 
             route = Route(destination=destination)
 
+            # Known keyword-value pairs
+            keyword_value_pairs = ["via", "dev", "proto", "scope", "metric", "src", "table"]
+
             # Parse route attributes
             i = 1
             while i < len(parts):
-                if parts[i] == "via" and i + 1 < len(parts):
-                    route.gateway = parts[i + 1]
-                    i += 2
-                elif parts[i] == "dev" and i + 1 < len(parts):
-                    route.device = parts[i + 1]
-                    i += 2
-                elif parts[i] == "proto" and i + 1 < len(parts):
-                    route.protocol = parts[i + 1]
-                    i += 2
-                elif parts[i] == "scope" and i + 1 < len(parts):
-                    route.scope = parts[i + 1]
-                    i += 2
-                elif parts[i] == "metric" and i + 1 < len(parts):
-                    try:
-                        route.metric = int(parts[i + 1])
-                    except ValueError:
-                        pass
-                    i += 2
-                elif parts[i] == "src" and i + 1 < len(parts):
-                    route.source = parts[i + 1]
-                    i += 2
-                elif parts[i] == "table" and i + 1 < len(parts):
-                    route.table = parts[i + 1]
+                if parts[i] in keyword_value_pairs and i + 1 < len(parts):
+                    keyword = parts[i]
+                    value = parts[i + 1]
+
+                    if keyword == "via":
+                        route.gateway = value
+                    elif keyword == "dev":
+                        route.device = value
+                    elif keyword == "proto":
+                        route.protocol = value
+                    elif keyword == "scope":
+                        route.scope = value
+                    elif keyword == "metric":
+                        try:
+                            route.metric = int(value)
+                        except ValueError:
+                            pass
+                    elif keyword == "src":
+                        route.source = value
+                    elif keyword == "table":
+                        route.table = value
                     i += 2
                 else:
                     i += 1
@@ -224,7 +229,7 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
 
         return routes
 
-    def _parse_ip_rule(self, output: str) -> list[RoutingRule]:
+    def _parse_ip_rule(self, output: str) -> List[RoutingRule]:
         """Parse 'ip rule show' output into RoutingRule objects.
            Example ip rule: 200: from 172.16.0.0/12 to 8.8.8.8 iif wlan0 oif eth0 fwmark 0x20 table vpn_table
 
@@ -289,7 +294,7 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
 
         return rules
 
-    def _parse_ip_neighbor(self, output: str) -> list[Neighbor]:
+    def _parse_ip_neighbor(self, output: str) -> List[Neighbor]:
         """Parse 'ip neighbor show' output into Neighbor objects.
 
         Args:
@@ -368,11 +373,11 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
     def collect_data(
         self,
         args=None,
-    ) -> tuple[TaskResult, Optional[NetworkDataModel]]:
+    ) -> Tuple[TaskResult, Optional[NetworkDataModel]]:
         """Collect network configuration from the system.
 
         Returns:
-            tuple[TaskResult, Optional[NetworkDataModel]]: tuple containing the task result
+            Tuple[TaskResult, Optional[NetworkDataModel]]: tuple containing the task result
             and an instance of NetworkDataModel or None if collection failed.
         """
         interfaces = []

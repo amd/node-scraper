@@ -54,6 +54,7 @@ def test_plugin_registry_has_plugins(all_plugins):
         "KernelPlugin",
         "KernelModulePlugin",
         "MemoryPlugin",
+        "NetworkPlugin",
         "NvmePlugin",
         "OsPlugin",
         "PackagePlugin",
