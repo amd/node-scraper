@@ -17,8 +17,8 @@
 | MemoryPlugin | free -b<br>/usr/bin/lsmem<br>wmic OS get FreePhysicalMemory /Value; wmic ComputerSystem get TotalPhysicalMemory /Value | - | [MemoryDataModel](#MemoryDataModel-Model) | [MemoryCollector](#Collector-Class-MemoryCollector) | [MemoryAnalyzer](#Data-Analyzer-Class-MemoryAnalyzer) |
 | NvmePlugin | nvme smart-log {dev}<br>nvme error-log {dev} --log-entries=256<br>nvme id-ctrl {dev}<br>nvme id-ns {dev}{ns}<br>nvme fw-log {dev}<br>nvme self-test-log {dev}<br>nvme get-log {dev} --log-id=6 --log-len=512<br>nvme telemetry-log {dev} --output-file={dev}_{f_name} | - | [NvmeDataModel](#NvmeDataModel-Model) | [NvmeCollector](#Collector-Class-NvmeCollector) | - |
 | OsPlugin | sh -c '( lsb_release -ds \|\| (cat /etc/*release \| grep PRETTY_NAME) \|\| uname -om ) 2>/dev/null \| head -n1'<br>cat /etc/*release \| grep VERSION_ID<br>wmic os get Version /value<br>wmic os get Caption /Value | **Analyzer Args:**<br>- `exp_os`: Union[str, list]<br>- `exact_match`: bool | [OsDataModel](#OsDataModel-Model) | [OsCollector](#Collector-Class-OsCollector) | [OsAnalyzer](#Data-Analyzer-Class-OsAnalyzer) |
-| PackagePlugin | dnf list --installed<br>dpkg-query -W<br>pacman -Q<br>cat /etc/*release<br>wmic product get name,version | **Analyzer Args:**<br>- `exp_package_ver`: Dict[str, Optional[str]]<br>- `regex_match`: bool | [PackageDataModel](#PackageDataModel-Model) | [PackageCollector](#Collector-Class-PackageCollector) | [PackageAnalyzer](#Data-Analyzer-Class-PackageAnalyzer) |
-| PciePlugin | lspci -d {vendor_id}: -nn<br>lspci -x<br>lspci -xxxx<br>lspci -PP<br>lspci -PP -d {vendor_id}:{dev_id}<br>lspci -vt<br>lspci -vvv | **Analyzer Args:**<br>- `exp_speed`: int<br>- `exp_width`: int<br>- `exp_sriov_count`: int<br>- `exp_gpu_count_override`: Optional[int]<br>- `exp_max_payload_size`: Union[Dict[int, int], int, NoneType]<br>- `exp_max_rd_req_size`: Union[Dict[int, int], int, NoneType]<br>- `exp_ten_bit_tag_req_en`: Union[Dict[int, int], int, NoneType] | [PcieDataModel](#PcieDataModel-Model) | [PcieCollector](#Collector-Class-PcieCollector) | [PcieAnalyzer](#Data-Analyzer-Class-PcieAnalyzer) |
+| PackagePlugin | dnf list --installed<br>dpkg-query -W<br>pacman -Q<br>cat /etc/*release<br>wmic product get name,version | **Analyzer Args:**<br>- `exp_package_ver`: Dict[str, Optional[str]]<br>- `regex_match`: bool<br>- `rocm_regex`: Optional[str]<br>- `enable_rocm_regex`: bool | [PackageDataModel](#PackageDataModel-Model) | [PackageCollector](#Collector-Class-PackageCollector) | [PackageAnalyzer](#Data-Analyzer-Class-PackageAnalyzer) |
+| PciePlugin | lspci -d {vendor_id}: -nn<br>lspci -x<br>lspci -xxxx<br>lspci -PP<br>lspci -PP -d {vendor_id}:{dev_id}<br>lspci -vvv<br>lspci -vvvt | **Analyzer Args:**<br>- `exp_speed`: int<br>- `exp_width`: int<br>- `exp_sriov_count`: int<br>- `exp_gpu_count_override`: Optional[int]<br>- `exp_max_payload_size`: Union[Dict[int, int], int, NoneType]<br>- `exp_max_rd_req_size`: Union[Dict[int, int], int, NoneType]<br>- `exp_ten_bit_tag_req_en`: Union[Dict[int, int], int, NoneType] | [PcieDataModel](#PcieDataModel-Model) | [PcieCollector](#Collector-Class-PcieCollector) | [PcieAnalyzer](#Data-Analyzer-Class-PcieAnalyzer) |
 | ProcessPlugin | top -b -n 1<br>rocm-smi --showpids<br>top -b -n 1 -o %CPU  | **Analyzer Args:**<br>- `max_kfd_processes`: int<br>- `max_cpu_usage`: float | [ProcessDataModel](#ProcessDataModel-Model) | [ProcessCollector](#Collector-Class-ProcessCollector) | [ProcessAnalyzer](#Data-Analyzer-Class-ProcessAnalyzer) |
 | RocmPlugin | {rocm_path}/opencl/bin/*/clinfo<br>env \| grep -Ei 'rocm\|hsa\|hip\|mpi\|openmp\|ucx\|miopen'<br>ls /sys/class/kfd/kfd/proc/<br>grep -i -E 'rocm' /etc/ld.so.conf.d/*<br>{rocm_path}/bin/rocminfo<br>ls -v -d /opt/rocm*<br>ls -v -d /opt/rocm-[3-7]* \| tail -1<br>ldconfig -p \| grep -i -E 'rocm'<br>/opt/rocm/.info/version-rocm<br>/opt/rocm/.info/version | **Analyzer Args:**<br>- `exp_rocm`: Union[str, list]<br>- `exp_rocm_latest`: str | [RocmDataModel](#RocmDataModel-Model) | [RocmCollector](#Collector-Class-RocmCollector) | [RocmAnalyzer](#Data-Analyzer-Class-RocmAnalyzer) |
 | StoragePlugin | sh -c 'df -lH -B1 \| grep -v 'boot''<br>wmic LogicalDisk Where DriveType="3" Get DeviceId,Size,FreeSpace | - | [StorageDataModel](#StorageDataModel-Model) | [StorageCollector](#Collector-Class-StorageCollector) | [StorageAnalyzer](#Data-Analyzer-Class-StorageAnalyzer) |
@@ -428,7 +428,7 @@ class for collection of PCIe data only supports Linux OS type.
 
     This class will collect important PCIe data from the system running the commands
     - `lspci -vvv` : Verbose collection of PCIe data
-    - `lspci -vt`: Tree view of PCIe data
+    - `lspci -vvvt`: Verbose tree view of PCIe data
     - `lspci -PP`: Path view of PCIe data for the GPUs
     - If system interaction level is set to STANDARD or higher, the following commands will be run with sudo:
         - `lspci -xxxx`: Hex view of PCIe data for the GPUs
@@ -448,7 +448,7 @@ class for collection of PCIe data only supports Linux OS type.
 
 - **SUPPORTED_OS_FAMILY**: `{<OSFamily.LINUX: 3>}`
 - **CMD_LSPCI_VERBOSE**: `lspci -vvv`
-- **CMD_LSPCI_TREE**: `lspci -vt`
+- **CMD_LSPCI_VERBOSE_TREE**: `lspci -vvvt`
 - **CMD_LSPCI_PATH**: `lspci -PP`
 - **CMD_LSPCI_HEX_SUDO**: `lspci -xxxx`
 - **CMD_LSPCI_HEX**: `lspci -x`
@@ -466,8 +466,8 @@ PcieDataModel
 - lspci -xxxx
 - lspci -PP
 - lspci -PP -d {vendor_id}:{dev_id}
-- lspci -vt
 - lspci -vvv
+- lspci -vvvt
 
 ## Collector Class ProcessCollector
 
@@ -810,6 +810,8 @@ Pacakge data contains the package data for the system
 ### Model annotations and fields
 
 - **version_info**: `dict[str, str]`
+- **rocm_regex**: `str`
+- **enable_rocm_regex**: `bool`
 
 ## PcieDataModel Model
 
@@ -1322,6 +1324,8 @@ Check sysctl matches expected sysctl details
 
 - **exp_package_ver**: `Dict[str, Optional[str]]`
 - **regex_match**: `bool`
+- **rocm_regex**: `Optional[str]`
+- **enable_rocm_regex**: `bool`
 
 ## Analyzer Args Class PcieAnalyzerArgs
 

@@ -64,7 +64,7 @@ class PcieCollector(InBandDataCollector[PcieDataModel, None]):
 
     This class will collect important PCIe data from the system running the commands
     - `lspci -vvv` : Verbose collection of PCIe data
-    - `lspci -vt`: Tree view of PCIe data
+    - `lspci -vvvt`: Verbose tree view of PCIe data
     - `lspci -PP`: Path view of PCIe data for the GPUs
     - If system interaction level is set to STANDARD or higher, the following commands will be run with sudo:
         - `lspci -xxxx`: Hex view of PCIe data for the GPUs
@@ -83,7 +83,7 @@ class PcieCollector(InBandDataCollector[PcieDataModel, None]):
     DATA_MODEL = PcieDataModel
 
     CMD_LSPCI_VERBOSE = "lspci -vvv"
-    CMD_LSPCI_TREE = "lspci -vt"
+    CMD_LSPCI_VERBOSE_TREE = "lspci -vvvt"
     CMD_LSPCI_PATH = "lspci -PP"
     CMD_LSPCI_HEX_SUDO = "lspci -xxxx"
     CMD_LSPCI_HEX = "lspci -x"
@@ -142,8 +142,8 @@ class PcieCollector(InBandDataCollector[PcieDataModel, None]):
         return self._run_os_cmd(self.CMD_LSPCI_VERBOSE, sudo=sudo)
 
     def show_lspci_verbose_tree(self, sudo=True) -> Optional[str]:
-        """Show lspci with -vt."""
-        return self._run_os_cmd(self.CMD_LSPCI_TREE, sudo=sudo)
+        """Show lspci with -vvvt (verbose tree view)."""
+        return self._run_os_cmd(self.CMD_LSPCI_VERBOSE_TREE, sudo=sudo)
 
     def show_lspci_path(self, sudo=True) -> Optional[str]:
         """Show lspci with -PP."""
@@ -548,13 +548,13 @@ class PcieCollector(InBandDataCollector[PcieDataModel, None]):
         self,
         lspci_pp: Optional[str],
         lspci_hex: Optional[str],
-        lspci_tree: Optional[str],
+        lspci_verbose_tree: Optional[str],
         lspci_verbose: Optional[str],
     ):
         """Log the file artifacts for the PCIe data collector."""
         name_log_map = {
             "lspci_hex.txt": lspci_hex,
-            "lspci_tree.txt": lspci_tree,
+            "lspci_verbose_tree.txt": lspci_verbose_tree,
             "lspci_verbose.txt": lspci_verbose,
             "lspci_pp.txt": lspci_pp,
         }
@@ -629,7 +629,7 @@ class PcieCollector(InBandDataCollector[PcieDataModel, None]):
             self._log_pcie_artifacts(
                 lspci_pp=lspci_path,
                 lspci_hex=lspci_hex,
-                lspci_tree=lspci_verbose_tree,
+                lspci_verbose_tree=lspci_verbose_tree,
                 lspci_verbose=lspci_verbose,
             )
             pcie_data = PcieDataModel(
