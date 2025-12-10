@@ -26,6 +26,7 @@
 from typing import Optional
 
 from nodescraper.base import InBandDataCollector
+from nodescraper.connection.inband import TextFileArtifact
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.models import TaskResult
 
@@ -40,6 +41,7 @@ class DimmCollector(InBandDataCollector[DimmDataModel, DimmCollectorArgs]):
 
     CMD_WINDOWS = "wmic memorychip get Capacity"
     CMD = """sh -c 'dmidecode -t 17 | tr -s " " | grep -v "Volatile\\|None\\|Module" | grep Size' 2>/dev/null"""
+    CMD_DMIDECODE_FULL = "dmidecode"
 
     def collect_data(
         self,
@@ -72,6 +74,25 @@ class DimmCollector(InBandDataCollector[DimmDataModel, DimmCollectorArgs]):
                 self.result.message = "Skipping sudo plugin"
                 self.result.status = ExecutionStatus.NOT_RAN
                 return self.result, None
+
+            # Collect full dmidecode output as artifact
+            dmidecode_full_res = self._run_sut_cmd(self.CMD_DMIDECODE_FULL, sudo=True)
+            if dmidecode_full_res.exit_code == 0 and dmidecode_full_res.stdout:
+                self.result.artifacts.append(
+                    TextFileArtifact(filename="dmidecode.txt", contents=dmidecode_full_res.stdout)
+                )
+            else:
+                self._log_event(
+                    category=EventCategory.OS,
+                    description="Could not collect full dmidecode output",
+                    data={
+                        "command": dmidecode_full_res.command,
+                        "exit_code": dmidecode_full_res.exit_code,
+                        "stderr": dmidecode_full_res.stderr,
+                    },
+                    priority=EventPriority.WARNING,
+                )
+
             res = self._run_sut_cmd(self.CMD, sudo=True)
             if res.exit_code == 0:
                 total = 0

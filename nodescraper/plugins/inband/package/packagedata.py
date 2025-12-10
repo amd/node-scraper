@@ -32,6 +32,10 @@ class PackageDataModel(DataModel):
     Attributes:
         version_info (dict[str, str]): The version information for the package
             Key is the package name and value is the version of the package
+        rocm_regex (str): Regular expression pattern for ROCm package filtering
+        enable_rocm_regex (bool): Whether to use custom ROCm regex from collection_args
     """
 
     version_info: dict[str, str]
+    rocm_regex: str = ""
+    enable_rocm_regex: bool = False

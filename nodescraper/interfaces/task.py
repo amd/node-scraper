@@ -107,6 +107,8 @@ class Task(abc.ABC):
             data = {"task_name": self.__class__.__name__, "task_type": self.TASK_TYPE}
 
         else:
+            # Copy to avoid mutating the caller's dict
+            data = copy.copy(data)
             data["task_name"] = self.__class__.__name__
             data["task_type"] = self.TASK_TYPE
 
