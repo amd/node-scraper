@@ -33,10 +33,10 @@ from nodescraper.models import TimeRangeAnalysisArgs
 class CustomErrorPattern(BaseModel):
     """Custom error pattern for dmesg analysis"""
 
-    pattern: str  # Regex pattern to search for
-    message: Optional[str] = "Custom dmesg error"  # Error message/description
-    category: Optional[str] = "UNKNOWN"  # Event category
-    priority: Optional[str] = "ERROR"  # Event priority (ERROR, WARNING, CRITICAL, INFO)
+    pattern: str
+    message: Optional[str] = "Custom dmesg error"
+    category: Optional[str] = "UNKNOWN"
+    priority: Optional[str] = "ERROR"
 
 
 class DmesgAnalyzerArgs(TimeRangeAnalysisArgs):

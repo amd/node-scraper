@@ -500,9 +500,7 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
                 if not self._is_known_error(known_err_events, match_content):
                     self.result.events.append(err_event)
 
-        # Check for custom error patterns specified by user
         if args.custom_error_patterns:
-            # Map string priority to EventPriority enum
             priority_map = {
                 "ERROR": EventPriority.ERROR,
                 "WARNING": EventPriority.WARNING,
