@@ -68,10 +68,16 @@ def test_run_linux(collector, system_info):
     system_info.os_family = OSFamily.LINUX
 
     collector._run_sut_cmd = MagicMock(
-        return_value=MagicMock(
-            exit_code=0,
-            stdout="Size: 64 GB\nSize: 64 GB\nSize: 128 GB\n",
-        )
+        side_effect=[
+            MagicMock(
+                exit_code=0,
+                stdout="Full dmidecode output...",
+            ),
+            MagicMock(
+                exit_code=0,
+                stdout="Size: 64 GB\nSize: 64 GB\nSize: 128 GB\n",
+            ),
+        ]
     )
 
     result, data = collector.collect_data()
@@ -84,15 +90,23 @@ def test_run_linux_error(collector, system_info):
     system_info.os_family = OSFamily.LINUX
 
     collector._run_sut_cmd = MagicMock(
-        return_value=MagicMock(
-            exit_code=1,
-            stderr="Error occurred",
-        )
+        side_effect=[
+            MagicMock(
+                exit_code=1,
+                stderr="Error occurred",
+                command="dmidecode",
+            ),
+            MagicMock(
+                exit_code=1,
+                stderr="Error occurred",
+                command="sh -c 'dmidecode -t 17 | ...'",
+            ),
+        ]
     )
 
     result, data = collector.collect_data()
 
     assert result.status == ExecutionStatus.ERROR
     assert data is None
-    assert result.events[0].category == EventCategory.OS.value
-    assert result.events[0].description == "Error checking dimms"
+    assert result.events[1].category == EventCategory.OS.value
+    assert result.events[1].description == "Error checking dimms"
