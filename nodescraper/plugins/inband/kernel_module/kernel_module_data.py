@@ -24,8 +24,37 @@
 #
 ###############################################################################
 
+from typing import Optional
+
+from pydantic import BaseModel, Field
+
 from nodescraper.models import DataModel
+
+
+class ModuleParameter(BaseModel):
+    name: str
+    type: Optional[str] = None
+    description: Optional[str] = None
+
+
+class ModuleInfo(BaseModel):
+    filename: Optional[str] = None
+    version: Optional[str] = None
+    license: Optional[str] = None
+    description: Optional[str] = None
+    author: list[str] = Field(default_factory=list)
+    firmware: list[str] = Field(default_factory=list)
+    srcversion: Optional[str] = None
+    depends: list[str] = Field(default_factory=list)
+    name: Optional[str] = None
+    vermagic: Optional[str] = None
+    sig_id: Optional[str] = None
+    signer: Optional[str] = None
+    sig_key: Optional[str] = None
+    sig_hashalgo: Optional[str] = None
+    parm: list[ModuleParameter] = Field(default_factory=list)
 
 
 class KernelModuleDataModel(DataModel):
     kernel_modules: dict
+    amdgpu_modinfo: Optional[ModuleInfo] = None
