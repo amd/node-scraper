@@ -500,4 +500,48 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
                 if not self._is_known_error(known_err_events, match_content):
                     self.result.events.append(err_event)
 
+        # Check for custom error patterns specified by user
+        if args.custom_error_patterns:
+            # Map string priority to EventPriority enum
+            priority_map = {
+                "ERROR": EventPriority.ERROR,
+                "WARNING": EventPriority.WARNING,
+                "CRITICAL": EventPriority.CRITICAL,
+                "INFO": EventPriority.INFO,
+            }
+
+            custom_error_regexes = []
+            for custom_pattern in args.custom_error_patterns:
+                try:
+                    # Compile the regex pattern
+                    compiled_regex = re.compile(custom_pattern.pattern)
+                    event_priority = priority_map.get(
+                        custom_pattern.priority.upper(), EventPriority.ERROR
+                    )
+
+                    custom_error_regexes.append(
+                        ErrorRegex(
+                            regex=compiled_regex,
+                            message=custom_pattern.message,
+                            event_category=custom_pattern.category,
+                            event_priority=event_priority,
+                        )
+                    )
+                except re.error as e:
+                    # Log invalid regex patterns
+                    self._log_event(
+                        category=EventCategory.RUNTIME,
+                        description=f"Invalid custom error pattern regex: {custom_pattern.pattern}",
+                        data={"error": str(e), "pattern": custom_pattern.pattern},
+                        priority=EventPriority.WARNING,
+                    )
+
+            if custom_error_regexes:
+                custom_err_events = self.check_all_regexes(
+                    content=dmesg_content,
+                    source="dmesg",
+                    error_regex=custom_error_regexes,
+                )
+                self.result.events += custom_err_events
+
         return self.result

@@ -27,7 +27,10 @@ import datetime
 
 from nodescraper.enums.eventpriority import EventPriority
 from nodescraper.enums.executionstatus import ExecutionStatus
-from nodescraper.plugins.inband.dmesg.analyzer_args import DmesgAnalyzerArgs
+from nodescraper.plugins.inband.dmesg.analyzer_args import (
+    CustomErrorPattern,
+    DmesgAnalyzerArgs,
+)
 from nodescraper.plugins.inband.dmesg.dmesg_analyzer import DmesgAnalyzer
 from nodescraper.plugins.inband.dmesg.dmesgdata import DmesgData
 
@@ -279,3 +282,201 @@ def test_aca(system_info):
     assert len(res.events) == 1
     assert res.events[0].description == "ACA Error"
     assert res.events[0].priority == EventPriority.ERROR
+
+
+def test_custom_error_patterns_basic(system_info):
+    """Test basic custom error pattern functionality."""
+    dmesg_data = DmesgData(
+        dmesg_content=(
+            "kern  :err   : 2024-10-07T10:17:15,145363-04:00 my_driver failed to initialize\n"
+            "kern  :err   : 2024-10-07T10:17:16,145363-04:00 temperature reached critical threshold\n"
+            "kern  :info  : 2024-10-07T10:17:17,145363-04:00 normal operation\n"
+            "kern  :err   : 2024-10-07T10:17:18,145363-04:00 my_driver failed to start\n"
+        )
+    )
+
+    analyzer = DmesgAnalyzer(system_info=system_info)
+
+    custom_patterns = [
+        CustomErrorPattern(
+            pattern=r"my_driver.*failed",
+            message="Custom driver failure",
+            category="CUSTOM_DRIVER",
+            priority="ERROR",
+        ),
+        CustomErrorPattern(
+            pattern=r"temperature.*critical",
+            message="Critical temperature",
+            category="THERMAL",
+            priority="CRITICAL",
+        ),
+    ]
+
+    args = DmesgAnalyzerArgs(
+        check_unknown_dmesg_errors=False, custom_error_patterns=custom_patterns
+    )
+
+    result = analyzer.analyze_data(dmesg_data, args)
+
+    assert result.status == ExecutionStatus.ERROR
+    assert len(result.events) == 2
+
+    driver_events = [e for e in result.events if e.description == "Custom driver failure"]
+    assert len(driver_events) == 1
+    assert driver_events[0].category == "CUSTOM_DRIVER"
+    assert driver_events[0].priority == EventPriority.ERROR
+    assert driver_events[0].data["count"] == 2
+
+    temp_events = [e for e in result.events if e.description == "Critical temperature"]
+    assert len(temp_events) == 1
+    assert temp_events[0].category == "THERMAL"
+    assert temp_events[0].priority == EventPriority.CRITICAL
+    assert temp_events[0].data["count"] == 1
+
+
+def test_custom_error_patterns_with_unknown_errors(system_info):
+    """Test custom error patterns combined with unknown error checking."""
+    dmesg_data = DmesgData(
+        dmesg_content=(
+            "kern  :err   : 2024-10-07T10:17:15,145363-04:00 my_custom_error occurred\n"
+            "kern  :err   : 2024-10-07T10:17:16,145363-04:00 some random unknown error\n"
+        )
+    )
+
+    analyzer = DmesgAnalyzer(system_info=system_info)
+
+    custom_patterns = [
+        CustomErrorPattern(
+            pattern=r"my_custom_error",
+            message="My custom error detected",
+            category="CUSTOM",
+            priority="ERROR",
+        )
+    ]
+
+    args = DmesgAnalyzerArgs(check_unknown_dmesg_errors=True, custom_error_patterns=custom_patterns)
+
+    result = analyzer.analyze_data(dmesg_data, args)
+
+    assert result.status == ExecutionStatus.ERROR
+    assert len(result.events) == 3
+
+    custom_events = [e for e in result.events if e.description == "My custom error detected"]
+    assert len(custom_events) == 1
+    assert custom_events[0].priority == EventPriority.ERROR
+
+    unknown_events = [e for e in result.events if e.description == "Unknown dmesg error"]
+    assert len(unknown_events) == 2
+    assert unknown_events[0].priority == EventPriority.WARNING
+
+
+def test_custom_error_patterns_invalid_regex(system_info):
+    """Test handling of invalid regex patterns."""
+    dmesg_data = DmesgData(
+        dmesg_content="kern  :err   : 2024-10-07T10:17:15,145363-04:00 test error\n"
+    )
+
+    analyzer = DmesgAnalyzer(system_info=system_info)
+
+    custom_patterns = [
+        CustomErrorPattern(
+            pattern=r"[invalid(regex",
+            message="This should not work",
+            category="INVALID",
+            priority="ERROR",
+        ),
+        CustomErrorPattern(
+            pattern=r"test error",
+            message="Valid pattern",
+            category="TEST",
+            priority="ERROR",
+        ),
+    ]
+
+    args = DmesgAnalyzerArgs(
+        check_unknown_dmesg_errors=False, custom_error_patterns=custom_patterns
+    )
+
+    result = analyzer.analyze_data(dmesg_data, args)
+
+    assert result.status == ExecutionStatus.ERROR
+
+    valid_events = [e for e in result.events if e.description == "Valid pattern"]
+    assert len(valid_events) == 1
+
+    invalid_regex_warnings = [
+        e for e in result.events if "Invalid custom error pattern regex" in e.description
+    ]
+    assert len(invalid_regex_warnings) == 1
+
+
+def test_custom_error_patterns_priority_mapping(system_info):
+    """Test that all priority levels are correctly mapped."""
+    dmesg_data = DmesgData(
+        dmesg_content=(
+            "kern  :err   : 2024-10-07T10:17:15,145363-04:00 error_test\n"
+            "kern  :err   : 2024-10-07T10:17:16,145363-04:00 warning_test\n"
+            "kern  :err   : 2024-10-07T10:17:17,145363-04:00 critical_test\n"
+            "kern  :err   : 2024-10-07T10:17:18,145363-04:00 info_test\n"
+        )
+    )
+
+    analyzer = DmesgAnalyzer(system_info=system_info)
+
+    custom_patterns = [
+        CustomErrorPattern(
+            pattern=r"error_test", message="Error priority", category="TEST", priority="ERROR"
+        ),
+        CustomErrorPattern(
+            pattern=r"warning_test",
+            message="Warning priority",
+            category="TEST",
+            priority="WARNING",
+        ),
+        CustomErrorPattern(
+            pattern=r"critical_test",
+            message="Critical priority",
+            category="TEST",
+            priority="CRITICAL",
+        ),
+        CustomErrorPattern(
+            pattern=r"info_test", message="Info priority", category="TEST", priority="INFO"
+        ),
+    ]
+
+    args = DmesgAnalyzerArgs(
+        check_unknown_dmesg_errors=False, custom_error_patterns=custom_patterns
+    )
+
+    result = analyzer.analyze_data(dmesg_data, args)
+
+    assert len(result.events) == 4
+
+    error_event = [e for e in result.events if e.description == "Error priority"][0]
+    assert error_event.priority == EventPriority.ERROR
+
+    warning_event = [e for e in result.events if e.description == "Warning priority"][0]
+    assert warning_event.priority == EventPriority.WARNING
+
+    critical_event = [e for e in result.events if e.description == "Critical priority"][0]
+    assert critical_event.priority == EventPriority.CRITICAL
+
+    info_event = [e for e in result.events if e.description == "Info priority"][0]
+    assert info_event.priority == EventPriority.INFO
+
+
+def test_custom_error_patterns_empty_list(system_info):
+    """Test that empty custom_error_patterns list doesn't cause issues."""
+    dmesg_data = DmesgData(
+        dmesg_content="kern  :err   : 2024-10-07T10:17:15,145363-04:00 oom_kill_process\n"
+    )
+
+    analyzer = DmesgAnalyzer(system_info=system_info)
+
+    args = DmesgAnalyzerArgs(check_unknown_dmesg_errors=False, custom_error_patterns=[])
+
+    result = analyzer.analyze_data(dmesg_data, args)
+
+    assert result.status == ExecutionStatus.ERROR
+    assert len(result.events) == 1
+    assert result.events[0].description == "Out of memory error"

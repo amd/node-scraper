@@ -4,11 +4,49 @@
     "DmesgPlugin": {
       "analysis_args": {
         "check_unknown_dmesg_errors": true,
-        "exclude_category": null
+        "exclude_category": null,
+        "custom_error_patterns": [
+          {
+            "pattern": "temperature.*(?:critical|exceeded)",
+            "message": "Critical temperature threshold exceeded",
+            "category": "THERMAL",
+            "priority": "CRITICAL"
+          },
+          {
+            "pattern": "amdgpu.*(?:timeout|hang)",
+            "message": "AMDGPU timeout or hang detected",
+            "category": "GPU_HANG",
+            "priority": "ERROR"
+          },
+          {
+            "pattern": "PCIe.*(?:link.*down|error)",
+            "message": "PCIe link issue detected",
+            "category": "HARDWARE",
+            "priority": "CRITICAL"
+          },
+          {
+            "pattern": "(?:NVMe|nvme).*error",
+            "message": "NVMe storage error detected",
+            "category": "STORAGE",
+            "priority": "ERROR"
+          },
+          {
+            "pattern": "security.*(?:breach|violation|unauthorized)",
+            "message": "Security violation detected",
+            "category": "SECURITY",
+            "priority": "CRITICAL"
+          },
+          {
+            "pattern": "network.*(?:unreachable|down|timeout)",
+            "message": "Network connectivity issue",
+            "category": "NETWORK",
+            "priority": "WARNING"
+          }
+        ]
       }
     }
   },
   "result_collators": {},
   "name": "DmesgPlugin config",
-  "desc": "Config for testing DmesgPlugin"
+  "desc": "Config for testing DmesgPlugin with custom error patterns"
 }

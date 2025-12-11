@@ -25,9 +25,21 @@
 ###############################################################################
 from typing import Optional
 
+from pydantic import BaseModel, Field
+
 from nodescraper.models import TimeRangeAnalysisArgs
+
+
+class CustomErrorPattern(BaseModel):
+    """Custom error pattern for dmesg analysis"""
+
+    pattern: str  # Regex pattern to search for
+    message: Optional[str] = "Custom dmesg error"  # Error message/description
+    category: Optional[str] = "UNKNOWN"  # Event category
+    priority: Optional[str] = "ERROR"  # Event priority (ERROR, WARNING, CRITICAL, INFO)
 
 
 class DmesgAnalyzerArgs(TimeRangeAnalysisArgs):
     check_unknown_dmesg_errors: Optional[bool] = True
     exclude_category: Optional[set[str]] = None
+    custom_error_patterns: list[CustomErrorPattern] = Field(default_factory=list)
