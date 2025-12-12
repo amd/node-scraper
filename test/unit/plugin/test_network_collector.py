@@ -50,30 +50,30 @@ def collector(system_info, conn_mock):
     )
 
 
-# Sample command outputs for testing
-IP_ADDR_OUTPUT = """1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+# Sample command outputs for testing (mock data)
+IP_ADDR_OUTPUT = """1: lo: <LOOPBACK,UP,LOWER_UP> mtu 12345 qdisc noqueue state UNKNOWN group default qlen 1000
     link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
     inet 127.0.0.1/8 scope host lo
        valid_lft forever preferred_lft forever
     inet6 ::1/128 scope host
        valid_lft forever preferred_lft forever
-2: enp129s0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP group default qlen 1000
-    link/ether 00:40:a6:96:d7:5a brd ff:ff:ff:ff:ff:ff
-    inet 10.228.152.67/22 brd 10.228.155.255 scope global noprefixroute enp129s0
+2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 5678 qdisc mq state UP group default qlen 1000
+    link/ether aa:bb:cc:dd:ee:ff brd ff:ff:ff:ff:ff:ff
+    inet 1.123.123.100/24 brd 1.123.123.255 scope global noprefixroute eth0
        valid_lft forever preferred_lft forever
-    inet6 fe80::240:a6ff:fe96:d75a/64 scope link
+    inet6 fe80::aabb:ccff/64 scope link
        valid_lft forever preferred_lft forever"""
 
-IP_ROUTE_OUTPUT = """default via 10.228.152.1 dev enp129s0 proto static metric 100
-10.228.152.0/22 dev enp129s0 proto kernel scope link src 10.228.152.67 metric 100
-172.17.0.0/16 dev docker0 proto kernel scope link src 172.17.0.1 linkdown"""
+IP_ROUTE_OUTPUT = """default via 2.123.123.1 dev eth0 proto static metric 100
+2.123.123.0/24 dev eth0 proto kernel scope link src 2.123.123.100 metric 100
+7.8.0.0/16 dev docker0 proto kernel scope link src 7.8.0.1 linkdown"""
 
 IP_RULE_OUTPUT = """0:	from all lookup local
-32766:	from all lookup main
-32767:	from all lookup default"""
+89145:	from all lookup main
+56789:	from all lookup default"""
 
-IP_NEIGHBOR_OUTPUT = """10.228.152.44 dev enp129s0 lladdr 00:50:56:b4:ed:cc STALE
-10.228.152.1 dev enp129s0 lladdr 64:3a:ea:74:e6:bf REACHABLE"""
+IP_NEIGHBOR_OUTPUT = """50.50.1.50 dev eth0 lladdr 11:22:33:44:55:66 STALE
+50.50.1.1 dev eth0 lladdr 99:88:77:66:55:44 REACHABLE"""
 
 
 def test_parse_ip_addr_loopback(collector):
@@ -85,7 +85,7 @@ def test_parse_ip_addr_loopback(collector):
     assert lo is not None
     assert lo.index == 1
     assert lo.state == "UNKNOWN"
-    assert lo.mtu == 65536
+    assert lo.mtu == 12345
     assert lo.qdisc == "noqueue"
     assert lo.mac_address == "00:00:00:00:00:00"
     assert "LOOPBACK" in lo.flags
@@ -105,22 +105,22 @@ def test_parse_ip_addr_ethernet(collector):
     interfaces = collector._parse_ip_addr(IP_ADDR_OUTPUT)
 
     # Find ethernet interface
-    eth = next((i for i in interfaces if i.name == "enp129s0"), None)
+    eth = next((i for i in interfaces if i.name == "eth0"), None)
     assert eth is not None
     assert eth.index == 2
     assert eth.state == "UP"
-    assert eth.mtu == 1500
+    assert eth.mtu == 5678
     assert eth.qdisc == "mq"
-    assert eth.mac_address == "00:40:a6:96:d7:5a"
+    assert eth.mac_address == "aa:bb:cc:dd:ee:ff"
     assert "BROADCAST" in eth.flags
     assert "MULTICAST" in eth.flags
 
     # Check IPv4 address
     ipv4 = next((a for a in eth.addresses if a.family == "inet"), None)
     assert ipv4 is not None
-    assert ipv4.address == "10.228.152.67"
-    assert ipv4.prefix_len == 22
-    assert ipv4.broadcast == "10.228.155.255"
+    assert ipv4.address == "1.123.123.100"
+    assert ipv4.prefix_len == 24
+    assert ipv4.broadcast == "1.123.123.255"
     assert ipv4.scope == "global"
 
 
@@ -131,8 +131,8 @@ def test_parse_ip_route_default(collector):
     # Find default route
     default_route = next((r for r in routes if r.destination == "default"), None)
     assert default_route is not None
-    assert default_route.gateway == "10.228.152.1"
-    assert default_route.device == "enp129s0"
+    assert default_route.gateway == "2.123.123.1"
+    assert default_route.device == "eth0"
     assert default_route.protocol == "static"
     assert default_route.metric == 100
 
@@ -142,13 +142,13 @@ def test_parse_ip_route_network(collector):
     routes = collector._parse_ip_route(IP_ROUTE_OUTPUT)
 
     # Find network route
-    net_route = next((r for r in routes if r.destination == "10.228.152.0/22"), None)
+    net_route = next((r for r in routes if r.destination == "2.123.123.0/24"), None)
     assert net_route is not None
     assert net_route.gateway is None  # Direct route, no gateway
-    assert net_route.device == "enp129s0"
+    assert net_route.device == "eth0"
     assert net_route.protocol == "kernel"
     assert net_route.scope == "link"
-    assert net_route.source == "10.228.152.67"
+    assert net_route.source == "2.123.123.100"
     assert net_route.metric == 100
 
 
@@ -157,13 +157,13 @@ def test_parse_ip_route_docker(collector):
     routes = collector._parse_ip_route(IP_ROUTE_OUTPUT)
 
     # Find docker route
-    docker_route = next((r for r in routes if r.destination == "172.17.0.0/16"), None)
+    docker_route = next((r for r in routes if r.destination == "7.8.0.0/16"), None)
     assert docker_route is not None
     assert docker_route.gateway is None
     assert docker_route.device == "docker0"
     assert docker_route.protocol == "kernel"
     assert docker_route.scope == "link"
-    assert docker_route.source == "172.17.0.1"
+    assert docker_route.source == "7.8.0.1"
 
 
 def test_parse_ip_rule_basic(collector):
@@ -181,12 +181,12 @@ def test_parse_ip_rule_basic(collector):
     assert local_rule.action == "lookup"
 
     # Check main rule
-    main_rule = next((r for r in rules if r.priority == 32766), None)
+    main_rule = next((r for r in rules if r.priority == 89145), None)
     assert main_rule is not None
     assert main_rule.table == "main"
 
     # Check default rule
-    default_rule = next((r for r in rules if r.priority == 32767), None)
+    default_rule = next((r for r in rules if r.priority == 56789), None)
     assert default_rule is not None
     assert default_rule.table == "default"
 
@@ -218,9 +218,9 @@ def test_parse_ip_neighbor_reachable(collector):
     # Check REACHABLE neighbor
     reachable = next((n for n in neighbors if n.state == "REACHABLE"), None)
     assert reachable is not None
-    assert reachable.ip_address == "10.228.152.1"
-    assert reachable.device == "enp129s0"
-    assert reachable.mac_address == "64:3a:ea:74:e6:bf"
+    assert reachable.ip_address == "50.50.1.1"
+    assert reachable.device == "eth0"
+    assert reachable.mac_address == "99:88:77:66:55:44"
     assert reachable.state == "REACHABLE"
 
 
@@ -231,9 +231,9 @@ def test_parse_ip_neighbor_stale(collector):
     # Check STALE neighbor
     stale = next((n for n in neighbors if n.state == "STALE"), None)
     assert stale is not None
-    assert stale.ip_address == "10.228.152.44"
-    assert stale.device == "enp129s0"
-    assert stale.mac_address == "00:50:56:b4:ed:cc"
+    assert stale.ip_address == "50.50.1.50"
+    assert stale.device == "eth0"
+    assert stale.mac_address == "11:22:33:44:55:66"
     assert stale.state == "STALE"
 
 
@@ -395,16 +395,16 @@ def test_network_data_model_creation(collector):
         name="eth0",
         index=1,
         state="UP",
-        mtu=1500,
-        addresses=[IpAddress(address="192.168.1.100", prefix_len=24, family="inet")],
+        mtu=5678,
+        addresses=[IpAddress(address="1.123.123.100", prefix_len=24, family="inet")],
     )
 
-    route = Route(destination="default", gateway="192.168.1.1", device="eth0")
+    route = Route(destination="default", gateway="2.123.123.1", device="eth0")
 
-    rule = RoutingRule(priority=100, source="192.168.1.0/24", table="main")
+    rule = RoutingRule(priority=100, source="1.123.123.0/24", table="main")
 
     neighbor = Neighbor(
-        ip_address="192.168.1.1", device="eth0", mac_address="11:22:33:44:55:66", state="REACHABLE"
+        ip_address="50.50.1.1", device="eth0", mac_address="11:22:33:44:55:66", state="REACHABLE"
     )
 
     data = NetworkDataModel(
