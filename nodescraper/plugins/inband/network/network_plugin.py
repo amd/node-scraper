@@ -35,7 +35,3 @@ class NetworkPlugin(InBandDataPlugin[NetworkDataModel, None, None]):
     DATA_MODEL = NetworkDataModel
 
     COLLECTOR = NetworkCollector
-
-    ANALYZER = None
-
-    ANALYZER_ARGS = None
