@@ -61,4 +61,6 @@ class RocmAnalyzerArgs(AnalyzerArgs):
         Returns:
             RocmAnalyzerArgs: instance of analyzer args class
         """
-        return cls(exp_rocm=datamodel.rocm_version)
+        return cls(
+            exp_rocm=datamodel.rocm_version, exp_rocm_latest=datamodel.rocm_latest_versioned_path
+        )
