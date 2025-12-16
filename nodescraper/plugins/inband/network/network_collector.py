@@ -24,13 +24,14 @@
 #
 ###############################################################################
 import re
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from nodescraper.base import InBandDataCollector
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
 from nodescraper.models import TaskResult
 
 from .networkdata import (
+    EthtoolInfo,
     IpAddress,
     Neighbor,
     NetworkDataModel,
@@ -48,6 +49,7 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
     CMD_ROUTE = "ip route show"
     CMD_RULE = "ip rule show"
     CMD_NEIGHBOR = "ip neighbor show"
+    CMD_ETHTOOL_TEMPLATE = "sudo ethtool {interface}"
 
     def _parse_ip_addr(self, output: str) -> List[NetworkInterface]:
         """Parse 'ip addr show' output into NetworkInterface objects.
@@ -370,6 +372,98 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
 
         return neighbors
 
+    def _parse_ethtool(self, interface: str, output: str) -> EthtoolInfo:
+        """Parse 'ethtool <interface>' output into EthtoolInfo object.
+
+        Args:
+            interface: Name of the network interface
+            output: Raw output from 'ethtool <interface>' command
+
+        Returns:
+            EthtoolInfo object with parsed data
+        """
+        ethtool_info = EthtoolInfo(interface=interface, raw_output=output)
+
+        # Parse line by line
+        current_section = None
+        for line in output.splitlines():
+            line_stripped = line.strip()
+            if not line_stripped:
+                continue
+
+            # Detect sections (lines ending with colon and no tab prefix)
+            if line_stripped.endswith(":") and not line.startswith("\t"):
+                current_section = line_stripped.rstrip(":")
+                continue
+
+            # Parse key-value pairs (lines with colon in the middle)
+            if ":" in line_stripped:
+                # Split on first colon
+                parts = line_stripped.split(":", 1)
+                if len(parts) == 2:
+                    key = parts[0].strip()
+                    value = parts[1].strip()
+
+                    # Store in settings dict
+                    ethtool_info.settings[key] = value
+
+                    # Extract specific important fields
+                    if key == "Speed":
+                        ethtool_info.speed = value
+                    elif key == "Duplex":
+                        ethtool_info.duplex = value
+                    elif key == "Port":
+                        ethtool_info.port = value
+                    elif key == "Auto-negotiation":
+                        ethtool_info.auto_negotiation = value
+                    elif key == "Link detected":
+                        ethtool_info.link_detected = value
+
+            # Parse supported/advertised link modes (typically indented list items)
+            elif current_section in ["Supported link modes", "Advertised link modes"]:
+                # These are typically list items, possibly with speeds like "10baseT/Half"
+                if line.startswith("\t") or line.startswith(" "):
+                    mode = line_stripped
+                    if current_section == "Supported link modes":
+                        ethtool_info.supported_link_modes.append(mode)
+                    elif current_section == "Advertised link modes":
+                        ethtool_info.advertised_link_modes.append(mode)
+
+        return ethtool_info
+
+    def _collect_ethtool_info(self, interfaces: List[NetworkInterface]) -> Dict[str, EthtoolInfo]:
+        """Collect ethtool information for all network interfaces.
+
+        Args:
+            interfaces: List of NetworkInterface objects to collect ethtool info for
+
+        Returns:
+            Dictionary mapping interface name to EthtoolInfo
+        """
+        ethtool_data = {}
+
+        for iface in interfaces:
+            cmd = self.CMD_ETHTOOL_TEMPLATE.format(interface=iface.name)
+            res_ethtool = self._run_sut_cmd(cmd)
+
+            if res_ethtool.exit_code == 0:
+                ethtool_info = self._parse_ethtool(iface.name, res_ethtool.stdout)
+                ethtool_data[iface.name] = ethtool_info
+                self._log_event(
+                    category=EventCategory.OS,
+                    description=f"Collected ethtool info for interface: {iface.name}",
+                    priority=EventPriority.INFO,
+                )
+            else:
+                self._log_event(
+                    category=EventCategory.OS,
+                    description=f"Error collecting ethtool info for interface: {iface.name}",
+                    data={"command": res_ethtool.command, "exit_code": res_ethtool.exit_code},
+                    priority=EventPriority.WARNING,
+                )
+
+        return ethtool_data
+
     def collect_data(
         self,
         args=None,
@@ -384,6 +478,7 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
         routes = []
         rules = []
         neighbors = []
+        ethtool_data = {}
 
         # Collect interface/address information
         res_addr = self._run_sut_cmd(self.CMD_ADDR)
@@ -401,6 +496,15 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
                 data={"command": res_addr.command, "exit_code": res_addr.exit_code},
                 priority=EventPriority.ERROR,
                 console_log=True,
+            )
+
+        # Collect ethtool information for interfaces
+        if interfaces:
+            ethtool_data = self._collect_ethtool_info(interfaces)
+            self._log_event(
+                category=EventCategory.OS,
+                description=f"Collected ethtool info for {len(ethtool_data)} interfaces",
+                priority=EventPriority.INFO,
             )
 
         # Collect routing table
@@ -456,11 +560,16 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
 
         if interfaces or routes or rules or neighbors:
             network_data = NetworkDataModel(
-                interfaces=interfaces, routes=routes, rules=rules, neighbors=neighbors
+                interfaces=interfaces,
+                routes=routes,
+                rules=rules,
+                neighbors=neighbors,
+                ethtool_info=ethtool_data,
             )
             self.result.message = (
                 f"Collected network data: {len(interfaces)} interfaces, "
-                f"{len(routes)} routes, {len(rules)} rules, {len(neighbors)} neighbors"
+                f"{len(routes)} routes, {len(rules)} rules, {len(neighbors)} neighbors, "
+                f"{len(ethtool_data)} ethtool entries"
             )
             self.result.status = ExecutionStatus.OK
             return self.result, network_data
