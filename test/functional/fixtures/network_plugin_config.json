@@ -1,0 +1,11 @@
+{
+  "global_args": {},
+  "plugins": {
+    "NetworkPlugin": {
+      "analysis_args": {}
+    }
+  },
+  "result_collators": {},
+  "name": "NetworkPlugin config",
+  "desc": "Config for testing NetworkPlugin"
+}
