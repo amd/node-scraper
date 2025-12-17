@@ -450,13 +450,13 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
                 ethtool_info = self._parse_ethtool(iface.name, res_ethtool.stdout)
                 ethtool_data[iface.name] = ethtool_info
                 self._log_event(
-                    category=EventCategory.OS,
+                    category=EventCategory.NETWORK,
                     description=f"Collected ethtool info for interface: {iface.name}",
                     priority=EventPriority.INFO,
                 )
             else:
                 self._log_event(
-                    category=EventCategory.OS,
+                    category=EventCategory.NETWORK,
                     description=f"Error collecting ethtool info for interface: {iface.name}",
                     data={"command": res_ethtool.command, "exit_code": res_ethtool.exit_code},
                     priority=EventPriority.WARNING,
@@ -485,13 +485,13 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
         if res_addr.exit_code == 0:
             interfaces = self._parse_ip_addr(res_addr.stdout)
             self._log_event(
-                category=EventCategory.OS,
+                category=EventCategory.NETWORK,
                 description=f"Collected {len(interfaces)} network interfaces",
                 priority=EventPriority.INFO,
             )
         else:
             self._log_event(
-                category=EventCategory.OS,
+                category=EventCategory.NETWORK,
                 description="Error collecting network interfaces",
                 data={"command": res_addr.command, "exit_code": res_addr.exit_code},
                 priority=EventPriority.ERROR,
@@ -502,7 +502,7 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
         if interfaces:
             ethtool_data = self._collect_ethtool_info(interfaces)
             self._log_event(
-                category=EventCategory.OS,
+                category=EventCategory.NETWORK,
                 description=f"Collected ethtool info for {len(ethtool_data)} interfaces",
                 priority=EventPriority.INFO,
             )
@@ -512,13 +512,13 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
         if res_route.exit_code == 0:
             routes = self._parse_ip_route(res_route.stdout)
             self._log_event(
-                category=EventCategory.OS,
+                category=EventCategory.NETWORK,
                 description=f"Collected {len(routes)} routes",
                 priority=EventPriority.INFO,
             )
         else:
             self._log_event(
-                category=EventCategory.OS,
+                category=EventCategory.NETWORK,
                 description="Error collecting routes",
                 data={"command": res_route.command, "exit_code": res_route.exit_code},
                 priority=EventPriority.WARNING,
@@ -529,13 +529,13 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
         if res_rule.exit_code == 0:
             rules = self._parse_ip_rule(res_rule.stdout)
             self._log_event(
-                category=EventCategory.OS,
+                category=EventCategory.NETWORK,
                 description=f"Collected {len(rules)} routing rules",
                 priority=EventPriority.INFO,
             )
         else:
             self._log_event(
-                category=EventCategory.OS,
+                category=EventCategory.NETWORK,
                 description="Error collecting routing rules",
                 data={"command": res_rule.command, "exit_code": res_rule.exit_code},
                 priority=EventPriority.WARNING,
@@ -546,13 +546,13 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
         if res_neighbor.exit_code == 0:
             neighbors = self._parse_ip_neighbor(res_neighbor.stdout)
             self._log_event(
-                category=EventCategory.OS,
+                category=EventCategory.NETWORK,
                 description=f"Collected {len(neighbors)} neighbor entries",
                 priority=EventPriority.INFO,
             )
         else:
             self._log_event(
-                category=EventCategory.OS,
+                category=EventCategory.NETWORK,
                 description="Error collecting neighbor table",
                 data={"command": res_neighbor.command, "exit_code": res_neighbor.exit_code},
                 priority=EventPriority.WARNING,

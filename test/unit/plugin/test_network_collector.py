@@ -32,6 +32,7 @@ from nodescraper.enums.systeminteraction import SystemInteractionLevel
 from nodescraper.models.systeminfo import OSFamily
 from nodescraper.plugins.inband.network.network_collector import NetworkCollector
 from nodescraper.plugins.inband.network.networkdata import (
+    EthtoolInfo,
     IpAddress,
     Neighbor,
     NetworkDataModel,
@@ -74,6 +75,41 @@ IP_RULE_OUTPUT = """0:	from all lookup local
 
 IP_NEIGHBOR_OUTPUT = """50.50.1.50 dev eth0 lladdr 11:22:33:44:55:66 STALE
 50.50.1.1 dev eth0 lladdr 99:88:77:66:55:44 REACHABLE"""
+
+ETHTOOL_OUTPUT = """Settings for ethmock123:
+	Supported ports: [ TP ]
+	Supported link modes:   10mockbaseT/Half
+				123mockbaseT/Half
+				1234mockbaseT/Full
+	Supported pause frame use: Symmetric
+	Supports auto-negotiation: Yes
+	Supported FEC modes: Not reported
+	Advertised link modes:  10mockbaseT/Half 10mockbaseT/Full
+				167mockbaseT/Half 167mockbaseT/Full
+				1345mockbaseT/Full
+	Advertised pause frame use: Symmetric
+	Advertised auto-negotiation: Yes
+	Advertised FEC modes: Xyz ABCfec
+	Speed: 1000mockMb/s
+	Duplex: Full
+	Port: MockedTwisted Pair
+	PHYAD: 1
+	Transceiver: internal
+	Auto-negotiation: on
+	MDI-X: on (auto)
+	Supports Wake-on: qwerty
+	Wake-on: g
+	Current message level: 0x123123
+	Link detected: yes"""
+
+ETHTOOL_NO_LINK_OUTPUT = """Settings for ethmock1:
+	Supported ports: [ FIBRE ]
+	Supported link modes:   11122mockbaseT/Full
+	Speed: Unknown!
+	Duplex: Unknown!
+	Port: FIBRE
+	Auto-negotiation: off
+	Link detected: no"""
 
 
 def test_parse_ip_addr_loopback(collector):
@@ -266,6 +302,9 @@ def test_collect_data_success(collector, conn_mock):
             return MagicMock(exit_code=0, stdout=IP_RULE_OUTPUT, command=cmd)
         elif "neighbor show" in cmd:
             return MagicMock(exit_code=0, stdout=IP_NEIGHBOR_OUTPUT, command=cmd)
+        elif "ethtool" in cmd:
+            # Fail ethtool commands (simulating no sudo or not supported)
+            return MagicMock(exit_code=1, stdout="", command=cmd)
         return MagicMock(exit_code=1, stdout="", command=cmd)
 
     collector._run_sut_cmd = MagicMock(side_effect=run_sut_cmd_side_effect)
@@ -283,6 +322,7 @@ def test_collect_data_success(collector, conn_mock):
     assert "3 routes" in result.message
     assert "3 rules" in result.message
     assert "2 neighbors" in result.message
+    assert "ethtool" in result.message
 
 
 def test_collect_data_addr_failure(collector, conn_mock):
@@ -299,6 +339,8 @@ def test_collect_data_addr_failure(collector, conn_mock):
             return MagicMock(exit_code=0, stdout=IP_RULE_OUTPUT, command=cmd)
         elif "neighbor show" in cmd:
             return MagicMock(exit_code=0, stdout=IP_NEIGHBOR_OUTPUT, command=cmd)
+        elif "ethtool" in cmd:
+            return MagicMock(exit_code=1, stdout="", command=cmd)
         return MagicMock(exit_code=1, stdout="", command=cmd)
 
     collector._run_sut_cmd = MagicMock(side_effect=run_sut_cmd_side_effect)
@@ -312,6 +354,7 @@ def test_collect_data_addr_failure(collector, conn_mock):
     assert len(data.routes) == 3  # Success
     assert len(data.rules) == 3  # Success
     assert len(data.neighbors) == 2  # Success
+    assert len(data.ethtool_info) == 0  # No interfaces, so no ethtool data
     assert len(result.events) > 0
 
 
@@ -319,8 +362,11 @@ def test_collect_data_all_failures(collector, conn_mock):
     """Test collection when all commands fail"""
     collector.system_info.os_family = OSFamily.LINUX
 
-    # Mock all commands failing
-    collector._run_sut_cmd = MagicMock(return_value=MagicMock(exit_code=1, stdout="", command="ip"))
+    # Mock all commands failing (including ethtool)
+    def run_sut_cmd_side_effect(cmd):
+        return MagicMock(exit_code=1, stdout="", command=cmd)
+
+    collector._run_sut_cmd = MagicMock(side_effect=run_sut_cmd_side_effect)
 
     result, data = collector.collect_data()
 
@@ -389,30 +435,110 @@ def test_parse_ip_rule_with_action(collector):
     assert rule.table is None
 
 
+def test_parse_ethtool_basic(collector):
+    """Test parsing basic ethtool output"""
+    ethtool_info = collector._parse_ethtool("ethmock123", ETHTOOL_OUTPUT)
+
+    assert ethtool_info.interface == "ethmock123"
+    assert ethtool_info.speed == "1000mockMb/s"
+    assert ethtool_info.duplex == "Full"
+    assert ethtool_info.port == "MockedTwisted Pair"
+    assert ethtool_info.auto_negotiation == "on"
+    assert ethtool_info.link_detected == "yes"
+    assert "Speed" in ethtool_info.settings
+    assert ethtool_info.settings["Speed"] == "1000mockMb/s"
+    assert ethtool_info.settings["PHYAD"] == "1"
+    assert ethtool_info.raw_output == ETHTOOL_OUTPUT
+
+
+def test_parse_ethtool_supported_link_modes(collector):
+    """Test parsing supported link modes from ethtool output"""
+    ethtool_info = collector._parse_ethtool("ethmock123", ETHTOOL_OUTPUT)
+
+    # Check supported link modes are stored in settings dict
+    # Note: The current implementation stores link modes in settings dict,
+    # not in the supported_link_modes list
+    assert "Supported link modes" in ethtool_info.settings
+    assert "10mockbaseT/Half" in ethtool_info.settings["Supported link modes"]
+
+
+def test_parse_ethtool_advertised_link_modes(collector):
+    """Test parsing advertised link modes from ethtool output"""
+    ethtool_info = collector._parse_ethtool("ethmock123", ETHTOOL_OUTPUT)
+
+    # Check advertised link modes are stored in settings dict
+    # Note: The current implementation stores link modes in settings dict,
+    # not in the advertised_link_modes list
+    assert "Advertised link modes" in ethtool_info.settings
+    assert "10mockbaseT/Half" in ethtool_info.settings["Advertised link modes"]
+    assert "10mockbaseT/Full" in ethtool_info.settings["Advertised link modes"]
+
+
+def test_parse_ethtool_no_link(collector):
+    """Test parsing ethtool output when link is down"""
+    ethtool_info = collector._parse_ethtool("ethmock1", ETHTOOL_NO_LINK_OUTPUT)
+
+    assert ethtool_info.interface == "ethmock1"
+    assert ethtool_info.speed == "Unknown!"
+    assert ethtool_info.duplex == "Unknown!"
+    assert ethtool_info.port == "FIBRE"
+    assert ethtool_info.auto_negotiation == "off"
+    assert ethtool_info.link_detected == "no"
+    # Check supported link modes are stored in settings dict
+    assert "Supported link modes" in ethtool_info.settings
+    assert "11122mockbaseT/Full" in ethtool_info.settings["Supported link modes"]
+
+
+def test_parse_ethtool_empty_output(collector):
+    """Test parsing empty ethtool output"""
+    ethtool_info = collector._parse_ethtool("eth0", "")
+
+    assert ethtool_info.interface == "eth0"
+    assert ethtool_info.speed is None
+    assert ethtool_info.duplex is None
+    assert ethtool_info.link_detected is None
+    assert len(ethtool_info.settings) == 0
+    assert len(ethtool_info.supported_link_modes) == 0
+    assert len(ethtool_info.advertised_link_modes) == 0
+
+
 def test_network_data_model_creation(collector):
     """Test creating NetworkDataModel with all components"""
     interface = NetworkInterface(
-        name="eth0",
+        name="ethmock123",
         index=1,
         state="UP",
         mtu=5678,
         addresses=[IpAddress(address="1.123.123.100", prefix_len=24, family="inet")],
     )
 
-    route = Route(destination="default", gateway="2.123.123.1", device="eth0")
+    route = Route(destination="default", gateway="2.123.123.1", device="ethmock123")
 
     rule = RoutingRule(priority=100, source="1.123.123.0/24", table="main")
 
     neighbor = Neighbor(
-        ip_address="50.50.1.1", device="eth0", mac_address="11:22:33:44:55:66", state="REACHABLE"
+        ip_address="50.50.1.1",
+        device="ethmock123",
+        mac_address="11:22:33:44:55:66",
+        state="REACHABLE",
+    )
+
+    ethtool_info = EthtoolInfo(
+        interface="ethmock123", raw_output=ETHTOOL_OUTPUT, speed="1000mockMb/s", duplex="Full"
     )
 
     data = NetworkDataModel(
-        interfaces=[interface], routes=[route], rules=[rule], neighbors=[neighbor]
+        interfaces=[interface],
+        routes=[route],
+        rules=[rule],
+        neighbors=[neighbor],
+        ethtool_info={"ethmock123": ethtool_info},
     )
 
     assert len(data.interfaces) == 1
     assert len(data.routes) == 1
     assert len(data.rules) == 1
     assert len(data.neighbors) == 1
-    assert data.interfaces[0].name == "eth0"
+    assert len(data.ethtool_info) == 1
+    assert data.interfaces[0].name == "ethmock123"
+    assert data.ethtool_info["ethmock123"].speed == "1000mockMb/s"
