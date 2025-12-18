@@ -63,6 +63,8 @@ class EventCategory(AutoNameStrEnum):
         SBIOS/VBIOS/IFWI Errors
     - INFRASTRUCTURE
         Network, IT issues, Downtime
+    - NETWORK
+        Network configuration, interfaces, routing, neighbors, ethtool data
     - RUNTIME
         Framework issues, does not include content failures
     - UNKNOWN
@@ -82,5 +84,6 @@ class EventCategory(AutoNameStrEnum):
     SW_DRIVER = auto()
     BIOS = auto()
     INFRASTRUCTURE = auto()
+    NETWORK = auto()
     RUNTIME = auto()
     UNKNOWN = auto()
