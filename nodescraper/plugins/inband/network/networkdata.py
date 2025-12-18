@@ -23,7 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -90,6 +90,21 @@ class Neighbor(BaseModel):
     flags: List[str] = Field(default_factory=list)  # Additional flags like "router", "proxy"
 
 
+class EthtoolInfo(BaseModel):
+    """Ethtool information for a network interface"""
+
+    interface: str  # Interface name this info belongs to
+    raw_output: str  # Raw ethtool command output
+    settings: Dict[str, str] = Field(default_factory=dict)  # Parsed key-value settings
+    supported_link_modes: List[str] = Field(default_factory=list)  # Supported link modes
+    advertised_link_modes: List[str] = Field(default_factory=list)  # Advertised link modes
+    speed: Optional[str] = None  # Link speed (e.g., "10000Mb/s")
+    duplex: Optional[str] = None  # Duplex mode (e.g., "Full")
+    port: Optional[str] = None  # Port type (e.g., "Twisted Pair")
+    auto_negotiation: Optional[str] = None  # Auto-negotiation status (e.g., "on", "off")
+    link_detected: Optional[str] = None  # Link detection status (e.g., "yes", "no")
+
+
 class NetworkDataModel(DataModel):
     """Complete network configuration data"""
 
@@ -97,3 +112,6 @@ class NetworkDataModel(DataModel):
     routes: List[Route] = Field(default_factory=list)
     rules: List[RoutingRule] = Field(default_factory=list)
     neighbors: List[Neighbor] = Field(default_factory=list)
+    ethtool_info: Dict[str, EthtoolInfo] = Field(
+        default_factory=dict
+    )  # Interface name -> EthtoolInfo mapping
