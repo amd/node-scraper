@@ -36,3 +36,4 @@ class DmesgCollectorArgs(CollectorArgs):
 
     collect_rotated_logs: bool = False
     skip_sudo: bool = False
+    collect_dmesg_log: bool = True

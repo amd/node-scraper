@@ -32,6 +32,7 @@ from nodescraper.enums.executionstatus import ExecutionStatus
 from nodescraper.enums.systeminteraction import SystemInteractionLevel
 from nodescraper.interfaces.task import SystemCompatibilityError
 from nodescraper.models.systeminfo import OSFamily
+from nodescraper.plugins.inband.dmesg.collector_args import DmesgCollectorArgs
 from nodescraper.plugins.inband.dmesg.dmesg_collector import DmesgCollector
 from nodescraper.plugins.inband.dmesg.dmesgdata import DmesgData
 
@@ -276,3 +277,27 @@ def test_collect_data_integration(monkeypatch, system_info, conn_mock):
 
     assert isinstance(data, DmesgData)
     assert data.dmesg_content == "DMESG OUTPUT\n"
+
+
+def test_collect_data_with_args(conn_mock, system_info):
+    """Test collect_data accepts DmesgCollectorArgs"""
+    dmesg = "2023-06-01T01:00:00,685236-05:00 test message1\n"
+    conn_mock.run_command.return_value = CommandArtifact(
+        exit_code=0,
+        stdout=dmesg,
+        stderr="",
+        command="dmesg --time-format iso",
+    )
+
+    collector = DmesgCollector(
+        system_info=system_info,
+        system_interaction_level=SystemInteractionLevel.INTERACTIVE,
+        connection=conn_mock,
+    )
+
+    args = DmesgCollectorArgs(collect_dmesg_log=False)
+    res, data = collector.collect_data(args=args)
+
+    assert res.status == ExecutionStatus.OK
+    assert data is not None
+    assert data.dmesg_content == dmesg
