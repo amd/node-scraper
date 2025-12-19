@@ -49,7 +49,28 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
     CMD_ROUTE = "ip route show"
     CMD_RULE = "ip rule show"
     CMD_NEIGHBOR = "ip neighbor show"
-    CMD_ETHTOOL_TEMPLATE = "sudo ethtool {interface}"
+    CMD_ETHTOOL_TEMPLATE = "ethtool {interface}"
+
+    # LLDP commands
+    CMD_LLDPCLI_NEIGHBOR = "lldpcli show neighbor"
+    CMD_LLDPCTL = "lldpctl"
+
+    # Broadcom NIC commands
+    CMD_NICCLI_LISTDEV = "niccli --listdev"
+    CMD_NICCLI_GETQOS_TEMPLATE = "niccli -i {device_num} getqos"
+
+    # Pensando NIC commands
+    CMD_NICCTL_COMMANDS = [
+        "nicctl show card",
+        "nicctl show dcqcn",
+        "nicctl show environment",
+        "nicctl show pcie ats",
+        "nicctl show port",
+        "nicctl show qos",
+        "nicctl show rdma statistics",
+        "nicctl show version host-software",
+        "nicctl show version firmware",
+    ]
 
     def _parse_ip_addr(self, output: str) -> List[NetworkInterface]:
         """Parse 'ip addr show' output into NetworkInterface objects.
@@ -444,7 +465,7 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
 
         for iface in interfaces:
             cmd = self.CMD_ETHTOOL_TEMPLATE.format(interface=iface.name)
-            res_ethtool = self._run_sut_cmd(cmd)
+            res_ethtool = self._run_sut_cmd(cmd, sudo=True)
 
             if res_ethtool.exit_code == 0:
                 ethtool_info = self._parse_ethtool(iface.name, res_ethtool.stdout)
@@ -463,6 +484,99 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
                 )
 
         return ethtool_data
+
+    def _collect_lldp_info(self) -> None:
+        """Collect LLDP information using lldpcli and lldpctl commands."""
+        # Run lldpcli show neighbor
+        res_lldpcli = self._run_sut_cmd(self.CMD_LLDPCLI_NEIGHBOR, sudo=True)
+        if res_lldpcli.exit_code == 0:
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description="Collected LLDP neighbor information (lldpcli)",
+                priority=EventPriority.INFO,
+            )
+        else:
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description="LLDP neighbor collection failed or lldpcli not available",
+                data={"command": res_lldpcli.command, "exit_code": res_lldpcli.exit_code},
+                priority=EventPriority.INFO,
+            )
+
+        # Run lldpctl
+        res_lldpctl = self._run_sut_cmd(self.CMD_LLDPCTL, sudo=True)
+        if res_lldpctl.exit_code == 0:
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description="Collected LLDP information (lldpctl)",
+                priority=EventPriority.INFO,
+            )
+        else:
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description="LLDP collection failed or lldpctl not available",
+                data={"command": res_lldpctl.command, "exit_code": res_lldpctl.exit_code},
+                priority=EventPriority.INFO,
+            )
+
+    def _collect_broadcom_nic_info(self) -> None:
+        """Collect Broadcom NIC information using niccli commands."""
+        # First, list devices
+        res_listdev = self._run_sut_cmd(self.CMD_NICCLI_LISTDEV, sudo=True)
+        if res_listdev.exit_code == 0:
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description="Collected Broadcom NIC device list",
+                priority=EventPriority.INFO,
+            )
+
+            # Parse device numbers and collect QoS info for each
+            device_count = 0
+            for line in res_listdev.stdout.splitlines():
+                # Look for device numbers in output (format may vary)
+                # Common formats: "Device 0:", "dev 0", etc.
+                match = re.search(r"(?:Device|dev)\s+(\d+)", line, re.IGNORECASE)
+                if match:
+                    device_num = match.group(1)
+                    cmd = self.CMD_NICCLI_GETQOS_TEMPLATE.format(device_num=device_num)
+                    res_qos = self._run_sut_cmd(cmd, sudo=True)
+                    if res_qos.exit_code == 0:
+                        device_count += 1
+
+            if device_count > 0:
+                self._log_event(
+                    category=EventCategory.NETWORK,
+                    description=f"Collected Broadcom NIC QoS info for {device_count} devices",
+                    priority=EventPriority.INFO,
+                )
+        else:
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description="Broadcom NIC collection failed or niccli not available",
+                data={"command": res_listdev.command, "exit_code": res_listdev.exit_code},
+                priority=EventPriority.INFO,
+            )
+
+    def _collect_pensando_nic_info(self) -> None:
+        """Collect Pensando NIC information using nicctl commands."""
+        collected_count = 0
+        for cmd in self.CMD_NICCTL_COMMANDS:
+            res = self._run_sut_cmd(cmd, sudo=True)
+            if res.exit_code == 0:
+                collected_count += 1
+
+        if collected_count > 0:
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description=f"Collected Pensando NIC information ({collected_count} commands)",
+                priority=EventPriority.INFO,
+            )
+        else:
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description="Pensando NIC collection failed or nicctl not available",
+                priority=EventPriority.INFO,
+            )
 
     def collect_data(
         self,
@@ -557,6 +671,15 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
                 data={"command": res_neighbor.command, "exit_code": res_neighbor.exit_code},
                 priority=EventPriority.WARNING,
             )
+
+        # Collect LLDP information
+        self._collect_lldp_info()
+
+        # Collect Broadcom NIC information
+        self._collect_broadcom_nic_info()
+
+        # Collect Pensando NIC information
+        self._collect_pensando_nic_info()
 
         if interfaces or routes or rules or neighbors:
             network_data = NetworkDataModel(

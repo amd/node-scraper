@@ -293,7 +293,7 @@ def test_collect_data_success(collector, conn_mock):
     collector.system_info.os_family = OSFamily.LINUX
 
     # Mock successful command execution
-    def run_sut_cmd_side_effect(cmd):
+    def run_sut_cmd_side_effect(cmd, **kwargs):
         if "addr show" in cmd:
             return MagicMock(exit_code=0, stdout=IP_ADDR_OUTPUT, command=cmd)
         elif "route show" in cmd:
@@ -330,9 +330,9 @@ def test_collect_data_addr_failure(collector, conn_mock):
     collector.system_info.os_family = OSFamily.LINUX
 
     # Mock failed addr command but successful others
-    def run_sut_cmd_side_effect(cmd):
+    def run_sut_cmd_side_effect(cmd, **kwargs):
         if "addr show" in cmd:
-            return MagicMock(exit_code=1, stdout="", command=cmd)
+            return MagicMock(exit_code=1, command=cmd)
         elif "route show" in cmd:
             return MagicMock(exit_code=0, stdout=IP_ROUTE_OUTPUT, command=cmd)
         elif "rule show" in cmd:
@@ -340,8 +340,17 @@ def test_collect_data_addr_failure(collector, conn_mock):
         elif "neighbor show" in cmd:
             return MagicMock(exit_code=0, stdout=IP_NEIGHBOR_OUTPUT, command=cmd)
         elif "ethtool" in cmd:
-            return MagicMock(exit_code=1, stdout="", command=cmd)
-        return MagicMock(exit_code=1, stdout="", command=cmd)
+            return MagicMock(exit_code=1, command=cmd)
+        elif "lldpcli" in cmd or "lldpctl" in cmd:
+            # LLDP commands fail (not available)
+            return MagicMock(exit_code=1, command=cmd)
+        elif "niccli" in cmd:
+            # Broadcom NIC commands fail (not available)
+            return MagicMock(exit_code=1, command=cmd)
+        elif "nicctl" in cmd:
+            # Pensando NIC commands fail (not available)
+            return MagicMock(exit_code=1, command=cmd)
+        return MagicMock(exit_code=1, command=cmd)
 
     collector._run_sut_cmd = MagicMock(side_effect=run_sut_cmd_side_effect)
 
@@ -362,9 +371,9 @@ def test_collect_data_all_failures(collector, conn_mock):
     """Test collection when all commands fail"""
     collector.system_info.os_family = OSFamily.LINUX
 
-    # Mock all commands failing (including ethtool)
-    def run_sut_cmd_side_effect(cmd):
-        return MagicMock(exit_code=1, stdout="", command=cmd)
+    # Mock all commands failing (including ethtool, LLDP, Broadcom, Pensando)
+    def run_sut_cmd_side_effect(cmd, **kwargs):
+        return MagicMock(exit_code=1, command=cmd)
 
     collector._run_sut_cmd = MagicMock(side_effect=run_sut_cmd_side_effect)
 
