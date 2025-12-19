@@ -35,6 +35,7 @@ class DmesgData(DataModel):
     """Data model for in band dmesg log"""
 
     dmesg_content: str
+    skip_log_file: bool = False
 
     @classmethod
     def get_new_dmesg_lines(cls, current_dmesg: str, new_dmesg: str) -> str:
@@ -83,6 +84,8 @@ class DmesgData(DataModel):
         Args:
             log_path (str): log path
         """
+        if self.skip_log_file:
+            return
         log_name = os.path.join(log_path, get_unique_filename(log_path, "dmesg.log"))
         with open(log_name, "w", encoding="utf-8") as log_file:
             log_file.write(self.dmesg_content)
