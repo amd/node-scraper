@@ -155,7 +155,9 @@ class DmesgCollector(InBandDataCollector[DmesgData, DmesgCollectorArgs]):
             self._collect_dmesg_rotations()
 
         if dmesg_content:
-            dmesg_data = DmesgData(dmesg_content=dmesg_content)
+            dmesg_data = DmesgData(
+                dmesg_content=dmesg_content, skip_log_file=not args.collect_dmesg_log
+            )
             self.result.message = "Dmesg data collected"
             return self.result, dmesg_data
 
