@@ -295,7 +295,7 @@ def test_collect_data_with_args(conn_mock, system_info):
         connection=conn_mock,
     )
 
-    args = DmesgCollectorArgs(collect_dmesg_log=False)
+    args = DmesgCollectorArgs(log_dmesg_data=False)
     res, data = collector.collect_data(args=args)
 
     assert res.status == ExecutionStatus.OK
