@@ -283,3 +283,54 @@ def test_all_plugin_config_files_exist(plugin_config_files):
             config = json.load(f)
             assert "plugins" in config
             assert plugin_name in config["plugins"]
+
+
+def test_dmesg_plugin_collect_dmesg_log_false(run_cli_command, tmp_path):
+    """Test DmesgPlugin with collect_dmesg_log=false doesn't write dmesg.log."""
+    config = {
+        "name": "DmesgNoLogConfig",
+        "desc": "DmesgPlugin config with collect_dmesg_log disabled",
+        "global_args": {},
+        "plugins": {"DmesgPlugin": {"collection_args": {"collect_dmesg_log": False}}},
+        "result_collators": {},
+    }
+    config_file = tmp_path / "dmesg_no_log_config.json"
+    config_file.write_text(json.dumps(config, indent=2))
+
+    log_path = str(tmp_path / "logs_dmesg_no_log")
+    result = run_cli_command(
+        ["--log-path", log_path, "--plugin-configs", str(config_file)], check=False
+    )
+
+    assert result.returncode in [0, 1, 2]
+
+    dmesg_plugin_dir = Path(log_path) / "dmesg_plugin" / "dmesg_collector"
+    if dmesg_plugin_dir.exists():
+        dmesg_log_files = list(dmesg_plugin_dir.glob("dmesg*.log"))
+        assert (
+            len(dmesg_log_files) == 0
+        ), f"Found dmesg log files when collect_dmesg_log=False: {dmesg_log_files}"
+
+
+def test_dmesg_plugin_collect_dmesg_log_true(run_cli_command, tmp_path):
+    """Test DmesgPlugin with collect_dmesg_log=true writes dmesg.log."""
+    config = {
+        "name": "DmesgWithLogConfig",
+        "desc": "DmesgPlugin config with collect_dmesg_log enabled",
+        "global_args": {},
+        "plugins": {"DmesgPlugin": {"collection_args": {"collect_dmesg_log": True}}},
+        "result_collators": {},
+    }
+    config_file = tmp_path / "dmesg_with_log_config.json"
+    config_file.write_text(json.dumps(config, indent=2))
+
+    log_path = str(tmp_path / "logs_dmesg_with_log")
+    result = run_cli_command(
+        ["--log-path", log_path, "--plugin-configs", str(config_file)], check=False
+    )
+
+    if result.returncode in [0, 1]:
+        dmesg_plugin_dir = Path(log_path) / "dmesg_plugin" / "dmesg_collector"
+        if dmesg_plugin_dir.exists():
+            dmesg_log_files = list(dmesg_plugin_dir.glob("dmesg*.log"))
+            assert len(dmesg_log_files) > 0, "Expected dmesg.log file when collect_dmesg_log=True"
