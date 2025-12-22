@@ -4,6 +4,7 @@ This guide covers how to integrate Nodescraper into another Python tool and how 
 
 ## Table of Contents
 - [nodescraper integration](#nodescraper-integration)
+- [programmatic usage improvements](#programmatic-usage-improvements)
 - [external plugins](#external-plugins)
 
 ## nodescraper integration
@@ -128,6 +129,142 @@ def main():
 
 if __name__ == "__main__":
     main()
+```
+
+## programmatic usage improvements
+
+Node-scraper provides built-in features to simplify programmatic integration:
+
+### Quiet Mode
+
+Suppress console logging output while maintaining file logging:
+
+```python
+from nodescraper.pluginexecutor import PluginExecutor
+from nodescraper.models.pluginconfig import PluginConfig
+
+config = PluginConfig(
+    name="my_config",
+    plugins={"DmesgPlugin": {}}
+)
+
+# Suppress console output
+executor = PluginExecutor(
+    plugin_configs=[config],
+    log_path="/tmp/logs",
+    quiet=True  # No console output, but files are still written
+)
+
+results = executor.run_queue()
+```
+
+### PluginResult Helper Methods
+
+Access common data using simplified helper methods:
+
+```python
+# Run plugins
+executor = PluginExecutor(
+    plugin_configs=[config],
+    log_path="/tmp/logs",
+    quiet=True
+)
+results = executor.run_queue()
+
+for result in results:
+    # Get collected system data
+    system_data = result.get_system_data()
+    if system_data:
+        print(f"Collected data from {result.source}")
+
+    # Get analysis events
+    events = result.get_analysis_events()
+    for event in events:
+        print(f"{event.priority}: {event.description}")
+
+    # Get all artifact file paths
+    files = result.get_artifact_files()
+    for file_path in files:
+        print(f"Created: {file_path}")
+```
+
+### Artifact File Path Tracking
+
+All files written by plugins are automatically tracked:
+
+```python
+results = executor.run_queue()
+
+for result in results:
+    # Access all files created by the plugin
+    artifact_files = result.get_artifact_files()
+
+    # Files include:
+    # - result.json
+    # - events.json (if events exist)
+    # - data model files (e.g., dmesg.log)
+    # - artifact files (e.g., command outputs)
+
+    for file_path in artifact_files:
+        assert os.path.exists(file_path)
+```
+
+### Complete Example
+
+```python
+from nodescraper.pluginexecutor import PluginExecutor
+from nodescraper.pluginregistry import PluginRegistry
+from nodescraper.models.pluginconfig import PluginConfig
+from nodescraper.models.systeminfo import SystemInfo
+from nodescraper.enums import SystemLocation
+
+# Simple configuration
+plugin_config = PluginConfig(
+    name="passive_collection",
+    plugins={
+        "DmesgPlugin": {
+            "analysis_args": {
+                "analysis_range_start": "2024-01-01T00:00:00",
+                "analysis_range_end": "2024-01-02T00:00:00"
+            },
+            "collection_args": {
+                "log_dmesg_data": False  # Don't write large log files
+            }
+        }
+    }
+)
+
+# Create executor with quiet mode
+executor = PluginExecutor(
+    plugin_configs=[plugin_config],
+    system_info=SystemInfo(name="my_host", location=SystemLocation.LOCAL),
+    log_path="/tmp/nodescraper_logs",
+    quiet=True  # Suppress console output
+)
+
+# Execute plugins
+try:
+    results = executor.run_queue()
+
+    for result in results:
+        print(f"Plugin: {result.source}")
+        print(f"Status: {result.status}")
+
+        # Use helper methods for easy data access
+        system_data = result.get_system_data()
+        events = result.get_analysis_events()
+        files = result.get_artifact_files()
+
+        print(f"Events found: {len(events)}")
+        print(f"Files created: {len(files)}")
+
+        # Process events
+        errors = [e for e in events if e.priority.value >= 3]
+        if errors:
+            print(f"Found {len(errors)} errors!")
+
+except Exception as e:
+    print(f"Execution failed: {e}")
 ```
 
 ## external plugins

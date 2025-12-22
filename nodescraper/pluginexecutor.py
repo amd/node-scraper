@@ -52,10 +52,19 @@ class PluginExecutor:
         logger: Optional[logging.Logger] = None,
         plugin_registry: Optional[PluginRegistry] = None,
         log_path: Optional[str] = None,
+        quiet: bool = False,
     ):
 
         if logger is None:
-            logger = logging.getLogger(DEFAULT_LOGGER)
+            if quiet:
+                # Create silent logger for programmatic usage
+                logger = logging.getLogger(DEFAULT_LOGGER + ".silent")
+                logger.propagate = False
+                logger.handlers.clear()
+                logger.setLevel(logging.CRITICAL + 1)
+                logger.addHandler(logging.NullHandler())
+            else:
+                logger = logging.getLogger(DEFAULT_LOGGER)
         self.logger = logger
 
         self.plugin_registry = plugin_registry or PluginRegistry()

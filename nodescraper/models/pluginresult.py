@@ -37,3 +37,43 @@ class PluginResult(BaseModel):
     source: str
     message: Optional[str] = None
     result_data: Optional[Union[dict, BaseModel]] = None
+
+    def get_system_data(self):
+        """Get the collected system data if available.
+
+        Returns:
+            DataModel or None: The system data collected by the plugin, or None if not available.
+        """
+        if self.result_data is not None and hasattr(self.result_data, "system_data"):
+            return self.result_data.system_data  # type: ignore[union-attr]
+        return None
+
+    def get_analysis_events(self) -> list:
+        """Get analysis events/matches if available.
+
+        Returns:
+            list[Event]: List of analysis events, or empty list if not available.
+        """
+        if self.result_data is not None and hasattr(self.result_data, "analysis_result"):
+            analysis_result = self.result_data.analysis_result  # type: ignore[union-attr]
+            if hasattr(analysis_result, "events"):
+                return analysis_result.events  # type: ignore[union-attr]
+        return []
+
+    def get_artifact_files(self) -> list[str]:
+        """Get all artifact file paths written by this plugin.
+
+        Returns:
+            list[str]: List of absolute file paths to artifacts created by the plugin.
+        """
+        files = []
+        if self.result_data is not None:
+            if hasattr(self.result_data, "collection_result"):
+                collection_result = self.result_data.collection_result  # type: ignore[union-attr]
+                if hasattr(collection_result, "artifact_file_paths"):
+                    files.extend(collection_result.artifact_file_paths)  # type: ignore[union-attr]
+            if hasattr(self.result_data, "analysis_result"):
+                analysis_result = self.result_data.analysis_result  # type: ignore[union-attr]
+                if hasattr(analysis_result, "artifact_file_paths"):
+                    files.extend(analysis_result.artifact_file_paths)  # type: ignore[union-attr]
+        return files

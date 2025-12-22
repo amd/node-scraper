@@ -47,6 +47,8 @@ class FileSystemLogHook(TaskResultHook):
         Args:
             task_result (TaskResult): input task result
         """
+        written_files = []
+
         log_path = self.log_base_path
         if task_result.parent:
             log_path = os.path.join(log_path, pascal_to_snake(task_result.parent))
@@ -55,14 +57,17 @@ class FileSystemLogHook(TaskResultHook):
 
         os.makedirs(log_path, exist_ok=True)
 
-        with open(os.path.join(log_path, "result.json"), "w", encoding="utf-8") as log_file:
+        result_file = os.path.join(log_path, "result.json")
+        with open(result_file, "w", encoding="utf-8") as log_file:
             log_file.write(task_result.model_dump_json(exclude={"artifacts", "events"}, indent=2))
+        written_files.append(result_file)
 
         artifact_map = {}
         for artifact in task_result.artifacts:
             if isinstance(artifact, BaseFileArtifact):
                 log_name = get_unique_filename(log_path, artifact.filename)
                 artifact.log_model(log_path)
+                written_files.append(os.path.join(log_path, log_name))
 
             else:
                 name = f"{pascal_to_snake(artifact.__class__.__name__)}s"
@@ -73,16 +78,23 @@ class FileSystemLogHook(TaskResultHook):
 
         for name, artifacts in artifact_map.items():
             log_name = get_unique_filename(log_path, f"{name}.json")
-            with open(os.path.join(log_path, log_name), "w", encoding="utf-8") as log_file:
+            artifact_file = os.path.join(log_path, log_name)
+            with open(artifact_file, "w", encoding="utf-8") as log_file:
                 json.dump(artifacts, log_file, indent=2)
+            written_files.append(artifact_file)
 
         if task_result.events:
             event_log = get_unique_filename(log_path, "events.json")
+            event_file = os.path.join(log_path, event_log)
             events = [
                 event.model_dump(mode="json", exclude_none=True) for event in task_result.events
             ]
-            with open(os.path.join(log_path, event_log), "w", encoding="utf-8") as log_file:
+            with open(event_file, "w", encoding="utf-8") as log_file:
                 json.dump(events, log_file, indent=2)
+            written_files.append(event_file)
 
         if data:
             data.log_model(log_path)
+
+        # Store all written file paths in the task result
+        task_result.artifact_file_paths.extend(written_files)

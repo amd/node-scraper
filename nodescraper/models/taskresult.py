@@ -52,6 +52,7 @@ class TaskResult(BaseModel):
     parent: Optional[str] = None
     artifacts: list[BaseModel] = Field(default_factory=list)
     events: list[Event] = Field(default_factory=list)
+    artifact_file_paths: list[str] = Field(default_factory=list)
     start_time: datetime.datetime = Field(default_factory=datetime.datetime.now)
     end_time: datetime.datetime = Field(default_factory=datetime.datetime.now)
 
