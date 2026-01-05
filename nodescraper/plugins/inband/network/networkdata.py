@@ -105,6 +105,50 @@ class EthtoolInfo(BaseModel):
     link_detected: Optional[str] = None  # Link detection status (e.g., "yes", "no")
 
 
+class BroadcomNicDevice(BaseModel):
+    """Broadcom NIC device information from niccli --list_devices"""
+
+    device_num: int  # Device number (1, 2, 3, etc.)
+    model: Optional[str] = None  # e.g., "Broadcom BCM57608 1x400G QSFP-DD PCIe Ethernet NIC"
+    adapter_port: Optional[str] = None  # e.g., "Adp#1 Port#1"
+    interface_name: Optional[str] = None  # e.g., "benic1p1"
+    mac_address: Optional[str] = None  # e.g., "8C:84:74:37:C3:70"
+    pci_address: Optional[str] = None  # e.g., "0000:06:00.0"
+
+
+class BroadcomNicQosAppEntry(BaseModel):
+    """APP TLV entry in Broadcom NIC QoS configuration"""
+
+    priority: Optional[int] = None
+    sel: Optional[int] = None
+    dscp: Optional[int] = None
+    protocol: Optional[str] = None  # "UDP or DCCP", etc.
+    port: Optional[int] = None
+
+
+class BroadcomNicQos(BaseModel):
+    """Broadcom NIC QoS information from niccli --dev X qos --ets --show"""
+
+    device_num: int  # Device number this QoS info belongs to
+    raw_output: str  # Raw command output
+    # ETS Configuration
+    prio_map: Dict[int, int] = Field(
+        default_factory=dict
+    )  # Priority to TC mapping {0: 0, 1: 0, ...}
+    tc_bandwidth: List[int] = Field(
+        default_factory=list
+    )  # TC bandwidth percentages [50, 50, 0, ...]
+    tsa_map: Dict[int, str] = Field(
+        default_factory=dict
+    )  # TC to TSA mapping {0: "ets", 1: "ets", ...}
+    # PFC Configuration
+    pfc_enabled: Optional[int] = None  # Bitmap of PFC enabled priorities
+    # APP TLV entries
+    app_entries: List[BroadcomNicQosAppEntry] = Field(default_factory=list)
+    # TC Rate Limit
+    tc_rate_limit: List[int] = Field(default_factory=list)  # TC rate limits [100, 100, 100, ...]
+
+
 class NetworkDataModel(DataModel):
     """Complete network configuration data"""
 
@@ -115,3 +159,7 @@ class NetworkDataModel(DataModel):
     ethtool_info: Dict[str, EthtoolInfo] = Field(
         default_factory=dict
     )  # Interface name -> EthtoolInfo mapping
+    broadcom_nic_devices: List[BroadcomNicDevice] = Field(default_factory=list)
+    broadcom_nic_qos: Dict[int, BroadcomNicQos] = Field(
+        default_factory=dict
+    )  # Device number -> QoS info mapping

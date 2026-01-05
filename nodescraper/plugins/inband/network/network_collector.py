@@ -31,6 +31,9 @@ from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
 from nodescraper.models import TaskResult
 
 from .networkdata import (
+    BroadcomNicDevice,
+    BroadcomNicQos,
+    BroadcomNicQosAppEntry,
     EthtoolInfo,
     IpAddress,
     Neighbor,
@@ -56,8 +59,8 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
     CMD_LLDPCTL = "lldpctl"
 
     # Broadcom NIC commands
-    CMD_NICCLI_LISTDEV = "niccli --listdev"
-    CMD_NICCLI_GETQOS_TEMPLATE = "niccli -i {device_num} getqos"
+    CMD_NICCLI_LISTDEV = "niccli --list_devices"
+    CMD_NICCLI_GETQOS_TEMPLATE = "niccli --dev {device_num} qos --ets --show"
 
     # Pensando NIC commands
     CMD_NICCTL_COMMANDS = [
@@ -452,6 +455,198 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
 
         return ethtool_info
 
+    def _parse_niccli_listdev(self, output: str) -> List[BroadcomNicDevice]:
+        """Parse 'niccli --list_devices' output into BroadcomNicDevice objects.
+
+        Args:
+            output: Raw output from 'niccli --list_devices' command
+
+        Returns:
+            List of BroadcomNicDevice objects
+        """
+        devices = []
+        current_device = None
+
+        for line in output.splitlines():
+            line_stripped = line.strip()
+            if not line_stripped:
+                continue
+
+            # Check if this is a device header line
+            # Format: "1 ) Broadcom BCM57608 1x400G QSFP-DD PCIe Ethernet NIC (Adp#1 Port#1)"
+            match = re.match(r"^(\d+)\s*\)\s*(.+?)(?:\s+\((.+?)\))?$", line_stripped)
+            if match:
+                device_num_str = match.group(1)
+                model = match.group(2).strip() if match.group(2) else None
+                adapter_port = match.group(3).strip() if match.group(3) else None
+
+                try:
+                    device_num = int(device_num_str)
+                except ValueError:
+                    continue
+
+                current_device = BroadcomNicDevice(
+                    device_num=device_num,
+                    model=model,
+                    adapter_port=adapter_port,
+                )
+                devices.append(current_device)
+
+            # Check for Device Interface Name line
+            elif "Device Interface Name" in line and current_device:
+                parts = line_stripped.split(":")
+                if len(parts) >= 2:
+                    current_device.interface_name = parts[1].strip()
+
+            # Check for MAC Address line
+            elif "MAC Address" in line and current_device:
+                parts = line_stripped.split(":")
+                if len(parts) >= 2:
+                    # MAC address has colons, so rejoin the parts after first split
+                    mac = ":".join(parts[1:]).strip()
+                    current_device.mac_address = mac
+
+            # Check for PCI Address line
+            elif "PCI Address" in line and current_device:
+                parts = line_stripped.split(":")
+                if len(parts) >= 2:
+                    # PCI address also has colons, rejoin
+                    pci = ":".join(parts[1:]).strip()
+                    current_device.pci_address = pci
+
+        return devices
+
+    def _parse_niccli_qos(self, device_num: int, output: str) -> BroadcomNicQos:
+        """Parse 'niccli --dev X qos --ets --show' output into BroadcomNicQos object.
+
+        Args:
+            device_num: Device number
+            output: Raw output from 'niccli --dev X qos --ets --show' command
+
+        Returns:
+            BroadcomNicQos object with parsed data
+        """
+        qos_info = BroadcomNicQos(device_num=device_num, raw_output=output)
+
+        current_app_entry = None
+
+        for line in output.splitlines():
+            line_stripped = line.strip()
+            if not line_stripped:
+                continue
+
+            # Parse PRIO_MAP: "PRIO_MAP: 0:0 1:0 2:0 3:1 4:0 5:0 6:0 7:2"
+            if "PRIO_MAP:" in line:
+                parts = line.split("PRIO_MAP:")
+                if len(parts) >= 2:
+                    prio_entries = parts[1].strip().split()
+                    for entry in prio_entries:
+                        if ":" in entry:
+                            prio, tc = entry.split(":")
+                            try:
+                                qos_info.prio_map[int(prio)] = int(tc)
+                            except ValueError:
+                                pass
+
+            # Parse TC Bandwidth: "TC Bandwidth: 50% 50% 0%"
+            elif "TC Bandwidth:" in line:
+                parts = line.split("TC Bandwidth:")
+                if len(parts) >= 2:
+                    bandwidth_entries = parts[1].strip().split()
+                    for bw in bandwidth_entries:
+                        bw_clean = bw.rstrip("%")
+                        try:
+                            qos_info.tc_bandwidth.append(int(bw_clean))
+                        except ValueError:
+                            pass
+
+            # Parse TSA_MAP: "TSA_MAP: 0:ets 1:ets 2:strict"
+            elif "TSA_MAP:" in line:
+                parts = line.split("TSA_MAP:")
+                if len(parts) >= 2:
+                    tsa_entries = parts[1].strip().split()
+                    for entry in tsa_entries:
+                        if ":" in entry:
+                            tc, tsa = entry.split(":", 1)
+                            try:
+                                qos_info.tsa_map[int(tc)] = tsa
+                            except ValueError:
+                                pass
+
+            # Parse PFC enabled: "PFC enabled: 3"
+            elif "PFC enabled:" in line:
+                parts = line.split("PFC enabled:")
+                if len(parts) >= 2:
+                    try:
+                        qos_info.pfc_enabled = int(parts[1].strip())
+                    except ValueError:
+                        pass
+
+            # Parse APP entries - detect start of new APP entry
+            elif line_stripped.startswith("APP#"):
+                # Save previous entry if exists
+                if current_app_entry:
+                    qos_info.app_entries.append(current_app_entry)
+                current_app_entry = BroadcomNicQosAppEntry()
+
+            # Parse Priority within APP entry
+            elif "Priority:" in line and current_app_entry is not None:
+                parts = line.split("Priority:")
+                if len(parts) >= 2:
+                    try:
+                        current_app_entry.priority = int(parts[1].strip())
+                    except ValueError:
+                        pass
+
+            # Parse Sel within APP entry
+            elif "Sel:" in line and current_app_entry is not None:
+                parts = line.split("Sel:")
+                if len(parts) >= 2:
+                    try:
+                        current_app_entry.sel = int(parts[1].strip())
+                    except ValueError:
+                        pass
+
+            # Parse DSCP within APP entry
+            elif "DSCP:" in line and current_app_entry is not None:
+                parts = line.split("DSCP:")
+                if len(parts) >= 2:
+                    try:
+                        current_app_entry.dscp = int(parts[1].strip())
+                    except ValueError:
+                        pass
+
+            # Parse protocol and port (e.g., "UDP or DCCP: 4791")
+            elif (
+                "UDP" in line or "TCP" in line or "DCCP" in line
+            ) and current_app_entry is not None:
+                if ":" in line:
+                    parts = line.split(":")
+                    if len(parts) >= 2:
+                        current_app_entry.protocol = parts[0].strip()
+                        try:
+                            current_app_entry.port = int(parts[1].strip())
+                        except ValueError:
+                            pass
+
+            # Parse TC Rate Limit: "TC Rate Limit: 100% 100% 100% 0% 0% 0% 0% 0%"
+            elif "TC Rate Limit:" in line:
+                parts = line.split("TC Rate Limit:")
+                if len(parts) >= 2:
+                    rate_entries = parts[1].strip().split()
+                    for rate in rate_entries:
+                        rate_clean = rate.rstrip("%")
+                        try:
+                            qos_info.tc_rate_limit.append(int(rate_clean))
+                        except ValueError:
+                            pass
+
+        # Add the last APP entry if exists
+        if current_app_entry:
+            qos_info.app_entries.append(current_app_entry)
+
+        return qos_info
+
     def _collect_ethtool_info(self, interfaces: List[NetworkInterface]) -> Dict[str, EthtoolInfo]:
         """Collect ethtool information for all network interfaces.
 
@@ -519,34 +714,52 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
                 priority=EventPriority.INFO,
             )
 
-    def _collect_broadcom_nic_info(self) -> None:
-        """Collect Broadcom NIC information using niccli commands."""
+    def _collect_broadcom_nic_info(
+        self,
+    ) -> Tuple[List[BroadcomNicDevice], Dict[int, BroadcomNicQos]]:
+        """Collect Broadcom NIC information using niccli commands.
+
+        Returns:
+            Tuple of (list of BroadcomNicDevice, dict mapping device number to BroadcomNicQos)
+        """
+        devices = []
+        qos_data = {}
+
         # First, list devices
         res_listdev = self._run_sut_cmd(self.CMD_NICCLI_LISTDEV, sudo=True)
         if res_listdev.exit_code == 0:
+            # Parse device list
+            devices = self._parse_niccli_listdev(res_listdev.stdout)
             self._log_event(
                 category=EventCategory.NETWORK,
-                description="Collected Broadcom NIC device list",
+                description=f"Collected Broadcom NIC device list: {len(devices)} devices",
                 priority=EventPriority.INFO,
             )
 
-            # Parse device numbers and collect QoS info for each
-            device_count = 0
-            for line in res_listdev.stdout.splitlines():
-                # Look for device numbers in output (format may vary)
-                # Common formats: "Device 0:", "dev 0", etc.
-                match = re.search(r"(?:Device|dev)\s+(\d+)", line, re.IGNORECASE)
-                if match:
-                    device_num = match.group(1)
-                    cmd = self.CMD_NICCLI_GETQOS_TEMPLATE.format(device_num=device_num)
-                    res_qos = self._run_sut_cmd(cmd, sudo=True)
-                    if res_qos.exit_code == 0:
-                        device_count += 1
+            # Collect QoS info for each device
+            for device in devices:
+                cmd = self.CMD_NICCLI_GETQOS_TEMPLATE.format(device_num=device.device_num)
+                res_qos = self._run_sut_cmd(cmd, sudo=True)
+                if res_qos.exit_code == 0:
+                    qos_info = self._parse_niccli_qos(device.device_num, res_qos.stdout)
+                    qos_data[device.device_num] = qos_info
+                    self._log_event(
+                        category=EventCategory.NETWORK,
+                        description=f"Collected Broadcom NIC QoS info for device {device.device_num}",
+                        priority=EventPriority.INFO,
+                    )
+                else:
+                    self._log_event(
+                        category=EventCategory.NETWORK,
+                        description=f"Failed to collect QoS info for device {device.device_num}",
+                        data={"command": res_qos.command, "exit_code": res_qos.exit_code},
+                        priority=EventPriority.WARNING,
+                    )
 
-            if device_count > 0:
+            if qos_data:
                 self._log_event(
                     category=EventCategory.NETWORK,
-                    description=f"Collected Broadcom NIC QoS info for {device_count} devices",
+                    description=f"Collected Broadcom NIC QoS info for {len(qos_data)} devices",
                     priority=EventPriority.INFO,
                 )
         else:
@@ -556,6 +769,8 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
                 data={"command": res_listdev.command, "exit_code": res_listdev.exit_code},
                 priority=EventPriority.INFO,
             )
+
+        return devices, qos_data
 
     def _collect_pensando_nic_info(self) -> None:
         """Collect Pensando NIC information using nicctl commands."""
@@ -593,6 +808,8 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
         rules = []
         neighbors = []
         ethtool_data = {}
+        broadcom_devices: List[BroadcomNicDevice] = []
+        broadcom_qos_data: Dict[int, BroadcomNicQos] = {}
 
         # Collect interface/address information
         res_addr = self._run_sut_cmd(self.CMD_ADDR)
@@ -676,23 +893,25 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
         self._collect_lldp_info()
 
         # Collect Broadcom NIC information
-        self._collect_broadcom_nic_info()
+        broadcom_devices, broadcom_qos_data = self._collect_broadcom_nic_info()
 
         # Collect Pensando NIC information
         self._collect_pensando_nic_info()
 
-        if interfaces or routes or rules or neighbors:
+        if interfaces or routes or rules or neighbors or broadcom_devices:
             network_data = NetworkDataModel(
                 interfaces=interfaces,
                 routes=routes,
                 rules=rules,
                 neighbors=neighbors,
                 ethtool_info=ethtool_data,
+                broadcom_nic_devices=broadcom_devices,
+                broadcom_nic_qos=broadcom_qos_data,
             )
             self.result.message = (
                 f"Collected network data: {len(interfaces)} interfaces, "
                 f"{len(routes)} routes, {len(rules)} rules, {len(neighbors)} neighbors, "
-                f"{len(ethtool_data)} ethtool entries"
+                f"{len(ethtool_data)} ethtool entries, {len(broadcom_devices)} Broadcom NICs"
             )
             self.result.status = ExecutionStatus.OK
             return self.result, network_data
