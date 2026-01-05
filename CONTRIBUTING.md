@@ -52,8 +52,41 @@ When creating a PR, use the following process.
 > By creating a PR, you agree to allow your contribution to be licensed under the
 > terms of the LICENSE.txt file.
 
-### Documentation
+### Pre-commit hooks
 
-Submit Node Scraper documentation changes to our
-[documentation](https://github.com/amd/node-scraper/blob/development/README.md). You must update
-documentation related to any new feature or API contribution.
+This repository uses [pre-commit](https://pre-commit.com/) to automatically format code. When you commit changes to plugin files, the hooks will:
+
+1. Run code formatters (ruff, black)
+2. Run type checking (mypy)
+
+#### Setup
+
+Install pre-commit hooks after cloning the repository:
+
+```bash
+# Activate your virtual environment
+source venv/bin/activate
+
+# Install pre-commit hooks
+pre-commit install
+```
+
+#### Usage
+
+The hooks run automatically when you commit.
+
+```bash
+# First commit attempt - hooks run and may modify files
+git commit -m "Add new plugin feature"
+
+# If hooks modified files, stage them and commit again
+git add .
+git commit -m "Add new plugin feature"
+```
+
+You can also run hooks manually:
+
+```bash
+# Run all hooks on all files
+pre-commit run --all-files
+```

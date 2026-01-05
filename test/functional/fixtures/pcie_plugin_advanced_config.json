@@ -1,0 +1,28 @@
+{
+  "global_args": {},
+  "plugins": {
+    "PciePlugin": {
+      "analysis_args": {
+        "exp_speed": 5,
+        "exp_width": 16,
+        "exp_sriov_count": 8,
+        "exp_gpu_count_override": 4,
+        "exp_max_payload_size": {
+          "29631": 256,
+          "29711": 512
+        },
+        "exp_max_rd_req_size": {
+          "29631": 512,
+          "29711": 1024
+        },
+        "exp_ten_bit_tag_req_en": {
+          "29631": 1,
+          "29711": 0
+        }
+      }
+    }
+  },
+  "result_collators": {},
+  "name": "PciePlugin advanced config",
+  "desc": "Advanced config for testing PciePlugin with device-specific settings"
+}

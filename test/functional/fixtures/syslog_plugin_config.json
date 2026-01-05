@@ -1,0 +1,9 @@
+{
+  "global_args": {},
+  "plugins": {
+    "SyslogPlugin": {}
+  },
+  "result_collators": {},
+  "name": "SyslogPlugin config",
+  "desc": "Config for testing SyslogPlugin"
+}

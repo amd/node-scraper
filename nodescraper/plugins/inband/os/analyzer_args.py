@@ -61,4 +61,4 @@ class OsAnalyzerArgs(AnalyzerArgs):
         Returns:
             OsAnalyzerArgs: instance of analyzer args class
         """
-        return cls(exp_os=datamodel.os_name)
+        return cls(exp_os=datamodel.os_name, exact_match=True)

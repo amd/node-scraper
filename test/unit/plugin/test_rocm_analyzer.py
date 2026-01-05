@@ -42,7 +42,7 @@ def analyzer(system_info):
 
 @pytest.fixture
 def model_obj():
-    return RocmDataModel(rocm_version="6.2.0-66")
+    return RocmDataModel(rocm_version="6.2.0-66", rocm_latest_versioned_path="/opt/rocm-7.1.0")
 
 
 @pytest.fixture
@@ -50,14 +50,16 @@ def config():
     return {
         "rocm_version": ["6.2.0-66"],
         "invalid": "invalid",
+        "rocm_latest": "/opt/rocm-7.1.0",
     }
 
 
 def test_all_good_data(analyzer, model_obj, config):
-    args = RocmAnalyzerArgs(exp_rocm=config["rocm_version"])
+    args = RocmAnalyzerArgs(exp_rocm=config["rocm_version"], exp_rocm_latest=config["rocm_latest"])
     result = analyzer.analyze_data(model_obj, args)
     assert result.status == ExecutionStatus.OK
-    assert result.message == "ROCm version matches expected"
+    assert "ROCm version matches expected" in result.message
+    assert "ROCm latest path validated" in result.message
     assert all(
         event.priority not in {EventPriority.WARNING, EventPriority.ERROR, EventPriority.CRITICAL}
         for event in result.events
@@ -94,3 +96,16 @@ def test_unexpected_rocm_version(analyzer, model_obj):
 def test_invalid_user_config(analyzer, model_obj, config):
     result = analyzer.analyze_data(model_obj, None)
     assert result.status == ExecutionStatus.NOT_RAN
+
+
+def test_rocm_latest_path_mismatch(analyzer, model_obj):
+    """Test that rocm_latest path mismatch is detected and logged"""
+    args = RocmAnalyzerArgs(exp_rocm=["6.2.0-66"], exp_rocm_latest="/opt/rocm-6.2.0")
+    result = analyzer.analyze_data(model_obj, args)
+    assert result.status == ExecutionStatus.ERROR
+    assert "ROCm latest path mismatch" in result.message
+    assert "/opt/rocm-6.2.0" in result.message  # expected
+    assert "/opt/rocm-7.1.0" in result.message  # actual
+    for event in result.events:
+        assert event.priority == EventPriority.CRITICAL
+        assert event.category == EventCategory.SW_DRIVER.value

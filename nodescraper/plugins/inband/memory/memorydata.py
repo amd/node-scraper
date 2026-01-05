@@ -23,9 +23,68 @@
 # SOFTWARE.
 #
 ###############################################################################
+from typing import Optional
+
+from pydantic import BaseModel
+
 from nodescraper.models import DataModel
 
 
+class MemoryBlock(BaseModel):
+    """Memory block information from lsmem"""
+
+    range: str
+    size: str
+    state: str
+    removable: Optional[str] = None
+    block: Optional[str] = None
+
+
+class MemorySummary(BaseModel):
+    """Summary information from lsmem"""
+
+    memory_block_size: Optional[str] = None
+    total_online_memory: Optional[str] = None
+    total_offline_memory: Optional[str] = None
+
+
+class LsmemData(BaseModel):
+    """Complete lsmem output data"""
+
+    memory_blocks: list[MemoryBlock]
+    summary: MemorySummary
+
+
+class NumaNode(BaseModel):
+    """NUMA node information"""
+
+    node_id: int
+    cpus: list[int]
+    memory_size_mb: Optional[int] = None
+    memory_free_mb: Optional[int] = None
+
+
+class NumaDistance(BaseModel):
+    """Distance between two NUMA nodes"""
+
+    from_node: int
+    to_node: int
+    distance: int
+
+
+class NumaTopology(BaseModel):
+    """Complete NUMA topology from 'numactl --hardware'"""
+
+    available_nodes: list[int]
+    nodes: list[NumaNode]
+    distances: list[NumaDistance]
+    distance_matrix: Optional[dict[int, dict[int, int]]] = None
+
+
 class MemoryDataModel(DataModel):
+    """Memory data model"""
+
     mem_free: str
     mem_total: str
+    lsmem_data: Optional[LsmemData] = None
+    numa_topology: Optional[NumaTopology] = None

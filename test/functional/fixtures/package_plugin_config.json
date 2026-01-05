@@ -1,0 +1,20 @@
+{
+  "global_args": {},
+  "plugins": {
+    "PackagePlugin": {
+      "collection_args": {
+        "rocm_regex": "rocm|hip|hsa|amdgpu",
+        "enable_rocm_regex": true
+      },
+      "analysis_args": {
+        "exp_package_ver": {
+          "gcc": "11.4.0"
+        },
+        "regex_match": false
+      }
+    }
+  },
+  "result_collators": {},
+  "name": "PackagePlugin config",
+  "desc": "Config for testing PackagePlugin"
+}

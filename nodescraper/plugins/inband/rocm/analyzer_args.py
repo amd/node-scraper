@@ -25,13 +25,15 @@
 ###############################################################################
 from typing import Union
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import Field, field_validator
 
+from nodescraper.models.analyzerargs import AnalyzerArgs
 from nodescraper.plugins.inband.rocm.rocmdata import RocmDataModel
 
 
-class RocmAnalyzerArgs(BaseModel):
+class RocmAnalyzerArgs(AnalyzerArgs):
     exp_rocm: Union[str, list] = Field(default_factory=list)
+    exp_rocm_latest: str = Field(default="")
 
     @field_validator("exp_rocm", mode="before")
     @classmethod
@@ -59,4 +61,6 @@ class RocmAnalyzerArgs(BaseModel):
         Returns:
             RocmAnalyzerArgs: instance of analyzer args class
         """
-        return cls(exp_rocm=datamodel.rocm_version)
+        return cls(
+            exp_rocm=datamodel.rocm_version, exp_rocm_latest=datamodel.rocm_latest_versioned_path
+        )

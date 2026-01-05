@@ -1,5 +1,5 @@
 [project]
-name = "node-scraper"
+name = "amd-node-scraper"
 version = "0.0.1"
 description = "A framework for automated error detection and data collection"
 authors = []

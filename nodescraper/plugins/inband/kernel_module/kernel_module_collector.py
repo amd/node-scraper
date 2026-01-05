@@ -26,11 +26,12 @@
 from typing import Optional
 
 from nodescraper.base import InBandDataCollector
+from nodescraper.connection.inband import TextFileArtifact
 from nodescraper.connection.inband.inband import CommandArtifact
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.models import TaskResult
 
-from .kernel_module_data import KernelModuleDataModel
+from .kernel_module_data import KernelModuleDataModel, ModuleInfo, ModuleParameter
 
 
 class KernelModuleCollector(InBandDataCollector[KernelModuleDataModel, None]):
@@ -39,6 +40,7 @@ class KernelModuleCollector(InBandDataCollector[KernelModuleDataModel, None]):
     DATA_MODEL = KernelModuleDataModel
     CMD_WINDOWS = "wmic os get Version /Value"
     CMD = "cat /proc/modules"
+    CMD_MODINFO_AMDGPU = "modinfo amdgpu"
 
     def parse_proc_modules(self, output: dict) -> dict:
         """Parse command output and return dict of modules
@@ -59,6 +61,77 @@ class KernelModuleCollector(InBandDataCollector[KernelModuleDataModel, None]):
                 "parameters": {},
             }
         return modules
+
+    def _parse_modinfo(self, output: str) -> Optional[ModuleInfo]:
+        """Parse modinfo command output into structured ModuleInfo
+
+        Args:
+            output (str): modinfo command output
+
+        Returns:
+            Optional[ModuleInfo]: parsed module information or None if parsing fails
+        """
+        if not output or not output.strip():
+            return None
+
+        module_info = ModuleInfo()
+
+        for line in output.splitlines():
+            line = line.strip()
+            if not line or ":" not in line:
+                continue
+
+            field, _, value = line.partition(":")
+            field = field.strip()
+            value = value.strip()
+
+            if field == "filename":
+                module_info.filename = value
+            elif field == "version":
+                module_info.version = value
+            elif field == "license":
+                module_info.license = value
+            elif field == "description":
+                module_info.description = value
+            elif field == "author":
+                module_info.author.append(value)
+            elif field == "firmware":
+                module_info.firmware.append(value)
+            elif field == "srcversion":
+                module_info.srcversion = value
+            elif field == "depends":
+                if value:
+                    module_info.depends = [dep.strip() for dep in value.split(",") if dep.strip()]
+            elif field == "name":
+                module_info.name = value
+            elif field == "vermagic":
+                module_info.vermagic = value
+            elif field == "sig_id":
+                module_info.sig_id = value
+            elif field == "signer":
+                module_info.signer = value
+            elif field == "sig_key":
+                module_info.sig_key = value
+            elif field == "sig_hashalgo":
+                module_info.sig_hashalgo = value
+            elif field == "parm":
+                param_name, param_desc = value.split(":", 1) if ":" in value else (value, "")
+                param_name = param_name.strip()
+                param_desc = param_desc.strip()
+
+                param_type = None
+                if param_desc and "(" in param_desc and ")" in param_desc:
+                    type_start = param_desc.rfind("(")
+                    type_end = param_desc.rfind(")")
+                    if type_start < type_end:
+                        param_type = param_desc[type_start + 1 : type_end].strip()
+                        param_desc = param_desc[:type_start].strip()
+
+                module_info.parm.append(
+                    ModuleParameter(name=param_name, type=param_type, description=param_desc)
+                )
+
+        return module_info
 
     def get_module_parameters(self, module_name: str) -> dict:
         """Fetches parameter names and values for a given kernel module using _run_sut_cmd
@@ -143,8 +216,39 @@ class KernelModuleCollector(InBandDataCollector[KernelModuleDataModel, None]):
         else:
             kernel_modules = self.collect_all_module_info()
 
+        amdgpu_modinfo = None
+        if self.system_info.os_family != OSFamily.WINDOWS:
+            # Collect and parse modinfo amdgpu output
+            modinfo_res = self._run_sut_cmd(self.CMD_MODINFO_AMDGPU)
+            if modinfo_res.exit_code == 0 and modinfo_res.stdout:
+                amdgpu_modinfo = self._parse_modinfo(modinfo_res.stdout)
+                if amdgpu_modinfo:
+                    self.result.artifacts.append(
+                        TextFileArtifact(filename="modinfo_amdgpu.txt", contents=modinfo_res.stdout)
+                    )
+                else:
+                    self._log_event(
+                        category=EventCategory.OS,
+                        description="Could not parse modinfo amdgpu output",
+                        data={"command": modinfo_res.command},
+                        priority=EventPriority.WARNING,
+                    )
+            else:
+                self._log_event(
+                    category=EventCategory.OS,
+                    description="Could not collect modinfo amdgpu output",
+                    data={
+                        "command": modinfo_res.command,
+                        "exit_code": modinfo_res.exit_code,
+                        "stderr": modinfo_res.stderr,
+                    },
+                    priority=EventPriority.WARNING,
+                )
+
         if kernel_modules:
-            km_data = KernelModuleDataModel(kernel_modules=kernel_modules)
+            km_data = KernelModuleDataModel(
+                kernel_modules=kernel_modules, amdgpu_modinfo=amdgpu_modinfo
+            )
             self._log_event(
                 category="KERNEL_READ",
                 description="Kernel modules read",

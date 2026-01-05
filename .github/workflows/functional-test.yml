@@ -1,0 +1,30 @@
+name: Python Functional Tests
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+
+jobs:
+  run_tests:
+    runs-on: [ self-hosted ]
+    container: python:3.9
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install xmllint
+      run: |
+        apt-get update
+        apt-get install -y libxml2-utils bc
+
+    - name: Install package and run functional tests
+      id: run_functional_tests
+      shell: bash
+      run: |
+        source ./dev-setup.sh
+        pytest test/functional -s --disable-warnings -v
