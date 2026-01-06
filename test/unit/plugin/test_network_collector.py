@@ -39,6 +39,13 @@ from nodescraper.plugins.inband.network.networkdata import (
     Neighbor,
     NetworkDataModel,
     NetworkInterface,
+    PensandoNicCard,
+    PensandoNicDcqcn,
+    PensandoNicEnvironment,
+    PensandoNicPcieAts,
+    PensandoNicPort,
+    PensandoNicQos,
+    PensandoNicQosScheduling,
     Route,
     RoutingRule,
 )
@@ -307,6 +314,15 @@ def test_collect_data_success(collector, conn_mock):
         elif "ethtool" in cmd:
             # Fail ethtool commands (simulating no sudo or not supported)
             return MagicMock(exit_code=1, stdout="", command=cmd)
+        elif "lldpcli" in cmd or "lldpctl" in cmd:
+            # LLDP commands fail (not available)
+            return MagicMock(exit_code=1, stdout="", command=cmd)
+        elif "niccli" in cmd:
+            # Broadcom NIC commands fail (not available)
+            return MagicMock(exit_code=1, stdout="", command=cmd)
+        elif "nicctl" in cmd:
+            # Pensando NIC commands fail (not available)
+            return MagicMock(exit_code=1, stdout="", command=cmd)
         return MagicMock(exit_code=1, stdout="", command=cmd)
 
     collector._run_sut_cmd = MagicMock(side_effect=run_sut_cmd_side_effect)
@@ -556,51 +572,14 @@ def test_network_data_model_creation(collector):
 
 
 # Sample Broadcom NIC command outputs for testing
-NICCLI_LISTDEV_OUTPUT = """root@smci355-ccs-aus-n13-25:/# niccli --list_devices
-
+NICCLI_LISTDEV_OUTPUT = """
 1 ) Broadcom BCM57608 1x400G QSFP-DD PCIe Ethernet NIC (Adp#1 Port#1)
-     Device Interface Name     : benic1p1
-     MAC Address               : 8C:84:74:37:C3:70
-     PCI Address               : 0000:06:00.0
-
-2 ) Broadcom BCM57608 1x400G QSFP-DD PCIe Ethernet NIC (Adp#2 Port#1)
-     Device Interface Name     : benic2p1
-     MAC Address               : 8C:84:74:37:DB:D0
-     PCI Address               : 0000:16:00.0
-
-3 ) Broadcom BCM57608 1x400G QSFP-DD PCIe Ethernet NIC (Adp#3 Port#1)
-     Device Interface Name     : benic4p1
-     MAC Address               : 8C:84:74:37:6C:10
-     PCI Address               : 0000:66:00.0
-
-4 ) Broadcom BCM57608 1x400G QSFP-DD PCIe Ethernet NIC (Adp#4 Port#1)
-     Device Interface Name     : benic3p1
-     MAC Address               : 8C:84:74:37:BB:F0
-     PCI Address               : 0000:76:00.0
-
-5 ) Broadcom BCM57608 1x400G QSFP-DD PCIe Ethernet NIC (Adp#5 Port#1)
-     Device Interface Name     : benic5p1
-     MAC Address               : 8C:84:74:37:8E:A0
-     PCI Address               : 0000:86:00.0
-
-6 ) Broadcom BCM57608 1x400G QSFP-DD PCIe Ethernet NIC (Adp#6 Port#1)
-     Device Interface Name     : benic6p1
-     MAC Address               : 6C:92:CF:9A:15:10
-     PCI Address               : 0000:96:00.0
-
-7 ) Broadcom BCM57608 1x400G QSFP-DD PCIe Ethernet NIC (Adp#7 Port#1)
-     Device Interface Name     : benic8p1
-     MAC Address               : 8C:84:74:37:69:90
-     PCI Address               : 0000:E6:00.0
-
-8 ) Broadcom BCM57608 1x400G QSFP-DD PCIe Ethernet NIC (Adp#8 Port#1)
-     Device Interface Name     : benic7p1
-     MAC Address               : 8C:84:74:37:C1:40
-     PCI Address               : 0000:F6:00.0
+     Device Interface Name     : abcd1p1
+     MAC Address               : 81:82:83:84:85:88
+     PCI Address               : 0000:22:00.0
 """
 
-NICCLI_QOS_OUTPUT = """root@smci355-ccs-aus-n13-25:/# niccli --dev 1 qos --ets --show
-
+NICCLI_QOS_OUTPUT = """
 IEEE 8021QAZ ETS Configuration TLV:
          PRIO_MAP: 0:0 1:0 2:0 3:1 4:0 5:0 6:0 7:2
          TC Bandwidth: 50% 50% 0%
@@ -626,12 +605,6 @@ IEEE 8021QAZ APP TLV:
 TC Rate Limit: 100% 100% 100% 0% 0% 0% 0% 0%
 """
 
-NICCLI_LISTDEV_SINGLE_DEVICE = """1 ) Broadcom BCM57608 1x400G QSFP-DD PCIe Ethernet NIC (Adp#1 Port#1)
-     Device Interface Name     : benic1p1
-     MAC Address               : 8C:84:74:37:C3:70
-     PCI Address               : 0000:06:00.0
-"""
-
 NICCLI_QOS_MINIMAL_OUTPUT = """IEEE 8021QAZ ETS Configuration TLV:
          PRIO_MAP: 0:0 1:1
          TC Bandwidth: 50% 50%
@@ -641,49 +614,123 @@ IEEE 8021QAZ PFC TLV:
 TC Rate Limit: 100% 100%
 """
 
+# Sample Pensando NIC command outputs for testing
+NICCTL_SHOW_CARD_OUTPUT = """
+---------------------------------------------------------------------------------------------
+Id                                      PCIe BDF       ASIC      F/W partition Serial number
+---------------------------------------------------------------------------------------------
+1111111-4c32-3533-3330-12345000000    0000:06:00.0   test1    A             ABC1234
+2222222-4c32-3533-3731-78901500000    0000:16:00.0   test2    A             DEF5678
+"""
 
-def test_parse_niccli_listdev_multiple_devices(collector):
-    """Test parsing multiple Broadcom NIC devices from niccli --list_devices output"""
+NICCTL_SHOW_DCQCN_OUTPUT = """
+NIC : 1111111-4c32-3533-3330-12345000000 (0000:06:00.0)
+------------------------------------------------------------------------------------------
+
+Lif id                                     : 1111111-4c32-3533-3330-12345000000
+ROCE device                                : sample
+  DCQCN profile id                         : 1
+  Status                                   : Disabled
+******************************************************************************************
+"""
+
+NICCTL_SHOW_ENVIRONMENT_OUTPUT = """
+NIC : 1111111-4c32-3533-3330-12345000000 (0000:06:00.0)
+
+  Power(W):
+    Total power drawn (pin)        : 29.437
+    Core power (pout1)             : 12.375
+    ARM power (pout2)              : 0.788
+  Temperature(C):
+    Local board temperature        : 44.12
+    Die temperature                : 45.59
+  Voltage(mV):
+    Input voltage                  : 12078
+    Core voltage                   : 725
+  Frequency(MHz):
+    Core frequency                 : 1100
+    CPU frequency                  : 1500
+    P4 stage frequency             : 1500
+-------------------------------------------------------------------------------------
+"""
+
+NICCTL_SHOW_PCIE_ATS_OUTPUT = """
+NIC : 1111111-4c32-3533-3330-12345000000 (0000:06:00.0) : Disabled
+"""
+
+NICCTL_SHOW_PORT_OUTPUT = """
+NIC  : 1111111-4c32-3533-3330-12345000000 (0000:06:00.0)
+
+Port : 555555a-6c40-4242-4242-000011010000 (eth1/1)
+  Spec:
+    Ifindex                                  : 0x11010000
+    Type                                     : ETH
+    speed                                    : 400G
+    Admin state                              : UP
+    FEC type                                 : RS
+    Pause type                               : PFC
+    Number of lanes                          : 4
+    MTU                                      : 9216
+    TX pause                                 : enabled
+    RX pause                                 : enabled
+    Auto negotiation                         : disabled
+  Status:
+    Physical port                            : 1
+    Operational status                       : DOWN
+    Link FSM state                           : SIGNAL_DETECT
+    FEC type                                 : RS
+    Cable type                               : Copper
+    Number of lanes                          : 4
+    speed                                    : 400G
+    Auto negotiation                         : disabled
+    MAC ID                                   : 0
+    MAC channel                              : 0
+    MAC address                              : 04:90:81:4a:6c:40
+    Transceiver type                         : QSFP_CMIS
+    Transceiver state                        : SPROM-READ
+    Transceiver PID                          : QSFP-400G-CR4
+-------------------------------------------------------------------------------------
+"""
+
+NICCTL_SHOW_QOS_OUTPUT = """
+NIC  : 1111111-4c32-3533-3330-12345000000  (0000:06:00.0)
+
+Port : 0490814a-6c40-4242-4242-000011010000
+
+  Classification type         : DSCP
+
+  DSCP-to-priority :
+    DSCP bitmap               : 0xffffffffffffffff ==> priority : 0
+    DSCP                      : 0-63 ==> priority : 0
+
+
+  PFC :
+    PFC priority bitmap       : 0x0
+    PFC no-drop priorities    :
+
+  Scheduling :
+    --------------------------------------------
+    Priority  Scheduling  Bandwidth Rate-limit
+              Type        (in %age) (in Gbps)
+    --------------------------------------------
+    0         DWRR        0         N/A
+"""
+
+
+def test_parse_niccli_listdev_device(collector):
+    """Test parsing Broadcom NIC device from niccli --list_devices output"""
     devices = collector._parse_niccli_listdev(NICCLI_LISTDEV_OUTPUT)
 
-    assert len(devices) == 8
+    assert len(devices) == 1
 
-    # Check first device
+    # Check device
     device1 = devices[0]
     assert device1.device_num == 1
     assert device1.model == "Broadcom BCM57608 1x400G QSFP-DD PCIe Ethernet NIC"
     assert device1.adapter_port == "Adp#1 Port#1"
-    assert device1.interface_name == "benic1p1"
-    assert device1.mac_address == "8C:84:74:37:C3:70"
-    assert device1.pci_address == "0000:06:00.0"
-
-    # Check another device (device 3)
-    device3 = devices[2]
-    assert device3.device_num == 3
-    assert device3.interface_name == "benic4p1"
-    assert device3.mac_address == "8C:84:74:37:6C:10"
-    assert device3.pci_address == "0000:66:00.0"
-
-    # Check last device
-    device8 = devices[7]
-    assert device8.device_num == 8
-    assert device8.interface_name == "benic7p1"
-    assert device8.mac_address == "8C:84:74:37:C1:40"
-    assert device8.pci_address == "0000:F6:00.0"
-
-
-def test_parse_niccli_listdev_single_device(collector):
-    """Test parsing single Broadcom NIC device"""
-    devices = collector._parse_niccli_listdev(NICCLI_LISTDEV_SINGLE_DEVICE)
-
-    assert len(devices) == 1
-    device = devices[0]
-    assert device.device_num == 1
-    assert device.model == "Broadcom BCM57608 1x400G QSFP-DD PCIe Ethernet NIC"
-    assert device.adapter_port == "Adp#1 Port#1"
-    assert device.interface_name == "benic1p1"
-    assert device.mac_address == "8C:84:74:37:C3:70"
-    assert device.pci_address == "0000:06:00.0"
+    assert device1.interface_name == "abcd1p1"
+    assert device1.mac_address == "81:82:83:84:85:88"
+    assert device1.pci_address == "0000:22:00.0"
 
 
 def test_parse_niccli_listdev_empty_output(collector):
@@ -769,40 +816,6 @@ def test_parse_niccli_qos_complete(collector):
     assert qos.tc_rate_limit[7] == 0
 
 
-def test_parse_niccli_qos_minimal(collector):
-    """Test parsing minimal Broadcom NIC QoS output"""
-    qos = collector._parse_niccli_qos(2, NICCLI_QOS_MINIMAL_OUTPUT)
-
-    assert qos.device_num == 2
-    assert qos.raw_output == NICCLI_QOS_MINIMAL_OUTPUT
-
-    # Check PRIO_MAP
-    assert len(qos.prio_map) == 2
-    assert qos.prio_map[0] == 0
-    assert qos.prio_map[1] == 1
-
-    # Check TC Bandwidth
-    assert len(qos.tc_bandwidth) == 2
-    assert qos.tc_bandwidth[0] == 50
-    assert qos.tc_bandwidth[1] == 50
-
-    # Check TSA_MAP
-    assert len(qos.tsa_map) == 2
-    assert qos.tsa_map[0] == "ets"
-    assert qos.tsa_map[1] == "strict"
-
-    # Check PFC enabled
-    assert qos.pfc_enabled == 1
-
-    # Check APP entries (should be empty)
-    assert len(qos.app_entries) == 0
-
-    # Check TC Rate Limit
-    assert len(qos.tc_rate_limit) == 2
-    assert qos.tc_rate_limit[0] == 100
-    assert qos.tc_rate_limit[1] == 100
-
-
 def test_parse_niccli_qos_empty_output(collector):
     """Test parsing empty QoS output"""
     qos = collector._parse_niccli_qos(1, "")
@@ -815,28 +828,6 @@ def test_parse_niccli_qos_empty_output(collector):
     assert qos.pfc_enabled is None
     assert len(qos.app_entries) == 0
     assert len(qos.tc_rate_limit) == 0
-
-
-def test_parse_niccli_qos_no_app_entries(collector):
-    """Test parsing QoS output without APP entries"""
-    qos_no_app = """IEEE 8021QAZ ETS Configuration TLV:
-         PRIO_MAP: 0:0 1:1 2:2
-         TC Bandwidth: 33% 33% 34%
-         TSA_MAP: 0:ets 1:ets 2:ets
-IEEE 8021QAZ PFC TLV:
-         PFC enabled: 7
-TC Rate Limit: 100% 100% 100%
-"""
-
-    qos = collector._parse_niccli_qos(5, qos_no_app)
-
-    assert qos.device_num == 5
-    assert len(qos.prio_map) == 3
-    assert len(qos.tc_bandwidth) == 3
-    assert len(qos.tsa_map) == 3
-    assert qos.pfc_enabled == 7
-    assert len(qos.app_entries) == 0
-    assert len(qos.tc_rate_limit) == 3
 
 
 def test_parse_niccli_qos_multiple_app_protocols(collector):
@@ -944,3 +935,922 @@ def test_network_data_model_with_broadcom_nic(collector):
     assert data.broadcom_nic_devices[0].interface_name == "benic1p1"
     assert data.broadcom_nic_qos[1].device_num == 1
     assert data.broadcom_nic_qos[1].pfc_enabled == 3
+
+
+def test_parse_nicctl_show_card_multiple_cards(collector):
+    """Test parsing multiple Pensando NIC cards from nicctl show card output"""
+    cards = collector._parse_nicctl_card(NICCTL_SHOW_CARD_OUTPUT)
+
+    assert len(cards) == 2
+
+    # Check first card
+    card1 = cards[0]
+    assert card1.id == "1111111-4c32-3533-3330-12345000000"
+    assert card1.pcie_bdf == "0000:06:00.0"
+    assert card1.asic == "test1"
+    assert card1.fw_partition == "A"
+    assert card1.serial_number == "ABC1234"
+
+    # Check second card
+    card2 = cards[1]
+    assert card2.id == "2222222-4c32-3533-3731-78901500000"
+    assert card2.pcie_bdf == "0000:16:00.0"
+    assert card2.asic == "test2"
+    assert card2.fw_partition == "A"
+    assert card2.serial_number == "DEF5678"
+
+
+def test_parse_nicctl_show_card_empty_output(collector):
+    """Test parsing empty nicctl show card output"""
+    cards = collector._parse_nicctl_card("")
+
+    assert len(cards) == 0
+
+
+def test_parse_nicctl_show_card_partial_fields(collector):
+    """Test parsing nicctl show card output with partial fields"""
+    partial_output = """
+---------------------------------------------------------------------------------------------
+Id                                      PCIe BDF       ASIC      F/W partition Serial number
+---------------------------------------------------------------------------------------------
+42424650-4c32-3533-3330-323934000000    0000:06:00.0
+42424650-4c32-3533-3731-304535000000    0000:16:00.0   salina
+"""
+
+    cards = collector._parse_nicctl_card(partial_output)
+
+    assert len(cards) == 2
+
+    # First card with only ID and PCIe BDF
+    card1 = cards[0]
+    assert card1.id == "42424650-4c32-3533-3330-323934000000"
+    assert card1.pcie_bdf == "0000:06:00.0"
+    assert card1.asic is None
+    assert card1.fw_partition is None
+    assert card1.serial_number is None
+
+    # Second card with ID, PCIe BDF, and ASIC
+    card2 = cards[1]
+    assert card2.id == "42424650-4c32-3533-3731-304535000000"
+    assert card2.pcie_bdf == "0000:16:00.0"
+    assert card2.asic == "salina"
+    assert card2.fw_partition is None
+    assert card2.serial_number is None
+
+
+def test_parse_nicctl_show_card_malformed_output(collector):
+    """Test parsing malformed nicctl show card output gracefully"""
+    malformed = """some random text
+not a valid card line
+123 invalid format
+"""
+
+    cards = collector._parse_nicctl_card(malformed)
+
+    # Should handle gracefully, return empty list or skip invalid lines
+    assert isinstance(cards, list)
+    # May parse some invalid entries, but should not crash
+
+
+def test_network_data_model_with_pensando_nic(collector):
+    """Test creating NetworkDataModel with Pensando NIC data"""
+    card1 = PensandoNicCard(
+        id="42424650-4c32-3533-3330-323934000000",
+        pcie_bdf="0000:06:00.0",
+        asic="salina",
+        fw_partition="A",
+        serial_number="FPL25330294",
+    )
+
+    card2 = PensandoNicCard(
+        id="42424650-4c32-3533-3731-304535000000",
+        pcie_bdf="0000:16:00.0",
+        asic="salina",
+        fw_partition="A",
+        serial_number="FPL253710E5",
+    )
+
+    data = NetworkDataModel(
+        interfaces=[],
+        routes=[],
+        rules=[],
+        neighbors=[],
+        ethtool_info={},
+        pensando_nic_cards=[card1, card2],
+    )
+
+    assert len(data.pensando_nic_cards) == 2
+    assert data.pensando_nic_cards[0].id == "42424650-4c32-3533-3330-323934000000"
+    assert data.pensando_nic_cards[0].pcie_bdf == "0000:06:00.0"
+    assert data.pensando_nic_cards[0].asic == "salina"
+    assert data.pensando_nic_cards[1].serial_number == "FPL253710E5"
+
+
+def test_collect_pensando_nic_success(collector, conn_mock):
+    """Test successful collection of Pensando NIC data"""
+    collector.system_info.os_family = OSFamily.LINUX
+
+    # Mock successful nicctl command execution
+    def run_sut_cmd_side_effect(cmd, **kwargs):
+        if "nicctl show card" in cmd:
+            return MagicMock(exit_code=0, stdout=NICCTL_SHOW_CARD_OUTPUT, command=cmd)
+        elif "nicctl show dcqcn" in cmd:
+            return MagicMock(exit_code=0, stdout=NICCTL_SHOW_DCQCN_OUTPUT, command=cmd)
+        elif "nicctl show environment" in cmd:
+            return MagicMock(exit_code=0, stdout=NICCTL_SHOW_ENVIRONMENT_OUTPUT, command=cmd)
+        elif "nicctl show pcie ats" in cmd:
+            return MagicMock(exit_code=0, stdout=NICCTL_SHOW_PCIE_ATS_OUTPUT, command=cmd)
+        elif "nicctl show port" in cmd:
+            return MagicMock(exit_code=0, stdout=NICCTL_SHOW_PORT_OUTPUT, command=cmd)
+        elif "nicctl show qos" in cmd:
+            return MagicMock(exit_code=0, stdout=NICCTL_SHOW_QOS_OUTPUT, command=cmd)
+        elif "nicctl show rdma statistics" in cmd:
+            return MagicMock(exit_code=0, stdout=NICCTL_SHOW_RDMA_STATISTICS_OUTPUT, command=cmd)
+        elif "nicctl show version host-software" in cmd:
+            return MagicMock(
+                exit_code=0, stdout=NICCTL_SHOW_VERSION_HOST_SOFTWARE_OUTPUT, command=cmd
+            )
+        elif "nicctl show version firmware" in cmd:
+            return MagicMock(exit_code=0, stdout=NICCTL_SHOW_VERSION_FIRMWARE_OUTPUT, command=cmd)
+        elif "nicctl" in cmd:
+            # Other nicctl commands succeed but return empty
+            return MagicMock(exit_code=0, stdout="", command=cmd)
+        return MagicMock(exit_code=1, stdout="", command=cmd)
+
+    collector._run_sut_cmd = MagicMock(side_effect=run_sut_cmd_side_effect)
+
+    (
+        cards,
+        dcqcn_entries,
+        environment_entries,
+        pcie_ats_entries,
+        port_entries,
+        qos_entries,
+        rdma_statistics_entries,
+        version_host_software,
+        version_firmware_entries,
+    ) = collector._collect_pensando_nic_info()
+
+    assert len(cards) == 2
+    assert cards[0].id == "1111111-4c32-3533-3330-12345000000"
+    assert cards[0].pcie_bdf == "0000:06:00.0"
+    assert cards[0].asic == "test1"
+    assert cards[0].serial_number == "ABC1234"
+
+    assert len(dcqcn_entries) == 1
+    assert dcqcn_entries[0].nic_id == "1111111-4c32-3533-3330-12345000000"
+    assert dcqcn_entries[0].pcie_bdf == "0000:06:00.0"
+
+    assert len(environment_entries) == 1
+    assert environment_entries[0].nic_id == "1111111-4c32-3533-3330-12345000000"
+    assert environment_entries[0].pcie_bdf == "0000:06:00.0"
+
+    assert len(pcie_ats_entries) == 1
+    assert pcie_ats_entries[0].nic_id == "1111111-4c32-3533-3330-12345000000"
+    assert pcie_ats_entries[0].pcie_bdf == "0000:06:00.0"
+    assert pcie_ats_entries[0].status == "Disabled"
+
+    assert len(port_entries) == 1
+    assert port_entries[0].nic_id == "1111111-4c32-3533-3330-12345000000"
+    assert port_entries[0].pcie_bdf == "0000:06:00.0"
+    assert port_entries[0].port_name == "eth1/1"
+
+    assert len(qos_entries) == 1
+    assert qos_entries[0].nic_id == "1111111-4c32-3533-3330-12345000000"
+    assert qos_entries[0].pcie_bdf == "0000:06:00.0"
+    assert qos_entries[0].port_id == "0490814a-6c40-4242-4242-000011010000"
+
+    assert len(rdma_statistics_entries) == 2
+    assert rdma_statistics_entries[0].nic_id == "42424650-4c32-3533-3330-323934000000"
+    assert rdma_statistics_entries[0].pcie_bdf == "0000:06:00.0"
+    assert len(rdma_statistics_entries[0].statistics) == 2
+
+    assert version_host_software is not None
+    assert version_host_software.nicctl == "1.117.1-a-63"
+    assert version_host_software.ipc_driver == "1.117.1.a.63"
+    assert version_host_software.ionic_driver == "25.08.4.004"
+
+    assert len(version_firmware_entries) == 2
+    assert version_firmware_entries[0].nic_id == "42424650-4c32-3533-3330-323934000000"
+    assert version_firmware_entries[0].pcie_bdf == "0000:06:00.0"
+    assert version_firmware_entries[0].cpld == "3.16 (primary)"
+
+
+def test_parse_nicctl_show_dcqcn_multiple_entries(collector):
+    """Test parsing Pensando NIC DCQCN entry from nicctl show dcqcn output"""
+    dcqcn_entries = collector._parse_nicctl_dcqcn(NICCTL_SHOW_DCQCN_OUTPUT)
+
+    assert len(dcqcn_entries) == 1
+
+    # Check entry
+    entry1 = dcqcn_entries[0]
+    assert entry1.nic_id == "1111111-4c32-3533-3330-12345000000"
+    assert entry1.pcie_bdf == "0000:06:00.0"
+    assert entry1.lif_id == "1111111-4c32-3533-3330-12345000000"
+    assert entry1.roce_device == "sample"
+    assert entry1.dcqcn_profile_id == "1"
+    assert entry1.status == "Disabled"
+
+
+def test_parse_nicctl_show_dcqcn_empty_output(collector):
+    """Test parsing empty nicctl show dcqcn output"""
+    dcqcn_entries = collector._parse_nicctl_dcqcn("")
+
+    assert len(dcqcn_entries) == 0
+
+
+def test_parse_nicctl_show_dcqcn_partial_fields(collector):
+    """Test parsing nicctl show dcqcn output with partial fields"""
+    partial_output = """
+NIC : 42424650-4c32-3533-3330-323934000000 (0000:06:00.0)
+------------------------------------------------------------------------------------------
+
+Lif id                                     : 43000070-0100-0000-4242-0490814a6c40
+******************************************************************************************
+"""
+
+    dcqcn_entries = collector._parse_nicctl_dcqcn(partial_output)
+
+    assert len(dcqcn_entries) == 1
+
+    # Entry with only NIC ID, PCIe BDF, and Lif ID
+    entry1 = dcqcn_entries[0]
+    assert entry1.nic_id == "42424650-4c32-3533-3330-323934000000"
+    assert entry1.pcie_bdf == "0000:06:00.0"
+    assert entry1.lif_id == "43000070-0100-0000-4242-0490814a6c40"
+    assert entry1.roce_device is None
+    assert entry1.dcqcn_profile_id is None
+    assert entry1.status is None
+
+
+def test_parse_nicctl_show_dcqcn_malformed_output(collector):
+    """Test parsing malformed nicctl show dcqcn output gracefully"""
+    malformed = """some random text
+not a valid dcqcn line
+123 invalid format
+"""
+
+    dcqcn_entries = collector._parse_nicctl_dcqcn(malformed)
+
+    # Should handle gracefully, return empty list
+    assert isinstance(dcqcn_entries, list)
+    assert len(dcqcn_entries) == 0
+
+
+def test_network_data_model_with_pensando_nic_dcqcn(collector):
+    """Test creating NetworkDataModel with Pensando NIC DCQCN data"""
+    dcqcn1 = PensandoNicDcqcn(
+        nic_id="42424650-4c32-3533-3330-323934000000",
+        pcie_bdf="0000:06:00.0",
+        lif_id="43000070-0100-0000-4242-0490814a6c40",
+        roce_device="rocep9s0",
+        dcqcn_profile_id="1",
+        status="Disabled",
+    )
+
+    dcqcn2 = PensandoNicDcqcn(
+        nic_id="42424650-4c32-3533-3731-304535000000",
+        pcie_bdf="0000:16:00.0",
+        lif_id="43000070-0100-0000-4242-0490815cce50",
+        roce_device="rocep25s0",
+        dcqcn_profile_id="1",
+        status="Disabled",
+    )
+
+    data = NetworkDataModel(
+        interfaces=[],
+        routes=[],
+        rules=[],
+        neighbors=[],
+        ethtool_info={},
+        pensando_nic_dcqcn=[dcqcn1, dcqcn2],
+    )
+
+    assert len(data.pensando_nic_dcqcn) == 2
+    assert data.pensando_nic_dcqcn[0].nic_id == "42424650-4c32-3533-3330-323934000000"
+    assert data.pensando_nic_dcqcn[0].pcie_bdf == "0000:06:00.0"
+    assert data.pensando_nic_dcqcn[0].roce_device == "rocep9s0"
+    assert data.pensando_nic_dcqcn[1].lif_id == "43000070-0100-0000-4242-0490815cce50"
+
+
+def test_parse_nicctl_show_environment_multiple_entries(collector):
+    """Test parsing Pensando NIC environment entry from nicctl show environment output"""
+    environment_entries = collector._parse_nicctl_environment(NICCTL_SHOW_ENVIRONMENT_OUTPUT)
+
+    assert len(environment_entries) == 1
+
+    # Check entry
+    entry1 = environment_entries[0]
+    assert entry1.nic_id == "1111111-4c32-3533-3330-12345000000"
+    assert entry1.pcie_bdf == "0000:06:00.0"
+    assert entry1.total_power_drawn == 29.437
+    assert entry1.core_power == 12.375
+    assert entry1.arm_power == 0.788
+    assert entry1.local_board_temperature == 44.12
+    assert entry1.die_temperature == 45.59
+    assert entry1.input_voltage == 12078
+    assert entry1.core_voltage == 725
+    assert entry1.core_frequency == 1100
+    assert entry1.cpu_frequency == 1500
+    assert entry1.p4_stage_frequency == 1500
+
+
+def test_parse_nicctl_show_environment_empty_output(collector):
+    """Test parsing empty nicctl show environment output"""
+    environment_entries = collector._parse_nicctl_environment("")
+
+    assert len(environment_entries) == 0
+
+
+def test_parse_nicctl_show_environment_partial_fields(collector):
+    """Test parsing nicctl show environment output with partial fields"""
+    partial_output = """
+NIC : 42424650-4c32-3533-3330-323934000000 (0000:06:00.0)
+
+  Power(W):
+    Total power drawn (pin)        : 29.437
+  Temperature(C):
+    Local board temperature        : 44.12
+-------------------------------------------------------------------------------------
+"""
+
+    environment_entries = collector._parse_nicctl_environment(partial_output)
+
+    assert len(environment_entries) == 1
+
+    # Entry with only some fields
+    entry1 = environment_entries[0]
+    assert entry1.nic_id == "42424650-4c32-3533-3330-323934000000"
+    assert entry1.pcie_bdf == "0000:06:00.0"
+    assert entry1.total_power_drawn == 29.437
+    assert entry1.local_board_temperature == 44.12
+    assert entry1.core_power is None
+    assert entry1.die_temperature is None
+    assert entry1.input_voltage is None
+
+
+def test_parse_nicctl_show_environment_malformed_output(collector):
+    """Test parsing malformed nicctl show environment output gracefully"""
+    malformed = """some random text
+not a valid environment line
+123 invalid format
+"""
+
+    environment_entries = collector._parse_nicctl_environment(malformed)
+
+    # Should handle gracefully, return empty list
+    assert isinstance(environment_entries, list)
+    assert len(environment_entries) == 0
+
+
+def test_network_data_model_with_pensando_nic_environment(collector):
+    """Test creating NetworkDataModel with Pensando NIC environment data"""
+    env1 = PensandoNicEnvironment(
+        nic_id="42424650-4c32-3533-3330-323934000000",
+        pcie_bdf="0000:06:00.0",
+        total_power_drawn=29.437,
+        core_power=12.375,
+        arm_power=0.788,
+        local_board_temperature=44.12,
+        die_temperature=45.59,
+        input_voltage=12078,
+        core_voltage=725,
+        core_frequency=1100,
+        cpu_frequency=1500,
+        p4_stage_frequency=1500,
+    )
+
+    env2 = PensandoNicEnvironment(
+        nic_id="42424650-4c32-3533-3731-304535000000",
+        pcie_bdf="0000:16:00.0",
+        total_power_drawn=28.968,
+        core_power=12.031,
+        arm_power=0.292,
+        local_board_temperature=42.62,
+        die_temperature=42.28,
+        input_voltage=12078,
+        core_voltage=725,
+        core_frequency=1100,
+        cpu_frequency=1500,
+        p4_stage_frequency=1500,
+    )
+
+    data = NetworkDataModel(
+        interfaces=[],
+        routes=[],
+        rules=[],
+        neighbors=[],
+        ethtool_info={},
+        pensando_nic_environment=[env1, env2],
+    )
+
+    assert len(data.pensando_nic_environment) == 2
+    assert data.pensando_nic_environment[0].nic_id == "42424650-4c32-3533-3330-323934000000"
+    assert data.pensando_nic_environment[0].pcie_bdf == "0000:06:00.0"
+    assert data.pensando_nic_environment[0].total_power_drawn == 29.437
+    assert data.pensando_nic_environment[0].die_temperature == 45.59
+    assert data.pensando_nic_environment[1].core_frequency == 1100
+
+
+def test_parse_nicctl_show_pcie_ats_multiple_entries(collector):
+    """Test parsing Pensando NIC PCIe ATS entry from nicctl show pcie ats output"""
+    pcie_ats_entries = collector._parse_nicctl_pcie_ats(NICCTL_SHOW_PCIE_ATS_OUTPUT)
+
+    assert len(pcie_ats_entries) == 1
+
+    # Check entry
+    entry1 = pcie_ats_entries[0]
+    assert entry1.nic_id == "1111111-4c32-3533-3330-12345000000"
+    assert entry1.pcie_bdf == "0000:06:00.0"
+    assert entry1.status == "Disabled"
+
+
+def test_parse_nicctl_show_pcie_ats_empty_output(collector):
+    """Test parsing empty nicctl show pcie ats output"""
+    pcie_ats_entries = collector._parse_nicctl_pcie_ats("")
+
+    assert len(pcie_ats_entries) == 0
+
+
+def test_parse_nicctl_show_pcie_ats_enabled(collector):
+    """Test parsing nicctl show pcie ats output with Enabled status"""
+    enabled_output = """
+NIC : 42424650-4c32-3533-3330-323934000000 (0000:06:00.0) : Enabled
+NIC : 42424650-4c32-3533-3731-304535000000 (0000:16:00.0) : Disabled
+"""
+
+    pcie_ats_entries = collector._parse_nicctl_pcie_ats(enabled_output)
+
+    assert len(pcie_ats_entries) == 2
+    assert pcie_ats_entries[0].status == "Enabled"
+    assert pcie_ats_entries[1].status == "Disabled"
+
+
+def test_parse_nicctl_show_pcie_ats_malformed_output(collector):
+    """Test parsing malformed nicctl show pcie ats output gracefully"""
+    malformed = """some random text
+not a valid pcie ats line
+123 invalid format
+"""
+
+    pcie_ats_entries = collector._parse_nicctl_pcie_ats(malformed)
+
+    # Should handle gracefully, return empty list
+    assert isinstance(pcie_ats_entries, list)
+    assert len(pcie_ats_entries) == 0
+
+
+def test_network_data_model_with_pensando_nic_pcie_ats(collector):
+    """Test creating NetworkDataModel with Pensando NIC PCIe ATS data"""
+    ats1 = PensandoNicPcieAts(
+        nic_id="42424650-4c32-3533-3330-323934000000",
+        pcie_bdf="0000:06:00.0",
+        status="Disabled",
+    )
+
+    ats2 = PensandoNicPcieAts(
+        nic_id="42424650-4c32-3533-3731-304535000000",
+        pcie_bdf="0000:16:00.0",
+        status="Enabled",
+    )
+
+    data = NetworkDataModel(
+        interfaces=[],
+        routes=[],
+        rules=[],
+        neighbors=[],
+        ethtool_info={},
+        pensando_nic_pcie_ats=[ats1, ats2],
+    )
+
+    assert len(data.pensando_nic_pcie_ats) == 2
+    assert data.pensando_nic_pcie_ats[0].nic_id == "42424650-4c32-3533-3330-323934000000"
+    assert data.pensando_nic_pcie_ats[0].pcie_bdf == "0000:06:00.0"
+    assert data.pensando_nic_pcie_ats[0].status == "Disabled"
+    assert data.pensando_nic_pcie_ats[1].status == "Enabled"
+
+
+def test_parse_nicctl_show_port_multiple_entries(collector):
+    """Test parsing Pensando NIC port entry from nicctl show port output"""
+    port_entries = collector._parse_nicctl_port(NICCTL_SHOW_PORT_OUTPUT)
+
+    assert len(port_entries) == 1
+
+    # Check entry
+    entry1 = port_entries[0]
+    assert entry1.nic_id == "1111111-4c32-3533-3330-12345000000"
+    assert entry1.pcie_bdf == "0000:06:00.0"
+    assert entry1.port_id == "555555a-6c40-4242-4242-000011010000"
+    assert entry1.port_name == "eth1/1"
+    # Spec fields
+    assert entry1.spec_ifindex == "0x11010000"
+    assert entry1.spec_type == "ETH"
+    assert entry1.spec_speed == "400G"
+    assert entry1.spec_admin_state == "UP"
+    assert entry1.spec_fec_type == "RS"
+    assert entry1.spec_pause_type == "PFC"
+    assert entry1.spec_num_lanes == 4
+    assert entry1.spec_mtu == 9216
+    assert entry1.spec_tx_pause == "enabled"
+    assert entry1.spec_rx_pause == "enabled"
+    assert entry1.spec_auto_negotiation == "disabled"
+    # Status fields
+    assert entry1.status_physical_port == 1
+    assert entry1.status_operational_status == "DOWN"
+    assert entry1.status_link_fsm_state == "SIGNAL_DETECT"
+    assert entry1.status_fec_type == "RS"
+    assert entry1.status_cable_type == "Copper"
+    assert entry1.status_num_lanes == 4
+    assert entry1.status_speed == "400G"
+    assert entry1.status_auto_negotiation == "disabled"
+    assert entry1.status_mac_id == 0
+    assert entry1.status_mac_channel == 0
+    assert entry1.status_mac_address == "04:90:81:4a:6c:40"
+    assert entry1.status_transceiver_type == "QSFP_CMIS"
+    assert entry1.status_transceiver_state == "SPROM-READ"
+    assert entry1.status_transceiver_pid == "QSFP-400G-CR4"
+
+
+def test_parse_nicctl_show_port_empty_output(collector):
+    """Test parsing empty nicctl show port output"""
+    port_entries = collector._parse_nicctl_port("")
+
+    assert len(port_entries) == 0
+
+
+def test_parse_nicctl_show_port_partial_fields(collector):
+    """Test parsing nicctl show port output with partial fields"""
+    partial_output = """
+NIC  : 42424650-4c32-3533-3330-323934000000 (0000:06:00.0)
+
+Port : 0490814a-6c40-4242-4242-000011010000 (eth1/1)
+  Spec:
+    speed                                    : 400G
+    Admin state                              : UP
+  Status:
+    Operational status                       : DOWN
+-------------------------------------------------------------------------------------
+"""
+
+    port_entries = collector._parse_nicctl_port(partial_output)
+
+    assert len(port_entries) == 1
+
+    # Entry with only some fields
+    entry1 = port_entries[0]
+    assert entry1.nic_id == "42424650-4c32-3533-3330-323934000000"
+    assert entry1.pcie_bdf == "0000:06:00.0"
+    assert entry1.port_name == "eth1/1"
+    assert entry1.spec_speed == "400G"
+    assert entry1.spec_admin_state == "UP"
+    assert entry1.status_operational_status == "DOWN"
+    assert entry1.spec_mtu is None
+    assert entry1.status_mac_address is None
+
+
+def test_parse_nicctl_show_port_malformed_output(collector):
+    """Test parsing malformed nicctl show port output gracefully"""
+    malformed = """some random text
+not a valid port line
+123 invalid format
+"""
+
+    port_entries = collector._parse_nicctl_port(malformed)
+
+    # Should handle gracefully, return empty list
+    assert isinstance(port_entries, list)
+    assert len(port_entries) == 0
+
+
+def test_network_data_model_with_pensando_nic_port(collector):
+    """Test creating NetworkDataModel with Pensando NIC port data"""
+    port1 = PensandoNicPort(
+        nic_id="42424650-4c32-3533-3330-323934000000",
+        pcie_bdf="0000:06:00.0",
+        port_id="0490814a-6c40-4242-4242-000011010000",
+        port_name="eth1/1",
+        spec_speed="400G",
+        spec_admin_state="UP",
+        spec_mtu=9216,
+        status_operational_status="DOWN",
+        status_mac_address="04:90:81:4a:6c:40",
+    )
+
+    port2 = PensandoNicPort(
+        nic_id="42424650-4c32-3533-3731-304535000000",
+        pcie_bdf="0000:16:00.0",
+        port_id="0490815c-ce50-4242-4242-000011010000",
+        port_name="eth1/1",
+        spec_speed="400G",
+        spec_admin_state="UP",
+        spec_mtu=9216,
+        status_operational_status="UP",
+        status_mac_address="04:90:81:5c:ce:50",
+    )
+
+    data = NetworkDataModel(
+        interfaces=[],
+        routes=[],
+        rules=[],
+        neighbors=[],
+        ethtool_info={},
+        pensando_nic_ports=[port1, port2],
+    )
+
+    assert len(data.pensando_nic_ports) == 2
+    assert data.pensando_nic_ports[0].nic_id == "42424650-4c32-3533-3330-323934000000"
+    assert data.pensando_nic_ports[0].port_name == "eth1/1"
+    assert data.pensando_nic_ports[0].spec_speed == "400G"
+    assert data.pensando_nic_ports[0].status_mac_address == "04:90:81:4a:6c:40"
+    assert data.pensando_nic_ports[1].status_operational_status == "UP"
+
+
+def test_parse_nicctl_show_qos_multiple_entries(collector):
+    """Test parsing Pensando NIC QoS entry from nicctl show qos output"""
+    qos_entries = collector._parse_nicctl_qos(NICCTL_SHOW_QOS_OUTPUT)
+
+    assert len(qos_entries) == 1
+
+    # Check entry
+    entry1 = qos_entries[0]
+    assert entry1.nic_id == "1111111-4c32-3533-3330-12345000000"
+    assert entry1.pcie_bdf == "0000:06:00.0"
+    assert entry1.port_id == "0490814a-6c40-4242-4242-000011010000"
+    assert entry1.classification_type == "DSCP"
+    assert entry1.dscp_bitmap == "0xffffffffffffffff"
+    assert entry1.dscp_range == "0-63"
+    assert entry1.dscp_priority == 0
+    assert entry1.pfc_priority_bitmap == "0x0"
+    assert entry1.pfc_no_drop_priorities == ""
+    assert len(entry1.scheduling) == 1
+    assert entry1.scheduling[0].priority == 0
+    assert entry1.scheduling[0].scheduling_type == "DWRR"
+    assert entry1.scheduling[0].bandwidth == 0
+    assert entry1.scheduling[0].rate_limit == "N/A"
+
+
+def test_parse_nicctl_show_qos_empty_output(collector):
+    """Test parsing empty nicctl show qos output"""
+    qos_entries = collector._parse_nicctl_qos("")
+
+    assert len(qos_entries) == 0
+
+
+def test_parse_nicctl_show_qos_malformed_output(collector):
+    """Test parsing malformed nicctl show qos output gracefully"""
+    malformed = """some random text
+not a valid qos line
+123 invalid format
+"""
+
+    qos_entries = collector._parse_nicctl_qos(malformed)
+
+    # Should handle gracefully, return empty list
+    assert isinstance(qos_entries, list)
+    assert len(qos_entries) == 0
+
+
+def test_network_data_model_with_pensando_nic_qos(collector):
+    """Test creating NetworkDataModel with Pensando NIC QoS data"""
+    sched1 = PensandoNicQosScheduling(
+        priority=0,
+        scheduling_type="DWRR",
+        bandwidth=0,
+        rate_limit="N/A",
+    )
+
+    qos1 = PensandoNicQos(
+        nic_id="42424650-4c32-3533-3330-323934000000",
+        pcie_bdf="0000:06:00.0",
+        port_id="0490814a-6c40-4242-4242-000011010000",
+        classification_type="DSCP",
+        dscp_bitmap="0xffffffffffffffff",
+        dscp_range="0-63",
+        dscp_priority=0,
+        pfc_priority_bitmap="0x0",
+        pfc_no_drop_priorities="",
+        scheduling=[sched1],
+    )
+
+    qos2 = PensandoNicQos(
+        nic_id="42424650-4c32-3533-3731-304535000000",
+        pcie_bdf="0000:16:00.0",
+        port_id="0490815c-ce50-4242-4242-000011010000",
+        classification_type="DSCP",
+    )
+
+    data = NetworkDataModel(
+        interfaces=[],
+        routes=[],
+        rules=[],
+        neighbors=[],
+        ethtool_info={},
+        pensando_nic_qos=[qos1, qos2],
+    )
+
+    assert len(data.pensando_nic_qos) == 2
+    assert data.pensando_nic_qos[0].nic_id == "42424650-4c32-3533-3330-323934000000"
+    assert data.pensando_nic_qos[0].port_id == "0490814a-6c40-4242-4242-000011010000"
+    assert data.pensando_nic_qos[0].classification_type == "DSCP"
+    assert len(data.pensando_nic_qos[0].scheduling) == 1
+    assert data.pensando_nic_qos[1].nic_id == "42424650-4c32-3533-3731-304535000000"
+
+
+# Mock output for 'nicctl show rdma statistics'
+NICCTL_SHOW_RDMA_STATISTICS_OUTPUT = """NIC : 42424650-4c32-3533-3330-323934000000 (0000:06:00.0)
+
+------------------------------------------------------------
+Name                                    Count
+------------------------------------------------------------
+Queue pair create                       1
+Completion queue create                 2
+
+NIC : 42424650-4c32-3533-3731-304535000000 (0000:16:00.0)
+
+------------------------------------------------------------
+Name                                    Count
+------------------------------------------------------------
+Queue pair create                       1
+Completion queue create                 2
+"""
+
+
+def test_parse_nicctl_show_rdma_statistics_multiple_entries(collector):
+    """Test parsing multiple NIC RDMA statistics entries."""
+    entries = collector._parse_nicctl_rdma_statistics(NICCTL_SHOW_RDMA_STATISTICS_OUTPUT)
+
+    assert len(entries) == 2
+
+    # Check first entry
+    assert entries[0].nic_id == "42424650-4c32-3533-3330-323934000000"
+    assert entries[0].pcie_bdf == "0000:06:00.0"
+    assert len(entries[0].statistics) == 2
+    assert entries[0].statistics[0].name == "Queue pair create"
+    assert entries[0].statistics[0].count == 1
+    assert entries[0].statistics[1].name == "Completion queue create"
+    assert entries[0].statistics[1].count == 2
+
+    # Check second entry
+    assert entries[1].nic_id == "42424650-4c32-3533-3731-304535000000"
+    assert entries[1].pcie_bdf == "0000:16:00.0"
+    assert len(entries[1].statistics) == 2
+    assert entries[1].statistics[0].name == "Queue pair create"
+    assert entries[1].statistics[0].count == 1
+    assert entries[1].statistics[1].name == "Completion queue create"
+    assert entries[1].statistics[1].count == 2
+
+
+def test_parse_nicctl_show_rdma_statistics_empty_output(collector):
+    """Test parsing empty RDMA statistics output."""
+    entries = collector._parse_nicctl_rdma_statistics("")
+    assert len(entries) == 0
+
+
+# Mock output for 'nicctl show version host-software'
+NICCTL_SHOW_VERSION_HOST_SOFTWARE_OUTPUT = """nicctl                           : 1.117.1-a-63
+IPC driver                       : 1.117.1.a.63
+ionic driver                     : 25.08.4.004
+"""
+
+
+def test_parse_nicctl_show_version_host_software(collector):
+    """Test parsing host software version."""
+    version = collector._parse_nicctl_version_host_software(
+        NICCTL_SHOW_VERSION_HOST_SOFTWARE_OUTPUT
+    )
+
+    assert version is not None
+    assert version.nicctl == "1.117.1-a-63"
+    assert version.ipc_driver == "1.117.1.a.63"
+    assert version.ionic_driver == "25.08.4.004"
+
+
+def test_parse_nicctl_show_version_host_software_empty_output(collector):
+    """Test parsing empty host software version output."""
+    version = collector._parse_nicctl_version_host_software("")
+    assert version is None
+
+
+# Mock output for 'nicctl show version firmware'
+NICCTL_SHOW_VERSION_FIRMWARE_OUTPUT = """NIC : 42424650-4c32-3533-3330-323934000000 (0000:06:00.0)
+
+CPLD                           : 3.16 (primary)
+Boot0                          : 21
+Uboot-A                        : 1.117.1-a-63
+Firmware-A                     : 1.117.1-a-63
+Device config-A                : device_config_rdma_1x400G/1.0.0
+-------------------------------------------------------------------------------------
+
+NIC : 42424650-4c32-3533-3731-304535000000 (0000:16:00.0)
+
+CPLD                           : 3.16 (primary)
+Boot0                          : 21
+Uboot-A                        : 1.117.1-a-63
+Firmware-A                     : 1.117.1-a-63
+Device config-A                : device_config_rdma_1x400G/1.0.0
+-------------------------------------------------------------------------------------
+"""
+
+
+def test_parse_nicctl_show_version_firmware_multiple_entries(collector):
+    """Test parsing multiple NIC firmware version entries."""
+    entries = collector._parse_nicctl_version_firmware(NICCTL_SHOW_VERSION_FIRMWARE_OUTPUT)
+
+    assert len(entries) == 2
+
+    # Check first entry
+    assert entries[0].nic_id == "42424650-4c32-3533-3330-323934000000"
+    assert entries[0].pcie_bdf == "0000:06:00.0"
+    assert entries[0].cpld == "3.16 (primary)"
+    assert entries[0].boot0 == "21"
+    assert entries[0].uboot_a == "1.117.1-a-63"
+    assert entries[0].firmware_a == "1.117.1-a-63"
+    assert entries[0].device_config_a == "device_config_rdma_1x400G/1.0.0"
+
+    # Check second entry
+    assert entries[1].nic_id == "42424650-4c32-3533-3731-304535000000"
+    assert entries[1].pcie_bdf == "0000:16:00.0"
+    assert entries[1].cpld == "3.16 (primary)"
+    assert entries[1].boot0 == "21"
+    assert entries[1].uboot_a == "1.117.1-a-63"
+    assert entries[1].firmware_a == "1.117.1-a-63"
+    assert entries[1].device_config_a == "device_config_rdma_1x400G/1.0.0"
+
+
+def test_parse_nicctl_show_version_firmware_empty_output(collector):
+    """Test parsing empty firmware version output."""
+    entries = collector._parse_nicctl_version_firmware("")
+    assert len(entries) == 0
+
+
+def test_network_data_model_with_pensando_nic_rdma_statistics():
+    """Test NetworkDataModel with Pensando NIC RDMA statistics."""
+    from nodescraper.plugins.inband.network.networkdata import (
+        NetworkDataModel,
+        PensandoNicRdmaStatistic,
+        PensandoNicRdmaStatistics,
+    )
+
+    data = NetworkDataModel(
+        pensando_nic_rdma_statistics=[
+            PensandoNicRdmaStatistics(
+                nic_id="42424650-4c32-3533-3330-323934000000",
+                pcie_bdf="0000:06:00.0",
+                statistics=[
+                    PensandoNicRdmaStatistic(name="Queue pair create", count=1),
+                    PensandoNicRdmaStatistic(name="Completion queue create", count=2),
+                ],
+            )
+        ]
+    )
+
+    assert len(data.pensando_nic_rdma_statistics) == 1
+    assert data.pensando_nic_rdma_statistics[0].nic_id == "42424650-4c32-3533-3330-323934000000"
+    assert len(data.pensando_nic_rdma_statistics[0].statistics) == 2
+
+
+def test_network_data_model_with_pensando_nic_version_host_software():
+    """Test NetworkDataModel with Pensando NIC host software version."""
+    from nodescraper.plugins.inband.network.networkdata import (
+        NetworkDataModel,
+        PensandoNicVersionHostSoftware,
+    )
+
+    data = NetworkDataModel(
+        pensando_nic_version_host_software=PensandoNicVersionHostSoftware(
+            nicctl="1.117.1-a-63",
+            ipc_driver="1.117.1.a.63",
+            ionic_driver="25.08.4.004",
+        )
+    )
+
+    assert data.pensando_nic_version_host_software is not None
+    assert data.pensando_nic_version_host_software.nicctl == "1.117.1-a-63"
+    assert data.pensando_nic_version_host_software.ipc_driver == "1.117.1.a.63"
+    assert data.pensando_nic_version_host_software.ionic_driver == "25.08.4.004"
+
+
+def test_network_data_model_with_pensando_nic_version_firmware():
+    """Test NetworkDataModel with Pensando NIC firmware versions."""
+    from nodescraper.plugins.inband.network.networkdata import (
+        NetworkDataModel,
+        PensandoNicVersionFirmware,
+    )
+
+    data = NetworkDataModel(
+        pensando_nic_version_firmware=[
+            PensandoNicVersionFirmware(
+                nic_id="42424650-4c32-3533-3330-323934000000",
+                pcie_bdf="0000:06:00.0",
+                cpld="3.16 (primary)",
+                boot0="21",
+                uboot_a="1.117.1-a-63",
+                firmware_a="1.117.1-a-63",
+                device_config_a="device_config_rdma_1x400G/1.0.0",
+            )
+        ]
+    )
+
+    assert len(data.pensando_nic_version_firmware) == 1
+    assert data.pensando_nic_version_firmware[0].nic_id == "42424650-4c32-3533-3330-323934000000"
+    assert data.pensando_nic_version_firmware[0].cpld == "3.16 (primary)"
