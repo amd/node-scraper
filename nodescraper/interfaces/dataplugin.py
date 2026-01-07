@@ -252,6 +252,9 @@ class DataPlugin(
             )
             return self.analysis_result
 
+        if data:
+            self.data = data
+
         if self.data is None:
             self.analysis_result = TaskResult(
                 task=self.ANALYZER.__name__,
@@ -260,9 +263,6 @@ class DataPlugin(
                 message=f"No data available to analyze for {self.__class__.__name__}",
             )
             return self.analysis_result
-
-        if data:
-            self.data = data
 
         analyzer_task = self.ANALYZER(
             self.system_info,
