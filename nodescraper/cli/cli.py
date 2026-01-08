@@ -30,6 +30,7 @@ import logging
 import os
 import platform
 import sys
+from importlib import import_module
 from typing import Optional
 
 import nodescraper
@@ -54,12 +55,87 @@ from nodescraper.models import SystemInfo
 from nodescraper.pluginexecutor import PluginExecutor
 from nodescraper.pluginregistry import PluginRegistry
 
-try:
-    import ext_nodescraper_plugins as ext_pkg
 
-    extra_pkgs = [ext_pkg]
-except ImportError:
+def discover_external_plugins():
+    """Discover ext_nodescraper_plugins from all installed packages.
+    
+    This function searches for ext_nodescraper_plugins in:
+    1. Top-level ext_nodescraper_plugins package
+    2. Any installed package that has an ext_nodescraper_plugins submodule
+    
+    Returns:
+        list: List of discovered plugin packages
+    """
     extra_pkgs = []
+    seen_paths = set()  # Track paths to avoid duplicates
+    
+    # Try top-level ext_nodescraper_plugins first (original behavior)
+    try:
+        import ext_nodescraper_plugins as ext_pkg
+        extra_pkgs.append(ext_pkg)
+        if hasattr(ext_pkg, '__file__') and ext_pkg.__file__:
+            seen_paths.add(ext_pkg.__file__)
+    except ImportError:
+        pass
+    
+    # Discover ext_nodescraper_plugins from installed packages
+    try:
+        from importlib.metadata import distributions
+        
+        for dist in distributions():
+            # Get package name and try different variations
+            pkg_name = dist.metadata.get('Name', '')
+            if not pkg_name:
+                continue
+            
+            # Try multiple name variations (with hyphens, underscores, and top-level module name)
+            name_variants = [
+                pkg_name.replace('-', '_'),  # amd-error-scraper -> amd_error_scraper
+                pkg_name.replace('_', '-'),   # amd_error_scraper -> amd-error-scraper
+            ]
+            
+            # Try to find the actual top-level module name
+            try:
+                top_level = dist.read_text('top_level.txt')
+                if top_level:
+                    name_variants.extend(top_level.strip().split('\n'))
+            except Exception:
+                pass
+            
+            # Try each variant
+            for variant in name_variants:
+                if not variant:
+                    continue
+                    
+                try:
+                    module_path = f"{variant}.ext_nodescraper_plugins"
+                    ext_pkg = import_module(module_path)
+                    
+                    # Check if we already have this package (by file path)
+                    pkg_path = getattr(ext_pkg, '__file__', None)
+                    if pkg_path and pkg_path in seen_paths:
+                        continue
+                    
+                    # Add the package
+                    extra_pkgs.append(ext_pkg)
+                    if pkg_path:
+                        seen_paths.add(pkg_path)
+                    
+                    # Found it, no need to try other variants
+                    break
+                        
+                except (ImportError, AttributeError, ModuleNotFoundError):
+                    # This variant doesn't have ext_nodescraper_plugins, try next
+                    continue
+                    
+    except Exception:
+        # If discovery fails, just use what we found with top-level import
+        pass
+    
+    return extra_pkgs
+
+
+extra_pkgs = discover_external_plugins()
 
 
 def build_parser(
