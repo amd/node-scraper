@@ -1539,8 +1539,13 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
         version_firmware_entries = []
         collected_count = 0
 
+        # Track which commands succeeded and which failed
+        collected_commands = []
+        uncollected_commands = []
+
         # Parse nicctl show card output
-        res_card = self._run_sut_cmd("nicctl show card", sudo=True)
+        cmd = "nicctl show card"
+        res_card = self._run_sut_cmd(cmd, sudo=True)
         if res_card.exit_code == 0:
             cards = self._parse_nicctl_card(res_card.stdout)
             self._log_event(
@@ -1549,9 +1554,13 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
                 priority=EventPriority.INFO,
             )
             collected_count += 1
+            collected_commands.append(cmd)
+        else:
+            uncollected_commands.append(cmd)
 
         # Parse nicctl show dcqcn output
-        res_dcqcn = self._run_sut_cmd("nicctl show dcqcn", sudo=True)
+        cmd = "nicctl show dcqcn"
+        res_dcqcn = self._run_sut_cmd(cmd, sudo=True)
         if res_dcqcn.exit_code == 0:
             dcqcn_entries = self._parse_nicctl_dcqcn(res_dcqcn.stdout)
             self._log_event(
@@ -1560,9 +1569,13 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
                 priority=EventPriority.INFO,
             )
             collected_count += 1
+            collected_commands.append(cmd)
+        else:
+            uncollected_commands.append(cmd)
 
         # Parse nicctl show environment output
-        res_environment = self._run_sut_cmd("nicctl show environment", sudo=True)
+        cmd = "nicctl show environment"
+        res_environment = self._run_sut_cmd(cmd, sudo=True)
         if res_environment.exit_code == 0:
             environment_entries = self._parse_nicctl_environment(res_environment.stdout)
             self._log_event(
@@ -1571,9 +1584,13 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
                 priority=EventPriority.INFO,
             )
             collected_count += 1
+            collected_commands.append(cmd)
+        else:
+            uncollected_commands.append(cmd)
 
         # Parse nicctl show pcie ats output
-        res_pcie_ats = self._run_sut_cmd("nicctl show pcie ats", sudo=True)
+        cmd = "nicctl show pcie ats"
+        res_pcie_ats = self._run_sut_cmd(cmd, sudo=True)
         if res_pcie_ats.exit_code == 0:
             pcie_ats_entries = self._parse_nicctl_pcie_ats(res_pcie_ats.stdout)
             self._log_event(
@@ -1582,9 +1599,13 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
                 priority=EventPriority.INFO,
             )
             collected_count += 1
+            collected_commands.append(cmd)
+        else:
+            uncollected_commands.append(cmd)
 
         # Parse nicctl show port output
-        res_port = self._run_sut_cmd("nicctl show port", sudo=True)
+        cmd = "nicctl show port"
+        res_port = self._run_sut_cmd(cmd, sudo=True)
         if res_port.exit_code == 0:
             port_entries = self._parse_nicctl_port(res_port.stdout)
             self._log_event(
@@ -1593,9 +1614,13 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
                 priority=EventPriority.INFO,
             )
             collected_count += 1
+            collected_commands.append(cmd)
+        else:
+            uncollected_commands.append(cmd)
 
         # Parse nicctl show qos output
-        res_qos = self._run_sut_cmd("nicctl show qos", sudo=True)
+        cmd = "nicctl show qos"
+        res_qos = self._run_sut_cmd(cmd, sudo=True)
         if res_qos.exit_code == 0:
             qos_entries = self._parse_nicctl_qos(res_qos.stdout)
             self._log_event(
@@ -1604,9 +1629,13 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
                 priority=EventPriority.INFO,
             )
             collected_count += 1
+            collected_commands.append(cmd)
+        else:
+            uncollected_commands.append(cmd)
 
         # Parse nicctl show rdma statistics output
-        res_rdma_stats = self._run_sut_cmd("nicctl show rdma statistics", sudo=True)
+        cmd = "nicctl show rdma statistics"
+        res_rdma_stats = self._run_sut_cmd(cmd, sudo=True)
         if res_rdma_stats.exit_code == 0:
             rdma_statistics_entries = self._parse_nicctl_rdma_statistics(res_rdma_stats.stdout)
             self._log_event(
@@ -1615,9 +1644,13 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
                 priority=EventPriority.INFO,
             )
             collected_count += 1
+            collected_commands.append(cmd)
+        else:
+            uncollected_commands.append(cmd)
 
         # Parse nicctl show version host-software output
-        res_version_host = self._run_sut_cmd("nicctl show version host-software", sudo=True)
+        cmd = "nicctl show version host-software"
+        res_version_host = self._run_sut_cmd(cmd, sudo=True)
         if res_version_host.exit_code == 0:
             version_host_software = self._parse_nicctl_version_host_software(
                 res_version_host.stdout
@@ -1629,9 +1662,15 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
                     priority=EventPriority.INFO,
                 )
                 collected_count += 1
+                collected_commands.append(cmd)
+            else:
+                uncollected_commands.append(cmd)
+        else:
+            uncollected_commands.append(cmd)
 
         # Parse nicctl show version firmware output
-        res_version_firmware = self._run_sut_cmd("nicctl show version firmware", sudo=True)
+        cmd = "nicctl show version firmware"
+        res_version_firmware = self._run_sut_cmd(cmd, sudo=True)
         if res_version_firmware.exit_code == 0:
             version_firmware_entries = self._parse_nicctl_version_firmware(
                 res_version_firmware.stdout
@@ -1642,33 +1681,26 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
                 priority=EventPriority.INFO,
             )
             collected_count += 1
+            collected_commands.append(cmd)
+        else:
+            uncollected_commands.append(cmd)
 
-        # Collect other nicctl information (raw data)
-        for cmd in self.CMD_NICCTL_COMMANDS:
-            if cmd in [
-                "nicctl show card",
-                "nicctl show dcqcn",
-                "nicctl show environment",
-                "nicctl show pcie ats",
-                "nicctl show port",
-                "nicctl show qos",
-                "nicctl show rdma statistics",
-                "nicctl show version host-software",
-                "nicctl show version firmware",
-            ]:
-                # Already collected and parsed above
-                continue
-            res = self._run_sut_cmd(cmd, sudo=True)
-            if res.exit_code == 0:
-                collected_count += 1
-
-        if collected_count > 0:
+        # Log summary of collected and uncollected commands
+        if collected_commands:
             self._log_event(
                 category=EventCategory.NETWORK,
-                description=f"Collected Pensando NIC information ({collected_count} commands)",
+                description=f"Successfully collected {len(collected_commands)} nicctl commands: {', '.join(collected_commands)}",
                 priority=EventPriority.INFO,
             )
-        else:
+
+        if uncollected_commands:
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description=f"Failed to collect {len(uncollected_commands)} nicctl commands: {', '.join(uncollected_commands)}",
+                priority=EventPriority.WARNING,
+            )
+
+        if not collected_commands and not uncollected_commands:
             self._log_event(
                 category=EventCategory.NETWORK,
                 description="Pensando NIC collection failed or nicctl not available",
@@ -1811,41 +1843,36 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
             pensando_version_firmware,
         ) = self._collect_pensando_nic_info()
 
-        if interfaces or routes or rules or neighbors or broadcom_devices or pensando_cards:
-            network_data = NetworkDataModel(
-                interfaces=interfaces,
-                routes=routes,
-                rules=rules,
-                neighbors=neighbors,
-                ethtool_info=ethtool_data,
-                broadcom_nic_devices=broadcom_devices,
-                broadcom_nic_qos=broadcom_qos_data,
-                pensando_nic_cards=pensando_cards,
-                pensando_nic_dcqcn=pensando_dcqcn,
-                pensando_nic_environment=pensando_environment,
-                pensando_nic_pcie_ats=pensando_pcie_ats,
-                pensando_nic_ports=pensando_ports,
-                pensando_nic_qos=pensando_qos,
-                pensando_nic_rdma_statistics=pensando_rdma_statistics,
-                pensando_nic_version_host_software=pensando_version_host_software,
-                pensando_nic_version_firmware=pensando_version_firmware,
-            )
-            self.result.message = (
-                f"Collected network data: {len(interfaces)} interfaces, "
-                f"{len(routes)} routes, {len(rules)} rules, {len(neighbors)} neighbors, "
-                f"{len(ethtool_data)} ethtool entries, {len(broadcom_devices)} Broadcom NICs, "
-                f"{len(pensando_cards)} Pensando NICs, {len(pensando_dcqcn)} Pensando DCQCN entries, "
-                f"{len(pensando_environment)} Pensando environment entries, "
-                f"{len(pensando_pcie_ats)} Pensando PCIe ATS entries, "
-                f"{len(pensando_ports)} Pensando ports, "
-                f"{len(pensando_qos)} Pensando QoS entries, "
-                f"{len(pensando_rdma_statistics)} Pensando RDMA statistics, "
-                f"Pensando host software version: {'Yes' if pensando_version_host_software else 'No'}, "
-                f"{len(pensando_version_firmware)} Pensando firmware versions"
-            )
-            self.result.status = ExecutionStatus.OK
-            return self.result, network_data
-        else:
-            self.result.message = "Failed to collect network data"
-            self.result.status = ExecutionStatus.ERROR
-            return self.result, None
+        network_data = NetworkDataModel(
+            interfaces=interfaces,
+            routes=routes,
+            rules=rules,
+            neighbors=neighbors,
+            ethtool_info=ethtool_data,
+            broadcom_nic_devices=broadcom_devices,
+            broadcom_nic_qos=broadcom_qos_data,
+            pensando_nic_cards=pensando_cards,
+            pensando_nic_dcqcn=pensando_dcqcn,
+            pensando_nic_environment=pensando_environment,
+            pensando_nic_pcie_ats=pensando_pcie_ats,
+            pensando_nic_ports=pensando_ports,
+            pensando_nic_qos=pensando_qos,
+            pensando_nic_rdma_statistics=pensando_rdma_statistics,
+            pensando_nic_version_host_software=pensando_version_host_software,
+            pensando_nic_version_firmware=pensando_version_firmware,
+        )
+        self.result.message = (
+            f"Collected network data: {len(interfaces)} interfaces, "
+            f"{len(routes)} routes, {len(rules)} rules, {len(neighbors)} neighbors, "
+            f"{len(ethtool_data)} ethtool entries, {len(broadcom_devices)} Broadcom NICs, "
+            f"{len(pensando_cards)} Pensando NICs, {len(pensando_dcqcn)} Pensando DCQCN entries, "
+            f"{len(pensando_environment)} Pensando environment entries, "
+            f"{len(pensando_pcie_ats)} Pensando PCIe ATS entries, "
+            f"{len(pensando_ports)} Pensando ports, "
+            f"{len(pensando_qos)} Pensando QoS entries, "
+            f"{len(pensando_rdma_statistics)} Pensando RDMA statistics, "
+            f"Pensando host software version: {'Yes' if pensando_version_host_software else 'No'}, "
+            f"{len(pensando_version_firmware)} Pensando firmware versions"
+        )
+        self.result.status = ExecutionStatus.OK
+        return self.result, network_data

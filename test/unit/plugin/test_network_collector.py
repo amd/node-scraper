@@ -397,8 +397,12 @@ def test_collect_data_all_failures(collector, conn_mock):
 
     result, data = collector.collect_data()
 
-    assert result.status == ExecutionStatus.ERROR
-    assert data is None
+    assert result.status == ExecutionStatus.OK
+    assert data is not None
+    assert len(data.interfaces) == 0
+    assert len(data.routes) == 0
+    assert len(data.rules) == 0
+    assert len(data.neighbors) == 0
     assert len(result.events) > 0
 
 
