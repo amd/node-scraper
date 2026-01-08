@@ -121,40 +121,10 @@ def test_run_comma_separated_plugins_with_invalid(run_cli_command):
 
 def test_run_plugin_with_data_file_no_collection(run_cli_command, tmp_path):
     """Test running plugin with --data argument and --collection False."""
-    collect_log_path = str(tmp_path / "collect_logs")
-    result = run_cli_command(
-        ["--log-path", collect_log_path, "run-plugins", "DmesgPlugin"], check=False
-    )
+    fixtures_dir = Path(__file__).parent / "fixtures"
+    dmesg_fixture = fixtures_dir / "dmesg_sample.log"
 
-    output = result.stdout + result.stderr
-    assert result.returncode in [0, 1, 2]
-
-    dmesg_data_file = None
-    collect_path = Path(collect_log_path)
-
-    for log_dir in collect_path.glob("*"):
-        dmesg_plugin_dir = log_dir / "dmesg_plugin" / "dmesg_collector"
-        if dmesg_plugin_dir.exists():
-            for dmesg_file in dmesg_plugin_dir.glob("dmesg*.log"):
-                dmesg_data_file = str(dmesg_file)
-                break
-
-    if not dmesg_data_file:
-        sample_dmesg_dir = tmp_path / "sample_data"
-        sample_dmesg_dir.mkdir(parents=True, exist_ok=True)
-        dmesg_data_file = str(sample_dmesg_dir / "dmesg.log")
-
-        sample_content = """[    0.000000] Linux version 5.15.0-generic (buildd@lcy02-amd64-001)
-[    0.001000] Command line: BOOT_IMAGE=/boot/vmlinuz root=UUID=test ro quiet splash
-[    1.234567] pci 0000:00:01.0: BAR 0: failed to assign [mem size 0x01000000]
-[    2.345678] WARNING: CPU: 0 PID: 1 at drivers/test/test.c:123 test_function+0x123/0x456
-[    3.456789] AMD-Vi: Event logged [IO_PAGE_FAULT device=00:14.0 domain=0x0000]
-[    4.567890] normal system message
-[    5.678901] ACPI Error: Method parse/execution failed
-[   10.123456] System is operational
-"""
-        with open(dmesg_data_file, "w", encoding="utf-8") as f:
-            f.write(sample_content)
+    assert dmesg_fixture.exists(), f"Fixture file not found: {dmesg_fixture}"
 
     analyze_log_path = str(tmp_path / "analyze_logs")
     result = run_cli_command(
@@ -164,7 +134,7 @@ def test_run_plugin_with_data_file_no_collection(run_cli_command, tmp_path):
             "run-plugins",
             "DmesgPlugin",
             "--data",
-            dmesg_data_file,
+            str(dmesg_fixture),
             "--collection",
             "False",
         ],
@@ -172,8 +142,10 @@ def test_run_plugin_with_data_file_no_collection(run_cli_command, tmp_path):
     )
 
     output = result.stdout + result.stderr
-    assert result.returncode in [0, 1, 2], f"Unexpected return code: {result.returncode}"
-    assert "Data collection not ran" in output or "collection" in output.lower()
+    assert (
+        result.returncode == 1
+    ), f"Expected return code 1 (errors found), got: {result.returncode}"
+    assert "Running data analyzer: DmesgAnalyzer" in output, "Analyzer should have run"
     assert "Data written to csv file" in output, "CSV file should be created"
 
     if "Plugin tasks not ran" in output:
@@ -191,11 +163,11 @@ def test_run_plugin_with_data_file_no_collection(run_cli_command, tmp_path):
         reader = csv.DictReader(f)
         rows = list(reader)
 
-        dmesg_rows = [row for row in rows if "DmesgPlugin" in row.get("Plugin", "")]
+        dmesg_rows = [row for row in rows if "DmesgPlugin" in row.get("plugin", "")]
         assert len(dmesg_rows) > 0, "DmesgPlugin should have results in CSV"
 
         dmesg_row = dmesg_rows[0]
-        status = dmesg_row.get("Status", "")
+        status = dmesg_row.get("status", "")
         assert status != "NOT_RAN", (
             f"Bug regression: DmesgPlugin status is NOT_RAN with --data file. "
             f"Analysis should have run on provided data. Status: {status}"
