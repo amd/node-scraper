@@ -58,68 +58,69 @@ from nodescraper.pluginregistry import PluginRegistry
 
 def discover_external_plugins():
     """Discover ext_nodescraper_plugins from all installed packages.
-    
+
     Returns:
         list: List of discovered plugin packages
     """
     extra_pkgs = []
     seen_paths = set()  # Track paths to avoid duplicates
-    
+
     try:
         import ext_nodescraper_plugins as ext_pkg
+
         extra_pkgs.append(ext_pkg)
-        if hasattr(ext_pkg, '__file__') and ext_pkg.__file__:
+        if hasattr(ext_pkg, "__file__") and ext_pkg.__file__:
             seen_paths.add(ext_pkg.__file__)
     except ImportError:
         pass
-    
+
     # Discover ext_nodescraper_plugins from installed packages
     try:
         from importlib.metadata import distributions
-        
+
         for dist in distributions():
-            pkg_name = dist.metadata.get('Name', '')
+            pkg_name = dist.metadata.get("Name", "")
             if not pkg_name:
                 continue
-            
+
             name_variants = [
-                pkg_name.replace('-', '_'),
-                pkg_name.replace('_', '-'),
+                pkg_name.replace("-", "_"),
+                pkg_name.replace("_", "-"),
             ]
-            
+
             try:
-                top_level = dist.read_text('top_level.txt')
+                top_level = dist.read_text("top_level.txt")
                 if top_level:
-                    name_variants.extend(top_level.strip().split('\n'))
+                    name_variants.extend(top_level.strip().split("\n"))
             except Exception:
                 pass
-            
+
             for variant in name_variants:
                 if not variant:
                     continue
-                    
+
                 try:
                     module_path = f"{variant}.ext_nodescraper_plugins"
                     ext_pkg = import_module(module_path)
-                    
+
                     # Check if we already have this package (by file path)
-                    pkg_path = getattr(ext_pkg, '__file__', None)
+                    pkg_path = getattr(ext_pkg, "__file__", None)
                     if pkg_path and pkg_path in seen_paths:
                         continue
-                    
+
                     # Add the package
                     extra_pkgs.append(ext_pkg)
                     if pkg_path:
                         seen_paths.add(pkg_path)
-                    
+
                     break
-                        
+
                 except (ImportError, AttributeError, ModuleNotFoundError):
                     continue
-                    
+
     except Exception:
         pass
-    
+
     return extra_pkgs
 
 
