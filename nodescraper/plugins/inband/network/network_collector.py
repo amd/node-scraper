@@ -74,17 +74,15 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
     CMD_NICCLI_GETQOS_TEMPLATE = "niccli --dev {device_num} qos --ets --show"
 
     # Pensando NIC commands
-    CMD_NICCTL_COMMANDS = [
-        "nicctl show card",
-        "nicctl show dcqcn",
-        "nicctl show environment",
-        "nicctl show pcie ats",
-        "nicctl show port",
-        "nicctl show qos",
-        "nicctl show rdma statistics",
-        "nicctl show version host-software",
-        "nicctl show version firmware",
-    ]
+    CMD_NICCTL_CARD = "nicctl show card"
+    CMD_NICCTL_DCQCN = "nicctl show dcqcn"
+    CMD_NICCTL_ENVIRONMENT = "nicctl show environment"
+    CMD_NICCTL_PCIE_ATS = "nicctl show pcie ats"
+    CMD_NICCTL_PORT = "nicctl show port"
+    CMD_NICCTL_QOS = "nicctl show qos"
+    CMD_NICCTL_RDMA_STATISTICS = "nicctl show rdma statistics"
+    CMD_NICCTL_VERSION_HOST_SOFTWARE = "nicctl show version host-software"
+    CMD_NICCTL_VERSION_FIRMWARE = "nicctl show version firmware"
 
     def _parse_ip_addr(self, output: str) -> List[NetworkInterface]:
         """Parse 'ip addr show' output into NetworkInterface objects.
@@ -1544,8 +1542,7 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
         uncollected_commands = []
 
         # Parse nicctl show card output
-        cmd = "nicctl show card"
-        res_card = self._run_sut_cmd(cmd, sudo=True)
+        res_card = self._run_sut_cmd(self.CMD_NICCTL_CARD, sudo=True)
         if res_card.exit_code == 0:
             cards = self._parse_nicctl_card(res_card.stdout)
             self._log_event(
@@ -1554,13 +1551,12 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
                 priority=EventPriority.INFO,
             )
             collected_count += 1
-            collected_commands.append(cmd)
+            collected_commands.append(self.CMD_NICCTL_CARD)
         else:
-            uncollected_commands.append(cmd)
+            uncollected_commands.append(self.CMD_NICCTL_CARD)
 
         # Parse nicctl show dcqcn output
-        cmd = "nicctl show dcqcn"
-        res_dcqcn = self._run_sut_cmd(cmd, sudo=True)
+        res_dcqcn = self._run_sut_cmd(self.CMD_NICCTL_DCQCN, sudo=True)
         if res_dcqcn.exit_code == 0:
             dcqcn_entries = self._parse_nicctl_dcqcn(res_dcqcn.stdout)
             self._log_event(
@@ -1569,13 +1565,12 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
                 priority=EventPriority.INFO,
             )
             collected_count += 1
-            collected_commands.append(cmd)
+            collected_commands.append(self.CMD_NICCTL_DCQCN)
         else:
-            uncollected_commands.append(cmd)
+            uncollected_commands.append(self.CMD_NICCTL_DCQCN)
 
         # Parse nicctl show environment output
-        cmd = "nicctl show environment"
-        res_environment = self._run_sut_cmd(cmd, sudo=True)
+        res_environment = self._run_sut_cmd(self.CMD_NICCTL_ENVIRONMENT, sudo=True)
         if res_environment.exit_code == 0:
             environment_entries = self._parse_nicctl_environment(res_environment.stdout)
             self._log_event(
@@ -1584,13 +1579,12 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
                 priority=EventPriority.INFO,
             )
             collected_count += 1
-            collected_commands.append(cmd)
+            collected_commands.append(self.CMD_NICCTL_ENVIRONMENT)
         else:
-            uncollected_commands.append(cmd)
+            uncollected_commands.append(self.CMD_NICCTL_ENVIRONMENT)
 
         # Parse nicctl show pcie ats output
-        cmd = "nicctl show pcie ats"
-        res_pcie_ats = self._run_sut_cmd(cmd, sudo=True)
+        res_pcie_ats = self._run_sut_cmd(self.CMD_NICCTL_PCIE_ATS, sudo=True)
         if res_pcie_ats.exit_code == 0:
             pcie_ats_entries = self._parse_nicctl_pcie_ats(res_pcie_ats.stdout)
             self._log_event(
@@ -1599,13 +1593,12 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
                 priority=EventPriority.INFO,
             )
             collected_count += 1
-            collected_commands.append(cmd)
+            collected_commands.append(self.CMD_NICCTL_PCIE_ATS)
         else:
-            uncollected_commands.append(cmd)
+            uncollected_commands.append(self.CMD_NICCTL_PCIE_ATS)
 
         # Parse nicctl show port output
-        cmd = "nicctl show port"
-        res_port = self._run_sut_cmd(cmd, sudo=True)
+        res_port = self._run_sut_cmd(self.CMD_NICCTL_PORT, sudo=True)
         if res_port.exit_code == 0:
             port_entries = self._parse_nicctl_port(res_port.stdout)
             self._log_event(
@@ -1614,13 +1607,12 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
                 priority=EventPriority.INFO,
             )
             collected_count += 1
-            collected_commands.append(cmd)
+            collected_commands.append(self.CMD_NICCTL_PORT)
         else:
-            uncollected_commands.append(cmd)
+            uncollected_commands.append(self.CMD_NICCTL_PORT)
 
         # Parse nicctl show qos output
-        cmd = "nicctl show qos"
-        res_qos = self._run_sut_cmd(cmd, sudo=True)
+        res_qos = self._run_sut_cmd(self.CMD_NICCTL_QOS, sudo=True)
         if res_qos.exit_code == 0:
             qos_entries = self._parse_nicctl_qos(res_qos.stdout)
             self._log_event(
@@ -1629,13 +1621,12 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
                 priority=EventPriority.INFO,
             )
             collected_count += 1
-            collected_commands.append(cmd)
+            collected_commands.append(self.CMD_NICCTL_QOS)
         else:
-            uncollected_commands.append(cmd)
+            uncollected_commands.append(self.CMD_NICCTL_QOS)
 
         # Parse nicctl show rdma statistics output
-        cmd = "nicctl show rdma statistics"
-        res_rdma_stats = self._run_sut_cmd(cmd, sudo=True)
+        res_rdma_stats = self._run_sut_cmd(self.CMD_NICCTL_RDMA_STATISTICS, sudo=True)
         if res_rdma_stats.exit_code == 0:
             rdma_statistics_entries = self._parse_nicctl_rdma_statistics(res_rdma_stats.stdout)
             self._log_event(
@@ -1644,13 +1635,12 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
                 priority=EventPriority.INFO,
             )
             collected_count += 1
-            collected_commands.append(cmd)
+            collected_commands.append(self.CMD_NICCTL_RDMA_STATISTICS)
         else:
-            uncollected_commands.append(cmd)
+            uncollected_commands.append(self.CMD_NICCTL_RDMA_STATISTICS)
 
         # Parse nicctl show version host-software output
-        cmd = "nicctl show version host-software"
-        res_version_host = self._run_sut_cmd(cmd, sudo=True)
+        res_version_host = self._run_sut_cmd(self.CMD_NICCTL_VERSION_HOST_SOFTWARE, sudo=True)
         if res_version_host.exit_code == 0:
             version_host_software = self._parse_nicctl_version_host_software(
                 res_version_host.stdout
@@ -1662,15 +1652,14 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
                     priority=EventPriority.INFO,
                 )
                 collected_count += 1
-                collected_commands.append(cmd)
+                collected_commands.append(self.CMD_NICCTL_VERSION_HOST_SOFTWARE)
             else:
-                uncollected_commands.append(cmd)
+                uncollected_commands.append(self.CMD_NICCTL_VERSION_HOST_SOFTWARE)
         else:
-            uncollected_commands.append(cmd)
+            uncollected_commands.append(self.CMD_NICCTL_VERSION_HOST_SOFTWARE)
 
         # Parse nicctl show version firmware output
-        cmd = "nicctl show version firmware"
-        res_version_firmware = self._run_sut_cmd(cmd, sudo=True)
+        res_version_firmware = self._run_sut_cmd(self.CMD_NICCTL_VERSION_FIRMWARE, sudo=True)
         if res_version_firmware.exit_code == 0:
             version_firmware_entries = self._parse_nicctl_version_firmware(
                 res_version_firmware.stdout
@@ -1681,9 +1670,9 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
                 priority=EventPriority.INFO,
             )
             collected_count += 1
-            collected_commands.append(cmd)
+            collected_commands.append(self.CMD_NICCTL_VERSION_FIRMWARE)
         else:
-            uncollected_commands.append(cmd)
+            uncollected_commands.append(self.CMD_NICCTL_VERSION_FIRMWARE)
 
         # Log summary of collected and uncollected commands
         if collected_commands:
