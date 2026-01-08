@@ -285,17 +285,16 @@ def test_external_plugins_integration():
     with tempfile.TemporaryDirectory() as tmpdir:
         pkg_dir = Path(tmpdir) / "test_external_pkg"
         pkg_dir.mkdir()
-        (pkg_dir / "__init__.py").write_text("# Test external package\n")
+        (pkg_dir / "__init__.py").write_text("")
 
         ext_plugins_dir = pkg_dir / "ext_nodescraper_plugins"
         ext_plugins_dir.mkdir()
-        (ext_plugins_dir / "__init__.py").write_text("# External plugins package\n")
+        (ext_plugins_dir / "__init__.py").write_text("")
 
         plugin_module_dir = ext_plugins_dir / "test_plugin"
         plugin_module_dir.mkdir()
 
-        plugin_code = '''
-"""Test external plugin module"""
+        plugin_code = """
 from nodescraper.base import InBandDataPlugin
 from nodescraper.enums import ExecutionStatus
 from nodescraper.interfaces import DataAnalyzer
@@ -312,7 +311,7 @@ class TestExternalPlugin(InBandDataPlugin):
 
     def run(self):
         return ExecutionStatus.SUCCESS, {"test": "data"}
-'''
+"""
         (plugin_module_dir / "__init__.py").write_text(plugin_code)
 
         sys.path.insert(0, tmpdir)
