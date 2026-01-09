@@ -124,7 +124,15 @@ def discover_external_plugins():
     return extra_pkgs
 
 
+# Fix sys.path[0] if it's the venv/bin directory to avoid breaking editable install discovery
+_original_syspath0 = sys.path[0]
+if _original_syspath0.endswith("/bin") or _original_syspath0.endswith("\\Scripts"):
+    sys.path[0] = ""
+
 extra_pkgs = discover_external_plugins()
+
+# Restore original sys.path[0]
+sys.path[0] = _original_syspath0
 
 
 def build_parser(
