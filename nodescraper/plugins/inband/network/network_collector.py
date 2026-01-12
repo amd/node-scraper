@@ -1515,6 +1515,7 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
         List[PensandoNicRdmaStatistics],
         Optional[PensandoNicVersionHostSoftware],
         List[PensandoNicVersionFirmware],
+        List[str],
     ]:
         """Collect Pensando NIC information using nicctl commands.
 
@@ -1524,7 +1525,8 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
                      list of PensandoNicPort, list of PensandoNicQos,
                      list of PensandoNicRdmaStatistics,
                      PensandoNicVersionHostSoftware object,
-                     list of PensandoNicVersionFirmware)
+                     list of PensandoNicVersionFirmware,
+                     list of uncollected command names)
         """
         cards = []
         dcqcn_entries = []
@@ -1535,10 +1537,8 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
         rdma_statistics_entries = []
         version_host_software = None
         version_firmware_entries = []
-        collected_count = 0
 
-        # Track which commands succeeded and which failed
-        collected_commands = []
+        # Track which commands failed
         uncollected_commands = []
 
         # Parse nicctl show card output
@@ -1550,8 +1550,6 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
                 description=f"Collected Pensando NIC card list: {len(cards)} cards",
                 priority=EventPriority.INFO,
             )
-            collected_count += 1
-            collected_commands.append(self.CMD_NICCTL_CARD)
         else:
             uncollected_commands.append(self.CMD_NICCTL_CARD)
 
@@ -1564,8 +1562,6 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
                 description=f"Collected Pensando NIC DCQCN info: {len(dcqcn_entries)} entries",
                 priority=EventPriority.INFO,
             )
-            collected_count += 1
-            collected_commands.append(self.CMD_NICCTL_DCQCN)
         else:
             uncollected_commands.append(self.CMD_NICCTL_DCQCN)
 
@@ -1578,8 +1574,6 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
                 description=f"Collected Pensando NIC environment info: {len(environment_entries)} entries",
                 priority=EventPriority.INFO,
             )
-            collected_count += 1
-            collected_commands.append(self.CMD_NICCTL_ENVIRONMENT)
         else:
             uncollected_commands.append(self.CMD_NICCTL_ENVIRONMENT)
 
@@ -1592,8 +1586,6 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
                 description=f"Collected Pensando NIC PCIe ATS info: {len(pcie_ats_entries)} entries",
                 priority=EventPriority.INFO,
             )
-            collected_count += 1
-            collected_commands.append(self.CMD_NICCTL_PCIE_ATS)
         else:
             uncollected_commands.append(self.CMD_NICCTL_PCIE_ATS)
 
@@ -1606,8 +1598,6 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
                 description=f"Collected Pensando NIC port info: {len(port_entries)} ports",
                 priority=EventPriority.INFO,
             )
-            collected_count += 1
-            collected_commands.append(self.CMD_NICCTL_PORT)
         else:
             uncollected_commands.append(self.CMD_NICCTL_PORT)
 
@@ -1620,8 +1610,6 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
                 description=f"Collected Pensando NIC QoS info: {len(qos_entries)} entries",
                 priority=EventPriority.INFO,
             )
-            collected_count += 1
-            collected_commands.append(self.CMD_NICCTL_QOS)
         else:
             uncollected_commands.append(self.CMD_NICCTL_QOS)
 
@@ -1634,8 +1622,6 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
                 description=f"Collected Pensando NIC RDMA statistics: {len(rdma_statistics_entries)} entries",
                 priority=EventPriority.INFO,
             )
-            collected_count += 1
-            collected_commands.append(self.CMD_NICCTL_RDMA_STATISTICS)
         else:
             uncollected_commands.append(self.CMD_NICCTL_RDMA_STATISTICS)
 
@@ -1651,8 +1637,6 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
                     description="Collected Pensando NIC host software version",
                     priority=EventPriority.INFO,
                 )
-                collected_count += 1
-                collected_commands.append(self.CMD_NICCTL_VERSION_HOST_SOFTWARE)
             else:
                 uncollected_commands.append(self.CMD_NICCTL_VERSION_HOST_SOFTWARE)
         else:
@@ -1669,32 +1653,8 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
                 description=f"Collected Pensando NIC firmware versions: {len(version_firmware_entries)} entries",
                 priority=EventPriority.INFO,
             )
-            collected_count += 1
-            collected_commands.append(self.CMD_NICCTL_VERSION_FIRMWARE)
         else:
             uncollected_commands.append(self.CMD_NICCTL_VERSION_FIRMWARE)
-
-        # Log summary of collected and uncollected commands
-        if collected_commands:
-            self._log_event(
-                category=EventCategory.NETWORK,
-                description=f"Successfully collected {len(collected_commands)} nicctl commands: {', '.join(collected_commands)}",
-                priority=EventPriority.INFO,
-            )
-
-        if uncollected_commands:
-            self._log_event(
-                category=EventCategory.NETWORK,
-                description=f"Failed to collect {len(uncollected_commands)} nicctl commands: {', '.join(uncollected_commands)}",
-                priority=EventPriority.WARNING,
-            )
-
-        if not collected_commands and not uncollected_commands:
-            self._log_event(
-                category=EventCategory.NETWORK,
-                description="Pensando NIC collection failed or nicctl not available",
-                priority=EventPriority.INFO,
-            )
 
         return (
             cards,
@@ -1706,6 +1666,7 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
             rdma_statistics_entries,
             version_host_software,
             version_firmware_entries,
+            uncollected_commands,
         )
 
     def collect_data(
@@ -1830,7 +1791,20 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
             pensando_rdma_statistics,
             pensando_version_host_software,
             pensando_version_firmware,
+            uncollected_commands,
         ) = self._collect_pensando_nic_info()
+
+        # Log summary of uncollected commands or success
+        if uncollected_commands:
+            self.result.message = "Network data collection failed"
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description=f"Failed to collect {len(uncollected_commands)} nicctl commands: {', '.join(uncollected_commands)}",
+                priority=EventPriority.WARNING,
+            )
+
+        else:
+            self.result.message = "Network data collected successfully"
 
         network_data = NetworkDataModel(
             interfaces=interfaces,
@@ -1849,19 +1823,6 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
             pensando_nic_rdma_statistics=pensando_rdma_statistics,
             pensando_nic_version_host_software=pensando_version_host_software,
             pensando_nic_version_firmware=pensando_version_firmware,
-        )
-        self.result.message = (
-            f"Collected network data: {len(interfaces)} interfaces, "
-            f"{len(routes)} routes, {len(rules)} rules, {len(neighbors)} neighbors, "
-            f"{len(ethtool_data)} ethtool entries, {len(broadcom_devices)} Broadcom NICs, "
-            f"{len(pensando_cards)} Pensando NICs, {len(pensando_dcqcn)} Pensando DCQCN entries, "
-            f"{len(pensando_environment)} Pensando environment entries, "
-            f"{len(pensando_pcie_ats)} Pensando PCIe ATS entries, "
-            f"{len(pensando_ports)} Pensando ports, "
-            f"{len(pensando_qos)} Pensando QoS entries, "
-            f"{len(pensando_rdma_statistics)} Pensando RDMA statistics, "
-            f"Pensando host software version: {'Yes' if pensando_version_host_software else 'No'}, "
-            f"{len(pensando_version_firmware)} Pensando firmware versions"
         )
         self.result.status = ExecutionStatus.OK
         return self.result, network_data
