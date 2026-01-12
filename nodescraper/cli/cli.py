@@ -30,7 +30,6 @@ import logging
 import os
 import platform
 import sys
-from importlib import import_module
 from typing import Optional
 
 import nodescraper
@@ -54,85 +53,6 @@ from nodescraper.enums import ExecutionStatus, SystemInteractionLevel, SystemLoc
 from nodescraper.models import SystemInfo
 from nodescraper.pluginexecutor import PluginExecutor
 from nodescraper.pluginregistry import PluginRegistry
-
-
-def discover_external_plugins():
-    """Discover ext_nodescraper_plugins from all installed packages.
-
-    Returns:
-        list: List of discovered plugin packages
-    """
-    extra_pkgs = []
-    seen_paths = set()  # Track paths to avoid duplicates
-
-    try:
-        import ext_nodescraper_plugins as ext_pkg
-
-        extra_pkgs.append(ext_pkg)
-        if hasattr(ext_pkg, "__file__") and ext_pkg.__file__:
-            seen_paths.add(ext_pkg.__file__)
-    except ImportError:
-        pass
-
-    # Discover ext_nodescraper_plugins from installed packages
-    try:
-        from importlib.metadata import distributions
-
-        for dist in distributions():
-            pkg_name = dist.metadata.get("Name", "")
-            if not pkg_name:
-                continue
-
-            name_variants = [
-                pkg_name.replace("-", "_"),
-                pkg_name.replace("_", "-"),
-            ]
-
-            try:
-                top_level = dist.read_text("top_level.txt")
-                if top_level:
-                    name_variants.extend(top_level.strip().split("\n"))
-            except Exception:
-                pass
-
-            for variant in name_variants:
-                if not variant:
-                    continue
-
-                try:
-                    module_path = f"{variant}.ext_nodescraper_plugins"
-                    ext_pkg = import_module(module_path)
-
-                    # Check if we already have this package (by file path)
-                    pkg_path = getattr(ext_pkg, "__file__", None)
-                    if pkg_path and pkg_path in seen_paths:
-                        continue
-
-                    # Add the package
-                    extra_pkgs.append(ext_pkg)
-                    if pkg_path:
-                        seen_paths.add(pkg_path)
-
-                    break
-
-                except (ImportError, AttributeError, ModuleNotFoundError):
-                    continue
-
-    except Exception:
-        pass
-
-    return extra_pkgs
-
-
-# Fix sys.path[0] if it's the venv/bin directory to avoid breaking editable install discovery
-_original_syspath0 = sys.path[0]
-if _original_syspath0.endswith("/bin") or _original_syspath0.endswith("\\Scripts"):
-    sys.path[0] = ""
-
-extra_pkgs = discover_external_plugins()
-
-# Restore original sys.path[0]
-sys.path[0] = _original_syspath0
 
 
 def build_parser(
@@ -449,7 +369,7 @@ def main(arg_input: Optional[list[str]] = None):
     if arg_input is None:
         arg_input = sys.argv[1:]
 
-    plugin_reg = PluginRegistry(plugin_pkg=extra_pkgs)
+    plugin_reg = PluginRegistry()
 
     config_reg = ConfigRegistry()
     parser, plugin_subparser_map = build_parser(plugin_reg, config_reg)
