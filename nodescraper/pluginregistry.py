@@ -124,13 +124,13 @@ class PluginRegistry:
         try:
             # Python 3.10+ supports group parameter
             try:
-                plugin_entry_points = importlib.metadata.entry_points(group="nodescraper.plugins")  # type: ignore[call-arg]
+                eps = importlib.metadata.entry_points(group="nodescraper.plugins")  # type: ignore[call-arg]
             except TypeError:
                 # Python 3.9 - entry_points() returns dict-like object
-                all_entry_points = importlib.metadata.entry_points()
-                plugin_entry_points = all_entry_points.get("nodescraper.plugins", [])  # type: ignore[attr-defined]
+                all_eps = importlib.metadata.entry_points()
+                eps = all_eps.get("nodescraper.plugins", [])  # type: ignore[assignment, attr-defined]
 
-            for entry_point in plugin_entry_points:
+            for entry_point in eps:
                 try:
                     plugin_class = entry_point.load()
 
