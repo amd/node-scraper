@@ -28,7 +28,7 @@ import importlib.metadata
 import inspect
 import pkgutil
 import types
-from typing import Optional
+from typing import Optional, Sequence
 
 import nodescraper.connection as internal_connections
 import nodescraper.plugins as internal_plugins
@@ -123,6 +123,7 @@ class PluginRegistry:
 
         try:
             # Python 3.10+ supports group parameter
+            eps: Sequence[importlib.metadata.EntryPoint]
             try:
                 eps = importlib.metadata.entry_points(group="nodescraper.plugins")  # type: ignore[call-arg]
             except TypeError:
