@@ -50,8 +50,8 @@ class FabricsCollector(InBandDataCollector[FabricsDataModel, None]):
     DATA_MODEL = FabricsDataModel
     CMD_IBSTAT = "ibstat"
     CMD_IBV_DEVINFO = "ibv_devinfo"
-    CMD_IBDEV2NETDEV = "ibdev2netdev -v"
-    CMD_OFED_INFO = "/usr/bin/ofed_info -s"
+    CMD_IB_DEV_NETDEVS = "ls -l /sys/class/infiniband/*/device/net"
+    CMD_OFED_INFO = "ofed_info -s"
     CMD_MST_START = "mst start"
     CMD_MST_STATUS = "mst status -v"
     CMD_RDMA_DEV = "rdma dev"
@@ -217,40 +217,55 @@ class FabricsCollector(InBandDataCollector[FabricsDataModel, None]):
 
         return devices
 
-    def _parse_ibdev2netdev(self, output: str) -> List[IbdevNetdevMapping]:
-        """Parse 'ibdev2netdev -v' output into IbdevNetdevMapping objects.
+    def _parse_ib_dev_netdevs(self, output: str) -> List[IbdevNetdevMapping]:
+        """Parse 'ls -l /sys/class/infiniband/*/device/net' output into IbdevNetdevMapping objects.
 
         Args:
-            output: Raw output from 'ibdev2netdev -v' command
+            output: Raw output from 'ls -l /sys/class/infiniband/*/device/net' command
 
         Returns:
             List of IbdevNetdevMapping objects
         """
         mappings = []
+        current_ib_device = None
 
         for line in output.splitlines():
             line = line.strip()
             if not line:
                 continue
 
-            # Example format: mlx5_0 port 1 ==> ib0 (Up)
-            # Example format: mlx5_1 port 1 ==> N/A (Down)
-            match = re.match(r"(\S+)\s+port\s+(\d+)\s+==>\s+(\S+)\s+\(([^)]+)\)", line)
-            if match:
-                ib_device = match.group(1)
-                port = int(match.group(2))
-                netdev = match.group(3) if match.group(3) != "N/A" else None
-                state = match.group(4)
+            # Check if this is a directory path line
+            # Example: /sys/class/infiniband/rocep105s0/device/net:
+            if line.startswith("/sys/class/infiniband/") and line.endswith(":"):
+                # Extract IB device name from path
+                path_match = re.search(r"/sys/class/infiniband/([^/]+)/device/net:", line)
+                if path_match:
+                    current_ib_device = path_match.group(1)
+                continue
 
-                mapping = IbdevNetdevMapping(
-                    ib_device=ib_device, port=port, netdev=netdev, state=state
-                )
-                mappings.append(mapping)
+            # Skip "total" lines
+            if line.startswith("total"):
+                continue
+
+            # Parse directory listing lines (network device names)
+            # Example: drwxr-xr-x 5 root root 0 Jan  8 18:01 benic5p1
+            if current_ib_device and line.startswith("d"):
+                parts = line.split()
+                if len(parts) >= 9:
+                    # The last part is the network device name
+                    netdev = parts[-1]
+
+                    # Create mapping with default port 1 (most common for single-port devices)
+                    # State is unknown from ls output
+                    mapping = IbdevNetdevMapping(
+                        ib_device=current_ib_device, port=1, netdev=netdev, state=None
+                    )
+                    mappings.append(mapping)
 
         return mappings
 
     def _parse_ofed_info(self, output: str) -> OfedInfo:
-        """Parse '/usr/bin/ofed_info -s' output into OfedInfo object.
+        """Parse 'ofed_info -s' output into OfedInfo object.
 
         Args:
             output: Raw output from 'ofed_info -s' command
@@ -260,15 +275,17 @@ class FabricsCollector(InBandDataCollector[FabricsDataModel, None]):
         """
         version = None
 
-        # The output is typically just a version string
+        # The output is typically just a version string, possibly with trailing colon
+        # Example: OFED-internal-25.10-1.7.1:
         output_stripped = output.strip()
         if output_stripped:
-            version = output_stripped
+            # Remove trailing colon if present
+            version = output_stripped.rstrip(":")
 
         return OfedInfo(version=version, raw_output=output)
 
     def _parse_mst_status(self, output: str) -> MstStatus:
-        """Parse 'sudo mst status -v' output into MstStatus object.
+        """Parse 'mst status -v' output into MstStatus object.
 
         Args:
             output: Raw output from 'mst status -v' command
@@ -280,7 +297,7 @@ class FabricsCollector(InBandDataCollector[FabricsDataModel, None]):
         devices = []
 
         # Check if MST is started
-        if "MST modules:" in output or "MST devices:" in output:
+        if "MST modules:" in output or "MST devices:" in output or "PCI devices:" in output:
             mst_status.mst_started = True
 
         for line in output.splitlines():
@@ -288,14 +305,26 @@ class FabricsCollector(InBandDataCollector[FabricsDataModel, None]):
             if not line:
                 continue
 
-            # Look for device lines (e.g., "/dev/mst/mt4123_pciconf0")
-            if line.startswith("/dev/mst/"):
+            # Skip header lines
+            if (
+                line.startswith("MST modules:")
+                or line.startswith("PCI devices:")
+                or line.startswith("---")
+            ):
+                continue
+            if line.startswith("DEVICE_TYPE") or line.startswith("MST PCI module"):
+                continue
+
+            # Look for device lines containing "/dev/mst/"
+            if "/dev/mst/" in line:
                 parts = line.split()
-                if parts:
+
+                # Handle old format: "/dev/mst/device_path" at the beginning
+                if line.startswith("/dev/mst/"):
                     device_path = parts[0]
                     device = MstDevice(device=device_path)
 
-                    # Try to parse additional fields
+                    # Try to parse additional fields (old format with key=value)
                     for part in parts[1:]:
                         if "=" in part:
                             key, value = part.split("=", 1)
@@ -304,15 +333,65 @@ class FabricsCollector(InBandDataCollector[FabricsDataModel, None]):
                             elif key == "net":
                                 device.net_device = value
                             elif ":" in value and "." in value:
-                                # Looks like a PCI address
                                 device.pci_address = value
                             else:
                                 device.attributes[key] = value
-                        elif re.match(r"[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.[0-9]", part):
-                            # PCI address format
+                        elif re.match(r"[0-9a-f]{2,4}:[0-9a-f]{2}:[0-9a-f]{2}\.[0-9]", part):
                             device.pci_address = part
 
                     devices.append(device)
+
+                # Handle new tabular format: DEVICE_TYPE MST PCI RDMA NET NUMA [VFIO]
+                # Example: ConnectX7(rev:0) /dev/mst/mt4129_pciconf9 ec:00.0 mlx5_4 net-enp235s0np0 1
+                else:
+                    # Find the index of the /dev/mst/ device path
+                    mst_idx = None
+                    for i, part in enumerate(parts):
+                        if part.startswith("/dev/mst/"):
+                            mst_idx = i
+                            break
+
+                    if mst_idx is not None and len(parts) >= mst_idx + 3:
+                        device_path = parts[mst_idx]
+                        device = MstDevice(device=device_path)
+
+                        # Store device type if available (before mst path)
+                        if mst_idx > 0:
+                            device.attributes["device_type"] = " ".join(parts[:mst_idx])
+
+                        # PCI address (next column after MST path)
+                        if mst_idx + 1 < len(parts):
+                            pci_addr = parts[mst_idx + 1]
+                            # Validate PCI address format (short or long form)
+                            if re.match(r"[0-9a-f]{2,4}:[0-9a-f]{2}:[0-9a-f]{2}\.[0-9]", pci_addr):
+                                device.pci_address = pci_addr
+
+                        # RDMA device (column after PCI)
+                        if mst_idx + 2 < len(parts):
+                            rdma_dev = parts[mst_idx + 2]
+                            if rdma_dev.startswith("mlx") or rdma_dev != "-":
+                                device.rdma_device = rdma_dev
+
+                        # NET device (column after RDMA)
+                        if mst_idx + 3 < len(parts):
+                            net_dev = parts[mst_idx + 3]
+                            # Remove "net-" prefix if present
+                            if net_dev.startswith("net-"):
+                                net_dev = net_dev[4:]
+                            if net_dev != "-":
+                                device.net_device = net_dev
+
+                        # NUMA node (column after NET)
+                        if mst_idx + 4 < len(parts):
+                            numa = parts[mst_idx + 4]
+                            if numa.isdigit():
+                                device.attributes["numa_node"] = numa
+
+                        # VFIO or other attributes (remaining columns)
+                        if mst_idx + 5 < len(parts):
+                            device.attributes["vfio"] = " ".join(parts[mst_idx + 5 :])
+
+                        devices.append(device)
 
         mst_status.devices = devices
         return mst_status
@@ -333,7 +412,8 @@ class FabricsCollector(InBandDataCollector[FabricsDataModel, None]):
             if not line:
                 continue
 
-            # Example format: 0: mlx5_0: node_type ca fw 16.28.2006 node_guid 0c42:a103:00b3:bfa0 sys_image_guid 0c42:a103:00b3:bfa0
+            # Example InfiniBand format: 0: mlx5_0: node_type ca fw 16.28.2006 node_guid 0c42:a103:00b3:bfa0 sys_image_guid 0c42:a103:00b3:bfa0
+            # Example RoCE format: 0: rocep9s0: node_type ca fw 1.117.1-a-63 node_guid 0690:81ff:fe4a:6c40 sys_image_guid 0690:81ff:fe4a:6c40
             parts = line.split()
             if len(parts) < 2:
                 continue
@@ -343,7 +423,7 @@ class FabricsCollector(InBandDataCollector[FabricsDataModel, None]):
             start_idx = 0
 
             if parts[0].endswith(":"):
-                # Skip index
+                # Skip index (e.g., "0:")
                 start_idx = 1
 
             if start_idx < len(parts):
@@ -401,8 +481,9 @@ class FabricsCollector(InBandDataCollector[FabricsDataModel, None]):
             if not line:
                 continue
 
-            # Example format: link mlx5_0/1 state ACTIVE physical_state LINK_UP netdev ib0
-            # Example format: 0/1: mlx5_0/1: state ACTIVE physical_state LINK_UP
+            # Example InfiniBand format: link mlx5_0/1 state ACTIVE physical_state LINK_UP netdev ib0
+            # Example RoCE format: link rocep9s0/1 state DOWN physical_state POLLING netdev benic8p1
+            # Example alternate format: 0/1: mlx5_0/1: state ACTIVE physical_state LINK_UP
             match = re.search(r"(\S+)/(\d+)", line)
             if not match:
                 continue
@@ -488,10 +569,10 @@ class FabricsCollector(InBandDataCollector[FabricsDataModel, None]):
                 priority=EventPriority.WARNING,
             )
 
-        # Collect ibdev2netdev mappings
-        res_ibdev2netdev = self._run_sut_cmd(self.CMD_IBDEV2NETDEV)
-        if res_ibdev2netdev.exit_code == 0:
-            ibdev_netdev_mappings = self._parse_ibdev2netdev(res_ibdev2netdev.stdout)
+        # Collect IB device to netdev mappings
+        res_ib_dev_netdevs = self._run_sut_cmd(self.CMD_IB_DEV_NETDEVS)
+        if res_ib_dev_netdevs.exit_code == 0:
+            ibdev_netdev_mappings = self._parse_ib_dev_netdevs(res_ib_dev_netdevs.stdout)
             self._log_event(
                 category=EventCategory.NETWORK,
                 description=f"Collected {len(ibdev_netdev_mappings)} IB to netdev mappings",
@@ -500,10 +581,10 @@ class FabricsCollector(InBandDataCollector[FabricsDataModel, None]):
         else:
             self._log_event(
                 category=EventCategory.NETWORK,
-                description="Error collecting ibdev2netdev mappings",
+                description="Error collecting IB device to netdev mappings",
                 data={
-                    "command": res_ibdev2netdev.command,
-                    "exit_code": res_ibdev2netdev.exit_code,
+                    "command": res_ib_dev_netdevs.command,
+                    "exit_code": res_ib_dev_netdevs.exit_code,
                 },
                 priority=EventPriority.WARNING,
             )
@@ -529,11 +610,21 @@ class FabricsCollector(InBandDataCollector[FabricsDataModel, None]):
         # First start MST
         res_mst_start = self._run_sut_cmd(self.CMD_MST_START, sudo=True)
         if res_mst_start.exit_code == 0:
-            self._log_event(
-                category=EventCategory.NETWORK,
-                description="MST service started successfully",
-                priority=EventPriority.INFO,
-            )
+            # Check output for success indicators
+            output_lower = res_mst_start.stdout.lower()
+            if "success" in output_lower or "loading mst" in output_lower:
+                self._log_event(
+                    category=EventCategory.NETWORK,
+                    description="MST service started successfully",
+                    priority=EventPriority.INFO,
+                )
+            else:
+                self._log_event(
+                    category=EventCategory.NETWORK,
+                    description="MST service command completed but status unclear",
+                    data={"output": res_mst_start.stdout[:200]},
+                    priority=EventPriority.INFO,
+                )
         else:
             self._log_event(
                 category=EventCategory.NETWORK,
