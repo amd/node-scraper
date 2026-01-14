@@ -31,11 +31,25 @@ from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
 from nodescraper.models import TaskResult
 
 from .networkdata import (
+    BroadcomNicDevice,
+    BroadcomNicQos,
+    BroadcomNicQosAppEntry,
     EthtoolInfo,
     IpAddress,
     Neighbor,
     NetworkDataModel,
     NetworkInterface,
+    PensandoNicCard,
+    PensandoNicDcqcn,
+    PensandoNicEnvironment,
+    PensandoNicPcieAts,
+    PensandoNicPort,
+    PensandoNicQos,
+    PensandoNicQosScheduling,
+    PensandoNicRdmaStatistic,
+    PensandoNicRdmaStatistics,
+    PensandoNicVersionFirmware,
+    PensandoNicVersionHostSoftware,
     Route,
     RoutingRule,
 )
@@ -49,7 +63,26 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
     CMD_ROUTE = "ip route show"
     CMD_RULE = "ip rule show"
     CMD_NEIGHBOR = "ip neighbor show"
-    CMD_ETHTOOL_TEMPLATE = "sudo ethtool {interface}"
+    CMD_ETHTOOL_TEMPLATE = "ethtool {interface}"
+
+    # LLDP commands
+    CMD_LLDPCLI_NEIGHBOR = "lldpcli show neighbor"
+    CMD_LLDPCTL = "lldpctl"
+
+    # Broadcom NIC commands
+    CMD_NICCLI_LISTDEV = "niccli --list_devices"
+    CMD_NICCLI_GETQOS_TEMPLATE = "niccli --dev {device_num} qos --ets --show"
+
+    # Pensando NIC commands
+    CMD_NICCTL_CARD = "nicctl show card"
+    CMD_NICCTL_DCQCN = "nicctl show dcqcn"
+    CMD_NICCTL_ENVIRONMENT = "nicctl show environment"
+    CMD_NICCTL_PCIE_ATS = "nicctl show pcie ats"
+    CMD_NICCTL_PORT = "nicctl show port"
+    CMD_NICCTL_QOS = "nicctl show qos"
+    CMD_NICCTL_RDMA_STATISTICS = "nicctl show rdma statistics"
+    CMD_NICCTL_VERSION_HOST_SOFTWARE = "nicctl show version host-software"
+    CMD_NICCTL_VERSION_FIRMWARE = "nicctl show version firmware"
 
     def _parse_ip_addr(self, output: str) -> List[NetworkInterface]:
         """Parse 'ip addr show' output into NetworkInterface objects.
@@ -431,6 +464,920 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
 
         return ethtool_info
 
+    def _parse_niccli_listdev(self, output: str) -> List[BroadcomNicDevice]:
+        """Parse 'niccli --list_devices' output into BroadcomNicDevice objects.
+
+        Args:
+            output: Raw output from 'niccli --list_devices' command
+
+        Returns:
+            List of BroadcomNicDevice objects
+        """
+        devices = []
+        current_device = None
+
+        for line in output.splitlines():
+            line_stripped = line.strip()
+            if not line_stripped:
+                continue
+
+            # Check if this is a device header line
+            match = re.match(r"^(\d+)\s*\)\s*(.+?)(?:\s+\((.+?)\))?$", line_stripped)
+            if match:
+                device_num_str = match.group(1)
+                model = match.group(2).strip() if match.group(2) else None
+                adapter_port = match.group(3).strip() if match.group(3) else None
+
+                try:
+                    device_num = int(device_num_str)
+                except ValueError:
+                    continue
+
+                current_device = BroadcomNicDevice(
+                    device_num=device_num,
+                    model=model,
+                    adapter_port=adapter_port,
+                )
+                devices.append(current_device)
+
+            # Check for Device Interface Name line
+            elif "Device Interface Name" in line and current_device:
+                parts = line_stripped.split(":")
+                if len(parts) >= 2:
+                    current_device.interface_name = parts[1].strip()
+
+            # Check for MAC Address line
+            elif "MAC Address" in line and current_device:
+                parts = line_stripped.split(":")
+                if len(parts) >= 2:
+                    # MAC address has colons, so rejoin the parts after first split
+                    mac = ":".join(parts[1:]).strip()
+                    current_device.mac_address = mac
+
+            # Check for PCI Address line
+            elif "PCI Address" in line and current_device:
+                parts = line_stripped.split(":")
+                if len(parts) >= 2:
+                    # PCI address also has colons, rejoin
+                    pci = ":".join(parts[1:]).strip()
+                    current_device.pci_address = pci
+
+        return devices
+
+    def _parse_nicctl_card(self, output: str) -> List[PensandoNicCard]:
+        """Parse 'nicctl show card' output into PensandoNicCard objects.
+
+        Args:
+            output: Raw output from 'nicctl show card' command
+
+        Returns:
+            List of PensandoNicCard objects
+        """
+        cards = []
+
+        # Skip header lines and separator lines
+        in_data_section = False
+
+        for line in output.splitlines():
+            line_stripped = line.strip()
+            if not line_stripped:
+                continue
+
+            # Skip header line (starts with "Id")
+            if line_stripped.startswith("Id"):
+                in_data_section = True
+                continue
+
+            # Skip separator lines (mostly dashes)
+            if re.match(r"^-+$", line_stripped):
+                continue
+
+            # Parse data lines after header
+            if in_data_section:
+                # Split by whitespace
+                parts = line_stripped.split()
+
+                # Expected format: Id PCIe_BDF ASIC F/W_partition Serial_number
+                if len(parts) >= 2:
+                    card = PensandoNicCard(
+                        id=parts[0],
+                        pcie_bdf=parts[1],
+                        asic=parts[2] if len(parts) > 2 else None,
+                        fw_partition=parts[3] if len(parts) > 3 else None,
+                        serial_number=parts[4] if len(parts) > 4 else None,
+                    )
+                    cards.append(card)
+
+        return cards
+
+    def _parse_nicctl_dcqcn(self, output: str) -> List[PensandoNicDcqcn]:
+        """Parse 'nicctl show dcqcn' output into PensandoNicDcqcn objects.
+
+        Args:
+            output: Raw output from 'nicctl show dcqcn' command
+
+        Returns:
+            List of PensandoNicDcqcn objects
+        """
+        dcqcn_entries = []
+        current_entry = None
+
+        for line in output.splitlines():
+            line_stripped = line.strip()
+            if not line_stripped:
+                continue
+
+            # Check for NIC line
+            if line_stripped.startswith("NIC :"):
+                # Save previous entry if exists
+                if current_entry:
+                    dcqcn_entries.append(current_entry)
+
+                # Parse NIC ID and PCIe BDF
+                # Format: "NIC : <id> (<pcie_bdf>)"
+                match = re.match(
+                    r"NIC\s*:\s*([a-f0-9\-]+)\s*\(([0-9a-f:\.]+)\)", line_stripped, re.IGNORECASE
+                )
+                if match:
+                    nic_id = match.group(1)
+                    pcie_bdf = match.group(2)
+                    current_entry = PensandoNicDcqcn(
+                        nic_id=nic_id,
+                        pcie_bdf=pcie_bdf,
+                    )
+                continue
+
+            # Skip separator lines (dashes or asterisks)
+            if re.match(r"^[-*]+$", line_stripped):
+                continue
+
+            # Parse fields within current entry
+            if current_entry and ":" in line_stripped:
+                parts = line_stripped.split(":", 1)
+                if len(parts) == 2:
+                    key = parts[0].strip()
+                    value = parts[1].strip()
+
+                    if key == "Lif id":
+                        current_entry.lif_id = value
+                    elif key == "ROCE device":
+                        current_entry.roce_device = value
+                    elif key == "DCQCN profile id":
+                        current_entry.dcqcn_profile_id = value
+                    elif key == "Status":
+                        current_entry.status = value
+
+        # Add the last entry if exists
+        if current_entry:
+            dcqcn_entries.append(current_entry)
+
+        return dcqcn_entries
+
+    def _parse_nicctl_environment(self, output: str) -> List[PensandoNicEnvironment]:
+        """Parse 'nicctl show environment' output into PensandoNicEnvironment objects.
+
+        Args:
+            output: Raw output from 'nicctl show environment' command
+
+        Returns:
+            List of PensandoNicEnvironment objects
+        """
+        environment_entries = []
+        current_entry = None
+
+        for line in output.splitlines():
+            line_stripped = line.strip()
+            if not line_stripped:
+                continue
+
+            # Check for NIC line
+            if line_stripped.startswith("NIC :"):
+                # Save previous entry if exists
+                if current_entry:
+                    environment_entries.append(current_entry)
+
+                # Parse NIC ID and PCIe BDF
+                # Format: "NIC : <id> (<pcie_bdf>)"
+                match = re.match(
+                    r"NIC\s*:\s*([a-f0-9\-]+)\s*\(([0-9a-f:\.]+)\)", line_stripped, re.IGNORECASE
+                )
+                if match:
+                    nic_id = match.group(1)
+                    pcie_bdf = match.group(2)
+                    current_entry = PensandoNicEnvironment(
+                        nic_id=nic_id,
+                        pcie_bdf=pcie_bdf,
+                    )
+                continue
+
+            # Skip separator lines (dashes)
+            if re.match(r"^-+$", line_stripped):
+                continue
+
+            # Skip section headers (Power(W):, Temperature(C):, etc.)
+            if line_stripped.endswith("):"):
+                continue
+
+            # Parse fields within current entry
+            if current_entry and ":" in line_stripped:
+                parts = line_stripped.split(":", 1)
+                if len(parts) == 2:
+                    key = parts[0].strip()
+                    value_str = parts[1].strip()
+
+                    # Try to parse the value as float
+                    try:
+                        value = float(value_str)
+                    except ValueError:
+                        continue
+
+                    # Map keys to fields
+                    if key == "Total power drawn (pin)" or key == "Total power drawn":
+                        current_entry.total_power_drawn = value
+                    elif key == "Core power (pout1)" or key == "Core power":
+                        current_entry.core_power = value
+                    elif key == "ARM power (pout2)" or key == "ARM power":
+                        current_entry.arm_power = value
+                    elif key == "Local board temperature":
+                        current_entry.local_board_temperature = value
+                    elif key == "Die temperature":
+                        current_entry.die_temperature = value
+                    elif key == "Input voltage":
+                        current_entry.input_voltage = value
+                    elif key == "Core voltage":
+                        current_entry.core_voltage = value
+                    elif key == "Core frequency":
+                        current_entry.core_frequency = value
+                    elif key == "CPU frequency":
+                        current_entry.cpu_frequency = value
+                    elif key == "P4 stage frequency":
+                        current_entry.p4_stage_frequency = value
+
+        # Add the last entry if exists
+        if current_entry:
+            environment_entries.append(current_entry)
+
+        return environment_entries
+
+    def _parse_nicctl_pcie_ats(self, output: str) -> List[PensandoNicPcieAts]:
+        """Parse 'nicctl show pcie ats' output into PensandoNicPcieAts objects.
+
+        Args:
+            output: Raw output from 'nicctl show pcie ats' command
+
+        Returns:
+            List of PensandoNicPcieAts objects
+        """
+        pcie_ats_entries = []
+
+        for line in output.splitlines():
+            line_stripped = line.strip()
+            if not line_stripped:
+                continue
+
+            # Parse line format: "NIC : <id> (<pcie_bdf>) : <status>"
+            if line_stripped.startswith("NIC :"):
+                match = re.match(
+                    r"NIC\s*:\s*([a-f0-9\-]+)\s*\(([0-9a-f:\.]+)\)\s*:\s*(\w+)",
+                    line_stripped,
+                    re.IGNORECASE,
+                )
+                if match:
+                    nic_id = match.group(1)
+                    pcie_bdf = match.group(2)
+                    status = match.group(3)
+                    entry = PensandoNicPcieAts(
+                        nic_id=nic_id,
+                        pcie_bdf=pcie_bdf,
+                        status=status,
+                    )
+                    pcie_ats_entries.append(entry)
+
+        return pcie_ats_entries
+
+    def _parse_nicctl_port(self, output: str) -> List[PensandoNicPort]:
+        """Parse 'nicctl show port' output into PensandoNicPort objects.
+
+        Args:
+            output: Raw output from 'nicctl show port' command
+
+        Returns:
+            List of PensandoNicPort objects
+        """
+        port_entries = []
+        current_entry = None
+        current_section = None  # 'spec' or 'status'
+        current_nic_id = None
+        current_pcie_bdf = None
+
+        for line in output.splitlines():
+            line_stripped = line.strip()
+            if not line_stripped:
+                continue
+
+            # Check for NIC line
+            if line_stripped.startswith("NIC") and ":" in line_stripped:
+                # Save previous entry if exists
+                if current_entry:
+                    port_entries.append(current_entry)
+                    current_entry = None
+
+                # Parse NIC ID and PCIe BDF
+                match = re.match(
+                    r"NIC\s*:\s*([a-f0-9\-]+)\s*\(([0-9a-f:\.]+)\)", line_stripped, re.IGNORECASE
+                )
+                if match:
+                    current_nic_id = match.group(1)
+                    current_pcie_bdf = match.group(2)
+                continue
+
+            # Check for Port line
+            if (
+                line_stripped.startswith("Port")
+                and ":" in line_stripped
+                and current_nic_id
+                and current_pcie_bdf
+            ):
+                # Save previous entry if exists
+                if current_entry:
+                    port_entries.append(current_entry)
+
+                # Parse Port ID and Port name
+                match = re.match(
+                    r"Port\s*:\s*([a-f0-9\-]+)\s*\(([^\)]+)\)", line_stripped, re.IGNORECASE
+                )
+                if match:
+                    port_id = match.group(1)
+                    port_name = match.group(2)
+                    current_entry = PensandoNicPort(
+                        nic_id=current_nic_id,
+                        pcie_bdf=current_pcie_bdf,
+                        port_id=port_id,
+                        port_name=port_name,
+                    )
+                continue
+
+            # Skip separator lines (dashes)
+            if re.match(r"^-+$", line_stripped):
+                continue
+
+            # Check for section headers
+            if line_stripped.endswith(":"):
+                if line_stripped == "Spec:":
+                    current_section = "spec"
+                elif line_stripped == "Status:":
+                    current_section = "status"
+                continue
+
+            # Parse fields within current entry and section
+            if current_entry and current_section and ":" in line_stripped:
+                parts = line_stripped.split(":", 1)
+                if len(parts) == 2:
+                    key = parts[0].strip()
+                    value = parts[1].strip()
+
+                    if current_section == "spec":
+                        if key == "Ifindex":
+                            current_entry.spec_ifindex = value
+                        elif key == "Type":
+                            current_entry.spec_type = value
+                        elif key == "speed":
+                            current_entry.spec_speed = value
+                        elif key == "Admin state":
+                            current_entry.spec_admin_state = value
+                        elif key == "FEC type":
+                            current_entry.spec_fec_type = value
+                        elif key == "Pause type":
+                            current_entry.spec_pause_type = value
+                        elif key == "Number of lanes":
+                            try:
+                                current_entry.spec_num_lanes = int(value)
+                            except ValueError:
+                                pass
+                        elif key == "MTU":
+                            try:
+                                current_entry.spec_mtu = int(value)
+                            except ValueError:
+                                pass
+                        elif key == "TX pause":
+                            current_entry.spec_tx_pause = value
+                        elif key == "RX pause":
+                            current_entry.spec_rx_pause = value
+                        elif key == "Auto negotiation":
+                            current_entry.spec_auto_negotiation = value
+                    elif current_section == "status":
+                        if key == "Physical port":
+                            try:
+                                current_entry.status_physical_port = int(value)
+                            except ValueError:
+                                pass
+                        elif key == "Operational status":
+                            current_entry.status_operational_status = value
+                        elif key == "Link FSM state":
+                            current_entry.status_link_fsm_state = value
+                        elif key == "FEC type":
+                            current_entry.status_fec_type = value
+                        elif key == "Cable type":
+                            current_entry.status_cable_type = value
+                        elif key == "Number of lanes":
+                            try:
+                                current_entry.status_num_lanes = int(value)
+                            except ValueError:
+                                pass
+                        elif key == "speed":
+                            current_entry.status_speed = value
+                        elif key == "Auto negotiation":
+                            current_entry.status_auto_negotiation = value
+                        elif key == "MAC ID":
+                            try:
+                                current_entry.status_mac_id = int(value)
+                            except ValueError:
+                                pass
+                        elif key == "MAC channel":
+                            try:
+                                current_entry.status_mac_channel = int(value)
+                            except ValueError:
+                                pass
+                        elif key == "MAC address":
+                            current_entry.status_mac_address = value
+                        elif key == "Transceiver type":
+                            current_entry.status_transceiver_type = value
+                        elif key == "Transceiver state":
+                            current_entry.status_transceiver_state = value
+                        elif key == "Transceiver PID":
+                            current_entry.status_transceiver_pid = value
+
+        # Add the last entry if exists
+        if current_entry:
+            port_entries.append(current_entry)
+
+        return port_entries
+
+    def _parse_nicctl_qos(self, output: str) -> List[PensandoNicQos]:
+        """Parse 'nicctl show qos' output into PensandoNicQos objects.
+
+        Args:
+            output: Raw output from 'nicctl show qos' command
+
+        Returns:
+            List of PensandoNicQos objects
+        """
+        qos_entries = []
+        current_entry = None
+        current_nic_id = None
+        current_pcie_bdf = None
+        in_scheduling_table = False
+
+        for line in output.splitlines():
+            line_stripped = line.strip()
+            if not line_stripped:
+                continue
+
+            # Check for NIC line: "NIC  : 42424650-4c32-3533-3330-323934000000 (0000:06:00.0)"
+            if line_stripped.startswith("NIC") and ":" in line_stripped:
+                # Save previous entry if exists
+                if current_entry:
+                    qos_entries.append(current_entry)
+                    current_entry = None
+
+                # Parse NIC ID and PCIe BDF
+                match = re.match(
+                    r"NIC\s*:\s*([a-f0-9\-]+)\s*\(([0-9a-f:\.]+)\)", line_stripped, re.IGNORECASE
+                )
+                if match:
+                    current_nic_id = match.group(1)
+                    current_pcie_bdf = match.group(2)
+                in_scheduling_table = False
+                continue
+
+            # Check for Port line: "Port : 0490814a-6c40-4242-4242-000011010000"
+            if (
+                line_stripped.startswith("Port")
+                and ":" in line_stripped
+                and current_nic_id
+                and current_pcie_bdf
+            ):
+                # Save previous entry if exists
+                if current_entry:
+                    qos_entries.append(current_entry)
+
+                # Parse Port ID
+                parts = line_stripped.split(":")
+                if len(parts) >= 2:
+                    port_id = parts[1].strip()
+                    current_entry = PensandoNicQos(
+                        nic_id=current_nic_id,
+                        pcie_bdf=current_pcie_bdf,
+                        port_id=port_id,
+                    )
+                in_scheduling_table = False
+                continue
+
+            # Skip separator lines (dashes) but don't reset scheduling table flag
+            if re.match(r"^-+$", line_stripped):
+                continue
+
+            # Check for section headers
+            if current_entry:
+                # Classification type
+                if "Classification type" in line:
+                    parts = line_stripped.split(":")
+                    if len(parts) >= 2:
+                        current_entry.classification_type = parts[1].strip()
+
+                # DSCP bitmap
+                elif "DSCP bitmap" in line and "==>" in line:
+                    parts = line_stripped.split("==>")
+                    if len(parts) >= 2:
+                        bitmap_part = parts[0].split(":")
+                        if len(bitmap_part) >= 2:
+                            current_entry.dscp_bitmap = bitmap_part[1].strip()
+                        priority_part = parts[1].split(":")
+                        if len(priority_part) >= 2:
+                            try:
+                                current_entry.dscp_priority = int(priority_part[1].strip())
+                            except ValueError:
+                                pass
+
+                # DSCP range
+                elif line_stripped.startswith("DSCP") and "==>" in line and "bitmap" not in line:
+                    parts = line_stripped.split("==>")
+                    if len(parts) >= 2:
+                        dscp_part = parts[0].split(":")
+                        if len(dscp_part) >= 2:
+                            current_entry.dscp_range = dscp_part[1].strip()
+                        priority_part = parts[1].split(":")
+                        if len(priority_part) >= 2:
+                            try:
+                                current_entry.dscp_priority = int(priority_part[1].strip())
+                            except ValueError:
+                                pass
+
+                # PFC priority bitmap
+                elif "PFC priority bitmap" in line:
+                    parts = line_stripped.split(":")
+                    if len(parts) >= 2:
+                        current_entry.pfc_priority_bitmap = parts[1].strip()
+
+                # PFC no-drop priorities
+                elif "PFC no-drop priorities" in line:
+                    parts = line_stripped.split(":")
+                    if len(parts) >= 2:
+                        current_entry.pfc_no_drop_priorities = parts[1].strip()
+
+                # Scheduling table header
+                elif "Priority" in line and "Scheduling" in line:
+                    in_scheduling_table = True
+                    continue
+
+                # Parse scheduling table entries
+                elif in_scheduling_table and not line_stripped.startswith("---"):
+                    # Try to parse scheduling entry
+                    # Format: "0         DWRR        0         N/A"
+                    parts = line_stripped.split()
+                    if len(parts) >= 2:
+                        try:
+                            priority = int(parts[0])
+                            scheduling_type = parts[1] if len(parts) > 1 else None
+                            bandwidth = None
+                            rate_limit = None
+                            if len(parts) > 2:
+                                try:
+                                    bandwidth = int(parts[2])
+                                except ValueError:
+                                    pass
+                            if len(parts) > 3:
+                                rate_limit = parts[3]
+
+                            sched_entry = PensandoNicQosScheduling(
+                                priority=priority,
+                                scheduling_type=scheduling_type,
+                                bandwidth=bandwidth,
+                                rate_limit=rate_limit,
+                            )
+                            current_entry.scheduling.append(sched_entry)
+                        except (ValueError, IndexError):
+                            pass
+
+        # Add the last entry if exists
+        if current_entry:
+            qos_entries.append(current_entry)
+
+        return qos_entries
+
+    def _parse_nicctl_rdma_statistics(self, output: str) -> List[PensandoNicRdmaStatistics]:
+        """Parse 'nicctl show rdma statistics' output into PensandoNicRdmaStatistics objects.
+
+        Args:
+            output: Raw output from 'nicctl show rdma statistics' command
+
+        Returns:
+            List of PensandoNicRdmaStatistics objects
+        """
+        rdma_stats_entries = []
+        current_entry = None
+        in_statistics_table = False
+
+        for line in output.splitlines():
+            line_stripped = line.strip()
+            if not line_stripped:
+                continue
+
+            # Check for NIC line: "NIC : 42424650-4c32-3533-3330-323934000000 (0000:06:00.0)"
+            if line_stripped.startswith("NIC") and ":" in line_stripped:
+                # Save previous entry if exists
+                if current_entry:
+                    rdma_stats_entries.append(current_entry)
+
+                # Parse NIC ID and PCIe BDF
+                match = re.match(
+                    r"NIC\s*:\s*([a-f0-9\-]+)\s*\(([0-9a-f:\.]+)\)", line_stripped, re.IGNORECASE
+                )
+                if match:
+                    nic_id = match.group(1)
+                    pcie_bdf = match.group(2)
+                    current_entry = PensandoNicRdmaStatistics(
+                        nic_id=nic_id,
+                        pcie_bdf=pcie_bdf,
+                    )
+                in_statistics_table = False
+                continue
+
+            # Skip separator lines (dashes)
+            if re.match(r"^-+$", line_stripped):
+                continue
+
+            # Check for table header
+            if "Name" in line and "Count" in line:
+                in_statistics_table = True
+                continue
+
+            # Parse statistics entries
+            if current_entry and in_statistics_table:
+                # The format is: "Queue pair create                       1"
+                # We need to split from the right to get the count
+                parts = line_stripped.rsplit(None, 1)  # Split from right, max 1 split
+                if len(parts) == 2:
+                    name = parts[0].strip()
+                    count_str = parts[1].strip()
+                    try:
+                        count = int(count_str)
+                        stat_entry = PensandoNicRdmaStatistic(
+                            name=name,
+                            count=count,
+                        )
+                        current_entry.statistics.append(stat_entry)
+                    except ValueError:
+                        pass
+
+        # Add the last entry if exists
+        if current_entry:
+            rdma_stats_entries.append(current_entry)
+
+        return rdma_stats_entries
+
+    def _parse_nicctl_version_host_software(
+        self, output: str
+    ) -> Optional[PensandoNicVersionHostSoftware]:
+        """Parse 'nicctl show version host-software' output into PensandoNicVersionHostSoftware object.
+
+        Args:
+            output: Raw output from 'nicctl show version host-software' command
+
+        Returns:
+            PensandoNicVersionHostSoftware object or None if no data found
+        """
+        version_info = PensandoNicVersionHostSoftware()
+        found_data = False
+
+        for line in output.splitlines():
+            line_stripped = line.strip()
+            if not line_stripped or ":" not in line_stripped:
+                continue
+
+            # Split on the first colon to get key and value
+            parts = line_stripped.split(":", 1)
+            if len(parts) != 2:
+                continue
+
+            key = parts[0].strip().lower()
+            value = parts[1].strip()
+
+            if "nicctl" in key:
+                version_info.nicctl = value
+                found_data = True
+            elif "ipc driver" in key or "ipc_driver" in key:
+                version_info.ipc_driver = value
+                found_data = True
+            elif "ionic driver" in key or "ionic_driver" in key:
+                version_info.ionic_driver = value
+                found_data = True
+
+        return version_info if found_data else None
+
+    def _parse_nicctl_version_firmware(self, output: str) -> List[PensandoNicVersionFirmware]:
+        """Parse 'nicctl show version firmware' output into PensandoNicVersionFirmware objects.
+
+        Args:
+            output: Raw output from 'nicctl show version firmware' command
+
+        Returns:
+            List of PensandoNicVersionFirmware objects
+        """
+        firmware_entries = []
+        current_entry = None
+
+        for line in output.splitlines():
+            line_stripped = line.strip()
+            if not line_stripped:
+                continue
+
+            # Skip separator lines (dashes)
+            if re.match(r"^-+$", line_stripped):
+                # Save previous entry when we hit a separator
+                if current_entry:
+                    firmware_entries.append(current_entry)
+                    current_entry = None
+                continue
+
+            # Check for NIC line
+            if line_stripped.startswith("NIC") and ":" in line_stripped:
+                # Save previous entry if exists
+                if current_entry:
+                    firmware_entries.append(current_entry)
+
+                # Parse NIC ID and PCIe BDF
+                match = re.match(
+                    r"NIC\s*:\s*([a-f0-9\-]+)\s*\(([0-9a-f:\.]+)\)", line_stripped, re.IGNORECASE
+                )
+                if match:
+                    nic_id = match.group(1)
+                    pcie_bdf = match.group(2)
+                    current_entry = PensandoNicVersionFirmware(
+                        nic_id=nic_id,
+                        pcie_bdf=pcie_bdf,
+                    )
+                continue
+
+            # Parse version fields
+            if current_entry and ":" in line_stripped:
+                parts = line_stripped.split(":", 1)
+                if len(parts) == 2:
+                    key = parts[0].strip().lower()
+                    value = parts[1].strip()
+
+                    if "cpld" in key:
+                        current_entry.cpld = value
+                    elif "boot0" in key:
+                        current_entry.boot0 = value
+                    elif "uboot-a" in key or "uboot_a" in key:
+                        current_entry.uboot_a = value
+                    elif "firmware-a" in key or "firmware_a" in key:
+                        current_entry.firmware_a = value
+                    elif (
+                        "device config-a" in key
+                        or "device_config_a" in key
+                        or "device config" in key
+                    ):
+                        current_entry.device_config_a = value
+
+        # Add the last entry if exists
+        if current_entry:
+            firmware_entries.append(current_entry)
+
+        return firmware_entries
+
+    def _parse_niccli_qos(self, device_num: int, output: str) -> BroadcomNicQos:
+        """Parse 'niccli --dev X qos --ets --show' output into BroadcomNicQos object.
+
+        Args:
+            device_num: Device number
+            output: Raw output from 'niccli --dev X qos --ets --show' command
+
+        Returns:
+            BroadcomNicQos object with parsed data
+        """
+        qos_info = BroadcomNicQos(device_num=device_num, raw_output=output)
+
+        current_app_entry = None
+
+        for line in output.splitlines():
+            line_stripped = line.strip()
+            if not line_stripped:
+                continue
+
+            # Parse PRIO_MAP: "PRIO_MAP: 0:0 1:0 2:0 3:1 4:0 5:0 6:0 7:2"
+            if "PRIO_MAP:" in line:
+                parts = line.split("PRIO_MAP:")
+                if len(parts) >= 2:
+                    prio_entries = parts[1].strip().split()
+                    for entry in prio_entries:
+                        if ":" in entry:
+                            prio, tc = entry.split(":")
+                            try:
+                                qos_info.prio_map[int(prio)] = int(tc)
+                            except ValueError:
+                                pass
+
+            # Parse TC Bandwidth: "TC Bandwidth: 50% 50% 0%"
+            elif "TC Bandwidth:" in line:
+                parts = line.split("TC Bandwidth:")
+                if len(parts) >= 2:
+                    bandwidth_entries = parts[1].strip().split()
+                    for bw in bandwidth_entries:
+                        bw_clean = bw.rstrip("%")
+                        try:
+                            qos_info.tc_bandwidth.append(int(bw_clean))
+                        except ValueError:
+                            pass
+
+            # Parse TSA_MAP: "TSA_MAP: 0:ets 1:ets 2:strict"
+            elif "TSA_MAP:" in line:
+                parts = line.split("TSA_MAP:")
+                if len(parts) >= 2:
+                    tsa_entries = parts[1].strip().split()
+                    for entry in tsa_entries:
+                        if ":" in entry:
+                            tc, tsa = entry.split(":", 1)
+                            try:
+                                qos_info.tsa_map[int(tc)] = tsa
+                            except ValueError:
+                                pass
+
+            # Parse PFC enabled: "PFC enabled: 3"
+            elif "PFC enabled:" in line:
+                parts = line.split("PFC enabled:")
+                if len(parts) >= 2:
+                    try:
+                        qos_info.pfc_enabled = int(parts[1].strip())
+                    except ValueError:
+                        pass
+
+            # Parse APP entries - detect start of new APP entry
+            elif line_stripped.startswith("APP#"):
+                # Save previous entry if exists
+                if current_app_entry:
+                    qos_info.app_entries.append(current_app_entry)
+                current_app_entry = BroadcomNicQosAppEntry()
+
+            # Parse Priority within APP entry
+            elif "Priority:" in line and current_app_entry is not None:
+                parts = line.split("Priority:")
+                if len(parts) >= 2:
+                    try:
+                        current_app_entry.priority = int(parts[1].strip())
+                    except ValueError:
+                        pass
+
+            # Parse Sel within APP entry
+            elif "Sel:" in line and current_app_entry is not None:
+                parts = line.split("Sel:")
+                if len(parts) >= 2:
+                    try:
+                        current_app_entry.sel = int(parts[1].strip())
+                    except ValueError:
+                        pass
+
+            # Parse DSCP within APP entry
+            elif "DSCP:" in line and current_app_entry is not None:
+                parts = line.split("DSCP:")
+                if len(parts) >= 2:
+                    try:
+                        current_app_entry.dscp = int(parts[1].strip())
+                    except ValueError:
+                        pass
+
+            # Parse protocol and port (e.g., "UDP or DCCP: 4791")
+            elif (
+                "UDP" in line or "TCP" in line or "DCCP" in line
+            ) and current_app_entry is not None:
+                if ":" in line:
+                    parts = line.split(":")
+                    if len(parts) >= 2:
+                        current_app_entry.protocol = parts[0].strip()
+                        try:
+                            current_app_entry.port = int(parts[1].strip())
+                        except ValueError:
+                            pass
+
+            # Parse TC Rate Limit: "TC Rate Limit: 100% 100% 100% 0% 0% 0% 0% 0%"
+            elif "TC Rate Limit:" in line:
+                parts = line.split("TC Rate Limit:")
+                if len(parts) >= 2:
+                    rate_entries = parts[1].strip().split()
+                    for rate in rate_entries:
+                        rate_clean = rate.rstrip("%")
+                        try:
+                            qos_info.tc_rate_limit.append(int(rate_clean))
+                        except ValueError:
+                            pass
+
+        # Add the last APP entry if exists
+        if current_app_entry:
+            qos_info.app_entries.append(current_app_entry)
+
+        return qos_info
+
     def _collect_ethtool_info(self, interfaces: List[NetworkInterface]) -> Dict[str, EthtoolInfo]:
         """Collect ethtool information for all network interfaces.
 
@@ -444,7 +1391,7 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
 
         for iface in interfaces:
             cmd = self.CMD_ETHTOOL_TEMPLATE.format(interface=iface.name)
-            res_ethtool = self._run_sut_cmd(cmd)
+            res_ethtool = self._run_sut_cmd(cmd, sudo=True)
 
             if res_ethtool.exit_code == 0:
                 ethtool_info = self._parse_ethtool(iface.name, res_ethtool.stdout)
@@ -464,6 +1411,264 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
 
         return ethtool_data
 
+    def _collect_lldp_info(self) -> None:
+        """Collect LLDP information using lldpcli and lldpctl commands."""
+        # Run lldpcli show neighbor
+        res_lldpcli = self._run_sut_cmd(self.CMD_LLDPCLI_NEIGHBOR, sudo=True)
+        if res_lldpcli.exit_code == 0:
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description="Collected LLDP neighbor information (lldpcli)",
+                priority=EventPriority.INFO,
+            )
+        else:
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description="LLDP neighbor collection failed or lldpcli not available",
+                data={"command": res_lldpcli.command, "exit_code": res_lldpcli.exit_code},
+                priority=EventPriority.INFO,
+            )
+
+        # Run lldpctl
+        res_lldpctl = self._run_sut_cmd(self.CMD_LLDPCTL, sudo=True)
+        if res_lldpctl.exit_code == 0:
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description="Collected LLDP information (lldpctl)",
+                priority=EventPriority.INFO,
+            )
+        else:
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description="LLDP collection failed or lldpctl not available",
+                data={"command": res_lldpctl.command, "exit_code": res_lldpctl.exit_code},
+                priority=EventPriority.INFO,
+            )
+
+    def _collect_broadcom_nic_info(
+        self,
+    ) -> Tuple[List[BroadcomNicDevice], Dict[int, BroadcomNicQos]]:
+        """Collect Broadcom NIC information using niccli commands.
+
+        Returns:
+            Tuple of (list of BroadcomNicDevice, dict mapping device number to BroadcomNicQos)
+        """
+        devices = []
+        qos_data = {}
+
+        # First, list devices
+        res_listdev = self._run_sut_cmd(self.CMD_NICCLI_LISTDEV, sudo=True)
+        if res_listdev.exit_code == 0:
+            # Parse device list
+            devices = self._parse_niccli_listdev(res_listdev.stdout)
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description=f"Collected Broadcom NIC device list: {len(devices)} devices",
+                priority=EventPriority.INFO,
+            )
+
+            # Collect QoS info for each device
+            for device in devices:
+                cmd = self.CMD_NICCLI_GETQOS_TEMPLATE.format(device_num=device.device_num)
+                res_qos = self._run_sut_cmd(cmd, sudo=True)
+                if res_qos.exit_code == 0:
+                    qos_info = self._parse_niccli_qos(device.device_num, res_qos.stdout)
+                    qos_data[device.device_num] = qos_info
+                    self._log_event(
+                        category=EventCategory.NETWORK,
+                        description=f"Collected Broadcom NIC QoS info for device {device.device_num}",
+                        priority=EventPriority.INFO,
+                    )
+                else:
+                    self._log_event(
+                        category=EventCategory.NETWORK,
+                        description=f"Failed to collect QoS info for device {device.device_num}",
+                        data={"command": res_qos.command, "exit_code": res_qos.exit_code},
+                        priority=EventPriority.WARNING,
+                    )
+
+            if qos_data:
+                self._log_event(
+                    category=EventCategory.NETWORK,
+                    description=f"Collected Broadcom NIC QoS info for {len(qos_data)} devices",
+                    priority=EventPriority.INFO,
+                )
+        else:
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description="Broadcom NIC collection failed or niccli not available",
+                data={"command": res_listdev.command, "exit_code": res_listdev.exit_code},
+                priority=EventPriority.INFO,
+            )
+
+        return devices, qos_data
+
+    def _collect_pensando_nic_info(
+        self,
+    ) -> Tuple[
+        List[PensandoNicCard],
+        List[PensandoNicDcqcn],
+        List[PensandoNicEnvironment],
+        List[PensandoNicPcieAts],
+        List[PensandoNicPort],
+        List[PensandoNicQos],
+        List[PensandoNicRdmaStatistics],
+        Optional[PensandoNicVersionHostSoftware],
+        List[PensandoNicVersionFirmware],
+        List[str],
+    ]:
+        """Collect Pensando NIC information using nicctl commands.
+
+        Returns:
+            Tuple of (list of PensandoNicCard, list of PensandoNicDcqcn,
+                     list of PensandoNicEnvironment, list of PensandoNicPcieAts,
+                     list of PensandoNicPort, list of PensandoNicQos,
+                     list of PensandoNicRdmaStatistics,
+                     PensandoNicVersionHostSoftware object,
+                     list of PensandoNicVersionFirmware,
+                     list of uncollected command names)
+        """
+        cards = []
+        dcqcn_entries = []
+        environment_entries = []
+        pcie_ats_entries = []
+        port_entries = []
+        qos_entries = []
+        rdma_statistics_entries = []
+        version_host_software = None
+        version_firmware_entries = []
+
+        # Track which commands failed
+        uncollected_commands = []
+
+        # Parse nicctl show card output
+        res_card = self._run_sut_cmd(self.CMD_NICCTL_CARD, sudo=True)
+        if res_card.exit_code == 0:
+            cards = self._parse_nicctl_card(res_card.stdout)
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description=f"Collected Pensando NIC card list: {len(cards)} cards",
+                priority=EventPriority.INFO,
+            )
+        else:
+            uncollected_commands.append(self.CMD_NICCTL_CARD)
+
+        # Parse nicctl show dcqcn output
+        res_dcqcn = self._run_sut_cmd(self.CMD_NICCTL_DCQCN, sudo=True)
+        if res_dcqcn.exit_code == 0:
+            dcqcn_entries = self._parse_nicctl_dcqcn(res_dcqcn.stdout)
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description=f"Collected Pensando NIC DCQCN info: {len(dcqcn_entries)} entries",
+                priority=EventPriority.INFO,
+            )
+        else:
+            uncollected_commands.append(self.CMD_NICCTL_DCQCN)
+
+        # Parse nicctl show environment output
+        res_environment = self._run_sut_cmd(self.CMD_NICCTL_ENVIRONMENT, sudo=True)
+        if res_environment.exit_code == 0:
+            environment_entries = self._parse_nicctl_environment(res_environment.stdout)
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description=f"Collected Pensando NIC environment info: {len(environment_entries)} entries",
+                priority=EventPriority.INFO,
+            )
+        else:
+            uncollected_commands.append(self.CMD_NICCTL_ENVIRONMENT)
+
+        # Parse nicctl show pcie ats output
+        res_pcie_ats = self._run_sut_cmd(self.CMD_NICCTL_PCIE_ATS, sudo=True)
+        if res_pcie_ats.exit_code == 0:
+            pcie_ats_entries = self._parse_nicctl_pcie_ats(res_pcie_ats.stdout)
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description=f"Collected Pensando NIC PCIe ATS info: {len(pcie_ats_entries)} entries",
+                priority=EventPriority.INFO,
+            )
+        else:
+            uncollected_commands.append(self.CMD_NICCTL_PCIE_ATS)
+
+        # Parse nicctl show port output
+        res_port = self._run_sut_cmd(self.CMD_NICCTL_PORT, sudo=True)
+        if res_port.exit_code == 0:
+            port_entries = self._parse_nicctl_port(res_port.stdout)
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description=f"Collected Pensando NIC port info: {len(port_entries)} ports",
+                priority=EventPriority.INFO,
+            )
+        else:
+            uncollected_commands.append(self.CMD_NICCTL_PORT)
+
+        # Parse nicctl show qos output
+        res_qos = self._run_sut_cmd(self.CMD_NICCTL_QOS, sudo=True)
+        if res_qos.exit_code == 0:
+            qos_entries = self._parse_nicctl_qos(res_qos.stdout)
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description=f"Collected Pensando NIC QoS info: {len(qos_entries)} entries",
+                priority=EventPriority.INFO,
+            )
+        else:
+            uncollected_commands.append(self.CMD_NICCTL_QOS)
+
+        # Parse nicctl show rdma statistics output
+        res_rdma_stats = self._run_sut_cmd(self.CMD_NICCTL_RDMA_STATISTICS, sudo=True)
+        if res_rdma_stats.exit_code == 0:
+            rdma_statistics_entries = self._parse_nicctl_rdma_statistics(res_rdma_stats.stdout)
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description=f"Collected Pensando NIC RDMA statistics: {len(rdma_statistics_entries)} entries",
+                priority=EventPriority.INFO,
+            )
+        else:
+            uncollected_commands.append(self.CMD_NICCTL_RDMA_STATISTICS)
+
+        # Parse nicctl show version host-software output
+        res_version_host = self._run_sut_cmd(self.CMD_NICCTL_VERSION_HOST_SOFTWARE, sudo=True)
+        if res_version_host.exit_code == 0:
+            version_host_software = self._parse_nicctl_version_host_software(
+                res_version_host.stdout
+            )
+            if version_host_software:
+                self._log_event(
+                    category=EventCategory.NETWORK,
+                    description="Collected Pensando NIC host software version",
+                    priority=EventPriority.INFO,
+                )
+            else:
+                uncollected_commands.append(self.CMD_NICCTL_VERSION_HOST_SOFTWARE)
+        else:
+            uncollected_commands.append(self.CMD_NICCTL_VERSION_HOST_SOFTWARE)
+
+        # Parse nicctl show version firmware output
+        res_version_firmware = self._run_sut_cmd(self.CMD_NICCTL_VERSION_FIRMWARE, sudo=True)
+        if res_version_firmware.exit_code == 0:
+            version_firmware_entries = self._parse_nicctl_version_firmware(
+                res_version_firmware.stdout
+            )
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description=f"Collected Pensando NIC firmware versions: {len(version_firmware_entries)} entries",
+                priority=EventPriority.INFO,
+            )
+        else:
+            uncollected_commands.append(self.CMD_NICCTL_VERSION_FIRMWARE)
+
+        return (
+            cards,
+            dcqcn_entries,
+            environment_entries,
+            pcie_ats_entries,
+            port_entries,
+            qos_entries,
+            rdma_statistics_entries,
+            version_host_software,
+            version_firmware_entries,
+            uncollected_commands,
+        )
+
     def collect_data(
         self,
         args=None,
@@ -479,6 +1684,17 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
         rules = []
         neighbors = []
         ethtool_data = {}
+        broadcom_devices: List[BroadcomNicDevice] = []
+        broadcom_qos_data: Dict[int, BroadcomNicQos] = {}
+        pensando_cards: List[PensandoNicCard] = []
+        pensando_dcqcn: List[PensandoNicDcqcn] = []
+        pensando_environment: List[PensandoNicEnvironment] = []
+        pensando_pcie_ats: List[PensandoNicPcieAts] = []
+        pensando_ports: List[PensandoNicPort] = []
+        pensando_qos: List[PensandoNicQos] = []
+        pensando_rdma_statistics: List[PensandoNicRdmaStatistics] = []
+        pensando_version_host_software: Optional[PensandoNicVersionHostSoftware] = None
+        pensando_version_firmware: List[PensandoNicVersionFirmware] = []
 
         # Collect interface/address information
         res_addr = self._run_sut_cmd(self.CMD_ADDR)
@@ -558,22 +1774,55 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
                 priority=EventPriority.WARNING,
             )
 
-        if interfaces or routes or rules or neighbors:
-            network_data = NetworkDataModel(
-                interfaces=interfaces,
-                routes=routes,
-                rules=rules,
-                neighbors=neighbors,
-                ethtool_info=ethtool_data,
+        # Collect LLDP information
+        self._collect_lldp_info()
+
+        # Collect Broadcom NIC information
+        broadcom_devices, broadcom_qos_data = self._collect_broadcom_nic_info()
+
+        # Collect Pensando NIC information
+        (
+            pensando_cards,
+            pensando_dcqcn,
+            pensando_environment,
+            pensando_pcie_ats,
+            pensando_ports,
+            pensando_qos,
+            pensando_rdma_statistics,
+            pensando_version_host_software,
+            pensando_version_firmware,
+            uncollected_commands,
+        ) = self._collect_pensando_nic_info()
+
+        # Log summary of uncollected commands or success
+        if uncollected_commands:
+            self.result.message = "Network data collection failed"
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description=f"Failed to collect {len(uncollected_commands)} nicctl commands: {', '.join(uncollected_commands)}",
+                priority=EventPriority.WARNING,
             )
-            self.result.message = (
-                f"Collected network data: {len(interfaces)} interfaces, "
-                f"{len(routes)} routes, {len(rules)} rules, {len(neighbors)} neighbors, "
-                f"{len(ethtool_data)} ethtool entries"
-            )
-            self.result.status = ExecutionStatus.OK
-            return self.result, network_data
+
         else:
-            self.result.message = "Failed to collect network data"
-            self.result.status = ExecutionStatus.ERROR
-            return self.result, None
+            self.result.message = "Network data collected successfully"
+
+        network_data = NetworkDataModel(
+            interfaces=interfaces,
+            routes=routes,
+            rules=rules,
+            neighbors=neighbors,
+            ethtool_info=ethtool_data,
+            broadcom_nic_devices=broadcom_devices,
+            broadcom_nic_qos=broadcom_qos_data,
+            pensando_nic_cards=pensando_cards,
+            pensando_nic_dcqcn=pensando_dcqcn,
+            pensando_nic_environment=pensando_environment,
+            pensando_nic_pcie_ats=pensando_pcie_ats,
+            pensando_nic_ports=pensando_ports,
+            pensando_nic_qos=pensando_qos,
+            pensando_nic_rdma_statistics=pensando_rdma_statistics,
+            pensando_nic_version_host_software=pensando_version_host_software,
+            pensando_nic_version_firmware=pensando_version_firmware,
+        )
+        self.result.status = ExecutionStatus.OK
+        return self.result, network_data
