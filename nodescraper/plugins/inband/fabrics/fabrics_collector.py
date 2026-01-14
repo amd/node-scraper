@@ -564,9 +564,9 @@ class FabricsCollector(InBandDataCollector[FabricsDataModel, None]):
         else:
             self._log_event(
                 category=EventCategory.NETWORK,
-                description="Error collecting ibv_devinfo information",
+                description="ibv_devinfo command not available or failed",
                 data={"command": res_ibv.command, "exit_code": res_ibv.exit_code},
-                priority=EventPriority.WARNING,
+                priority=EventPriority.INFO,
             )
 
         # Collect IB device to netdev mappings
@@ -581,12 +581,12 @@ class FabricsCollector(InBandDataCollector[FabricsDataModel, None]):
         else:
             self._log_event(
                 category=EventCategory.NETWORK,
-                description="Error collecting IB device to netdev mappings",
+                description="No InfiniBand devices found in sysfs",
                 data={
                     "command": res_ib_dev_netdevs.command,
                     "exit_code": res_ib_dev_netdevs.exit_code,
                 },
-                priority=EventPriority.WARNING,
+                priority=EventPriority.INFO,
             )
 
         # Collect OFED version info
@@ -601,9 +601,9 @@ class FabricsCollector(InBandDataCollector[FabricsDataModel, None]):
         else:
             self._log_event(
                 category=EventCategory.NETWORK,
-                description="Error collecting OFED info",
+                description="OFED not installed or ofed_info command not available",
                 data={"command": res_ofed.command, "exit_code": res_ofed.exit_code},
-                priority=EventPriority.WARNING,
+                priority=EventPriority.INFO,
             )
 
         # Start MST and collect status
@@ -628,9 +628,9 @@ class FabricsCollector(InBandDataCollector[FabricsDataModel, None]):
         else:
             self._log_event(
                 category=EventCategory.NETWORK,
-                description="Error starting MST service (might already be running)",
+                description="MST tools not available (Mellanox-specific)",
                 data={"command": res_mst_start.command, "exit_code": res_mst_start.exit_code},
-                priority=EventPriority.WARNING,
+                priority=EventPriority.INFO,
             )
 
         # Get MST status
@@ -645,9 +645,9 @@ class FabricsCollector(InBandDataCollector[FabricsDataModel, None]):
         else:
             self._log_event(
                 category=EventCategory.NETWORK,
-                description="Error collecting MST status",
+                description="MST status not available (Mellanox-specific)",
                 data={"command": res_mst_status.command, "exit_code": res_mst_status.exit_code},
-                priority=EventPriority.WARNING,
+                priority=EventPriority.INFO,
             )
 
         # Collect RDMA device information
@@ -694,7 +694,7 @@ class FabricsCollector(InBandDataCollector[FabricsDataModel, None]):
                 raw_output=res_rdma_dev.stdout + "\n" + res_rdma_link.stdout,
             )
 
-        # Build the data model if we collected any data
+        # Build the data model only if we collected any data
         if (
             ibstat_devices
             or ibv_devices
@@ -721,6 +721,7 @@ class FabricsCollector(InBandDataCollector[FabricsDataModel, None]):
             self.result.status = ExecutionStatus.OK
             return self.result, fabrics_data
         else:
-            self.result.message = "Failed to collect fabrics data"
+            # No fabrics hardware detected - this is not an error for optional hardware
+            self.result.message = "No InfiniBand/RDMA fabrics hardware detected on this system"
             self.result.status = ExecutionStatus.ERROR
             return self.result, None
