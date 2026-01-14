@@ -132,7 +132,7 @@ class PluginRegistry:
 
             for entry_point in eps:
                 try:
-                    plugin_class = entry_point.load()
+                    plugin_class = entry_point.load()  # type: ignore[attr-defined]
 
                     if (
                         inspect.isclass(plugin_class)
