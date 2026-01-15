@@ -24,6 +24,7 @@
 #
 ###############################################################################
 import importlib
+import importlib.metadata
 import inspect
 import pkgutil
 import types
@@ -45,12 +46,14 @@ class PluginRegistry:
         self,
         plugin_pkg: Optional[list[types.ModuleType]] = None,
         load_internal_plugins: bool = True,
+        load_entry_point_plugins: bool = True,
     ) -> None:
         """Initialize the PluginRegistry with optional plugin packages.
 
         Args:
             plugin_pkg (Optional[list[types.ModuleType]], optional): The module to search for plugins in. Defaults to None.
             load_internal_plugins (bool, optional): Whether internal plugin should be loaded. Defaults to True.
+            load_entry_point_plugins (bool, optional): Whether to load plugins from entry points. Defaults to True.
         """
         if load_internal_plugins:
             self.plugin_pkg = [internal_plugins, internal_connections, internal_collators]
@@ -69,6 +72,10 @@ class PluginRegistry:
         self.result_collators: dict[str, type[PluginResultCollator]] = PluginRegistry.load_plugins(
             PluginResultCollator, self.plugin_pkg
         )
+
+        if load_entry_point_plugins:
+            entry_point_plugins = self.load_plugins_from_entry_points()
+            self.plugins.update(entry_point_plugins)
 
     @staticmethod
     def load_plugins(
@@ -104,3 +111,42 @@ class PluginRegistry:
         for pkg in search_modules:
             _recurse_pkg(pkg, base_class)
         return registry
+
+    @staticmethod
+    def load_plugins_from_entry_points() -> dict[str, type]:
+        """Load plugins registered via entry points.
+
+        Returns:
+            dict[str, type]: A dictionary mapping plugin names to their classes.
+        """
+        plugins = {}
+
+        try:
+            # Python 3.10+ supports group parameter
+            try:
+                eps = importlib.metadata.entry_points(group="nodescraper.plugins")  # type: ignore[call-arg]
+            except TypeError:
+                # Python 3.9 - entry_points() returns dict-like object
+                all_eps = importlib.metadata.entry_points()  # type: ignore[assignment]
+                eps = all_eps.get("nodescraper.plugins", [])  # type: ignore[assignment, attr-defined]
+
+            for entry_point in eps:
+                try:
+                    plugin_class = entry_point.load()  # type: ignore[attr-defined]
+
+                    if (
+                        inspect.isclass(plugin_class)
+                        and issubclass(plugin_class, PluginInterface)
+                        and not inspect.isabstract(plugin_class)
+                    ):
+                        if hasattr(plugin_class, "is_valid") and not plugin_class.is_valid():
+                            continue
+
+                        plugins[plugin_class.__name__] = plugin_class
+                except Exception:
+                    pass
+
+        except Exception:
+            pass
+
+        return plugins
