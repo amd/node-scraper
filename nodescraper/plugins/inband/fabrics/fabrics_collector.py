@@ -622,7 +622,7 @@ class FabricsCollector(InBandDataCollector[FabricsDataModel, None]):
                 self._log_event(
                     category=EventCategory.NETWORK,
                     description="MST service command completed but status unclear",
-                    data={"output": res_mst_start.stdout[:200]},
+                    data={"output": res_mst_start.stdout},
                     priority=EventPriority.INFO,
                 )
         else:
@@ -721,7 +721,6 @@ class FabricsCollector(InBandDataCollector[FabricsDataModel, None]):
             self.result.status = ExecutionStatus.OK
             return self.result, fabrics_data
         else:
-            # No fabrics hardware detected - this is not an error for optional hardware
             self.result.message = "No InfiniBand/RDMA fabrics hardware detected on this system"
             self.result.status = ExecutionStatus.ERROR
             return self.result, None
