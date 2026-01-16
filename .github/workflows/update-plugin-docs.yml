@@ -40,9 +40,16 @@ jobs:
           --package nodescraper.plugins.inband \
           --output docs/PLUGIN_DOC.md
 
+    - name: Clean pre-commit cache
+      run: |
+        rm -rf /tmp/github-actions-home/.cache/pre-commit
+        source venv/bin/activate
+        pre-commit clean || true
+
     - name: Format documentation with pre-commit
       run: |
         source venv/bin/activate
+        pre-commit install-hooks || true
         pre-commit run --files docs/PLUGIN_DOC.md || true
 
     - name: Create Pull Request
