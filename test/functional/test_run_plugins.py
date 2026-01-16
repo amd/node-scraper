@@ -25,6 +25,9 @@
 ###############################################################################
 """Functional tests for running individual plugins."""
 
+import csv
+from pathlib import Path
+
 import pytest
 
 from nodescraper.pluginregistry import PluginRegistry
@@ -114,3 +117,58 @@ def test_run_comma_separated_plugins_with_invalid(run_cli_command):
     assert "Running plugin AmdSmiPlugin" in output
     # Verify it didn't crash
     assert "Data written to csv file" in output
+
+
+def test_run_plugin_with_data_file_no_collection(run_cli_command, tmp_path):
+    """Test running plugin with --data argument and --collection False."""
+    fixtures_dir = Path(__file__).parent / "fixtures"
+    dmesg_fixture = fixtures_dir / "dmesg_sample.log"
+
+    assert dmesg_fixture.exists(), f"Fixture file not found: {dmesg_fixture}"
+
+    analyze_log_path = str(tmp_path / "analyze_logs")
+    result = run_cli_command(
+        [
+            "--log-path",
+            analyze_log_path,
+            "run-plugins",
+            "DmesgPlugin",
+            "--data",
+            str(dmesg_fixture),
+            "--collection",
+            "False",
+        ],
+        check=False,
+    )
+
+    output = result.stdout + result.stderr
+    assert (
+        result.returncode == 1
+    ), f"Expected return code 1 (errors found), got: {result.returncode}"
+    assert "Running data analyzer: DmesgAnalyzer" in output, "Analyzer should have run"
+    assert "Data written to csv file" in output, "CSV file should be created"
+
+    if "Plugin tasks not ran" in output:
+        pytest.fail(
+            "Bug regression: Plugin reported 'tasks not ran' with --data file. "
+            "Analysis should load data from --data parameter before checking if data is None."
+        )
+
+    analyze_path = Path(analyze_log_path)
+    csv_files = list(analyze_path.glob("*/nodescraper.csv"))
+    assert len(csv_files) > 0, "CSV results file should exist"
+
+    csv_file = csv_files[0]
+    with open(csv_file, "r", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        rows = list(reader)
+
+        dmesg_rows = [row for row in rows if "DmesgPlugin" in row.get("plugin", "")]
+        assert len(dmesg_rows) > 0, "DmesgPlugin should have results in CSV"
+
+        dmesg_row = dmesg_rows[0]
+        status = dmesg_row.get("status", "")
+        assert status != "NOT_RAN", (
+            f"Bug regression: DmesgPlugin status is NOT_RAN with --data file. "
+            f"Analysis should have run on provided data. Status: {status}"
+        )

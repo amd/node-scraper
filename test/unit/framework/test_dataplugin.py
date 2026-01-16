@@ -329,3 +329,77 @@ class TestDataPluginCore:
 
                 # Verify disconnect WAS called when preserve_connection=False
                 mock_disconnect.assert_called_once()
+
+    def test_run_with_data_file_no_collection(self, plugin_with_conn, tmp_path):
+        """Test running plugin with data file and collection=False."""
+        data_file = tmp_path / "test_data.json"
+        data_file.write_text('{"value": "from_file"}')
+
+        with (
+            patch.object(CoreDataPlugin, "collect") as mock_collect,
+            patch.object(StandardAnalyzer, "analyze_data") as mock_analyze,
+        ):
+            mock_analyze.return_value = TaskResult(status=ExecutionStatus.OK)
+
+            result = plugin_with_conn.run(collection=False, analysis=True, data=str(data_file))
+
+            mock_collect.assert_not_called()
+            mock_analyze.assert_called_once()
+
+            call_args = mock_analyze.call_args
+            analyzed_data = call_args[0][0]
+            assert isinstance(analyzed_data, StandardDataModel)
+            assert analyzed_data.value == "from_file"
+            assert result.status == ExecutionStatus.OK
+            assert plugin_with_conn.analysis_result.status == ExecutionStatus.OK
+
+    def test_run_with_data_dict_no_collection(self, plugin_with_conn):
+        """Test running plugin with data dict and collection=False."""
+        data_dict = {"value": "from_dict"}
+
+        with (
+            patch.object(CoreDataPlugin, "collect") as mock_collect,
+            patch.object(StandardAnalyzer, "analyze_data") as mock_analyze,
+        ):
+            mock_analyze.return_value = TaskResult(status=ExecutionStatus.OK)
+
+            result = plugin_with_conn.run(collection=False, analysis=True, data=data_dict)
+
+            mock_collect.assert_not_called()
+            mock_analyze.assert_called_once()
+
+            call_args = mock_analyze.call_args
+            analyzed_data = call_args[0][0]
+            assert isinstance(analyzed_data, StandardDataModel)
+            assert analyzed_data.value == "from_dict"
+            assert result.status == ExecutionStatus.OK
+
+    def test_run_with_data_model_no_collection(self, plugin_with_conn):
+        """Test running plugin with data model instance and collection=False."""
+        data_model = StandardDataModel(value="from_model")
+
+        with (
+            patch.object(CoreDataPlugin, "collect") as mock_collect,
+            patch.object(StandardAnalyzer, "analyze_data") as mock_analyze,
+        ):
+            mock_analyze.return_value = TaskResult(status=ExecutionStatus.OK)
+
+            result = plugin_with_conn.run(collection=False, analysis=True, data=data_model)
+
+            mock_collect.assert_not_called()
+            mock_analyze.assert_called_once()
+
+            call_args = mock_analyze.call_args
+            analyzed_data = call_args[0][0]
+            assert analyzed_data is data_model
+            assert analyzed_data.value == "from_model"
+            assert result.status == ExecutionStatus.OK
+
+    def test_analyze_no_data_available(self, plugin_with_conn):
+        """Test analyze returns NOT_RAN when no data is available."""
+        plugin_with_conn._data = None
+
+        result = plugin_with_conn.analyze()
+
+        assert result.status == ExecutionStatus.NOT_RAN
+        assert "No data available" in result.message
