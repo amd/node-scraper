@@ -1,0 +1,43 @@
+kern  :info  : 2026-01-07T10:00:00,123456-06:00 Linux version 5.15.0-91-generic (buildd@amd64-builder) (gcc version 11.4.0) #101-Ubuntu SMP
+kern  :info  : 2026-01-07T10:00:00,234567-06:00 Command line: BOOT_IMAGE=/boot/vmlinuz-5.15.0-91-generic root=UUID=a1b2c3d4 ro quiet splash vt.handoff=7
+kern  :info  : 2026-01-07T10:00:01,345678-06:00 KERNEL supported cpus:
+kern  :info  : 2026-01-07T10:00:01,456789-06:00   Intel GenuineIntel
+kern  :info  : 2026-01-07T10:00:01,567890-06:00   AMD AuthenticAMD
+kern  :info  : 2026-01-07T10:00:02,678901-06:00 x86/fpu: Supporting XSAVE feature 0x001: 'x87 floating point registers'
+kern  :info  : 2026-01-07T10:00:02,789012-06:00 x86/fpu: Supporting XSAVE feature 0x002: 'SSE registers'
+kern  :info  : 2026-01-07T10:00:03,890123-06:00 Memory: 32823616K/33554432K available
+kern  :warn  : 2026-01-07T10:00:05,123456-06:00 pci 0000:00:01.0: BAR 0: failed to assign [mem size 0x01000000]
+kern  :info  : 2026-01-07T10:00:06,234567-06:00 PCI: Using ACPI for IRQ routing
+kern  :info  : 2026-01-07T10:00:07,345678-06:00 NetLabel: Initializing
+kern  :info  : 2026-01-07T10:00:08,456789-06:00 DMA: preallocated 4096 KiB GFP_KERNEL pool for atomic allocations
+kern  :err   : 2026-01-07T10:00:10,567890-06:00 WARNING: CPU: 0 PID: 1 at drivers/gpu/drm/amd/amdgpu/amdgpu_device.c:123 amdgpu_device_init+0x456/0x789
+kern  :info  : 2026-01-07T10:00:11,678901-06:00 Modules linked in: amdgpu drm_ttm_helper ttm drm_kms_helper
+kern  :info  : 2026-01-07T10:00:12,789012-06:00 CPU: 0 PID: 1 Comm: swapper/0 Not tainted 5.15.0-91-generic #101-Ubuntu
+kern  :err   : 2026-01-07T10:00:15,890123-06:00 AMD-Vi: Event logged [IO_PAGE_FAULT device=00:14.0 domain=0x0000 address=0xfffffffffffffef0 flags=0x0010]
+kern  :info  : 2026-01-07T10:00:16,123456-06:00 SCSI subsystem initialized
+kern  :info  : 2026-01-07T10:00:17,234567-06:00 libata version 3.00 loaded
+kern  :info  : 2026-01-07T10:00:18,345678-06:00 ACPI: Added _OSI(Module Device)
+kern  :info  : 2026-01-07T10:00:19,456789-06:00 ACPI: Added _OSI(Processor Device)
+kern  :err   : 2026-01-07T10:00:20,567890-06:00 ACPI Error: Method parse/execution failed \_SB.PCI0.GPP0.SWUS.SWDS.VGA.LCD._BCM, AE_NOT_FOUND
+kern  :info  : 2026-01-07T10:00:22,678901-06:00 [drm] amdgpu kernel modesetting enabled
+kern  :info  : 2026-01-07T10:00:23,789012-06:00 [drm] initializing kernel modesetting (NAVI21 0x1002:0x73BF)
+kern  :info  : 2026-01-07T10:00:25,890123-06:00 amdgpu 0000:03:00.0: amdgpu: Fetched VBIOS from VFCT
+kern  :info  : 2026-01-07T10:00:26,123456-06:00 amdgpu 0000:03:00.0: amdgpu: ATOM BIOS: 113-D4120100-O04
+kern  :info  : 2026-01-07T10:00:28,234567-06:00 [drm] GPU posting now...
+kern  :warn  : 2026-01-07T10:00:30,345678-06:00 [drm] *ERROR* Timeout waiting for DMCUB auto-load
+kern  :info  : 2026-01-07T10:00:32,456789-06:00 [drm] Display Core initialized with v3.2.149!
+kern  :info  : 2026-01-07T10:00:35,567890-06:00 [drm] VCN decode and encode initialized successfully
+kern  :info  : 2026-01-07T10:00:38,678901-06:00 [drm] fb0: amdgpudrmfb frame buffer device
+kern  :info  : 2026-01-07T10:00:40,789012-06:00 amdgpu 0000:03:00.0: amdgpu: ring gfx_0.0.0 uses VM inv eng 0 on hub 0
+kern  :info  : 2026-01-07T10:00:42,890123-06:00 [drm] Initialized amdgpu 3.42.0 20150101 for 0000:03:00.0 on minor 0
+kern  :info  : 2026-01-07T10:00:45,123456-06:00 EXT4-fs (nvme0n1p2): mounted filesystem with ordered data mode
+kern  :info  : 2026-01-07T10:00:48,234567-06:00 systemd[1]: systemd 249.11-0ubuntu3.6 running in system mode
+kern  :info  : 2026-01-07T10:00:50,345678-06:00 systemd[1]: Detected architecture x86-64
+kern  :info  : 2026-01-07T10:00:55,456789-06:00 audit: type=1400 audit(1704636055.456:2): apparmor="STATUS" operation="profile_load"
+kern  :info  : 2026-01-07T10:01:00,567890-06:00 Adding 33554428k swap on /swapfile
+kern  :info  : 2026-01-07T10:01:05,678901-06:00 IPv6: ADDRCONF(NETDEV_CHANGE): enp5s0: link becomes ready
+kern  :info  : 2026-01-07T10:01:10,789012-06:00 NFSD: Using UMH upcall client tracking operations
+kern  :info  : 2026-01-07T10:01:15,890123-06:00 NFSD: starting 90-second grace period (net f0000098)
+kern  :info  : 2026-01-07T10:01:20,123456-06:00 Bluetooth: BNEP (Ethernet Emulation) ver 1.3
+kern  :info  : 2026-01-07T10:01:25,234567-06:00 Bluetooth: BNEP filters: protocol multicast
+kern  :info  : 2026-01-07T10:01:30,345678-06:00 System operational - all services started successfully
