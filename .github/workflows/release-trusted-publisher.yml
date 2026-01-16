@@ -1,0 +1,129 @@
+name: Release (Trusted Publisher)
+
+permissions:
+  contents: write  # Required for creating releases and pushing tags
+  id-token: write  # Required for PyPI Trusted Publishing
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Release type (major, minor, patch)'
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+jobs:
+  release:
+    runs-on: [ self-hosted ]
+    container: python:3.9
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Fetch all history and tags
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global --add safe.directory /__w/node-scraper/node-scraper
+
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install -y wget
+
+      - name: Install GitHub CLI
+        run: |
+          mkdir -p -m 755 /etc/apt/keyrings
+          wget -nv -O /tmp/githubcli-archive-keyring.gpg https://cli.github.com/packages/githubcli-archive-keyring.gpg
+          cat /tmp/githubcli-archive-keyring.gpg | tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null
+          chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+          apt-get update
+          apt-get install -y gh
+
+      - name: Calculate next version
+        id: next_version
+        run: |
+          # Get the latest tag, default to v0.0.0 if no tags exist
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "Latest tag: $LATEST_TAG"
+
+          # Remove 'v' prefix and split into components
+          VERSION=${LATEST_TAG#v}
+          IFS='.' read -r -a VERSION_PARTS <<< "$VERSION"
+          MAJOR="${VERSION_PARTS[0]:-0}"
+          MINOR="${VERSION_PARTS[1]:-0}"
+          PATCH="${VERSION_PARTS[2]:-0}"
+
+          echo "Current version: $MAJOR.$MINOR.$PATCH"
+
+          # Increment based on release type
+          case "${{ github.event.inputs.release_type }}" in
+            major)
+              MAJOR=$((MAJOR + 1))
+              MINOR=0
+              PATCH=0
+              ;;
+            minor)
+              MINOR=$((MINOR + 1))
+              PATCH=0
+              ;;
+            patch)
+              PATCH=$((PATCH + 1))
+              ;;
+          esac
+
+          NEW_VERSION="v${MAJOR}.${MINOR}.${PATCH}"
+          echo "New version: $NEW_VERSION"
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Setup Python environment
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install build twine
+
+      - name: Build package
+        run: |
+          python3 -m build ./
+
+      - name: Upload to PyPI using Trusted Publisher
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+
+      - name: Create and push tag
+        run: |
+          git tag ${{ steps.next_version.outputs.version }}
+          git push origin ${{ steps.next_version.outputs.version }}
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create ${{ steps.next_version.outputs.version }} \
+            --title "${{ steps.next_version.outputs.version }}" \
+            --generate-notes \
+            dist/*
+
+      - name: Print summary
+        if: success()
+        run: |
+          echo "### :rocket: Release ${{ steps.next_version.outputs.version }} completed successfully!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Release Type:** ${{ github.event.inputs.release_type }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **New Version:** ${{ steps.next_version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **PyPI Package:** Published via Trusted Publisher" >> $GITHUB_STEP_SUMMARY
+          echo "- **GitHub Release:** Created with auto-generated notes" >> $GITHUB_STEP_SUMMARY
+
+      - name: Print failure message
+        if: failure()
+        run: |
+          echo "### :x: Release failed. Please check the logs above." >> $GITHUB_STEP_SUMMARY
