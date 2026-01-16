@@ -1,0 +1,11 @@
+{
+  "global_args": {},
+  "plugins": {
+    "FabricsPlugin": {
+      "analysis_args": {}
+    }
+  },
+  "result_collators": {},
+  "name": "FabricsPlugin config",
+  "desc": "Config for testing FabricsPlugin"
+}
