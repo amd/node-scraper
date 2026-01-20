@@ -15,11 +15,6 @@ on:
           - patch
           - minor
           - major
-      dry_run:
-        description: 'Dry run (skip PyPI upload and tag creation)'
-        required: false
-        type: boolean
-        default: false
 
 jobs:
   release:
@@ -89,16 +84,9 @@ jobs:
           echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
 
       - name: Create and push tag
-        if: ${{ !inputs.dry_run }}
         run: |
           git tag ${{ steps.next_version.outputs.version }}
           git push origin ${{ steps.next_version.outputs.version }}
-
-      - name: Dry run - Show tag (not created)
-        if: ${{ inputs.dry_run }}
-        run: |
-          echo "DRY RUN: Would create tag ${{ steps.next_version.outputs.version }}"
-          echo "DRY RUN: Tag not actually created"
 
       - name: Install build dependencies
         run: |
@@ -109,27 +97,12 @@ jobs:
         run: |
           python -m build
 
-      - name: Validate package (dry run check)
-        run: |
-          python -m pip install twine
-          python -m twine check dist/*
-
       - name: Upload to PyPI using Trusted Publisher
-        if: ${{ !inputs.dry_run }}
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
 
-      - name: Dry run - Show what would be uploaded
-        if: ${{ inputs.dry_run }}
-        run: |
-          echo "DRY RUN: Would upload the following files to PyPI:"
-          ls -lh dist/
-          echo ""
-          echo "DRY RUN: Package validation passed, but not uploading to PyPI"
-
       - name: Create GitHub Release
-        if: ${{ !inputs.dry_run }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -138,32 +111,15 @@ jobs:
             --generate-notes \
             dist/*
 
-      - name: Dry run - Show release info
-        if: ${{ inputs.dry_run }}
-        run: |
-          echo "DRY RUN: Would create GitHub release ${{ steps.next_version.outputs.version }}"
-          echo "DRY RUN: Release not actually created"
-
       - name: Print summary
         if: success()
         run: |
-          if [ "${{ inputs.dry_run }}" == "true" ]; then
-            echo "### 🧪 Dry Run Completed Successfully!" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "- **Release Type:** ${{ github.event.inputs.release_type }}" >> $GITHUB_STEP_SUMMARY
-            echo "- **Would Create Version:** ${{ steps.next_version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-            echo "- **Package Built:** ✅ (validated with twine check)" >> $GITHUB_STEP_SUMMARY
-            echo "- **PyPI Upload:** ⏭️ Skipped (dry run)" >> $GITHUB_STEP_SUMMARY
-            echo "- **GitHub Release:** ⏭️ Skipped (dry run)" >> $GITHUB_STEP_SUMMARY
-            echo "- **Git Tag:** ⏭️ Not created (dry run)" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "### :rocket: Release ${{ steps.next_version.outputs.version }} completed successfully!" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "- **Release Type:** ${{ github.event.inputs.release_type }}" >> $GITHUB_STEP_SUMMARY
-            echo "- **New Version:** ${{ steps.next_version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-            echo "- **PyPI Package:** Published via Trusted Publisher" >> $GITHUB_STEP_SUMMARY
-            echo "- **GitHub Release:** Created with auto-generated notes" >> $GITHUB_STEP_SUMMARY
-          fi
+          echo "### :rocket: Release ${{ steps.next_version.outputs.version }} completed successfully!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Release Type:** ${{ github.event.inputs.release_type }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **New Version:** ${{ steps.next_version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **PyPI Package:** Published via Trusted Publisher" >> $GITHUB_STEP_SUMMARY
+          echo "- **GitHub Release:** Created with auto-generated notes" >> $GITHUB_STEP_SUMMARY
 
       - name: Print failure message
         if: failure()
