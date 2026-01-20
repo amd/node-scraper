@@ -19,7 +19,6 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
-    container: python:3.9
 
     steps:
       - name: Checkout code
@@ -28,26 +27,15 @@ jobs:
           fetch-depth: 0  # Fetch all history and tags
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
       - name: Configure Git
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git config --global --add safe.directory /__w/node-scraper/node-scraper
-
-      - name: Install dependencies
-        run: |
-          apt-get update
-          apt-get install -y wget
-
-      - name: Install GitHub CLI
-        run: |
-          mkdir -p -m 755 /etc/apt/keyrings
-          wget -nv -O /tmp/githubcli-archive-keyring.gpg https://cli.github.com/packages/githubcli-archive-keyring.gpg
-          cat /tmp/githubcli-archive-keyring.gpg | tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null
-          chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
-          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-          apt-get update
-          apt-get install -y gh
 
       - name: Calculate next version
         id: next_version
@@ -86,14 +74,14 @@ jobs:
           echo "New version: $NEW_VERSION"
           echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
 
-      - name: Setup Python environment
+      - name: Install build dependencies
         run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install build twine
+          python -m pip install --upgrade pip
+          python -m pip install build
 
       - name: Build package
         run: |
-          python3 -m build ./
+          python -m build
 
       - name: Upload to PyPI using Trusted Publisher
         uses: pypa/gh-action-pypi-publish@release/v1
