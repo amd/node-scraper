@@ -1,0 +1,122 @@
+name: Release (Trusted Publisher)
+
+permissions:
+  contents: write  # Required for creating releases and pushing tags
+  id-token: write  # Required for PyPI Trusted Publishing
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Release type (major, minor, patch)'
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Fetch all history and tags
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fetch all tags
+        run: |
+          git fetch --tags --force
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Calculate next version
+        id: next_version
+        shell: bash
+        run: |
+          # Get the latest tag, default to v0.0.0 if no tags exist
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "Latest tag: $LATEST_TAG"
+
+          # Remove 'v' prefix and split into components
+          VERSION=${LATEST_TAG#v}
+          IFS='.' read -r -a VERSION_PARTS <<< "$VERSION"
+          MAJOR="${VERSION_PARTS[0]:-0}"
+          MINOR="${VERSION_PARTS[1]:-0}"
+          PATCH="${VERSION_PARTS[2]:-0}"
+
+          echo "Current version: $MAJOR.$MINOR.$PATCH"
+
+          # Increment based on release type
+          case "${{ github.event.inputs.release_type }}" in
+            major)
+              MAJOR=$((MAJOR + 1))
+              MINOR=0
+              PATCH=0
+              ;;
+            minor)
+              MINOR=$((MINOR + 1))
+              PATCH=0
+              ;;
+            patch)
+              PATCH=$((PATCH + 1))
+              ;;
+          esac
+
+          NEW_VERSION="v${MAJOR}.${MINOR}.${PATCH}"
+          echo "New version: $NEW_VERSION"
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create and push tag
+        run: |
+          git tag ${{ steps.next_version.outputs.version }}
+          git push origin ${{ steps.next_version.outputs.version }}
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install build
+
+      - name: Build package
+        run: |
+          python -m build
+
+      - name: Upload to PyPI using Trusted Publisher
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create ${{ steps.next_version.outputs.version }} \
+            --title "${{ steps.next_version.outputs.version }}" \
+            --generate-notes \
+            dist/*
+
+      - name: Print summary
+        if: success()
+        run: |
+          echo "### :rocket: Release ${{ steps.next_version.outputs.version }} completed successfully!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Release Type:** ${{ github.event.inputs.release_type }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **New Version:** ${{ steps.next_version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **PyPI Package:** Published via Trusted Publisher" >> $GITHUB_STEP_SUMMARY
+          echo "- **GitHub Release:** Created with auto-generated notes" >> $GITHUB_STEP_SUMMARY
+
+      - name: Print failure message
+        if: failure()
+        run: |
+          echo "### :x: Release failed. Please check the logs above." >> $GITHUB_STEP_SUMMARY
