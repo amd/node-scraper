@@ -10,7 +10,7 @@ on:
 
 jobs:
   pre-commit:
-    runs-on: ubuntu-latest
+    runs-on: [ self-hosted ]
     container: python:3.9
 
     steps:
