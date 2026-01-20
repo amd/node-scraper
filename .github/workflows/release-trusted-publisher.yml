@@ -74,6 +74,11 @@ jobs:
           echo "New version: $NEW_VERSION"
           echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
 
+      - name: Create and push tag
+        run: |
+          git tag ${{ steps.next_version.outputs.version }}
+          git push origin ${{ steps.next_version.outputs.version }}
+
       - name: Install build dependencies
         run: |
           python -m pip install --upgrade pip
@@ -87,11 +92,6 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
-
-      - name: Create and push tag
-        run: |
-          git tag ${{ steps.next_version.outputs.version }}
-          git push origin ${{ steps.next_version.outputs.version }}
 
       - name: Create GitHub Release
         env:
