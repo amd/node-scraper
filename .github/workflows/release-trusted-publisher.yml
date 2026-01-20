@@ -27,6 +27,10 @@ jobs:
           fetch-depth: 0  # Fetch all history and tags
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Fetch all tags
+        run: |
+          git fetch --tags --force
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
