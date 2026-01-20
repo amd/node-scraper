@@ -15,6 +15,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Fetch all history for pre-commit to work
+      - name: Configure git for container
+        run: |
+          git config --global --add safe.directory /__w/node-scraper/node-scraper
+          git config --global user.email "ci@github.com"
+          git config --global user.name "CI Bot"
       - name: setup environment and run pre-commit hooks
         shell: bash
         run: |
