@@ -25,7 +25,7 @@
 ###############################################################################
 import os
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Union
 
 from pydantic import ConfigDict, Field, field_validator
 
@@ -48,7 +48,7 @@ class JournalJsonEntry(DataModel):
     BOOT_ID: Optional[str] = Field(None, alias="_BOOT_ID")
     SOURCE_MONOTONIC_TIMESTAMP: Optional[float] = Field(None, alias="_SOURCE_MONOTONIC_TIMESTAMP")
     MONOTONIC_TIMESTAMP: Optional[float] = Field(None, alias="__MONOTONIC_TIMESTAMP")
-    MESSAGE: str | list[str] = Field(default="", alias="MESSAGE")
+    MESSAGE: Union[str, list[str]] = Field(default="", alias="MESSAGE")
 
     # assume datetime has microseconds
     @field_validator("SOURCE_REALTIME_TIMESTAMP", mode="before")
