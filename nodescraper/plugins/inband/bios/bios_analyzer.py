@@ -86,7 +86,7 @@ class BiosAnalyzer(DataAnalyzer[BiosDataModel, BiosAnalyzerArgs]):
         self.result.status = ExecutionStatus.ERROR
         self._log_event(
             category=EventCategory.BIOS,
-            description="Bios data mismatch",
+            description=f"{self.result.message}, Actual: {data.bios_version}",
             data={
                 "actual_bios_version": data.bios_version,
                 "expected_bios_version": args.exp_bios_version,
