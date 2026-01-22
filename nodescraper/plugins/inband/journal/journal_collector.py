@@ -50,11 +50,11 @@ class JournalCollector(InBandDataCollector[JournalData, JournalCollectorArgs]):
             str|None: system journal read
         """
 
-        cmd = "journalctl --no-pager --system --output=short-iso"
+        cmd = self.CMD
         try:
             # safe check for args.boot
             if args is not None and getattr(args, "boot", None):
-                cmd = f"journalctl --no-pager -b {args.boot} --system --output=short-iso"
+                cmd = f"{self.CMD} -b {args.boot}"
 
             res = self._run_sut_cmd(cmd, sudo=True, log_artifact=False, strip=False)
 
