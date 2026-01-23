@@ -93,6 +93,12 @@ class MemoryAnalyzer(DataAnalyzer[MemoryDataModel, MemoryAnalyzerArgs]):
                 category=EventCategory.OS,
                 description=self.result.message,
                 priority=EventPriority.CRITICAL,
+                data={
+                    "used_memory": used_memory,
+                    "max_allowed_used_mem": max_allowed_used_mem,
+                    "total_memory": total_memory,
+                    "free_memory": free_memory,
+                },
             )
 
         return self.result

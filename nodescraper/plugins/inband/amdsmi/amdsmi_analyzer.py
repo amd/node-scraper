@@ -286,7 +286,7 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                 if count is not None and count > 0:
                     self._log_event(
                         category=EventCategory.RAS,
-                        description=f"GPU: {gpu} has {desc}: {count}",
+                        description="GPU ECC error count detected",
                         priority=priority,
                         data={"gpu": gpu, "error_count": count, "error_type": desc},
                         console_log=True,

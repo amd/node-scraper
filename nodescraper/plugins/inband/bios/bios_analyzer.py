@@ -87,6 +87,10 @@ class BiosAnalyzer(DataAnalyzer[BiosDataModel, BiosAnalyzerArgs]):
         self._log_event(
             category=EventCategory.BIOS,
             description=f"{self.result.message}, Actual: {data.bios_version}",
+            data={
+                "actual_bios_version": data.bios_version,
+                "expected_bios_version": args.exp_bios_version,
+            },
             priority=EventPriority.ERROR,
             console_log=True,
         )
