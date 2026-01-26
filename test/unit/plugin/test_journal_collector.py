@@ -24,10 +24,14 @@
 #
 ###############################################################################
 import types
+from datetime import datetime
 
+from nodescraper.enums import ExecutionStatus
 from nodescraper.enums.systeminteraction import SystemInteractionLevel
+from nodescraper.plugins.inband.journal.analyzer_args import JournalAnalyzerArgs
+from nodescraper.plugins.inband.journal.journal_analyzer import JournalAnalyzer
 from nodescraper.plugins.inband.journal.journal_collector import JournalCollector
-from nodescraper.plugins.inband.journal.journaldata import JournalData
+from nodescraper.plugins.inband.journal.journaldata import JournalData, JournalJsonEntry
 
 
 class DummyRes:
@@ -69,3 +73,160 @@ def test_collect_data_integration(monkeypatch, system_info, conn_mock):
     assert isinstance(data, JournalData)
 
     assert data.journal_log == '{"MESSAGE":"hello"}\n'
+
+
+def test_journal_filter():
+    """Test filtering journal entries based on timestamp range."""
+    journal_data = [
+        {
+            "TRANSPORT": "kernel",
+            "MACHINE_ID": "dummy-machine-id-123456789abcdef",
+            "HOSTNAME": "test-hostname-001",
+            "SYSLOG_IDENTIFIER": "kernel",
+            "CURSOR": "dummy-cursor-s1234;i=1000;b=dummy-boot-abc123;m=100;t=1000;x=dummy-x1",
+            "SYSLOG_FACILITY": 0,
+            "SOURCE_REALTIME_TIMESTAMP": None,
+            "REALTIME_TIMESTAMP": "2025-02-23T21:03:46.685975",
+            "PRIORITY": 1,
+            "BOOT_ID": "dummy-boot-id-aabbccdd11223344",
+            "SOURCE_MONOTONIC_TIMESTAMP": 0.0,
+            "MONOTONIC_TIMESTAMP": 11418011.0,
+            "MESSAGE": "Test kernel message - alert level",
+        },
+        {
+            "TRANSPORT": "kernel",
+            "MACHINE_ID": "dummy-machine-id-123456789abcdef",
+            "HOSTNAME": "test-hostname-001",
+            "SYSLOG_IDENTIFIER": "kernel",
+            "CURSOR": "dummy-cursor-s1234;i=1001;b=dummy-boot-abc123;m=101;t=1001;x=dummy-x2",
+            "SYSLOG_FACILITY": 0,
+            "SOURCE_REALTIME_TIMESTAMP": None,
+            "REALTIME_TIMESTAMP": "2025-02-23T21:03:46.686007",
+            "PRIORITY": 5,
+            "BOOT_ID": "dummy-boot-id-aabbccdd11223344",
+            "SOURCE_MONOTONIC_TIMESTAMP": 0.0,
+            "MONOTONIC_TIMESTAMP": 11418043.0,
+            "MESSAGE": "Test kernel message - notice level",
+        },
+        {
+            "TRANSPORT": "kernel",
+            "MACHINE_ID": "dummy-machine-id-123456789abcdef",
+            "HOSTNAME": "test-hostname-001",
+            "SYSLOG_IDENTIFIER": "kernel",
+            "CURSOR": "dummy-cursor-s1234;i=1002;b=dummy-boot-abc123;m=102;t=1002;x=dummy-x3",
+            "SYSLOG_FACILITY": 0,
+            "SOURCE_REALTIME_TIMESTAMP": None,
+            "REALTIME_TIMESTAMP": "2025-02-23T21:03:46.686019",
+            "PRIORITY": 2,
+            "BOOT_ID": "dummy-boot-id-aabbccdd11223344",
+            "SOURCE_MONOTONIC_TIMESTAMP": 0.0,
+            "MONOTONIC_TIMESTAMP": 11418056.0,
+            "MESSAGE": "Test kernel message - critical level",
+        },
+        {
+            "TRANSPORT": "kernel",
+            "MACHINE_ID": "dummy-machine-id-123456789abcdef",
+            "HOSTNAME": "test-hostname-001",
+            "SYSLOG_IDENTIFIER": "kernel",
+            "CURSOR": "dummy-cursor-s1234;i=1003;b=dummy-boot-abc123;m=103;t=1003;x=dummy-x4",
+            "SYSLOG_FACILITY": 0,
+            "SOURCE_REALTIME_TIMESTAMP": None,
+            "REALTIME_TIMESTAMP": "2025-02-23T21:03:46.686027",
+            "PRIORITY": 7,
+            "BOOT_ID": "dummy-boot-id-aabbccdd11223344",
+            "SOURCE_MONOTONIC_TIMESTAMP": 0.0,
+            "MONOTONIC_TIMESTAMP": 11418064.0,
+            "MESSAGE": "Test kernel message - debug level",
+        },
+    ]
+
+    journal_content_json = [JournalJsonEntry(**entry) for entry in journal_data]
+
+    start_range = datetime.fromisoformat("2025-02-23T21:03:46.686006")
+    end_range = datetime.fromisoformat("2025-02-23T21:03:46.686020")
+
+    filtered_journal = JournalAnalyzer.filter_journal(journal_content_json, start_range, end_range)
+    assert filtered_journal == [JournalJsonEntry(**entry) for entry in journal_data[1:3]]
+
+    filtered_journal = JournalAnalyzer.filter_journal(journal_content_json, start_range, None)
+    assert filtered_journal == [JournalJsonEntry(**entry) for entry in journal_data[1:]]
+
+    filtered_journal = JournalAnalyzer.filter_journal(journal_content_json, None, end_range)
+    assert filtered_journal == [JournalJsonEntry(**entry) for entry in journal_data[:3]]
+
+
+def test_check_priority(system_info):
+    """Test checking priority of journal entries."""
+    journal_data_dict = {
+        "journal_log": "",
+        "journal_content_json": [
+            {
+                "TRANSPORT": "kernel",
+                "MACHINE_ID": "dummy-machine-id-123456789abcdef",
+                "HOSTNAME": "test-hostname-002",
+                "SYSLOG_IDENTIFIER": "kernel",
+                "CURSOR": "dummy-cursor-s2000;i=2000;b=dummy-boot-def456;m=200;t=2000;x=dummy-y1",
+                "SYSLOG_FACILITY": 0,
+                "SOURCE_REALTIME_TIMESTAMP": None,
+                "REALTIME_TIMESTAMP": "2025-02-23T21:03:46.685975",
+                "PRIORITY": 1,
+                "BOOT_ID": "dummy-boot-id-11223344aabbccdd",
+                "SOURCE_MONOTONIC_TIMESTAMP": 0.0,
+                "MONOTONIC_TIMESTAMP": 11418011.0,
+                "MESSAGE": "Test system alert message",
+            },
+            {
+                "TRANSPORT": "kernel",
+                "MACHINE_ID": "dummy-machine-id-123456789abcdef",
+                "HOSTNAME": "test-hostname-002",
+                "SYSLOG_IDENTIFIER": "kernel",
+                "CURSOR": "dummy-cursor-s2000;i=2001;b=dummy-boot-def456;m=201;t=2001;x=dummy-y2",
+                "SYSLOG_FACILITY": 0,
+                "SOURCE_REALTIME_TIMESTAMP": None,
+                "REALTIME_TIMESTAMP": "2025-02-23T21:03:46.686007",
+                "PRIORITY": 5,
+                "BOOT_ID": "dummy-boot-id-11223344aabbccdd",
+                "SOURCE_MONOTONIC_TIMESTAMP": 0.0,
+                "MONOTONIC_TIMESTAMP": 11418043.0,
+                "MESSAGE": "Test notice level message",
+            },
+            {
+                "TRANSPORT": "kernel",
+                "MACHINE_ID": "dummy-machine-id-123456789abcdef",
+                "HOSTNAME": "test-hostname-002",
+                "SYSLOG_IDENTIFIER": "kernel",
+                "CURSOR": "dummy-cursor-s2000;i=2002;b=dummy-boot-def456;m=202;t=2002;x=dummy-y3",
+                "SYSLOG_FACILITY": 0,
+                "SOURCE_REALTIME_TIMESTAMP": None,
+                "REALTIME_TIMESTAMP": "2025-02-23T21:03:46.686019",
+                "PRIORITY": 2,
+                "BOOT_ID": "dummy-boot-id-11223344aabbccdd",
+                "SOURCE_MONOTONIC_TIMESTAMP": 0.0,
+                "MONOTONIC_TIMESTAMP": 11418056.0,
+                "MESSAGE": "Test critical level message",
+            },
+            {
+                "TRANSPORT": "kernel",
+                "MACHINE_ID": "dummy-machine-id-123456789abcdef",
+                "HOSTNAME": "test-hostname-002",
+                "SYSLOG_IDENTIFIER": "kernel",
+                "CURSOR": "dummy-cursor-s2000;i=2003;b=dummy-boot-def456;m=203;t=2003;x=dummy-y4",
+                "SYSLOG_FACILITY": 0,
+                "SOURCE_REALTIME_TIMESTAMP": None,
+                "REALTIME_TIMESTAMP": "2025-02-23T21:03:46.686027",
+                "PRIORITY": 7,
+                "BOOT_ID": "dummy-boot-id-11223344aabbccdd",
+                "SOURCE_MONOTONIC_TIMESTAMP": 0.0,
+                "MONOTONIC_TIMESTAMP": 11418064.0,
+                "MESSAGE": "Test debug level message",
+            },
+        ],
+    }
+
+    journal_data = JournalData(**journal_data_dict)
+    analyzer = JournalAnalyzer(system_info=system_info)
+    args = JournalAnalyzerArgs(check_priority=5)
+    res = analyzer.analyze_data(data=journal_data, args=args)
+
+    assert res.status == ExecutionStatus.ERROR
+    assert len(res.events) == 3
