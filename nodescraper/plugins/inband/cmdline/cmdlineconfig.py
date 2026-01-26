@@ -50,7 +50,7 @@ class ParameterValueConflict(BaseModel):
 
     parameter: str  # e.g., "pci"
     conflicting_values: List[str]  # e.g., ["pci=bfsort", "pci=noats"]
-    source: str  # e.g., "final configuration for OS 'centos' and platform 'grand-teton'"
+    source: str  # e.g., "final configuration for OS 'centos' and platform 'mi300x'"
 
 
 class CmdlineConflictError(Exception):
