@@ -157,8 +157,34 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
             event_category=EventCategory.SW_DRIVER,
         ),
         ErrorRegex(
-            regex=re.compile(r"(?:pcieport )(.*AER: aer_status.*)|(aer_status.*)"),
-            message="PCIe AER Error",
+            regex=re.compile(
+                r"(pcieport [\w:.]+: AER: aer_status:[^\n]*"
+                r"(?:\n[^\n]*){0,32}?"
+                r"pcieport [\w:.]+: AER: aer_layer=[^\n]*)",
+                re.MULTILINE,
+            ),
+            message="PCIe AER Error Status",
+            event_category=EventCategory.SW_DRIVER,
+        ),
+        ErrorRegex(
+            regex=re.compile(r"(.*aer_cor_status: 0x[0-9a-fA-F]+, aer_cor_mask: 0x[0-9a-fA-F]+.*)"),
+            message="PCIe AER Correctable Error Status",
+            event_category=EventCategory.SW_DRIVER,
+        ),
+        ErrorRegex(
+            regex=re.compile(
+                r"(.*aer_uncor_status: 0x[0-9a-fA-F]+, aer_uncor_mask: 0x[0-9a-fA-F]+.*)"
+            ),
+            message="PCIe AER Uncorrectable Error Status",
+            event_category=EventCategory.SW_DRIVER,
+        ),
+        ErrorRegex(
+            regex=re.compile(
+                r"(.*aer_uncor_severity: 0x[0-9a-fA-F]+.*)"
+                r"(\n.*TLP Header: (?:0x)?[0-9a-fA-F]+(?: (?:0x)?[0-9a-fA-F]+){3}.*)",
+                re.MULTILINE,
+            ),
+            message="PCIe AER Uncorrectable Error Severity with TLP Header",
             event_category=EventCategory.SW_DRIVER,
         ),
         ErrorRegex(
@@ -333,10 +359,61 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
             event_priority=EventPriority.WARNING,
         ),
         ErrorRegex(
+            regex=re.compile(r"Failed to load MMP firmware qat_4xxx_mmp.bin"),
+            message="MMP Error",
+            event_category=EventCategory.BIOS,
+            event_priority=EventPriority.WARNING,
+        ),
+        ErrorRegex(
             regex=re.compile(r"amdgpu \w{4}:\w{2}:\w{2}.\w: amdgpu: WARN: GPU is throttled.*"),
             message="GPU Throttled",
             event_category=EventCategory.SW_DRIVER,
             event_priority=EventPriority.WARNING,
+        ),
+        ErrorRegex(
+            regex=re.compile(
+                r"amdgpu[ 0-9a-fA-F:.]+:(?:\s*amdgpu:)?\s+(?:{\d+})?poison is consumed by client \d+, kick off gpu reset flow"
+            ),
+            message="RAS Poison Consumed",
+            event_category=EventCategory.RAS,
+        ),
+        ErrorRegex(
+            regex=re.compile(
+                r"amdgpu[ 0-9a-fA-F:.]+:(?:\s*amdgpu:)?\s+(?:{\d+})?Poison is created"
+            ),
+            message="RAS Poison created",
+            event_category=EventCategory.RAS,
+        ),
+        ErrorRegex(
+            regex=re.compile(r"(amdgpu: Saved bad pages (\d+) reaches threshold value 128)"),
+            message="Bad page threshold exceeded",
+            event_category=EventCategory.RAS,
+        ),
+        ErrorRegex(
+            regex=re.compile(
+                r"Hardware error from APEI Generic Hardware Error Source:.*(?:\n.*){0,14}"
+            ),
+            message="RAS Hardware Error",
+            event_category=EventCategory.RAS,
+        ),
+        ErrorRegex(
+            regex=re.compile(r"Error Address.*(?:\s.*)"),
+            message="Error Address",
+            event_category=EventCategory.RAS,
+        ),
+        ErrorRegex(
+            regex=re.compile(
+                r"EDR: EDR event received",
+            ),
+            message="RAS EDR Event",
+            event_category=EventCategory.RAS,
+        ),
+        ErrorRegex(
+            regex=re.compile(
+                r"DPC: .*",
+            ),
+            message="DPC Event",
+            event_category=EventCategory.RAS,
         ),
         ErrorRegex(
             regex=re.compile(
@@ -402,34 +479,58 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
 
         return filtered_dmesg
 
-    def _is_known_error(self, known_err_events: list[Event], unknown_match: str) -> bool:
+    def _is_known_error(
+        self,
+        known_err_events: list[Event],
+        unknown_match: str,
+        error_regex: Optional[list[ErrorRegex]] = None,
+    ) -> bool:
         """Check if a potential unknown error line has a known regex
 
         Args:
             known_err_events (list[Event]): list of events from known regex
             unknown_match (str): unknown match string
+            error_regex (Optional[list[ErrorRegex]]): list of error regexes to check against
 
         Returns:
             bool: return True if error is known
         """
-        for regex_obj in self.ERROR_REGEX:
+        if error_regex is None:
+            error_regex = self.ERROR_REGEX
+
+        # Normalize whitespace to reduce false negatives (collapse runs, trim)
+        def _norm(s: str) -> str:
+            return re.sub(r"\s+", " ", s.strip())
+
+        unknown_norm = _norm(unknown_match)
+
+        # Direct regex hit counts as known
+        for regex_obj in error_regex:
             try:
                 if regex_obj.regex.search(unknown_match):
                     return True
             except re.error:
+                # If a bad pattern somehow slipped in, ignore it for unknown detection
                 continue
 
+        # Compare against previously matched multi-line or single-line contents
         for event in known_err_events:
             known_match = event.data["match_content"]
             if isinstance(known_match, list):
                 for line in known_match:
-                    if unknown_match == line or unknown_match in line or line in unknown_match:
+                    line_norm = _norm(line)
+                    if (
+                        unknown_norm == line_norm
+                        or unknown_norm in line_norm
+                        or line_norm in unknown_norm
+                    ):
                         return True
             elif isinstance(known_match, str):
+                line_norm = _norm(known_match)
                 if (
-                    unknown_match == known_match
-                    or unknown_match in known_match
-                    or known_match in unknown_match
+                    unknown_norm == line_norm
+                    or unknown_norm in line_norm
+                    or line_norm in unknown_norm
                 ):
                     return True
         return False
@@ -497,7 +598,7 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
 
             for err_event in err_events:
                 match_content = err_event.data["match_content"]
-                if not self._is_known_error(known_err_events, match_content):
+                if not self._is_known_error(known_err_events, match_content, self.ERROR_REGEX):
                     self.result.events.append(err_event)
 
         return self.result
