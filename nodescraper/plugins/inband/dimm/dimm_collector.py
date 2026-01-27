@@ -117,9 +117,8 @@ class DimmCollector(InBandDataCollector[DimmDataModel, DimmCollectorArgs]):
                 if total_gb == 0:
                     dimm_str = "0 GB"
                 else:
-                    dimm_str = str(total_gb) + size + " @ "
-                    for k, v in topology.items():
-                        dimm_str += str(v) + " x " + k
+                    dimm_entries = [f"{v} x {k}" for k, v in topology.items()]
+                    dimm_str = f"{total_gb}{size} @ {' '.join(dimm_entries)}"
         if res.exit_code != 0:
             self._log_event(
                 category=EventCategory.OS,
