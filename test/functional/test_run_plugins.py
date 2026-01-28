@@ -106,9 +106,12 @@ def test_run_plugin_with_invalid_name(run_cli_command):
     assert "Data written to csv file" in output
 
 
-def test_run_comma_separated_plugins_with_invalid(run_cli_command):
+def test_run_comma_separated_plugins_with_invalid(run_cli_command, tmp_path):
     """Test that comma-separated plugins run valid ones and ignore invalid ones."""
-    result = run_cli_command(["run-plugins", "AmdSmiPlugin,SomePlugin"], check=False)
+    log_path = str(tmp_path / "logs_comma_separated")
+    result = run_cli_command(
+        ["--log-path", log_path, "run-plugins", "AmdSmiPlugin,SomePlugin"], check=False
+    )
 
     output = result.stdout + result.stderr
     # Check that warning was logged for invalid plugin
