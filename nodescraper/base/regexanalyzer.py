@@ -83,7 +83,9 @@ class RegexAnalyzer(DataAnalyzer[TDataModel, TAnalyzeArg]):
         return timestamp_match.group(1) if timestamp_match else None
 
     def _convert_and_extend_error_regex(
-        self, custom_regex: Optional[list[ErrorRegex] | list[dict]], base_regex: list[ErrorRegex]
+        self,
+        custom_regex: Optional[Union[list[ErrorRegex], list[dict]]],
+        base_regex: list[ErrorRegex],
     ) -> list[ErrorRegex]:
         """Convert custom error patterns and extend base ERROR_REGEX.
 
