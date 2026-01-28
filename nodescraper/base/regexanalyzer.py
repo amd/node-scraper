@@ -82,6 +82,46 @@ class RegexAnalyzer(DataAnalyzer[TDataModel, TAnalyzeArg]):
         timestamp_match = self.TIMESTAMP_PATTERN.search(first_line)
         return timestamp_match.group(1) if timestamp_match else None
 
+    def _convert_and_extend_error_regex(
+        self, custom_regex: Optional[list[ErrorRegex] | list[dict]], base_regex: list[ErrorRegex]
+    ) -> list[ErrorRegex]:
+        """Convert custom error patterns and extend base ERROR_REGEX.
+
+        Supports two input formats:
+        - ErrorRegex objects directly
+        - Dicts with regex/message/category/priority that get converted to ErrorRegex
+
+        Args:
+            custom_regex: Optional list of custom error patterns (ErrorRegex objects or dicts)
+            base_regex: Base list of ErrorRegex patterns to extend
+
+        Returns:
+            Extended list of ErrorRegex objects (custom patterns + base patterns)
+
+        Example:
+            custom = [
+                {"regex": r"my-error.*", "message": "Custom error", "event_category": "SW_DRIVER"}
+            ]
+            extended = analyzer._convert_and_extend_error_regex(custom, analyzer.ERROR_REGEX)
+        """
+        if not custom_regex or not isinstance(custom_regex, list):
+            return list(base_regex)
+
+        converted_regex = []
+        for item in custom_regex:
+            if isinstance(item, ErrorRegex):
+                converted_regex.append(item)
+            elif isinstance(item, dict):
+                # Convert dict to ErrorRegex
+                item["regex"] = re.compile(item["regex"])
+                if "event_category" in item:
+                    item["event_category"] = EventCategory(item["event_category"])
+                if "event_priority" in item:
+                    item["event_priority"] = EventPriority(item["event_priority"])
+                converted_regex.append(ErrorRegex(**item))
+
+        return converted_regex + list(base_regex)
+
     def _build_regex_event(
         self, regex_obj: ErrorRegex, match: Union[str, list[str]], source: str
     ) -> RegexEvent:

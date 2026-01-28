@@ -539,12 +539,14 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
         self,
         data: DmesgData,
         args: Optional[DmesgAnalyzerArgs] = None,
+        error_regex: Optional[list[ErrorRegex] | list[dict]] = None,
     ) -> TaskResult:
         """Analyze dmesg data for errors
 
         Args:
             data (DmesgData): dmesg data to analyze
             args (Optional[DmesgAnalyzerArgs], optional): dmesg analysis arguments. Defaults to None.
+            error_regex (Optional[list[ErrorRegex] | list[dict]]): custom error regexes to extend ERROR_REGEX
 
         Returns:
             TaskResult: The result of the analysis containing status and message.
@@ -552,6 +554,8 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
 
         if not args:
             args = DmesgAnalyzerArgs()
+
+        final_error_regex = self._convert_and_extend_error_regex(error_regex, self.ERROR_REGEX)
 
         if args.analysis_range_start or args.analysis_range_end:
             self.logger.info(
@@ -573,7 +577,7 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
         known_err_events = self.check_all_regexes(
             content=dmesg_content,
             source="dmesg",
-            error_regex=self.ERROR_REGEX,
+            error_regex=final_error_regex,
             num_timestamps=args.num_timestamps,
             interval_to_collapse_event=args.interval_to_collapse_event,
         )
@@ -604,7 +608,7 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
 
             for err_event in err_events:
                 match_content = err_event.data["match_content"]
-                if not self._is_known_error(known_err_events, match_content, self.ERROR_REGEX):
+                if not self._is_known_error(known_err_events, match_content, final_error_regex):
                     self.result.events.append(err_event)
 
         return self.result
