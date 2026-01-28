@@ -571,7 +571,11 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
             dmesg_content = data.dmesg_content
 
         known_err_events = self.check_all_regexes(
-            content=dmesg_content, source="dmesg", error_regex=self.ERROR_REGEX
+            content=dmesg_content,
+            source="dmesg",
+            error_regex=self.ERROR_REGEX,
+            num_timestamps=args.num_timestamps,
+            interval_to_collapse_event=args.interval_to_collapse_event,
         )
         if args.exclude_category:
             known_err_events = [
@@ -594,6 +598,8 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
                         event_priority=EventPriority.WARNING,
                     )
                 ],
+                num_timestamps=args.num_timestamps,
+                interval_to_collapse_event=args.interval_to_collapse_event,
             )
 
             for err_event in err_events:

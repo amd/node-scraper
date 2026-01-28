@@ -31,3 +31,5 @@ from nodescraper.models import TimeRangeAnalysisArgs
 class DmesgAnalyzerArgs(TimeRangeAnalysisArgs):
     check_unknown_dmesg_errors: Optional[bool] = True
     exclude_category: Optional[set[str]] = None
+    interval_to_collapse_event: int = 60
+    num_timestamps: int = 3
