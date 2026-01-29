@@ -127,14 +127,20 @@ class TaskResult(BaseModel):
                 f"{msg} (x{count})" if count > 1 else msg
                 for msg, count in warning_msg_counts.items()
             ]
-            summary_parts.append(f"{total_warnings} warnings: {', '.join(warning_details)}")
+            if total_warnings == 1:
+                summary_parts.append(warning_details[0])
+            else:
+                summary_parts.append(f"{total_warnings} warnings: {', '.join(warning_details)}")
 
         if error_msg_counts:
             total_errors = sum(error_msg_counts.values())
             error_details = [
                 f"{msg} (x{count})" if count > 1 else msg for msg, count in error_msg_counts.items()
             ]
-            summary_parts.append(f"{total_errors} errors: {', '.join(error_details)}")
+            if total_errors == 1:
+                summary_parts.append(error_details[0])
+            else:
+                summary_parts.append(f"{total_errors} errors: {', '.join(error_details)}")
 
         return "; ".join(summary_parts)
 
