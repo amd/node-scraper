@@ -161,7 +161,7 @@ class KernelModuleAnalyzer(DataAnalyzer[KernelModuleDataModel, KernelModuleAnaly
                     data={"unmatched_pattern: ": unmatched_pattern},
                     priority=EventPriority.INFO,
                 )
-                self.result.message = "Kernel modules failed to match every pattern"
+                self.result.message = f"Kernel modules failed to match every pattern. Unmatched patterns: {unmatched_pattern}"
                 self.result.status = ExecutionStatus.ERROR
                 return self.result
 
@@ -186,7 +186,7 @@ class KernelModuleAnalyzer(DataAnalyzer[KernelModuleDataModel, KernelModuleAnaly
                     data=args.kernel_modules,
                     priority=EventPriority.ERROR,
                 )
-                self.result.message = "Kernel modules not matched"
+                self.result.message = f"Kernel modules not matched. Not matched: {not_matched}"
                 self.result.status = ExecutionStatus.ERROR
                 return self.result
             # some modules matched
@@ -198,7 +198,7 @@ class KernelModuleAnalyzer(DataAnalyzer[KernelModuleDataModel, KernelModuleAnaly
                     data=not_matched,
                     priority=EventPriority.ERROR,
                 )
-                self.result.message = "Kernel modules not matched"
+                self.result.message = f"Kernel modules not matched. Not matched: {not_matched}"
                 self.result.status = ExecutionStatus.ERROR
                 return self.result
         else:
