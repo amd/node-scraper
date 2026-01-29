@@ -468,3 +468,274 @@ def test_combined_ras_errors(system_info):
     for event in res.events:
         assert event.category == "RAS"
         assert event.priority == EventPriority.ERROR
+
+
+def test_custom_regex_dict_passed_to_analyzer(system_info):
+    """Test passing custom regex as dict through error_regex parameter"""
+    dmesg_data = DmesgData(
+        dmesg_content=(
+            "kern  :err   : 2026-01-07T10:00:00,000000-06:00 custom_error_pattern_123\n"
+            "kern  :err   : 2026-01-07T10:00:01,000000-06:00 another_custom_error_xyz\n"
+            "kern  :err   : 2026-01-07T10:00:02,000000-06:00 oom_kill_process\n"
+        )
+    )
+
+    custom_regex = [
+        {
+            "regex": r"custom_error_pattern_\d+",
+            "message": "Custom Error Pattern",
+            "event_category": "SW_DRIVER",
+            "event_priority": 3,
+        },
+        {
+            "regex": r"another_custom_error_\w+",
+            "message": "Another Custom Error",
+            "event_category": "RAS",
+        },
+    ]
+
+    analyzer = DmesgAnalyzer(system_info=system_info)
+    res = analyzer.analyze_data(
+        dmesg_data,
+        args=DmesgAnalyzerArgs(check_unknown_dmesg_errors=False),
+        error_regex=custom_regex,
+    )
+
+    assert res.status == ExecutionStatus.ERROR
+    assert len(res.events) == 3
+
+    descriptions = [e.description for e in res.events]
+    assert "Custom Error Pattern" in descriptions
+    assert "Another Custom Error" in descriptions
+    assert "Out of memory error" in descriptions
+
+    custom_event1 = next(e for e in res.events if e.description == "Custom Error Pattern")
+    assert custom_event1.category == "SW_DRIVER"
+    assert custom_event1.priority == EventPriority.CRITICAL
+
+    custom_event2 = next(e for e in res.events if e.description == "Another Custom Error")
+    assert custom_event2.category == "RAS"
+    assert custom_event2.priority == EventPriority.ERROR
+
+
+def test_event_collapsing_within_interval(system_info):
+    """Test that events within interval_to_collapse_event are collapsed"""
+    dmesg_data = DmesgData(
+        dmesg_content=(
+            "kern  :err   : 2026-01-07T10:00:00,000000-06:00 oom_kill_process\n"
+            "kern  :err   : 2026-01-07T10:00:30,000000-06:00 oom_kill_process\n"
+            "kern  :err   : 2026-01-07T10:00:50,000000-06:00 oom_kill_process\n"
+            "kern  :err   : 2026-01-07T10:02:00,000000-06:00 oom_kill_process\n"
+            "kern  :err   : 2026-01-07T10:04:00,000000-06:00 oom_kill_process\n"
+        )
+    )
+
+    analyzer = DmesgAnalyzer(system_info=system_info)
+
+    res = analyzer.analyze_data(
+        dmesg_data,
+        args=DmesgAnalyzerArgs(check_unknown_dmesg_errors=False, interval_to_collapse_event=60),
+    )
+
+    assert res.status == ExecutionStatus.ERROR
+    assert len(res.events) == 1
+    event = res.events[0]
+    assert event.description == "Out of memory error"
+    assert event.data["count"] == 5
+
+    timestamps = event.data.get("timestamps", [])
+    assert len(timestamps) == 3  # First, one at 2min, one at 4min
+
+
+def test_event_collapsing_with_different_intervals(system_info):
+    """Test event collapsing with different interval values"""
+    dmesg_data = DmesgData(
+        dmesg_content=(
+            "kern  :err   : 2026-01-07T10:00:00,000000-06:00 IO_PAGE_FAULT\n"
+            "kern  :err   : 2026-01-07T10:00:10,000000-06:00 IO_PAGE_FAULT\n"
+            "kern  :err   : 2026-01-07T10:00:20,000000-06:00 IO_PAGE_FAULT\n"
+            "kern  :err   : 2026-01-07T10:00:30,000000-06:00 IO_PAGE_FAULT\n"
+        )
+    )
+
+    analyzer = DmesgAnalyzer(system_info=system_info)
+
+    res = analyzer.analyze_data(
+        dmesg_data,
+        args=DmesgAnalyzerArgs(check_unknown_dmesg_errors=False, interval_to_collapse_event=5),
+    )
+
+    assert len(res.events) == 1
+    event = res.events[0]
+    assert event.data["count"] == 4
+    timestamps = event.data.get("timestamps", [])
+    assert len(timestamps) == 4
+
+    # Test with 100-second interval - should collapse all
+    res = analyzer.analyze_data(
+        dmesg_data,
+        args=DmesgAnalyzerArgs(check_unknown_dmesg_errors=False, interval_to_collapse_event=100),
+    )
+
+    assert len(res.events) == 1
+    event = res.events[0]
+    assert event.data["count"] == 4
+    timestamps = event.data.get("timestamps", [])
+    assert len(timestamps) == 1
+
+
+def test_num_timestamps_pruning(system_info):
+    """Test that timestamp lists are pruned to num_timestamps"""
+    # Create dmesg with many occurrences outside collapse interval
+    dmesg_lines = []
+    for i in range(10):
+        timestamp = f"2026-01-07T10:{i*2:02d}:00,000000-06:00"
+        dmesg_lines.append(f"kern  :err   : {timestamp} oom_kill_process")
+
+    dmesg_data = DmesgData(dmesg_content="\n".join(dmesg_lines))
+
+    analyzer = DmesgAnalyzer(system_info=system_info)
+
+    res = analyzer.analyze_data(
+        dmesg_data,
+        args=DmesgAnalyzerArgs(
+            check_unknown_dmesg_errors=False, num_timestamps=3, interval_to_collapse_event=60
+        ),
+    )
+
+    assert len(res.events) == 1
+    event = res.events[0]
+    assert event.data["count"] == 10
+
+    # Should keep first 3 and last 3 timestamps
+    timestamps = event.data.get("timestamps", [])
+    assert len(timestamps) == 6
+    assert "10:00:00" in timestamps[0]
+    assert "10:02:00" in timestamps[1]
+    assert "10:04:00" in timestamps[2]
+    assert "10:12:00" in timestamps[3]
+    assert "10:14:00" in timestamps[4]
+    assert "10:16:00" in timestamps[5]
+
+
+def test_custom_regex_with_event_collapsing(system_info):
+    """Test that custom regex works correctly with event collapsing"""
+    dmesg_data = DmesgData(
+        dmesg_content=(
+            "kern  :err   : 2026-01-07T10:00:00,000000-06:00 my_custom_driver_error\n"
+            "kern  :err   : 2026-01-07T10:00:10,000000-06:00 my_custom_driver_error\n"
+            "kern  :err   : 2026-01-07T10:00:20,000000-06:00 my_custom_driver_error\n"
+            "kern  :err   : 2026-01-07T10:02:00,000000-06:00 my_custom_driver_error\n"
+        )
+    )
+
+    custom_regex = [
+        {
+            "regex": r"my_custom_driver_error",
+            "message": "Custom Driver Error",
+            "event_category": "SW_DRIVER",
+        }
+    ]
+
+    analyzer = DmesgAnalyzer(system_info=system_info)
+    res = analyzer.analyze_data(
+        dmesg_data,
+        args=DmesgAnalyzerArgs(
+            check_unknown_dmesg_errors=False, interval_to_collapse_event=60, num_timestamps=2
+        ),
+        error_regex=custom_regex,
+    )
+
+    assert len(res.events) == 1
+    event = res.events[0]
+    assert event.description == "Custom Driver Error"
+    assert event.data["count"] == 4
+    assert event.category == "SW_DRIVER"
+
+    timestamps = event.data.get("timestamps", [])
+    assert len(timestamps) == 2
+    assert "10:00:00" in timestamps[0]
+    assert "10:02:00" in timestamps[1]
+
+
+def test_multiple_error_types_with_collapsing(system_info):
+    """Test that different error types are collapsed independently"""
+    dmesg_data = DmesgData(
+        dmesg_content=(
+            "kern  :err   : 2026-01-07T10:00:00,000000-06:00 oom_kill_process\n"
+            "kern  :err   : 2026-01-07T10:00:10,000000-06:00 IO_PAGE_FAULT\n"
+            "kern  :err   : 2026-01-07T10:00:20,000000-06:00 oom_kill_process\n"
+            "kern  :err   : 2026-01-07T10:00:30,000000-06:00 IO_PAGE_FAULT\n"
+            "kern  :err   : 2026-01-07T10:01:30,000000-06:00 oom_kill_process\n"
+            "kern  :err   : 2026-01-07T10:01:40,000000-06:00 IO_PAGE_FAULT\n"
+        )
+    )
+
+    analyzer = DmesgAnalyzer(system_info=system_info)
+    res = analyzer.analyze_data(
+        dmesg_data,
+        args=DmesgAnalyzerArgs(check_unknown_dmesg_errors=False, interval_to_collapse_event=60),
+    )
+
+    assert len(res.events) == 2
+
+    oom_events = [e for e in res.events if e.description == "Out of memory error"]
+    io_fault_events = [e for e in res.events if e.description == "I/O Page Fault"]
+
+    assert len(oom_events) == 1
+    assert len(io_fault_events) == 1
+
+    assert oom_events[0].data["count"] == 3
+    assert io_fault_events[0].data["count"] == 3
+
+    oom_timestamps = oom_events[0].data.get("timestamps", [])
+    io_timestamps = io_fault_events[0].data.get("timestamps", [])
+
+    assert len(oom_timestamps) == 2
+    assert len(io_timestamps) == 2
+
+
+def test_custom_regex_empty_list(system_info):
+    """Test that empty custom regex list doesn't break analysis"""
+    dmesg_data = DmesgData(
+        dmesg_content="kern  :err   : 2026-01-07T10:00:00,000000-06:00 oom_kill_process\n"
+    )
+
+    analyzer = DmesgAnalyzer(system_info=system_info)
+    res = analyzer.analyze_data(
+        dmesg_data, args=DmesgAnalyzerArgs(check_unknown_dmesg_errors=False), error_regex=[]
+    )
+
+    assert len(res.events) == 1
+    assert res.events[0].description == "Out of memory error"
+
+
+def test_custom_regex_with_multiline_pattern(system_info):
+    """Test custom regex with multiline patterns"""
+    dmesg_data = DmesgData(
+        dmesg_content=(
+            "kern  :err   : 2026-01-07T10:00:00,000000-06:00 START_ERROR_BLOCK\n"
+            "kern  :err   : 2026-01-07T10:00:01,000000-06:00 error_detail_line1\n"
+            "kern  :err   : 2026-01-07T10:00:02,000000-06:00 error_detail_line2\n"
+            "kern  :err   : 2026-01-07T10:00:03,000000-06:00 END_ERROR_BLOCK\n"
+        )
+    )
+
+    custom_regex = [
+        {
+            "regex": r"(START_ERROR_BLOCK.*?)(?:END_ERROR_BLOCK)",
+            "message": "Multiline Error Block",
+            "event_category": "SW_DRIVER",
+        }
+    ]
+
+    analyzer = DmesgAnalyzer(system_info=system_info)
+    res = analyzer.analyze_data(
+        dmesg_data,
+        args=DmesgAnalyzerArgs(check_unknown_dmesg_errors=False),
+        error_regex=custom_regex,
+    )
+
+    assert len(res.events) >= 1
+    multiline_events = [e for e in res.events if e.description == "Multiline Error Block"]
+    assert len(multiline_events) >= 1
