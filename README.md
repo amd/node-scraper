@@ -247,7 +247,7 @@ This would produce the following config:
 Instead of collecting dmesg from the system, you can analyze a pre-existing dmesg log file using the `--data` argument:
 
 ```sh
-node-scraper --plugin-configs DmesgPlugin --data /path/to/dmesg.log run-plugins
+node-scraper --run-plugins DmesgPlugin --data /path/to/dmesg.log --collection False
 ```
 
 This will skip the collection phase and directly analyze the provided dmesg.log file.
