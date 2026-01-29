@@ -77,13 +77,11 @@ class KernelAnalyzer(DataAnalyzer[KernelDataModel, KernelAnalyzerArgs]):
                 self.result.status = ExecutionStatus.OK
                 return self.result
 
-        self.result.message = (
-            f"Kernel mismatch! Expected: {args.exp_kernel}, actual: {data.kernel_version}"
-        )
+        self.result.message = "Kernel mismatch!"
         self.result.status = ExecutionStatus.ERROR
         self._log_event(
             category=EventCategory.OS,
-            description=f"{self.result.message}",
+            description=f"Kernel mismatch! Expected: {args.exp_kernel}, actual: {data.kernel_version}",
             data={"expected": args.exp_kernel, "actual": data.kernel_version},
             priority=EventPriority.CRITICAL,
             console_log=True,
