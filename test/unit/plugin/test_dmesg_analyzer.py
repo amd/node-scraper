@@ -24,6 +24,7 @@
 #
 ###############################################################################
 import datetime
+import pathlib
 
 from nodescraper.enums.eventpriority import EventPriority
 from nodescraper.enums.executionstatus import ExecutionStatus
@@ -279,3 +280,191 @@ def test_aca(system_info):
     assert len(res.events) == 1
     assert res.events[0].description == "ACA Error"
     assert res.events[0].priority == EventPriority.ERROR
+
+
+def test_ras_poison_errors(system_info):
+    dmesg_data = DmesgData(
+        dmesg_content=(
+            "kern  :err   : 2024-11-24T17:53:23,028841-06:00 amdgpu 0000:68:00.0: {14}poison is consumed by client 12, kick off gpu reset flow\n"
+            "kern  :err   : 2024-11-24T17:53:23,028841-06:00 amdgpu 0000:68:00.0: {15}Poison is created\n"
+            "kern  :info  : 2024-11-24T17:53:24,028841-06:00 Normal log entry\n"
+            "kern  :err   : 2024-11-24T17:53:25,028841-06:00 amdgpu 0000:01:00.0: poison is consumed by client 5, kick off gpu reset flow\n"
+            "kern  :err   : 2024-11-24T17:53:26,028841-06:00 amdgpu 0000:02:00.0: amdgpu: Poison is created\n"
+        )
+    )
+
+    analyzer = DmesgAnalyzer(system_info=system_info)
+    res = analyzer.analyze_data(
+        dmesg_data, args=DmesgAnalyzerArgs(check_unknown_dmesg_errors=False)
+    )
+
+    assert res.status == ExecutionStatus.ERROR
+    assert len(res.events) == 4
+
+    poison_consumed_events = [e for e in res.events if e.description == "RAS Poison Consumed"]
+    poison_created_events = [e for e in res.events if e.description == "RAS Poison created"]
+
+    assert len(poison_consumed_events) == 2
+    assert len(poison_created_events) == 2
+
+    for event in res.events:
+        assert event.priority == EventPriority.ERROR
+        assert event.category == "RAS"
+
+
+def test_bad_page_threshold(system_info):
+    dmesg_data = DmesgData(
+        dmesg_content=(
+            "kern  :err   : 2024-11-24T17:53:23,028841-06:00 amdgpu 0000:08:00.0: amdgpu: Saved bad pages 176 reaches threshold value 128\n"
+            "kern  :info  : 2024-11-24T17:53:24,028841-06:00 Normal log entry\n"
+            "kern  :err   : 2024-11-24T17:53:25,028841-06:00 amdgpu: Saved bad pages 200 reaches threshold value 128\n"
+        )
+    )
+
+    analyzer = DmesgAnalyzer(system_info=system_info)
+    res = analyzer.analyze_data(
+        dmesg_data, args=DmesgAnalyzerArgs(check_unknown_dmesg_errors=False)
+    )
+
+    assert res.status == ExecutionStatus.ERROR
+    assert len(res.events) == 2
+
+    for event in res.events:
+        assert event.description == "Bad page threshold exceeded"
+        assert event.priority == EventPriority.ERROR
+        assert event.category == "RAS"
+        match_content = event.data["match_content"]
+        if isinstance(match_content, list):
+            assert "Saved bad pages" in match_content[0]
+        else:
+            assert "Saved bad pages" in match_content
+
+
+def test_apei_hardware_error(system_info):
+    dmesg_data = DmesgData(
+        dmesg_content=(
+            "kern  :err   : 2024-09-21T06:12:53,907220-05:00 {1}[Hardware Error]: Hardware error from APEI Generic Hardware Error Source: 1\n"
+            "kern  :err   : 2024-09-21T06:12:53,907220-05:00 {1}[Hardware Error]: event severity: recoverable\n"
+            "kern  :err   : 2024-09-21T06:12:53,907220-05:00 {1}[Hardware Error]:  Error 0, type: recoverable\n"
+            "kern  :err   : 2024-09-21T06:12:53,907220-05:00 {1}[Hardware Error]:   section_type: PCIe error\n"
+            "kern  :err   : 2024-09-21T06:12:53,907220-05:00 {1}[Hardware Error]:   port_type: 4, root port\n"
+            "kern  :err   : 2024-09-21T06:12:53,907220-05:00 {1}[Hardware Error]:   version: 3.0\n"
+            "kern  :err   : 2024-09-21T06:12:53,907220-05:00 {1}[Hardware Error]:   command: 0x0547, status: 0x4010\n"
+            "kern  :err   : 2024-09-21T06:12:53,907220-05:00 {1}[Hardware Error]:   device_id: 0000:54:01.0\n"
+            "kern  :err   : 2024-09-21T06:12:53,907220-05:00 {1}[Hardware Error]:   slot: 19\n"
+            "kern  :err   : 2024-09-21T06:12:53,907220-05:00 {1}[Hardware Error]:   secondary_bus: 0x55\n"
+            "kern  :err   : 2024-09-21T06:12:53,907220-05:00 {1}[Hardware Error]:   vendor_id: 0x8086, device_id: 0x352a\n"
+            "kern  :err   : 2024-09-21T06:12:53,907220-05:00 {1}[Hardware Error]:   class_code: 060400\n"
+            "kern  :err   : 2024-09-21T06:12:53,907220-05:00 {1}[Hardware Error]:   bridge: secondary_status: 0x2000, control: 0x0003\n"
+            "kern  :info  : 2024-09-21T06:12:54,000000-05:00 Normal log entry\n"
+        )
+    )
+
+    analyzer = DmesgAnalyzer(system_info=system_info)
+    res = analyzer.analyze_data(
+        dmesg_data, args=DmesgAnalyzerArgs(check_unknown_dmesg_errors=False)
+    )
+
+    assert res.status == ExecutionStatus.ERROR
+    assert len(res.events) == 1
+
+    event = res.events[0]
+    assert event.description == "RAS Hardware Error"
+    assert event.priority == EventPriority.ERROR
+    assert event.category == "RAS"
+    match_content = event.data["match_content"]
+    if isinstance(match_content, list):
+        assert any(
+            "Hardware error from APEI Generic Hardware Error Source" in line
+            for line in match_content
+        )
+    else:
+        assert "Hardware error from APEI Generic Hardware Error Source" in match_content
+
+
+def test_error_address_pa(system_info):
+    dmesg_data = DmesgData(
+        dmesg_content=(
+            "kern  :err   : 2024-11-24T17:53:23,028841-06:00 amdgpu 0000:08:00.0: amdgpu: Error Address(PA):0x60d1a4480  Row:0x1834 Col:0x0  Bank:0x7 Channel:0x74\n"
+            "kern  :info  : 2024-11-24T17:53:24,028841-06:00 Normal log entry\n"
+            "kern  :err   : 2024-11-24T17:53:25,028841-06:00 Error Address(PA):0x12345678  Row:0x100 Col:0x5  Bank:0x2 Channel:0x10\n"
+        )
+    )
+
+    analyzer = DmesgAnalyzer(system_info=system_info)
+    res = analyzer.analyze_data(
+        dmesg_data, args=DmesgAnalyzerArgs(check_unknown_dmesg_errors=False)
+    )
+
+    assert res.status == ExecutionStatus.ERROR
+    assert len(res.events) == 2
+
+    for event in res.events:
+        assert event.description == "Error Address"
+        assert event.priority == EventPriority.ERROR
+        assert event.category == "RAS"
+        match_content = event.data["match_content"]
+        if isinstance(match_content, list):
+            content_str = " ".join(match_content)
+        else:
+            content_str = match_content
+        assert "Error Address(PA)" in content_str
+        assert "Row:" in content_str
+
+
+def test_fixture_file_ras_detection(system_info):
+    fixture_path = (
+        pathlib.Path(__file__).parent.parent.parent / "functional" / "fixtures" / "dmesg_sample.log"
+    )
+    with open(fixture_path, "r") as f:
+        fixture_content = f.read()
+
+    dmesg_data = DmesgData(dmesg_content=fixture_content)
+    analyzer = DmesgAnalyzer(system_info=system_info)
+    res = analyzer.analyze_data(
+        dmesg_data, args=DmesgAnalyzerArgs(check_unknown_dmesg_errors=False)
+    )
+
+    assert res.status == ExecutionStatus.ERROR
+
+    descriptions = [e.description for e in res.events]
+    assert len(res.events) >= 6, f"Expected at least 6 errors, found {len(res.events)}"
+    assert "RAS Poison Consumed" in descriptions
+    assert "RAS Poison created" in descriptions
+    assert "Bad page threshold exceeded" in descriptions
+    assert "RAS Hardware Error" in descriptions
+    assert "Error Address" in descriptions
+    assert "ACA Error" in descriptions
+
+
+def test_combined_ras_errors(system_info):
+    dmesg_data = DmesgData(
+        dmesg_content=(
+            "kern  :err   : 2024-11-24T17:53:23,028841-06:00 amdgpu 0000:68:00.0: {14}poison is consumed by client 12, kick off gpu reset flow\n"
+            "kern  :err   : 2024-11-24T17:53:23,028841-06:00 amdgpu 0000:68:00.0: {15}Poison is created\n"
+            "kern  :err   : 2024-11-24T17:53:23,028841-06:00 amdgpu 0000:08:00.0: amdgpu: Saved bad pages 176 reaches threshold value 128\n"
+            "kern  :err   : 2024-09-21T06:12:53,907220-05:00 {1}[Hardware Error]: Hardware error from APEI Generic Hardware Error Source: 1\n"
+            "kern  :err   : 2024-09-21T06:12:53,907220-05:00 {1}[Hardware Error]: event severity: recoverable\n"
+            "kern  :err   : 2024-09-21T06:12:53,907220-05:00 {1}[Hardware Error]:  Error 0, type: recoverable\n"
+            "kern  :err   : 2024-11-24T17:53:23,028841-06:00 amdgpu 0000:08:00.0: amdgpu: Error Address(PA):0x60d1a4480  Row:0x1834 Col:0x0  Bank:0x7 Channel:0x74\n"
+        )
+    )
+
+    analyzer = DmesgAnalyzer(system_info=system_info)
+    res = analyzer.analyze_data(
+        dmesg_data, args=DmesgAnalyzerArgs(check_unknown_dmesg_errors=False)
+    )
+
+    assert res.status == ExecutionStatus.ERROR
+    assert len(res.events) == 5
+
+    descriptions = [e.description for e in res.events]
+    assert "RAS Poison Consumed" in descriptions
+    assert "RAS Poison created" in descriptions
+    assert "Bad page threshold exceeded" in descriptions
+    assert "RAS Hardware Error" in descriptions
+    assert "Error Address" in descriptions
+
+    for event in res.events:
+        assert event.category == "RAS"
+        assert event.priority == EventPriority.ERROR

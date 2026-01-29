@@ -41,3 +41,31 @@ kern  :info  : 2026-01-07T10:01:15,890123-06:00 NFSD: starting 90-second grace p
 kern  :info  : 2026-01-07T10:01:20,123456-06:00 Bluetooth: BNEP (Ethernet Emulation) ver 1.3
 kern  :info  : 2026-01-07T10:01:25,234567-06:00 Bluetooth: BNEP filters: protocol multicast
 kern  :info  : 2026-01-07T10:01:30,345678-06:00 System operational - all services started successfully
+kern  :err   : 2026-01-07T10:02:00,123456-06:00 amdgpu 0000:01:00.0: {14}poison is consumed by client 12, kick off gpu reset flow
+kern  :err   : 2026-01-07T10:02:00,234567-06:00 amdgpu 0000:01:00.0: {15}Poison is created
+kern  :err   : 2026-01-07T10:02:01,345678-06:00 amdgpu 0000:02:00.0: amdgpu: Saved bad pages 150 reaches threshold value 128
+kern  :err   : 2026-01-07T10:03:00,456789-06:00 {1}[Hardware Error]: Hardware error from APEI Generic Hardware Error Source: 1
+kern  :err   : 2026-01-07T10:03:00,567890-06:00 {1}[Hardware Error]: event severity: recoverable
+kern  :err   : 2026-01-07T10:03:00,678901-06:00 {1}[Hardware Error]:  Error 0, type: recoverable
+kern  :err   : 2026-01-07T10:03:00,789012-06:00 {1}[Hardware Error]:   section_type: PCIe error
+kern  :err   : 2026-01-07T10:03:00,890123-06:00 {1}[Hardware Error]:   port_type: 4, root port
+kern  :err   : 2026-01-07T10:03:01,123456-06:00 {1}[Hardware Error]:   version: 3.0
+kern  :err   : 2026-01-07T10:03:01,234567-06:00 {1}[Hardware Error]:   command: 0x0547, status: 0x4010
+kern  :err   : 2026-01-07T10:03:01,345678-06:00 {1}[Hardware Error]:   device_id: 0000:11:01.0
+kern  :err   : 2026-01-07T10:03:01,456789-06:00 {1}[Hardware Error]:   slot: 5
+kern  :err   : 2026-01-07T10:03:01,567890-06:00 {1}[Hardware Error]:   secondary_bus: 0x12
+kern  :err   : 2026-01-07T10:03:01,678901-06:00 {1}[Hardware Error]:   vendor_id: 0x1002, device_id: 0x74a1
+kern  :err   : 2026-01-07T10:03:01,789012-06:00 {1}[Hardware Error]:   class_code: 060400
+kern  :err   : 2026-01-07T10:03:01,890123-06:00 {1}[Hardware Error]:   bridge: secondary_status: 0x2000, control: 0x0003
+kern  :err   : 2026-01-07T10:04:00,123456-06:00 amdgpu 0000:02:00.0: amdgpu: Error Address(PA):0x12345000  Row:0x1000 Col:0x0  Bank:0x5 Channel:0x10
+kern  :err   : 2026-01-07T10:05:00,123456-06:00 amdgpu 0000:03:00.0: {1}[Hardware Error]: Accelerator Check Architecture events logged
+kern  :err   : 2026-01-07T10:05:00,234567-06:00 amdgpu 0000:03:00.0: {1}[Hardware Error]: ACA[01/01].CONTROL=0x00000000000003ff
+kern  :err   : 2026-01-07T10:05:00,345678-06:00 amdgpu 0000:03:00.0: {1}[Hardware Error]: ACA[01/01].STATUS=0x98000800003e0000
+kern  :err   : 2026-01-07T10:05:00,456789-06:00 amdgpu 0000:03:00.0: {1}[Hardware Error]: ACA[01/01].ADDR=0x0000000000000000
+kern  :err   : 2026-01-07T10:05:00,567890-06:00 amdgpu 0000:03:00.0: {1}[Hardware Error]: ACA[01/01].MISC=0xd008000000000000
+kern  :err   : 2026-01-07T10:05:00,678901-06:00 amdgpu 0000:03:00.0: {1}[Hardware Error]: ACA[01/01].CONFIG=0x00000021000001fb
+kern  :err   : 2026-01-07T10:05:00,789012-06:00 amdgpu 0000:03:00.0: {1}[Hardware Error]: ACA[01/01].IPID=0x0001100138430401
+kern  :err   : 2026-01-07T10:05:00,890123-06:00 amdgpu 0000:03:00.0: {1}[Hardware Error]: ACA[01/01].SYND=0x0000000000000000
+kern  :err   : 2026-01-07T10:05:01,123456-06:00 amdgpu 0000:03:00.0: {1}[Hardware Error]: ACA[01/01].DESTAT=0x0000000000000000
+kern  :err   : 2026-01-07T10:05:01,234567-06:00 amdgpu 0000:03:00.0: {1}[Hardware Error]: ACA[01/01].DEADDR=0x0000000000000000
+kern  :err   : 2026-01-07T10:05:01,345678-06:00 amdgpu 0000:03:00.0: {1}[Hardware Error]: ACA[01/01].CONTROL_MASK=0x0000000000000000
