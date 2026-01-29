@@ -244,7 +244,7 @@ This would produce the following config:
 The 'summary' subcommand can be used to combine results from multiple runs of node-scraper to a
 single summary.csv file. Sample run:
 ```sh
-node-scraper summary --search_path /<path_to_node-scraper_logs>
+node-scraper summary --search-path /<path_to_node-scraper_logs>
 ```
 This will generate a new file '/<path_to_node-scraper_logs>/summary.csv' file. This file will
 contain the results from all 'nodescraper.csv' files from '/<path_to_node-scarper_logs>'.
