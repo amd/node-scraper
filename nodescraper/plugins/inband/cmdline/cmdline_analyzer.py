@@ -23,13 +23,21 @@
 # SOFTWARE.
 #
 ###############################################################################
-from typing import Optional
+from typing import List, Optional
+
+from pydantic import ValidationError
 
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
 from nodescraper.interfaces import DataAnalyzer
 from nodescraper.models import TaskResult
 
 from .analyzer_args import CmdlineAnalyzerArgs
+from .cmdlineconfig import (
+    CmdlineConflictError,
+    ConflictType,
+    ParameterValueConflict,
+    RequiredVsBannedConflict,
+)
 from .cmdlinedata import CmdlineDataModel
 
 
@@ -38,7 +46,7 @@ class CmdlineAnalyzer(DataAnalyzer[CmdlineDataModel, CmdlineAnalyzerArgs]):
 
     DATA_MODEL = CmdlineDataModel
 
-    def _compare_cmdline(self, cmdline: str, required_cmdline: list, banned_cmdline: list) -> bool:
+    def _compare_cmdline(self, cmdline: str, required_cmdline: List, banned_cmdline: List) -> bool:
         """Compare the kernel cmdline against required and banned cmdline arguments.
 
         Args:
@@ -92,9 +100,66 @@ class CmdlineAnalyzer(DataAnalyzer[CmdlineDataModel, CmdlineAnalyzerArgs]):
             self.result.status = ExecutionStatus.NOT_RAN
             return self.result
 
+        # Get OS and platform info if available
+        os_id = getattr(self, "os_id", None) if hasattr(self, "os_id") else None
+        platform = (
+            getattr(self.system_info, "platform", None) if hasattr(self, "system_info") else None
+        )
+
+        try:
+            # Get effective configuration based on OS and platform overrides
+            # This performs runtime validation with the actual OS/platform context
+            effective_required, effective_banned = args.get_effective_config(os_id, platform)
+
+        except ValidationError as e:
+            # Pydantic validation failed - configuration is invalid
+            self.result.status = ExecutionStatus.ERROR
+            self.result.message = "Invalid CmdlineAnalyzer configuration"
+
+            # Log all validation errors in a single event
+            self._log_event(
+                category=EventCategory.RUNTIME,
+                description="Pydantic validation errors on configuration",
+                data={"errors": e.errors(include_url=False)},
+                priority=EventPriority.CRITICAL,
+                console_log=True,
+            )
+            return self.result
+
+        except CmdlineConflictError as e:
+            # Runtime validation failed (conflicts detected)
+            self.result.status = ExecutionStatus.ERROR
+            self.result.message = str(e)
+
+            # Build conflict data from structured exception
+            conflict_data = {
+                "error_type": "configuration_conflict",
+                "conflict_type": e.conflict_type.value,
+            }
+
+            # Add specific details based on conflict type
+            if e.conflict_type == ConflictType.REQUIRED_VS_BANNED:
+                assert isinstance(e.details, RequiredVsBannedConflict)
+                conflict_data["conflicting_parameters"] = e.details.conflicting_parameters
+                conflict_data["source"] = e.details.source
+            elif e.conflict_type == ConflictType.PARAMETER_VALUE_CONFLICT:
+                assert isinstance(e.details, ParameterValueConflict)
+                conflict_data["parameter"] = e.details.parameter
+                conflict_data["conflicting_values"] = e.details.conflicting_values
+                conflict_data["source"] = e.details.source
+
+            self._log_event(
+                category=EventCategory.RUNTIME,
+                description="CmdlineAnalyzer configuration conflict detected",
+                priority=EventPriority.ERROR,
+                data=conflict_data,
+                console_log=True,
+            )
+            return self.result
+
         # check if any of the cmdline defined in the list match the actual kernel cmdline
         check, missing_required, found_banned = self._compare_cmdline(
-            data.cmdline, args.required_cmdline, args.banned_cmdline
+            data.cmdline, effective_required, effective_banned
         )
 
         if check:
