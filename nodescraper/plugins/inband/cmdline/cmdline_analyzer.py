@@ -167,11 +167,11 @@ class CmdlineAnalyzer(DataAnalyzer[CmdlineDataModel, CmdlineAnalyzerArgs]):
             self.result.status = ExecutionStatus.OK
             return self.result
 
-        self.result.message = f"Illegal kernel cmdline, found_banned: {found_banned}, missing required: {missing_required}"
+        self.result.message = "Illegal kernel cmdline"
         self.result.status = ExecutionStatus.ERROR
         self._log_event(
             category=EventCategory.OS,
-            description=self.result.message,
+            description=f"Illegal kernel cmdline, found_banned: {found_banned}, missing required: {missing_required}",
             priority=EventPriority.CRITICAL,
             console_log=True,
         )

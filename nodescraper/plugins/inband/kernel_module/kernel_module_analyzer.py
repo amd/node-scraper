@@ -146,24 +146,22 @@ class KernelModuleAnalyzer(DataAnalyzer[KernelModuleDataModel, KernelModuleAnaly
             except re.error:
                 self._log_event(
                     category=EventCategory.RUNTIME,
-                    description="KernelModule regex is invalid",
+                    description=f"KernelModule regex is invalid. Regex: {args.regex_filter}",
                     data={"regex_filters": {args.regex_filter}},
                     priority=EventPriority.ERROR,
                 )
-                self.result.message = (
-                    f"Kernel modules failed to match regex. Regex: {args.regex_filter}"
-                )
+                self.result.message = "Kernel modules failed to match regex"
                 self.result.status = ExecutionStatus.ERROR
                 return self.result
 
             if unmatched_pattern:
                 self._log_event(
                     category=EventCategory.RUNTIME,
-                    description="KernelModules did not match all patterns",
+                    description=f"KernelModules did not match all patterns. Unmatched patterns: {unmatched_pattern}",
                     data={"unmatched_pattern: ": unmatched_pattern},
                     priority=EventPriority.INFO,
                 )
-                self.result.message = f"Kernel modules failed to match every pattern. Unmatched patterns: {unmatched_pattern}"
+                self.result.message = "Kernel modules failed to match every pattern"
                 self.result.status = ExecutionStatus.ERROR
                 return self.result
 
@@ -184,11 +182,11 @@ class KernelModuleAnalyzer(DataAnalyzer[KernelModuleDataModel, KernelModuleAnaly
             if not filtered_modules and not_matched:
                 self._log_event(
                     category=EventCategory.RUNTIME,
-                    description="KernelModules: no modules matched",
+                    description=f"KernelModules: no modules matched. Not matched: {not_matched}",
                     data=args.kernel_modules,
                     priority=EventPriority.ERROR,
                 )
-                self.result.message = f"Kernel modules not matched: {not_matched}"
+                self.result.message = "Kernel modules not matched"
                 self.result.status = ExecutionStatus.ERROR
                 return self.result
             # some modules matched
@@ -196,11 +194,11 @@ class KernelModuleAnalyzer(DataAnalyzer[KernelModuleDataModel, KernelModuleAnaly
 
                 self._log_event(
                     category=EventCategory.RUNTIME,
-                    description="KernelModules: not all modules matched",
+                    description=f"KernelModules: not all modules matched. Not matched: {not_matched}",
                     data=not_matched,
                     priority=EventPriority.ERROR,
                 )
-                self.result.message = f"Kernel modules not matched: {not_matched}"
+                self.result.message = "Kernel modules not matched"
                 self.result.status = ExecutionStatus.ERROR
                 return self.result
         else:
