@@ -99,6 +99,8 @@ class DkmsAnalyzer(DataAnalyzer[DkmsDataModel, DkmsAnalyzerArgs]):
 
         if error_state:
             self.result.status = ExecutionStatus.ERROR
-            self.result.message = "DKMS data mismatch"
+            self.result.message = (
+                f"DKMS data mismatch. \nActual: {actual_values}.\nExpected: {expected_values}"
+            )
 
         return self.result
