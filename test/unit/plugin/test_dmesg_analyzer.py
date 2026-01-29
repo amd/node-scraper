@@ -497,8 +497,7 @@ def test_custom_regex_dict_passed_to_analyzer(system_info):
     analyzer = DmesgAnalyzer(system_info=system_info)
     res = analyzer.analyze_data(
         dmesg_data,
-        args=DmesgAnalyzerArgs(check_unknown_dmesg_errors=False),
-        error_regex=custom_regex,
+        args=DmesgAnalyzerArgs(check_unknown_dmesg_errors=False, error_regex=custom_regex),
     )
 
     assert res.status == ExecutionStatus.ERROR
@@ -544,7 +543,7 @@ def test_event_collapsing_within_interval(system_info):
     assert event.data["count"] == 5
 
     timestamps = event.data.get("timestamps", [])
-    assert len(timestamps) == 3  # First, one at 2min, one at 4min
+    assert len(timestamps) == 3
 
 
 def test_event_collapsing_with_different_intervals(system_info):
@@ -571,7 +570,6 @@ def test_event_collapsing_with_different_intervals(system_info):
     timestamps = event.data.get("timestamps", [])
     assert len(timestamps) == 4
 
-    # Test with 100-second interval - should collapse all
     res = analyzer.analyze_data(
         dmesg_data,
         args=DmesgAnalyzerArgs(check_unknown_dmesg_errors=False, interval_to_collapse_event=100),
@@ -586,7 +584,6 @@ def test_event_collapsing_with_different_intervals(system_info):
 
 def test_num_timestamps_pruning(system_info):
     """Test that timestamp lists are pruned to num_timestamps"""
-    # Create dmesg with many occurrences outside collapse interval
     dmesg_lines = []
     for i in range(10):
         timestamp = f"2026-01-07T10:{i*2:02d}:00,000000-06:00"
@@ -607,7 +604,6 @@ def test_num_timestamps_pruning(system_info):
     event = res.events[0]
     assert event.data["count"] == 10
 
-    # Should keep first 3 and last 3 timestamps
     timestamps = event.data.get("timestamps", [])
     assert len(timestamps) == 6
     assert "10:00:00" in timestamps[0]
@@ -641,9 +637,11 @@ def test_custom_regex_with_event_collapsing(system_info):
     res = analyzer.analyze_data(
         dmesg_data,
         args=DmesgAnalyzerArgs(
-            check_unknown_dmesg_errors=False, interval_to_collapse_event=60, num_timestamps=2
+            check_unknown_dmesg_errors=False,
+            interval_to_collapse_event=60,
+            num_timestamps=2,
+            error_regex=custom_regex,
         ),
-        error_regex=custom_regex,
     )
 
     assert len(res.events) == 1
@@ -703,7 +701,7 @@ def test_custom_regex_empty_list(system_info):
 
     analyzer = DmesgAnalyzer(system_info=system_info)
     res = analyzer.analyze_data(
-        dmesg_data, args=DmesgAnalyzerArgs(check_unknown_dmesg_errors=False), error_regex=[]
+        dmesg_data, args=DmesgAnalyzerArgs(check_unknown_dmesg_errors=False, error_regex=[])
     )
 
     assert len(res.events) == 1
@@ -732,8 +730,7 @@ def test_custom_regex_with_multiline_pattern(system_info):
     analyzer = DmesgAnalyzer(system_info=system_info)
     res = analyzer.analyze_data(
         dmesg_data,
-        args=DmesgAnalyzerArgs(check_unknown_dmesg_errors=False),
-        error_regex=custom_regex,
+        args=DmesgAnalyzerArgs(check_unknown_dmesg_errors=False, error_regex=custom_regex),
     )
 
     assert len(res.events) >= 1

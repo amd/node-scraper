@@ -25,7 +25,7 @@
 ###############################################################################
 import datetime
 import re
-from typing import Optional, Union
+from typing import Optional
 
 from nodescraper.base.regexanalyzer import ErrorRegex, RegexAnalyzer
 from nodescraper.connection.inband import TextFileArtifact
@@ -539,14 +539,12 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
         self,
         data: DmesgData,
         args: Optional[DmesgAnalyzerArgs] = None,
-        error_regex: Optional[Union[list[ErrorRegex], list[dict]]] = None,
     ) -> TaskResult:
         """Analyze dmesg data for errors
 
         Args:
             data (DmesgData): dmesg data to analyze
             args (Optional[DmesgAnalyzerArgs], optional): dmesg analysis arguments. Defaults to None.
-            error_regex (Optional[Union[list[ErrorRegex], list[dict]]]): custom error regexes to extend ERROR_REGEX
 
         Returns:
             TaskResult: The result of the analysis containing status and message.
@@ -555,7 +553,7 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
         if not args:
             args = DmesgAnalyzerArgs()
 
-        final_error_regex = self._convert_and_extend_error_regex(error_regex, self.ERROR_REGEX)
+        final_error_regex = self._convert_and_extend_error_regex(args.error_regex, self.ERROR_REGEX)
 
         if args.analysis_range_start or args.analysis_range_end:
             self.logger.info(

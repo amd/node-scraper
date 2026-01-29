@@ -23,8 +23,9 @@
 # SOFTWARE.
 #
 ###############################################################################
-from typing import Optional
+from typing import Optional, Union
 
+from nodescraper.base.regexanalyzer import ErrorRegex
 from nodescraper.models import TimeRangeAnalysisArgs
 
 
@@ -33,3 +34,4 @@ class DmesgAnalyzerArgs(TimeRangeAnalysisArgs):
     exclude_category: Optional[set[str]] = None
     interval_to_collapse_event: int = 60
     num_timestamps: int = 3
+    error_regex: Optional[Union[list[ErrorRegex], list[dict]]] = None
