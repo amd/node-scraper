@@ -27,9 +27,10 @@ import re
 from typing import Dict, List, Optional, Tuple
 
 from nodescraper.base import InBandDataCollector
-from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
+from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.models import TaskResult
 
+from .collector_args import NetworkCollectorArgs
 from .networkdata import (
     BroadcomNicDevice,
     BroadcomNicQos,
@@ -55,7 +56,7 @@ from .networkdata import (
 )
 
 
-class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
+class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArgs]):
     """Collect network configuration details using ip command"""
 
     DATA_MODEL = NetworkDataModel
@@ -1669,11 +1670,50 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
             uncollected_commands,
         )
 
+    def _check_network_connectivity(self, url: str) -> bool:
+        """Check network connectivity by pinging a URL.
+
+        Args:
+            url: URL or hostname to ping
+
+        Returns:
+            bool: True if network is accessible, False otherwise
+        """
+        cmd = "ping"
+
+        # Determine ping options based on OS
+        ping_option = "-c 1" if self.system_info.os_family == OSFamily.LINUX else "-n 1"
+
+        # Run ping command
+        result = self._run_sut_cmd(f"{cmd} {url} {ping_option}")
+
+        network_accessible = result.exit_code == 0
+
+        if network_accessible:
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description="System networking is up",
+                data={"url": url, "accessible": network_accessible},
+                priority=EventPriority.INFO,
+            )
+        else:
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description=f"{cmd} to {url} failed!",
+                data={"url": url, "accessible": network_accessible},
+                priority=EventPriority.ERROR,
+            )
+
+        return network_accessible
+
     def collect_data(
         self,
-        args=None,
+        args: Optional[NetworkCollectorArgs] = None,
     ) -> Tuple[TaskResult, Optional[NetworkDataModel]]:
         """Collect network configuration from the system.
+
+        Args:
+            args: Optional NetworkCollectorArgs with URL for network connectivity check
 
         Returns:
             Tuple[TaskResult, Optional[NetworkDataModel]]: tuple containing the task result
@@ -1695,6 +1735,11 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
         pensando_rdma_statistics: List[PensandoNicRdmaStatistics] = []
         pensando_version_host_software: Optional[PensandoNicVersionHostSoftware] = None
         pensando_version_firmware: List[PensandoNicVersionFirmware] = []
+        network_accessible: Optional[bool] = None
+
+        # Check network connectivity if URL is provided
+        if args and args.url:
+            network_accessible = self._check_network_connectivity(args.url)
 
         # Collect interface/address information
         res_addr = self._run_sut_cmd(self.CMD_ADDR)
@@ -1823,6 +1868,7 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
             pensando_nic_rdma_statistics=pensando_rdma_statistics,
             pensando_nic_version_host_software=pensando_version_host_software,
             pensando_nic_version_firmware=pensando_version_firmware,
+            accessible=network_accessible,
         )
         self.result.status = ExecutionStatus.OK
         return self.result, network_data
