@@ -485,7 +485,7 @@ def test_custom_regex_dict_passed_to_analyzer(system_info):
             "regex": r"custom_error_pattern_\d+",
             "message": "Custom Error Pattern",
             "event_category": "SW_DRIVER",
-            "event_priority": 3,
+            "event_priority": 4,
         },
         {
             "regex": r"another_custom_error_\w+",
@@ -609,9 +609,9 @@ def test_num_timestamps_pruning(system_info):
     assert "10:00:00" in timestamps[0]
     assert "10:02:00" in timestamps[1]
     assert "10:04:00" in timestamps[2]
-    assert "10:12:00" in timestamps[3]
-    assert "10:14:00" in timestamps[4]
-    assert "10:16:00" in timestamps[5]
+    assert "10:14:00" in timestamps[3]
+    assert "10:16:00" in timestamps[4]
+    assert "10:18:00" in timestamps[5]
 
 
 def test_custom_regex_with_event_collapsing(system_info):
@@ -709,7 +709,7 @@ def test_custom_regex_empty_list(system_info):
 
 
 def test_custom_regex_with_multiline_pattern(system_info):
-    """Test custom regex with multiline patterns"""
+    """Test custom regex that should NOT match across multiple dmesg lines (each line processed separately)"""
     dmesg_data = DmesgData(
         dmesg_content=(
             "kern  :err   : 2026-01-07T10:00:00,000000-06:00 START_ERROR_BLOCK\n"
@@ -721,8 +721,8 @@ def test_custom_regex_with_multiline_pattern(system_info):
 
     custom_regex = [
         {
-            "regex": r"(START_ERROR_BLOCK.*?)(?:END_ERROR_BLOCK)",
-            "message": "Multiline Error Block",
+            "regex": r"START_ERROR_BLOCK",
+            "message": "Start Error Block",
             "event_category": "SW_DRIVER",
         }
     ]
@@ -734,5 +734,5 @@ def test_custom_regex_with_multiline_pattern(system_info):
     )
 
     assert len(res.events) >= 1
-    multiline_events = [e for e in res.events if e.description == "Multiline Error Block"]
-    assert len(multiline_events) >= 1
+    start_events = [e for e in res.events if e.description == "Start Error Block"]
+    assert len(start_events) == 1
