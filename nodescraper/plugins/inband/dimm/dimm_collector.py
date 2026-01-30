@@ -23,6 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
+import re
 from typing import Optional
 
 from nodescraper.base import InBandDataCollector
@@ -97,25 +98,27 @@ class DimmCollector(InBandDataCollector[DimmDataModel, DimmCollectorArgs]):
             if res.exit_code == 0:
                 total = 0
                 topology = {}
-                size = None
-                for d in res.stdout.splitlines():
-                    split = d.split()
-                    size = split[2]
-                    key = split[1] + split[2]
-                    if not topology.get(key, None):
-                        topology[key] = 1
-                    else:
-                        topology[key] += 1
-                    num_gb = int(split[1])
-                    total += num_gb
+                size = ""
+                dimm_size_pattern = re.compile(r"Size:\s+(\d+)\s+([A-Za-z]+)")
+                matches = dimm_size_pattern.findall(res.stdout)
+                if matches:
+                    for match in matches:
+                        size = match[1]
+                        total += int(match[0])
+                        key = match[0] + match[1]
+                        if not topology.get(key, None):
+                            topology[key] = 1
+                        else:
+                            topology[key] += 1
                 topology["total"] = total
                 topology["size"] = size
                 total_gb = topology.pop("total")
                 size = topology.pop("size")
-                dimm_str = str(total_gb) + size + " @"
-                for size, count in topology.items():
-                    dimm_str += f" {count} x {size}"
-
+                if total_gb == 0:
+                    dimm_str = "0 GB"
+                else:
+                    dimm_entries = [f"{v} x {k}" for k, v in topology.items()]
+                    dimm_str = f"{total_gb}{size} @ {' '.join(dimm_entries)}"
         if res.exit_code != 0:
             self._log_event(
                 category=EventCategory.OS,

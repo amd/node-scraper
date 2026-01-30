@@ -23,6 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
+import json
 from typing import Optional
 
 from pydantic import ValidationError
@@ -33,7 +34,7 @@ from nodescraper.models import TaskResult
 from nodescraper.utils import get_exception_details
 
 from .collector_args import JournalCollectorArgs
-from .journaldata import JournalData
+from .journaldata import JournalData, JournalJsonEntry
 
 
 class JournalCollector(InBandDataCollector[JournalData, JournalCollectorArgs]):
@@ -42,6 +43,7 @@ class JournalCollector(InBandDataCollector[JournalData, JournalCollectorArgs]):
     SUPPORTED_OS_FAMILY = {OSFamily.LINUX}
     DATA_MODEL = JournalData
     CMD = "journalctl --no-pager --system --output=short-iso"
+    CMD_JSON = "journalctl --no-pager --system --output=json"
 
     def _read_with_journalctl(self, args: Optional[JournalCollectorArgs] = None):
         """Read journal logs using journalctl
@@ -50,11 +52,11 @@ class JournalCollector(InBandDataCollector[JournalData, JournalCollectorArgs]):
             str|None: system journal read
         """
 
-        cmd = "journalctl --no-pager --system --output=short-iso"
+        cmd = self.CMD
         try:
             # safe check for args.boot
             if args is not None and getattr(args, "boot", None):
-                cmd = f"journalctl --no-pager -b {args.boot} --system --output=short-iso"
+                cmd = f"{self.CMD} -b {args.boot}"
 
             res = self._run_sut_cmd(cmd, sudo=True, log_artifact=False, strip=False)
 
@@ -84,6 +86,63 @@ class JournalCollector(InBandDataCollector[JournalData, JournalCollectorArgs]):
 
         return res.stdout
 
+    def _read_with_journalctl_json(
+        self, args: Optional[JournalCollectorArgs] = None
+    ) -> Optional[list[JournalJsonEntry]]:
+        """Read journal logs in JSON format using journalctl
+
+        Returns:
+            list[JournalJsonEntry]|None: system journal read as JSON entries
+        """
+
+        cmd = self.CMD_JSON
+        try:
+            # safe check for args.boot
+            if args is not None and getattr(args, "boot", None):
+                cmd = f"{self.CMD_JSON} -b {args.boot}"
+
+            res = self._run_sut_cmd(cmd, sudo=True, log_artifact=False, strip=False)
+
+        except ValidationError as val_err:
+            self._log_event(
+                category=EventCategory.OS,
+                description="Exception while running journalctl JSON",
+                data=get_exception_details(val_err),
+                priority=EventPriority.ERROR,
+                console_log=True,
+            )
+            return None
+
+        if res.exit_code != 0:
+            self._log_event(
+                category=EventCategory.OS,
+                description="Error reading journalctl JSON",
+                data={"command": res.command, "exit_code": res.exit_code},
+                priority=EventPriority.ERROR,
+                console_log=True,
+            )
+            return None
+
+        # Parse JSON entries
+        json_entries: list[JournalJsonEntry] = []
+        for line in res.stdout.splitlines():
+            if not line.strip():
+                continue
+            try:
+                entry_dict = json.loads(line)
+                json_entries.append(JournalJsonEntry(**entry_dict))
+            except (json.JSONDecodeError, ValidationError) as e:
+                self._log_event(
+                    category=EventCategory.OS,
+                    description="Failed to parse journal JSON entry",
+                    data={"error": str(e), "line": line[:200]},
+                    priority=EventPriority.WARNING,
+                    console_log=False,
+                )
+                continue
+
+        return json_entries
+
     def collect_data(
         self,
         args: Optional[JournalCollectorArgs] = None,
@@ -100,8 +159,13 @@ class JournalCollector(InBandDataCollector[JournalData, JournalCollectorArgs]):
             args = JournalCollectorArgs()
 
         journal_log = self._read_with_journalctl(args)
+        journal_json = self._read_with_journalctl_json(args)
+
         if journal_log:
-            data = JournalData(journal_log=journal_log)
+            data = JournalData(
+                journal_log=journal_log,
+                journal_content_json=journal_json if journal_json else [],
+            )
             self.result.message = self.result.message or "Journal data collected"
             return self.result, data
         return self.result, None

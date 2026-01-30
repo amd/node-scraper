@@ -1,0 +1,34 @@
+{
+  "global_args": {},
+  "plugins": {
+    "DmesgPlugin": {
+      "analysis_args": {
+        "check_unknown_dmesg_errors": false,
+        "interval_to_collapse_event": 60,
+        "num_timestamps": 3,
+        "error_regex": [
+          {
+            "regex": "CUSTOM_ERROR_TYPE_1.*",
+            "message": "Custom Error Type 1",
+            "event_category": "SW_DRIVER",
+            "event_priority": 4
+          },
+          {
+            "regex": "CUSTOM_ERROR_TYPE_2.*",
+            "message": "Custom Error Type 2",
+            "event_category": "RAS",
+            "event_priority": 3
+          },
+          {
+            "regex": "APPLICATION_CRASH: .*",
+            "message": "Application Crash Detected",
+            "event_category": "SW_DRIVER"
+          }
+        ]
+      }
+    }
+  },
+  "result_collators": {},
+  "name": "DmesgPlugin config with custom regex",
+  "desc": "Config for testing DmesgPlugin with custom error regex and event collapsing"
+}

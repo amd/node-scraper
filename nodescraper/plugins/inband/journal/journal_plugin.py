@@ -25,16 +25,22 @@
 ###############################################################################
 from nodescraper.base import InBandDataPlugin
 
+from .analyzer_args import JournalAnalyzerArgs
 from .collector_args import JournalCollectorArgs
+from .journal_analyzer import JournalAnalyzer
 from .journal_collector import JournalCollector
 from .journaldata import JournalData
 
 
-class JournalPlugin(InBandDataPlugin[JournalData, JournalCollectorArgs, None]):
-    """Plugin for collection of journal data"""
+class JournalPlugin(InBandDataPlugin[JournalData, JournalCollectorArgs, JournalAnalyzerArgs]):
+    """Plugin for collection and analysis of journal data"""
 
     DATA_MODEL = JournalData
 
     COLLECTOR = JournalCollector
 
     COLLECTOR_ARGS = JournalCollectorArgs
+
+    ANALYZER = JournalAnalyzer
+
+    ANALYZER_ARGS = JournalAnalyzerArgs

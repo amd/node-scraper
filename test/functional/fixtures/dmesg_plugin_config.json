@@ -4,11 +4,13 @@
     "DmesgPlugin": {
       "analysis_args": {
         "check_unknown_dmesg_errors": true,
-        "exclude_category": null
+        "exclude_category": null,
+        "interval_to_collapse_event": 60,
+        "num_timestamps": 3
       }
     }
   },
   "result_collators": {},
   "name": "DmesgPlugin config",
-  "desc": "Config for testing DmesgPlugin"
+  "desc": "Config for testing DmesgPlugin with event collapsing"
 }

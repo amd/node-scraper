@@ -64,12 +64,11 @@ class DeviceEnumerationAnalyzer(
         for check, accepted_counts in checks.items():
             actual_count = getattr(data, check)
             if actual_count not in accepted_counts:
-                message = f"Expected {check} in {accepted_counts}, but got {actual_count}. "
-                self.result.message += message
+                self.result.message = "Device Enumeration mismatch"
                 self.result.status = ExecutionStatus.ERROR
                 self._log_event(
                     category=EventCategory.PLATFORM,
-                    description=message,
+                    description=f"Expected {check} in {accepted_counts}, but got {actual_count}",
                     data={check: actual_count},
                     priority=EventPriority.CRITICAL,
                     console_log=True,

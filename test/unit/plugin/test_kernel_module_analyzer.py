@@ -126,7 +126,10 @@ def test_analyze_data_regex_unmatched_patterns(data_model, analyzer):
     args = KernelModuleAnalyzerArgs(regex_filter=["modA", "nope"])
     result = analyzer.analyze_data(data_model, args)
     assert result.status == ExecutionStatus.ERROR
-    assert any(ev.description == "KernelModules did not match all patterns" for ev in result.events)
+    assert any(
+        ev.description.startswith("KernelModules did not match all patterns")
+        for ev in result.events
+    )
 
 
 def test_analyze_data_name_only_success(data_model, analyzer):

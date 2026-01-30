@@ -55,14 +55,12 @@ class ProcessAnalyzer(DataAnalyzer[ProcessDataModel, ProcessAnalyzerArgs]):
         if not args:
             args = ProcessAnalyzerArgs()
 
-        err_messages = []
+        has_errors = False
         if data.kfd_process is not None and data.kfd_process > args.max_kfd_processes:
-            err_messages.append(
-                f"Kfd processes {data.kfd_process} exeed max limit {args.max_kfd_processes}"
-            )
+            has_errors = True
             self._log_event(
                 category=EventCategory.OS,
-                description="Kfd processes exceed maximum limit",
+                description=f"Kfd processes {data.kfd_process} exeed max limit {args.max_kfd_processes}",
                 data={
                     "kfd_process": data.kfd_process,
                     "kfd_process_limit": args.max_kfd_processes,
@@ -72,10 +70,10 @@ class ProcessAnalyzer(DataAnalyzer[ProcessDataModel, ProcessAnalyzerArgs]):
             )
 
         if data.cpu_usage is not None and data.cpu_usage > args.max_cpu_usage:
-            err_messages.append(f"CPU usage {data.cpu_usage} exceeds limit {args.max_cpu_usage}")
+            has_errors = True
             self._log_event(
                 category=EventCategory.OS,
-                description="CPU usage exceeds maximum limit",
+                description=f"CPU usage {data.cpu_usage} exceeds limit {args.max_cpu_usage}",
                 data={
                     "cpu_usage": data.cpu_usage,
                     "cpu_usage_limit": args.max_cpu_usage,
@@ -84,8 +82,8 @@ class ProcessAnalyzer(DataAnalyzer[ProcessDataModel, ProcessAnalyzerArgs]):
                 console_log=True,
             )
 
-        if err_messages:
+        if has_errors:
             self.result.status = ExecutionStatus.ERROR
-            self.result.message = ". ".join(err_messages)
+            self.result.message = "Process limits exceeded"
 
         return self.result

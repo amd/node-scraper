@@ -4,7 +4,31 @@
     "CmdlinePlugin": {
       "analysis_args": {
         "required_cmdline": "selinux=0",
-        "banned_cmdline": []
+        "banned_cmdline": [],
+        "os_overrides": {
+          "ubuntu": {
+            "required_cmdline": {
+              "add": [],
+              "remove": []
+            },
+            "banned_cmdline": {
+              "add": [],
+              "remove": []
+            }
+          }
+        },
+        "platform_overrides": {
+          "mi300x": {
+            "required_cmdline": {
+              "add": [],
+              "remove": []
+            },
+            "banned_cmdline": {
+              "add": [],
+              "remove": []
+            }
+          }
+        }
       }
     }
   },
