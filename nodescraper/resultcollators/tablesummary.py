@@ -134,7 +134,7 @@ class TableSummary(PluginResultCollator):
             table = gen_str_table(
                 ["Connection", "Status", "Message"],
                 conn_rows,
-                max_widths={"Connection": 32, "Status": 16, "Message": 80},
+                max_widths={"Connection": 32, "Status": 20, "Message": 80},
             )
             tables += f"\n\n{table}"
 
@@ -151,7 +151,7 @@ class TableSummary(PluginResultCollator):
             table = gen_str_table(
                 ["Plugin", "Status", "Message"],
                 plug_rows,
-                max_widths={"Plugin": 32, "Status": 16, "Message": 80},
+                max_widths={"Plugin": 32, "Status": 20, "Message": 80},
             )
             tables += f"\n\n{table}"
 
