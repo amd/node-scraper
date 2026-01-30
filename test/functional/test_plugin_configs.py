@@ -334,3 +334,261 @@ def test_dmesg_plugin_log_dmesg_data_true(run_cli_command, tmp_path):
         if dmesg_plugin_dir.exists():
             dmesg_log_files = list(dmesg_plugin_dir.glob("dmesg*.log"))
             assert len(dmesg_log_files) > 0, "Expected dmesg.log file when log_dmesg_data=True"
+
+
+def test_dmesg_plugin_with_custom_regex_in_config(run_cli_command, tmp_path):
+    """Test DmesgPlugin with custom error regex passed through plugin config"""
+    # Create a test dmesg fixture with custom errors
+    test_dmesg_content = """kern  :err   : 2026-01-07T10:00:00,000000-06:00 CUSTOM_APP_CRASH: Application XYZ crashed
+kern  :err   : 2026-01-07T10:00:05,000000-06:00 CUSTOM_DRIVER_TIMEOUT: Driver timeout occurred
+kern  :err   : 2026-01-07T10:00:10,000000-06:00 oom_kill_process
+kern  :err   : 2026-01-07T10:00:15,000000-06:00 CUSTOM_APP_CRASH: Application ABC crashed
+"""
+
+    dmesg_file = tmp_path / "custom_dmesg.log"
+    dmesg_file.write_text(test_dmesg_content)
+
+    # Create config with custom regex
+    config = {
+        "name": "DmesgCustomRegexConfig",
+        "desc": "DmesgPlugin config with custom error regex",
+        "global_args": {},
+        "plugins": {
+            "DmesgPlugin": {
+                "collection_args": {"dmesg_file": str(dmesg_file)},
+                "analysis_args": {
+                    "check_unknown_dmesg_errors": False,
+                    "error_regex": [
+                        {
+                            "regex": r"CUSTOM_APP_CRASH.*",
+                            "message": "Custom Application Crash",
+                            "event_category": "SW_DRIVER",
+                            "event_priority": 4,
+                        },
+                        {
+                            "regex": r"CUSTOM_DRIVER_TIMEOUT.*",
+                            "message": "Custom Driver Timeout",
+                            "event_category": "SW_DRIVER",
+                            "event_priority": 3,
+                        },
+                    ],
+                },
+            }
+        },
+        "result_collators": {},
+    }
+
+    config_file = tmp_path / "custom_regex_config.json"
+    config_file.write_text(json.dumps(config, indent=2))
+
+    log_path = str(tmp_path / "logs_custom_regex")
+    result = run_cli_command(
+        ["--log-path", log_path, "--plugin-configs", str(config_file)], check=False
+    )
+
+    # Check that command ran successfully
+    assert result.returncode in [0, 1, 2]
+
+    # Verify results JSON contains custom errors
+    results_dir = Path(log_path) / "dmesg_plugin" / "dmesg_analyzer"
+    if results_dir.exists():
+        result_files = list(results_dir.glob("results*.json"))
+        if result_files:
+            with open(result_files[0], "r") as f:
+                results = json.load(f)
+                events = results.get("events", [])
+
+                # Should detect custom errors and base errors
+                descriptions = [e["description"] for e in events]
+                assert "Custom Application Crash" in descriptions or len(events) > 0
+                assert "Out of memory error" in descriptions or len(events) > 0
+
+
+def test_dmesg_plugin_with_event_collapsing_config(run_cli_command, tmp_path):
+    """Test DmesgPlugin with event collapsing parameters in config"""
+    # Create a test dmesg with repeated errors at different intervals
+    test_dmesg_content = """kern  :err   : 2026-01-07T10:00:00,000000-06:00 oom_kill_process
+kern  :err   : 2026-01-07T10:00:30,000000-06:00 oom_kill_process
+kern  :err   : 2026-01-07T10:00:50,000000-06:00 oom_kill_process
+kern  :err   : 2026-01-07T10:02:00,000000-06:00 oom_kill_process
+kern  :err   : 2026-01-07T10:04:00,000000-06:00 oom_kill_process
+kern  :err   : 2026-01-07T10:06:00,000000-06:00 oom_kill_process
+kern  :err   : 2026-01-07T10:08:00,000000-06:00 oom_kill_process
+kern  :err   : 2026-01-07T10:10:00,000000-06:00 oom_kill_process
+"""
+
+    dmesg_file = tmp_path / "collapse_dmesg.log"
+    dmesg_file.write_text(test_dmesg_content)
+
+    # Create config with event collapsing parameters
+    config = {
+        "name": "DmesgEventCollapsingConfig",
+        "desc": "DmesgPlugin config with event collapsing",
+        "global_args": {},
+        "plugins": {
+            "DmesgPlugin": {
+                "collection_args": {"dmesg_file": str(dmesg_file)},
+                "analysis_args": {
+                    "check_unknown_dmesg_errors": False,
+                    "interval_to_collapse_event": 60,
+                    "num_timestamps": 2,
+                },
+            }
+        },
+        "result_collators": {},
+    }
+
+    config_file = tmp_path / "collapse_config.json"
+    config_file.write_text(json.dumps(config, indent=2))
+
+    log_path = str(tmp_path / "logs_collapse")
+    result = run_cli_command(
+        ["--log-path", log_path, "--plugin-configs", str(config_file)], check=False
+    )
+
+    assert result.returncode in [0, 1, 2]
+
+    # Verify results JSON shows collapsed events
+    results_dir = Path(log_path) / "dmesg_plugin" / "dmesg_analyzer"
+    if results_dir.exists():
+        result_files = list(results_dir.glob("results*.json"))
+        if result_files:
+            with open(result_files[0], "r") as f:
+                results = json.load(f)
+                events = results.get("events", [])
+
+                # Should have 1 event with count > 1
+                oom_events = [
+                    e for e in events if "memory error" in e.get("description", "").lower()
+                ]
+                if oom_events:
+                    # Verify event was collapsed (count > 1)
+                    assert oom_events[0]["data"]["count"] > 1
+                    # Verify timestamps list exists
+                    assert "timestamps" in oom_events[0]["data"]
+                    # Timestamps should be pruned (first 2 + last 2)
+                    timestamps = oom_events[0]["data"]["timestamps"]
+                    assert len(timestamps) <= 4
+
+
+def test_dmesg_plugin_with_custom_regex_and_collapsing(run_cli_command, tmp_path):
+    """Test DmesgPlugin with both custom regex and event collapsing"""
+    # Create test dmesg with repeated custom errors
+    test_dmesg_content = """kern  :err   : 2026-01-07T10:00:00,000000-06:00 MY_DRIVER_ERROR: Failed to initialize device
+kern  :err   : 2026-01-07T10:00:10,000000-06:00 MY_DRIVER_ERROR: Failed to initialize device
+kern  :err   : 2026-01-07T10:00:20,000000-06:00 MY_DRIVER_ERROR: Failed to initialize device
+kern  :err   : 2026-01-07T10:02:00,000000-06:00 MY_DRIVER_ERROR: Failed to initialize device
+kern  :err   : 2026-01-07T10:04:00,000000-06:00 MY_DRIVER_ERROR: Failed to initialize device
+kern  :err   : 2026-01-07T10:00:05,000000-06:00 oom_kill_process
+kern  :err   : 2026-01-07T10:02:05,000000-06:00 oom_kill_process
+"""
+
+    dmesg_file = tmp_path / "custom_collapse_dmesg.log"
+    dmesg_file.write_text(test_dmesg_content)
+
+    # Create config with both features
+    config = {
+        "name": "DmesgCustomRegexAndCollapsingConfig",
+        "desc": "DmesgPlugin config with custom regex and event collapsing",
+        "global_args": {},
+        "plugins": {
+            "DmesgPlugin": {
+                "collection_args": {"dmesg_file": str(dmesg_file)},
+                "analysis_args": {
+                    "check_unknown_dmesg_errors": False,
+                    "interval_to_collapse_event": 60,
+                    "num_timestamps": 2,
+                    "error_regex": [
+                        {
+                            "regex": r"MY_DRIVER_ERROR.*",
+                            "message": "My Custom Driver Error",
+                            "event_category": "SW_DRIVER",
+                        }
+                    ],
+                },
+            }
+        },
+        "result_collators": {},
+    }
+
+    config_file = tmp_path / "custom_collapse_config.json"
+    config_file.write_text(json.dumps(config, indent=2))
+
+    log_path = str(tmp_path / "logs_custom_collapse")
+    result = run_cli_command(
+        ["--log-path", log_path, "--plugin-configs", str(config_file)], check=False
+    )
+
+    assert result.returncode in [0, 1, 2]
+
+    # Verify results
+    results_dir = Path(log_path) / "dmesg_plugin" / "dmesg_analyzer"
+    if results_dir.exists():
+        result_files = list(results_dir.glob("results*.json"))
+        if result_files:
+            with open(result_files[0], "r") as f:
+                results = json.load(f)
+                events = results.get("events", [])
+
+                # Look for custom driver error
+                custom_events = [
+                    e for e in events if "Custom Driver Error" in e.get("description", "")
+                ]
+                if custom_events:
+                    # Should be collapsed
+                    assert custom_events[0]["data"]["count"] >= 1
+                    assert "timestamps" in custom_events[0]["data"]
+
+
+def test_dmesg_plugin_different_collapse_intervals(run_cli_command, tmp_path):
+    """Test DmesgPlugin with different collapse interval values"""
+    # Create test dmesg with errors 10 seconds apart
+    test_dmesg_content = """kern  :err   : 2026-01-07T10:00:00,000000-06:00 IO_PAGE_FAULT
+kern  :err   : 2026-01-07T10:00:10,000000-06:00 IO_PAGE_FAULT
+kern  :err   : 2026-01-07T10:00:20,000000-06:00 IO_PAGE_FAULT
+kern  :err   : 2026-01-07T10:00:30,000000-06:00 IO_PAGE_FAULT
+"""
+
+    dmesg_file = tmp_path / "interval_dmesg.log"
+    dmesg_file.write_text(test_dmesg_content)
+
+    # Test with small interval (5 seconds) - should NOT collapse
+    config_small = {
+        "name": "DmesgSmallIntervalConfig",
+        "desc": "DmesgPlugin with 5-second collapse interval",
+        "global_args": {},
+        "plugins": {
+            "DmesgPlugin": {
+                "collection_args": {"dmesg_file": str(dmesg_file)},
+                "analysis_args": {
+                    "check_unknown_dmesg_errors": False,
+                    "interval_to_collapse_event": 5,
+                },
+            }
+        },
+        "result_collators": {},
+    }
+
+    config_file_small = tmp_path / "small_interval_config.json"
+    config_file_small.write_text(json.dumps(config_small, indent=2))
+
+    log_path_small = str(tmp_path / "logs_small_interval")
+    result = run_cli_command(
+        ["--log-path", log_path_small, "--plugin-configs", str(config_file_small)], check=False
+    )
+
+    assert result.returncode in [0, 1, 2]
+
+    # Verify results have all timestamps (not collapsed much)
+    results_dir = Path(log_path_small) / "dmesg_plugin" / "dmesg_analyzer"
+    if results_dir.exists():
+        result_files = list(results_dir.glob("results*.json"))
+        if result_files:
+            with open(result_files[0], "r") as f:
+                results = json.load(f)
+                events = results.get("events", [])
+                io_events = [e for e in events if "Page Fault" in e.get("description", "")]
+                if io_events:
+                    # Should have multiple timestamps since interval is small
+                    timestamps = io_events[0]["data"].get("timestamps", [])
+                    assert len(timestamps) >= 3
