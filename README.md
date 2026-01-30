@@ -261,9 +261,6 @@ You can extend the built-in error detection with custom regex patterns. Create a
   "global_args": {},
   "plugins": {
     "DmesgPlugin": {
-      "collection_args": {
-        "dmesg_file": "/path/to/dmesg.log"
-      },
       "analysis_args": {
         "check_unknown_dmesg_errors": false,
         "interval_to_collapse_event": 60,
