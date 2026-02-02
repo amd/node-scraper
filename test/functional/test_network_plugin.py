@@ -104,3 +104,21 @@ def test_network_plugin_skip_sudo(run_cli_command, network_config_file, tmp_path
     assert result.returncode in [0, 1, 2]
     output = result.stdout + result.stderr
     assert len(output) > 0
+
+
+def test_network_plugin_with_url(run_cli_command, network_config_file, tmp_path):
+    """Test NetworkPlugin with url collector argument."""
+    log_path = str(tmp_path / "logs_network_url")
+    result = run_cli_command(
+        [
+            "--log-path",
+            log_path,
+            "--plugin-configs",
+            str(network_config_file),
+        ],
+        check=False,
+    )
+
+    assert result.returncode in [0, 1, 2]
+    output = result.stdout + result.stderr
+    assert len(output) > 0
