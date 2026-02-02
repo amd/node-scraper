@@ -61,11 +61,11 @@ class OsAnalyzer(DataAnalyzer[OsDataModel, OsAnalyzerArgs]):
                 self.result.status = ExecutionStatus.OK
                 return self.result
 
-        self.result.message = f"OS name mismatch! Expected: {args.exp_os}, actual: {data.os_name}"
+        self.result.message = "OS name mismatch!"
         self.result.status = ExecutionStatus.ERROR
         self._log_event(
             category=EventCategory.OS,
-            description=f"{self.result.message}",
+            description=f"OS name mismatch! Expected: {args.exp_os}, actual: {data.os_name}",
             data={"expected": args.exp_os, "actual": data.os_name},
             priority=EventPriority.CRITICAL,
             console_log=True,

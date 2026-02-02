@@ -64,13 +64,11 @@ class RocmAnalyzer(DataAnalyzer[RocmDataModel, RocmAnalyzerArgs]):
                 break
         else:
             # No matching version found
-            self.result.message = (
-                f"ROCm version mismatch! Expected: {args.exp_rocm}, actual: {data.rocm_version}"
-            )
+            self.result.message = "ROCm version mismatch!"
             self.result.status = ExecutionStatus.ERROR
             self._log_event(
                 category=EventCategory.SW_DRIVER,
-                description=f"{self.result.message}",
+                description=f"ROCm version mismatch! Expected: {args.exp_rocm}, actual: {data.rocm_version}",
                 data={"expected": args.exp_rocm, "actual": data.rocm_version},
                 priority=EventPriority.CRITICAL,
                 console_log=True,
@@ -80,11 +78,11 @@ class RocmAnalyzer(DataAnalyzer[RocmDataModel, RocmAnalyzerArgs]):
         # validate rocm_latest if provided in args
         if args.exp_rocm_latest:
             if data.rocm_latest_versioned_path != args.exp_rocm_latest:
-                self.result.message = f"ROCm latest path mismatch! Expected: {args.exp_rocm_latest}, actual: {data.rocm_latest_versioned_path}"
+                self.result.message = "ROCm latest path mismatch!"
                 self.result.status = ExecutionStatus.ERROR
                 self._log_event(
                     category=EventCategory.SW_DRIVER,
-                    description=f"{self.result.message}",
+                    description=f"ROCm latest path mismatch! Expected: {args.exp_rocm_latest}, actual: {data.rocm_latest_versioned_path}",
                     data={
                         "expected": args.exp_rocm_latest,
                         "actual": data.rocm_latest_versioned_path,

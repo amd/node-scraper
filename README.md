@@ -232,7 +232,9 @@ This would produce the following config:
         "analysis_range_start": null,
         "analysis_range_end": null,
         "check_unknown_dmesg_errors": true,
-        "exclude_category": null
+        "exclude_category": null,
+        "interval_to_collapse_event": 60,
+        "num_timestamps": 3
       }
     }
   },
@@ -240,11 +242,61 @@ This would produce the following config:
 }
 ```
 
+**Running DmesgPlugin with a dmesg log file:**
+
+Instead of collecting dmesg from the system, you can analyze a pre-existing dmesg log file using the `--data` argument:
+
+```sh
+node-scraper --run-plugins DmesgPlugin --data /path/to/dmesg.log --collection False
+```
+
+This will skip the collection phase and directly analyze the provided dmesg.log file.
+
+**Custom Error Regex Example:**
+
+You can extend the built-in error detection with custom regex patterns. Create a config file with custom error patterns:
+
+```json
+{
+  "global_args": {},
+  "plugins": {
+    "DmesgPlugin": {
+      "analysis_args": {
+        "check_unknown_dmesg_errors": false,
+        "interval_to_collapse_event": 60,
+        "num_timestamps": 3,
+        "error_regex": [
+          {
+            "regex": "MY_CUSTOM_ERROR.*",
+            "message": "My Custom Error Detected",
+            "event_category": "SW_DRIVER",
+            "event_priority": 3
+          },
+          {
+            "regex": "APPLICATION_CRASH: .*",
+            "message": "Application Crash",
+            "event_category": "SW_DRIVER",
+            "event_priority": 4
+          }
+        ]
+      }
+    }
+  },
+  "result_collators": {}
+}
+```
+
+Save this to `dmesg_custom_config.json` and run:
+
+```sh
+node-scraper --plugin-configs dmesg_custom_config.json run-plugins DmesgPlugin
+```
+
 #### **'summary' sub command**
 The 'summary' subcommand can be used to combine results from multiple runs of node-scraper to a
 single summary.csv file. Sample run:
 ```sh
-node-scraper summary --summary_path /<path_to_node-scraper_logs>
+node-scraper summary --search-path /<path_to_node-scraper_logs>
 ```
 This will generate a new file '/<path_to_node-scraper_logs>/summary.csv' file. This file will
 contain the results from all 'nodescraper.csv' files from '/<path_to_node-scarper_logs>'.
