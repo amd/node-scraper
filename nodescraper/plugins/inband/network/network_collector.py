@@ -65,6 +65,7 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
     CMD_RULE = "ip rule show"
     CMD_NEIGHBOR = "ip neighbor show"
     CMD_ETHTOOL_TEMPLATE = "ethtool {interface}"
+    CMD_PING = "ping"
 
     # LLDP commands
     CMD_LLDPCLI_NEIGHBOR = "lldpcli show neighbor"
@@ -1679,32 +1680,29 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
         Returns:
             bool: True if network is accessible, False otherwise
         """
-        cmd = "ping"
 
         # Determine ping options based on OS
         ping_option = "-c 1" if self.system_info.os_family == OSFamily.LINUX else "-n 1"
 
         # Run ping command
-        result = self._run_sut_cmd(f"{cmd} {url} {ping_option}")
+        result = self._run_sut_cmd(f"{self.CMD_PING} {url} {ping_option}")
 
-        network_accessible = result.exit_code == 0
-
-        if network_accessible:
+        if result.exit_code == 0:
             self._log_event(
                 category=EventCategory.NETWORK,
                 description="System networking is up",
-                data={"url": url, "accessible": network_accessible},
+                data={"url": url, "accessible": result.exit_code == 0},
                 priority=EventPriority.INFO,
             )
         else:
             self._log_event(
                 category=EventCategory.NETWORK,
-                description=f"{cmd} to {url} failed!",
-                data={"url": url, "accessible": network_accessible},
+                description=f"{self.CMD_PING} to {url} failed!",
+                data={"url": url, "not accessible": result.exit_code == 0},
                 priority=EventPriority.ERROR,
             )
 
-        return network_accessible
+        return result.exit_code == 0
 
     def collect_data(
         self,
