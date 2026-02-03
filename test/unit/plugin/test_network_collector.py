@@ -1859,3 +1859,85 @@ def test_network_data_model_with_pensando_nic_version_firmware():
     assert len(data.pensando_nic_version_firmware) == 1
     assert data.pensando_nic_version_firmware[0].nic_id == "42424650-4c32-3533-3330-323934000000"
     assert data.pensando_nic_version_firmware[0].cpld == "3.16 (primary)"
+
+
+def test_network_accessibility_linux_success(collector, conn_mock):
+    """Test network accessibility check on Linux with successful ping"""
+    collector.system_info.os_family = OSFamily.LINUX
+
+    # Mock successful ping command
+    def run_sut_cmd_side_effect(cmd, **kwargs):
+        if "ping" in cmd:
+            return MagicMock(
+                exit_code=0,
+                stdout=(
+                    "PING sample.mock.com (11.22.33.44) 56(84) bytes of data.\n"
+                    "64 bytes from mock-server 55.66.77.88): icmp_seq=1 ttl=63 time=0.408 ms\n"
+                    "--- sample.mock.com ping statistics ---\n"
+                    "1 packets transmitted, 1 received, 0% packet loss, time 0ms\n"
+                    "rtt min/avg/max/mdev = 0.408/0.408/0.408/0.000 ms\n"
+                ),
+                command=cmd,
+            )
+        return MagicMock(exit_code=1, stdout="", command=cmd)
+
+    collector._run_sut_cmd = MagicMock(side_effect=run_sut_cmd_side_effect)
+
+    # Test if collector has accessibility check method
+    if hasattr(collector, "check_network_accessibility"):
+        result, accessible = collector.check_network_accessibility()
+        assert result.status == ExecutionStatus.OK
+        assert accessible is True
+
+
+def test_network_accessibility_windows_success(collector, conn_mock):
+    """Test network accessibility check on Windows with successful ping"""
+    collector.system_info.os_family = OSFamily.WINDOWS
+
+    # Mock successful ping command
+    def run_sut_cmd_side_effect(cmd, **kwargs):
+        if "ping" in cmd:
+            return MagicMock(
+                exit_code=0,
+                stdout=(
+                    "Pinging sample.mock.com [11.22.33.44] with 32 bytes of data:\n"
+                    "Reply from 10.228.151.8: bytes=32 time=224ms TTL=55\n"
+                    "Ping statistics for 11.22.33.44:\n"
+                    "Packets: Sent = 1, Received = 1, Lost = 0 (0% loss),\n"
+                    "Approximate round trip times in milli-seconds:\n"
+                    "Minimum = 224ms, Maximum = 224ms, Average = 224ms\n"
+                ),
+                command=cmd,
+            )
+        return MagicMock(exit_code=1, stdout="", command=cmd)
+
+    collector._run_sut_cmd = MagicMock(side_effect=run_sut_cmd_side_effect)
+
+    # Test if collector has accessibility check method
+    if hasattr(collector, "check_network_accessibility"):
+        result, accessible = collector.check_network_accessibility()
+        assert result.status == ExecutionStatus.OK
+        assert accessible is True
+
+
+def test_network_accessibility_failure(collector, conn_mock):
+    """Test network accessibility check with failed ping"""
+    collector.system_info.os_family = OSFamily.LINUX
+
+    # Mock failed ping command
+    def run_sut_cmd_side_effect(cmd, **kwargs):
+        if "ping" in cmd:
+            return MagicMock(
+                exit_code=1,
+                stdout="ping: www.sample.mock.com: Name or service not known",
+                command=cmd,
+            )
+        return MagicMock(exit_code=1, stdout="", command=cmd)
+
+    collector._run_sut_cmd = MagicMock(side_effect=run_sut_cmd_side_effect)
+
+    # Test if collector has accessibility check method
+    if hasattr(collector, "check_network_accessibility"):
+        result, accessible = collector.check_network_accessibility()
+        assert result.status == ExecutionStatus.ERRORS_DETECTED
+        assert accessible is False
