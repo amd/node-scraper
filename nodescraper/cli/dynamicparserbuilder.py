@@ -109,9 +109,6 @@ class DynamicParserBuilder:
         # Check if Literal is in the type_class_map
         literal_type = type_class_map.get(Literal)
         if literal_type and literal_type.inner_type is not None:
-            # The inner_type contains the first literal value, but we need all of them
-            # We need to get the original annotation to extract all literal values
-            # For now, return None and we'll handle this differently
             return None
         return None
 
