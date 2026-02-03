@@ -24,10 +24,11 @@
 #
 ###############################################################################
 
-from typing import Optional
+from typing import Literal, Optional
 
 from nodescraper.models import CollectorArgs
 
 
 class NetworkCollectorArgs(CollectorArgs):
     url: Optional[str] = None
+    netprobe: Optional[Literal["ping", "wget", "curl"]] = None

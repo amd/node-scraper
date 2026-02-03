@@ -122,3 +122,135 @@ def test_network_plugin_with_url(run_cli_command, network_config_file, tmp_path)
     assert result.returncode in [0, 1, 2]
     output = result.stdout + result.stderr
     assert len(output) > 0
+
+
+def test_network_plugin_with_netprobe_ping(run_cli_command, tmp_path):
+    """Test NetworkPlugin with netprobe set to ping."""
+    log_path = str(tmp_path / "logs_network_netprobe_ping")
+    result = run_cli_command(
+        [
+            "--log-path",
+            log_path,
+            "run-plugins",
+            "NetworkPlugin",
+            "--url",
+            "google.com",
+            "--netprobe",
+            "ping",
+        ],
+        check=False,
+    )
+
+    assert result.returncode in [0, 1, 2]
+    output = result.stdout + result.stderr
+    assert len(output) > 0
+
+
+def test_network_plugin_with_netprobe_wget(run_cli_command, tmp_path):
+    """Test NetworkPlugin with netprobe set to wget."""
+    log_path = str(tmp_path / "logs_network_netprobe_wget")
+    result = run_cli_command(
+        [
+            "--log-path",
+            log_path,
+            "run-plugins",
+            "NetworkPlugin",
+            "--url",
+            "google.com",
+            "--netprobe",
+            "wget",
+        ],
+        check=False,
+    )
+
+    assert result.returncode in [0, 1, 2]
+    output = result.stdout + result.stderr
+    assert len(output) > 0
+
+
+def test_network_plugin_with_netprobe_curl(run_cli_command, tmp_path):
+    """Test NetworkPlugin with netprobe set to curl."""
+    log_path = str(tmp_path / "logs_network_netprobe_curl")
+    result = run_cli_command(
+        [
+            "--log-path",
+            log_path,
+            "run-plugins",
+            "NetworkPlugin",
+            "--url",
+            "google.com",
+            "--netprobe",
+            "curl",
+        ],
+        check=False,
+    )
+
+    assert result.returncode in [0, 1, 2]
+    output = result.stdout + result.stderr
+    assert len(output) > 0
+
+
+def test_network_plugin_with_invalid_netprobe(run_cli_command, tmp_path):
+    """Test NetworkPlugin with invalid netprobe value - should fail at CLI validation."""
+    log_path = str(tmp_path / "logs_network_invalid_netprobe")
+    result = run_cli_command(
+        [
+            "--log-path",
+            log_path,
+            "run-plugins",
+            "NetworkPlugin",
+            "--url",
+            "google.com",
+            "--netprobe",
+            "invalid",
+        ],
+        check=False,
+    )
+
+    # Should fail with exit code 2 (argparse error)
+    assert result.returncode == 2
+    output = result.stdout + result.stderr
+    assert len(output) > 0
+    assert "invalid choice" in output.lower()
+    assert "choose from" in output.lower()
+
+
+def test_network_plugin_with_url_no_netprobe(run_cli_command, tmp_path):
+    """Test NetworkPlugin with URL but no netprobe - should default to ping."""
+    log_path = str(tmp_path / "logs_network_url_default")
+    result = run_cli_command(
+        [
+            "--log-path",
+            log_path,
+            "run-plugins",
+            "NetworkPlugin",
+            "--url",
+            "google.com",
+        ],
+        check=False,
+    )
+
+    assert result.returncode in [0, 1, 2]
+    output = result.stdout + result.stderr
+    assert len(output) > 0
+
+
+def test_network_plugin_with_netprobe_no_url(run_cli_command, tmp_path):
+    """Test NetworkPlugin with netprobe but no URL - should skip connectivity check."""
+    log_path = str(tmp_path / "logs_network_netprobe_no_url")
+    result = run_cli_command(
+        [
+            "--log-path",
+            log_path,
+            "run-plugins",
+            "NetworkPlugin",
+            "--netprobe",
+            "ping",
+        ],
+        check=False,
+    )
+
+    # Should succeed but skip connectivity check
+    assert result.returncode in [0, 1, 2]
+    output = result.stdout + result.stderr
+    assert len(output) > 0

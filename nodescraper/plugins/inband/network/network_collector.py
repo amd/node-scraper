@@ -66,6 +66,8 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
     CMD_NEIGHBOR = "ip neighbor show"
     CMD_ETHTOOL_TEMPLATE = "ethtool {interface}"
     CMD_PING = "ping"
+    CMD_WGET = "wget"
+    CMD_CURL = "curl"
 
     # LLDP commands
     CMD_LLDPCLI_NEIGHBOR = "lldpcli show neighbor"
@@ -1671,21 +1673,32 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
             uncollected_commands,
         )
 
-    def _check_network_connectivity(self, url: str) -> bool:
-        """Check network connectivity by pinging a URL.
+    def _check_network_connectivity(self, cmd: str, url: str) -> bool:
+        """Check network connectivity using specified command.
 
         Args:
-            url: URL or hostname to ping
+            cmd: Command to use for connectivity check (ping, wget, or curl)
+            url: URL or hostname to check
 
         Returns:
             bool: True if network is accessible, False otherwise
         """
+        if cmd not in {"ping", "wget", "curl"}:
+            raise ValueError(
+                f"Invalid network probe command: '{cmd}'. "
+                f"Valid options are: 'ping', 'wget', 'curl'"
+            )
 
         # Determine ping options based on OS
         ping_option = "-c 1" if self.system_info.os_family == OSFamily.LINUX else "-n 1"
 
-        # Run ping command
-        result = self._run_sut_cmd(f"{self.CMD_PING} {url} {ping_option}")
+        # Build command based on cmd parameter using class constants
+        if cmd == "ping":
+            result = self._run_sut_cmd(f"{self.CMD_PING} {url} {ping_option}")
+        elif cmd == "wget":
+            result = self._run_sut_cmd(f"{self.CMD_WGET} {url}")
+        else:  # curl
+            result = self._run_sut_cmd(f"{self.CMD_CURL} {url}")
 
         if result.exit_code == 0:
             self._log_event(
@@ -1697,7 +1710,7 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
         else:
             self._log_event(
                 category=EventCategory.NETWORK,
-                description=f"{self.CMD_PING} to {url} failed!",
+                description=f"{cmd} to {url} failed!",
                 data={"url": url, "not accessible": result.exit_code == 0},
                 priority=EventPriority.ERROR,
             )
@@ -1737,7 +1750,19 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
 
         # Check network connectivity if URL is provided
         if args and args.url:
-            network_accessible = self._check_network_connectivity(args.url)
+            cmd = args.netprobe if args.netprobe else "ping"
+            try:
+                network_accessible = self._check_network_connectivity(cmd, args.url)
+            except ValueError as e:
+                self._log_event(
+                    category=EventCategory.NETWORK,
+                    description=str(e),
+                    data={"netprobe": cmd, "url": args.url},
+                    priority=EventPriority.ERROR,
+                    console_log=True,
+                )
+                # Set network_accessible to None since we couldn't check
+                network_accessible = None
 
         # Collect interface/address information
         res_addr = self._run_sut_cmd(self.CMD_ADDR)

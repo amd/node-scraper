@@ -3,7 +3,8 @@
   "plugins": {
     "NetworkPlugin": {
       "collector_args": {
-        "url": "mock.example.com"
+        "url": "mock.example.com",
+        "netprobe": "ping"
       },
       "analysis_args": {}
     }
