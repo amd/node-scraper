@@ -67,10 +67,11 @@ from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     StaticXgmiPlpd,
     ValueUnit,
 )
+from nodescraper.plugins.inband.amdsmi.collector_args import AmdSmiCollectorArgs
 from nodescraper.utils import get_exception_traceback
 
 
-class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
+class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs]):
     """Class for collection of inband tool amd-smi data."""
 
     AMD_SMI_EXE = "amd-smi"
@@ -87,6 +88,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
     CMD_STATIC = "static -g all --json"
     CMD_STATIC_GPU = "static -g {gpu_id} --json"
     CMD_RAS = "ras --cper --folder={folder}"
+    CMD_RAS_AFID = "ras --afid --cper-file {cper_file}"
 
     def _check_amdsmi_installed(self) -> bool:
         """Check if amd-smi is installed
@@ -1266,14 +1268,57 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             )
             return []
 
+    def _get_cper_afid(self, cper_file_path: str) -> Optional[int]:
+        """Get AFID from a CPER file
+
+        Args:
+            cper_file_path (str): Path to the CPER file
+
+        Returns:
+            Optional[int]: AFID value or None
+        """
+        cmd = self.CMD_RAS_AFID.format(cper_file=cper_file_path)
+        result = self._run_amd_smi(cmd)
+
+        if result is None:
+            self._log_event(
+                category=EventCategory.APPLICATION,
+                description=f"Failed to get AFID from CPER file: {cper_file_path}",
+                priority=EventPriority.ERROR,
+                console_log=True,
+            )
+            return None
+
+        try:
+            afid = int(result.strip())
+            self._log_event(
+                category=EventCategory.APPLICATION,
+                description=f"Successfully retrieved AFID from CPER file: {cper_file_path}",
+                data={"afid": afid, "cper_file": cper_file_path},
+                priority=EventPriority.INFO,
+                console_log=True,
+            )
+            return afid
+        except ValueError:
+            self._log_event(
+                category=EventCategory.APPLICATION,
+                description=f"Failed to parse AFID value from output: {result}",
+                data={"output": result, "cper_file": cper_file_path},
+                priority=EventPriority.ERROR,
+                console_log=True,
+            )
+            return None
+
     def collect_data(
         self,
-        args: Any = None,
+        args: Optional[AmdSmiCollectorArgs] = None,
     ) -> tuple[TaskResult, Optional[AmdSmiDataModel]]:
         """Collect AmdSmi data from system
 
         Args:
-            args (Any, optional): optional arguments for data collection. Defaults to None.
+            args (Optional[AmdSmiCollectorArgs], optional): optional arguments for data collection.
+                If cper_file_path is provided, will run amd-smi ras --afid --cper-file command.
+                Defaults to None.
 
         Returns:
             tuple[TaskResult, Optional[AmdSmiDataModel]]: task result and collected data model
@@ -1299,6 +1344,11 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
 
             if amd_smi_data is None:
                 return self.result, None
+
+            # If cper_file_path is provided, get AFID from the CPER file
+            if args and args.cper_file_path:
+                afid = self._get_cper_afid(args.cper_file_path)
+                amd_smi_data.cper_afid = afid
 
             return self.result, amd_smi_data
         except Exception as e:

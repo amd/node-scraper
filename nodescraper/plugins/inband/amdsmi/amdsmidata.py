@@ -954,6 +954,7 @@ class AmdSmiDataModel(DataModel):
     xgmi_metric: Optional[list[XgmiMetrics]] = Field(default_factory=list)
     xgmi_link: Optional[list[XgmiLinks]] = Field(default_factory=list)
     cper_data: Optional[list[FileModel]] = Field(default_factory=list)
+    cper_afid: Optional[int] = None
     amdsmitst_data: AmdSmiTstData = Field(default_factory=AmdSmiTstData)
 
     def get_list(self, gpu: int) -> Optional[AmdSmiListItem]:
