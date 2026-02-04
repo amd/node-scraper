@@ -31,6 +31,27 @@ import pytest
 
 from nodescraper.enums.systeminteraction import SystemInteractionLevel
 from nodescraper.plugins.inband.amdsmi.amdsmi_collector import AmdSmiCollector
+from nodescraper.plugins.inband.amdsmi.amdsmidata import AmdSmiDataModel
+from nodescraper.plugins.inband.amdsmi.collector_args import AmdSmiCollectorArgs
+
+
+def test_collector_args_instantiation():
+    """Test AmdSmiCollectorArgs can be instantiated with and without cper_file_path"""
+
+    args2 = AmdSmiCollectorArgs(cper_file_path="/path/to/test.cper")
+    assert args2.cper_file_path == "/path/to/test.cper"
+
+
+def test_data_model_cper_afid_field():
+    """Test AmdSmiDataModel accepts cper_afid field"""
+    data1 = AmdSmiDataModel(cper_afid=12345)
+    assert data1.cper_afid == 12345
+
+    data2 = AmdSmiDataModel()
+    assert data2.cper_afid is None
+
+    data3 = AmdSmiDataModel(**{"cper_afid": 99999})
+    assert data3.cper_afid == 99999
 
 
 def make_cmd_result(stdout: str, stderr: str = "", exit_code: int = 0) -> MagicMock:
@@ -483,3 +504,116 @@ def test_single_json_parsing(conn_mock, system_info, monkeypatch):
     assert isinstance(result, list)
     assert len(result) == 1
     assert result[0]["tool"] == "amdsmi"
+
+
+def test_get_cper_afid_success(conn_mock, system_info, monkeypatch):
+    """Test successful AFID retrieval from CPER file"""
+
+    def mock_run_sut_cmd(cmd: str) -> MagicMock:
+        if "which amd-smi" in cmd:
+            return make_cmd_result("/usr/bin/amd-smi")
+        if "ras --afid --cper-file" in cmd:
+            return make_cmd_result("12345\n")
+        return make_cmd_result("")
+
+    c = AmdSmiCollector(
+        system_info=system_info,
+        system_interaction_level=SystemInteractionLevel.PASSIVE,
+        connection=conn_mock,
+    )
+    monkeypatch.setattr(c, "_run_sut_cmd", mock_run_sut_cmd)
+
+    afid = c._get_cper_afid("/path/to/test.cper")
+
+    assert afid is not None
+    assert afid == 12345
+
+
+def test_get_cper_afid_invalid_output(conn_mock, system_info, monkeypatch):
+    """Test AFID retrieval with invalid/non-integer output"""
+
+    def mock_run_sut_cmd(cmd: str) -> MagicMock:
+        if "which amd-smi" in cmd:
+            return make_cmd_result("/usr/bin/amd-smi")
+        if "ras --afid --cper-file" in cmd:
+            return make_cmd_result("not_a_number\n")
+        return make_cmd_result("")
+
+    c = AmdSmiCollector(
+        system_info=system_info,
+        system_interaction_level=SystemInteractionLevel.PASSIVE,
+        connection=conn_mock,
+    )
+    monkeypatch.setattr(c, "_run_sut_cmd", mock_run_sut_cmd)
+
+    afid = c._get_cper_afid("/path/to/test.cper")
+
+    assert afid is None
+
+
+def test_get_cper_afid_command_failure(conn_mock, system_info, monkeypatch):
+    """Test AFID retrieval when command fails"""
+
+    def mock_run_sut_cmd(cmd: str) -> MagicMock:
+        if "which amd-smi" in cmd:
+            return make_cmd_result("/usr/bin/amd-smi")
+        if "ras --afid --cper-file" in cmd:
+            return make_cmd_result("", stderr="Error: file not found", exit_code=1)
+        return make_cmd_result("")
+
+    c = AmdSmiCollector(
+        system_info=system_info,
+        system_interaction_level=SystemInteractionLevel.PASSIVE,
+        connection=conn_mock,
+    )
+    monkeypatch.setattr(c, "_run_sut_cmd", mock_run_sut_cmd)
+
+    # _run_amd_smi returns None on non-zero exit code
+    afid = c._get_cper_afid("/path/to/test.cper")
+
+    assert afid is None
+
+
+def test_collect_data_with_cper_file(conn_mock, system_info, mock_commands):
+    """Test collect_data with cper_file_path argument"""
+    from nodescraper.plugins.inband.amdsmi.collector_args import AmdSmiCollectorArgs
+
+    c = AmdSmiCollector(
+        system_info=system_info,
+        system_interaction_level=SystemInteractionLevel.PASSIVE,
+        connection=conn_mock,
+    )
+
+    # Add mock for AFID command
+    original_mock = mock_commands
+
+    def extended_mock(cmd: str) -> MagicMock:
+        if "ras --afid --cper-file" in cmd:
+            return make_cmd_result("99999\n")
+        return original_mock(cmd)
+
+    c._run_sut_cmd = extended_mock
+
+    args = AmdSmiCollectorArgs(cper_file_path="/path/to/test.cper")
+    result, data = c.collect_data(args)
+
+    assert result is not None
+    assert data is not None
+    assert data.cper_afid == 99999
+
+
+def test_collect_data_without_cper_file(conn_mock, system_info, mock_commands):
+    """Test collect_data without cper_file_path argument"""
+
+    c = AmdSmiCollector(
+        system_info=system_info,
+        system_interaction_level=SystemInteractionLevel.PASSIVE,
+        connection=conn_mock,
+    )
+    c._run_sut_cmd = mock_commands
+
+    result, data = c.collect_data()
+
+    assert result is not None
+    assert data is not None
+    assert data.cper_afid is None
