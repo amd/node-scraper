@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# Copyright (c) 2025 Advanced Micro Devices, Inc.
+# Copyright (c) 2026 Advanced Micro Devices, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,24 +23,12 @@
 # SOFTWARE.
 #
 ###############################################################################
-from nodescraper.base import InBandDataPlugin
+from typing import Optional
 
-from .amdsmi_analyzer import AmdSmiAnalyzer
-from .amdsmi_collector import AmdSmiCollector
-from .amdsmidata import AmdSmiDataModel
-from .analyzer_args import AmdSmiAnalyzerArgs
-from .collector_args import AmdSmiCollectorArgs
+from nodescraper.models import CollectorArgs
 
 
-class AmdSmiPlugin(InBandDataPlugin[AmdSmiDataModel, AmdSmiCollectorArgs, AmdSmiAnalyzerArgs]):
-    """Plugin for collection and analysis of amdsmi data"""
+class AmdSmiCollectorArgs(CollectorArgs):
+    """Collector arguments for AmdSmiPlugin"""
 
-    DATA_MODEL = AmdSmiDataModel
-
-    COLLECTOR = AmdSmiCollector
-
-    COLLECTOR_ARGS = AmdSmiCollectorArgs
-
-    ANALYZER = AmdSmiAnalyzer
-
-    ANALYZER_ARGS = AmdSmiAnalyzerArgs
+    cper_file_path: Optional[str] = None
