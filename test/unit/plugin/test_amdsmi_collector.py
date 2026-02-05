@@ -23,7 +23,9 @@
 # SOFTWARE.
 #
 ###############################################################################
+import io
 import json
+import tarfile
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -37,21 +39,26 @@ from nodescraper.plugins.inband.amdsmi.collector_args import AmdSmiCollectorArgs
 
 def test_collector_args_instantiation():
     """Test AmdSmiCollectorArgs can be instantiated with and without cper_file_path"""
+    args1 = AmdSmiCollectorArgs()
+    assert args1.cper_file_path is None
 
     args2 = AmdSmiCollectorArgs(cper_file_path="/path/to/test.cper")
     assert args2.cper_file_path == "/path/to/test.cper"
 
+    args3 = AmdSmiCollectorArgs(**{"cper_file_path": "/another/path.cper"})
+    assert args3.cper_file_path == "/another/path.cper"
 
-def test_data_model_cper_afid_field():
-    """Test AmdSmiDataModel accepts cper_afid field"""
-    data1 = AmdSmiDataModel(cper_afid=12345)
-    assert data1.cper_afid == 12345
+
+def test_data_model_cper_afids_field():
+    """Test AmdSmiDataModel accepts cper_afids dict field"""
+    data1 = AmdSmiDataModel(cper_afids={"file1.cper": 12345, "file2.cper": 67890})
+    assert data1.cper_afids == {"file1.cper": 12345, "file2.cper": 67890}
 
     data2 = AmdSmiDataModel()
-    assert data2.cper_afid is None
+    assert data2.cper_afids == {}
 
-    data3 = AmdSmiDataModel(**{"cper_afid": 99999})
-    assert data3.cper_afid == 99999
+    data3 = AmdSmiDataModel(**{"cper_afids": {"test.cper": 99999}})
+    assert data3.cper_afids == {"test.cper": 99999}
 
 
 def make_cmd_result(stdout: str, stderr: str = "", exit_code: int = 0) -> MagicMock:
@@ -576,8 +583,6 @@ def test_get_cper_afid_command_failure(conn_mock, system_info, monkeypatch):
 
 def test_collect_data_with_cper_file(conn_mock, system_info, mock_commands):
     """Test collect_data with cper_file_path argument"""
-    from nodescraper.plugins.inband.amdsmi.collector_args import AmdSmiCollectorArgs
-
     c = AmdSmiCollector(
         system_info=system_info,
         system_interaction_level=SystemInteractionLevel.PASSIVE,
@@ -599,7 +604,8 @@ def test_collect_data_with_cper_file(conn_mock, system_info, mock_commands):
 
     assert result is not None
     assert data is not None
-    assert data.cper_afid == 99999
+    assert "/path/to/test.cper" in data.cper_afids
+    assert data.cper_afids["/path/to/test.cper"] == 99999
 
 
 def test_collect_data_without_cper_file(conn_mock, system_info, mock_commands):
@@ -616,4 +622,132 @@ def test_collect_data_without_cper_file(conn_mock, system_info, mock_commands):
 
     assert result is not None
     assert data is not None
-    assert data.cper_afid is None
+    assert isinstance(data.cper_afids, dict)
+
+
+def test_get_cper_data_with_afids(conn_mock, system_info, monkeypatch):
+    """Test get_cper_data returns both CPER files and AFIDs"""
+
+    def mock_run_sut_cmd(cmd: str, sudo: bool = False) -> MagicMock:
+        if "which amd-smi" in cmd:
+            return make_cmd_result("/usr/bin/amd-smi")
+        if "ras --cper --folder" in cmd:
+            return make_cmd_result("Created test1.cper\nCreated test2.cper\n")
+        if "mkdir -p" in cmd or "tar -czf" in cmd:
+            return make_cmd_result("")
+        if "ras --afid --cper-file" in cmd:
+            if "test1.cper" in cmd:
+                return make_cmd_result("12345\n")
+            elif "test2.cper" in cmd:
+                return make_cmd_result("67890\n")
+        return make_cmd_result("")
+
+    def mock_read_sut_file(path: str, encoding=None, strip=False, log_artifact=False):
+        tar_buffer = io.BytesIO()
+        with tarfile.open(fileobj=tar_buffer, mode="w:gz") as tar:
+            for name in ["test1.cper", "test2.cper"]:
+                info = tarfile.TarInfo(name=name)
+                info.size = len(b"fake cper data")
+                tar.addfile(info, io.BytesIO(b"fake cper data"))
+
+        tar_buffer.seek(0)
+        mock_artifact = MagicMock()
+        mock_artifact.contents = tar_buffer.read()
+        return mock_artifact
+
+    c = AmdSmiCollector(
+        system_info=system_info,
+        system_interaction_level=SystemInteractionLevel.PASSIVE,
+        connection=conn_mock,
+    )
+    monkeypatch.setattr(c, "_run_sut_cmd", mock_run_sut_cmd)
+    monkeypatch.setattr(c, "_read_sut_file", mock_read_sut_file)
+
+    cper_files, cper_afids = c.get_cper_data()
+
+    assert len(cper_files) == 2
+    assert cper_files[0].file_name == "test1.cper"
+    assert cper_files[1].file_name == "test2.cper"
+    assert cper_afids == {"test1.cper": 12345, "test2.cper": 67890}
+
+
+def test_get_cper_data_no_cper_files(conn_mock, system_info, monkeypatch):
+    """Test get_cper_data returns empty lists when no CPER files created"""
+
+    def mock_run_sut_cmd(cmd: str, sudo: bool = False) -> MagicMock:
+        if "which amd-smi" in cmd:
+            return make_cmd_result("/usr/bin/amd-smi")
+        if "ras --cper --folder" in cmd:
+            return make_cmd_result("No CPER files created\n")
+        if "mkdir -p" in cmd:
+            return make_cmd_result("")
+        return make_cmd_result("")
+
+    c = AmdSmiCollector(
+        system_info=system_info,
+        system_interaction_level=SystemInteractionLevel.PASSIVE,
+        connection=conn_mock,
+    )
+    monkeypatch.setattr(c, "_run_sut_cmd", mock_run_sut_cmd)
+
+    cper_files, cper_afids = c.get_cper_data()
+
+    assert cper_files == []
+    assert cper_afids == {}
+
+
+def test_collect_data_with_both_auto_and_custom_cper(conn_mock, system_info, monkeypatch):
+    """Test that both auto-collected and custom CPER AFIDs are stored in cper_afids"""
+
+    def mock_run_sut_cmd(cmd: str, sudo: bool = False) -> MagicMock:
+        if "which amd-smi" in cmd:
+            return make_cmd_result("/usr/bin/amd-smi")
+        if "version --json" in cmd:
+            return make_cmd_result(
+                make_json_response(
+                    [{"tool": "amdsmi", "amdsmi_library_version": "1.2.3", "rocm_version": "6.1.0"}]
+                )
+            )
+        if "list --json" in cmd:
+            return make_cmd_result(make_json_response([{"gpu": 0, "bdf": "0000:0b:00.0"}]))
+        if "ras --cper --folder" in cmd:
+            return make_cmd_result("Created auto1.cper\n")
+        if "ras --afid --cper-file" in cmd:
+            if "auto1.cper" in cmd:
+                return make_cmd_result("11111\n")
+            elif "custom.cper" in cmd:
+                return make_cmd_result("99999\n")
+        if "mkdir -p" in cmd or "tar -czf" in cmd:
+            return make_cmd_result("")
+        if "static -g all --json" in cmd:
+            return make_cmd_result(make_json_response({"gpu_data": []}))
+        return make_cmd_result("")
+
+    def mock_read_sut_file(path: str, encoding=None, strip=False, log_artifact=False):
+        tar_buffer = io.BytesIO()
+        with tarfile.open(fileobj=tar_buffer, mode="w:gz") as tar:
+            info = tarfile.TarInfo(name="auto1.cper")
+            info.size = len(b"auto cper data")
+            tar.addfile(info, io.BytesIO(b"auto cper data"))
+        tar_buffer.seek(0)
+        mock_artifact = MagicMock()
+        mock_artifact.contents = tar_buffer.read()
+        return mock_artifact
+
+    c = AmdSmiCollector(
+        system_info=system_info,
+        system_interaction_level=SystemInteractionLevel.PASSIVE,
+        connection=conn_mock,
+    )
+    monkeypatch.setattr(c, "_run_sut_cmd", mock_run_sut_cmd)
+    monkeypatch.setattr(c, "_read_sut_file", mock_read_sut_file)
+
+    args = AmdSmiCollectorArgs(cper_file_path="/home/user/custom.cper")
+    result, data = c.collect_data(args)
+
+    assert result is not None
+    assert data is not None
+    assert "auto1.cper" in data.cper_afids
+    assert data.cper_afids["auto1.cper"] == 11111
+    assert "/home/user/custom.cper" in data.cper_afids
+    assert data.cper_afids["/home/user/custom.cper"] == 99999
