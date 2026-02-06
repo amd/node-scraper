@@ -34,6 +34,7 @@ from nodescraper.plugins.inband.rocm.rocmdata import RocmDataModel
 class RocmAnalyzerArgs(AnalyzerArgs):
     exp_rocm: Union[str, list] = Field(default_factory=list)
     exp_rocm_latest: str = Field(default="")
+    # Key = sub-version name (e.g. version_rocm); value = expected string or list of allowed strings
     exp_rocm_sub_versions: dict[str, Union[str, list]] = Field(default_factory=dict)
 
     @field_validator("exp_rocm", mode="before")
