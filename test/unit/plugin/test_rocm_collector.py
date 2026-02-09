@@ -64,7 +64,11 @@ def test_collect_rocm_version_fallback(collector):
     """Test fallback to version file when version-rocm fails"""
     collector._run_sut_cmd = MagicMock(
         side_effect=[
+            # Sub-versions (grep . -r /opt/rocm/.info/*)
+            MagicMock(exit_code=0, stdout=""),
+            # First path: version-rocm (fails)
             MagicMock(exit_code=1, stdout="", command="grep . /opt/rocm/.info/version-rocm"),
+            # Second path: version (succeeds)
             MagicMock(exit_code=0, stdout="6.2.0-66", command="grep . /opt/rocm/.info/version"),
             # Additional commands after finding version
             MagicMock(exit_code=1, stdout=""),  # latest path
@@ -106,10 +110,12 @@ def test_collect_rocm_version_not_found(collector):
 
 def test_collect_all_rocm_data(collector):
     """Test collection of all ROCm data including tech support commands"""
-    # Mock all command outputs in sequence
+    # Mock all command outputs in sequence (order must match collector's call order)
     collector._run_sut_cmd = MagicMock(
         side_effect=[
-            # ROCm version
+            # Sub-versions (grep . -r /opt/rocm/.info/*)
+            MagicMock(exit_code=0, stdout="/opt/rocm/.info/version-rocm:6.2.0-66"),
+            # ROCm version (grep . /opt/rocm/.info/version-rocm)
             MagicMock(exit_code=0, stdout="6.2.0-66"),
             # Latest versioned path
             MagicMock(exit_code=0, stdout="/opt/rocm-1.1.0"),
@@ -200,7 +206,9 @@ def test_collect_with_clinfo_failure(collector):
     """Test that clinfo failure is handled gracefully and captured in artifact"""
     collector._run_sut_cmd = MagicMock(
         side_effect=[
-            # ROCm version
+            # Sub-versions (grep . -r /opt/rocm/.info/*)
+            MagicMock(exit_code=0, stdout="/opt/rocm/.info/version-rocm:6.2.0-66"),
+            # ROCm version (grep . /opt/rocm/.info/version-rocm)
             MagicMock(exit_code=0, stdout="6.2.0-66"),
             # Latest versioned path
             MagicMock(exit_code=0, stdout="/opt/rocm-7.1.0"),
@@ -241,7 +249,9 @@ def test_collect_minimal_data(collector):
     """Test collection when only version is available"""
     collector._run_sut_cmd = MagicMock(
         side_effect=[
-            # ROCm version
+            # Sub-versions (grep . -r /opt/rocm/.info/*)
+            MagicMock(exit_code=0, stdout=""),
+            # ROCm version (grep . /opt/rocm/.info/version-rocm)
             MagicMock(exit_code=0, stdout="6.2.0-66"),
             # All subsequent commands fail
             MagicMock(exit_code=1, stdout=""),  # latest path
