@@ -1703,9 +1703,10 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
         if result.exit_code == 0:
             self._log_event(
                 category=EventCategory.NETWORK,
-                description="System networking is up",
-                data={"url": url, "accessible": result.exit_code == 0},
+                description=f"Network connectivity check successful: {cmd} to {url} succeeded",
+                data={"url": url, "command": cmd, "accessible": True},
                 priority=EventPriority.INFO,
+                console_log=True,
             )
         else:
             self._log_event(
@@ -1713,6 +1714,7 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
                 description=f"{cmd} to {url} failed!",
                 data={"url": url, "not accessible": result.exit_code == 0},
                 priority=EventPriority.ERROR,
+                console_log=True,
             )
 
         return result.exit_code == 0
