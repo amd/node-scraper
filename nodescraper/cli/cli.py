@@ -33,6 +33,7 @@ import sys
 from typing import Optional
 
 import nodescraper
+from nodescraper.cli.compare_runs import run_compare_runs
 from nodescraper.cli.constants import DEFAULT_CONFIG, META_VAR_MAP
 from nodescraper.cli.dynamicparserbuilder import DynamicParserBuilder
 from nodescraper.cli.helper import (
@@ -223,6 +224,21 @@ def build_parser(
         help="Generate reference config from previous run logfiles. Writes to --output-path/reference_config.json if provided, otherwise ./reference_config.json.",
     )
 
+    compare_runs_parser = subparsers.add_parser(
+        "compare-runs",
+        help="Compare datamodels from two run log directories",
+    )
+    compare_runs_parser.add_argument(
+        "path1",
+        type=str,
+        help="Path to first run log directory",
+    )
+    compare_runs_parser.add_argument(
+        "path2",
+        type=str,
+        help="Path to second run log directory",
+    )
+
     config_builder_parser.add_argument(
         "--plugins",
         nargs="*",
@@ -384,7 +400,11 @@ def main(arg_input: Optional[list[str]] = None):
         sname = system_info.name.lower().replace("-", "_").replace(".", "_")
         timestamp = datetime.datetime.now().strftime("%Y_%m_%d-%I_%M_%S_%p")
 
-        if parsed_args.log_path and parsed_args.subcmd not in ["gen-plugin-config", "describe"]:
+        if parsed_args.log_path and parsed_args.subcmd not in [
+            "gen-plugin-config",
+            "describe",
+            "compare-runs",
+        ]:
             log_path = os.path.join(
                 parsed_args.log_path,
                 f"scraper_logs_{sname}_{timestamp}",
@@ -410,6 +430,15 @@ def main(arg_input: Optional[list[str]] = None):
 
         if parsed_args.subcmd == "describe":
             parse_describe(parsed_args, plugin_reg, config_reg, logger)
+
+        if parsed_args.subcmd == "compare-runs":
+            run_compare_runs(
+                parsed_args.path1,
+                parsed_args.path2,
+                plugin_reg,
+                logger,
+            )
+            sys.exit(0)
 
         if parsed_args.subcmd == "gen-plugin-config":
 
