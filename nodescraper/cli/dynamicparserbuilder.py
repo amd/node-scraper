@@ -24,7 +24,7 @@
 #
 ###############################################################################
 import argparse
-from typing import Optional, Type
+from typing import Literal, Optional, Type, get_args, get_origin
 
 from pydantic import BaseModel
 
@@ -96,11 +96,28 @@ class DynamicParserBuilder:
             None,
         )
 
+    @classmethod
+    def get_literal_choices(cls, type_class_map: dict) -> Optional[list]:
+        """Get the choices from a Literal type if present
+
+        Args:
+            type_class_map (dict): mapping of type classes
+
+        Returns:
+            Optional[list]: list of valid choices for the Literal type, or None if not a Literal
+        """
+        # Check if Literal is in the type_class_map
+        literal_type = type_class_map.get(Literal)
+        if literal_type and literal_type.inner_type is not None:
+            return None
+        return None
+
     def add_argument(
         self,
         type_class_map: dict,
         arg_name: str,
         required: bool,
+        annotation: Optional[Type] = None,
     ) -> None:
         """Add an argument to a parser with an appropriate type
 
@@ -108,7 +125,18 @@ class DynamicParserBuilder:
             type_class_map (dict): type classes for the arg
             arg_name (str): argument name
             required (bool): whether or not the arg is required
+            annotation (Optional[Type]): full type annotation for extracting Literal choices
         """
+        # Check for Literal types and extract choices
+        literal_choices = None
+        if Literal in type_class_map and annotation:
+            # Extract all arguments from the annotation
+            args = get_args(annotation)
+            for arg in args:
+                if get_origin(arg) is Literal:
+                    literal_choices = list(get_args(arg))
+                    break
+
         if list in type_class_map:
             type_class = type_class_map[list]
             self.parser.add_argument(
@@ -124,6 +152,15 @@ class DynamicParserBuilder:
                 type=bool_arg,
                 required=required,
                 choices=[True, False],
+            )
+        elif Literal in type_class_map and literal_choices:
+            # Add argument with choices for Literal types
+            self.parser.add_argument(
+                f"--{arg_name}",
+                type=str,
+                required=required,
+                choices=literal_choices,
+                metavar=f"{{{','.join(literal_choices)}}}",
             )
         elif float in type_class_map:
             self.parser.add_argument(
@@ -166,6 +203,10 @@ class DynamicParserBuilder:
             if type(None) in type_class_map and len(attr_data.type_classes) == 1:
                 continue
 
-            self.add_argument(type_class_map, attr.replace("_", "-"), required)
+            # Get the full annotation from the model field
+            field = model.model_fields.get(attr)
+            annotation = field.annotation if field else None
+
+            self.add_argument(type_class_map, attr.replace("_", "-"), required, annotation)
 
         return list(type_map.keys())
