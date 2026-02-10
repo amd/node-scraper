@@ -50,6 +50,7 @@ from nodescraper.enums import ExecutionStatus, SystemInteractionLevel
 from nodescraper.models import PluginConfig, TaskResult
 from nodescraper.models.datapluginresult import DataPluginResult
 from nodescraper.models.pluginresult import PluginResult
+from nodescraper.pluginregistry import PluginRegistry
 
 
 def test_generate_reference_config(plugin_registry):
@@ -157,6 +158,30 @@ def test_find_datamodel_and_result_with_fixture(framework_fixtures_path):
 
     assert dm.name == "biosdatamodel.json"
     assert rt.name == "result.json"
+
+
+def test_find_datamodel_and_result_with_plugin_reg_finds_log(tmp_path):
+    """With plugin_reg, a collector dir with result.json and a .log file finds the .log."""
+    collector = tmp_path / "collector"
+    collector.mkdir()
+    result_json = {
+        "status": "OK",
+        "message": "ok",
+        "task": "JournalCollector",
+        "parent": "JournalPlugin",
+        "start_time": "2025-01-01T00:00:00",
+        "end_time": "2025-01-01T00:00:01",
+    }
+    (collector / "result.json").write_text(json.dumps(result_json), encoding="utf-8")
+    (collector / "journal.log").write_text("some log line\n", encoding="utf-8")
+
+    plugin_reg = PluginRegistry()
+    pairs = find_datamodel_and_result(str(tmp_path), plugin_reg)
+
+    assert len(pairs) == 1
+    dm_path, res_path = pairs[0]
+    assert Path(dm_path).name == "journal.log"
+    assert Path(res_path).name == "result.json"
 
 
 def test_generate_reference_config_from_logs(framework_fixtures_path):
