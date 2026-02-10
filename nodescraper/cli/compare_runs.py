@@ -31,8 +31,10 @@ from typing import Any, Optional
 from pydantic import ValidationError
 
 from nodescraper.cli.helper import find_datamodel_and_result
-from nodescraper.models import TaskResult
+from nodescraper.enums import ExecutionStatus
+from nodescraper.models import PluginResult, TaskResult
 from nodescraper.pluginregistry import PluginRegistry
+from nodescraper.resultcollators.tablesummary import TableSummary
 
 
 def _load_plugin_data_from_run(
@@ -168,33 +170,47 @@ def run_compare_runs(
         logger.warning("No plugin data found in either run.")
         return
 
-    logger.info("Comparing %d plugin(s): %s", len(all_plugins), ", ".join(all_plugins))
-
+    plugin_results: list[PluginResult] = []
     for plugin_name in all_plugins:
         if plugin_name not in data1:
-            logger.info(
-                "Plugin '%s' was not found in run 1 (path: %s).",
-                plugin_name,
-                path1,
+            plugin_results.append(
+                PluginResult(
+                    source=plugin_name,
+                    status=ExecutionStatus.NOT_RAN,
+                    message=f"Plugin not found in run 1 (path: {path1}).",
+                )
             )
             continue
         if plugin_name not in data2:
-            logger.info(
-                "Plugin '%s' was not found in run 2 (path: %s).",
-                plugin_name,
-                path2,
+            plugin_results.append(
+                PluginResult(
+                    source=plugin_name,
+                    status=ExecutionStatus.NOT_RAN,
+                    message=f"Plugin not found in run 2 (path: {path2}).",
+                )
             )
             continue
 
         diffs = _diff_value(data1[plugin_name], data2[plugin_name], "")
         if not diffs:
-            logger.info("Plugin '%s': no differences.", plugin_name)
-        else:
-            logger.info("Plugin '%s': %d difference(s):", plugin_name, len(diffs))
-            for p, v1, v2 in diffs:
-                logger.info(
-                    "  %s: run1=%s  run2=%s",
-                    p,
-                    _format_value(v1),
-                    _format_value(v2),
+            plugin_results.append(
+                PluginResult(
+                    source=plugin_name,
+                    status=ExecutionStatus.OK,
+                    message="No differences.",
                 )
+            )
+        else:
+            msg_lines = [f"{len(diffs)} difference(s):"]
+            for p, v1, v2 in diffs:
+                msg_lines.append(f"  {p}: run1={_format_value(v1)}  run2={_format_value(v2)}")
+            plugin_results.append(
+                PluginResult(
+                    source=plugin_name,
+                    status=ExecutionStatus.WARNING,
+                    message="\n".join(msg_lines),
+                )
+            )
+
+    table_summary = TableSummary(logger=logger)
+    table_summary.collate_results(plugin_results=plugin_results, connection_results=[])
