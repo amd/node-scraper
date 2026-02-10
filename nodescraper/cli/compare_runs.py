@@ -51,7 +51,7 @@ def _load_plugin_data_from_run(
         Dict mapping plugin name to the datamodel as a JSON-serializable dict (model_dump).
     """
     result: dict[str, dict[str, Any]] = {}
-    found = find_datamodel_and_result(base_path)
+    found = find_datamodel_and_result(base_path, plugin_reg)
 
     for dm_path, res_path in found:
         try:
@@ -77,8 +77,19 @@ def _load_plugin_data_from_run(
             continue
 
         try:
-            dm_payload = json.loads(Path(dm_path).read_text(encoding="utf-8"))
-            data_model = data_model_cls.model_validate(dm_payload)
+            if dm_path.lower().endswith(".log"):
+                import_model = getattr(data_model_cls, "import_model", None)
+                if callable(import_model):
+                    data_model = import_model(dm_path)
+                else:
+                    logger.warning(
+                        "Plugin %s datamodel is .log but has no import_model, skipping.",
+                        plugin_name,
+                    )
+                    continue
+            else:
+                dm_payload = json.loads(Path(dm_path).read_text(encoding="utf-8"))
+                data_model = data_model_cls.model_validate(dm_payload)
             result[plugin_name] = data_model.model_dump(mode="json")
         except (json.JSONDecodeError, OSError) as e:
             logger.warning("Skipping %s for plugin %s: %s", dm_path, plugin_name, e)
