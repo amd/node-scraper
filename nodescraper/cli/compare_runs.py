@@ -25,14 +25,16 @@
 ###############################################################################
 import json
 import logging
+import sys
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Sequence
 
 from pydantic import ValidationError
 
 from nodescraper.cli.helper import find_datamodel_and_result
 from nodescraper.enums import ExecutionStatus
 from nodescraper.models import PluginResult, TaskResult
+from nodescraper.models.datamodel import DataModel
 from nodescraper.pluginregistry import PluginRegistry
 from nodescraper.resultcollators.tablesummary import TableSummary
 
@@ -79,14 +81,26 @@ def _load_plugin_data_from_run(
         try:
             if dm_path.lower().endswith(".log"):
                 import_model = getattr(data_model_cls, "import_model", None)
-                if callable(import_model):
-                    data_model = import_model(dm_path)
-                else:
+                if not callable(import_model):
                     logger.warning(
                         "Plugin %s datamodel is .log but has no import_model, skipping.",
                         plugin_name,
                     )
                     continue
+
+                # skipping plugins where import_model is not implemented
+                _import_func = getattr(import_model, "__func__", import_model)
+                _base_import_func = getattr(
+                    DataModel.import_model, "__func__", DataModel.import_model
+                )
+                if _import_func is _base_import_func:
+                    logger.debug(
+                        "Skipping %s for plugin %s: .log file not loadable (no custom import_model).",
+                        dm_path,
+                        plugin_name,
+                    )
+                    continue
+                data_model = import_model(dm_path)
             else:
                 dm_payload = json.loads(Path(dm_path).read_text(encoding="utf-8"))
                 data_model = data_model_cls.model_validate(dm_payload)
@@ -143,14 +157,69 @@ def _diff_value(val1: Any, val2: Any, path: str) -> list[tuple[str, Optional[Any
     return diffs
 
 
-def _format_value(val: Any, max_len: int = 80) -> str:
-    """Format a value for display; truncate long strings."""
+# Max length for a single value in the full-diff file (avoids dumping huge .log content).
+_FULL_DIFF_VALUE_CAP = 8192
+
+
+def _format_value(val: Any, max_len: Optional[int] = 80) -> str:
+    """Format a value for display; optionally truncate long strings (max_len=None for no truncation)."""
     if val is None:
         return "<missing>"
     s = json.dumps(val) if not isinstance(val, str) else repr(val)
-    if len(s) > max_len:
+    if max_len is not None and len(s) > max_len:
         s = s[: max_len - 3] + "..."
     return s
+
+
+def _format_value_for_diff_file(val: Any) -> str:
+    """Format a value for the diff file; cap very long strings (e.g. journal/dmesg logs)."""
+    if val is None:
+        return "<missing>"
+    s = repr(val) if isinstance(val, str) else json.dumps(val)
+    if len(s) > _FULL_DIFF_VALUE_CAP:
+        s = s[:_FULL_DIFF_VALUE_CAP] + f" ... [truncated, total {len(s)} characters]"
+    return s
+
+
+def _build_full_diff_report(
+    path1: str,
+    path2: str,
+    data1: dict[str, dict[str, Any]],
+    data2: dict[str, dict[str, Any]],
+    all_plugins: list[str],
+) -> str:
+    """Build a full diff report (no value truncation) for dumping to file."""
+    lines = [
+        "Compare-runs full diff report",
+        f"Run 1: {path1}",
+        f"Run 2: {path2}",
+        "",
+    ]
+    for plugin_name in all_plugins:
+        lines.append("=" * 80)
+        lines.append(f"Plugin: {plugin_name}")
+        lines.append("=" * 80)
+        if plugin_name not in data1:
+            lines.append("  Not present in run 1.")
+            lines.append("")
+            continue
+        if plugin_name not in data2:
+            lines.append("  Not present in run 2.")
+            lines.append("")
+            continue
+        diffs = _diff_value(data1[plugin_name], data2[plugin_name], "")
+        if not diffs:
+            lines.append("  No differences.")
+            lines.append("")
+            continue
+        lines.append(f"  {len(diffs)} difference(s):")
+        for p, v1, v2 in diffs:
+            lines.append(f"  --- path: {p} ---")
+            lines.append(f"  run1:\n{_format_value_for_diff_file(v1)}")
+            lines.append(f"  run2:\n{_format_value_for_diff_file(v2)}")
+            lines.append("")
+        lines.append("")
+    return "\n".join(lines)
 
 
 def run_compare_runs(
@@ -158,6 +227,8 @@ def run_compare_runs(
     path2: str,
     plugin_reg: PluginRegistry,
     logger: logging.Logger,
+    skip_plugins: Optional[Sequence[str]] = None,
+    output_path: Optional[str] = None,
 ) -> None:
     """Compare datamodels from two run log directories and log results.
 
@@ -170,13 +241,35 @@ def run_compare_runs(
         path2: Path to second run log directory.
         plugin_reg: Plugin registry.
         logger: Logger for output.
+        skip_plugins: Optional list of plugin names to exclude from comparison.
+        output_path: Optional path for full diff report; default is <path1>_<path2>_diff.txt.
     """
+    p1 = Path(path1)
+    p2 = Path(path2)
+    if not p1.exists():
+        logger.error("Path not found: %s", path1)
+        sys.exit(1)
+    if not p1.is_dir():
+        logger.error("Path is not a directory: %s", path1)
+        sys.exit(1)
+    if not p2.exists():
+        logger.error("Path not found: %s", path2)
+        sys.exit(1)
+    if not p2.is_dir():
+        logger.error("Path is not a directory: %s", path2)
+        sys.exit(1)
+
     logger.info("Loading run 1 from: %s", path1)
     data1 = _load_plugin_data_from_run(path1, plugin_reg, logger)
     logger.info("Loading run 2 from: %s", path2)
     data2 = _load_plugin_data_from_run(path2, plugin_reg, logger)
 
     all_plugins = sorted(set(data1) | set(data2))
+    if skip_plugins:
+        skip_set = set(skip_plugins)
+        all_plugins = [p for p in all_plugins if p not in skip_set]
+        if skip_set:
+            logger.info("Skipping plugins: %s", ", ".join(sorted(skip_set)))
     if not all_plugins:
         logger.warning("No plugin data found in either run.")
         return
@@ -223,5 +316,13 @@ def run_compare_runs(
                 )
             )
 
+    out_file = output_path
+    if not out_file:
+        out_file = f"{Path(path1).name}_{Path(path2).name}_diff.txt"
+    full_report = _build_full_diff_report(path1, path2, data1, data2, all_plugins)
+    Path(out_file).write_text(full_report, encoding="utf-8")
+    logger.info("Full diff report written to: %s", out_file)
+
     table_summary = TableSummary(logger=logger)
     table_summary.collate_results(plugin_results=plugin_results, connection_results=[])
+    print(f"Diff file written to {out_file}")  # noqa: T201

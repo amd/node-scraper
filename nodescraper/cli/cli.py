@@ -238,7 +238,13 @@ def build_parser(
         type=str,
         help="Path to second run log directory",
     )
-
+    compare_runs_parser.add_argument(
+        "--skip-plugins",
+        nargs="*",
+        choices=list(plugin_reg.plugins.keys()),
+        metavar="PLUGIN",
+        help="Plugin names to exclude from comparison",
+    )
     config_builder_parser.add_argument(
         "--plugins",
         nargs="*",
@@ -437,6 +443,7 @@ def main(arg_input: Optional[list[str]] = None):
                 parsed_args.path2,
                 plugin_reg,
                 logger,
+                skip_plugins=getattr(parsed_args, "skip_plugins", None) or [],
             )
             sys.exit(0)
 
