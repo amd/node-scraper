@@ -16,7 +16,7 @@
 | KernelPlugin | sh -c 'uname -a'<br>wmic os get Version /Value | **Analyzer Args:**<br>- `exp_kernel`: Union[str, list]<br>- `regex_match`: bool | [KernelDataModel](#KernelDataModel-Model) | [KernelCollector](#Collector-Class-KernelCollector) | [KernelAnalyzer](#Data-Analyzer-Class-KernelAnalyzer) |
 | KernelModulePlugin | cat /proc/modules<br>modinfo amdgpu<br>wmic os get Version /Value | **Analyzer Args:**<br>- `kernel_modules`: dict[str, dict]<br>- `regex_filter`: list[str] | [KernelModuleDataModel](#KernelModuleDataModel-Model) | [KernelModuleCollector](#Collector-Class-KernelModuleCollector) | [KernelModuleAnalyzer](#Data-Analyzer-Class-KernelModuleAnalyzer) |
 | MemoryPlugin | free -b<br>lsmem<br>numactl -H<br>wmic OS get FreePhysicalMemory /Value; wmic ComputerSystem get TotalPhysicalMemory /Value | **Analyzer Args:**<br>- `ratio`: float<br>- `memory_threshold`: str | [MemoryDataModel](#MemoryDataModel-Model) | [MemoryCollector](#Collector-Class-MemoryCollector) | [MemoryAnalyzer](#Data-Analyzer-Class-MemoryAnalyzer) |
-| NetworkPlugin | ip addr show<br>ethtool {interface}<br>lldpcli show neighbor<br>lldpctl<br>ip neighbor show<br>niccli --dev {device_num} qos --ets --show<br>niccli --list_devices<br>nicctl show card<br>nicctl show dcqcn<br>nicctl show environment<br>nicctl show pcie ats<br>nicctl show port<br>nicctl show qos<br>nicctl show rdma statistics<br>nicctl show version firmware<br>nicctl show version host-software<br>ip route show<br>ip rule show | - | [NetworkDataModel](#NetworkDataModel-Model) | [NetworkCollector](#Collector-Class-NetworkCollector) | - |
+| NetworkPlugin | ip addr show<br>curl<br>ethtool {interface}<br>lldpcli show neighbor<br>lldpctl<br>ip neighbor show<br>niccli --dev {device_num} qos --ets --show<br>niccli --list_devices<br>nicctl show card<br>nicctl show dcqcn<br>nicctl show environment<br>nicctl show pcie ats<br>nicctl show port<br>nicctl show qos<br>nicctl show rdma statistics<br>nicctl show version firmware<br>nicctl show version host-software<br>ping<br>ip route show<br>ip rule show<br>wget | - | [NetworkDataModel](#NetworkDataModel-Model) | [NetworkCollector](#Collector-Class-NetworkCollector) | - |
 | NvmePlugin | nvme smart-log {dev}<br>nvme error-log {dev} --log-entries=256<br>nvme id-ctrl {dev}<br>nvme id-ns {dev}{ns}<br>nvme fw-log {dev}<br>nvme self-test-log {dev}<br>nvme get-log {dev} --log-id=6 --log-len=512<br>nvme telemetry-log {dev} --output-file={dev}_{f_name} | - | [NvmeDataModel](#NvmeDataModel-Model) | [NvmeCollector](#Collector-Class-NvmeCollector) | - |
 | OsPlugin | sh -c '( lsb_release -ds \|\| (cat /etc/*release \| grep PRETTY_NAME) \|\| uname -om ) 2>/dev/null \| head -n1'<br>cat /etc/*release \| grep VERSION_ID<br>wmic os get Version /value<br>wmic os get Caption /Value | **Analyzer Args:**<br>- `exp_os`: Union[str, list]<br>- `exact_match`: bool | [OsDataModel](#OsDataModel-Model) | [OsCollector](#Collector-Class-OsCollector) | [OsAnalyzer](#Data-Analyzer-Class-OsAnalyzer) |
 | PackagePlugin | dnf list --installed<br>dpkg-query -W<br>pacman -Q<br>cat /etc/*release<br>wmic product get name,version | **Analyzer Args:**<br>- `exp_package_ver`: Dict[str, Optional[str]]<br>- `regex_match`: bool<br>- `rocm_regex`: Optional[str]<br>- `enable_rocm_regex`: bool | [PackageDataModel](#PackageDataModel-Model) | [PackageCollector](#Collector-Class-PackageCollector) | [PackageAnalyzer](#Data-Analyzer-Class-PackageAnalyzer) |
@@ -383,6 +383,9 @@ Collect network configuration details using ip command
 - **CMD_RULE**: `ip rule show`
 - **CMD_NEIGHBOR**: `ip neighbor show`
 - **CMD_ETHTOOL_TEMPLATE**: `ethtool {interface}`
+- **CMD_PING**: `ping`
+- **CMD_WGET**: `wget`
+- **CMD_CURL**: `curl`
 - **CMD_LLDPCLI_NEIGHBOR**: `lldpcli show neighbor`
 - **CMD_LLDPCTL**: `lldpctl`
 - **CMD_NICCLI_LISTDEV**: `niccli --list_devices`
@@ -404,6 +407,7 @@ NetworkDataModel
 ### Commands
 
 - ip addr show
+- curl
 - ethtool {interface}
 - lldpcli show neighbor
 - lldpctl
@@ -419,8 +423,10 @@ NetworkDataModel
 - nicctl show rdma statistics
 - nicctl show version firmware
 - nicctl show version host-software
+- ping
 - ip route show
 - ip rule show
+- wget
 
 ## Collector Class NvmeCollector
 
@@ -940,6 +946,7 @@ Complete network configuration data
 - **pensando_nic_rdma_statistics**: `List[nodescraper.plugins.inband.network.networkdata.PensandoNicRdmaStatistics]`
 - **pensando_nic_version_host_software**: `Optional[nodescraper.plugins.inband.network.networkdata.PensandoNicVersionHostSoftware]`
 - **pensando_nic_version_firmware**: `List[nodescraper.plugins.inband.network.networkdata.PensandoNicVersionFirmware]`
+- **accessible**: `Optional[bool]`
 
 ## NvmeDataModel Model
 
