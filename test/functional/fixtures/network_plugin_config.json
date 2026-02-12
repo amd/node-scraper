@@ -2,6 +2,10 @@
   "global_args": {},
   "plugins": {
     "NetworkPlugin": {
+      "collector_args": {
+        "url": "mock.example.com",
+        "netprobe": "ping"
+      },
       "analysis_args": {}
     }
   },
