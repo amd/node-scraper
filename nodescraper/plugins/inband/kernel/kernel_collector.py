@@ -39,6 +39,7 @@ class KernelCollector(InBandDataCollector[KernelDataModel, None]):
     DATA_MODEL = KernelDataModel
     CMD_WINDOWS = "wmic os get Version /Value"
     CMD = "sh -c 'uname -a'"
+    CMD_NUMA_BALANCING = "sh -c 'cat /proc/sys/kernel/numa_balancing'"
 
     def _parse_kernel_version(self, uname_a: str) -> Optional[str]:
         """Extract the kernel release from `uname -a` output.
@@ -77,6 +78,7 @@ class KernelCollector(InBandDataCollector[KernelDataModel, None]):
 
         kernel = None
         kernel_info = None
+        numa_balancing = None
 
         if self.system_info.os_family == OSFamily.WINDOWS:
             res = self._run_sut_cmd(self.CMD_WINDOWS)
@@ -90,6 +92,9 @@ class KernelCollector(InBandDataCollector[KernelDataModel, None]):
             if res.exit_code == 0:
                 kernel_info = res.stdout
                 kernel = self._parse_kernel_version(kernel_info)
+                numa_res = self._run_sut_cmd(self.CMD_NUMA_BALANCING)
+                if numa_res.exit_code == 0 and numa_res.stdout.strip().isdigit():
+                    numa_balancing = int(numa_res.stdout.strip())
                 if not kernel:
                     self._log_event(
                         category=EventCategory.OS,
@@ -110,7 +115,11 @@ class KernelCollector(InBandDataCollector[KernelDataModel, None]):
 
         if kernel_info and kernel:
 
-            kernel_data = KernelDataModel(kernel_info=kernel_info, kernel_version=kernel)
+            kernel_data = KernelDataModel(
+                kernel_info=kernel_info,
+                kernel_version=kernel,
+                numa_balancing=numa_balancing,
+            )
             self._log_event(
                 category="KERNEL_READ",
                 description="Kernel version read",
