@@ -338,8 +338,10 @@ def process_args(
         else:
             cur_plugin = None
             for arg in plugin_args:
-                # Handle comma-separated plugin names (but not arguments)
-                if not arg.startswith("-") and "," in arg:
+                # Handle comma-separated plugin names (but not option values like JSON)
+                arg_stripped = arg.strip()
+                looks_like_value = arg_stripped.startswith("{") or arg_stripped.startswith("[")
+                if not arg.startswith("-") and "," in arg and not looks_like_value:
                     # Split comma-separated plugin names
                     for potential_plugin in arg.split(","):
                         potential_plugin = potential_plugin.strip()
