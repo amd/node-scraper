@@ -37,13 +37,15 @@ import pytest
 from conftest import DummyDataModel
 from pydantic import BaseModel
 
-from nodescraper.cli import cli
 from nodescraper.cli.helper import (
     build_config,
     dump_results_to_csv,
     dump_to_csv,
     find_datamodel_and_result,
+    generate_reference_config,
+    generate_reference_config_from_logs,
     generate_summary,
+    get_plugin_configs,
 )
 from nodescraper.configregistry import ConfigRegistry
 from nodescraper.enums import ExecutionStatus, SystemInteractionLevel
@@ -71,14 +73,14 @@ def test_generate_reference_config(plugin_registry):
         )
     ]
 
-    ref_config = cli.generate_reference_config(results, plugin_registry, logging.getLogger())
+    ref_config = generate_reference_config(results, plugin_registry, logging.getLogger())
     dump = ref_config.dict()
     assert dump["plugins"] == {"TestPluginA": {"analysis_args": {"model_attr": 17}}}
 
 
 def test_get_plugin_configs():
     with pytest.raises(argparse.ArgumentTypeError):
-        cli.get_plugin_configs(
+        get_plugin_configs(
             system_interaction_level="INVALID",
             plugin_config_input=[],
             built_in_configs={},
@@ -86,7 +88,7 @@ def test_get_plugin_configs():
             plugin_subparser_map={},
         )
 
-    plugin_configs = cli.get_plugin_configs(
+    plugin_configs = get_plugin_configs(
         system_interaction_level="PASSIVE",
         plugin_config_input=[],
         built_in_configs={},
@@ -180,7 +182,7 @@ def test_generate_reference_config_from_logs(framework_fixtures_path):
         plugins={parent: SimpleNamespace(DATA_MODEL=FakeDataModel, ANALYZER_ARGS=FakeArgs)}
     )
 
-    cfg = cli.generate_reference_config_from_logs(str(framework_fixtures_path), plugin_reg, logger)
+    cfg = generate_reference_config_from_logs(str(framework_fixtures_path), plugin_reg, logger)
 
     assert isinstance(cfg, PluginConfig)
     assert set(cfg.plugins) == {parent}

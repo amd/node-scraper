@@ -29,14 +29,16 @@ import os
 import pytest
 from pydantic import BaseModel
 
-from nodescraper.cli import cli, inputargtypes
+from nodescraper.cli import inputargtypes
+from nodescraper.cli.helper import get_system_info, process_args
+from nodescraper.cli.inputargtypes import ModelArgHandler, json_arg, log_path_arg
 from nodescraper.enums import SystemLocation
 from nodescraper.models import SystemInfo
 
 
 def test_log_path_arg():
-    assert cli.log_path_arg("test") == "test"
-    assert cli.log_path_arg("none") is None
+    assert log_path_arg("test") == "test"
+    assert log_path_arg("none") is None
 
 
 @pytest.mark.parametrize(
@@ -66,16 +68,16 @@ def test_dict_arg():
 
 
 def test_json_arg(framework_fixtures_path):
-    assert cli.json_arg(os.path.join(framework_fixtures_path, "example.json")) == {"test": 123}
+    assert json_arg(os.path.join(framework_fixtures_path, "example.json")) == {"test": 123}
     with pytest.raises(argparse.ArgumentTypeError):
-        cli.json_arg(os.path.join(framework_fixtures_path, "invalid.json"))
+        json_arg(os.path.join(framework_fixtures_path, "invalid.json"))
 
 
 def test_model_arg(framework_fixtures_path):
     class TestArg(BaseModel):
         test: int
 
-    arg_handler = cli.ModelArgHandler(TestArg)
+    arg_handler = ModelArgHandler(TestArg)
     assert arg_handler.process_file_arg(
         os.path.join(framework_fixtures_path, "example.json")
     ) == TestArg(test=123)
@@ -85,7 +87,7 @@ def test_model_arg(framework_fixtures_path):
 
 
 def test_system_info_builder():
-    assert cli.get_system_info(
+    assert get_system_info(
         argparse.Namespace(
             sys_name="test_name",
             sys_sku="test_sku",
@@ -98,7 +100,7 @@ def test_system_info_builder():
     )
 
     with pytest.raises(argparse.ArgumentTypeError):
-        cli.get_system_info(
+        get_system_info(
             argparse.Namespace(
                 sys_name="test_name",
                 sys_sku="test_sku",
@@ -149,4 +151,4 @@ def test_system_info_builder():
     ],
 )
 def test_process_args(raw_arg_input, plugin_names, exp_output):
-    assert cli.process_args(raw_arg_input, plugin_names) == exp_output
+    assert process_args(raw_arg_input, plugin_names) == exp_output
