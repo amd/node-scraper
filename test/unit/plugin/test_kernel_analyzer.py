@@ -38,6 +38,7 @@ def model_obj():
     return KernelDataModel(
         kernel_info="Linux MockSystem 5.13.0-30-generic #1 XYZ Day Month 10 15:19:13 EDT 2024 x86_64 x86_64 x86_64 GNU/Linux",
         kernel_version="5.13.0-30-generic",
+        numa_balancing=0,
     )
 
 
@@ -54,7 +55,7 @@ def config():
 
 
 def test_all_good_data(system_info, model_obj, config):
-    args = KernelAnalyzerArgs(exp_kernel=config["kernel_name"])
+    args = KernelAnalyzerArgs(exp_kernel=config["kernel_name"], exp_numa=0)
     analyzer = KernelAnalyzer(system_info)
     result = analyzer.analyze_data(model_obj, args)
 
@@ -64,7 +65,7 @@ def test_all_good_data(system_info, model_obj, config):
 
 
 def test_all_good_data_strings(system_info, model_obj, config):
-    args = KernelAnalyzerArgs(exp_kernel=config["kernel_name"][0])
+    args = KernelAnalyzerArgs(exp_kernel=config["kernel_name"][0], exp_numa=0)
     analyzer = KernelAnalyzer(system_info)
     result = analyzer.analyze_data(model_obj, args)
 
@@ -85,27 +86,29 @@ def test_no_config_data(system_info, model_obj):
 
 
 def test_invalid_kernel(system_info, model_obj, config):
-    args = KernelAnalyzerArgs(exp_kernel=config["kernel_name"])
+    args = KernelAnalyzerArgs(exp_kernel=config["kernel_name"], exp_numa=0)
     model_obj.kernel_version = "some_invalid"
 
     analyzer = KernelAnalyzer(system_info)
     result = analyzer.analyze_data(model_obj, args=args)
 
     assert result.status == ExecutionStatus.ERROR
-    assert "Kernel mismatch" in result.message
+    assert "unexpected kernel data!" in result.message
     assert any(
-        event.priority == EventPriority.CRITICAL and event.category == EventCategory.OS.value
+        event.priority == EventPriority.CRITICAL
+        and event.category == EventCategory.OS.value
+        and "unexpected kernel version!" in event.description
         for event in result.events
     )
 
 
 def test_unexpected_kernel(system_info, model_obj):
-    args = KernelAnalyzerArgs(exp_kernel=["5.18.2-mi300-build"])
+    args = KernelAnalyzerArgs(exp_kernel=["5.18.2-mi300-build"], exp_numa=0)
     analyzer = KernelAnalyzer(system_info)
     result = analyzer.analyze_data(model_obj, args)
 
     assert result.status == ExecutionStatus.ERROR
-    assert "Kernel mismatch!" in result.message
+    assert "unexpected kernel data!" in result.message
     assert any(
         event.priority == EventPriority.CRITICAL and event.category == EventCategory.OS.value
         for event in result.events
@@ -113,7 +116,7 @@ def test_unexpected_kernel(system_info, model_obj):
 
 
 def test_invalid_kernel_config(system_info, model_obj, config):
-    args = KernelAnalyzerArgs(exp_kernel=config["invalid"])
+    args = KernelAnalyzerArgs(exp_kernel=config["invalid"], exp_numa=0)
     analyzer = KernelAnalyzer(system_info)
     result = analyzer.analyze_data(model_obj, args)
 
@@ -121,14 +124,18 @@ def test_invalid_kernel_config(system_info, model_obj, config):
 
 
 def test_match_regex(system_info, model_obj):
-    args = KernelAnalyzerArgs(exp_kernel=[r".*5\.13\.\d+-\d+-[\w-]+.*"], regex_match=True)
+    args = KernelAnalyzerArgs(
+        exp_kernel=[r".*5\.13\.\d+-\d+-[\w-]+.*"], regex_match=True, exp_numa=0
+    )
     analyzer = KernelAnalyzer(system_info)
     result = analyzer.analyze_data(model_obj, args)
     assert result.status == ExecutionStatus.OK
 
 
 def test_mismatch_regex(system_info, model_obj):
-    args = KernelAnalyzerArgs(exp_kernel=[r".*4\.13\.\d+-\d+-[\w-]+.*"], regex_match=True)
+    args = KernelAnalyzerArgs(
+        exp_kernel=[r".*4\.13\.\d+-\d+-[\w-]+.*"], regex_match=True, exp_numa=0
+    )
     analyzer = KernelAnalyzer(system_info)
     result = analyzer.analyze_data(model_obj, args)
 
@@ -136,11 +143,11 @@ def test_mismatch_regex(system_info, model_obj):
     assert len(result.events) == 1
     assert result.events[0].priority == EventPriority.CRITICAL
     assert result.events[0].category == EventCategory.OS.value
-    assert "Kernel mismatch!" in result.events[0].description
+    assert "unexpected kernel version!" in result.events[0].description
 
 
 def test_bad_regex(system_info, model_obj):
-    args = KernelAnalyzerArgs(exp_kernel=[r"4.[3.\d-\d+-[\w]+"], regex_match=True)
+    args = KernelAnalyzerArgs(exp_kernel=[r"4.[3.\d-\d+-[\w]+"], regex_match=True, exp_numa=0)
     analyzer = KernelAnalyzer(system_info)
     result = analyzer.analyze_data(model_obj, args)
 
@@ -151,4 +158,56 @@ def test_bad_regex(system_info, model_obj):
     assert result.events[0].description == "Kernel regex is invalid"
     assert result.events[1].priority == EventPriority.CRITICAL
     assert result.events[1].category == EventCategory.OS.value
-    assert "Kernel mismatch!" in result.events[1].description
+    assert "unexpected kernel version!" in result.events[1].description
+
+
+def test_unexpected_numa(system_info, model_obj, config):
+    """Test with config specifying a different numa value than actual."""
+    args = KernelAnalyzerArgs(
+        exp_kernel=config["kernel_name"][0],
+        exp_numa=1,
+    )
+    analyzer = KernelAnalyzer(system_info)
+    result = analyzer.analyze_data(model_obj, args)
+
+    assert result.status == ExecutionStatus.ERROR
+    assert "unexpected kernel data!" in result.message
+    assert any(
+        event.priority == EventPriority.CRITICAL
+        and event.category == EventCategory.OS.value
+        and "unexpected numa_balancing setting!" in event.description
+        for event in result.events
+    )
+
+
+def test_no_expected_numa(system_info, model_obj, config):
+    """Test with no expected numa provided to analyzer (NUMA check skipped)."""
+    args = KernelAnalyzerArgs(exp_kernel=config["kernel_name"][0], exp_numa=None)
+    analyzer = KernelAnalyzer(system_info)
+    result = analyzer.analyze_data(model_obj, args)
+
+    assert result.status == ExecutionStatus.OK
+    assert "Kernel matches expected" in result.message
+    assert all(
+        event.priority not in [EventPriority.WARNING, EventPriority.ERROR, EventPriority.CRITICAL]
+        for event in result.events
+    )
+
+
+def test_no_numa_balancing(system_info, model_obj, config):
+    """Test when data has no numa_balancing (e.g. not collected); NUMA check passes."""
+    data_no_numa = KernelDataModel(
+        kernel_info=model_obj.kernel_info,
+        kernel_version=config["kernel_name"][0],
+        numa_balancing=None,
+    )
+    args = KernelAnalyzerArgs(exp_kernel=config["kernel_name"][0], exp_numa=0)
+    analyzer = KernelAnalyzer(system_info)
+    result = analyzer.analyze_data(data_no_numa, args)
+
+    assert result.status == ExecutionStatus.OK
+    assert "Kernel matches expected" in result.message
+    assert all(
+        event.priority not in [EventPriority.WARNING, EventPriority.ERROR, EventPriority.CRITICAL]
+        for event in result.events
+    )
