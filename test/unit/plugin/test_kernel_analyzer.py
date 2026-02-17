@@ -93,11 +93,11 @@ def test_invalid_kernel(system_info, model_obj, config):
     result = analyzer.analyze_data(model_obj, args=args)
 
     assert result.status == ExecutionStatus.ERROR
-    assert "unexpected kernel data!" in result.message
+    assert "Kernel mismatch" in result.message
     assert any(
         event.priority == EventPriority.CRITICAL
         and event.category == EventCategory.OS.value
-        and "unexpected kernel version!" in event.description
+        and "Kernel mismatch" in event.description
         for event in result.events
     )
 
@@ -108,7 +108,7 @@ def test_unexpected_kernel(system_info, model_obj):
     result = analyzer.analyze_data(model_obj, args)
 
     assert result.status == ExecutionStatus.ERROR
-    assert "unexpected kernel data!" in result.message
+    assert "Kernel mismatch" in result.message
     assert any(
         event.priority == EventPriority.CRITICAL and event.category == EventCategory.OS.value
         for event in result.events
@@ -143,7 +143,7 @@ def test_mismatch_regex(system_info, model_obj):
     assert len(result.events) == 1
     assert result.events[0].priority == EventPriority.CRITICAL
     assert result.events[0].category == EventCategory.OS.value
-    assert "unexpected kernel version!" in result.events[0].description
+    assert "Kernel mismatch" in result.events[0].description
 
 
 def test_bad_regex(system_info, model_obj):
@@ -158,7 +158,7 @@ def test_bad_regex(system_info, model_obj):
     assert result.events[0].description == "Kernel regex is invalid"
     assert result.events[1].priority == EventPriority.CRITICAL
     assert result.events[1].category == EventCategory.OS.value
-    assert "unexpected kernel version!" in result.events[1].description
+    assert "Kernel mismatch" in result.events[1].description
 
 
 def test_unexpected_numa(system_info, model_obj, config):
@@ -171,11 +171,11 @@ def test_unexpected_numa(system_info, model_obj, config):
     result = analyzer.analyze_data(model_obj, args)
 
     assert result.status == ExecutionStatus.ERROR
-    assert "unexpected kernel data!" in result.message
+    assert "Unexpected numa_balancing setting!" in result.message
     assert any(
         event.priority == EventPriority.CRITICAL
         and event.category == EventCategory.OS.value
-        and "unexpected numa_balancing setting!" in event.description
+        and "Unexpected numa_balancing setting!" in event.description
         for event in result.events
     )
 
