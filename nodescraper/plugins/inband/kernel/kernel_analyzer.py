@@ -86,21 +86,21 @@ class KernelAnalyzer(DataAnalyzer[KernelDataModel, KernelAnalyzerArgs]):
                 break
 
         if not correct_kernel_version:
-            self.result.message = "unexpected kernel data!"
+            self.result.message = "Kernel mismatch"
             self.result.status = ExecutionStatus.ERROR
             self._log_event(
                 category=EventCategory.OS,
-                description="unexpected kernel version!",
+                description="Kernel mismatch",
                 data={"expected": args.exp_kernel, "actual": data.kernel_version},
                 priority=EventPriority.CRITICAL,
                 console_log=True,
             )
         elif not correct_numa_setting:
-            self.result.message = "unexpected kernel data!"
+            self.result.message = "Unexpected numa_balancing setting!"
             self.result.status = ExecutionStatus.ERROR
             self._log_event(
                 category=EventCategory.OS,
-                description="unexpected numa_balancing setting!",
+                description="Unexpected numa_balancing setting!",
                 data={"expected": args.exp_numa, "actual": data.numa_balancing},
                 priority=EventPriority.CRITICAL,
                 console_log=True,
