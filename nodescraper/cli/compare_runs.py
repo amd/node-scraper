@@ -25,6 +25,7 @@
 ###############################################################################
 import json
 import logging
+import re
 import sys
 from pathlib import Path
 from typing import Any, Optional, Sequence
@@ -37,6 +38,69 @@ from nodescraper.models import PluginResult, TaskResult
 from nodescraper.models.datamodel import DataModel
 from nodescraper.pluginregistry import PluginRegistry
 from nodescraper.resultcollators.tablesummary import TableSummary
+
+# Default regex for log comparison when plugin has no get_error_matches
+_DEFAULT_LOG_ERROR_PATTERN = re.compile(
+    r"^.*\b(error|fail|critical|crit|warning|warn|alert|emerg)\b.*$",
+    re.MULTILINE | re.IGNORECASE,
+)
+
+
+def _default_log_error_matches(content: str) -> set[str]:
+    """Extract lines matching default error keywords; used for log plugins without analyzer regexes."""
+    return {
+        m.group(0).strip()
+        for m in _DEFAULT_LOG_ERROR_PATTERN.finditer(content)
+        if m.group(0).strip()
+    }
+
+
+def _get_compare_content(data_model: DataModel) -> Optional[str]:
+    """Get log content from datamodel for compare-runs (get_compare_content() or None)."""
+    get_content = getattr(data_model, "get_compare_content", None)
+    if callable(get_content):
+        try:
+            out = get_content()
+            return out if isinstance(out, str) else None
+        except Exception:
+            return None
+    return None
+
+
+def _get_error_matches_for_analyzer(analyzer_class: type, content: str) -> set[str]:
+    """Get error matches from analyzer.get_error_matches if present, else default keyword match."""
+    get_matches = getattr(analyzer_class, "get_error_matches", None)
+    if callable(get_matches):
+        try:
+            return get_matches(content)
+        except Exception:
+            pass
+    return _default_log_error_matches(content)
+
+
+def _compute_extracted_errors_if_applicable(
+    data_model: DataModel,
+    plugin_name: str,
+    analyzer_class: Optional[type],
+    logger: logging.Logger,
+) -> Optional[list[str]]:
+    """If datamodel has get_compare_content, compute extracted errors in memory (not saved to model or disk)."""
+    content = _get_compare_content(data_model)
+    if content is None:
+        return None
+    try:
+        if analyzer_class is not None:
+            matches = _get_error_matches_for_analyzer(analyzer_class, content)
+        else:
+            matches = _default_log_error_matches(content)
+        return sorted(matches)
+    except Exception as e:
+        logger.warning(
+            "Could not compute extracted_errors for %s: %s",
+            plugin_name,
+            e,
+        )
+        return None
 
 
 def _load_plugin_data_from_run(
@@ -104,7 +168,13 @@ def _load_plugin_data_from_run(
             else:
                 dm_payload = json.loads(Path(dm_path).read_text(encoding="utf-8"))
                 data_model = data_model_cls.model_validate(dm_payload)
+            analyzer_class = getattr(plugin, "ANALYZER", None)
             result[plugin_name] = data_model.model_dump(mode="json")
+            extracted = _compute_extracted_errors_if_applicable(
+                data_model, plugin_name, analyzer_class, logger
+            )
+            if extracted is not None:
+                result[plugin_name]["extracted_errors"] = extracted
         except (json.JSONDecodeError, OSError) as e:
             logger.warning("Skipping %s for plugin %s: %s", dm_path, plugin_name, e)
             continue
@@ -181,6 +251,15 @@ def _format_value_for_diff_file(val: Any) -> str:
     return s
 
 
+def _extracted_errors_compare(
+    data1: dict[str, Any], data2: dict[str, Any]
+) -> tuple[list[str], list[str]]:
+    """If datamodels have extracted_errors, return (errors_only_in_run1, errors_only_in_run2)."""
+    err1 = set(data1.get("extracted_errors") or [])
+    err2 = set(data2.get("extracted_errors") or [])
+    return (sorted(err1 - err2), sorted(err2 - err1))
+
+
 def _build_full_diff_report(
     path1: str,
     path2: str,
@@ -207,11 +286,29 @@ def _build_full_diff_report(
             lines.append("  Not present in run 2.")
             lines.append("")
             continue
-        diffs = _diff_value(data1[plugin_name], data2[plugin_name], "")
+        d1, d2 = data1[plugin_name], data2[plugin_name]
+        has_extracted_errors = "extracted_errors" in d1 or "extracted_errors" in d2
+        if has_extracted_errors:
+            only_in_1, only_in_2 = _extracted_errors_compare(d1, d2)
+            lines.append("  --- Errors only in run 1 ---")
+            for e in only_in_1:
+                lines.append(f"  {_format_value_for_diff_file(e)}")
+            lines.append("")
+            lines.append("  --- Errors only in run 2 ---")
+            for e in only_in_2:
+                lines.append(f"  {_format_value_for_diff_file(e)}")
+            lines.append("")
+        diffs = _diff_value(d1, d2, "")
         if not diffs:
-            lines.append("  No differences.")
+            if not has_extracted_errors:
+                lines.append("  No differences.")
             lines.append("")
             continue
+        if has_extracted_errors:
+            lines.append(
+                "  (Other field differences below; see above for extracted_errors comparison.)"
+            )
+            lines.append("")
         lines.append(f"  {len(diffs)} difference(s):")
         for p, v1, v2 in diffs:
             lines.append(f"  --- path: {p} ---")
@@ -295,8 +392,31 @@ def run_compare_runs(
             )
             continue
 
-        diffs = _diff_value(data1[plugin_name], data2[plugin_name], "")
-        if not diffs:
+        d1, d2 = data1[plugin_name], data2[plugin_name]
+        diffs = _diff_value(d1, d2, "")
+        if "extracted_errors" in d1 or "extracted_errors" in d2:
+            only_in_1, only_in_2 = _extracted_errors_compare(d1, d2)
+            msg_lines = [
+                f"Errors only in run 1: {len(only_in_1)}; only in run 2: {len(only_in_2)}.",
+            ]
+            if only_in_1 or only_in_2:
+                if only_in_1:
+                    msg_lines.append("  Run 1 only (first 3):")
+                    for e in only_in_1[:3]:
+                        msg_lines.append(f"    {_format_value(e, max_len=120)}")
+                if only_in_2:
+                    msg_lines.append("  Run 2 only (first 3):")
+                    for e in only_in_2[:3]:
+                        msg_lines.append(f"    {_format_value(e, max_len=120)}")
+            status = ExecutionStatus.WARNING if (only_in_1 or only_in_2) else ExecutionStatus.OK
+            plugin_results.append(
+                PluginResult(
+                    source=plugin_name,
+                    status=status,
+                    message="\n".join(msg_lines),
+                )
+            )
+        elif not diffs:
             plugin_results.append(
                 PluginResult(
                     source=plugin_name,
