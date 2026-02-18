@@ -325,6 +325,7 @@ def run_compare_runs(
     plugin_reg: PluginRegistry,
     logger: logging.Logger,
     skip_plugins: Optional[Sequence[str]] = None,
+    include_plugins: Optional[Sequence[str]] = None,
     output_path: Optional[str] = None,
 ) -> None:
     """Compare datamodels from two run log directories and log results.
@@ -339,6 +340,7 @@ def run_compare_runs(
         plugin_reg: Plugin registry.
         logger: Logger for output.
         skip_plugins: Optional list of plugin names to exclude from comparison.
+        include_plugins: Optional list of plugin names to include; if set, only these are compared.
         output_path: Optional path for full diff report; default is <path1>_<path2>_diff.txt.
     """
     p1 = Path(path1)
@@ -362,6 +364,10 @@ def run_compare_runs(
     data2 = _load_plugin_data_from_run(path2, plugin_reg, logger)
 
     all_plugins = sorted(set(data1) | set(data2))
+    if include_plugins is not None:
+        include_set = set(include_plugins)
+        all_plugins = [p for p in all_plugins if p in include_set]
+        logger.info("Including only plugins: %s", ", ".join(sorted(include_set)))
     if skip_plugins:
         skip_set = set(skip_plugins)
         all_plugins = [p for p in all_plugins if p not in skip_set]

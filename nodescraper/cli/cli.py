@@ -245,6 +245,13 @@ def build_parser(
         metavar="PLUGIN",
         help="Plugin names to exclude from comparison",
     )
+    compare_runs_parser.add_argument(
+        "--include-plugins",
+        nargs="*",
+        choices=list(plugin_reg.plugins.keys()),
+        metavar="PLUGIN",
+        help="If set, only compare data for these plugins (default: compare all found)",
+    )
     config_builder_parser.add_argument(
         "--plugins",
         nargs="*",
@@ -444,6 +451,7 @@ def main(arg_input: Optional[list[str]] = None):
                 plugin_reg,
                 logger,
                 skip_plugins=getattr(parsed_args, "skip_plugins", None) or [],
+                include_plugins=getattr(parsed_args, "include_plugins", None),
             )
             sys.exit(0)
 
