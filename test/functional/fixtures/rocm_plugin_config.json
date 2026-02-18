@@ -3,7 +3,10 @@
   "plugins": {
     "RocmPlugin": {
       "analysis_args": {
-        "exp_rocm": "7.0.0-38"
+        "exp_rocm": "7.0.0-38",
+        "exp_rocm_sub_versions": {
+          "version_rocm": "7.0.0-38"
+        }
       }
     }
   },

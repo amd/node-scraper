@@ -44,6 +44,7 @@ class RocmCollector(InBandDataCollector[RocmDataModel, None]):
         "/opt/rocm/.info/version-rocm",
         "/opt/rocm/.info/version",
     ]
+    CMD_ROCM_SUB_VERSIONS = "grep . -r /opt/rocm/.info/*"
     CMD_ROCMINFO = "{rocm_path}/bin/rocminfo"
     CMD_ROCM_LATEST = "ls -v -d /opt/rocm-[3-7]* | tail -1"
     CMD_ROCM_DIRS = "ls -v -d /opt/rocm*"
@@ -60,11 +61,27 @@ class RocmCollector(InBandDataCollector[RocmDataModel, None]):
             tuple[TaskResult, Optional[RocmDataModel]]: tuple containing the task result and ROCm data model if available.
         """
         rocm_data = None
+        rocm_sub_versions = {}
+
+        # First, try to collect all sub-versions
+        sub_versions_res = self._run_sut_cmd(self.CMD_ROCM_SUB_VERSIONS)
+        if sub_versions_res.exit_code == 0:
+            for line in sub_versions_res.stdout.splitlines():
+                if ":" in line:
+                    # Split the line into key and value (format: /path/to/file:version)
+                    key, value = line.split(":", 1)
+                    # Extract just the filename from the path
+                    key = key.split("/")[-1]
+                    rocm_sub_versions[key.strip()] = value.strip()
+
+        # Determine the main ROCm version
         for path in self.CMD_VERSION_PATHS:
             res = self._run_sut_cmd(f"grep . {path}")
             if res.exit_code == 0:
                 try:
-                    rocm_data = RocmDataModel(rocm_version=res.stdout)
+                    rocm_data = RocmDataModel(
+                        rocm_version=res.stdout, rocm_sub_versions=rocm_sub_versions
+                    )
                     self._log_event(
                         category="ROCM_VERSION_READ",
                         description="ROCm version data collected",
