@@ -137,6 +137,16 @@ def _load_plugin_data_from_run(
             logger.warning("Plugin %s not found in registry, skipping.", plugin_name)
             continue
 
+        load_run_data = getattr(plugin, "load_run_data", None)
+        if callable(load_run_data) and plugin_name not in result:
+            try:
+                data = load_run_data(base_path)
+                if data:
+                    result[plugin_name] = data
+            except Exception as e:
+                logger.warning("Plugin %s load_run_data failed: %s", plugin_name, e)
+            continue
+
         data_model_cls = getattr(plugin, "DATA_MODEL", None)
         if data_model_cls is None:
             logger.warning("Plugin %s has no DATA_MODEL, skipping.", plugin_name)

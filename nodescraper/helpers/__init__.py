@@ -23,7 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
-from nodescraper.helpers.dmesg_compare import (
+from nodescraper.plugins.inband.dmesg import (
     compare_dmesg_runs,
     compute_extracted_errors,
     find_dmesg_datamodel_path,
