@@ -252,6 +252,12 @@ def build_parser(
         metavar="PLUGIN",
         help="If set, only compare data for these plugins (default: compare all found)",
     )
+    compare_runs_parser.add_argument(
+        "--dont-truncate",
+        action="store_true",
+        dest="dont_truncate",
+        help="Do not truncate the Message column; show full error text and all errors (not just first 3)",
+    )
     config_builder_parser.add_argument(
         "--plugins",
         nargs="*",
@@ -452,6 +458,7 @@ def main(arg_input: Optional[list[str]] = None):
                 logger,
                 skip_plugins=getattr(parsed_args, "skip_plugins", None) or [],
                 include_plugins=getattr(parsed_args, "include_plugins", None),
+                truncate_message=not getattr(parsed_args, "dont_truncate", False),
             )
             sys.exit(0)
 

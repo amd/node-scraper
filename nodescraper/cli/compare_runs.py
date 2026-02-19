@@ -199,6 +199,27 @@ def _load_plugin_data_from_run(
     return result
 
 
+# Paths to exclude from "Other differences" (e.g. timestamps that differ per run)
+_DIFF_EXCLUDE_PATHS = frozenset({"start_time", "end_time"})
+
+
+def _is_timestamp_path(path: str) -> bool:
+    """True if path is a timestamp field we should exclude from diff output."""
+    if path in _DIFF_EXCLUDE_PATHS:
+        return True
+    for excl in _DIFF_EXCLUDE_PATHS:
+        if path.endswith("." + excl):
+            return True
+    return False
+
+
+def _filter_timestamp_diffs(
+    diffs: list[tuple[str, Optional[Any], Optional[Any]]],
+) -> list[tuple[str, Optional[Any], Optional[Any]]]:
+    """Remove timestamp-only differences from diff list."""
+    return [(p, v1, v2) for p, v1, v2 in diffs if not _is_timestamp_path(p)]
+
+
 def _diff_value(val1: Any, val2: Any, path: str) -> list[tuple[str, Optional[Any], Optional[Any]]]:
     """Recursively diff two JSON-like values; return list of (path, value_run1, value_run2)."""
     diffs: list[tuple[str, Optional[Any], Optional[Any]]] = []
@@ -308,7 +329,7 @@ def _build_full_diff_report(
             for e in only_in_2:
                 lines.append(f"  {_format_value_for_diff_file(e)}")
             lines.append("")
-        diffs = _diff_value(d1, d2, "")
+        diffs = _filter_timestamp_diffs(_diff_value(d1, d2, ""))
         if not diffs:
             if not has_extracted_errors:
                 lines.append("  No differences.")
@@ -337,6 +358,7 @@ def run_compare_runs(
     skip_plugins: Optional[Sequence[str]] = None,
     include_plugins: Optional[Sequence[str]] = None,
     output_path: Optional[str] = None,
+    truncate_message: bool = True,
 ) -> None:
     """Compare datamodels from two run log directories and log results.
 
@@ -352,6 +374,7 @@ def run_compare_runs(
         skip_plugins: Optional list of plugin names to exclude from comparison.
         include_plugins: Optional list of plugin names to include; if set, only these are compared.
         output_path: Optional path for full diff report; default is <path1>_<path2>_diff.txt.
+        truncate_message: If True, truncate message text and show only first 3 errors; if False, show full text and all.
     """
     p1 = Path(path1)
     p2 = Path(path2)
@@ -409,21 +432,27 @@ def run_compare_runs(
             continue
 
         d1, d2 = data1[plugin_name], data2[plugin_name]
-        diffs = _diff_value(d1, d2, "")
+        diffs = _filter_timestamp_diffs(_diff_value(d1, d2, ""))
         if "extracted_errors" in d1 or "extracted_errors" in d2:
             only_in_1, only_in_2 = _extracted_errors_compare(d1, d2)
             msg_lines = [
                 f"Errors only in run 1: {len(only_in_1)}; only in run 2: {len(only_in_2)}.",
             ]
+            msg_max_len = None if not truncate_message else 120
+            err_slice = slice(None) if not truncate_message else slice(3)
             if only_in_1 or only_in_2:
                 if only_in_1:
-                    msg_lines.append("  Run 1 only (first 3):")
-                    for e in only_in_1[:3]:
-                        msg_lines.append(f"    {_format_value(e, max_len=120)}")
+                    msg_lines.append(
+                        "  Run 1 only (first 3):" if truncate_message else "  Run 1 only:"
+                    )
+                    for e in only_in_1[err_slice]:
+                        msg_lines.append(f"    {_format_value(e, max_len=msg_max_len)}")
                 if only_in_2:
-                    msg_lines.append("  Run 2 only (first 3):")
-                    for e in only_in_2[:3]:
-                        msg_lines.append(f"    {_format_value(e, max_len=120)}")
+                    msg_lines.append(
+                        "  Run 2 only (first 3):" if truncate_message else "  Run 2 only:"
+                    )
+                    for e in only_in_2[err_slice]:
+                        msg_lines.append(f"    {_format_value(e, max_len=msg_max_len)}")
             status = ExecutionStatus.WARNING if (only_in_1 or only_in_2) else ExecutionStatus.OK
             plugin_results.append(
                 PluginResult(
@@ -441,9 +470,12 @@ def run_compare_runs(
                 )
             )
         else:
+            diff_max_len = None if not truncate_message else 80
             msg_lines = [f"{len(diffs)} difference(s):"]
             for p, v1, v2 in diffs:
-                msg_lines.append(f"  {p}: run1={_format_value(v1)}  run2={_format_value(v2)}")
+                msg_lines.append(
+                    f"  {p}: run1={_format_value(v1, max_len=diff_max_len)}  run2={_format_value(v2, max_len=diff_max_len)}"
+                )
             plugin_results.append(
                 PluginResult(
                     source=plugin_name,
