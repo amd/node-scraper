@@ -54,25 +54,36 @@ def test_run_windows(collector, conn_mock):
     result, data = collector.collect_data()
 
     assert data == KernelDataModel(
-        kernel_info="Version=10.0.19041.1237", kernel_version="10.0.19041.1237"
+        kernel_info="Version=10.0.19041.1237",
+        kernel_version="10.0.19041.1237",
+        numa_balancing=None,
     )
     assert result.status == ExecutionStatus.OK
 
 
 def test_run_linux(collector, conn_mock):
     collector.system_info.os_family = OSFamily.LINUX
-    conn_mock.run_command.return_value = CommandArtifact(
-        exit_code=0,
-        stdout="Linux MockSystem 5.13.0-30-generic #1 XYZ Day Month 10 15:19:13 EDT 2024 x86_64 x86_64 x86_64 GNU/Linux",
-        stderr="",
-        command="sh -c 'uname -a'",
-    )
+    conn_mock.run_command.side_effect = [
+        CommandArtifact(
+            exit_code=0,
+            stdout="Linux MockSystem 5.13.0-30-generic #1 XYZ Day Month 10 15:19:13 EDT 2024 x86_64 x86_64 x86_64 GNU/Linux",
+            stderr="",
+            command="sh -c 'uname -a'",
+        ),
+        CommandArtifact(
+            exit_code=0,
+            stdout="0",
+            stderr="",
+            command="sh -c 'cat /proc/sys/kernel/numa_balancing'",
+        ),
+    ]
 
     result, data = collector.collect_data()
 
     assert data == KernelDataModel(
         kernel_info="Linux MockSystem 5.13.0-30-generic #1 XYZ Day Month 10 15:19:13 EDT 2024 x86_64 x86_64 x86_64 GNU/Linux",
         kernel_version="5.13.0-30-generic",
+        numa_balancing=0,
     )
     assert result.status == ExecutionStatus.OK
 
@@ -83,7 +94,7 @@ def test_run_error(collector, conn_mock):
         exit_code=1,
         stdout="",
         stderr="Error occurred",
-        command="sh -c 'uname -r'",
+        command="sh -c 'uname -a'",
     )
 
     result, data = collector.collect_data()
@@ -91,3 +102,56 @@ def test_run_error(collector, conn_mock):
     assert result.status == ExecutionStatus.ERROR
     assert data is None
     assert len(collector.result.events) == 1
+
+
+def test_run_linux_numa_fails(collector, conn_mock):
+    """Linux: uname succeeds but numa_balancing command fails; numa_balancing remains None."""
+    collector.system_info.os_family = OSFamily.LINUX
+    conn_mock.run_command.side_effect = [
+        CommandArtifact(
+            exit_code=0,
+            stdout="Linux MockSystem 5.4.0-88-generic #1 SMP x86_64 GNU/Linux",
+            stderr="",
+            command="sh -c 'uname -a'",
+        ),
+        CommandArtifact(
+            exit_code=1,
+            stdout="",
+            stderr="Permission denied",
+            command="sh -c 'cat /proc/sys/kernel/numa_balancing'",
+        ),
+    ]
+
+    result, data = collector.collect_data()
+
+    assert data == KernelDataModel(
+        kernel_info="Linux MockSystem 5.4.0-88-generic #1 SMP x86_64 GNU/Linux",
+        kernel_version="5.4.0-88-generic",
+        numa_balancing=None,
+    )
+    assert result.status == ExecutionStatus.OK
+
+
+def test_run_linux_numa_non_digit(collector, conn_mock):
+    """Linux: numa_balancing file returns non-digit; numa_balancing remains None."""
+    collector.system_info.os_family = OSFamily.LINUX
+    conn_mock.run_command.side_effect = [
+        CommandArtifact(
+            exit_code=0,
+            stdout="Linux host 5.4.0-88-generic #1 SMP x86_64 GNU/Linux",
+            stderr="",
+            command="sh -c 'uname -a'",
+        ),
+        CommandArtifact(
+            exit_code=0,
+            stdout="off\n",
+            stderr="",
+            command="sh -c 'cat /proc/sys/kernel/numa_balancing'",
+        ),
+    ]
+
+    result, data = collector.collect_data()
+
+    assert data.kernel_version == "5.4.0-88-generic"
+    assert data.numa_balancing is None
+    assert result.status == ExecutionStatus.OK
