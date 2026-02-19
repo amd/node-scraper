@@ -119,6 +119,8 @@ def test_format_value_long_truncated():
 
 def test_run_compare_runs_no_data(caplog, tmp_path):
     """When neither run has plugin data, warning is logged."""
+    (tmp_path / "run1").mkdir()
+    (tmp_path / "run2").mkdir()
     logger = logging.getLogger("test_compare_runs")
     plugin_reg = PluginRegistry()
     run_compare_runs(str(tmp_path / "run1"), str(tmp_path / "run2"), plugin_reg, logger)
@@ -136,6 +138,21 @@ def test_run_compare_runs_with_fixture_dirs(caplog, framework_fixtures_path):
     # Same dir twice: BiosPlugin should be found, no differences
     assert "Plugin" in caplog.text
     assert "No differences" in caplog.text or "difference" in caplog.text.lower()
+
+
+def test_run_compare_runs_sysctl_fixture(caplog, framework_fixtures_path):
+    """Compare runs using compare_runs_sysctl fixtures; run1 and run2 differ (SysctlPlugin)."""
+    base = framework_fixtures_path / "compare_runs_sysctl"
+    run1 = base / "run1"
+    run2 = base / "run2"
+    logger = logging.getLogger("test_compare_runs")
+    plugin_reg = PluginRegistry()
+    run_compare_runs(str(run1), str(run2), plugin_reg, logger)
+    assert "Loading run 1" in caplog.text
+    assert "Loading run 2" in caplog.text
+    assert "Sysctl" in caplog.text or "sysctl" in caplog.text
+    # Fixtures have different vm_swappiness etc. so we expect differences
+    assert "difference" in caplog.text.lower() or "only in" in caplog.text.lower()
 
 
 def test_run_compare_runs_one_run_missing_plugin(caplog, framework_fixtures_path, tmp_path):
