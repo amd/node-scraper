@@ -358,6 +358,53 @@ def generate_reference_config(
     return plugin_config
 
 
+def process_args(
+    raw_arg_input: list[str], plugin_names: list[str]
+) -> tuple[list[str], dict[str, list[str]], list[str]]:
+    """Separate top level args from plugin args.
+
+    Args:
+        raw_arg_input: list of all arg input
+        plugin_names: list of plugin names
+
+    Returns:
+        tuple of (top_level_args, plugin_arg_map, invalid_plugins)
+    """
+    top_level_args = raw_arg_input
+    try:
+        plugin_arg_index = raw_arg_input.index("run-plugins")
+    except ValueError:
+        plugin_arg_index = -1
+
+    plugin_arg_map: dict[str, list[str]] = {}
+    invalid_plugins: list[str] = []
+    if plugin_arg_index != -1 and plugin_arg_index != len(raw_arg_input) - 1:
+        top_level_args = raw_arg_input[: plugin_arg_index + 1]
+        plugin_args = raw_arg_input[plugin_arg_index + 1 :]
+
+        if plugin_args == ["-h"]:
+            top_level_args += plugin_args
+        else:
+            cur_plugin = None
+            for arg in plugin_args:
+                if not arg.startswith("-") and "," in arg:
+                    for potential_plugin in arg.split(","):
+                        potential_plugin = potential_plugin.strip()
+                        if potential_plugin in plugin_names:
+                            plugin_arg_map[potential_plugin] = []
+                            cur_plugin = potential_plugin
+                        elif potential_plugin:
+                            invalid_plugins.append(potential_plugin)
+                elif arg in plugin_names:
+                    plugin_arg_map[arg] = []
+                    cur_plugin = arg
+                elif cur_plugin:
+                    plugin_arg_map[cur_plugin].append(arg)
+                elif not arg.startswith("-"):
+                    invalid_plugins.append(arg)
+    return (top_level_args, plugin_arg_map, invalid_plugins)
+
+
 def generate_reference_config_from_logs(
     path: str, plugin_reg: PluginRegistry, logger: logging.Logger
 ) -> PluginConfig:

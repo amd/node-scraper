@@ -46,6 +46,7 @@ from nodescraper.cli.helper import (
     log_system_info,
     parse_describe,
     parse_gen_plugin_config,
+    process_args,
 )
 from nodescraper.cli.inputargtypes import ModelArgHandler, json_arg, log_path_arg
 from nodescraper.configregistry import ConfigRegistry
@@ -339,60 +340,6 @@ def setup_logger(log_level: str = "INFO", log_path: Optional[str] = None) -> log
     logger = logging.getLogger(DEFAULT_LOGGER)
 
     return logger
-
-
-def process_args(
-    raw_arg_input: list[str], plugin_names: list[str]
-) -> tuple[list[str], dict[str, list[str]]]:
-    """separate top level args from plugin args
-
-    Args:
-        raw_arg_input (list[str]): list of all arg input
-        plugin_names (list[str]): list of plugin names
-
-    Returns:
-        tuple[list[str], dict[str, list[str]]]: tuple of top level args
-        and dict of plugin name to plugin args
-    """
-    top_level_args = raw_arg_input
-
-    try:
-        plugin_arg_index = raw_arg_input.index("run-plugins")
-    except ValueError:
-        plugin_arg_index = -1
-
-    plugin_arg_map = {}
-    invalid_plugins = []
-    if plugin_arg_index != -1 and plugin_arg_index != len(raw_arg_input) - 1:
-        top_level_args = raw_arg_input[: plugin_arg_index + 1]
-        plugin_args = raw_arg_input[plugin_arg_index + 1 :]
-
-        # handle help case
-        if plugin_args == ["-h"]:
-            top_level_args += plugin_args
-        else:
-            cur_plugin = None
-            for arg in plugin_args:
-                # Handle comma-separated plugin names (but not arguments)
-                if not arg.startswith("-") and "," in arg:
-                    # Split comma-separated plugin names
-                    for potential_plugin in arg.split(","):
-                        potential_plugin = potential_plugin.strip()
-                        if potential_plugin in plugin_names:
-                            plugin_arg_map[potential_plugin] = []
-                            cur_plugin = potential_plugin
-                        elif potential_plugin:
-                            # Track invalid plugin names to log event later
-                            invalid_plugins.append(potential_plugin)
-                elif arg in plugin_names:
-                    plugin_arg_map[arg] = []
-                    cur_plugin = arg
-                elif cur_plugin:
-                    plugin_arg_map[cur_plugin].append(arg)
-                elif not arg.startswith("-"):
-                    # Track invalid plugin names to log event later
-                    invalid_plugins.append(arg)
-    return (top_level_args, plugin_arg_map, invalid_plugins)
 
 
 def main(arg_input: Optional[list[str]] = None):
