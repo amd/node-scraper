@@ -55,6 +55,7 @@ def plugin_config_files(fixtures_dir):
         "OsPlugin": fixtures_dir / "os_plugin_config.json",
         "PackagePlugin": fixtures_dir / "package_plugin_config.json",
         "ProcessPlugin": fixtures_dir / "process_plugin_config.json",
+        "RdmaPlugin": fixtures_dir / "rdma_plugin_config.json",
         "RocmPlugin": fixtures_dir / "rocm_plugin_config.json",
         "StoragePlugin": fixtures_dir / "storage_plugin_config.json",
         "SysctlPlugin": fixtures_dir / "sysctl_plugin_config.json",
