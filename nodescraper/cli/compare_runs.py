@@ -143,9 +143,9 @@ def _load_plugin_data_from_run(
                 data = load_run_data(base_path)
                 if data:
                     result[plugin_name] = data
+                    continue
             except Exception as e:
                 logger.warning("Plugin %s load_run_data failed: %s", plugin_name, e)
-            continue
 
         data_model_cls = getattr(plugin, "DATA_MODEL", None)
         if data_model_cls is None:

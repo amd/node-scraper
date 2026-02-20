@@ -428,7 +428,7 @@ def generate_reference_config_from_logs(
         plugin = plugin_reg.plugins.get(task_res.parent)
         if not plugin:
             logger.warning(
-                "Plugin %s not found in the plugin registry: %s.",
+                "Plugin %s not found in the plugin registry, skipping.",
                 task_res.parent,
             )
             continue
