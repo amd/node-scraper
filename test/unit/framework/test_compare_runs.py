@@ -119,9 +119,10 @@ def test_format_value_long_truncated():
 
 def test_run_compare_runs_no_data(caplog, tmp_path):
     """When neither run has plugin data, warning is logged."""
+    caplog.set_level(logging.INFO)
     (tmp_path / "run1").mkdir()
     (tmp_path / "run2").mkdir()
-    logger = logging.getLogger("test_compare_runs")
+    logger = logging.getLogger()
     plugin_reg = PluginRegistry()
     run_compare_runs(str(tmp_path / "run1"), str(tmp_path / "run2"), plugin_reg, logger)
     assert "No plugin data found" in caplog.text
@@ -129,7 +130,8 @@ def test_run_compare_runs_no_data(caplog, tmp_path):
 
 def test_run_compare_runs_with_fixture_dirs(caplog, framework_fixtures_path):
     """With two log dirs using fixture (same content), table is produced and no diffs."""
-    logger = logging.getLogger("test_compare_runs")
+    caplog.set_level(logging.INFO)
+    logger = logging.getLogger()
     plugin_reg = PluginRegistry()
     base = framework_fixtures_path / "log_dir"
     run_compare_runs(str(base), str(base), plugin_reg, logger)
@@ -142,10 +144,11 @@ def test_run_compare_runs_with_fixture_dirs(caplog, framework_fixtures_path):
 
 def test_run_compare_runs_sysctl_fixture(caplog, framework_fixtures_path):
     """Compare runs using compare_runs_sysctl fixtures; run1 and run2 differ (SysctlPlugin)."""
+    caplog.set_level(logging.INFO)
+    logger = logging.getLogger()
     base = framework_fixtures_path / "compare_runs_sysctl"
     run1 = base / "run1"
     run2 = base / "run2"
-    logger = logging.getLogger("test_compare_runs")
     plugin_reg = PluginRegistry()
     run_compare_runs(str(run1), str(run2), plugin_reg, logger)
     assert "Loading run 1" in caplog.text
@@ -157,7 +160,8 @@ def test_run_compare_runs_sysctl_fixture(caplog, framework_fixtures_path):
 
 def test_run_compare_runs_one_run_missing_plugin(caplog, framework_fixtures_path, tmp_path):
     """When a plugin exists only in run1, NOT_RAN message for run2 is in results."""
-    logger = logging.getLogger("test_compare_runs")
+    caplog.set_level(logging.INFO)
+    logger = logging.getLogger()
     plugin_reg = PluginRegistry()
     run1 = framework_fixtures_path / "log_dir"
     run2 = tmp_path / "run2"
