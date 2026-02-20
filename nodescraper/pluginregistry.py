@@ -128,7 +128,7 @@ class PluginRegistry:
             except TypeError:
                 # Python 3.9 - entry_points() returns dict-like object
                 all_eps = importlib.metadata.entry_points()  # type: ignore[assignment]
-                eps = all_eps.get("nodescraper.plugins", [])  # type: ignore[assignment, attr-defined]
+                eps = all_eps.get("nodescraper.plugins", [])  # type: ignore[assignment, attr-defined, arg-type]
 
             for entry_point in eps:
                 try:

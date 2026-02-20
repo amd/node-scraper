@@ -68,6 +68,10 @@ class DmesgData(DataModel):
 
         return ("\n").join(new_lines)
 
+    def get_compare_content(self) -> str:
+        """Return the log content used for compare-runs extracted_errors (same as dmesg_content)."""
+        return self.dmesg_content
+
     def merge_data(self, input_data: "DmesgData"):
         """Merge dmesg data with new input data
 
