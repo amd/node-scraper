@@ -238,6 +238,16 @@ class TaskResult(BaseModel):
 
         return "; ".join(summary_parts)
 
+    def _get_event_priorities(self) -> str:
+        warnings = sum(1 for e in self.events if e.priority == EventPriority.WARNING)
+        errors = sum(1 for e in self.events if e.priority >= EventPriority.ERROR)
+        parts = []
+        if warnings:
+            parts.append(f"{warnings} warnings")
+        if errors:
+            parts.append(f"{errors} errors")
+        return "|".join(parts)
+
     def _update_status(self) -> None:
         """Update overall status based on event priority"""
         self.status = ExecutionStatus.OK
