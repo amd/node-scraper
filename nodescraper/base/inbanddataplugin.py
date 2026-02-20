@@ -39,22 +39,13 @@ class InBandDataPlugin(
     DataPlugin[InBandConnectionManager, SSHConnectionParams, TDataModel, TCollectArg, TAnalyzeArg],
     Generic[TDataModel, TCollectArg, TAnalyzeArg],
 ):
-    """Base class for in band plugins.
-
-    Supports loading and comparing plugin data from scraper run directories
-    (e.g. for compare-runs). Subclasses get find_datamodel_path_in_run,
-    load_datamodel_from_path, get_extracted_errors, and load_run_data.
-    """
+    """Base class for in band plugins."""
 
     CONNECTION_TYPE = InBandConnectionManager
 
     @classmethod
     def find_datamodel_path_in_run(cls, run_path: str) -> Optional[str]:
         """Find this plugin's collector datamodel file under a scraper run directory.
-
-        Looks for <run_path>/<plugin_snake>/<collector_snake>/ with result.json
-        whose parent matches this plugin, then a datamodel file (datamodel.json,
-        <data_model_name>.json, or .log).
 
         Args:
             run_path: Path to a scraper log run directory (e.g. scraper_logs_*).
@@ -130,9 +121,6 @@ class InBandDataPlugin(
     def get_extracted_errors(cls, data_model: DataModel) -> Optional[list[str]]:
         """Compute extracted errors from datamodel for compare-runs (in memory only).
 
-        Uses get_compare_content() on the datamodel and ANALYZER.get_error_matches
-        if this plugin has an ANALYZER; otherwise returns None.
-
         Args:
             data_model: Loaded DATA_MODEL instance.
 
@@ -163,10 +151,6 @@ class InBandDataPlugin(
     @classmethod
     def load_run_data(cls, run_path: str) -> Optional[dict[str, Any]]:
         """Load this plugin's run data from a scraper run directory for comparison.
-
-        Finds the datamodel file, loads it, and returns a JSON-serializable dict
-        (model_dump) with optional "extracted_errors" if the plugin supports
-        get_compare_content and ANALYZER.get_error_matches.
 
         Args:
             run_path: Path to a scraper log run directory or to a datamodel file.

@@ -32,18 +32,12 @@ from .dmesgdata import DmesgData
 
 
 def find_dmesg_datamodel_path(run_path: str) -> Optional[str]:
-    """Find the DmesgPlugin collector datamodel under a scraper run directory.
-
-    Delegates to DmesgPlugin.find_datamodel_path_in_run (see InBandDataPlugin).
-    """
+    """Find the DmesgPlugin collector datamodel under a scraper run directory."""
     return DmesgPlugin.find_datamodel_path_in_run(run_path)
 
 
 def load_dmesg_data(path: str) -> Tuple[Optional[DmesgData], Optional[str]]:
-    """Load DmesgData from a scraper run directory or a datamodel file path.
-
-    Uses DmesgPlugin.load_datamodel_from_path and find_datamodel_path_in_run.
-    """
+    """Load DmesgData from a scraper run directory or a datamodel file path."""
     path = os.path.abspath(path)
     if not os.path.exists(path):
         return None, None
@@ -55,10 +49,7 @@ def load_dmesg_data(path: str) -> Tuple[Optional[DmesgData], Optional[str]]:
 
 
 def compute_extracted_errors(dm: DmesgData) -> list[str]:
-    """Apply DmesgPlugin analyzer regexes to dmesg content (in memory only).
-
-    Delegates to DmesgPlugin.get_extracted_errors.
-    """
+    """Apply DmesgPlugin analyzer regexes to dmesg content (in memory only)."""
     out = DmesgPlugin.get_extracted_errors(dm)
     return out if out is not None else []
 
@@ -68,11 +59,7 @@ def compare_dmesg_runs(
     path2: str,
     logger: Optional[logging.Logger] = None,
 ) -> Tuple[list[str], list[str], str, str]:
-    """Load two DmesgPlugin runs, compute extracted errors in memory, and compare.
-
-    Uses DmesgPlugin.load_run_data; same logic is available for any InBandDataPlugin
-    via plugin.load_run_data and compare-runs.
-    """
+    """Load two DmesgPlugin runs, compute extracted errors in memory, and compare."""
     log = logger or logging.getLogger(__name__)
     label1 = os.path.basename(path1.rstrip(os.sep))
     label2 = os.path.basename(path2.rstrip(os.sep))

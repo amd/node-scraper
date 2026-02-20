@@ -362,10 +362,6 @@ def run_compare_runs(
 ) -> None:
     """Compare datamodels from two run log directories and log results.
 
-    For each plugin present in either run:
-    - If plugin is only in one run, logs that it was not found in the other run.
-    - If plugin is in both runs, computes diff and logs differences or 'no differences'.
-
     Args:
         path1: Path to first run log directory.
         path2: Path to second run log directory.

@@ -137,7 +137,6 @@ def test_run_compare_runs_with_fixture_dirs(caplog, framework_fixtures_path):
     run_compare_runs(str(base), str(base), plugin_reg, logger)
     assert "Loading run 1" in caplog.text
     assert "Loading run 2" in caplog.text
-    # Same dir twice: BiosPlugin should be found, no differences
     assert "Plugin" in caplog.text
     assert "No differences" in caplog.text or "difference" in caplog.text.lower()
 
@@ -154,7 +153,6 @@ def test_run_compare_runs_sysctl_fixture(caplog, framework_fixtures_path):
     assert "Loading run 1" in caplog.text
     assert "Loading run 2" in caplog.text
     assert "Sysctl" in caplog.text or "sysctl" in caplog.text
-    # Fixtures have different vm_swappiness etc. so we expect differences
     assert "difference" in caplog.text.lower() or "only in" in caplog.text.lower()
 
 
@@ -170,5 +168,4 @@ def test_run_compare_runs_one_run_missing_plugin(caplog, framework_fixtures_path
     run_compare_runs(str(run1), str(run2), plugin_reg, logger)
     assert "Loading run 1" in caplog.text
     assert "Loading run 2" in caplog.text
-    # BiosPlugin in run1 only -> we should see "not found in run 2"
     assert "not found in run 2" in caplog.text or "NOT_RAN" in caplog.text
