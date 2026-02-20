@@ -60,11 +60,12 @@ class TaskResult(BaseModel):
     task: Optional[str] = None
     parent: Optional[str] = None
     artifacts: list[BaseModel] = Field(default_factory=list)
+    details: dict = Field(default_factory=dict)
 
     @model_validator(mode="before")
     @classmethod
     def _source_source_type_aliases(cls, data: Any) -> Any:
-        """Accept source/source_type as aliases for task/parent"""
+        """Accept source/source_type."""
         if isinstance(data, dict):
             data = dict(data)
             if "source" in data and "task" not in data:
@@ -131,7 +132,7 @@ class TaskResult(BaseModel):
 
     @source.setter
     def source(self, value: str) -> None:
-        """Set task from source"""
+        """Set task from source."""
         self.task = value if value else None
 
     @property
@@ -141,7 +142,7 @@ class TaskResult(BaseModel):
 
     @source_type.setter
     def source_type(self, value: str) -> None:
-        """Set parent from source_type"""
+        """Set parent from source_type."""
         self.parent = value if value else None
 
     @property
