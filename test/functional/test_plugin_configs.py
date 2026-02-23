@@ -118,6 +118,7 @@ def test_plugin_config_with_builtin_config(run_cli_command, tmp_path):
         "OsPlugin",
         "PackagePlugin",
         "ProcessPlugin",
+        "RdmaPlugin",
         "RocmPlugin",
         "StoragePlugin",
         "SysctlPlugin",
