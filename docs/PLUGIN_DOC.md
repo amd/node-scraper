@@ -22,7 +22,7 @@
 | PackagePlugin | dnf list --installed<br>dpkg-query -W<br>pacman -Q<br>cat /etc/*release<br>wmic product get name,version | **Analyzer Args:**<br>- `exp_package_ver`: Dict[str, Optional[str]]<br>- `regex_match`: bool<br>- `rocm_regex`: Optional[str]<br>- `enable_rocm_regex`: bool | [PackageDataModel](#PackageDataModel-Model) | [PackageCollector](#Collector-Class-PackageCollector) | [PackageAnalyzer](#Data-Analyzer-Class-PackageAnalyzer) |
 | PciePlugin | lspci -d {vendor_id}: -nn<br>lspci -x<br>lspci -xxxx<br>lspci -PP<br>lspci -PP -d {vendor_id}:{dev_id}<br>lspci -vvv<br>lspci -vvvt | **Analyzer Args:**<br>- `exp_speed`: int<br>- `exp_width`: int<br>- `exp_sriov_count`: int<br>- `exp_gpu_count_override`: Optional[int]<br>- `exp_max_payload_size`: Union[Dict[int, int], int, NoneType]<br>- `exp_max_rd_req_size`: Union[Dict[int, int], int, NoneType]<br>- `exp_ten_bit_tag_req_en`: Union[Dict[int, int], int, NoneType] | [PcieDataModel](#PcieDataModel-Model) | [PcieCollector](#Collector-Class-PcieCollector) | [PcieAnalyzer](#Data-Analyzer-Class-PcieAnalyzer) |
 | ProcessPlugin | top -b -n 1<br>rocm-smi --showpids<br>top -b -n 1 -o %CPU  | **Analyzer Args:**<br>- `max_kfd_processes`: int<br>- `max_cpu_usage`: float | [ProcessDataModel](#ProcessDataModel-Model) | [ProcessCollector](#Collector-Class-ProcessCollector) | [ProcessAnalyzer](#Data-Analyzer-Class-ProcessAnalyzer) |
-| RocmPlugin | {rocm_path}/opencl/bin/*/clinfo<br>env \| grep -Ei 'rocm\|hsa\|hip\|mpi\|openmp\|ucx\|miopen'<br>ls /sys/class/kfd/kfd/proc/<br>grep -i -E 'rocm' /etc/ld.so.conf.d/*<br>{rocm_path}/bin/rocminfo<br>ls -v -d /opt/rocm*<br>ls -v -d /opt/rocm-[3-7]* \| tail -1<br>ldconfig -p \| grep -i -E 'rocm'<br>/opt/rocm/.info/version-rocm<br>/opt/rocm/.info/version | **Analyzer Args:**<br>- `exp_rocm`: Union[str, list]<br>- `exp_rocm_latest`: str | [RocmDataModel](#RocmDataModel-Model) | [RocmCollector](#Collector-Class-RocmCollector) | [RocmAnalyzer](#Data-Analyzer-Class-RocmAnalyzer) |
+| RocmPlugin | {rocm_path}/opencl/bin/*/clinfo<br>env \| grep -Ei 'rocm\|hsa\|hip\|mpi\|openmp\|ucx\|miopen'<br>ls /sys/class/kfd/kfd/proc/<br>grep -i -E 'rocm' /etc/ld.so.conf.d/*<br>{rocm_path}/bin/rocminfo<br>ls -v -d /opt/rocm*<br>ls -v -d /opt/rocm-[3-7]* \| tail -1<br>ldconfig -p \| grep -i -E 'rocm'<br>grep . -r /opt/rocm/.info/*<br>/opt/rocm/.info/version-rocm<br>/opt/rocm/.info/version | **Analyzer Args:**<br>- `exp_rocm`: Union[str, list]<br>- `exp_rocm_latest`: str<br>- `exp_rocm_sub_versions`: dict[str, Union[str, list]] | [RocmDataModel](#RocmDataModel-Model) | [RocmCollector](#Collector-Class-RocmCollector) | [RocmAnalyzer](#Data-Analyzer-Class-RocmAnalyzer) |
 | StoragePlugin | sh -c 'df -lH -B1 \| grep -v 'boot''<br>wmic LogicalDisk Where DriveType="3" Get DeviceId,Size,FreeSpace | - | [StorageDataModel](#StorageDataModel-Model) | [StorageCollector](#Collector-Class-StorageCollector) | [StorageAnalyzer](#Data-Analyzer-Class-StorageAnalyzer) |
 | SysctlPlugin | sysctl -n | **Analyzer Args:**<br>- `exp_vm_swappiness`: Optional[int]<br>- `exp_vm_numa_balancing`: Optional[int]<br>- `exp_vm_oom_kill_allocating_task`: Optional[int]<br>- `exp_vm_compaction_proactiveness`: Optional[int]<br>- `exp_vm_compact_unevictable_allowed`: Optional[int]<br>- `exp_vm_extfrag_threshold`: Optional[int]<br>- `exp_vm_zone_reclaim_mode`: Optional[int]<br>- `exp_vm_dirty_background_ratio`: Optional[int]<br>- `exp_vm_dirty_ratio`: Optional[int]<br>- `exp_vm_dirty_writeback_centisecs`: Optional[int]<br>- `exp_kernel_numa_balancing`: Optional[int] | [SysctlDataModel](#SysctlDataModel-Model) | [SysctlCollector](#Collector-Class-SysctlCollector) | [SysctlAnalyzer](#Data-Analyzer-Class-SysctlAnalyzer) |
 | SyslogPlugin | ls -1 /var/log/syslog* 2>/dev/null \| grep -E '^/var/log/syslog(\.[0-9]+(\.gz)?)?$' \|\| true | - | [SyslogData](#SyslogData-Model) | [SyslogCollector](#Collector-Class-SyslogCollector) | - |
@@ -622,6 +622,7 @@ Collect ROCm version data
 
 - **SUPPORTED_OS_FAMILY**: `{<OSFamily.LINUX: 3>}`
 - **CMD_VERSION_PATHS**: `['/opt/rocm/.info/version-rocm', '/opt/rocm/.info/version']`
+- **CMD_ROCM_SUB_VERSIONS**: `grep . -r /opt/rocm/.info/*`
 - **CMD_ROCMINFO**: `{rocm_path}/bin/rocminfo`
 - **CMD_ROCM_LATEST**: `ls -v -d /opt/rocm-[3-7]* | tail -1`
 - **CMD_ROCM_DIRS**: `ls -v -d /opt/rocm*`
@@ -645,6 +646,7 @@ RocmDataModel
 - ls -v -d /opt/rocm*
 - ls -v -d /opt/rocm-[3-7]* | tail -1
 - ldconfig -p | grep -i -E 'rocm'
+- grep . -r /opt/rocm/.info/*
 - /opt/rocm/.info/version-rocm
 - /opt/rocm/.info/version
 
@@ -1033,6 +1035,7 @@ class for collection of PCIe data.
 ### Model annotations and fields
 
 - **rocm_version**: `str`
+- **rocm_sub_versions**: `dict[str, str]`
 - **rocminfo**: `List[str]`
 - **rocm_latest_versioned_path**: `str`
 - **rocm_all_paths**: `List[str]`
@@ -1385,7 +1388,11 @@ Check cpu and kfd processes are within allowed maximum cpu and gpu usage
 
 ### Description
 
-Check ROCm matches expected versions
+Check ROCm matches expected versions.
+
+    The expected ROCm version (exp_rocm) can be a string or a list of allowed strings.
+    Sub-versions (exp_rocm_sub_versions) are a dict: each value can be a string or
+    a list of allowed strings for that key.
 
 **Bases**: ['DataAnalyzer']
 
@@ -1600,6 +1607,7 @@ Arguments for PCIe analyzer
 
 - **exp_rocm**: `Union[str, list]`
 - **exp_rocm_latest**: `str`
+- **exp_rocm_sub_versions**: `dict[str, Union[str, list]]`
 
 ## Analyzer Args Class SysctlAnalyzerArgs
 
