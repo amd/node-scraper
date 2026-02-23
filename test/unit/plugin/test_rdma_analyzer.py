@@ -80,14 +80,14 @@ def test_single_error_detected(rdma_analyzer, clean_rdma_model):
     assert result.status == ExecutionStatus.ERROR
     assert "RDMA errors detected in statistics" in result.message
     assert len(result.events) == 1
-    assert result.events[0].description == "RDMA error detected: tx_roce_errors"
+    assert result.events[0].description == "RDMA error detected on bnxt_re0: [tx_roce_errors]"
     assert result.events[0].priority == EventPriority.ERROR
-    assert result.events[0].data["error_count"] == 5
+    assert result.events[0].data["errors"] == {"tx_roce_errors": 5}
     assert result.events[0].data["interface"] == "bnxt_re0"
 
 
 def test_multiple_errors_detected(rdma_analyzer, clean_rdma_model):
-    """Test with data containing multiple errors."""
+    """Test with data containing multiple errors (grouped per interface)."""
     stats = list(clean_rdma_model.statistic_list)
     stats[0].tx_roce_errors = 10
     stats[0].rx_roce_errors = 3
@@ -96,13 +96,15 @@ def test_multiple_errors_detected(rdma_analyzer, clean_rdma_model):
     result = rdma_analyzer.analyze_data(model)
     assert result.status == ExecutionStatus.ERROR
     assert "RDMA errors detected in statistics" in result.message
-    assert len(result.events) == 3
+    assert len(result.events) == 2  # one per interface
     for event in result.events:
         assert event.priority == EventPriority.ERROR
+    # Total 3 errors across 2 interfaces
+    assert sum(len(e.data["errors"]) for e in result.events) == 3
 
 
 def test_critical_error_detected(rdma_analyzer, clean_rdma_model):
-    """Test with data containing a critical error."""
+    """Test with data containing a critical error (grouped per interface)."""
     stats = list(clean_rdma_model.statistic_list)
     stats[0].unrecoverable_err = 1
     stats[0].res_tx_pci_err = 2
@@ -110,9 +112,10 @@ def test_critical_error_detected(rdma_analyzer, clean_rdma_model):
     result = rdma_analyzer.analyze_data(model)
     assert result.status == ExecutionStatus.ERROR
     assert "RDMA errors detected in statistics" in result.message
-    assert len(result.events) == 2
-    critical_events = [e for e in result.events if e.priority == EventPriority.CRITICAL]
-    assert len(critical_events) == 2
+    assert len(result.events) == 1  # one event per interface
+    assert result.events[0].priority == EventPriority.CRITICAL
+    assert "unrecoverable_err" in result.events[0].data["errors"]
+    assert "res_tx_pci_err" in result.events[0].data["errors"]
 
 
 def test_empty_statistics(rdma_analyzer):
@@ -138,7 +141,7 @@ def test_multiple_interfaces_with_errors(rdma_analyzer, clean_rdma_model):
 
 
 def test_all_error_types(rdma_analyzer):
-    """Test that all error fields are properly detected."""
+    """Test that all error fields are properly detected (grouped in one event)."""
     stats = RdmaStatistics(
         ifname="bnxt_re_test",
         port=1,
@@ -149,10 +152,14 @@ def test_all_error_types(rdma_analyzer):
     model = RdmaDataModel(statistic_list=[stats])
     result = rdma_analyzer.analyze_data(model)
     assert result.status == ExecutionStatus.ERROR
-    assert len(result.events) == 3
-    critical_events = [e for e in result.events if e.data["error_field"] == "unrecoverable_err"]
-    assert len(critical_events) == 1
-    assert critical_events[0].priority == EventPriority.CRITICAL
+    assert len(result.events) == 1  # one event per interface
+    assert "unrecoverable_err" in result.events[0].data["errors"]
+    assert result.events[0].priority == EventPriority.CRITICAL
+    assert set(result.events[0].data["errors"].keys()) == {
+        "recoverable_errors",
+        "tx_roce_errors",
+        "unrecoverable_err",
+    }
 
 
 def test_zero_errors_are_ignored(rdma_analyzer):

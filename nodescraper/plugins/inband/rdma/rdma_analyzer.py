@@ -151,28 +151,31 @@ class RdmaAnalyzer(DataAnalyzer[RdmaDataModel, None]):
 
         error_state = False
         for idx, stat in enumerate(data.statistic_list):
+            errors_on_interface = []  # (error_field, value, is_critical)
             for error_field in self.ERROR_FIELDS:
                 value = getattr(stat, error_field, None)
                 if value is not None and value > 0:
-                    priority = (
-                        EventPriority.CRITICAL
-                        if error_field in self.CRITICAL_ERROR_FIELDS
-                        else EventPriority.ERROR
-                    )
-                    self._log_event(
-                        category=EventCategory.IO,
-                        description=f"RDMA error detected on {stat.ifname}: {error_field}",
-                        data={
-                            "interface": stat.ifname,
-                            "port": stat.port,
-                            "error_field": error_field,
-                            "error_count": value,
-                            "statistic_index": idx,
-                        },
-                        priority=priority,
-                        console_log=True,
-                    )
-                    error_state = True
+                    is_critical = error_field in self.CRITICAL_ERROR_FIELDS
+                    errors_on_interface.append((error_field, value, is_critical))
+            if errors_on_interface:
+                error_state = True
+                interface_label = stat.ifname or "unknown"
+                error_names = [e[0] for e in errors_on_interface]
+                any_critical = any(e[2] for e in errors_on_interface)
+                priority = EventPriority.CRITICAL if any_critical else EventPriority.ERROR
+                errors_data = {field: value for field, value, _ in errors_on_interface}
+                self._log_event(
+                    category=EventCategory.IO,
+                    description=f"RDMA error detected on {interface_label}: [{', '.join(error_names)}]",
+                    data={
+                        "interface": stat.ifname,
+                        "port": stat.port,
+                        "errors": errors_data,
+                        "statistic_index": idx,
+                    },
+                    priority=priority,
+                    console_log=True,
+                )
 
         if error_state:
             self.result.message = "RDMA errors detected in statistics"
