@@ -37,4 +37,4 @@ class ThpDataModel(DataModel):
     """
 
     enabled: Optional[str] = None  # 'always', 'madvise', or 'never'
-    defrag: Optional[str] = None   # e.g. 'always', 'defer', 'madvise', 'never'
+    defrag: Optional[str] = None  # e.g. 'always', 'defer', 'madvise', 'never'

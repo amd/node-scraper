@@ -65,6 +65,7 @@ def test_collect_data_success(linux_thp_collector, conn_mock):
 
 def test_collect_data_enabled_fails(linux_thp_collector):
     """Enabled read fails; defrag succeeds -> still get partial data."""
+
     def run_cmd(cmd, **kwargs):
         if "enabled" in cmd:
             return make_artifact(1, "")
@@ -81,6 +82,7 @@ def test_collect_data_enabled_fails(linux_thp_collector):
 
 def test_collect_data_both_fail(linux_thp_collector):
     """Both reads fail -> error."""
+
     def run_cmd(cmd, **kwargs):
         return make_artifact(1, "")
 
