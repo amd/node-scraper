@@ -161,7 +161,7 @@ class RdmaAnalyzer(DataAnalyzer[RdmaDataModel, None]):
                     )
                     self._log_event(
                         category=EventCategory.IO,
-                        description=f"RDMA error detected: {error_field}",
+                        description=f"RDMA error detected on {stat.ifname}: {error_field}",
                         data={
                             "interface": stat.ifname,
                             "port": stat.port,
