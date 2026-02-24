@@ -54,6 +54,15 @@ class NvmeCollector(InBandDataCollector[NvmeDataModel, None]):
 
     TELEMETRY_FILENAME = "telemetry_log.bin"
 
+    def _check_nvme_cli_installed(self) -> bool:
+        """Check if the nvme CLI is installed on the system.
+
+        Returns:
+            bool: True if nvme is available, False otherwise.
+        """
+        res = self._run_sut_cmd("which nvme")
+        return res.exit_code == 0 and bool(res.stdout.strip())
+
     def collect_data(
         self,
         args=None,
@@ -70,6 +79,16 @@ class NvmeCollector(InBandDataCollector[NvmeDataModel, None]):
                 priority=EventPriority.WARNING,
             )
             self.result.message = "NVMe data collection skipped on Windows"
+            self.result.status = ExecutionStatus.NOT_RAN
+            return self.result, None
+
+        if not self._check_nvme_cli_installed():
+            self._log_event(
+                category=EventCategory.SW_DRIVER,
+                description="nvme CLI not found; install nvme-cli to collect NVMe data",
+                priority=EventPriority.WARNING,
+            )
+            self.result.message = "nvme CLI not found; NVMe collection skipped"
             self.result.status = ExecutionStatus.NOT_RAN
             return self.result, None
 
