@@ -23,6 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
+import json
 import os
 import re
 from typing import Optional
@@ -32,14 +33,16 @@ from pydantic import ValidationError
 from nodescraper.base import InBandDataCollector
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.models import TaskResult
+from nodescraper.utils import bytes_to_human_readable, str_or_none
 
-from .nvmedata import NvmeDataModel
+from .nvmedata import NvmeDataModel, NvmeListEntry
 
 
 class NvmeCollector(InBandDataCollector[NvmeDataModel, None]):
     """Collect NVMe details from the system."""
 
     DATA_MODEL = NvmeDataModel
+    CMD_LINUX_LIST_JSON = "nvme list -o json"
     CMD_LINUX = {
         "smart_log": "nvme smart-log {dev}",
         "error_log": "nvme error-log {dev} --log-entries=256",
@@ -92,6 +95,8 @@ class NvmeCollector(InBandDataCollector[NvmeDataModel, None]):
             self.result.status = ExecutionStatus.NOT_RAN
             return self.result, None
 
+        nvme_list_entries = self._collect_nvme_list_entries()
+
         nvme_devices = self._get_nvme_devices()
         if not nvme_devices:
             self._log_event(
@@ -134,7 +139,7 @@ class NvmeCollector(InBandDataCollector[NvmeDataModel, None]):
 
         if all_device_data:
             try:
-                nvme_data = NvmeDataModel(devices=all_device_data)
+                nvme_data = NvmeDataModel(nvme_list=nvme_list_entries, devices=all_device_data)
             except ValidationError as exp:
                 self._log_event(
                     category=EventCategory.SW_DRIVER,
@@ -165,6 +170,82 @@ class NvmeCollector(InBandDataCollector[NvmeDataModel, None]):
             self.result.message = "No NVMe data collected"
             self.result.status = ExecutionStatus.ERROR
             return self.result, None
+
+    def _collect_nvme_list_entries(self) -> Optional[list[NvmeListEntry]]:
+        """Run 'nvme list -o json' and parse output into list of NvmeListEntry."""
+        res = self._run_sut_cmd(self.CMD_LINUX_LIST_JSON, sudo=False)
+        if res.exit_code == 0 and res.stdout:
+            return self._parse_nvme_list_json(res.stdout.strip())
+        return None
+
+    def _parse_nvme_list_json(self, raw: str) -> list[NvmeListEntry]:
+        """Parse 'nvme list -o json' output into NvmeListEntry list.
+
+        Walks structure: Devices[] -> Subsystems[] -> Controllers[] -> Namespaces[].
+        One NvmeListEntry per namespace (matches table: Node, Generic, SN, Model, etc.).
+        """
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            return []
+        devices = data.get("Devices", []) if isinstance(data, dict) else []
+        if not isinstance(devices, list):
+            return []
+        entries = []
+        for dev in devices:
+            if not isinstance(dev, dict):
+                continue
+            subsystems = dev.get("Subsystems") or []
+            for subsys in subsystems:
+                if not isinstance(subsys, dict):
+                    continue
+                controllers = subsys.get("Controllers") or []
+                for ctrl in controllers:
+                    if not isinstance(ctrl, dict):
+                        continue
+                    serial_number = str_or_none(ctrl.get("SerialNumber"))
+                    model = str_or_none(ctrl.get("ModelNumber"))
+                    fw_rev = str_or_none(ctrl.get("Firmware"))
+                    namespaces = ctrl.get("Namespaces") or []
+                    for ns in namespaces:
+                        if not isinstance(ns, dict):
+                            continue
+                        name_space = ns.get("NameSpace") or ns.get("NameSpaceId")
+                        generic = ns.get("Generic")
+                        nsid = ns.get("NSID")
+                        used_bytes = ns.get("UsedBytes")
+                        physical_size = ns.get("PhysicalSize")
+                        sector_size = ns.get("SectorSize")
+                        node = f"/dev/{name_space}" if name_space else None
+                        generic_path = (
+                            f"/dev/{generic}" if (generic and str(generic).strip()) else None
+                        )
+                        namespace_id = f"0x{nsid:x}" if isinstance(nsid, int) else str_or_none(nsid)
+                        if isinstance(used_bytes, (int, float)) and isinstance(
+                            physical_size, (int, float)
+                        ):
+                            usage = (
+                                f"{bytes_to_human_readable(int(used_bytes))} / "
+                                f"{bytes_to_human_readable(int(physical_size))}"
+                            )
+                        else:
+                            usage = None
+                        format_lba = (
+                            f"{sector_size}   B +  0 B" if sector_size is not None else None
+                        )
+                        entries.append(
+                            NvmeListEntry(
+                                node=str_or_none(node),
+                                generic=str_or_none(generic_path),
+                                serial_number=serial_number,
+                                model=model,
+                                namespace_id=namespace_id,
+                                usage=usage,
+                                format_lba=format_lba,
+                                fw_rev=fw_rev,
+                            )
+                        )
+        return entries
 
     def _get_nvme_devices(self) -> list[str]:
         nvme_devs = []
