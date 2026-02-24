@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# Copyright (c) 2025 Advanced Micro Devices, Inc.
+# Copyright (c) 2026 Advanced Micro Devices, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -51,6 +51,8 @@ class ThpCollector(InBandDataCollector[ThpDataModel, None]):
     DATA_MODEL = ThpDataModel
     SUPPORTED_OS_FAMILY: set[OSFamily] = {OSFamily.LINUX}
 
+    # Command template for doc generator: {} is each sysfs path (e.g. from checks).
+    CMD = "cat {}"
     CMD_ENABLED = f"cat {THP_BASE}/enabled"
     CMD_DEFRAG = f"cat {THP_BASE}/defrag"
 
