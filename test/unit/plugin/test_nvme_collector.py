@@ -57,10 +57,27 @@ def test_skips_on_windows(collector):
     assert "Windows" in collector._log_event.call_args.kwargs["description"]
 
 
+def test_not_ran_when_nvme_cli_not_found(collector):
+    collector.system_info = MagicMock(os_family=OSFamily.LINUX)
+    collector._run_sut_cmd.return_value = MagicMock(exit_code=1, stdout="")
+
+    result, data = collector.collect_data()
+
+    assert result.status == ExecutionStatus.NOT_RAN
+    assert data is None
+    assert "nvme CLI not found" in result.message
+    collector._run_sut_cmd.assert_called_once_with("which nvme")
+    collector._log_event.assert_called_once()
+
+
 @pytest.mark.skip(reason="No NVME device in testing infrastructure")
 def test_successful_collection(collector):
     collector.system_info = MagicMock(os_family=OSFamily.LINUX)
-    collector._run_sut_cmd.return_value = MagicMock(exit_code=0, stdout="output")
+    cmd_ok = MagicMock(exit_code=0, stdout="output")
+    collector._run_sut_cmd.side_effect = [
+        MagicMock(exit_code=0, stdout="/usr/bin/nvme"),
+        MagicMock(exit_code=0, stdout="nvme0\nnvme0n1\nsda"),
+    ] + [cmd_ok] * 8
 
     fake_artifact = MagicMock()
     fake_artifact.filename = "telemetry_log"
@@ -73,7 +90,7 @@ def test_successful_collection(collector):
     assert result.status == ExecutionStatus.OK
     assert result.message == "NVMe data successfully collected"
     assert isinstance(data, NvmeDataModel)
-    assert collector._run_sut_cmd.call_count == 8
+    assert collector._run_sut_cmd.call_count == 10
 
     collector._read_sut_file.assert_called_once_with(filename="telemetry_log", encoding=None)
 
@@ -81,10 +98,15 @@ def test_successful_collection(collector):
 def test_partial_failures(collector):
     collector.system_info = MagicMock(os_family=OSFamily.LINUX)
 
-    def fake_cmd(cmd, sudo):
+    def fake_cmd(cmd, sudo=False):
+        if cmd == "which nvme":
+            return MagicMock(exit_code=0, stdout="/usr/bin/nvme")
+        if cmd == "ls /dev":
+            return MagicMock(exit_code=0, stdout="nvme0\nnvme0n1\nnvme1\nsda")
         return MagicMock(exit_code=0 if "smart-log" in cmd else 1, stdout="out")
 
     collector._run_sut_cmd.side_effect = fake_cmd
+    collector._read_sut_file = MagicMock(return_value=MagicMock(contents=b""))
 
     result, data = collector.collect_data()
 
@@ -96,7 +118,11 @@ def test_partial_failures(collector):
 def test_no_data_collected(collector):
     collector.system_info = MagicMock(os_family=OSFamily.LINUX)
 
-    collector._run_sut_cmd.return_value = MagicMock(exit_code=1, stdout="")
+    collector._run_sut_cmd.side_effect = [
+        MagicMock(exit_code=0, stdout="/usr/bin/nvme"),
+        MagicMock(exit_code=0, stdout="nvme0\nnvme0n1\nnvme1\nsda"),
+    ] + [MagicMock(exit_code=1, stdout="")] * 16
+    collector._read_sut_file = MagicMock(side_effect=FileNotFoundError())
 
     result, data = collector.collect_data()
 
