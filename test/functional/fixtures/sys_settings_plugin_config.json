@@ -1,0 +1,36 @@
+{
+  "name": "SysSettingsPlugin config",
+  "desc": "Config for testing SysSettingsPlugin (sysfs settings)",
+  "global_args": {},
+  "plugins": {
+    "SysSettingsPlugin": {
+      "collection_args": {
+        "paths": [
+          "/sys/kernel/mm/transparent_hugepage/enabled",
+          "/sys/kernel/mm/transparent_hugepage/defrag",
+          "/sys/kernel/mm/transparent_hugepage/shmem_enabled"
+        ]
+      },
+      "analysis_args": {
+        "checks": [
+          {
+            "path": "/sys/kernel/mm/transparent_hugepage/enabled",
+            "expected": ["always", "madvise", "never"],
+            "name": "thp_enabled"
+          },
+          {
+            "path": "/sys/kernel/mm/transparent_hugepage/defrag",
+            "expected": ["always", "madvise", "never", "defer"],
+            "name": "thp_defrag"
+          },
+          {
+            "path": "/sys/kernel/mm/transparent_hugepage/shmem_enabled",
+            "expected": [],
+            "name": "thp_shmem"
+          }
+        ]
+      }
+    }
+  },
+  "result_collators": {}
+}
