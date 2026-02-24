@@ -23,7 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
-from .analyzer_args import ThpAnalyzerArgs
-from .thp_plugin import ThpPlugin
+from .analyzer_args import SysfsCheck, SysSettingsAnalyzerArgs
+from .sys_settings_plugin import SysSettingsPlugin
 
-__all__ = ["ThpPlugin", "ThpAnalyzerArgs"]
+__all__ = ["SysSettingsPlugin", "SysSettingsAnalyzerArgs", "SysfsCheck"]

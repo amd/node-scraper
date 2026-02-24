@@ -28,42 +28,61 @@ from types import SimpleNamespace
 import pytest
 
 from nodescraper.enums import ExecutionStatus, OSFamily
-from nodescraper.plugins.inband.thp.thp_collector import ThpCollector
-from nodescraper.plugins.inband.thp.thpdata import ThpDataModel
+from nodescraper.plugins.inband.sys_settings.sys_settings_collector import (
+    SysSettingsCollector,
+)
+from nodescraper.plugins.inband.sys_settings.sys_settings_data import (
+    SysSettingsDataModel,
+)
+
+SYSFS_BASE = "/sys/kernel/mm/transparent_hugepage"
+PATH_ENABLED = f"{SYSFS_BASE}/enabled"
+PATH_DEFRAG = f"{SYSFS_BASE}/defrag"
 
 
 @pytest.fixture
-def linux_thp_collector(system_info, conn_mock):
+def linux_sys_settings_collector(system_info, conn_mock):
     system_info.os_family = OSFamily.LINUX
-    return ThpCollector(system_info=system_info, connection=conn_mock)
+    return SysSettingsCollector(system_info=system_info, connection=conn_mock)
+
+
+@pytest.fixture
+def collection_args():
+    return {"paths": [PATH_ENABLED, PATH_DEFRAG]}
 
 
 def make_artifact(exit_code, stdout):
     return SimpleNamespace(command="", exit_code=exit_code, stdout=stdout, stderr="")
 
 
-def test_collect_data_success(linux_thp_collector, conn_mock):
+def test_collect_data_success(linux_sys_settings_collector, collection_args):
     """Both enabled and defrag read successfully."""
-    calls = []
 
-    def capture_cmd(cmd, **kwargs):
-        calls.append(cmd)
+    def run_cmd(cmd, **kwargs):
         if "enabled" in cmd:
             return make_artifact(0, "[always] madvise never")
         return make_artifact(0, "[madvise] always never defer")
 
-    linux_thp_collector._run_sut_cmd = capture_cmd
-    result, data = linux_thp_collector.collect_data()
+    linux_sys_settings_collector._run_sut_cmd = run_cmd
+    result, data = linux_sys_settings_collector.collect_data(collection_args)
 
     assert result.status == ExecutionStatus.OK
     assert data is not None
-    assert isinstance(data, ThpDataModel)
-    assert data.enabled == "always"
-    assert data.defrag == "madvise"
-    assert "THP enabled=always" in result.message
+    assert isinstance(data, SysSettingsDataModel)
+    assert data.readings.get(PATH_ENABLED) == "always"
+    assert data.readings.get(PATH_DEFRAG) == "madvise"
+    assert "Sysfs collected 2 path(s)" in result.message
 
 
-def test_collect_data_enabled_fails(linux_thp_collector):
+def test_collect_data_no_paths_not_ran(linux_sys_settings_collector):
+    """No paths in args -> NOT_RAN."""
+    result, data = linux_sys_settings_collector.collect_data({})
+    assert result.status == ExecutionStatus.NOT_RAN
+    assert "No paths configured" in result.message
+    assert data is None
+
+
+def test_collect_data_enabled_fails(linux_sys_settings_collector, collection_args):
     """Enabled read fails; defrag succeeds -> still get partial data."""
 
     def run_cmd(cmd, **kwargs):
@@ -71,33 +90,33 @@ def test_collect_data_enabled_fails(linux_thp_collector):
             return make_artifact(1, "")
         return make_artifact(0, "[never] always madvise")
 
-    linux_thp_collector._run_sut_cmd = run_cmd
-    result, data = linux_thp_collector.collect_data()
+    linux_sys_settings_collector._run_sut_cmd = run_cmd
+    result, data = linux_sys_settings_collector.collect_data(collection_args)
 
     assert result.status == ExecutionStatus.OK
     assert data is not None
-    assert data.enabled is None
-    assert data.defrag == "never"
+    assert PATH_ENABLED not in data.readings
+    assert data.readings.get(PATH_DEFRAG) == "never"
 
 
-def test_collect_data_both_fail(linux_thp_collector):
+def test_collect_data_both_fail(linux_sys_settings_collector, collection_args):
     """Both reads fail -> error."""
 
     def run_cmd(cmd, **kwargs):
         return make_artifact(1, "")
 
-    linux_thp_collector._run_sut_cmd = run_cmd
-    result, data = linux_thp_collector.collect_data()
+    linux_sys_settings_collector._run_sut_cmd = run_cmd
+    result, data = linux_sys_settings_collector.collect_data(collection_args)
 
     assert result.status == ExecutionStatus.ERROR
     assert data is None
-    assert "THP settings not read" in result.message
+    assert "Sysfs settings not read" in result.message
 
 
 def test_collector_raises_on_non_linux(system_info, conn_mock):
-    """ThpCollector does not support non-Linux; constructor raises."""
+    """SysSettingsCollector does not support non-Linux; constructor raises."""
     from nodescraper.interfaces.task import SystemCompatibilityError
 
     system_info.os_family = OSFamily.WINDOWS
     with pytest.raises(SystemCompatibilityError, match="not supported"):
-        ThpCollector(system_info=system_info, connection=conn_mock)
+        SysSettingsCollector(system_info=system_info, connection=conn_mock)
