@@ -154,7 +154,10 @@ class NvmeCollector(InBandDataCollector[NvmeDataModel, None]):
             self._log_event(
                 category=EventCategory.SW_DRIVER,
                 description="Collected NVMe data",
-                data=nvme_data.model_dump(),
+                data={
+                    "devices": list(nvme_data.devices.keys()),
+                    "nvme_list_entries": len(nvme_data.nvme_list or []),
+                },
                 priority=EventPriority.INFO,
             )
             self.result.message = "NVMe data successfully collected"
