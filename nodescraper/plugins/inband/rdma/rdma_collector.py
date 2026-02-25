@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# Copyright (c) 2025 Advanced Micro Devices, Inc.
+# Copyright (c) 2026 Advanced Micro Devices, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -42,24 +42,26 @@ class RdmaCollector(InBandDataCollector[RdmaDataModel, None]):
     DATA_MODEL = RdmaDataModel
     SUPPORTED_OS_FAMILY = {OSFamily.LINUX}
 
+    CMD_LINK = "rdma link -j"
+    CMD_STATISTIC = "rdma statistic -j"
+
     def _run_rdma_command(self, cmd: str) -> Optional[list[dict]]:
         """Run rdma command with JSON output.
 
         Args:
-            cmd: Subcommand (e.g. 'link' or 'statistic'), without 'rdma' prefix.
+            cmd: Full command string (e.g. CMD_LINK or CMD_STATISTIC).
 
         Returns:
             List of dicts from JSON output, or None on failure.
         """
-        full_cmd = f"rdma {cmd} -j"
-        res = self._run_sut_cmd(full_cmd)
+        res = self._run_sut_cmd(cmd)
 
         if res.exit_code != 0:
             self._log_event(
-                category=EventCategory.APPLICATION,
-                description=f"Error running rdma command: {full_cmd}",
+                category=EventCategory.NETWORK,
+                description=f"Error running rdma command: {cmd}",
                 data={
-                    "command": full_cmd,
+                    "command": cmd,
                     "exit_code": res.exit_code,
                     "stderr": res.stderr,
                 },
@@ -75,10 +77,10 @@ class RdmaCollector(InBandDataCollector[RdmaDataModel, None]):
             return json.loads(res.stdout)
         except json.JSONDecodeError as e:
             self._log_event(
-                category=EventCategory.APPLICATION,
-                description=f"Error parsing command: {full_cmd} json data",
+                category=EventCategory.NETWORK,
+                description=f"Error parsing command: {cmd} json data",
                 data={
-                    "cmd": full_cmd,
+                    "cmd": cmd,
                     "exception": get_exception_traceback(e),
                 },
                 priority=EventPriority.ERROR,
@@ -88,7 +90,7 @@ class RdmaCollector(InBandDataCollector[RdmaDataModel, None]):
 
     def _get_rdma_statistics(self) -> Optional[list[RdmaStatistics]]:
         """Get RDMA statistics from 'rdma statistic -j'."""
-        stat_data = self._run_rdma_command("statistic")
+        stat_data = self._run_rdma_command(self.CMD_STATISTIC)
         if stat_data is None:
             return None
         if not stat_data:
@@ -99,7 +101,7 @@ class RdmaCollector(InBandDataCollector[RdmaDataModel, None]):
             for stat in stat_data:
                 if not isinstance(stat, dict):
                     self._log_event(
-                        category=EventCategory.APPLICATION,
+                        category=EventCategory.NETWORK,
                         description="Invalid data type for RDMA statistic",
                         data={"data_type": type(stat).__name__},
                         priority=EventPriority.WARNING,
@@ -108,7 +110,7 @@ class RdmaCollector(InBandDataCollector[RdmaDataModel, None]):
                 statistics.append(RdmaStatistics(**stat))
         except ValidationError as e:
             self._log_event(
-                category=EventCategory.APPLICATION,
+                category=EventCategory.NETWORK,
                 description="Failed to build RdmaStatistics model",
                 data={"exception": get_exception_traceback(e)},
                 priority=EventPriority.WARNING,
@@ -117,7 +119,7 @@ class RdmaCollector(InBandDataCollector[RdmaDataModel, None]):
 
     def _get_rdma_link(self) -> Optional[list[RdmaLink]]:
         """Get RDMA link data from 'rdma link -j'."""
-        link_data = self._run_rdma_command("link")
+        link_data = self._run_rdma_command(self.CMD_LINK)
         if link_data is None:
             return None
         if not link_data:
@@ -128,7 +130,7 @@ class RdmaCollector(InBandDataCollector[RdmaDataModel, None]):
             for link in link_data:
                 if not isinstance(link, dict):
                     self._log_event(
-                        category=EventCategory.APPLICATION,
+                        category=EventCategory.NETWORK,
                         description="Invalid data type for RDMA link",
                         data={"data_type": type(link).__name__},
                         priority=EventPriority.WARNING,
@@ -138,7 +140,7 @@ class RdmaCollector(InBandDataCollector[RdmaDataModel, None]):
             return links
         except ValidationError as e:
             self._log_event(
-                category=EventCategory.APPLICATION,
+                category=EventCategory.NETWORK,
                 description="Failed to build RdmaLink model",
                 data={"exception": get_exception_traceback(e)},
                 priority=EventPriority.WARNING,
@@ -173,7 +175,7 @@ class RdmaCollector(InBandDataCollector[RdmaDataModel, None]):
 
         except Exception as e:
             self._log_event(
-                category=EventCategory.APPLICATION,
+                category=EventCategory.NETWORK,
                 description="Error running RDMA collector",
                 data={"exception": get_exception_traceback(e)},
                 priority=EventPriority.ERROR,

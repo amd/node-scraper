@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# Copyright (c) 2025 Advanced Micro Devices, Inc.
+# Copyright (c) 2026 Advanced Micro Devices, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -25,7 +25,7 @@
 ###############################################################################
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, Field, model_validator
 from typing_extensions import Self
 
 from nodescraper.models import DataModel
@@ -33,8 +33,6 @@ from nodescraper.models import DataModel
 
 class RdmaStatistics(BaseModel):
     """RDMA statistic entry from 'rdma statistic -j'."""
-
-    model_config = ConfigDict(extra="allow")
 
     ifname: Optional[str] = None
     port: Optional[int] = None
