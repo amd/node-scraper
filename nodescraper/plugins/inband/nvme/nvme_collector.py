@@ -178,7 +178,14 @@ class NvmeCollector(InBandDataCollector[NvmeDataModel, None]):
         """Run 'nvme list -o json' and parse output into list of NvmeListEntry."""
         res = self._run_sut_cmd(self.CMD_LINUX_LIST_JSON, sudo=False)
         if res.exit_code == 0 and res.stdout:
-            return self._parse_nvme_list_json(res.stdout.strip())
+            entries = self._parse_nvme_list_json(res.stdout.strip())
+            if not entries:
+                self._log_event(
+                    category=EventCategory.SW_DRIVER,
+                    description="Parsing of 'nvme list -o json' output failed (no entries from nested or flat format)",
+                    priority=EventPriority.WARNING,
+                )
+            return entries
         return None
 
     def _parse_nvme_list_json(self, raw: str) -> list[NvmeListEntry]:
