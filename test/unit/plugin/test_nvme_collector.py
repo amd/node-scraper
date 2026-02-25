@@ -27,11 +27,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from nodescraper.enums import EventPriority, ExecutionStatus, OSFamily
+from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.enums.systeminteraction import SystemInteractionLevel
 from nodescraper.models import TaskResult
 from nodescraper.plugins.inband.nvme.nvme_collector import NvmeCollector
-from nodescraper.plugins.inband.nvme.nvmedata import NvmeDataModel
+from nodescraper.plugins.inband.nvme.nvmedata import NvmeDataModel, NvmeListEntry
 
 
 @pytest.fixture
@@ -142,3 +142,121 @@ def test_get_nvme_devices_filters_partitions(collector):
     devices = collector._get_nvme_devices()
 
     assert devices == ["/dev/nvme0", "/dev/nvme1", "/dev/nvme2"]
+
+
+FLAT_NVME_LIST_JSON = """{
+  "Devices": [
+    {
+      "NameSpace": 1,
+      "DevicePath": "/dev/nvme0n1",
+      "GenericPath": "/dev/ng0n1",
+      "Firmware": "FW-DUMMY-01",
+      "ModelNumber": "TEST_MODEL_A",
+      "SerialNumber": "SN-DUMMY-001",
+      "UsedBytes": 2097152,
+      "MaximumLBA": 15002931888,
+      "PhysicalSize": 7681501126656,
+      "SectorSize": 512
+    },
+    {
+      "NameSpace": 1,
+      "DevicePath": "/dev/nvme1n1",
+      "GenericPath": "/dev/ng1n1",
+      "Firmware": "FW-DUMMY-01",
+      "ModelNumber": "TEST_MODEL_A",
+      "SerialNumber": "SN-DUMMY-002",
+      "UsedBytes": 2097152,
+      "MaximumLBA": 15002931888,
+      "PhysicalSize": 7681501126656,
+      "SectorSize": 512
+    }
+  ]
+}"""
+
+
+def test_parse_nvme_list_json_flat_format(collector):
+    entries = collector._parse_nvme_list_json(FLAT_NVME_LIST_JSON)
+    assert len(entries) == 2
+    e0, e1 = entries
+    assert isinstance(e0, NvmeListEntry)
+    assert e0.node == "/dev/nvme0n1"
+    assert e0.generic == "/dev/ng0n1"
+    assert e0.serial_number == "SN-DUMMY-001"
+    assert e0.model == "TEST_MODEL_A"
+    assert e0.fw_rev == "FW-DUMMY-01"
+    assert e0.namespace_id == "0x1"
+    assert "2.00 MiB" in (e0.usage or "")
+    assert "7.00 TiB" in (e0.usage or "")
+    assert e0.format_lba == "512   B +  0 B"
+    assert e1.node == "/dev/nvme1n1"
+    assert e1.serial_number == "SN-DUMMY-002"
+
+
+def test_parse_nvme_list_json_nested_format(collector):
+    nested_json = """{
+      "Devices": [{
+        "Subsystems": [{
+          "Controllers": [{
+            "SerialNumber": "SN-DUMMY-NESTED",
+            "ModelNumber": "TEST_MODEL_NESTED",
+            "Firmware": "FW-DUMMY",
+            "Namespaces": [{
+              "NameSpace": "nvme0n1",
+              "Generic": "ng0n1",
+              "NSID": 1,
+              "UsedBytes": 1000,
+              "PhysicalSize": 2000,
+              "SectorSize": 512
+            }]
+          }]
+        }]
+      }]
+    }"""
+    entries = collector._parse_nvme_list_json(nested_json)
+    assert len(entries) == 1
+    e = entries[0]
+    assert e.serial_number == "SN-DUMMY-NESTED"
+    assert e.model == "TEST_MODEL_NESTED"
+    assert e.fw_rev == "FW-DUMMY"
+    assert e.namespace_id == "0x1"
+    assert e.node == "/dev/nvme0n1"
+    assert e.generic == "/dev/ng0n1"
+
+
+def test_parse_nvme_list_json_invalid_returns_empty(collector):
+    assert collector._parse_nvme_list_json("not json") == []
+    assert collector._parse_nvme_list_json("{}") == []
+    assert collector._parse_nvme_list_json('{"Devices": null}') == []
+    assert collector._parse_nvme_list_json('{"Devices": []}') == []
+
+
+def test_collect_nvme_list_entries_calls_nvme_list_json(collector):
+    collector._run_sut_cmd.return_value = MagicMock(
+        exit_code=0,
+        stdout=FLAT_NVME_LIST_JSON.strip(),
+    )
+    entries = collector._collect_nvme_list_entries()
+    assert entries is not None
+    assert len(entries) == 2
+    collector._run_sut_cmd.assert_called_once_with("nvme list -o json", sudo=False)
+
+
+def test_collect_nvme_list_entries_parsing_failed_logs_event(collector):
+    collector._run_sut_cmd.return_value = MagicMock(
+        exit_code=0,
+        stdout='{"Devices": []}',
+    )
+    entries = collector._collect_nvme_list_entries()
+    assert entries == []
+    collector._log_event.assert_called_once()
+    call = collector._log_event.call_args
+    assert call.kwargs["category"] == EventCategory.SW_DRIVER
+    assert "Parsing of 'nvme list -o json' output failed" in call.kwargs["description"]
+    assert call.kwargs["priority"] == EventPriority.WARNING
+
+
+def test_collect_nvme_list_entries_fail_or_empty_stdout_returns_none(collector):
+    collector._run_sut_cmd.return_value = MagicMock(exit_code=1, stdout="")
+    assert collector._collect_nvme_list_entries() is None
+    collector._run_sut_cmd.return_value = MagicMock(exit_code=0, stdout="")
+    assert collector._collect_nvme_list_entries() is None
