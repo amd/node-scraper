@@ -29,17 +29,21 @@ import re
 from tarfile import TarFile
 from typing import Any, Dict, List, Optional, Union
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from nodescraper.base.inbandcollectortask import InBandDataCollector
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
+from nodescraper.enums.systeminteraction import SystemInteractionLevel
 from nodescraper.models import TaskResult
 from nodescraper.models.datamodel import FileModel
 from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     AmdSmiDataModel,
     AmdSmiListItem,
+    AmdSmiMetric,
     AmdSmiStatic,
+    AmdSmiTstData,
     AmdSmiVersion,
+    BadPages,
     EccState,
     Fw,
     FwListItem,
@@ -65,7 +69,10 @@ from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     StaticVbios,
     StaticVram,
     StaticXgmiPlpd,
+    Topo,
     ValueUnit,
+    XgmiLinks,
+    XgmiMetrics,
 )
 from nodescraper.plugins.inband.amdsmi.collector_args import AmdSmiCollectorArgs
 from nodescraper.utils import get_exception_traceback
@@ -87,8 +94,14 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
     CMD_FIRMWARE = "firmware --json"
     CMD_STATIC = "static -g all --json"
     CMD_STATIC_GPU = "static -g {gpu_id} --json"
+    CMD_TOPOLOGY = "topology"
+    CMD_METRIC = "metric -g all"
+    CMD_BAD_PAGES = "bad-pages"
+    CMD_XGMI_METRIC = "xgmi -m"
+    CMD_XGMI_LINK = "xgmi -l"
     CMD_RAS = "ras --cper --folder={folder}"
     CMD_RAS_AFID = "ras --afid --cper-file {cper_file}"
+    AMDSMITST_PATH = "/opt/rocm/share/amd_smi/tests/amdsmitst"
 
     def _check_amdsmi_installed(self) -> bool:
         """Check if amd-smi is installed
@@ -317,10 +330,179 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
             if u == "CEM":
                 return "CEM"
             return "Unknown"
-
         return s
 
-    def _get_amdsmi_data(self) -> Optional[AmdSmiDataModel]:
+    def _build_amdsmi_sub_data(
+        self,
+        model_class: type[BaseModel],
+        json_data: Optional[Union[dict, list]],
+        *,
+        model_name: Optional[str] = None,
+    ) -> Optional[Union[list, Any]]:
+        """Build list or single instance from amd-smi JSON using a Pydantic model.
+
+        Args:
+            model_class: Pydantic model class (e.g. Topo, BadPages, AmdSmiMetric).
+            json_data: Raw dict or list from amd-smi --json.
+            model_name: Optional name for logging (defaults to model_class.__name__).
+
+        Returns:
+            List of model instances, single instance, or None on error.
+        """
+        name = model_name or model_class.__name__
+        if json_data is None:
+            return None
+        try:
+            if isinstance(json_data, list):
+                out: List[Any] = []
+                for item in json_data:
+                    if not isinstance(item, dict):
+                        continue
+                    try:
+                        out.append(model_class.model_validate(item))
+                    except ValidationError as err:
+                        self._log_event(
+                            category=EventCategory.APPLICATION,
+                            description=f"Failed to build {name} entry; skipping",
+                            data={
+                                "errors": err.errors(include_url=False),
+                                "item_keys": list(item.keys()),
+                            },
+                            priority=EventPriority.WARNING,
+                        )
+                return out
+            if isinstance(json_data, dict):
+                return model_class.model_validate(json_data)
+            return None
+        except ValidationError as err:
+            self._log_event(
+                category=EventCategory.APPLICATION,
+                description=f"Failed to build {name}",
+                data={"errors": err.errors(include_url=False)},
+                priority=EventPriority.WARNING,
+            )
+            return None
+
+    def get_topology(self) -> Optional[List[Topo]]:
+        """Get topology from amd-smi topology --json."""
+        ret = self._run_amd_smi_dict(self.CMD_TOPOLOGY)
+        if ret is None:
+            return []
+        if isinstance(ret, dict) and "gpu_data" in ret:
+            ret = ret["gpu_data"]
+        data = ret if isinstance(ret, list) else [ret]
+        built = self._build_amdsmi_sub_data(Topo, data)
+        return built if isinstance(built, list) else ([built] if built else [])
+
+    def get_bad_pages(self) -> Optional[List[BadPages]]:
+        """Get bad pages from amd-smi bad-pages --json."""
+        ret = self._run_amd_smi_dict(self.CMD_BAD_PAGES)
+        if ret is None:
+            return []
+        data = ret if isinstance(ret, list) else [ret]
+        built = self._build_amdsmi_sub_data(BadPages, data)
+        return built if isinstance(built, list) else ([built] if built else [])
+
+    def get_metric(self) -> Optional[List[AmdSmiMetric]]:
+        """Get metrics from amd-smi metric -g all --json."""
+        ret = self._run_amd_smi_dict(self.CMD_METRIC)
+        if ret is None:
+            return []
+        if isinstance(ret, dict) and "gpu_data" in ret:
+            ret = ret["gpu_data"]
+        data = ret if isinstance(ret, list) else [ret]
+        built = self._build_amdsmi_sub_data(AmdSmiMetric, data)
+        return built if isinstance(built, list) else ([built] if built else [])
+
+    def get_xgmi_data(
+        self,
+    ) -> tuple[List[XgmiMetrics], List[XgmiLinks]]:
+        """Get XGMI metric and link data from amd-smi xgmi -m and xgmi -l."""
+        xgmi_metric_raw = self._run_amd_smi_dict(self.CMD_XGMI_METRIC)
+        xgmi_metrics: Optional[List[XgmiMetrics]] = []
+        if xgmi_metric_raw is not None:
+            if isinstance(xgmi_metric_raw, dict) and "xgmi_metric" in xgmi_metric_raw:
+                xgmi_metric_raw = xgmi_metric_raw["xgmi_metric"]
+            if isinstance(xgmi_metric_raw, list) and len(xgmi_metric_raw) == 1:
+                xgmi_metric_raw = xgmi_metric_raw[0]
+            data_m = (
+                xgmi_metric_raw
+                if isinstance(xgmi_metric_raw, list)
+                else ([xgmi_metric_raw] if isinstance(xgmi_metric_raw, dict) else [])
+            )
+            built_m = self._build_amdsmi_sub_data(XgmiMetrics, data_m)
+            xgmi_metrics = built_m if isinstance(built_m, list) else ([built_m] if built_m else [])
+
+        xgmi_link_raw = self._run_amd_smi_dict(self.CMD_XGMI_LINK)
+        xgmi_links: Optional[List[XgmiLinks]] = []
+        if isinstance(xgmi_link_raw, dict) and "link_status" in xgmi_link_raw:
+            link_list = xgmi_link_raw.get("link_status")
+            if isinstance(link_list, list):
+                xgmi_links = self._build_amdsmi_sub_data(XgmiLinks, link_list)
+                xgmi_links = xgmi_links if isinstance(xgmi_links, list) else []
+        elif isinstance(xgmi_link_raw, list):
+            xgmi_links = self._build_amdsmi_sub_data(XgmiLinks, xgmi_link_raw)
+            xgmi_links = xgmi_links if isinstance(xgmi_links, list) else []
+
+        return xgmi_metrics or [], xgmi_links or []
+
+    def get_amdsmitst_data(self, version: Optional[AmdSmiVersion]) -> AmdSmiTstData:
+        """Run amdsmitst and parse passed/skipped/failed counts. Only runs when run_amdsmitst is True and system interaction is DISRUPTIVE."""
+        result = AmdSmiTstData()
+        try:
+            from packaging.version import Version as PackageVersion
+        except ImportError:
+            self.logger.info("packaging not installed; skipping amdsmitst")
+            return result
+
+        min_rocm = PackageVersion("6.4.2")
+        if version is None or not version.rocm_version:
+            return result
+        try:
+            if PackageVersion(version.rocm_version) < min_rocm:
+                self.logger.info("Skipping amdsmitst: ROCm %s < %s", version.rocm_version, min_rocm)
+                return result
+        except Exception:
+            return result
+
+        if self.system_interaction_level != SystemInteractionLevel.DISRUPTIVE:
+            return result
+
+        res = self._run_sut_cmd(self.AMDSMITST_PATH, sudo=True)
+        if res.exit_code != 0 or not res.stdout:
+            if res.exit_code != 0:
+                self._log_event(
+                    category=EventCategory.APPLICATION,
+                    description="Error running amdsmitst",
+                    data={"exit_code": res.exit_code, "stderr": res.stderr},
+                    priority=EventPriority.WARNING,
+                    console_log=True,
+                )
+            return result
+
+        passed_pat = re.compile(r"\[\s+OK\s+\]\s+(.*?)\s+\(\d+\s*ms\)")
+        skipped_pat = re.compile(r"\[\s+SKIPPED\s+\]\s+(.*?)\s+\(\d+\s*ms\)")
+        failed_pat = re.compile(r"\[\s+FAILED\s+\]\s+(.*?)\s+\(\d+\s*ms\)")
+        for line in res.stdout.splitlines():
+            m = passed_pat.match(line)
+            if m:
+                result.passed_tests.append(m.group(1).strip())
+                continue
+            m = skipped_pat.match(line)
+            if m:
+                result.skipped_tests.append(m.group(1).strip())
+                continue
+            m = failed_pat.match(line)
+            if m:
+                result.failed_tests.append(m.group(1).strip())
+        result.passed_test_count = len(result.passed_tests)
+        result.skipped_test_count = len(result.skipped_tests)
+        result.failed_test_count = len(result.failed_tests)
+        return result
+
+    def _get_amdsmi_data(
+        self, args: Optional[AmdSmiCollectorArgs] = None
+    ) -> Optional[AmdSmiDataModel]:
         """Fill in information for AmdSmi data model
 
         Returns:
@@ -333,7 +515,16 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
             firmware = self.get_firmware()
             gpu_list = self.get_gpu_list()
             statics = self.get_static()
+            topology = self.get_topology()
+            metric = self.get_metric()
+            bad_pages = self.get_bad_pages()
+            xgmi_metric, xgmi_link = self.get_xgmi_data()
             cper_data, cper_afids = self.get_cper_data()
+            amdsmitst_data = (
+                self.get_amdsmitst_data(version)
+                if (args and getattr(args, "run_amdsmitst", False))
+                else AmdSmiTstData()
+            )
         except Exception as e:
             self._log_event(
                 category=EventCategory.APPLICATION,
@@ -353,8 +544,14 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
                 partition=partition,
                 firmware=firmware,
                 static=statics,
+                topology=topology or [],
+                metric=metric or [],
+                bad_pages=bad_pages or [],
+                xgmi_metric=xgmi_metric or [],
+                xgmi_link=xgmi_link or [],
                 cper_data=cper_data,
                 cper_afids=cper_afids,
+                amdsmitst_data=amdsmitst_data,
             )
         except ValidationError as err:
             self.logger.warning("Validation err: %s", err)
@@ -1348,7 +1545,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
                 self.logger.info("amd-smi version: %s", version.version)
                 self.logger.info("ROCm version: %s", version.rocm_version)
 
-            amd_smi_data = self._get_amdsmi_data()
+            amd_smi_data = self._get_amdsmi_data(args)
 
             if amd_smi_data is None:
                 return self.result, None
