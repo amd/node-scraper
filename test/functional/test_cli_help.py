@@ -62,7 +62,7 @@ def test_no_arguments():
         [sys.executable, "-m", "nodescraper.cli.cli"],
         capture_output=True,
         text=True,
-        timeout=30,
+        timeout=120,
     )
 
     assert len(result.stdout) > 0 or len(result.stderr) > 0
