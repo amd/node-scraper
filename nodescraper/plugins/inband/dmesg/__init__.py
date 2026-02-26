@@ -24,5 +24,17 @@
 #
 ###############################################################################
 from .dmesg_plugin import DmesgPlugin
+from .run_compare import (
+    compare_dmesg_runs,
+    compute_extracted_errors,
+    find_dmesg_datamodel_path,
+    load_dmesg_data,
+)
 
-__all__ = ["DmesgPlugin"]
+__all__ = [
+    "DmesgPlugin",
+    "compare_dmesg_runs",
+    "compute_extracted_errors",
+    "find_dmesg_datamodel_path",
+    "load_dmesg_data",
+]

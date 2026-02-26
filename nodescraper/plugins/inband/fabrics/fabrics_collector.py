@@ -722,5 +722,5 @@ class FabricsCollector(InBandDataCollector[FabricsDataModel, None]):
             return self.result, fabrics_data
         else:
             self.result.message = "No InfiniBand/RDMA fabrics hardware detected on this system"
-            self.result.status = ExecutionStatus.WARNING
+            self.result.status = ExecutionStatus.NOT_RAN
             return self.result, None

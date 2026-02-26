@@ -418,24 +418,34 @@ def generate_reference_config_from_logs(
     Returns:
         PluginConfig: instance of plugin config
     """
-    found = find_datamodel_and_result(path)
+    found = find_datamodel_and_result(path, plugin_reg)
     plugin_config = PluginConfig()
     plugins = {}
     for dm, res in found:
         result_path = Path(res)
         res_payload = json.loads(result_path.read_text(encoding="utf-8"))
         task_res = TaskResult(**res_payload)
-        dm_path = Path(dm)
-        dm_payload = json.loads(dm_path.read_text(encoding="utf-8"))
         plugin = plugin_reg.plugins.get(task_res.parent)
         if not plugin:
             logger.warning(
-                "Plugin %s not found in the plugin registry: %s.",
+                "Plugin %s not found in the plugin registry, skipping.",
                 task_res.parent,
             )
             continue
 
-        data_model = plugin.DATA_MODEL.model_validate(dm_payload)
+        data_model_cls = getattr(plugin, "DATA_MODEL", None)
+        if not data_model_cls:
+            continue
+        dm_path = Path(dm)
+        if str(dm_path).lower().endswith(".log"):
+            import_model = getattr(data_model_cls, "import_model", None)
+            if callable(import_model):
+                data_model = import_model(str(dm_path))
+            else:
+                continue
+        else:
+            dm_payload = json.loads(dm_path.read_text(encoding="utf-8"))
+            data_model = data_model_cls.model_validate(dm_payload)
 
         args = extract_analyzer_args_from_model(plugin, data_model, logger)
         if not args:
@@ -447,30 +457,58 @@ def generate_reference_config_from_logs(
     return plugin_config
 
 
-def find_datamodel_and_result(base_path: str) -> list[Tuple[str, str]]:
+def find_datamodel_and_result(
+    base_path: str, plugin_reg: Optional[PluginRegistry] = None
+) -> list[Tuple[str, str]]:
     """Get datamodel and result files
 
     Args:
         base_path (str): location of previous run logs
+        plugin_reg (Optional[PluginRegistry]): if provided, also find datamodel files
+            named <DATA_MODEL.__name__.lower()>.json or any *.log in the collector dir
 
     Returns:
-        list[Tuple[str, str]]: tuple of datamodel and result json files
+        list[Tuple[str, str]]: tuple of (datamodel_path, result_path)
     """
-    tuple_list: list[Tuple[str, str, str]] = []
+    tuple_list: list[Tuple[str, str]] = []
     for root, _, files in os.walk(base_path):
-        if "collector" in os.path.basename(root).lower():
-            datamodel_path = None
-            result_path = None
+        if "collector" not in os.path.basename(root).lower():
+            continue
+        result_path = os.path.join(root, "result.json")
+        if "result.json" not in [f for f in files if f.lower() == "result.json"]:
+            continue
 
+        datamodel_path = None
+        if plugin_reg:
+            try:
+                res_payload = json.loads(Path(result_path).read_text(encoding="utf-8"))
+                parent = res_payload.get("parent")
+                if parent:
+                    plugin = plugin_reg.plugins.get(parent)
+                    data_model_cls = getattr(plugin, "DATA_MODEL", None) if plugin else None
+                    if data_model_cls:
+                        want_json = data_model_cls.__name__.lower() + ".json"
+                        for fname in files:
+                            low = fname.lower()
+                            if low.endswith("datamodel.json") or low == want_json:
+                                datamodel_path = os.path.join(root, fname)
+                                break
+                        if not datamodel_path:
+                            for fname in files:
+                                if fname.lower().endswith(".log"):
+                                    datamodel_path = os.path.join(root, fname)
+                                    break
+            except (json.JSONDecodeError, OSError):
+                pass
+
+        if not datamodel_path:
             for fname in files:
-                low = fname.lower()
-                if low.endswith("datamodel.json"):
+                if fname.lower().endswith("datamodel.json"):
                     datamodel_path = os.path.join(root, fname)
-                elif low == "result.json":
-                    result_path = os.path.join(root, fname)
+                    break
 
-            if datamodel_path and result_path:
-                tuple_list.append((datamodel_path, result_path))
+        if datamodel_path and result_path:
+            tuple_list.append((datamodel_path, result_path))
 
     return tuple_list
 
