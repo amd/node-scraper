@@ -29,7 +29,13 @@ import logging
 import os
 from typing import Any, Optional
 
-from pydantic import BaseModel, Field, field_serializer, field_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    field_serializer,
+    field_validator,
+    model_validator,
+)
 
 from nodescraper.enums import EventPriority, ExecutionStatus
 from nodescraper.utils import get_unique_filename, pascal_to_snake
@@ -54,6 +60,20 @@ class TaskResult(BaseModel):
     task: Optional[str] = None
     parent: Optional[str] = None
     artifacts: list[BaseModel] = Field(default_factory=list)
+    details: dict = Field(default_factory=dict)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _source_source_type_aliases(cls, data: Any) -> Any:
+        """Accept source/source_type."""
+        if isinstance(data, dict):
+            data = dict(data)
+            if "source" in data and "task" not in data:
+                data["task"] = data.pop("source")
+            if "source_type" in data and "parent" not in data:
+                data["parent"] = data.pop("source_type")
+        return data
+
     events: list[Event] = Field(default_factory=list)
     start_time: datetime.datetime = Field(default_factory=datetime.datetime.now)
     end_time: datetime.datetime = Field(default_factory=datetime.datetime.now)
@@ -107,13 +127,23 @@ class TaskResult(BaseModel):
 
     @property
     def source(self) -> str:
-        """Task/source name (alias for task for error-scraper compatibility)."""
+        """Task/source name."""
         return self.task or ""
+
+    @source.setter
+    def source(self, value: str) -> None:
+        """Set task from source."""
+        self.task = value if value else None
 
     @property
     def source_type(self) -> str:
-        """Task/source type (alias for parent for error-scraper compatibility)."""
+        """Task/source type."""
         return self.parent or ""
+
+    @source_type.setter
+    def source_type(self, value: str) -> None:
+        """Set parent from source_type."""
+        self.parent = value if value else None
 
     @property
     def summary_dict(self) -> dict:
@@ -207,6 +237,16 @@ class TaskResult(BaseModel):
             summary_parts.append(f"{total_errors} errors: {', '.join(error_details)}")
 
         return "; ".join(summary_parts)
+
+    def _get_event_priorities(self) -> str:
+        warnings = sum(1 for e in self.events if e.priority == EventPriority.WARNING)
+        errors = sum(1 for e in self.events if e.priority >= EventPriority.ERROR)
+        parts = []
+        if warnings:
+            parts.append(f"{warnings} warnings")
+        if errors:
+            parts.append(f"{errors} errors")
+        return "|".join(parts)
 
     def _update_status(self) -> None:
         """Update overall status based on event priority"""
