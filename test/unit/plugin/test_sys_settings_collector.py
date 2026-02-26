@@ -120,3 +120,46 @@ def test_collector_raises_on_non_linux(system_info, conn_mock):
     system_info.os_family = OSFamily.WINDOWS
     with pytest.raises(SystemCompatibilityError, match="not supported"):
         SysSettingsCollector(system_info=system_info, connection=conn_mock)
+
+
+def test_collect_data_uses_sys_only_command(linux_sys_settings_collector):
+    seen_commands = []
+
+    def run_cmd(cmd, **kwargs):
+        seen_commands.append(cmd)
+        return make_artifact(0, "value")
+
+    linux_sys_settings_collector._run_sut_cmd = run_cmd
+    args = {"paths": [PATH_ENABLED]}
+    result, data = linux_sys_settings_collector.collect_data(args)
+
+    assert result.status == ExecutionStatus.OK
+    assert len(seen_commands) == 1
+    assert seen_commands[0].startswith("cat /sys/")
+    assert data.readings.get(PATH_ENABLED) == "value"
+
+
+def test_collect_data_skips_path_with_dotdot(linux_sys_settings_collector):
+    seen_commands = []
+
+    def run_cmd(cmd, **kwargs):
+        seen_commands.append(cmd)
+        return make_artifact(0, "safe")
+
+    linux_sys_settings_collector._run_sut_cmd = run_cmd
+    args = {
+        "paths": [
+            "/sys/kernel/mm/transparent_hugepage/enabled",
+            "/sys/../etc/passwd",
+            "/sys/something/../../etc",
+            "sys/kernel/mm/transparent_hugepage/defrag",
+        ]
+    }
+    result, data = linux_sys_settings_collector.collect_data(args)
+
+    assert result.status == ExecutionStatus.OK
+    assert len(seen_commands) == 2
+    assert all(c.startswith("cat /sys/") for c in seen_commands)
+    assert data.readings.get("/sys/kernel/mm/transparent_hugepage/enabled") == "safe"
+    assert data.readings.get("/sys/kernel/mm/transparent_hugepage/defrag") == "safe"
+    assert "/etc" not in str(seen_commands)

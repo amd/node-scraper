@@ -56,14 +56,32 @@ def _paths_from_args(args: Optional[SysSettingsCollectorArgs]) -> list[str]:
     """Extract list of sysfs paths from collection args.
 
     Args:
-        args: Collector args containing paths to read, or None.
+        args: Collector args containing paths to read, or None. May be a dict.
 
     Returns:
         List of sysfs paths; empty if args is None or args.paths is empty.
     """
     if args is None:
         return []
-    return list(args.paths) if args.paths else []
+    paths = args.get("paths") if isinstance(args, dict) else getattr(args, "paths", None)
+    return list(paths) if paths else []
+
+
+def _path_under_sys(path: str) -> Optional[str]:
+    """Normalize path to the suffix under /sys/ for use in 'cat /sys/{}'."""
+    if ".." in path:
+        return None
+    p = path.strip().lstrip("/")
+    if p.startswith("sys/"):
+        p = p[4:]
+    if p.startswith("/"):
+        return None
+    return p if p else None
+
+
+def _sysfs_full_path(suffix: str) -> str:
+    """Return full path /sys/{suffix}."""
+    return f"/sys/{suffix}"
 
 
 class SysSettingsCollector(InBandDataCollector[SysSettingsDataModel, SysSettingsCollectorArgs]):
@@ -72,7 +90,7 @@ class SysSettingsCollector(InBandDataCollector[SysSettingsDataModel, SysSettings
     DATA_MODEL = SysSettingsDataModel
     SUPPORTED_OS_FAMILY: set[OSFamily] = {OSFamily.LINUX}
 
-    CMD = "cat {}"
+    CMD = "cat /sys/{}"
 
     def collect_data(
         self, args: Optional[SysSettingsCollectorArgs] = None
@@ -102,14 +120,25 @@ class SysSettingsCollector(InBandDataCollector[SysSettingsDataModel, SysSettings
 
         readings: dict[str, str] = {}
         for path in paths:
-            res = self._run_sut_cmd(self.CMD.format(path), sudo=False)
+            suffix = _path_under_sys(path)
+            if suffix is None:
+                self._log_event(
+                    category=EventCategory.OS,
+                    description=f"Skipping path not under /sys or invalid: {path!r}",
+                    data={"path": path},
+                    priority=EventPriority.WARNING,
+                    console_log=True,
+                )
+                continue
+            full_path = _sysfs_full_path(suffix)
+            res = self._run_sut_cmd(self.CMD.format(suffix), sudo=False)
             if res.exit_code == 0 and res.stdout:
                 value = _parse_bracketed_setting(res.stdout) or res.stdout.strip()
-                readings[path] = value
+                readings[full_path] = value
             else:
                 self._log_event(
                     category=EventCategory.OS,
-                    description=f"Failed to read sysfs path: {path}",
+                    description=f"Failed to read sysfs path: {full_path}",
                     data={"exit_code": res.exit_code},
                     priority=EventPriority.WARNING,
                     console_log=True,
