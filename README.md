@@ -13,6 +13,7 @@ system debug.
     - ['describe' subcommand](#describe-subcommand)
     - ['run-plugins' sub command](#run-plugins-sub-command)
     - ['gen-plugin-config' sub command](#gen-plugin-config-sub-command)
+    - ['compare-runs' subcommand](#compare-runs-subcommand)
     - ['summary' sub command](#summary-sub-command)
 - [Configs](#configs)
   - [Global args](#global-args)
@@ -291,6 +292,32 @@ Save this to `dmesg_custom_config.json` and run:
 ```sh
 node-scraper --plugin-configs dmesg_custom_config.json run-plugins DmesgPlugin
 ```
+
+#### **'compare-runs' subcommand**
+The `compare-runs` subcommand compares datamodels from two run log directories (e.g. two
+`nodescraper_log_*` folders). By default, all plugins with data in both runs are compared.
+
+**Basic usage:**
+```sh
+node-scraper compare-runs <path1> <path2>
+```
+
+**Exclude specific plugins from the comparison** with `--skip-plugins`:
+```sh
+node-scraper compare-runs path1 path2 --skip-plugins SomePlugin
+```
+
+**Compare only certain plugins** with `--include-plugins`:
+```sh
+node-scraper compare-runs path1 path2 --include-plugins DmesgPlugin
+```
+
+**Show full diff output** (no truncation of the Message column or limit on number of errors) with `--dont-truncate`:
+```sh
+node-scraper compare-runs path1 path2 --include-plugins DmesgPlugin --dont-truncate
+```
+
+You can pass multiple plugin names to `--skip-plugins` or `--include-plugins`.
 
 #### **'summary' sub command**
 The 'summary' subcommand can be used to combine results from multiple runs of node-scraper to a
