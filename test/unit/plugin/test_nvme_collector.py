@@ -185,8 +185,8 @@ def test_parse_nvme_list_json_flat_format(collector):
     assert e0.model == "TEST_MODEL_A"
     assert e0.fw_rev == "FW-DUMMY-01"
     assert e0.namespace_id == "0x1"
-    assert "2.00 MiB" in (e0.usage or "")
-    assert "7.00 TiB" in (e0.usage or "")
+    assert e0.usage and "/" in e0.usage
+    assert "2.1MB" in (e0.usage or "") and "7.68TB" in (e0.usage or "")
     assert e0.format_lba == "512   B +  0 B"
     assert e1.node == "/dev/nvme1n1"
     assert e1.serial_number == "SN-DUMMY-002"
