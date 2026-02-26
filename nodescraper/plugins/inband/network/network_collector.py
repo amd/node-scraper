@@ -27,6 +27,7 @@ import re
 from typing import Dict, List, Optional, Tuple
 
 from nodescraper.base import InBandDataCollector
+from nodescraper.connection.inband import TextFileArtifact
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.models import TaskResult
 
@@ -65,6 +66,7 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
     CMD_RULE = "ip rule show"
     CMD_NEIGHBOR = "ip neighbor show"
     CMD_ETHTOOL_TEMPLATE = "ethtool {interface}"
+    CMD_ETHTOOL_S_TEMPLATE = "ethtool -S {interface}"
     CMD_PING = "ping"
     CMD_WGET = "wget"
     CMD_CURL = "curl"
@@ -467,6 +469,38 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
                         ethtool_info.advertised_link_modes.append(mode)
 
         return ethtool_info
+
+    def _parse_ethtool_statistics(self, output: str, interface: str) -> Dict[str, str]:
+        """Parse 'ethtool -S <interface>' output into a key-value dictionary.
+
+        Args:
+            output: Raw output from 'ethtool -S <interface>' command
+            interface: Name of the network interface (for netdev key)
+
+        Returns:
+            Dictionary of statistic name -> value (string)
+        """
+        stats_dict: Dict[str, str] = {}
+        for line in output.splitlines():
+            if ":" not in line:
+                continue
+            if "NIC statistics" in line:
+                stats_dict["netdev"] = interface
+            elif "]: " in line and line.strip().startswith("["):
+                # Format: "     [0]: rx_ucast_packets: 162"
+                bracket_part, rest = line.split("]: ", 1)
+                index = bracket_part.strip().lstrip("[")
+                if ": " in rest:
+                    stat_key, stat_value = rest.split(": ", 1)
+                    key = f"{index}_{stat_key.strip()}"
+                    stats_dict[key] = stat_value.strip()
+                else:
+                    key, value = line.split(":", 1)
+                    stats_dict[key.strip()] = value.strip()
+            else:
+                key, value = line.split(":", 1)
+                stats_dict[key.strip()] = value.strip()
+        return stats_dict
 
     def _parse_niccli_listdev(self, output: str) -> List[BroadcomNicDevice]:
         """Parse 'niccli --list_devices' output into BroadcomNicDevice objects.
@@ -1399,6 +1433,19 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
 
             if res_ethtool.exit_code == 0:
                 ethtool_info = self._parse_ethtool(iface.name, res_ethtool.stdout)
+                # Collect ethtool -S (statistics) for error/health analysis
+                cmd_s = self.CMD_ETHTOOL_S_TEMPLATE.format(interface=iface.name)
+                res_ethtool_s = self._run_sut_cmd(cmd_s, sudo=True)
+                if res_ethtool_s.exit_code == 0 and res_ethtool_s.stdout:
+                    ethtool_info.statistics = self._parse_ethtool_statistics(
+                        res_ethtool_s.stdout, iface.name
+                    )
+                    self.result.artifacts.append(
+                        TextFileArtifact(
+                            filename=f"{iface.name}.log",
+                            contents=res_ethtool_s.stdout,
+                        )
+                    )
                 ethtool_data[iface.name] = ethtool_info
                 self._log_event(
                     category=EventCategory.NETWORK,
