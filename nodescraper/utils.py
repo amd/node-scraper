@@ -71,6 +71,25 @@ def get_exception_details(exception: Exception) -> dict:
     }
 
 
+def str_or_none(val: object) -> Optional[str]:
+    """Return a stripped string or None.
+
+    None input, or a string that is empty/whitespace after stripping, becomes None.
+    Non-string values are converted to string then stripped. Useful for normalizing
+    values from JSON, dicts, or user input into Optional[str] for model fields.
+
+    Args:
+        val: Any value (e.g. str, int, None).
+
+    Returns:
+        Stripped non-empty string, or None.
+    """
+    if val is None:
+        return None
+    s = val.strip() if isinstance(val, str) else str(val).strip()
+    return s if s else None
+
+
 def convert_to_bytes(value: str, si=False) -> int:
     """
     Convert human-readable memory sizes (like GB, MB) to bytes.
@@ -150,26 +169,23 @@ def pascal_to_snake(input_str: str) -> str:
 
 
 def bytes_to_human_readable(input_bytes: int) -> str:
-    """converts a bytes int to a human readable sting in KB, MB, or GB
+    """Converts a bytes int to a human-readable string in B, KB, MB, GB, TB, or PB (decimal).
 
     Args:
         input_bytes (int): bytes integer
 
     Returns:
-        str: human readable string
+        str: human-readable string (e.g. "8.25KB", "7.68TB")
     """
-    kb = round(float(input_bytes) / 1000, 2)
-
-    if kb < 1000:
-        return f"{kb}KB"
-
-    mb = round(kb / 1000, 2)
-
-    if mb < 1000:
-        return f"{mb}MB"
-
-    gb = round(mb / 1000, 2)
-    return f"{gb}GB"
+    if input_bytes < 0:
+        return "0B"
+    if input_bytes == 0:
+        return "0B"
+    units = [(10**12, "TB"), (10**9, "GB"), (10**6, "MB"), (10**3, "KB"), (1, "B")]
+    for scale, label in units:
+        if input_bytes >= scale:
+            return f"{round(float(input_bytes) / scale, 2)}{label}"
+    return "0B"
 
 
 def find_annotation_in_container(
