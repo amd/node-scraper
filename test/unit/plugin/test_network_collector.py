@@ -530,6 +530,23 @@ def test_parse_ethtool_empty_output(collector):
     assert len(ethtool_info.advertised_link_modes) == 0
 
 
+def test_parse_ethtool_statistics(collector):
+    """Test parsing ethtool -S output (statistics) for error/health analysis."""
+    output = """NIC statistics:
+     [0]: rx_ucast_packets: 162692536538787551
+     [0]: rx_errors: 0
+     [1]: rx_ucast_packets: 79657418409137764
+     rx_total_l4_csum_errors: 0
+     rx_total_buf_errors: 0"""
+    stats = collector._parse_ethtool_statistics(output, "abc1p1")
+    assert stats.get("netdev") == "abc1p1"
+    assert stats.get("0_rx_ucast_packets") == "162692536538787551"
+    assert stats.get("0_rx_errors") == "0"
+    assert stats.get("1_rx_ucast_packets") == "79657418409137764"
+    assert stats.get("rx_total_l4_csum_errors") == "0"
+    assert stats.get("rx_total_buf_errors") == "0"
+
+
 def test_network_data_model_creation(collector):
     """Test creating NetworkDataModel with all components"""
     interface = NetworkInterface(
