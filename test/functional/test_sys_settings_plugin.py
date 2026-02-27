@@ -30,11 +30,6 @@ from pathlib import Path
 import pytest
 
 
-def _project_root() -> Path:
-    """Return project root (directory containing plugin_config.json)."""
-    return Path(__file__).resolve().parent.parent.parent
-
-
 @pytest.fixture
 def fixtures_dir():
     """Return path to fixtures directory."""
@@ -48,9 +43,9 @@ def sys_settings_config_file(fixtures_dir):
 
 
 @pytest.fixture
-def plugin_config_json():
-    """Return path to project root plugin_config.json (full config: paths + directory_paths + checks)."""
-    return _project_root() / "plugin_config.json"
+def plugin_config_json(fixtures_dir):
+    """Return path to fixture plugin_config.json."""
+    return fixtures_dir / "plugin_config.json"
 
 
 def test_sys_settings_plugin_with_config_file(run_cli_command, sys_settings_config_file, tmp_path):
