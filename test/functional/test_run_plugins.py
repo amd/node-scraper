@@ -62,6 +62,7 @@ def test_plugin_registry_has_plugins(all_plugins):
         "OsPlugin",
         "PackagePlugin",
         "ProcessPlugin",
+        "RdmaPlugin",
         "RocmPlugin",
         "StoragePlugin",
         "SysctlPlugin",
