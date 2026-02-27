@@ -25,20 +25,22 @@
 ###############################################################################
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from nodescraper.models import AnalyzerArgs
 
 
 class SysfsCheck(BaseModel):
-    """One sysfs check: path to read, acceptable values, and display name.
+    """One sysfs check: path to read, acceptable values or pattern, and display name.
 
-    If expected is an empty list, the check is treated as passing (no constraint).
+    For file paths: use expected (list of acceptable values); if empty, check passes.
+    For directory paths: use pattern (regex); at least one directory entry must match (e.g. ^hsn[0-9]+).
     """
 
     path: str
-    expected: list[str]
+    expected: list[str] = Field(default_factory=list)
     name: str
+    pattern: Optional[str] = None
 
 
 class SysSettingsAnalyzerArgs(AnalyzerArgs):
@@ -51,16 +53,29 @@ class SysSettingsAnalyzerArgs(AnalyzerArgs):
     checks: Optional[list[SysfsCheck]] = None
 
     def paths_to_collect(self) -> list[str]:
-        """Return the unique sysfs paths from checks, for use by the collector.
-
-        Returns:
-            List of unique path strings from self.checks, preserving order of first occurrence.
-        """
+        """Return unique sysfs file paths from checks (those without pattern), for use by the collector."""
         if not self.checks:
             return []
         seen = set()
         out = []
         for c in self.checks:
+            if c.pattern:
+                continue
+            p = c.path.rstrip("/")
+            if p not in seen:
+                seen.add(p)
+                out.append(c.path)
+        return out
+
+    def paths_to_list(self) -> list[str]:
+        """Return unique sysfs directory paths from checks (those with pattern), for listing (ls)."""
+        if not self.checks:
+            return []
+        seen = set()
+        out = []
+        for c in self.checks:
+            if not c.pattern:
+                continue
             p = c.path.rstrip("/")
             if p not in seen:
                 seen.add(p)

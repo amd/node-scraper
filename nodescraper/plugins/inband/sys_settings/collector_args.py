@@ -27,6 +27,11 @@ from pydantic import BaseModel
 
 
 class SysSettingsCollectorArgs(BaseModel):
-    """Collection args for SysSettingsCollector: list of sysfs paths to read."""
+    """Collection args for SysSettingsCollector.
+
+    paths: sysfs paths to read (cat).
+    directory_paths: sysfs paths to list (ls -1); use for checks that match entry names by regex.
+    """
 
     paths: list[str] = []
+    directory_paths: list[str] = []

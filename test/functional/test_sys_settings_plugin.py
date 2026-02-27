@@ -30,6 +30,11 @@ from pathlib import Path
 import pytest
 
 
+def _project_root() -> Path:
+    """Return project root (directory containing plugin_config.json)."""
+    return Path(__file__).resolve().parent.parent.parent
+
+
 @pytest.fixture
 def fixtures_dir():
     """Return path to fixtures directory."""
@@ -40,6 +45,12 @@ def fixtures_dir():
 def sys_settings_config_file(fixtures_dir):
     """Return path to SysSettingsPlugin config file."""
     return fixtures_dir / "sys_settings_plugin_config.json"
+
+
+@pytest.fixture
+def plugin_config_json():
+    """Return path to project root plugin_config.json (full config: paths + directory_paths + checks)."""
+    return _project_root() / "plugin_config.json"
 
 
 def test_sys_settings_plugin_with_config_file(run_cli_command, sys_settings_config_file, tmp_path):
@@ -85,3 +96,20 @@ def test_sys_settings_plugin_output_contains_plugin_result(
     output = result.stdout + result.stderr
     # Table or status line should mention the plugin
     assert "SysSettingsPlugin" in output
+
+
+def test_sys_settings_plugin_with_plugin_config_json(run_cli_command, plugin_config_json, tmp_path):
+    """Functional test: run node-scraper with project plugin_config.json (paths + directory_paths + checks)."""
+    assert plugin_config_json.exists(), f"Config not found: {plugin_config_json}"
+
+    log_path = str(tmp_path / "logs_plugin_config")
+    result = run_cli_command(
+        ["--log-path", log_path, "--plugin-configs", str(plugin_config_json)], check=False
+    )
+
+    assert result.returncode in [0, 1, 2]
+    output = result.stdout + result.stderr
+    assert len(output) > 0
+    assert "SysSettingsPlugin" in output
+    # Config exercises paths + directory_paths (/sys/class/net) + pattern check; collector/analyzer run
+    assert "Sysfs" in output or "sys" in output.lower()

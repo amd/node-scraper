@@ -23,7 +23,8 @@
 # SOFTWARE.
 #
 ###############################################################################
-from typing import Optional, cast
+import re
+from typing import List, Optional, Union, cast
 
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
 from nodescraper.interfaces import DataAnalyzer
@@ -64,7 +65,7 @@ class SysSettingsAnalyzer(DataAnalyzer[SysSettingsDataModel, SysSettingsAnalyzer
         Returns:
             TaskResult with status OK if all checks pass, ERROR if any mismatch or missing path.
         """
-        mismatches = {}
+        mismatches: dict[str, dict[str, Union[Optional[str], List[str]]]] = {}
 
         if not args or not args.checks:
             self.result.status = ExecutionStatus.OK
@@ -72,6 +73,36 @@ class SysSettingsAnalyzer(DataAnalyzer[SysSettingsDataModel, SysSettingsAnalyzer
             return self.result
 
         for check in args.checks:
+            raw_reading = data.readings.get(check.path) or data.readings.get(check.path.rstrip("/"))
+
+            if check.pattern:
+                # Directory-listing check: at least one line must match the regex (e.g. ^hsn[0-9]+)
+                if raw_reading is None:
+                    mismatches[check.name] = {
+                        "path": check.path,
+                        "pattern": check.pattern,
+                        "actual": None,
+                        "reason": "path not collected by this plugin",
+                    }
+                    continue
+                try:
+                    pat = re.compile(check.pattern)
+                except re.error:
+                    mismatches[check.name] = {
+                        "path": check.path,
+                        "pattern": check.pattern,
+                        "reason": "invalid regex",
+                    }
+                    continue
+                lines = [ln.strip() for ln in raw_reading.splitlines() if ln.strip()]
+                if not any(pat.search(ln) for ln in lines):
+                    mismatches[check.name] = {
+                        "path": check.path,
+                        "pattern": check.pattern,
+                        "actual": lines,
+                    }
+                continue
+
             actual = _get_actual_for_path(data, check.path)
             if actual is None:
                 mismatches[check.name] = {
@@ -98,12 +129,15 @@ class SysSettingsAnalyzer(DataAnalyzer[SysSettingsDataModel, SysSettingsAnalyzer
             parts = []
             for name, info in mismatches.items():
                 path = info.get("path", "")
-                expected = info.get("expected")
-                actual = cast(Optional[str], info.get("actual"))
                 reason = info.get("reason")
+                pattern = info.get("pattern")
                 if reason:
-                    part = f"{name} ({path})"
+                    part = f"{name} ({path}): {reason}"
+                elif pattern is not None:
+                    part = f"{name} ({path}): no entry matching pattern {pattern!r}"
                 else:
+                    expected = info.get("expected")
+                    actual = cast(Optional[str], info.get("actual"))
                     part = f"{name} ({path}): expected one of {expected}, actual {repr(actual)}"
                 parts.append(part)
             self.result.message = "Sysfs mismatch: " + "; ".join(parts)
