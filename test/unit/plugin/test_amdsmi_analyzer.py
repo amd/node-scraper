@@ -24,18 +24,23 @@
 #
 ###############################################################################
 
+from typing import Optional
+
 import pytest
 
 from nodescraper.enums import EventPriority
 from nodescraper.plugins.inband.amdsmi.amdsmi_analyzer import AmdSmiAnalyzer
 from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     AmdSmiDataModel,
+    AmdSmiMetric,
     AmdSmiStatic,
     AmdSmiTstData,
     AmdSmiVersion,
     EccState,
     Fw,
     FwListItem,
+    MetricEccTotals,
+    MetricPcie,
     Partition,
     PartitionCompute,
     PartitionMemory,
@@ -801,3 +806,246 @@ def test_analyze_data_no_static_data(mock_analyzer):
 
     assert len(result.events) >= 1
     assert any("No AMD SMI static data available" in event.description for event in result.events)
+
+
+# All required keys for MetricPcie / MetricEccTotals (no defaults in model -> must be present).
+_PCIE_KEYS = [
+    "width",
+    "speed",
+    "bandwidth",
+    "replay_count",
+    "l0_to_recovery_count",
+    "replay_roll_over_count",
+    "nak_sent_count",
+    "nak_received_count",
+    "current_bandwidth_sent",
+    "current_bandwidth_received",
+    "max_packet_size",
+    "lc_perf_other_end_recovery",
+]
+_ECC_TOTALS_KEYS = [
+    "total_correctable_count",
+    "total_uncorrectable_count",
+    "total_deferred_count",
+    "cache_correctable_count",
+    "cache_uncorrectable_count",
+]
+
+
+def _pcie_dict(**overrides):
+    """Full PCIe dict for model_validate; overrides merged on top."""
+    base = {k: None for k in _PCIE_KEYS}
+    for k, v in overrides.items():
+        if v is not None and isinstance(v, ValueUnit):
+            base[k] = {"value": v.value, "unit": v.unit}
+        else:
+            base[k] = v
+    return MetricPcie.model_validate(base)
+
+
+def _ecc_totals_dict(**overrides):
+    """Full ECC totals dict for model_validate; overrides merged on top."""
+    base = {k: None for k in _ECC_TOTALS_KEYS}
+    base.update(overrides)
+    return MetricEccTotals.model_validate(base)
+
+
+def _minimal_amdsmi_metric(
+    gpu: int = 0,
+    pcie: Optional[MetricPcie] = None,
+    ecc: Optional[MetricEccTotals] = None,
+    ecc_blocks: Optional[dict] = None,
+) -> AmdSmiMetric:
+    """Build minimal AmdSmiMetric for PCIe/ECC tests with all required fields present."""
+    pcie_dict = pcie.model_dump() if pcie is not None else {k: None for k in _PCIE_KEYS}
+    ecc_dict = ecc.model_dump() if ecc is not None else {k: None for k in _ECC_TOTALS_KEYS}
+    return AmdSmiMetric.model_validate(
+        {
+            "gpu": gpu,
+            "usage": {
+                "gfx_activity": None,
+                "umc_activity": None,
+                "mm_activity": None,
+                "vcn_activity": [],
+                "jpeg_activity": [],
+                "gfx_busy_inst": None,
+                "jpeg_busy": None,
+                "vcn_busy": None,
+            },
+            "power": {
+                "socket_power": None,
+                "gfx_voltage": None,
+                "soc_voltage": None,
+                "mem_voltage": None,
+                "throttle_status": None,
+                "power_management": None,
+            },
+            "clock": {},
+            "temperature": {"edge": None, "hotspot": None, "mem": None},
+            "pcie": pcie_dict,
+            "ecc": ecc_dict,
+            "ecc_blocks": ecc_blocks if ecc_blocks is not None else {},
+            "fan": {"speed": None, "max": None, "rpm": None, "usage": None},
+            "voltage_curve": None,
+            "perf_level": None,
+            "xgmi_err": None,
+            "energy": None,
+            "mem_usage": {
+                "total_vram": None,
+                "used_vram": None,
+                "free_vram": None,
+                "total_visible_vram": None,
+                "used_visible_vram": None,
+                "free_visible_vram": None,
+                "total_gtt": None,
+                "used_gtt": None,
+                "free_gtt": None,
+            },
+            "throttle": {},
+        }
+    )
+
+
+def test_check_amdsmi_metric_pcie_width_fail(mock_analyzer):
+    """PCIe width not x16 generates error."""
+    analyzer = mock_analyzer
+    pcie = _pcie_dict(width=8)
+    metrics = [_minimal_amdsmi_metric(0, pcie=pcie)]
+    analyzer.check_amdsmi_metric_pcie(metrics, 4, 2)
+    assert len(analyzer.result.events) == 1
+    assert "PCIe width is not x16" in analyzer.result.events[0].description
+    assert analyzer.result.events[0].data.get("pcie_width") == 8
+    assert analyzer.result.events[0].priority == EventPriority.ERROR
+    assert analyzer.result.events[0].category == "IO"
+
+
+def test_check_amdsmi_metric_pcie_speed_fail(mock_analyzer):
+    """PCIe speed not Gen5 (32 GT/s) generates error."""
+    analyzer = mock_analyzer
+    pcie = _pcie_dict(width=16, speed=ValueUnit(value=16, unit="GT/s"))
+    metrics = [_minimal_amdsmi_metric(0, pcie=pcie)]
+    analyzer.check_amdsmi_metric_pcie(metrics, 4, 2)
+    assert len(analyzer.result.events) == 1
+    assert "PCIe link speed is not Gen5" in analyzer.result.events[0].description
+    assert analyzer.result.events[0].data.get("pcie_speed") == 16
+    assert analyzer.result.events[0].priority == EventPriority.ERROR
+
+
+def test_check_amdsmi_metric_pcie_l0_warning(mock_analyzer):
+    """L0 recovery count above warning threshold generates warning."""
+    analyzer = mock_analyzer
+    pcie = _pcie_dict(width=16, l0_to_recovery_count=2)
+    metrics = [_minimal_amdsmi_metric(0, pcie=pcie)]
+    analyzer.check_amdsmi_metric_pcie(metrics, 4, 1)
+    assert len(analyzer.result.events) == 1
+    assert "L0 recoveries" in analyzer.result.events[0].description
+    assert analyzer.result.events[0].data.get("l0_to_recovery_count") == 2
+    assert analyzer.result.events[0].priority == EventPriority.WARNING
+
+
+def test_check_amdsmi_metric_pcie_l0_error(mock_analyzer):
+    """L0 recovery count above error threshold generates error."""
+    analyzer = mock_analyzer
+    pcie = _pcie_dict(width=16, l0_to_recovery_count=10)
+    metrics = [_minimal_amdsmi_metric(0, pcie=pcie)]
+    analyzer.check_amdsmi_metric_pcie(metrics, 4, 2)
+    assert len(analyzer.result.events) == 1
+    assert "L0 recoveries" in analyzer.result.events[0].description
+    assert analyzer.result.events[0].data.get("l0_to_recovery_count") == 10
+    assert analyzer.result.events[0].priority == EventPriority.ERROR
+
+
+def test_check_amdsmi_metric_pcie_replay_count_warning(mock_analyzer):
+    """PCIe replay count > 0 generates warning."""
+    analyzer = mock_analyzer
+    pcie = _pcie_dict(width=16, replay_count=10)
+    metrics = [_minimal_amdsmi_metric(0, pcie=pcie)]
+    analyzer.check_amdsmi_metric_pcie(metrics, 4, 2)
+    assert len(analyzer.result.events) == 1
+    assert "replay count" in analyzer.result.events[0].description
+    assert analyzer.result.events[0].data.get("replay_count") == 10
+    assert analyzer.result.events[0].priority == EventPriority.WARNING
+
+
+def test_check_amdsmi_metric_pcie_nak_sent_warning(mock_analyzer):
+    """PCIe NAK sent count > 0 generates warning."""
+    analyzer = mock_analyzer
+    pcie = _pcie_dict(width=16, nak_sent_count=1)
+    metrics = [_minimal_amdsmi_metric(0, pcie=pcie)]
+    analyzer.check_amdsmi_metric_pcie(metrics, 4, 2)
+    assert len(analyzer.result.events) == 1
+    assert (
+        "NAKs" in analyzer.result.events[0].description
+        and "sent" in analyzer.result.events[0].description
+    )
+    assert analyzer.result.events[0].data.get("nak_sent_count") == 1
+    assert analyzer.result.events[0].priority == EventPriority.WARNING
+
+
+def test_check_amdsmi_metric_pcie_nak_received_warning(mock_analyzer):
+    """PCIe NAK received count > 0 generates warning."""
+    analyzer = mock_analyzer
+    pcie = _pcie_dict(width=16, nak_received_count=1)
+    metrics = [_minimal_amdsmi_metric(0, pcie=pcie)]
+    analyzer.check_amdsmi_metric_pcie(metrics, 4, 2)
+    assert len(analyzer.result.events) == 1
+    assert (
+        "NAKs" in analyzer.result.events[0].description
+        and "received" in analyzer.result.events[0].description
+    )
+    assert analyzer.result.events[0].priority == EventPriority.WARNING
+
+
+def test_check_amdsmi_metric_pcie_pass(mock_analyzer):
+    """PCIe metrics all OK generates no events."""
+    analyzer = mock_analyzer
+    pcie = _pcie_dict(width=16, speed=ValueUnit(value=32, unit="GT/s"))
+    metrics = [_minimal_amdsmi_metric(0, pcie=pcie)]
+    analyzer.check_amdsmi_metric_pcie(metrics, 4, 2)
+    assert len(analyzer.result.events) == 0
+
+
+def test_check_amdsmi_metric_ecc_totals(mock_analyzer):
+    """ECC totals generate expected events."""
+    analyzer = mock_analyzer
+    metrics = [
+        _minimal_amdsmi_metric(
+            0, ecc=_ecc_totals_dict(total_correctable_count=1, total_uncorrectable_count=0)
+        ),
+        _minimal_amdsmi_metric(1, ecc=_ecc_totals_dict(total_uncorrectable_count=1)),
+        _minimal_amdsmi_metric(2, ecc=_ecc_totals_dict(total_deferred_count=1)),
+        _minimal_amdsmi_metric(3, ecc=_ecc_totals_dict(cache_correctable_count=1)),
+        _minimal_amdsmi_metric(4, ecc=_ecc_totals_dict(cache_uncorrectable_count=1)),
+    ]
+    analyzer.check_amdsmi_metric_ecc_totals(metrics)
+    assert len(analyzer.result.events) == 5
+    # Analyzer uses generic description "GPU ECC error count detected"; type is in data["error_type"]
+    for e in analyzer.result.events:
+        assert e.description == "GPU ECC error count detected"
+        assert "error_type" in e.data and "error_count" in e.data
+    error_types = [e.data["error_type"] for e in analyzer.result.events]
+    assert "Total correctable ECC errors" in error_types
+    assert "Total uncorrectable ECC errors" in error_types
+    assert "Total deferred ECC errors" in error_types
+    assert "Cache correctable ECC errors" in error_types
+    assert "Cache uncorrectable ECC errors" in error_types
+
+
+def test_check_amdsmi_metric_ecc_blocks(mock_analyzer):
+    """ECC block-level correctable/uncorrectable/deferred generate events."""
+    analyzer = mock_analyzer
+    ecc_blocks = {
+        "SDMA": {"correctable_count": 0, "uncorrectable_count": 3, "deferred_count": 0},
+        "GFX": {"correctable_count": 2, "uncorrectable_count": 0, "deferred_count": 0},
+        "MMHUB": {"correctable_count": 0, "uncorrectable_count": 10, "deferred_count": 1},
+        "HDP": {"correctable_count": 8, "uncorrectable_count": 5, "deferred_count": 0},
+    }
+    metrics = [_minimal_amdsmi_metric(0, ecc_blocks=ecc_blocks)]
+    analyzer.check_amdsmi_metric_ecc(metrics)
+    events = analyzer.result.events
+    assert len(events) >= 6
+    desc = [e.description for e in events]
+    assert any("SDMA" in d and "uncorrectable" in d for d in desc)
+    assert any("GFX" in d and "correctable" in d for d in desc)
+    assert any("MMHUB" in d for d in desc)
+    assert any("HDP" in d for d in desc)
