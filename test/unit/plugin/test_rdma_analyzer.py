@@ -119,11 +119,11 @@ def test_critical_error_detected(rdma_analyzer, clean_rdma_model):
 
 
 def test_empty_statistics(rdma_analyzer):
-    """Test with empty statistics list."""
+    """Test with empty statistics list: WARNING and message logged."""
     model = RdmaDataModel(statistic_list=[], link_list=[])
     result = rdma_analyzer.analyze_data(model)
-    assert result.status == ExecutionStatus.NOT_RAN
-    assert result.message == "RDMA statistics list is empty"
+    assert result.status == ExecutionStatus.WARNING
+    assert result.message == "No RDMA devices found"
 
 
 def test_multiple_interfaces_with_errors(rdma_analyzer, clean_rdma_model):

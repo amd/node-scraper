@@ -88,14 +88,13 @@ def test_collect_both_commands_fail(collector, conn_mock):
 
 
 def test_collect_empty_output(collector, conn_mock):
-    """Empty JSON arrays yield empty lists in model."""
+    """No RDMA devices: WARNING, message 'No RDMA devices found', no data so analyzer is skipped."""
     collector.system_info.os_family = OSFamily.LINUX
     conn_mock.run_command.side_effect = [
         CommandArtifact(exit_code=0, stdout="[]", stderr="", command="rdma link -j"),
         CommandArtifact(exit_code=0, stdout="[]", stderr="", command="rdma statistic -j"),
     ]
     res, data = collector.collect_data()
-    assert res.status == ExecutionStatus.OK
-    assert data is not None
-    assert data.link_list == []
-    assert data.statistic_list == []
+    assert res.status == ExecutionStatus.WARNING
+    assert res.message == "No RDMA devices found"
+    assert data is None

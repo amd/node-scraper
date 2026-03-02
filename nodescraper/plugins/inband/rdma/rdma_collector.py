@@ -166,6 +166,11 @@ class RdmaCollector(InBandDataCollector[RdmaDataModel, None]):
                 statistic_list=statistics if statistics is not None else [],
                 link_list=links if links is not None else [],
             )
+            if not rdma_data.statistic_list and not rdma_data.link_list:
+                self.result.status = ExecutionStatus.WARNING
+                self.result.message = "No RDMA devices found"
+                return self.result, None
+
             self.result.message = (
                 f"Collected {len(rdma_data.statistic_list)} RDMA statistics, "
                 f"{len(rdma_data.link_list)} RDMA links"

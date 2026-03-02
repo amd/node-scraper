@@ -145,8 +145,8 @@ class RdmaAnalyzer(DataAnalyzer[RdmaDataModel, None]):
             TaskResult with status OK if no errors, ERROR if any error counter > 0.
         """
         if not data.statistic_list:
-            self.result.message = "RDMA statistics list is empty"
-            self.result.status = ExecutionStatus.NOT_RAN
+            self.result.message = "No RDMA devices found"
+            self.result.status = ExecutionStatus.WARNING
             return self.result
 
         error_state = False
