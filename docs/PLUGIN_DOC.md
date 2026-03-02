@@ -24,6 +24,7 @@
 | ProcessPlugin | top -b -n 1<br>rocm-smi --showpids<br>top -b -n 1 -o %CPU  | **Analyzer Args:**<br>- `max_kfd_processes`: int<br>- `max_cpu_usage`: float | [ProcessDataModel](#ProcessDataModel-Model) | [ProcessCollector](#Collector-Class-ProcessCollector) | [ProcessAnalyzer](#Data-Analyzer-Class-ProcessAnalyzer) |
 | RocmPlugin | {rocm_path}/opencl/bin/*/clinfo<br>env \| grep -Ei 'rocm\|hsa\|hip\|mpi\|openmp\|ucx\|miopen'<br>ls /sys/class/kfd/kfd/proc/<br>grep -i -E 'rocm' /etc/ld.so.conf.d/*<br>{rocm_path}/bin/rocminfo<br>ls -v -d /opt/rocm*<br>ls -v -d /opt/rocm-[3-7]* \| tail -1<br>ldconfig -p \| grep -i -E 'rocm'<br>grep . -r /opt/rocm/.info/*<br>/opt/rocm/.info/version-rocm<br>/opt/rocm/.info/version | **Analyzer Args:**<br>- `exp_rocm`: Union[str, list]<br>- `exp_rocm_latest`: str<br>- `exp_rocm_sub_versions`: dict[str, Union[str, list]] | [RocmDataModel](#RocmDataModel-Model) | [RocmCollector](#Collector-Class-RocmCollector) | [RocmAnalyzer](#Data-Analyzer-Class-RocmAnalyzer) |
 | StoragePlugin | sh -c 'df -lH -B1 \| grep -v 'boot''<br>wmic LogicalDisk Where DriveType="3" Get DeviceId,Size,FreeSpace | - | [StorageDataModel](#StorageDataModel-Model) | [StorageCollector](#Collector-Class-StorageCollector) | [StorageAnalyzer](#Data-Analyzer-Class-StorageAnalyzer) |
+| SysSettingsPlugin | cat /sys/{}<br>ls -1 /sys/{} | **Analyzer Args:**<br>- `checks`: Optional[list[nodescraper.plugins.inband.sys_settings.analyzer_args.SysfsCheck]] | [SysSettingsDataModel](#SysSettingsDataModel-Model) | [SysSettingsCollector](#Collector-Class-SysSettingsCollector) | [SysSettingsAnalyzer](#Data-Analyzer-Class-SysSettingsAnalyzer) |
 | SysctlPlugin | sysctl -n | **Analyzer Args:**<br>- `exp_vm_swappiness`: Optional[int]<br>- `exp_vm_numa_balancing`: Optional[int]<br>- `exp_vm_oom_kill_allocating_task`: Optional[int]<br>- `exp_vm_compaction_proactiveness`: Optional[int]<br>- `exp_vm_compact_unevictable_allowed`: Optional[int]<br>- `exp_vm_extfrag_threshold`: Optional[int]<br>- `exp_vm_zone_reclaim_mode`: Optional[int]<br>- `exp_vm_dirty_background_ratio`: Optional[int]<br>- `exp_vm_dirty_ratio`: Optional[int]<br>- `exp_vm_dirty_writeback_centisecs`: Optional[int]<br>- `exp_kernel_numa_balancing`: Optional[int] | [SysctlDataModel](#SysctlDataModel-Model) | [SysctlCollector](#Collector-Class-SysctlCollector) | [SysctlAnalyzer](#Data-Analyzer-Class-SysctlAnalyzer) |
 | SyslogPlugin | ls -1 /var/log/syslog* 2>/dev/null \| grep -E '^/var/log/syslog(\.[0-9]+(\.gz)?)?$' \|\| true | - | [SyslogData](#SyslogData-Model) | [SyslogCollector](#Collector-Class-SyslogCollector) | - |
 | UptimePlugin | uptime | - | [UptimeDataModel](#UptimeDataModel-Model) | [UptimeCollector](#Collector-Class-UptimeCollector) | - |
@@ -678,6 +679,31 @@ StorageDataModel
 - sh -c 'df -lH -B1 | grep -v 'boot''
 - wmic LogicalDisk Where DriveType="3" Get DeviceId,Size,FreeSpace
 
+## Collector Class SysSettingsCollector
+
+### Description
+
+Collect sysfs settings from user-specified paths.
+
+**Bases**: ['InBandDataCollector']
+
+**Link to code**: [sys_settings_collector.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/sys_settings/sys_settings_collector.py)
+
+### Class Variables
+
+- **SUPPORTED_OS_FAMILY**: `{<OSFamily.LINUX: 3>}`
+- **CMD**: `cat /sys/{}`
+- **CMD_LS**: `ls -1 /sys/{}`
+
+### Provides Data
+
+SysSettingsDataModel
+
+### Commands
+
+- cat /sys/{}
+- ls -1 /sys/{}
+
 ## Collector Class SysctlCollector
 
 ### Description
@@ -1065,6 +1091,23 @@ class for collection of PCIe data.
 
 - **storage_data**: `dict[str, nodescraper.plugins.inband.storage.storagedata.DeviceStorageData]`
 
+## SysSettingsDataModel Model
+
+### Description
+
+Data model for sysfs settings: path -> parsed value.
+
+    Values are parsed from user-specified sysfs paths (bracketed value extracted
+    when present, e.g. '[always] madvise never' -> 'always').
+
+**Link to code**: [sys_settings_data.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/sys_settings/sys_settings_data.py)
+
+**Bases**: ['DataModel']
+
+### Model annotations and fields
+
+- **readings**: `dict[str, str]`
+
 ## SysctlDataModel Model
 
 **Link to code**: [sysctldata.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/sysctl/sysctldata.py)
@@ -1418,6 +1461,16 @@ Check storage usage
 
 **Link to code**: [storage_analyzer.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/storage/storage_analyzer.py)
 
+## Data Analyzer Class SysSettingsAnalyzer
+
+### Description
+
+Check sysfs settings against expected values from the checks list.
+
+**Bases**: ['DataAnalyzer']
+
+**Link to code**: [sys_settings_analyzer.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/sys_settings/sys_settings_analyzer.py)
+
 ## Data Analyzer Class SysctlAnalyzer
 
 ### Description
@@ -1619,6 +1672,23 @@ Arguments for PCIe analyzer
 - **exp_rocm**: `Union[str, list]`
 - **exp_rocm_latest**: `str`
 - **exp_rocm_sub_versions**: `dict[str, Union[str, list]]`
+
+## Analyzer Args Class SysSettingsAnalyzerArgs
+
+### Description
+
+Sysfs settings for analysis via a list of checks (path, expected values, name).
+
+    The path in each check is the sysfs path to read; the collector uses these paths
+    when collection_args is derived from analysis_args (e.g. by the plugin).
+
+**Bases**: ['AnalyzerArgs']
+
+**Link to code**: [analyzer_args.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/sys_settings/analyzer_args.py)
+
+### Annotations / fields
+
+- **checks**: `Optional[list[nodescraper.plugins.inband.sys_settings.analyzer_args.SysfsCheck]]`
 
 ## Analyzer Args Class SysctlAnalyzerArgs
 
