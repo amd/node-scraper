@@ -700,14 +700,18 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                 continue
 
             if xgmi_float not in expected_xgmi_speed:
+                expected_str = ", ".join(str(s) for s in expected_xgmi_speed)
                 self._log_event(
                     category=EventCategory.IO,
-                    description="XGMI link speed is not as expected",
+                    description=(
+                        f"XGMI link speed is not as expected "
+                        f"(GPU {xgmi_data.gpu}: actual {xgmi_float} GT/s, expected {expected_str} GT/s)"
+                    ),
                     priority=EventPriority.ERROR,
                     data={
                         "gpu": xgmi_data.gpu,
-                        "xgmi_bit_rate": xgmi_float,
-                        "expected_xgmi_speed": expected_xgmi_speed,
+                        "actual_xgmi_speed_gt_s": xgmi_float,
+                        "expected_xgmi_speed_gt_s": expected_xgmi_speed,
                     },
                     console_log=True,
                 )
