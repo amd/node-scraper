@@ -667,6 +667,9 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
             )
             return
 
+        expected_str = ", ".join(str(s) for s in expected_xgmi_speed)
+        mismatches: list[dict] = []
+
         for xgmi_data in xgmi_metric:
             link_metric = xgmi_data.link_metrics
             try:
@@ -700,21 +703,25 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                 continue
 
             if xgmi_float not in expected_xgmi_speed:
-                expected_str = ", ".join(str(s) for s in expected_xgmi_speed)
-                self._log_event(
-                    category=EventCategory.IO,
-                    description=(
-                        f"XGMI link speed is not as expected "
-                        f"(GPU {xgmi_data.gpu}: actual {xgmi_float} GT/s, expected {expected_str} GT/s)"
-                    ),
-                    priority=EventPriority.ERROR,
-                    data={
+                mismatches.append(
+                    {
                         "gpu": xgmi_data.gpu,
-                        "actual_xgmi_speed_gt_s": xgmi_float,
-                        "expected_xgmi_speed_gt_s": expected_xgmi_speed,
-                    },
-                    console_log=True,
+                        "actual_gt_s": xgmi_float,
+                        "expected_gt_s": expected_str,
+                    }
                 )
+
+        if mismatches:
+            self._log_event(
+                category=EventCategory.IO,
+                description="XGMI link speed is not as expected",
+                priority=EventPriority.ERROR,
+                data={
+                    "expected_gt_s": expected_str,
+                    "mismatches": mismatches,
+                },
+                console_log=True,
+            )
 
     def check_amdsmitst(self, amdsmitst_data: AmdSmiTstData):
         """Check AMD SMI test results
