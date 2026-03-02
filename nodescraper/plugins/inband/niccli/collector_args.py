@@ -33,4 +33,4 @@ class NicCliCollectorArgs(CollectorArgs):
 
     commands: Optional[List[str]] = None
     use_sudo_niccli: bool = True
-    use_sudo_nicctl: bool = False
+    use_sudo_nicctl: bool = True

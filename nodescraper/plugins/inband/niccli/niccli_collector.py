@@ -358,7 +358,7 @@ class NicCliCollector(InBandDataCollector[NicCliDataModel, NicCliCollectorArgs])
     ) -> Tuple[TaskResult, Optional[NicCliDataModel]]:
         """Run niccli/nicctl commands and store stdout/stderr/exit_code per command."""
         use_sudo_niccli = args.use_sudo_niccli if args else True
-        use_sudo_nicctl = args.use_sudo_nicctl if args else False
+        use_sudo_nicctl = args.use_sudo_nicctl if args else True
         custom_commands = args.commands if args and args.commands else None
 
         results: dict[str, NicCliCommandResult] = {}
