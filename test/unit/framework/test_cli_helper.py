@@ -37,19 +37,22 @@ import pytest
 from conftest import DummyDataModel
 from pydantic import BaseModel
 
-from nodescraper.cli import cli
 from nodescraper.cli.helper import (
     build_config,
     dump_results_to_csv,
     dump_to_csv,
     find_datamodel_and_result,
+    generate_reference_config,
+    generate_reference_config_from_logs,
     generate_summary,
+    get_plugin_configs,
 )
 from nodescraper.configregistry import ConfigRegistry
 from nodescraper.enums import ExecutionStatus, SystemInteractionLevel
 from nodescraper.models import PluginConfig, TaskResult
 from nodescraper.models.datapluginresult import DataPluginResult
 from nodescraper.models.pluginresult import PluginResult
+from nodescraper.pluginregistry import PluginRegistry
 
 
 def test_generate_reference_config(plugin_registry):
@@ -71,14 +74,14 @@ def test_generate_reference_config(plugin_registry):
         )
     ]
 
-    ref_config = cli.generate_reference_config(results, plugin_registry, logging.getLogger())
+    ref_config = generate_reference_config(results, plugin_registry, logging.getLogger())
     dump = ref_config.dict()
     assert dump["plugins"] == {"TestPluginA": {"analysis_args": {"model_attr": 17}}}
 
 
 def test_get_plugin_configs():
     with pytest.raises(argparse.ArgumentTypeError):
-        cli.get_plugin_configs(
+        get_plugin_configs(
             system_interaction_level="INVALID",
             plugin_config_input=[],
             built_in_configs={},
@@ -86,7 +89,7 @@ def test_get_plugin_configs():
             plugin_subparser_map={},
         )
 
-    plugin_configs = cli.get_plugin_configs(
+    plugin_configs = get_plugin_configs(
         system_interaction_level="PASSIVE",
         plugin_config_input=[],
         built_in_configs={},
@@ -159,6 +162,30 @@ def test_find_datamodel_and_result_with_fixture(framework_fixtures_path):
     assert rt.name == "result.json"
 
 
+def test_find_datamodel_and_result_with_plugin_reg_finds_log(tmp_path):
+    """With plugin_reg, a collector dir with result.json and a .log file finds the .log."""
+    collector = tmp_path / "collector"
+    collector.mkdir()
+    result_json = {
+        "status": "OK",
+        "message": "ok",
+        "task": "JournalCollector",
+        "parent": "JournalPlugin",
+        "start_time": "2025-01-01T00:00:00",
+        "end_time": "2025-01-01T00:00:01",
+    }
+    (collector / "result.json").write_text(json.dumps(result_json), encoding="utf-8")
+    (collector / "journal.log").write_text("some log line\n", encoding="utf-8")
+
+    plugin_reg = PluginRegistry()
+    pairs = find_datamodel_and_result(str(tmp_path), plugin_reg)
+
+    assert len(pairs) == 1
+    dm_path, res_path = pairs[0]
+    assert Path(dm_path).name == "journal.log"
+    assert Path(res_path).name == "result.json"
+
+
 def test_generate_reference_config_from_logs(framework_fixtures_path):
     logger = logging.getLogger()
     res_payload = json.loads(
@@ -180,7 +207,7 @@ def test_generate_reference_config_from_logs(framework_fixtures_path):
         plugins={parent: SimpleNamespace(DATA_MODEL=FakeDataModel, ANALYZER_ARGS=FakeArgs)}
     )
 
-    cfg = cli.generate_reference_config_from_logs(str(framework_fixtures_path), plugin_reg, logger)
+    cfg = generate_reference_config_from_logs(str(framework_fixtures_path), plugin_reg, logger)
 
     assert isinstance(cfg, PluginConfig)
     assert set(cfg.plugins) == {parent}

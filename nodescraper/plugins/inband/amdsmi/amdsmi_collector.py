@@ -67,10 +67,11 @@ from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     StaticXgmiPlpd,
     ValueUnit,
 )
+from nodescraper.plugins.inband.amdsmi.collector_args import AmdSmiCollectorArgs
 from nodescraper.utils import get_exception_traceback
 
 
-class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
+class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs]):
     """Class for collection of inband tool amd-smi data."""
 
     AMD_SMI_EXE = "amd-smi"
@@ -87,6 +88,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
     CMD_STATIC = "static -g all --json"
     CMD_STATIC_GPU = "static -g {gpu_id} --json"
     CMD_RAS = "ras --cper --folder={folder}"
+    CMD_RAS_AFID = "ras --afid --cper-file {cper_file}"
 
     def _check_amdsmi_installed(self) -> bool:
         """Check if amd-smi is installed
@@ -331,7 +333,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             firmware = self.get_firmware()
             gpu_list = self.get_gpu_list()
             statics = self.get_static()
-            cper_data = self.get_cper_data()
+            cper_data, cper_afids = self.get_cper_data()
         except Exception as e:
             self._log_event(
                 category=EventCategory.APPLICATION,
@@ -352,6 +354,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                 firmware=firmware,
                 static=statics,
                 cper_data=cper_data,
+                cper_afids=cper_afids,
             )
         except ValidationError as err:
             self.logger.warning("Validation err: %s", err)
@@ -1173,11 +1176,12 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
 
         return clock_dict if clock_dict else None
 
-    def get_cper_data(self) -> List[FileModel]:
-        """Collect CPER data from amd-smi ras command
+    def get_cper_data(self) -> tuple[List[FileModel], Dict[str, int]]:
+        """Collect CPER data from amd-smi ras command and extract AFID for each file
 
         Returns:
-            list[FileModel]: List of CPER files or empty list if not supported/available
+            tuple[list[FileModel], dict[str, int]]: Tuple of (list of CPER files, dict mapping filenames to AFIDs)
+                                                     Returns empty list and dict if not supported/available
         """
         try:
             AMD_SMI_CPER_FOLDER = "/tmp/amd_smi_cper"
@@ -1192,14 +1196,14 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                 sudo=True,
             )
             if cper_cmd_ret.exit_code != 0:
-                # Command failed, return empty list
-                return []
+                # Command failed, return empty list and dict
+                return [], {}
             cper_cmd = cper_cmd_ret.stdout
             # search that a CPER is actually created here
             regex_cper_search = re.findall(r"(\w+\.cper)", cper_cmd)
             if not regex_cper_search:
                 # Early exit if no CPER files were created
-                return []
+                return [], {}
             # tar the cper folder
             self._run_sut_cmd(
                 f"tar -czf {AMD_SMI_CPER_FOLDER}.tar.gz -C {AMD_SMI_CPER_FOLDER} .",
@@ -1213,11 +1217,12 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
             if hasattr(cper_zip, "contents"):
                 io_bytes = io.BytesIO(cper_zip.contents)  # type: ignore[attr-defined]
             else:
-                return []
+                return [], {}
             del cper_zip  # Free memory after reading the file
             try:
                 with TarFile.open(fileobj=io_bytes, mode="r:gz") as tar_file:
                     cper_data = []
+                    cper_afids = {}
                     for member in tar_file.getmembers():
                         if member.isfile() and member.name.endswith(".cper"):
                             file_content = tar_file.extractfile(member)
@@ -1230,6 +1235,12 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                             cper_data.append(
                                 FileModel(file_contents=file_content_bytes, file_name=member.name)
                             )
+
+                            cper_file_path = f"{AMD_SMI_CPER_FOLDER}/{member.name}"
+                            afid = self._get_cper_afid(cper_file_path)
+                            if afid is not None:
+                                cper_afids[member.name] = afid
+
                 # Since we do not log the cper data in the data model create an event informing the user if CPER created
                 if cper_data:
                     self._log_event(
@@ -1237,9 +1248,12 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                         description="CPER data has been extracted from amd-smi",
                         data={
                             "cper_count": len(cper_data),
+                            "afid_count": len(cper_afids),
                         },
                         priority=EventPriority.INFO,
+                        console_log=True,
                     )
+                return cper_data, cper_afids
             except Exception as e:
                 self._log_event(
                     category=EventCategory.APPLICATION,
@@ -1250,11 +1264,8 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                     priority=EventPriority.ERROR,
                     console_log=True,
                 )
-                return []
-            return cper_data
+                return [], {}
         except Exception as e:
-            # If any unexpected error occurs during CPER collection, log it and return empty list
-            # This ensures CPER collection failures don't break the entire data collection
             self._log_event(
                 category=EventCategory.APPLICATION,
                 description="Error collecting CPER data",
@@ -1264,19 +1275,61 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
                 priority=EventPriority.WARNING,
                 console_log=False,
             )
-            return []
+            return [], {}
+
+    def _get_cper_afid(self, cper_file_path: str) -> Optional[int]:
+        """Get AFID from a CPER file using amd-smi ras --afid --cper-file command
+
+        Args:
+            cper_file_path (str): Path to the CPER file
+
+        Returns:
+            Optional[int]: AFID value or None if command fails or no value found
+        """
+        cmd = self.CMD_RAS_AFID.format(cper_file=cper_file_path)
+        result = self._run_amd_smi(cmd)
+
+        if result is None:
+            self._log_event(
+                category=EventCategory.APPLICATION,
+                description=f"Failed to get AFID from CPER file: {cper_file_path}",
+                priority=EventPriority.ERROR,
+                console_log=True,
+            )
+            return None
+
+        try:
+            afid = int(result.strip())
+            self._log_event(
+                category=EventCategory.APPLICATION,
+                description=f"Successfully retrieved AFID from CPER file: {cper_file_path}",
+                data={"afid": afid, "cper_file": cper_file_path},
+                priority=EventPriority.INFO,
+                console_log=True,
+            )
+            return afid
+        except ValueError:
+            self._log_event(
+                category=EventCategory.APPLICATION,
+                description=f"Failed to parse AFID value from output: {result}",
+                data={"output": result, "cper_file": cper_file_path},
+                priority=EventPriority.ERROR,
+                console_log=True,
+            )
+            return None
 
     def collect_data(
         self,
-        args: Any = None,
+        args: Optional[AmdSmiCollectorArgs] = None,
     ) -> tuple[TaskResult, Optional[AmdSmiDataModel]]:
         """Collect AmdSmi data from system
 
         Args:
-            args (Any, optional): optional arguments for data collection. Defaults to None.
+            args: Optional collector arguments. If cper_file_path is provided,
+                  AFID will be extracted and stored in cper_afids dict.
 
         Returns:
-            tuple[TaskResult, Optional[AmdSmiDataModel]]: task result and collected data model
+            tuple[TaskResult, Optional[AmdSmiDataModel]]: task result and data model
         """
 
         if not self._check_amdsmi_installed():
@@ -1299,6 +1352,11 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, None]):
 
             if amd_smi_data is None:
                 return self.result, None
+
+            if args and args.cper_file_path:
+                afid = self._get_cper_afid(args.cper_file_path)
+                if afid is not None:
+                    amd_smi_data.cper_afids[args.cper_file_path] = afid
 
             return self.result, amd_smi_data
         except Exception as e:

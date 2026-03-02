@@ -142,7 +142,7 @@ class DataPlugin(
             Union[SystemInteractionLevel, str]
         ] = SystemInteractionLevel.INTERACTIVE,
         preserve_connection: bool = False,
-        collection_args: Optional[Union[TCollectArg, dict]] = None,
+        collection_args: Optional[TCollectArg] = None,
     ) -> TaskResult:
         """Run data collector task
 
@@ -150,7 +150,7 @@ class DataPlugin(
             max_event_priority_level (Union[EventPriority, str], optional): priority limit for events. Defaults to EventPriority.CRITICAL.
             system_interaction_level (Union[SystemInteractionLevel, str], optional): system interaction level. Defaults to SystemInteractionLevel.INTERACTIVE.
             preserve_connection (bool, optional): whether we should close the connection after data collection. Defaults to False.
-            collection_args (Optional[Union[TCollectArg  , dict]], optional): args for data collection. Defaults to None.
+            collection_args (Optional[TCollectArg], optional): args for data collection (validated model). Defaults to None.
 
         Returns:
             TaskResult: task result for data collection
@@ -195,6 +195,13 @@ class DataPlugin(
                     message="Connection not available, data collection skipped",
                 )
             else:
+                if (
+                    collection_args is not None
+                    and isinstance(collection_args, dict)
+                    and hasattr(self, "COLLECTOR_ARGS")
+                    and self.COLLECTOR_ARGS is not None
+                ):
+                    collection_args = self.COLLECTOR_ARGS.model_validate(collection_args)
 
                 collection_task = self.COLLECTOR(
                     system_info=self.system_info,
@@ -263,6 +270,14 @@ class DataPlugin(
                 message=f"No data available to analyze for {self.__class__.__name__}",
             )
             return self.analysis_result
+
+        if (
+            analysis_args is not None
+            and isinstance(analysis_args, dict)
+            and hasattr(self, "ANALYZER_ARGS")
+            and self.ANALYZER_ARGS is not None
+        ):
+            analysis_args = self.ANALYZER_ARGS.model_validate(analysis_args)
 
         analyzer_task = self.ANALYZER(
             self.system_info,

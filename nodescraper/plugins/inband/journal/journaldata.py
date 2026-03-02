@@ -140,3 +140,20 @@ class JournalData(DataModel):
         log_name = os.path.join(log_path, "journal.log")
         with open(log_name, "w", encoding="utf-8") as log_filename:
             log_filename.write(self.journal_log)
+
+    @classmethod
+    def import_model(cls, model_input: Union[str, dict]) -> "JournalData":
+        """Load journal data from a file path or dict.
+
+        Args:
+            model_input: Path to journal.log file, or dict of field values.
+
+        Returns:
+            JournalData: Loaded journal data instance.
+        """
+        if isinstance(model_input, dict):
+            return cls(**model_input)
+        if isinstance(model_input, str):
+            with open(model_input, "r", encoding="utf-8") as f:
+                return cls(journal_log=f.read(), journal_content_json=[])
+        raise ValueError("Invalid input for journal data")

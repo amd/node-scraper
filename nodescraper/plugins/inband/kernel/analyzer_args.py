@@ -23,7 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
-from typing import Union
+from typing import Optional, Union
 
 from pydantic import Field, field_validator
 
@@ -33,6 +33,7 @@ from nodescraper.plugins.inband.kernel.kerneldata import KernelDataModel
 
 class KernelAnalyzerArgs(AnalyzerArgs):
     exp_kernel: Union[str, list] = Field(default_factory=list)
+    exp_numa: Optional[int] = None
     regex_match: bool = False
 
     @field_validator("exp_kernel", mode="before")
@@ -61,4 +62,7 @@ class KernelAnalyzerArgs(AnalyzerArgs):
         Returns:
             KernelAnalyzerArgs: instance of analyzer args class
         """
-        return cls(exp_kernel=datamodel.kernel_version)
+        return cls(
+            exp_kernel=datamodel.kernel_version,
+            exp_numa=datamodel.numa_balancing,
+        )

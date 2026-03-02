@@ -51,10 +51,20 @@ class KernelAnalyzer(DataAnalyzer[KernelDataModel, KernelAnalyzerArgs]):
         Returns:
             TaskResult: Result of the analysis containing status and message.
         """
-        if not args:
+        correct_kernel_version = False
+        correct_numa_setting = False
+        # skip check if data not provided in config
+        if not args or not args.exp_kernel:
             self.result.message = "Expected kernel not provided"
             self.result.status = ExecutionStatus.NOT_RAN
             return self.result
+
+        if (
+            args.exp_numa is None
+            or data.numa_balancing is None
+            or data.numa_balancing == args.exp_numa
+        ):
+            correct_numa_setting = True
 
         for kernel in args.exp_kernel:
             if args.regex_match:
@@ -69,21 +79,34 @@ class KernelAnalyzer(DataAnalyzer[KernelDataModel, KernelAnalyzerArgs]):
                     )
                     continue
                 if regex_data.match(data.kernel_version):
-                    self.result.message = "Kernel matches expected"
-                    self.result.status = ExecutionStatus.OK
-                    return self.result
+                    correct_kernel_version = True
+                    break
             elif data.kernel_version == kernel:
-                self.result.message = "Kernel matches expected"
-                self.result.status = ExecutionStatus.OK
-                return self.result
+                correct_kernel_version = True
+                break
 
-        self.result.message = "Kernel mismatch!"
-        self.result.status = ExecutionStatus.ERROR
-        self._log_event(
-            category=EventCategory.OS,
-            description=f"Kernel mismatch! Expected: {args.exp_kernel}, actual: {data.kernel_version}",
-            data={"expected": args.exp_kernel, "actual": data.kernel_version},
-            priority=EventPriority.CRITICAL,
-            console_log=True,
-        )
+        if not correct_kernel_version:
+            self.result.message = "Kernel mismatch"
+            self.result.status = ExecutionStatus.ERROR
+            self._log_event(
+                category=EventCategory.OS,
+                description="Kernel mismatch",
+                data={"expected": args.exp_kernel, "actual": data.kernel_version},
+                priority=EventPriority.CRITICAL,
+                console_log=True,
+            )
+        elif not correct_numa_setting:
+            self.result.message = "Unexpected numa_balancing setting!"
+            self.result.status = ExecutionStatus.ERROR
+            self._log_event(
+                category=EventCategory.OS,
+                description="Unexpected numa_balancing setting!",
+                data={"expected": args.exp_numa, "actual": data.numa_balancing},
+                priority=EventPriority.CRITICAL,
+                console_log=True,
+            )
+        else:
+            self.result.message = "Kernel matches expected"
+            self.result.status = ExecutionStatus.OK
+
         return self.result

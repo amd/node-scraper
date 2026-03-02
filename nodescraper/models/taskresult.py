@@ -24,12 +24,15 @@
 #
 ###############################################################################
 import datetime
+import json
 import logging
+import os
 from typing import Any, Optional
 
 from pydantic import BaseModel, Field, field_serializer, field_validator
 
 from nodescraper.enums import EventPriority, ExecutionStatus
+from nodescraper.utils import get_unique_filename, pascal_to_snake
 
 from .event import Event
 
@@ -101,6 +104,73 @@ class TaskResult(BaseModel):
             duration = None
 
         return duration
+
+    @property
+    def source(self) -> str:
+        """Task/source name (alias for task for error-scraper compatibility)."""
+        return self.task or ""
+
+    @property
+    def source_type(self) -> str:
+        """Task/source type (alias for parent for error-scraper compatibility)."""
+        return self.parent or ""
+
+    @property
+    def summary_dict(self) -> dict:
+        """Summary dict for logging/display (task_name, task_type, task_result, event_count, duration)."""
+        return {
+            "task_name": self.source or self.parent or "",
+            "task_type": self.source_type or self.task or "",
+            "task_result": self.status.name if self.status else None,
+            "event_count": len(self.events),
+            "duration": self.duration,
+        }
+
+    @property
+    def summary_str(self) -> str:
+        """Message string for display."""
+        return self.message or ""
+
+    def log_result(self, log_path: str) -> None:
+        """Write result, artifacts, and events to log_path. Events are merged into a single events.json."""
+        from nodescraper.connection.inband import BaseFileArtifact
+
+        os.makedirs(log_path, exist_ok=True)
+
+        with open(os.path.join(log_path, "result.json"), "w", encoding="utf-8") as log_file:
+            log_file.write(self.model_dump_json(exclude={"artifacts", "events"}, indent=2))
+
+        artifact_map: dict[str, list[dict[str, Any]]] = {}
+        for artifact in self.artifacts:
+            if isinstance(artifact, BaseFileArtifact):
+                artifact.log_model(log_path)
+            else:
+                name = f"{pascal_to_snake(artifact.__class__.__name__)}s"
+                if name in artifact_map:
+                    artifact_map[name].append(artifact.model_dump(mode="json"))
+                else:
+                    artifact_map[name] = [artifact.model_dump(mode="json")]
+
+        for name, artifacts in artifact_map.items():
+            log_name = get_unique_filename(log_path, f"{name}.json")
+            with open(os.path.join(log_path, log_name), "w", encoding="utf-8") as log_file:
+                json.dump(artifacts, log_file, indent=2)
+
+        if self.events:
+            event_log = os.path.join(log_path, "events.json")
+            new_events = [e.model_dump(mode="json", exclude_none=True) for e in self.events]
+            existing_events = []
+            if os.path.isfile(event_log):
+                try:
+                    with open(event_log, "r", encoding="utf-8") as f:
+                        existing_events = json.load(f)
+                    if not isinstance(existing_events, list):
+                        existing_events = []
+                except (json.JSONDecodeError, OSError):
+                    existing_events = []
+            all_events = existing_events + new_events
+            with open(event_log, "w", encoding="utf-8") as log_file:
+                json.dump(all_events, log_file, indent=2)
 
     def _get_event_summary(self) -> str:
         """Get summary string for events

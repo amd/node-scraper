@@ -46,6 +46,20 @@ def model_obj():
 
 
 @pytest.fixture
+def model_obj_with_sub_versions():
+    """Model with rocm_sub_versions populated (for sub-version tests)."""
+    return RocmDataModel(
+        rocm_version="6.2.0-66",
+        rocm_latest_versioned_path="/opt/rocm-7.1.0",
+        rocm_sub_versions={
+            "version": "6.2.0-66",
+            "version-rocm": "6.2.0-66",
+            "version-hip-sdk": "6.2.0-66",
+        },
+    )
+
+
+@pytest.fixture
 def config():
     return {
         "rocm_version": ["6.2.0-66"],
@@ -109,3 +123,59 @@ def test_rocm_latest_path_mismatch(analyzer, model_obj):
     for event in result.events:
         assert event.priority == EventPriority.CRITICAL
         assert event.category == EventCategory.SW_DRIVER.value
+
+
+def test_sub_versions_pass(analyzer, model_obj_with_sub_versions, config):
+    """Test that exp_rocm + exp_rocm_sub_versions matching yields OK."""
+    args = RocmAnalyzerArgs(
+        exp_rocm=config["rocm_version"],
+        exp_rocm_latest=config["rocm_latest"],
+        exp_rocm_sub_versions={"version-rocm": "6.2.0-66"},
+    )
+    result = analyzer.analyze_data(model_obj_with_sub_versions, args)
+    assert result.status == ExecutionStatus.OK
+    assert "ROCm version matches expected" in result.message
+    assert "ROCm sub-versions match expected" in result.message
+    assert all(
+        event.priority not in {EventPriority.WARNING, EventPriority.ERROR, EventPriority.CRITICAL}
+        for event in result.events
+    )
+
+
+def test_sub_versions_mismatch(analyzer, model_obj_with_sub_versions):
+    """Test that exp_rocm_sub_versions value mismatch is detected."""
+    # Main version matches; sub-version expected 6.2.0-65, actual 6.2.0-66
+    model = copy.deepcopy(model_obj_with_sub_versions)
+    model.rocm_version = "6.2.0"
+    args = RocmAnalyzerArgs(
+        exp_rocm="6.2.0",
+        exp_rocm_sub_versions={"version-rocm": "6.2.0-65"},
+    )
+    result = analyzer.analyze_data(model, args)
+    assert result.status == ExecutionStatus.ERROR
+    assert "ROCm sub-version mismatch" in result.message
+    assert len(result.events) == 1
+    for event in result.events:
+        assert event.priority == EventPriority.ERROR
+        assert event.category == EventCategory.SW_DRIVER.value
+        assert event.description == "ROCm sub-version mismatch!"
+        assert event.data["actual"] == {"version-rocm": "6.2.0-66"}
+        assert event.data["expected"] == {"version-rocm": "6.2.0-65"}
+
+
+def test_sub_versions_not_bad_key(analyzer, model_obj_with_sub_versions, config):
+    """Test that a requested sub-version key not present in data logs 'Not Available'."""
+    args = RocmAnalyzerArgs(
+        exp_rocm=config["rocm_version"],
+        exp_rocm_sub_versions={"versiodsalodn-rocm": "6.2.0-66"},
+    )
+    result = analyzer.analyze_data(model_obj_with_sub_versions, args)
+    assert result.status == ExecutionStatus.ERROR
+    assert "ROCm sub-version mismatch" in result.message
+    assert len(result.events) == 1
+    for event in result.events:
+        assert event.priority == EventPriority.ERROR
+        assert event.category == EventCategory.SW_DRIVER.value
+        assert event.description == "ROCm sub-version mismatch!"
+        assert event.data["actual"] == {"versiodsalodn-rocm": "Not Available"}
+        assert event.data["expected"] == {"versiodsalodn-rocm": "6.2.0-66"}

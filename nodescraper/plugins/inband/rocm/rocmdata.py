@@ -33,6 +33,7 @@ from nodescraper.models import DataModel
 
 class RocmDataModel(DataModel):
     rocm_version: str
+    rocm_sub_versions: dict[str, str] = {}
     rocminfo: List[str] = []
     rocm_latest_versioned_path: str = ""
     rocm_all_paths: List[str] = []

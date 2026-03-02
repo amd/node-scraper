@@ -1,0 +1,8 @@
+{
+  "status": "OK",
+  "message": "SYSCTL data collected",
+  "task": "SysctlCollector",
+  "parent": "SysctlPlugin",
+  "start_time": "2026-02-10T18:00:00.000000",
+  "end_time": "2026-02-10T18:00:01.000000"
+}

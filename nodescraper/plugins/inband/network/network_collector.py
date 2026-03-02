@@ -27,9 +27,10 @@ import re
 from typing import Dict, List, Optional, Tuple
 
 from nodescraper.base import InBandDataCollector
-from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
+from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.models import TaskResult
 
+from .collector_args import NetworkCollectorArgs
 from .networkdata import (
     BroadcomNicDevice,
     BroadcomNicQos,
@@ -55,7 +56,7 @@ from .networkdata import (
 )
 
 
-class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
+class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArgs]):
     """Collect network configuration details using ip command"""
 
     DATA_MODEL = NetworkDataModel
@@ -64,6 +65,9 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
     CMD_RULE = "ip rule show"
     CMD_NEIGHBOR = "ip neighbor show"
     CMD_ETHTOOL_TEMPLATE = "ethtool {interface}"
+    CMD_PING = "ping"
+    CMD_WGET = "wget"
+    CMD_CURL = "curl"
 
     # LLDP commands
     CMD_LLDPCLI_NEIGHBOR = "lldpcli show neighbor"
@@ -1669,11 +1673,60 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
             uncollected_commands,
         )
 
+    def _check_network_connectivity(self, cmd: str, url: str) -> bool:
+        """Check network connectivity using specified command.
+
+        Args:
+            cmd: Command to use for connectivity check (ping, wget, or curl)
+            url: URL or hostname to check
+
+        Returns:
+            bool: True if network is accessible, False otherwise
+        """
+        if cmd not in {"ping", "wget", "curl"}:
+            raise ValueError(
+                f"Invalid network probe command: '{cmd}'. "
+                f"Valid options are: 'ping', 'wget', 'curl'"
+            )
+
+        # Determine ping options based on OS
+        ping_option = "-c 1" if self.system_info.os_family == OSFamily.LINUX else "-n 1"
+
+        # Build command based on cmd parameter using class constants
+        if cmd == "ping":
+            result = self._run_sut_cmd(f"{self.CMD_PING} {url} {ping_option}")
+        elif cmd == "wget":
+            result = self._run_sut_cmd(f"{self.CMD_WGET} {url}")
+        else:  # curl
+            result = self._run_sut_cmd(f"{self.CMD_CURL} {url}")
+
+        if result.exit_code == 0:
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description=f"Network connectivity check successful: {cmd} to {url} succeeded",
+                data={"url": url, "command": cmd, "accessible": True},
+                priority=EventPriority.INFO,
+                console_log=True,
+            )
+        else:
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description=f"{cmd} to {url} failed!",
+                data={"url": url, "not accessible": result.exit_code == 0},
+                priority=EventPriority.ERROR,
+                console_log=True,
+            )
+
+        return result.exit_code == 0
+
     def collect_data(
         self,
-        args=None,
+        args: Optional[NetworkCollectorArgs] = None,
     ) -> Tuple[TaskResult, Optional[NetworkDataModel]]:
         """Collect network configuration from the system.
+
+        Args:
+            args: Optional NetworkCollectorArgs with URL for network connectivity check
 
         Returns:
             Tuple[TaskResult, Optional[NetworkDataModel]]: tuple containing the task result
@@ -1695,6 +1748,23 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
         pensando_rdma_statistics: List[PensandoNicRdmaStatistics] = []
         pensando_version_host_software: Optional[PensandoNicVersionHostSoftware] = None
         pensando_version_firmware: List[PensandoNicVersionFirmware] = []
+        network_accessible: Optional[bool] = None
+
+        # Check network connectivity if URL is provided
+        if args and args.url:
+            cmd = args.netprobe if args.netprobe else "ping"
+            try:
+                network_accessible = self._check_network_connectivity(cmd, args.url)
+            except ValueError as e:
+                self._log_event(
+                    category=EventCategory.NETWORK,
+                    description=str(e),
+                    data={"netprobe": cmd, "url": args.url},
+                    priority=EventPriority.ERROR,
+                    console_log=True,
+                )
+                # Set network_accessible to None since we couldn't check
+                network_accessible = None
 
         # Collect interface/address information
         res_addr = self._run_sut_cmd(self.CMD_ADDR)
@@ -1823,6 +1893,7 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, None]):
             pensando_nic_rdma_statistics=pensando_rdma_statistics,
             pensando_nic_version_host_software=pensando_version_host_software,
             pensando_nic_version_firmware=pensando_version_firmware,
+            accessible=network_accessible,
         )
         self.result.status = ExecutionStatus.OK
         return self.result, network_data

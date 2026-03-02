@@ -4,6 +4,7 @@
     "KernelPlugin": {
       "analysis_args": {
         "exp_kernel": "5.11-generic",
+        "exp_numa": 0,
         "regex_match": false
       }
     }

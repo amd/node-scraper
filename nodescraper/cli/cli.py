@@ -33,6 +33,7 @@ import sys
 from typing import Optional
 
 import nodescraper
+from nodescraper.cli.compare_runs import run_compare_runs
 from nodescraper.cli.constants import DEFAULT_CONFIG, META_VAR_MAP
 from nodescraper.cli.dynamicparserbuilder import DynamicParserBuilder
 from nodescraper.cli.helper import (
@@ -45,6 +46,7 @@ from nodescraper.cli.helper import (
     log_system_info,
     parse_describe,
     parse_gen_plugin_config,
+    process_args,
 )
 from nodescraper.cli.inputargtypes import ModelArgHandler, json_arg, log_path_arg
 from nodescraper.configregistry import ConfigRegistry
@@ -223,6 +225,40 @@ def build_parser(
         help="Generate reference config from previous run logfiles. Writes to --output-path/reference_config.json if provided, otherwise ./reference_config.json.",
     )
 
+    compare_runs_parser = subparsers.add_parser(
+        "compare-runs",
+        help="Compare datamodels from two run log directories",
+    )
+    compare_runs_parser.add_argument(
+        "path1",
+        type=str,
+        help="Path to first run log directory",
+    )
+    compare_runs_parser.add_argument(
+        "path2",
+        type=str,
+        help="Path to second run log directory",
+    )
+    compare_runs_parser.add_argument(
+        "--skip-plugins",
+        nargs="*",
+        choices=list(plugin_reg.plugins.keys()),
+        metavar="PLUGIN",
+        help="Plugin names to exclude from comparison",
+    )
+    compare_runs_parser.add_argument(
+        "--include-plugins",
+        nargs="*",
+        choices=list(plugin_reg.plugins.keys()),
+        metavar="PLUGIN",
+        help="If set, only compare data for these plugins (default: compare all found)",
+    )
+    compare_runs_parser.add_argument(
+        "--dont-truncate",
+        action="store_true",
+        dest="dont_truncate",
+        help="Do not truncate the Message column; show full error text and all errors (not just first 3)",
+    )
     config_builder_parser.add_argument(
         "--plugins",
         nargs="*",
@@ -306,60 +342,6 @@ def setup_logger(log_level: str = "INFO", log_path: Optional[str] = None) -> log
     return logger
 
 
-def process_args(
-    raw_arg_input: list[str], plugin_names: list[str]
-) -> tuple[list[str], dict[str, list[str]]]:
-    """separate top level args from plugin args
-
-    Args:
-        raw_arg_input (list[str]): list of all arg input
-        plugin_names (list[str]): list of plugin names
-
-    Returns:
-        tuple[list[str], dict[str, list[str]]]: tuple of top level args
-        and dict of plugin name to plugin args
-    """
-    top_level_args = raw_arg_input
-
-    try:
-        plugin_arg_index = raw_arg_input.index("run-plugins")
-    except ValueError:
-        plugin_arg_index = -1
-
-    plugin_arg_map = {}
-    invalid_plugins = []
-    if plugin_arg_index != -1 and plugin_arg_index != len(raw_arg_input) - 1:
-        top_level_args = raw_arg_input[: plugin_arg_index + 1]
-        plugin_args = raw_arg_input[plugin_arg_index + 1 :]
-
-        # handle help case
-        if plugin_args == ["-h"]:
-            top_level_args += plugin_args
-        else:
-            cur_plugin = None
-            for arg in plugin_args:
-                # Handle comma-separated plugin names (but not arguments)
-                if not arg.startswith("-") and "," in arg:
-                    # Split comma-separated plugin names
-                    for potential_plugin in arg.split(","):
-                        potential_plugin = potential_plugin.strip()
-                        if potential_plugin in plugin_names:
-                            plugin_arg_map[potential_plugin] = []
-                            cur_plugin = potential_plugin
-                        elif potential_plugin:
-                            # Track invalid plugin names to log event later
-                            invalid_plugins.append(potential_plugin)
-                elif arg in plugin_names:
-                    plugin_arg_map[arg] = []
-                    cur_plugin = arg
-                elif cur_plugin:
-                    plugin_arg_map[cur_plugin].append(arg)
-                elif not arg.startswith("-"):
-                    # Track invalid plugin names to log event later
-                    invalid_plugins.append(arg)
-    return (top_level_args, plugin_arg_map, invalid_plugins)
-
-
 def main(arg_input: Optional[list[str]] = None):
     """Main entry point for the CLI
 
@@ -384,7 +366,11 @@ def main(arg_input: Optional[list[str]] = None):
         sname = system_info.name.lower().replace("-", "_").replace(".", "_")
         timestamp = datetime.datetime.now().strftime("%Y_%m_%d-%I_%M_%S_%p")
 
-        if parsed_args.log_path and parsed_args.subcmd not in ["gen-plugin-config", "describe"]:
+        if parsed_args.log_path and parsed_args.subcmd not in [
+            "gen-plugin-config",
+            "describe",
+            "compare-runs",
+        ]:
             log_path = os.path.join(
                 parsed_args.log_path,
                 f"scraper_logs_{sname}_{timestamp}",
@@ -410,6 +396,18 @@ def main(arg_input: Optional[list[str]] = None):
 
         if parsed_args.subcmd == "describe":
             parse_describe(parsed_args, plugin_reg, config_reg, logger)
+
+        if parsed_args.subcmd == "compare-runs":
+            run_compare_runs(
+                parsed_args.path1,
+                parsed_args.path2,
+                plugin_reg,
+                logger,
+                skip_plugins=getattr(parsed_args, "skip_plugins", None) or [],
+                include_plugins=getattr(parsed_args, "include_plugins", None),
+                truncate_message=not getattr(parsed_args, "dont_truncate", False),
+            )
+            sys.exit(0)
 
         if parsed_args.subcmd == "gen-plugin-config":
 

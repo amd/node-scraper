@@ -317,3 +317,4 @@ class NetworkDataModel(DataModel):
     pensando_nic_rdma_statistics: List[PensandoNicRdmaStatistics] = Field(default_factory=list)
     pensando_nic_version_host_software: Optional[PensandoNicVersionHostSoftware] = None
     pensando_nic_version_firmware: List[PensandoNicVersionFirmware] = Field(default_factory=list)
+    accessible: Optional[bool] = None  # Network accessibility check via ping
