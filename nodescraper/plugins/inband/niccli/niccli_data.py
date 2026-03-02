@@ -217,6 +217,15 @@ class PensandoNicPcieAts(BaseModel):
     status: str
 
 
+class PensandoNicLif(BaseModel):
+    """Pensando NIC LIF from nicctl show lif (text)."""
+
+    nic_id: str
+    pcie_bdf: str
+    lif_id: str
+    lif_name: Optional[str] = None
+
+
 class PensandoNicPort(BaseModel):
     """Pensando NIC port from nicctl show port (text)."""
 
@@ -363,6 +372,7 @@ class NicCliDataModel(DataModel):
     pensando_nic_cards: List[PensandoNicCard] = Field(default_factory=list)
     pensando_nic_dcqcn: List[PensandoNicDcqcn] = Field(default_factory=list)
     pensando_nic_environment: List[PensandoNicEnvironment] = Field(default_factory=list)
+    pensando_nic_lif: List[PensandoNicLif] = Field(default_factory=list)
     pensando_nic_pcie_ats: List[PensandoNicPcieAts] = Field(default_factory=list)
     pensando_nic_ports: List[PensandoNicPort] = Field(default_factory=list)
     pensando_nic_qos: List[PensandoNicQos] = Field(default_factory=list)

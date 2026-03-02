@@ -249,10 +249,10 @@ def test_collect_data_success(collector, conn_mock):
     def run_sut_cmd_side_effect(cmd, **kwargs):
         if "niccli" in cmd and ("--list" in cmd or "--list_devices" in cmd):
             return MagicMock(exit_code=0, stdout=NICCLI_LISTDEV_OUTPUT, command=cmd)
-        if "nicctl show card --json" in cmd:
+        if cmd.strip() == "nicctl show card":
             return MagicMock(
                 exit_code=0,
-                stdout='[{"id": "1111111-4c32-3533-3330-12345000000"}]',
+                stdout="1111111-4c32-3533-3330-12345000000 0000:06:00.0\n",
                 command=cmd,
             )
         if "nicctl" in cmd or "niccli" in cmd:

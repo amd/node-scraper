@@ -28,6 +28,7 @@ import re
 from typing import Any, Dict, List, Optional, Tuple
 
 from nodescraper.base import InBandDataCollector
+from nodescraper.connection.inband import TextFileArtifact
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
 from nodescraper.models import TaskResult
 
@@ -50,6 +51,7 @@ from .niccli_data import (
     PensandoNicCard,
     PensandoNicDcqcn,
     PensandoNicEnvironment,
+    PensandoNicLif,
     PensandoNicPcieAts,
     PensandoNicPort,
     PensandoNicQos,
@@ -74,10 +76,10 @@ NICCLI_PER_DEVICE_TEMPLATES = [
     "niccli -dev {device_num} nvm -getoption pcie_relaxed_ordering",
     "niccli -dev {device_num} getqos",
 ]
-NICCTL_CARD_JSON_CMD = "nicctl show card --json"
+# Text-format command for card discovery and pensando_nic_cards (no --json).
+NICCTL_CARD_TEXT_CMD = "nicctl show card"
 NICCTL_GLOBAL_COMMANDS = [
     "nicctl --version",
-    "nicctl show card --json",
     "nicctl show card flash partition --json",
     "nicctl show card interrupts --json",
     "nicctl show card logs --non-persistent",
@@ -86,31 +88,41 @@ NICCTL_GLOBAL_COMMANDS = [
     "nicctl show card profile --json",
     "nicctl show card time --json",
     "nicctl show card statistics packet-buffer summary --json",
-    "nicctl show dcqcn --json",
-    "nicctl show environment --json",
-    "nicctl show lif --json",
     "nicctl show lif statistics --json",
     "nicctl show lif internal queue-to-ud-pinning",
-    "nicctl show pcie ats --json",
     "nicctl show pipeline internal anomalies",
     "nicctl show pipeline internal rsq-ring",
     "nicctl show pipeline internal statistics memory",
-    "nicctl show port --json",
     "nicctl show port fsm",
     "nicctl show port transceiver --json",
     "nicctl show port statistics --json",
     "nicctl show port internal mac",
-    "nicctl show qos --json",
     "nicctl show qos headroom --json",
     "nicctl show rdma queue --json",
     "nicctl show rdma queue-pair --detail --json",
-    "nicctl show rdma statistics --json",
     "nicctl show version firmware",
 ]
 NICCTL_PER_CARD_TEMPLATES = [
     "nicctl show dcqcn --card {card_id} --json",
     "nicctl show card hardware-config --card {card_id}",
 ]
+
+# Legacy text-format commands for Pensando (no --json); parsed by _parse_nicctl_* into pensando_nic_*.
+NICCTL_LEGACY_TEXT_COMMANDS = [
+    "nicctl show card",
+    "nicctl show dcqcn",
+    "nicctl show environment",
+    "nicctl show lif",
+    "nicctl show pcie ats",
+    "nicctl show port",
+    "nicctl show qos",
+    "nicctl show rdma statistics",
+    "nicctl show version host-software",
+]
+
+# Max lengths for fields included in the serialized datamodel (keeps nicclidatamodel.json small).
+MAX_COMMAND_LENGTH_IN_DATAMODEL = 256
+MAX_STDERR_LENGTH_IN_DATAMODEL = 512
 
 
 # Commands whose output is very long; store only as file artifacts, not in data model.
@@ -145,10 +157,8 @@ def _default_commands() -> List[str]:
     out: List[str] = [NICCLI_LIST_CMD]
     for t in NICCLI_PER_DEVICE_TEMPLATES:
         out.append(t)
-    out.append(NICCTL_CARD_JSON_CMD)
     for c in NICCTL_GLOBAL_COMMANDS:
-        if c != NICCTL_CARD_JSON_CMD:
-            out.append(c)
+        out.append(c)
     for t in NICCTL_PER_CARD_TEMPLATES:
         out.append(t)
     return out
@@ -285,6 +295,7 @@ def _build_structured(
     results: Dict[str, NicCliCommandResult],
     parsed: Dict[str, Any],
     card_ids: List[str],
+    card_list_override: Optional[List[Dict[str, Any]]] = None,
 ) -> Tuple[
     Optional[CardShow],
     List[NicCliCard],
@@ -308,7 +319,11 @@ def _build_structured(
         r = _r(cmd)
         return (r.stdout or "") if r else ""
 
-    card_list = _card_list_items(_p(NICCTL_CARD_JSON_CMD))
+    card_list = (
+        card_list_override
+        if card_list_override is not None
+        else _card_list_items(_p("nicctl show card --json"))
+    )
     cards: List[NicCliCard] = []
     for cid in card_ids:
         info = _find_card_info(card_list, cid)
@@ -337,29 +352,29 @@ def _build_structured(
     )
 
     port = NicCliPort(
-        port=_p("nicctl show port --json"),
+        port=_p("nicctl show port"),
         port_fsm=_stdout("nicctl show port fsm") or None,
         port_transceiver=_p("nicctl show port transceiver --json"),
         port_statistics=_p("nicctl show port statistics --json"),
         port_internal_mac=_stdout("nicctl show port internal mac") or None,
     )
     lif = NicCliLif(
-        lif=_p("nicctl show lif --json"),
+        lif=_p("nicctl show lif"),
         lif_statistics=_p("nicctl show lif statistics --json"),
         lif_internal_queue_to_ud_pinning=_stdout("nicctl show lif internal queue-to-ud-pinning")
         or None,
     )
     qos = NicCliQos(
-        qos=_p("nicctl show qos --json"),
+        qos=_p("nicctl show qos"),
         qos_headroom=_p("nicctl show qos headroom --json"),
     )
     rdma = NicCliRdma(
         rdma_queue=_p("nicctl show rdma queue --json"),
         rdma_queue_pair_detail=_p("nicctl show rdma queue-pair --detail --json"),
-        rdma_statistics=_p("nicctl show rdma statistics --json"),
+        rdma_statistics=_p("nicctl show rdma statistics"),
     )
-    dcqcn = NicCliDcqcn(dcqcn_global=_p("nicctl show dcqcn --json"))
-    environment = NicCliEnvironment(environment=_p("nicctl show environment --json"))
+    dcqcn = NicCliDcqcn(dcqcn_global=_p("nicctl show dcqcn"))
+    environment = NicCliEnvironment(environment=_p("nicctl show environment"))
     version = NicCliVersion(
         version=_stdout("nicctl --version") or None,
         version_firmware=_stdout("nicctl show version firmware") or None,
@@ -398,17 +413,20 @@ class NicCliCollector(InBandDataCollector[NicCliDataModel, NicCliCollectorArgs])
                 if device_nums:
                     break
 
-        # Discovery: card IDs from nicctl show card --json
+        # Discovery: card IDs from nicctl show card (text); same output used for pensando_nic_cards
         card_ids: List[str] = []
-        res_card = self._run_sut_cmd(NICCTL_CARD_JSON_CMD, sudo=use_sudo_nicctl)
-        results[NICCTL_CARD_JSON_CMD] = NicCliCommandResult(
-            command=NICCTL_CARD_JSON_CMD,
+        card_list_from_text: List[Dict[str, Any]] = []
+        res_card = self._run_sut_cmd(NICCTL_CARD_TEXT_CMD, sudo=use_sudo_nicctl)
+        results[NICCTL_CARD_TEXT_CMD] = NicCliCommandResult(
+            command=NICCTL_CARD_TEXT_CMD,
             stdout=res_card.stdout or "",
             stderr=res_card.stderr or "",
             exit_code=res_card.exit_code,
         )
         if res_card.exit_code == 0 and res_card.stdout:
-            card_ids = _parse_nicctl_card_ids(res_card.stdout)
+            legacy_cards = self._parse_nicctl_card(res_card.stdout)
+            card_ids = [c.id for c in legacy_cards]
+            card_list_from_text = [c.model_dump() for c in legacy_cards]
 
         # Build full command list (expand placeholders)
         if custom_commands is not None:
@@ -428,13 +446,14 @@ class NicCliCollector(InBandDataCollector[NicCliDataModel, NicCliCollectorArgs])
             for tpl in NICCLI_PER_DEVICE_TEMPLATES:
                 for d in device_nums:
                     commands_to_run.append(tpl.format(device_num=d))
-            # nicctl global (skip card --json already done)
+            # nicctl global (card discovery already done via NICCTL_CARD_TEXT_CMD)
             for c in NICCTL_GLOBAL_COMMANDS:
-                if c != NICCTL_CARD_JSON_CMD:
-                    commands_to_run.append(c)
+                commands_to_run.append(c)
             for tpl in NICCTL_PER_CARD_TEMPLATES:
                 for cid in card_ids:
                     commands_to_run.append(tpl.format(card_id=cid))
+            for cmd in NICCTL_LEGACY_TEXT_COMMANDS:
+                commands_to_run.append(cmd)
 
         # Run each command and store (artifact-only commands are not added to results / data model).
         for cmd in commands_to_run:
@@ -476,7 +495,7 @@ class NicCliCollector(InBandDataCollector[NicCliDataModel, NicCliCollectorArgs])
             except (ValueError, TypeError):
                 pass
 
-        # Build structured domain objects (card_show, cards, port, lif, qos, rdma, dcqcn, environment, version).
+        # Build structured domain objects from JSON/raw output (card_show/cards from text when present).
         (
             card_show,
             cards,
@@ -487,14 +506,64 @@ class NicCliCollector(InBandDataCollector[NicCliDataModel, NicCliCollectorArgs])
             dcqcn,
             environment,
             version,
-        ) = _build_structured(results, parsed, card_ids)
+        ) = _build_structured(
+            results, parsed, card_ids, card_list_override=card_list_from_text or None
+        )
+
+        # card_show and cards (can be large) go to TextFileArtifacts; excluded from datamodel.
+        if card_show is not None:
+            self.result.artifacts.append(
+                TextFileArtifact(
+                    filename="niccli_card_show.json",
+                    contents=card_show.model_dump_json(indent=2),
+                )
+            )
+        if cards:
+            self.result.artifacts.append(
+                TextFileArtifact(
+                    filename="niccli_cards.json",
+                    contents=json.dumps([c.model_dump(mode="json") for c in cards], indent=2),
+                )
+            )
+
+        # Serialized nicclidatamodel.json: no stdout in results, truncated command/stderr (keeps file small).
+        # Command output lives on disk from _run_sut_cmd; model keeps only command identity and status.
+        def _truncate(s: str, max_len: int) -> str:
+            if not s or len(s) <= max_len:
+                return s or ""
+            return s[: max_len - 3] + "..."
+
+        results_for_model = {
+            cmd: NicCliCommandResult(
+                command=_truncate(r.command, MAX_COMMAND_LENGTH_IN_DATAMODEL),
+                stdout="",
+                stderr=_truncate(r.stderr or "", MAX_STDERR_LENGTH_IN_DATAMODEL),
+                exit_code=r.exit_code,
+            )
+            for cmd, r in results.items()
+        }
+
+        # Legacy text parsers: populate broadcom_nic_* and pensando_nic_* for the datamodel.
+        broadcom_devices, broadcom_qos_data = self._collect_broadcom_nic_structured(results)
+        (
+            pensando_cards,
+            pensando_dcqcn,
+            pensando_environment,
+            pensando_lif,
+            pensando_pcie_ats,
+            pensando_ports,
+            pensando_qos,
+            pensando_rdma_statistics,
+            pensando_version_host_software,
+            pensando_version_firmware,
+        ) = self._collect_pensando_nic_structured(results)
 
         self.result.status = ExecutionStatus.OK
         self.result.message = f"Collected {len(results)} niccli/nicctl command results"
         return self.result, NicCliDataModel(
-            results=results,
-            card_show=card_show,
-            cards=cards,
+            results=results_for_model,
+            card_show=None,
+            cards=[],
             port=port,
             lif=lif,
             qos=qos,
@@ -502,6 +571,90 @@ class NicCliCollector(InBandDataCollector[NicCliDataModel, NicCliCollectorArgs])
             dcqcn=dcqcn,
             environment=environment,
             version=version,
+            broadcom_nic_devices=broadcom_devices,
+            broadcom_nic_qos=broadcom_qos_data,
+            pensando_nic_cards=pensando_cards,
+            pensando_nic_dcqcn=pensando_dcqcn,
+            pensando_nic_environment=pensando_environment,
+            pensando_nic_lif=pensando_lif,
+            pensando_nic_pcie_ats=pensando_pcie_ats,
+            pensando_nic_ports=pensando_ports,
+            pensando_nic_qos=pensando_qos,
+            pensando_nic_rdma_statistics=pensando_rdma_statistics,
+            pensando_nic_version_host_software=pensando_version_host_software,
+            pensando_nic_version_firmware=pensando_version_firmware,
+        )
+
+    def _collect_broadcom_nic_structured(
+        self, results: Dict[str, NicCliCommandResult]
+    ) -> Tuple[List[BroadcomNicDevice], Dict[int, BroadcomNicQos]]:
+        """Build Broadcom NIC structured data from results using legacy text parsers."""
+        devices: List[BroadcomNicDevice] = []
+        qos_data: Dict[int, BroadcomNicQos] = {}
+        list_stdout: Optional[str] = None
+        for list_cmd in NICCLI_DISCOVERY_CMDS:
+            r = results.get(list_cmd)
+            if r and r.exit_code == 0 and (r.stdout or "").strip():
+                list_stdout = r.stdout
+                break
+        if not list_stdout:
+            return devices, qos_data
+        devices = self._parse_niccli_listdev(list_stdout)
+        for device in devices:
+            cmd = f"niccli -dev {device.device_num} getqos"
+            r = results.get(cmd)
+            if r and r.exit_code == 0 and (r.stdout or "").strip():
+                qos_data[device.device_num] = self._parse_niccli_qos(
+                    device.device_num, r.stdout or ""
+                )
+        return devices, qos_data
+
+    def _collect_pensando_nic_structured(self, results: Dict[str, NicCliCommandResult]) -> Tuple[
+        List[PensandoNicCard],
+        List[PensandoNicDcqcn],
+        List[PensandoNicEnvironment],
+        List[PensandoNicLif],
+        List[PensandoNicPcieAts],
+        List[PensandoNicPort],
+        List[PensandoNicQos],
+        List[PensandoNicRdmaStatistics],
+        Optional[PensandoNicVersionHostSoftware],
+        List[PensandoNicVersionFirmware],
+    ]:
+        """Build Pensando NIC structured data from results using legacy text parsers."""
+
+        def _stdout(cmd: str) -> str:
+            r = results.get(cmd)
+            return (r.stdout or "").strip() if r and r.exit_code == 0 else ""
+
+        cards = self._parse_nicctl_card(_stdout("nicctl show card"))
+        dcqcn_entries = self._parse_nicctl_dcqcn(_stdout("nicctl show dcqcn"))
+        environment_entries = self._parse_nicctl_environment(_stdout("nicctl show environment"))
+        lif_entries = self._parse_nicctl_lif(_stdout("nicctl show lif"))
+        pcie_ats_entries = self._parse_nicctl_pcie_ats(_stdout("nicctl show pcie ats"))
+        port_entries = self._parse_nicctl_port(_stdout("nicctl show port"))
+        qos_entries = self._parse_nicctl_qos(_stdout("nicctl show qos"))
+        rdma_statistics_entries = self._parse_nicctl_rdma_statistics(
+            _stdout("nicctl show rdma statistics")
+        )
+        version_host_software = self._parse_nicctl_version_host_software(
+            _stdout("nicctl show version host-software")
+        )
+        version_firmware_entries = self._parse_nicctl_version_firmware(
+            _stdout("nicctl show version firmware")
+        )
+
+        return (
+            cards,
+            dcqcn_entries,
+            environment_entries,
+            lif_entries,
+            pcie_ats_entries,
+            port_entries,
+            qos_entries,
+            rdma_statistics_entries,
+            version_host_software,
+            version_firmware_entries,
         )
 
     # --- Legacy text parsers (human-readable niccli/nicctl output) ---
@@ -734,6 +887,39 @@ class NicCliCollector(InBandDataCollector[NicCliDataModel, NicCliCollectorArgs])
                     p4_stage_frequency=data.get("p4_stage_frequency"),
                 )
             )
+        return entries
+
+    def _parse_nicctl_lif(self, stdout: str) -> List[PensandoNicLif]:
+        """Parse nicctl show lif (text) into PensandoNicLif list."""
+        entries: List[PensandoNicLif] = []
+        nic_id = pcie_bdf = None
+        for line in stdout.splitlines():
+            if "NIC " in line and ":" in line and "(" in line:
+                m = re.search(r"NIC\s*:\s*([^\s(]+)\s*\(([^)]+)\)", line)
+                if m:
+                    nic_id, pcie_bdf = m.group(1).strip(), m.group(2).strip()
+            if "LIF :" in line or "Lif :" in line or "Lif:" in line:
+                rest = line.split(":", 1)[-1].strip()
+                lif_match = re.match(r"([0-9a-f-]{36})\s*\(([^)]*)\)", rest)
+                if lif_match and nic_id:
+                    lif_id, lif_name = lif_match.group(1), lif_match.group(2).strip()
+                    entries.append(
+                        PensandoNicLif(
+                            nic_id=nic_id,
+                            pcie_bdf=pcie_bdf or "",
+                            lif_id=lif_id,
+                            lif_name=lif_name or None,
+                        )
+                    )
+                elif re.match(r"^[0-9a-f-]{36}$", rest.strip()) and nic_id:
+                    entries.append(
+                        PensandoNicLif(
+                            nic_id=nic_id,
+                            pcie_bdf=pcie_bdf or "",
+                            lif_id=rest.strip(),
+                            lif_name=None,
+                        )
+                    )
         return entries
 
     def _parse_nicctl_pcie_ats(self, stdout: str) -> List[PensandoNicPcieAts]:
