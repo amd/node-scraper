@@ -712,9 +712,13 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                 )
 
         if mismatches:
+            details = "; ".join(
+                f"GPU {m['gpu']} {m['actual_gt_s']} GT/s (expected {m['expected_gt_s']})"
+                for m in mismatches
+            )
             self._log_event(
                 category=EventCategory.IO,
-                description="XGMI link speed is not as expected",
+                description=f"XGMI link speed is not as expected: {details}",
                 priority=EventPriority.ERROR,
                 data={
                     "expected_gt_s": expected_str,
