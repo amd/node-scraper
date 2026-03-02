@@ -458,42 +458,29 @@ class NicCliCollector(InBandDataCollector[NicCliDataModel, NicCliCollectorArgs])
                     priority=EventPriority.WARNING,
                 )
 
-        # Parse JSON for building structured domain objects only
-        parsed: Dict[str, Any] = {}
-        for cmd, r in results.items():
-            if r.exit_code != 0 or not (r.stdout or "").strip():
-                continue
-            try:
-                parsed[cmd] = json.loads(r.stdout.strip())
-            except (ValueError, TypeError):
-                pass
-
-        # Build structured domain objects (card_show, cards, port, lif, qos, rdma, dcqcn, environment, version)
-        (
-            card_show,
-            cards,
-            port,
-            lif,
-            qos,
-            rdma,
-            dcqcn,
-            environment,
-            version,
-        ) = _build_structured(results, parsed, card_ids)
+        results_for_model = {
+            cmd: NicCliCommandResult(
+                command=r.command,
+                stdout="",
+                stderr=r.stderr or "",
+                exit_code=r.exit_code,
+            )
+            for cmd, r in results.items()
+        }
 
         self.result.status = ExecutionStatus.OK
         self.result.message = f"Collected {len(results)} niccli/nicctl command results"
         return self.result, NicCliDataModel(
-            results=results,
-            card_show=card_show,
-            cards=cards,
-            port=port,
-            lif=lif,
-            qos=qos,
-            rdma=rdma,
-            dcqcn=dcqcn,
-            environment=environment,
-            version=version,
+            results=results_for_model,
+            card_show=None,
+            cards=[],
+            port=None,
+            lif=None,
+            qos=None,
+            rdma=None,
+            dcqcn=None,
+            environment=None,
+            version=None,
         )
 
     def _parse_niccli_listdev(self, stdout: str) -> List[BroadcomNicDevice]:
