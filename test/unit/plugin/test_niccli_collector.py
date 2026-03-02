@@ -12,18 +12,18 @@ import pytest
 from nodescraper.enums.executionstatus import ExecutionStatus
 from nodescraper.enums.systeminteraction import SystemInteractionLevel
 from nodescraper.models.systeminfo import OSFamily
-from nodescraper.plugins.inband.niccli.niccli_collector import NicCliCollector
+from nodescraper.plugins.inband.niccli.niccli_collector import NicCollector
 from nodescraper.plugins.inband.niccli.niccli_data import (
-    BroadcomNicDevice,
-    BroadcomNicQos,
-    NicCliDataModel,
+    NicCliDevice,
+    NicCliQos,
+    NicDataModel,
     PensandoNicCard,
 )
 
 
 @pytest.fixture
 def collector(system_info, conn_mock):
-    return NicCliCollector(
+    return NicCollector(
         system_info=system_info,
         system_interaction_level=SystemInteractionLevel.PASSIVE,
         connection=conn_mock,
@@ -185,9 +185,9 @@ TC Rate Limit: 100% bad% 100%
     assert qos.pfc_enabled is None
 
 
-def test_niccli_data_model_with_broadcom_nic(collector):
-    """Test creating NicCliDataModel with Broadcom NIC data."""
-    device = BroadcomNicDevice(
+def test_nic_data_model_with_broadcom_nic(collector):
+    """Test creating NicDataModel with Broadcom NIC data."""
+    device = NicCliDevice(
         device_num=1,
         model="Broadcom BCM57608 1x400G QSFP-DD PCIe Ethernet NIC",
         adapter_port="Adp#1 Port#1",
@@ -195,7 +195,7 @@ def test_niccli_data_model_with_broadcom_nic(collector):
         mac_address="8C:84:74:37:C3:70",
         pci_address="0000:06:00.0",
     )
-    qos = BroadcomNicQos(
+    qos = NicCliQos(
         device_num=1,
         raw_output="test output",
         prio_map={0: 0, 1: 1},
@@ -204,7 +204,7 @@ def test_niccli_data_model_with_broadcom_nic(collector):
         pfc_enabled=3,
         tc_rate_limit=[100, 100],
     )
-    data = NicCliDataModel(
+    data = NicDataModel(
         broadcom_nic_devices=[device],
         broadcom_nic_qos={1: qos},
     )
@@ -216,8 +216,8 @@ def test_niccli_data_model_with_broadcom_nic(collector):
     assert data.broadcom_nic_qos[1].pfc_enabled == 3
 
 
-def test_niccli_data_model_with_pensando_nic(collector):
-    """Test creating NicCliDataModel with Pensando NIC data."""
+def test_nic_data_model_with_pensando_nic(collector):
+    """Test creating NicDataModel with Pensando NIC data."""
     card1 = PensandoNicCard(
         id="42424650-4c32-3533-3330-323934000000",
         pcie_bdf="0000:06:00.0",
@@ -232,7 +232,7 @@ def test_niccli_data_model_with_pensando_nic(collector):
         fw_partition="A",
         serial_number="FPL253710E5",
     )
-    data = NicCliDataModel(
+    data = NicDataModel(
         pensando_nic_cards=[card1, card2],
     )
     assert len(data.pensando_nic_cards) == 2
@@ -265,5 +265,5 @@ def test_collect_data_success(collector, conn_mock):
 
     assert result.status == ExecutionStatus.OK
     assert data is not None
-    assert isinstance(data, NicCliDataModel)
+    assert isinstance(data, NicDataModel)
     assert len(data.results) >= 1

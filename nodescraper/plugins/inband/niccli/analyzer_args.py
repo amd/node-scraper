@@ -30,20 +30,20 @@ from pydantic import Field
 from nodescraper.models import AnalyzerArgs
 
 
-class NicCliAnalyzerArgs(AnalyzerArgs):
+class NicAnalyzerArgs(AnalyzerArgs):
     """Analyzer args for niccli/nicctl data, with expected_values keyed by canonical command key.
 
-    Use expected_values to compare what each command returned (success or parsed
-    content) against desired values. Keys are canonical keys from the data model
-    (see niccli_data.command_to_canonical_key), e.g.:
+    Use expected_values to define checks; the analyzer uses the data model's
+    structured fields (card_show, cards, port, lif, qos, etc.) and results to
+    run them. Keys are canonical keys (see nic_data.command_to_canonical_key), e.g.:
       - nicctl_show_card_json
       - nicctl_show_dcqcn_card_0_json
       - niccli_list
 
     Each value is a dict of checks the analyzer can apply. Common patterns:
-      - require_success: true  -> command must have exit_code 0
-      - min_cards: 1          -> for card list, require at least N cards (list length)
-      - <field>: <value>      -> require parsed payload to have field equal to value
+      - require_success: true  -> command must have exit_code 0 (from results)
+      - min_cards: 1           -> require at least N cards (from cards)
+      - <field>: <value>       -> require structured payload to have field equal to value
     """
 
     expected_values: Optional[Dict[str, Dict[str, Any]]] = Field(

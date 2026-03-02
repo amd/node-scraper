@@ -32,22 +32,22 @@ from nodescraper.connection.inband import TextFileArtifact
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
 from nodescraper.models import TaskResult
 
-from .collector_args import NicCliCollectorArgs
+from .collector_args import NicCollectorArgs
 from .niccli_data import (
-    BroadcomNicDevice,
-    BroadcomNicQos,
-    BroadcomNicQosAppEntry,
-    CardShow,
-    NicCliCard,
-    NicCliCommandResult,
-    NicCliDataModel,
-    NicCliDcqcn,
-    NicCliEnvironment,
-    NicCliLif,
-    NicCliPort,
+    NicCliDevice,
     NicCliQos,
-    NicCliRdma,
-    NicCliVersion,
+    NicCliQosAppEntry,
+    NicCommandResult,
+    NicCtlCard,
+    NicCtlCardShow,
+    NicCtlDcqcn,
+    NicCtlEnvironment,
+    NicCtlLif,
+    NicCtlPort,
+    NicCtlQos,
+    NicCtlRdma,
+    NicCtlVersion,
+    NicDataModel,
     PensandoNicCard,
     PensandoNicDcqcn,
     PensandoNicEnvironment,
@@ -164,16 +164,16 @@ def _default_commands() -> List[str]:
     return out
 
 
-def _parse_niccli_qos_app_entries(stdout: str) -> List[BroadcomNicQosAppEntry]:
-    """Parse APP# blocks from niccli qos output into BroadcomNicQosAppEntry list."""
-    entries: List[BroadcomNicQosAppEntry] = []
-    current: Optional[BroadcomNicQosAppEntry] = None
+def _parse_niccli_qos_app_entries(stdout: str) -> List[NicCliQosAppEntry]:
+    """Parse APP# blocks from niccli qos output into NicCliQosAppEntry list."""
+    entries: List[NicCliQosAppEntry] = []
+    current: Optional[NicCliQosAppEntry] = None
     for line in stdout.splitlines():
         line = line.strip()
         if re.match(r"APP#\d+", line, re.I):
             if current is not None:
                 entries.append(current)
-            current = BroadcomNicQosAppEntry()
+            current = NicCliQosAppEntry()
             continue
         if current is None or ":" not in line:
             continue
@@ -292,27 +292,27 @@ def _find_card_info(card_list: List[Any], card_id: str) -> Optional[Any]:
 
 
 def _build_structured(
-    results: Dict[str, NicCliCommandResult],
+    results: Dict[str, NicCommandResult],
     parsed: Dict[str, Any],
     card_ids: List[str],
     card_list_override: Optional[List[Dict[str, Any]]] = None,
 ) -> Tuple[
-    Optional[CardShow],
-    List[NicCliCard],
-    Optional[NicCliPort],
-    Optional[NicCliLif],
-    Optional[NicCliQos],
-    Optional[NicCliRdma],
-    Optional[NicCliDcqcn],
-    Optional[NicCliEnvironment],
-    Optional[NicCliVersion],
+    Optional[NicCtlCardShow],
+    List[NicCtlCard],
+    Optional[NicCtlPort],
+    Optional[NicCtlLif],
+    Optional[NicCtlQos],
+    Optional[NicCtlRdma],
+    Optional[NicCtlDcqcn],
+    Optional[NicCtlEnvironment],
+    Optional[NicCtlVersion],
 ]:
     """Build structured domain objects from results and parsed dicts."""
 
     def _p(cmd: str) -> Any:
         return parsed.get(cmd)
 
-    def _r(cmd: str) -> Optional[NicCliCommandResult]:
+    def _r(cmd: str) -> Optional[NicCommandResult]:
         return results.get(cmd)
 
     def _stdout(cmd: str) -> str:
@@ -324,13 +324,13 @@ def _build_structured(
         if card_list_override is not None
         else _card_list_items(_p("nicctl show card --json"))
     )
-    cards: List[NicCliCard] = []
+    cards: List[NicCtlCard] = []
     for cid in card_ids:
         info = _find_card_info(card_list, cid)
         hw_cmd = f"nicctl show card hardware-config --card {cid}"
         dcqcn_cmd = f"nicctl show dcqcn --card {cid} --json"
         cards.append(
-            NicCliCard(
+            NicCtlCard(
                 card_id=cid,
                 info=info,
                 hardware_config=_stdout(hw_cmd) or None,
@@ -338,7 +338,7 @@ def _build_structured(
             )
         )
 
-    card_show = CardShow(
+    card_show = NicCtlCardShow(
         flash_partition=_p("nicctl show card flash partition --json"),
         interrupts=_p("nicctl show card interrupts --json"),
         logs_non_persistent=_stdout("nicctl show card logs --non-persistent") or None,
@@ -351,58 +351,58 @@ def _build_structured(
         ),
     )
 
-    port = NicCliPort(
+    port = NicCtlPort(
         port=_p("nicctl show port"),
         port_fsm=_stdout("nicctl show port fsm") or None,
         port_transceiver=_p("nicctl show port transceiver --json"),
         port_statistics=_p("nicctl show port statistics --json"),
         port_internal_mac=_stdout("nicctl show port internal mac") or None,
     )
-    lif = NicCliLif(
+    lif = NicCtlLif(
         lif=_p("nicctl show lif"),
         lif_statistics=_p("nicctl show lif statistics --json"),
         lif_internal_queue_to_ud_pinning=_stdout("nicctl show lif internal queue-to-ud-pinning")
         or None,
     )
-    qos = NicCliQos(
+    qos = NicCtlQos(
         qos=_p("nicctl show qos"),
         qos_headroom=_p("nicctl show qos headroom --json"),
     )
-    rdma = NicCliRdma(
+    rdma = NicCtlRdma(
         rdma_queue=_p("nicctl show rdma queue --json"),
         rdma_queue_pair_detail=_p("nicctl show rdma queue-pair --detail --json"),
         rdma_statistics=_p("nicctl show rdma statistics"),
     )
-    dcqcn = NicCliDcqcn(dcqcn_global=_p("nicctl show dcqcn"))
-    environment = NicCliEnvironment(environment=_p("nicctl show environment"))
-    version = NicCliVersion(
+    dcqcn = NicCtlDcqcn(dcqcn_global=_p("nicctl show dcqcn"))
+    environment = NicCtlEnvironment(environment=_p("nicctl show environment"))
+    version = NicCtlVersion(
         version=_stdout("nicctl --version") or None,
         version_firmware=_stdout("nicctl show version firmware") or None,
     )
     return card_show, cards, port, lif, qos, rdma, dcqcn, environment, version
 
 
-class NicCliCollector(InBandDataCollector[NicCliDataModel, NicCliCollectorArgs]):
+class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
     """Collect raw output from niccli (Broadcom) and nicctl (Pensando) commands."""
 
-    DATA_MODEL = NicCliDataModel
+    DATA_MODEL = NicDataModel
 
     def collect_data(
         self,
-        args: Optional[NicCliCollectorArgs] = None,
-    ) -> Tuple[TaskResult, Optional[NicCliDataModel]]:
+        args: Optional[NicCollectorArgs] = None,
+    ) -> Tuple[TaskResult, Optional[NicDataModel]]:
         """Run niccli/nicctl commands and store stdout/stderr/exit_code per command."""
         use_sudo_niccli = args.use_sudo_niccli if args else True
         use_sudo_nicctl = args.use_sudo_nicctl if args else True
         custom_commands = args.commands if args and args.commands else None
 
-        results: dict[str, NicCliCommandResult] = {}
+        results: dict[str, NicCommandResult] = {}
 
         # Discovery: device numbers from niccli
         device_nums: List[int] = []
         for list_cmd in NICCLI_DISCOVERY_CMDS:
             res = self._run_sut_cmd(list_cmd, sudo=use_sudo_niccli)
-            results[list_cmd] = NicCliCommandResult(
+            results[list_cmd] = NicCommandResult(
                 command=list_cmd,
                 stdout=res.stdout or "",
                 stderr=res.stderr or "",
@@ -417,7 +417,7 @@ class NicCliCollector(InBandDataCollector[NicCliDataModel, NicCliCollectorArgs])
         card_ids: List[str] = []
         card_list_from_text: List[Dict[str, Any]] = []
         res_card = self._run_sut_cmd(NICCTL_CARD_TEXT_CMD, sudo=use_sudo_nicctl)
-        results[NICCTL_CARD_TEXT_CMD] = NicCliCommandResult(
+        results[NICCTL_CARD_TEXT_CMD] = NicCommandResult(
             command=NICCTL_CARD_TEXT_CMD,
             stdout=res_card.stdout or "",
             stderr=res_card.stderr or "",
@@ -471,7 +471,7 @@ class NicCliCollector(InBandDataCollector[NicCliDataModel, NicCliCollectorArgs])
                         priority=EventPriority.WARNING,
                     )
                 continue
-            results[cmd] = NicCliCommandResult(
+            results[cmd] = NicCommandResult(
                 command=cmd,
                 stdout=res.stdout or "",
                 stderr=res.stderr or "",
@@ -534,7 +534,7 @@ class NicCliCollector(InBandDataCollector[NicCliDataModel, NicCliCollectorArgs])
             return s[: max_len - 3] + "..."
 
         results_for_model = {
-            cmd: NicCliCommandResult(
+            cmd: NicCommandResult(
                 command=_truncate(r.command, MAX_COMMAND_LENGTH_IN_DATAMODEL),
                 stdout="",
                 stderr=_truncate(r.stderr or "", MAX_STDERR_LENGTH_IN_DATAMODEL),
@@ -560,7 +560,7 @@ class NicCliCollector(InBandDataCollector[NicCliDataModel, NicCliCollectorArgs])
 
         self.result.status = ExecutionStatus.OK
         self.result.message = f"Collected {len(results)} niccli/nicctl command results"
-        return self.result, NicCliDataModel(
+        return self.result, NicDataModel(
             results=results_for_model,
             card_show=None,
             cards=[],
@@ -586,11 +586,11 @@ class NicCliCollector(InBandDataCollector[NicCliDataModel, NicCliCollectorArgs])
         )
 
     def _collect_broadcom_nic_structured(
-        self, results: Dict[str, NicCliCommandResult]
-    ) -> Tuple[List[BroadcomNicDevice], Dict[int, BroadcomNicQos]]:
-        """Build Broadcom NIC structured data from results using legacy text parsers."""
-        devices: List[BroadcomNicDevice] = []
-        qos_data: Dict[int, BroadcomNicQos] = {}
+        self, results: Dict[str, NicCommandResult]
+    ) -> Tuple[List[NicCliDevice], Dict[int, NicCliQos]]:
+        """Build niccli (Broadcom) structured data from results using legacy text parsers."""
+        devices: List[NicCliDevice] = []
+        qos_data: Dict[int, NicCliQos] = {}
         list_stdout: Optional[str] = None
         for list_cmd in NICCLI_DISCOVERY_CMDS:
             r = results.get(list_cmd)
@@ -609,7 +609,7 @@ class NicCliCollector(InBandDataCollector[NicCliDataModel, NicCliCollectorArgs])
                 )
         return devices, qos_data
 
-    def _collect_pensando_nic_structured(self, results: Dict[str, NicCliCommandResult]) -> Tuple[
+    def _collect_pensando_nic_structured(self, results: Dict[str, NicCommandResult]) -> Tuple[
         List[PensandoNicCard],
         List[PensandoNicDcqcn],
         List[PensandoNicEnvironment],
@@ -659,9 +659,9 @@ class NicCliCollector(InBandDataCollector[NicCliDataModel, NicCliCollectorArgs])
 
     # --- Legacy text parsers (human-readable niccli/nicctl output) ---
 
-    def _parse_niccli_listdev(self, stdout: str) -> List[BroadcomNicDevice]:
-        """Parse niccli --list_devices output into BroadcomNicDevice list."""
-        devices: List[BroadcomNicDevice] = []
+    def _parse_niccli_listdev(self, stdout: str) -> List[NicCliDevice]:
+        """Parse niccli --list_devices output into NicCliDevice list."""
+        devices: List[NicCliDevice] = []
         current_num: Optional[int] = None
         model = adapter_port = interface_name = mac_address = pci_address = None
         for line in stdout.splitlines():
@@ -672,7 +672,7 @@ class NicCliCollector(InBandDataCollector[NicCliDataModel, NicCliCollectorArgs])
             if num_match:
                 if current_num is not None and model is not None:
                     devices.append(
-                        BroadcomNicDevice(
+                        NicCliDevice(
                             device_num=current_num,
                             model=model.strip() or None,
                             adapter_port=adapter_port,
@@ -707,7 +707,7 @@ class NicCliCollector(InBandDataCollector[NicCliDataModel, NicCliCollectorArgs])
             model is not None or interface_name or mac_address or pci_address
         ):
             devices.append(
-                BroadcomNicDevice(
+                NicCliDevice(
                     device_num=current_num,
                     model=model,
                     adapter_port=adapter_port,
@@ -718,13 +718,13 @@ class NicCliCollector(InBandDataCollector[NicCliDataModel, NicCliCollectorArgs])
             )
         return devices
 
-    def _parse_niccli_qos(self, device_num: int, stdout: str) -> "BroadcomNicQos":
+    def _parse_niccli_qos(self, device_num: int, stdout: str) -> NicCliQos:
         """Parse niccli -dev X qos --ets --show output."""
         prio_map: Dict[int, int] = {}
         tc_bandwidth: List[int] = []
         tsa_map: Dict[int, str] = {}
         pfc_enabled: Optional[int] = None
-        app_entries: List[BroadcomNicQosAppEntry] = []
+        app_entries: List[NicCliQosAppEntry] = []
         tc_rate_limit: List[int] = []
         for line in stdout.splitlines():
             line = line.strip()
@@ -745,7 +745,7 @@ class NicCliCollector(InBandDataCollector[NicCliDataModel, NicCliCollectorArgs])
                 break
             if "TC Rate Limit:" in line:
                 tc_rate_limit = [int(x) for x in re.findall(r"(\d+)%", line)]
-        return BroadcomNicQos(
+        return NicCliQos(
             device_num=device_num,
             raw_output=stdout,
             prio_map=prio_map,

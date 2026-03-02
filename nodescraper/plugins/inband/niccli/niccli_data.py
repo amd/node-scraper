@@ -31,7 +31,7 @@ from pydantic import BaseModel, Field
 from nodescraper.models import DataModel
 
 
-class CardShow(BaseModel):
+class NicCtlCardShow(BaseModel):
     """Outputs from global 'nicctl show card *' commands (flash, interrupts, logs, profile, time, statistics)."""
 
     flash_partition: Optional[Any] = None
@@ -44,8 +44,8 @@ class CardShow(BaseModel):
     statistics_packet_buffer_summary: Optional[Any] = None
 
 
-class NicCliCard(BaseModel):
-    """Per-card data: identity from 'nicctl show card --json' plus per-card commands (hardware-config, dcqcn)."""
+class NicCtlCard(BaseModel):
+    """Per-card data: identity from 'nicctl show card' plus per-card commands (hardware-config, dcqcn)."""
 
     card_id: str
     info: Optional[Any] = Field(
@@ -59,7 +59,7 @@ class NicCliCard(BaseModel):
     )
 
 
-class NicCliPort(BaseModel):
+class NicCtlPort(BaseModel):
     """Outputs from 'nicctl show port *' commands."""
 
     port: Optional[Any] = Field(default=None, description="Parsed from nicctl show port --json.")
@@ -77,7 +77,7 @@ class NicCliPort(BaseModel):
     )
 
 
-class NicCliLif(BaseModel):
+class NicCtlLif(BaseModel):
     """Outputs from 'nicctl show lif *' commands."""
 
     lif: Optional[Any] = Field(default=None, description="Parsed from nicctl show lif --json.")
@@ -90,7 +90,7 @@ class NicCliLif(BaseModel):
     )
 
 
-class NicCliQos(BaseModel):
+class NicCtlQos(BaseModel):
     """Outputs from 'nicctl show qos *' commands."""
 
     qos: Optional[Any] = Field(default=None, description="Parsed from nicctl show qos --json.")
@@ -99,7 +99,7 @@ class NicCliQos(BaseModel):
     )
 
 
-class NicCliRdma(BaseModel):
+class NicCtlRdma(BaseModel):
     """Outputs from 'nicctl show rdma *' commands."""
 
     rdma_queue: Optional[Any] = Field(
@@ -114,21 +114,21 @@ class NicCliRdma(BaseModel):
     )
 
 
-class NicCliDcqcn(BaseModel):
-    """Global DCQCN output; per-card DCQCN is in NicCliCard.dcqcn."""
+class NicCtlDcqcn(BaseModel):
+    """Global DCQCN output; per-card DCQCN is in NicCtlCard.dcqcn."""
 
     dcqcn_global: Optional[Any] = Field(
         default=None, description="Parsed from nicctl show dcqcn --json."
     )
 
 
-class NicCliEnvironment(BaseModel):
-    """Output from 'nicctl show environment --json'."""
+class NicCtlEnvironment(BaseModel):
+    """Output from 'nicctl show environment'."""
 
     environment: Optional[Any] = None
 
 
-class NicCliVersion(BaseModel):
+class NicCtlVersion(BaseModel):
     """Version outputs from nicctl."""
 
     version: Optional[str] = Field(default=None, description="Raw stdout from nicctl --version.")
@@ -137,8 +137,8 @@ class NicCliVersion(BaseModel):
     )
 
 
-class BroadcomNicDevice(BaseModel):
-    """Broadcom NIC device from niccli --list_devices."""
+class NicCliDevice(BaseModel):
+    """NIC device from niccli --list_devices (Broadcom)."""
 
     device_num: int
     model: Optional[str] = None
@@ -148,8 +148,8 @@ class BroadcomNicDevice(BaseModel):
     pci_address: Optional[str] = None
 
 
-class BroadcomNicQosAppEntry(BaseModel):
-    """APP TLV entry in Broadcom NIC QoS."""
+class NicCliQosAppEntry(BaseModel):
+    """APP TLV entry in niccli QoS output (Broadcom)."""
 
     priority: Optional[int] = None
     sel: Optional[int] = None
@@ -158,8 +158,8 @@ class BroadcomNicQosAppEntry(BaseModel):
     port: Optional[int] = None
 
 
-class BroadcomNicQos(BaseModel):
-    """Broadcom NIC QoS from niccli -dev X qos --ets --show."""
+class NicCliQos(BaseModel):
+    """NIC QoS from niccli -dev X getqos / qos --ets --show (Broadcom)."""
 
     device_num: int
     raw_output: str
@@ -167,7 +167,7 @@ class BroadcomNicQos(BaseModel):
     tc_bandwidth: List[int] = Field(default_factory=list)
     tsa_map: Dict[int, str] = Field(default_factory=dict)
     pfc_enabled: Optional[int] = None
-    app_entries: List[BroadcomNicQosAppEntry] = Field(default_factory=list)
+    app_entries: List[NicCliQosAppEntry] = Field(default_factory=list)
     tc_rate_limit: List[int] = Field(default_factory=list)
 
 
@@ -333,7 +333,7 @@ def command_to_canonical_key(command: str) -> str:
     return s or "unknown"
 
 
-class NicCliCommandResult(BaseModel):
+class NicCommandResult(BaseModel):
     """Result of a single niccli/nicctl command run."""
 
     command: str
@@ -347,28 +347,28 @@ class NicCliCommandResult(BaseModel):
         return self.exit_code == 0
 
 
-class NicCliDataModel(DataModel):
+class NicDataModel(DataModel):
     """Collected output of niccli (Broadcom) and nicctl (Pensando) commands."""
 
-    results: Dict[str, NicCliCommandResult] = Field(default_factory=dict)
+    results: Dict[str, NicCommandResult] = Field(default_factory=dict)
 
     # Structured by domain (parsed from command output in collector)
-    card_show: Optional[CardShow] = Field(
+    card_show: Optional[NicCtlCardShow] = Field(
         default=None, description="Global nicctl show card * outputs."
     )
-    cards: List[NicCliCard] = Field(
+    cards: List[NicCtlCard] = Field(
         default_factory=list, description="Per-card data (card list + hardware-config, dcqcn)."
     )
-    port: Optional[NicCliPort] = None
-    lif: Optional[NicCliLif] = None
-    qos: Optional[NicCliQos] = None
-    rdma: Optional[NicCliRdma] = None
-    dcqcn: Optional[NicCliDcqcn] = None
-    environment: Optional[NicCliEnvironment] = None
-    version: Optional[NicCliVersion] = None
+    port: Optional[NicCtlPort] = None
+    lif: Optional[NicCtlLif] = None
+    qos: Optional[NicCtlQos] = None
+    rdma: Optional[NicCtlRdma] = None
+    dcqcn: Optional[NicCtlDcqcn] = None
+    environment: Optional[NicCtlEnvironment] = None
+    version: Optional[NicCtlVersion] = None
 
-    broadcom_nic_devices: List[BroadcomNicDevice] = Field(default_factory=list)
-    broadcom_nic_qos: Dict[int, BroadcomNicQos] = Field(default_factory=dict)
+    broadcom_nic_devices: List[NicCliDevice] = Field(default_factory=list)
+    broadcom_nic_qos: Dict[int, NicCliQos] = Field(default_factory=dict)
     pensando_nic_cards: List[PensandoNicCard] = Field(default_factory=list)
     pensando_nic_dcqcn: List[PensandoNicDcqcn] = Field(default_factory=list)
     pensando_nic_environment: List[PensandoNicEnvironment] = Field(default_factory=list)
@@ -385,7 +385,7 @@ class NicCliDataModel(DataModel):
         r = self.results.get(command)
         return r is not None and r.succeeded
 
-    def get_card(self, card_id: str) -> Optional[NicCliCard]:
+    def get_card(self, card_id: str) -> Optional[NicCtlCard]:
         """Return the per-card data for the given card id."""
         for c in self.cards:
             if c.card_id == card_id:

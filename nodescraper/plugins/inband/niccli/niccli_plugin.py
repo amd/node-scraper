@@ -7,20 +7,21 @@
 ###############################################################################
 from nodescraper.base import InBandDataPlugin
 
-from .analyzer_args import NicCliAnalyzerArgs
-from .collector_args import NicCliCollectorArgs
-from .niccli_collector import NicCliCollector
-from .niccli_data import NicCliDataModel
+from .analyzer_args import NicAnalyzerArgs
+from .collector_args import NicCollectorArgs
+from .niccli_collector import NicCollector
+from .niccli_data import NicDataModel
 
 
-class NicCliPlugin(InBandDataPlugin[NicCliDataModel, NicCliCollectorArgs, NicCliAnalyzerArgs]):
+class NicPlugin(InBandDataPlugin[NicDataModel, NicCollectorArgs, NicAnalyzerArgs]):
     """Plugin for collecting niccli (Broadcom) and nicctl (Pensando) command output.
 
-    Use analyzer_args.expected_values (keyed by canonical command key) to check
-    what niccli/nicctl commands return; add an analyzer to run those checks.
+    Data is parsed into structured fields (card_show, cards, port, lif, qos, etc.).
+    Use analyzer_args.expected_values (keyed by canonical command key) to define
+    checks; add an analyzer that uses the structured fields and results to run them.
     """
 
-    DATA_MODEL = NicCliDataModel
-    COLLECTOR = NicCliCollector
-    COLLECTOR_ARGS = NicCliCollectorArgs
-    ANALYZER_ARGS = NicCliAnalyzerArgs
+    DATA_MODEL = NicDataModel
+    COLLECTOR = NicCollector
+    COLLECTOR_ARGS = NicCollectorArgs
+    ANALYZER_ARGS = NicAnalyzerArgs

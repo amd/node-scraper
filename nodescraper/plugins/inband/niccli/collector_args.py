@@ -28,7 +28,7 @@ from typing import List, Optional
 from nodescraper.models import CollectorArgs
 
 
-class NicCliCollectorArgs(CollectorArgs):
+class NicCollectorArgs(CollectorArgs):
     """ """
 
     commands: Optional[List[str]] = None
