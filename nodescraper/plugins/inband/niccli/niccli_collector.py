@@ -113,6 +113,26 @@ NICCTL_PER_CARD_TEMPLATES = [
 ]
 
 
+# Commands whose output is very long; store only as file artifacts, not in data model.
+def _is_artifact_only_command(cmd: str) -> bool:
+    c = cmd.strip()
+    if c.startswith("nicctl show card logs "):
+        return True
+    if "nicctl show card hardware-config --card " in c:
+        return True
+    if c == "nicctl show port fsm":
+        return True
+    if c.startswith("nicctl show pipeline internal "):
+        return True
+    if c == "nicctl show rdma queue-pair --detail --json":
+        return True
+    if c == "nicctl show lif internal queue-to-ud-pinning":
+        return True
+    if c == "nicctl show port internal mac":
+        return True
+    return False
+
+
 def _merged_canonical_key(cmd: str) -> str:
     """Return a single canonical key for commands that collect the same data."""
     if cmd in NICCLI_DISCOVERY_CMDS:
@@ -423,9 +443,10 @@ class NicCliCollector(InBandDataCollector[NicCliDataModel, NicCliCollectorArgs])
             is_niccli = cmd.strip().startswith("niccli")
             sudo = use_sudo_niccli if is_niccli else use_sudo_nicctl
             res = self._run_sut_cmd(cmd, sudo=sudo)
+            artifact_only = _is_artifact_only_command(cmd)
             results[cmd] = NicCliCommandResult(
                 command=cmd,
-                stdout=res.stdout or "",
+                stdout="" if artifact_only else (res.stdout or ""),
                 stderr=res.stderr or "",
                 exit_code=res.exit_code,
             )
@@ -437,7 +458,7 @@ class NicCliCollector(InBandDataCollector[NicCliDataModel, NicCliCollectorArgs])
                     priority=EventPriority.WARNING,
                 )
 
-        # Parse JSON for building structured domain objects only (not stored on model)
+        # Parse JSON for building structured domain objects only
         parsed: Dict[str, Any] = {}
         for cmd, r in results.items():
             if r.exit_code != 0 or not (r.stdout or "").strip():
@@ -474,8 +495,6 @@ class NicCliCollector(InBandDataCollector[NicCliDataModel, NicCliCollectorArgs])
             environment=environment,
             version=version,
         )
-
-    # --- Legacy text parsers (human-readable niccli/nicctl output) ---
 
     def _parse_niccli_listdev(self, stdout: str) -> List[BroadcomNicDevice]:
         """Parse niccli --list_devices output into BroadcomNicDevice list."""
