@@ -17,7 +17,7 @@
 | KernelModulePlugin | cat /proc/modules<br>modinfo amdgpu<br>wmic os get Version /Value | **Analyzer Args:**<br>- `kernel_modules`: dict[str, dict]<br>- `regex_filter`: list[str] | [KernelModuleDataModel](#KernelModuleDataModel-Model) | [KernelModuleCollector](#Collector-Class-KernelModuleCollector) | [KernelModuleAnalyzer](#Data-Analyzer-Class-KernelModuleAnalyzer) |
 | MemoryPlugin | free -b<br>lsmem<br>numactl -H<br>wmic OS get FreePhysicalMemory /Value; wmic ComputerSystem get TotalPhysicalMemory /Value | **Analyzer Args:**<br>- `ratio`: float<br>- `memory_threshold`: str | [MemoryDataModel](#MemoryDataModel-Model) | [MemoryCollector](#Collector-Class-MemoryCollector) | [MemoryAnalyzer](#Data-Analyzer-Class-MemoryAnalyzer) |
 | NetworkPlugin | ip addr show<br>curl<br>ethtool {interface}<br>lldpcli show neighbor<br>lldpctl<br>ip neighbor show<br>niccli --dev {device_num} qos --ets --show<br>niccli --list_devices<br>nicctl show card<br>nicctl show dcqcn<br>nicctl show environment<br>nicctl show pcie ats<br>nicctl show port<br>nicctl show qos<br>nicctl show rdma statistics<br>nicctl show version firmware<br>nicctl show version host-software<br>ping<br>ip route show<br>ip rule show<br>wget | - | [NetworkDataModel](#NetworkDataModel-Model) | [NetworkCollector](#Collector-Class-NetworkCollector) | - |
-| NvmePlugin | nvme smart-log {dev}<br>nvme error-log {dev} --log-entries=256<br>nvme id-ctrl {dev}<br>nvme id-ns {dev}{ns}<br>nvme fw-log {dev}<br>nvme self-test-log {dev}<br>nvme get-log {dev} --log-id=6 --log-len=512<br>nvme telemetry-log {dev} --output-file={dev}_{f_name} | - | [NvmeDataModel](#NvmeDataModel-Model) | [NvmeCollector](#Collector-Class-NvmeCollector) | - |
+| NvmePlugin | nvme smart-log {dev}<br>nvme error-log {dev} --log-entries=256<br>nvme id-ctrl {dev}<br>nvme id-ns {dev}{ns}<br>nvme fw-log {dev}<br>nvme self-test-log {dev}<br>nvme get-log {dev} --log-id=6 --log-len=512<br>nvme telemetry-log {dev} --output-file={dev}_{f_name}<br>nvme list -o json | - | [NvmeDataModel](#NvmeDataModel-Model) | [NvmeCollector](#Collector-Class-NvmeCollector) | - |
 | OsPlugin | sh -c '( lsb_release -ds \|\| (cat /etc/*release \| grep PRETTY_NAME) \|\| uname -om ) 2>/dev/null \| head -n1'<br>cat /etc/*release \| grep VERSION_ID<br>wmic os get Version /value<br>wmic os get Caption /Value | **Analyzer Args:**<br>- `exp_os`: Union[str, list]<br>- `exact_match`: bool | [OsDataModel](#OsDataModel-Model) | [OsCollector](#Collector-Class-OsCollector) | [OsAnalyzer](#Data-Analyzer-Class-OsAnalyzer) |
 | PackagePlugin | dnf list --installed<br>dpkg-query -W<br>pacman -Q<br>cat /etc/*release<br>wmic product get name,version | **Analyzer Args:**<br>- `exp_package_ver`: Dict[str, Optional[str]]<br>- `regex_match`: bool<br>- `rocm_regex`: Optional[str]<br>- `enable_rocm_regex`: bool | [PackageDataModel](#PackageDataModel-Model) | [PackageCollector](#Collector-Class-PackageCollector) | [PackageAnalyzer](#Data-Analyzer-Class-PackageAnalyzer) |
 | PciePlugin | lspci -d {vendor_id}: -nn<br>lspci -x<br>lspci -xxxx<br>lspci -PP<br>lspci -PP -d {vendor_id}:{dev_id}<br>lspci -vvv<br>lspci -vvvt | **Analyzer Args:**<br>- `exp_speed`: int<br>- `exp_width`: int<br>- `exp_sriov_count`: int<br>- `exp_gpu_count_override`: Optional[int]<br>- `exp_max_payload_size`: Union[Dict[int, int], int, NoneType]<br>- `exp_max_rd_req_size`: Union[Dict[int, int], int, NoneType]<br>- `exp_ten_bit_tag_req_en`: Union[Dict[int, int], int, NoneType] | [PcieDataModel](#PcieDataModel-Model) | [PcieCollector](#Collector-Class-PcieCollector) | [PcieAnalyzer](#Data-Analyzer-Class-PcieAnalyzer) |
@@ -442,6 +442,7 @@ Collect NVMe details from the system.
 
 ### Class Variables
 
+- **CMD_LINUX_LIST_JSON**: `nvme list -o json`
 - **CMD_LINUX**: `{'smart_log': 'nvme smart-log {dev}', 'error_log': 'nvme error-log {dev} --log-entries=256', 'id_ctrl': 'nvme id-ctrl {dev}', 'id_ns': 'nvme id-ns {dev}{ns}', 'fw_log': 'nvme fw-log {dev}', 'self_test_log': 'nvme self-test-log {dev}', 'get_log': 'nvme get-log {dev} --log-id=6 --log-len=512', 'telemetry_log': 'nvme telemetry-log {dev} --output-file={dev}_{f_name}'}`
 - **CMD_TEMPLATES**: `[
   nvme smart-log {dev},
@@ -469,6 +470,7 @@ NvmeDataModel
 - nvme self-test-log {dev}
 - nvme get-log {dev} --log-id=6 --log-len=512
 - nvme telemetry-log {dev} --output-file={dev}_{f_name}
+- nvme list -o json
 
 ## Collector Class OsCollector
 
@@ -955,12 +957,17 @@ Complete network configuration data
 
 ## NvmeDataModel Model
 
+### Description
+
+NVMe collection output: parsed 'nvme list' entries and per-device command outputs.
+
 **Link to code**: [nvmedata.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/nvme/nvmedata.py)
 
 **Bases**: ['DataModel']
 
 ### Model annotations and fields
 
+- **nvme_list**: `Optional[list[nodescraper.plugins.inband.nvme.nvmedata.NvmeListEntry]]`
 - **devices**: `dict[str, nodescraper.plugins.inband.nvme.nvmedata.DeviceNvmeData]`
 
 ## OsDataModel Model
