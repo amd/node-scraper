@@ -436,17 +436,25 @@ class NicCliCollector(InBandDataCollector[NicCliDataModel, NicCliCollectorArgs])
                 for cid in card_ids:
                     commands_to_run.append(tpl.format(card_id=cid))
 
-        # Run each command and store
+        # Run each command and store (artifact-only commands are not added to results / data model).
         for cmd in commands_to_run:
             if cmd in results:
                 continue
             is_niccli = cmd.strip().startswith("niccli")
             sudo = use_sudo_niccli if is_niccli else use_sudo_nicctl
             res = self._run_sut_cmd(cmd, sudo=sudo)
-            artifact_only = _is_artifact_only_command(cmd)
+            if _is_artifact_only_command(cmd):
+                if res.exit_code != 0:
+                    self._log_event(
+                        category=EventCategory.NETWORK,
+                        description=f"niccli/nicctl command failed: {cmd}",
+                        data={"exit_code": res.exit_code, "stderr": (res.stderr or "")[:500]},
+                        priority=EventPriority.WARNING,
+                    )
+                continue
             results[cmd] = NicCliCommandResult(
                 command=cmd,
-                stdout="" if artifact_only else (res.stdout or ""),
+                stdout=res.stdout or "",
                 stderr=res.stderr or "",
                 exit_code=res.exit_code,
             )
