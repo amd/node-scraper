@@ -110,10 +110,20 @@ class TaskResult(BaseModel):
         """Task/source name (alias for task for error-scraper compatibility)."""
         return self.task or ""
 
+    @source.setter
+    def source(self, value: str) -> None:
+        """Set task so extended plugins can set result.source to their class name."""
+        self.task = value or None
+
     @property
     def source_type(self) -> str:
         """Task/source type (alias for parent for error-scraper compatibility)."""
         return self.parent or ""
+
+    @source_type.setter
+    def source_type(self, value: str) -> None:
+        """Set parent so extended plugins can set result.source_type if needed."""
+        self.parent = value or None
 
     @property
     def summary_dict(self) -> dict:
