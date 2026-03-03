@@ -13,17 +13,18 @@
 | DmesgPlugin | dmesg --time-format iso -x<br>ls -1 /var/log/dmesg* 2>/dev/null \| grep -E '^/var/log/dmesg(\.[0-9]+(\.gz)?)?$' \|\| true | **Built-in Regexes:**<br>- Out of memory error: `(?:oom_kill_process.*)\|(?:Out of memory.*)`<br>- I/O Page Fault: `IO_PAGE_FAULT`<br>- Kernel Panic: `\bkernel panic\b.*`<br>- SQ Interrupt: `sq_intr`<br>- SRAM ECC: `sram_ecc.*`<br>- Failed to load driver. IP hardware init error.: `\[amdgpu\]\] \*ERROR\* hw_init of IP block.*`<br>- Failed to load driver. IP software init error.: `\[amdgpu\]\] \*ERROR\* sw_init of IP block.*`<br>- Real Time throttling activated: `sched: RT throttling activated.*`<br>- RCU preempt detected stalls: `rcu_preempt detected stalls.*`<br>- RCU preempt self-detected stall: `rcu_preempt self-detected stall.*`<br>- QCM fence timeout: `qcm fence wait loop timeout.*`<br>- General protection fault: `(?:[\w-]+(?:\[[0-9.]+\])?\s+)?general protectio...`<br>- Segmentation fault: `(?:segfault.*in .*\[)\|(?:[Ss]egmentation [Ff]au...`<br>- Failed to disallow cf state: `amdgpu: Failed to disallow cf state.*`<br>- Failed to terminate tmr: `\*ERROR\* Failed to terminate tmr.*`<br>- Suspend of IP block failed: `\*ERROR\* suspend of IP block <\w+> failed.*`<br>- amdgpu Page Fault: `(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:\s+\[\S...`<br>- Page Fault: `page fault for address.*`<br>- Fatal error during GPU init: `(?:amdgpu)(.*Fatal error during GPU init)\|(Fata...`<br>- PCIe AER Error Status: `(pcieport [\w:.]+: AER: aer_status:[^\n]*(?:\n[...`<br>- PCIe AER Correctable Error Status: `(.*aer_cor_status: 0x[0-9a-fA-F]+, aer_cor_mask...`<br>- PCIe AER Uncorrectable Error Status: `(.*aer_uncor_status: 0x[0-9a-fA-F]+, aer_uncor_...`<br>- PCIe AER Uncorrectable Error Severity with TLP Header: `(.*aer_uncor_severity: 0x[0-9a-fA-F]+.*)(\n.*TL...`<br>- Failed to read journal file: `Failed to read journal file.*`<br>- Journal file corrupted or uncleanly shut down: `journal corrupted or uncleanly shut down.*`<br>- ACPI BIOS Error: `ACPI BIOS Error`<br>- ACPI Error: `ACPI Error`<br>- Filesystem corrupted!: `EXT4-fs error \(device .*\):`<br>- Error in buffered IO, check filesystem integrity: `(Buffer I\/O error on dev)(?:ice)? (\w+)`<br>- PCIe card no longer present: `pcieport (\w+:\w+:\w+\.\w+):\s+(\w+):\s+(Slot\(...`<br>- PCIe Link Down: `pcieport (\w+:\w+:\w+\.\w+):\s+(\w+):\s+(Slot\(...`<br>- Mismatched clock configuration between PCIe device and host: `pcieport (\w+:\w+:\w+\.\w+):\s+(\w+):\s+(curren...`<br>- RAS Correctable Error: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- RAS Uncorrectable Error: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- RAS Deferred Error: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- RAS Corrected PCIe Error: `((?:\[Hardware Error\]:\s+)?event severity: cor...`<br>- GPU Reset: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- GPU reset failed: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- ACA Error: `(Accelerator Check Architecture[^\n]*)(?:\n[^\n...`<br>- ACA Error: `(Accelerator Check Architecture[^\n]*)(?:\n[^\n...`<br>- MCE Error: `\[Hardware Error\]:.+MC\d+_STATUS.*(?:\n.*){0,5}`<br>- Mode 2 Reset Failed: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)? (...`<br>- RAS Corrected Error: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- SGX Error: `x86/cpu: SGX disabled by BIOS`<br>- MMP Error: `Failed to load MMP firmware qat_4xxx_mmp.bin`<br>- GPU Throttled: `amdgpu \w{4}:\w{2}:\w{2}.\w: amdgpu: WARN: GPU ...`<br>- RAS Poison Consumed: `amdgpu[ 0-9a-fA-F:.]+:(?:\s*amdgpu:)?\s+(?:{\d+...`<br>- RAS Poison created: `amdgpu[ 0-9a-fA-F:.]+:(?:\s*amdgpu:)?\s+(?:{\d+...`<br>- Bad page threshold exceeded: `(amdgpu: Saved bad pages (\d+) reaches threshol...`<br>- RAS Hardware Error: `Hardware error from APEI Generic Hardware Error...`<br>- Error Address: `Error Address.*(?:\s.*)`<br>- RAS EDR Event: `EDR: EDR event received`<br>- DPC Event: `DPC: .*`<br>- LNet: ko2iblnd has no matching interfaces: `(?:\[[^\]]+\]\s*)?LNetError:.*ko2iblnd:\s*No ma...`<br>- LNet: Error starting up LNI: `(?:\[[^\]]+\]\s*)?LNetError:\s*.*Error\s*-?\d+\...`<br>- Lustre: network initialisation failed: `LustreError:.*ptlrpc_init_portals\(\).*network ...` | [DmesgData](#DmesgData-Model) | [DmesgCollector](#Collector-Class-DmesgCollector) | [DmesgAnalyzer](#Data-Analyzer-Class-DmesgAnalyzer) |
 | FabricsPlugin | ibstat<br>ibv_devinfo<br>ls -l /sys/class/infiniband/*/device/net<br>mst start<br>mst status -v<br>ofed_info -s<br>rdma dev<br>rdma link | - | [FabricsDataModel](#FabricsDataModel-Model) | [FabricsCollector](#Collector-Class-FabricsCollector) | - |
 | JournalPlugin | journalctl --no-pager --system --output=short-iso<br>journalctl --no-pager --system --output=json | **Analyzer Args:**<br>- `check_priority`: Optional[int]<br>- `group`: bool | [JournalData](#JournalData-Model) | [JournalCollector](#Collector-Class-JournalCollector) | [JournalAnalyzer](#Data-Analyzer-Class-JournalAnalyzer) |
-| KernelPlugin | sh -c 'uname -a'<br>wmic os get Version /Value | **Analyzer Args:**<br>- `exp_kernel`: Union[str, list]<br>- `regex_match`: bool | [KernelDataModel](#KernelDataModel-Model) | [KernelCollector](#Collector-Class-KernelCollector) | [KernelAnalyzer](#Data-Analyzer-Class-KernelAnalyzer) |
+| KernelPlugin | sh -c 'uname -a'<br>sh -c 'cat /proc/sys/kernel/numa_balancing'<br>wmic os get Version /Value | **Analyzer Args:**<br>- `exp_kernel`: Union[str, list]<br>- `exp_numa`: Optional[int]<br>- `regex_match`: bool | [KernelDataModel](#KernelDataModel-Model) | [KernelCollector](#Collector-Class-KernelCollector) | [KernelAnalyzer](#Data-Analyzer-Class-KernelAnalyzer) |
 | KernelModulePlugin | cat /proc/modules<br>modinfo amdgpu<br>wmic os get Version /Value | **Analyzer Args:**<br>- `kernel_modules`: dict[str, dict]<br>- `regex_filter`: list[str] | [KernelModuleDataModel](#KernelModuleDataModel-Model) | [KernelModuleCollector](#Collector-Class-KernelModuleCollector) | [KernelModuleAnalyzer](#Data-Analyzer-Class-KernelModuleAnalyzer) |
 | MemoryPlugin | free -b<br>lsmem<br>numactl -H<br>wmic OS get FreePhysicalMemory /Value; wmic ComputerSystem get TotalPhysicalMemory /Value | **Analyzer Args:**<br>- `ratio`: float<br>- `memory_threshold`: str | [MemoryDataModel](#MemoryDataModel-Model) | [MemoryCollector](#Collector-Class-MemoryCollector) | [MemoryAnalyzer](#Data-Analyzer-Class-MemoryAnalyzer) |
 | NetworkPlugin | ip addr show<br>curl<br>ethtool {interface}<br>lldpcli show neighbor<br>lldpctl<br>ip neighbor show<br>niccli --dev {device_num} qos --ets --show<br>niccli --list_devices<br>nicctl show card<br>nicctl show dcqcn<br>nicctl show environment<br>nicctl show pcie ats<br>nicctl show port<br>nicctl show qos<br>nicctl show rdma statistics<br>nicctl show version firmware<br>nicctl show version host-software<br>ping<br>ip route show<br>ip rule show<br>wget | - | [NetworkDataModel](#NetworkDataModel-Model) | [NetworkCollector](#Collector-Class-NetworkCollector) | - |
-| NvmePlugin | nvme smart-log {dev}<br>nvme error-log {dev} --log-entries=256<br>nvme id-ctrl {dev}<br>nvme id-ns {dev}{ns}<br>nvme fw-log {dev}<br>nvme self-test-log {dev}<br>nvme get-log {dev} --log-id=6 --log-len=512<br>nvme telemetry-log {dev} --output-file={dev}_{f_name} | - | [NvmeDataModel](#NvmeDataModel-Model) | [NvmeCollector](#Collector-Class-NvmeCollector) | - |
+| NvmePlugin | nvme smart-log {dev}<br>nvme error-log {dev} --log-entries=256<br>nvme id-ctrl {dev}<br>nvme id-ns {dev}{ns}<br>nvme fw-log {dev}<br>nvme self-test-log {dev}<br>nvme get-log {dev} --log-id=6 --log-len=512<br>nvme telemetry-log {dev} --output-file={dev}_{f_name}<br>nvme list -o json | - | [NvmeDataModel](#NvmeDataModel-Model) | [NvmeCollector](#Collector-Class-NvmeCollector) | - |
 | OsPlugin | sh -c '( lsb_release -ds \|\| (cat /etc/*release \| grep PRETTY_NAME) \|\| uname -om ) 2>/dev/null \| head -n1'<br>cat /etc/*release \| grep VERSION_ID<br>wmic os get Version /value<br>wmic os get Caption /Value | **Analyzer Args:**<br>- `exp_os`: Union[str, list]<br>- `exact_match`: bool | [OsDataModel](#OsDataModel-Model) | [OsCollector](#Collector-Class-OsCollector) | [OsAnalyzer](#Data-Analyzer-Class-OsAnalyzer) |
 | PackagePlugin | dnf list --installed<br>dpkg-query -W<br>pacman -Q<br>cat /etc/*release<br>wmic product get name,version | **Analyzer Args:**<br>- `exp_package_ver`: Dict[str, Optional[str]]<br>- `regex_match`: bool<br>- `rocm_regex`: Optional[str]<br>- `enable_rocm_regex`: bool | [PackageDataModel](#PackageDataModel-Model) | [PackageCollector](#Collector-Class-PackageCollector) | [PackageAnalyzer](#Data-Analyzer-Class-PackageAnalyzer) |
 | PciePlugin | lspci -d {vendor_id}: -nn<br>lspci -x<br>lspci -xxxx<br>lspci -PP<br>lspci -PP -d {vendor_id}:{dev_id}<br>lspci -vvv<br>lspci -vvvt | **Analyzer Args:**<br>- `exp_speed`: int<br>- `exp_width`: int<br>- `exp_sriov_count`: int<br>- `exp_gpu_count_override`: Optional[int]<br>- `exp_max_payload_size`: Union[Dict[int, int], int, NoneType]<br>- `exp_max_rd_req_size`: Union[Dict[int, int], int, NoneType]<br>- `exp_ten_bit_tag_req_en`: Union[Dict[int, int], int, NoneType] | [PcieDataModel](#PcieDataModel-Model) | [PcieCollector](#Collector-Class-PcieCollector) | [PcieAnalyzer](#Data-Analyzer-Class-PcieAnalyzer) |
 | ProcessPlugin | top -b -n 1<br>rocm-smi --showpids<br>top -b -n 1 -o %CPU  | **Analyzer Args:**<br>- `max_kfd_processes`: int<br>- `max_cpu_usage`: float | [ProcessDataModel](#ProcessDataModel-Model) | [ProcessCollector](#Collector-Class-ProcessCollector) | [ProcessAnalyzer](#Data-Analyzer-Class-ProcessAnalyzer) |
 | RocmPlugin | {rocm_path}/opencl/bin/*/clinfo<br>env \| grep -Ei 'rocm\|hsa\|hip\|mpi\|openmp\|ucx\|miopen'<br>ls /sys/class/kfd/kfd/proc/<br>grep -i -E 'rocm' /etc/ld.so.conf.d/*<br>{rocm_path}/bin/rocminfo<br>ls -v -d /opt/rocm*<br>ls -v -d /opt/rocm-[3-7]* \| tail -1<br>ldconfig -p \| grep -i -E 'rocm'<br>grep . -r /opt/rocm/.info/*<br>/opt/rocm/.info/version-rocm<br>/opt/rocm/.info/version | **Analyzer Args:**<br>- `exp_rocm`: Union[str, list]<br>- `exp_rocm_latest`: str<br>- `exp_rocm_sub_versions`: dict[str, Union[str, list]] | [RocmDataModel](#RocmDataModel-Model) | [RocmCollector](#Collector-Class-RocmCollector) | [RocmAnalyzer](#Data-Analyzer-Class-RocmAnalyzer) |
 | StoragePlugin | sh -c 'df -lH -B1 \| grep -v 'boot''<br>wmic LogicalDisk Where DriveType="3" Get DeviceId,Size,FreeSpace | - | [StorageDataModel](#StorageDataModel-Model) | [StorageCollector](#Collector-Class-StorageCollector) | [StorageAnalyzer](#Data-Analyzer-Class-StorageAnalyzer) |
+| SysSettingsPlugin | cat /sys/{}<br>ls -1 /sys/{} | **Analyzer Args:**<br>- `checks`: Optional[list[nodescraper.plugins.inband.sys_settings.analyzer_args.SysfsCheck]] | [SysSettingsDataModel](#SysSettingsDataModel-Model) | [SysSettingsCollector](#Collector-Class-SysSettingsCollector) | [SysSettingsAnalyzer](#Data-Analyzer-Class-SysSettingsAnalyzer) |
 | SysctlPlugin | sysctl -n | **Analyzer Args:**<br>- `exp_vm_swappiness`: Optional[int]<br>- `exp_vm_numa_balancing`: Optional[int]<br>- `exp_vm_oom_kill_allocating_task`: Optional[int]<br>- `exp_vm_compaction_proactiveness`: Optional[int]<br>- `exp_vm_compact_unevictable_allowed`: Optional[int]<br>- `exp_vm_extfrag_threshold`: Optional[int]<br>- `exp_vm_zone_reclaim_mode`: Optional[int]<br>- `exp_vm_dirty_background_ratio`: Optional[int]<br>- `exp_vm_dirty_ratio`: Optional[int]<br>- `exp_vm_dirty_writeback_centisecs`: Optional[int]<br>- `exp_kernel_numa_balancing`: Optional[int] | [SysctlDataModel](#SysctlDataModel-Model) | [SysctlCollector](#Collector-Class-SysctlCollector) | [SysctlAnalyzer](#Data-Analyzer-Class-SysctlAnalyzer) |
 | SyslogPlugin | ls -1 /var/log/syslog* 2>/dev/null \| grep -E '^/var/log/syslog(\.[0-9]+(\.gz)?)?$' \|\| true | - | [SyslogData](#SyslogData-Model) | [SyslogCollector](#Collector-Class-SyslogCollector) | - |
 | UptimePlugin | uptime | - | [UptimeDataModel](#UptimeDataModel-Model) | [UptimeCollector](#Collector-Class-UptimeCollector) | - |
@@ -302,6 +303,7 @@ Read kernel version
 
 - **CMD_WINDOWS**: `wmic os get Version /Value`
 - **CMD**: `sh -c 'uname -a'`
+- **CMD_NUMA_BALANCING**: `sh -c 'cat /proc/sys/kernel/numa_balancing'`
 
 ### Provides Data
 
@@ -310,6 +312,7 @@ KernelDataModel
 ### Commands
 
 - sh -c 'uname -a'
+- sh -c 'cat /proc/sys/kernel/numa_balancing'
 - wmic os get Version /Value
 
 ## Collector Class KernelModuleCollector
@@ -440,6 +443,7 @@ Collect NVMe details from the system.
 
 ### Class Variables
 
+- **CMD_LINUX_LIST_JSON**: `nvme list -o json`
 - **CMD_LINUX**: `{'smart_log': 'nvme smart-log {dev}', 'error_log': 'nvme error-log {dev} --log-entries=256', 'id_ctrl': 'nvme id-ctrl {dev}', 'id_ns': 'nvme id-ns {dev}{ns}', 'fw_log': 'nvme fw-log {dev}', 'self_test_log': 'nvme self-test-log {dev}', 'get_log': 'nvme get-log {dev} --log-id=6 --log-len=512', 'telemetry_log': 'nvme telemetry-log {dev} --output-file={dev}_{f_name}'}`
 - **CMD_TEMPLATES**: `[
   nvme smart-log {dev},
@@ -467,6 +471,7 @@ NvmeDataModel
 - nvme self-test-log {dev}
 - nvme get-log {dev} --log-id=6 --log-len=512
 - nvme telemetry-log {dev} --output-file={dev}_{f_name}
+- nvme list -o json
 
 ## Collector Class OsCollector
 
@@ -673,6 +678,31 @@ StorageDataModel
 
 - sh -c 'df -lH -B1 | grep -v 'boot''
 - wmic LogicalDisk Where DriveType="3" Get DeviceId,Size,FreeSpace
+
+## Collector Class SysSettingsCollector
+
+### Description
+
+Collect sysfs settings from user-specified paths.
+
+**Bases**: ['InBandDataCollector']
+
+**Link to code**: [sys_settings_collector.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/sys_settings/sys_settings_collector.py)
+
+### Class Variables
+
+- **SUPPORTED_OS_FAMILY**: `{<OSFamily.LINUX: 3>}`
+- **CMD**: `cat /sys/{}`
+- **CMD_LS**: `ls -1 /sys/{}`
+
+### Provides Data
+
+SysSettingsDataModel
+
+### Commands
+
+- cat /sys/{}
+- ls -1 /sys/{}
 
 ## Collector Class SysctlCollector
 
@@ -891,6 +921,7 @@ Data model for journal logs
 
 - **kernel_info**: `str`
 - **kernel_version**: `str`
+- **numa_balancing**: `Optional[int]`
 
 ## KernelModuleDataModel Model
 
@@ -952,12 +983,17 @@ Complete network configuration data
 
 ## NvmeDataModel Model
 
+### Description
+
+NVMe collection output: parsed 'nvme list' entries and per-device command outputs.
+
 **Link to code**: [nvmedata.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/nvme/nvmedata.py)
 
 **Bases**: ['DataModel']
 
 ### Model annotations and fields
 
+- **nvme_list**: `Optional[list[nodescraper.plugins.inband.nvme.nvmedata.NvmeListEntry]]`
 - **devices**: `dict[str, nodescraper.plugins.inband.nvme.nvmedata.DeviceNvmeData]`
 
 ## OsDataModel Model
@@ -1054,6 +1090,23 @@ class for collection of PCIe data.
 ### Model annotations and fields
 
 - **storage_data**: `dict[str, nodescraper.plugins.inband.storage.storagedata.DeviceStorageData]`
+
+## SysSettingsDataModel Model
+
+### Description
+
+Data model for sysfs settings: path -> parsed value.
+
+    Values are parsed from user-specified sysfs paths (bracketed value extracted
+    when present, e.g. '[always] madvise never' -> 'always').
+
+**Link to code**: [sys_settings_data.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/sys_settings/sys_settings_data.py)
+
+**Bases**: ['DataModel']
+
+### Model annotations and fields
+
+- **readings**: `dict[str, str]`
 
 ## SysctlDataModel Model
 
@@ -1408,6 +1461,16 @@ Check storage usage
 
 **Link to code**: [storage_analyzer.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/storage/storage_analyzer.py)
 
+## Data Analyzer Class SysSettingsAnalyzer
+
+### Description
+
+Check sysfs settings against expected values from the checks list.
+
+**Bases**: ['DataAnalyzer']
+
+**Link to code**: [sys_settings_analyzer.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/sys_settings/sys_settings_analyzer.py)
+
 ## Data Analyzer Class SysctlAnalyzer
 
 ### Description
@@ -1518,6 +1581,7 @@ Arguments for journal analyzer
 ### Annotations / fields
 
 - **exp_kernel**: `Union[str, list]`
+- **exp_numa**: `Optional[int]`
 - **regex_match**: `bool`
 
 ## Analyzer Args Class KernelModuleAnalyzerArgs
@@ -1608,6 +1672,23 @@ Arguments for PCIe analyzer
 - **exp_rocm**: `Union[str, list]`
 - **exp_rocm_latest**: `str`
 - **exp_rocm_sub_versions**: `dict[str, Union[str, list]]`
+
+## Analyzer Args Class SysSettingsAnalyzerArgs
+
+### Description
+
+Sysfs settings for analysis via a list of checks (path, expected values, name).
+
+    The path in each check is the sysfs path to read; the collector uses these paths
+    when collection_args is derived from analysis_args (e.g. by the plugin).
+
+**Bases**: ['AnalyzerArgs']
+
+**Link to code**: [analyzer_args.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/sys_settings/analyzer_args.py)
+
+### Annotations / fields
+
+- **checks**: `Optional[list[nodescraper.plugins.inband.sys_settings.analyzer_args.SysfsCheck]]`
 
 ## Analyzer Args Class SysctlAnalyzerArgs
 

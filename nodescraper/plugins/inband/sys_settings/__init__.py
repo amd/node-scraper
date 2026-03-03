@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# Copyright (c) 2025 Advanced Micro Devices, Inc.
+# Copyright (c) 2026 Advanced Micro Devices, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,18 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
-from .dmesg_plugin import DmesgPlugin
-from .run_compare import (
-    compare_dmesg_runs,
-    compute_extracted_errors,
-    find_dmesg_datamodel_path,
-    load_dmesg_data,
-)
+from .analyzer_args import SysfsCheck, SysSettingsAnalyzerArgs
+from .sys_settings_plugin import SysSettingsPlugin
 
-__all__ = [
-    "DmesgPlugin",
-    "compare_dmesg_runs",
-    "compute_extracted_errors",
-    "find_dmesg_datamodel_path",
-    "load_dmesg_data",
-]
+__all__ = ["SysSettingsPlugin", "SysSettingsAnalyzerArgs", "SysfsCheck"]

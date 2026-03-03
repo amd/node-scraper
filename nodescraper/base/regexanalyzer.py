@@ -55,8 +55,29 @@ class RegexEvent(Event):
 class RegexAnalyzer(DataAnalyzer[TDataModel, TAnalyzeArg]):
     """Parent class for all regex based data analyzers."""
 
-    # Class variable for timestamp pattern - can be overridden in subclasses
     TIMESTAMP_PATTERN: re.Pattern = re.compile(r"(\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)")
+    ERROR_REGEX: list[ErrorRegex] = []
+
+    @classmethod
+    def get_error_matches(cls, content: str) -> set[str]:
+        """Extract all error match strings from content using the analyzer's ERROR_REGEX.
+        Args:
+            content: Raw log text.
+        Returns:
+            Set of normalized error match strings.
+        """
+        matches: set[str] = set()
+        for error_regex_obj in getattr(cls, "ERROR_REGEX", []):
+            for match in error_regex_obj.regex.findall(content):
+                if isinstance(match, str) and "\n" in match:
+                    normalized = match.strip()
+                elif isinstance(match, (tuple, list)):
+                    normalized = "\n".join(m for m in match if m)
+                else:
+                    normalized = str(match).strip() if match else ""
+                if normalized:
+                    matches.add(normalized)
+        return matches
 
     def _extract_timestamp_from_match_position(
         self, content: str, match_start: int

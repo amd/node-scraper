@@ -25,9 +25,26 @@
 ###############################################################################
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from nodescraper.models import DataModel
+
+
+class NvmeListEntry(BaseModel):
+    """One row from 'nvme list': a single NVMe device/namespace line."""
+
+    node: Optional[str] = Field(default=None, description="Device node path (e.g. /dev/nvme0n1).")
+    generic: Optional[str] = Field(
+        default=None, description="Generic device node (e.g. /dev/ng0n1)."
+    )
+    serial_number: Optional[str] = Field(default=None, description="Serial number (SN).")
+    model: Optional[str] = Field(default=None, description="Model name.")
+    namespace_id: Optional[str] = Field(default=None, description="Namespace ID.")
+    usage: Optional[str] = Field(default=None, description="Usage (e.g. capacity).")
+    format_lba: Optional[str] = Field(
+        default=None, description="LBA format (sector size + metadata)."
+    )
+    fw_rev: Optional[str] = Field(default=None, description="Firmware revision.")
 
 
 class DeviceNvmeData(BaseModel):
@@ -42,4 +59,10 @@ class DeviceNvmeData(BaseModel):
 
 
 class NvmeDataModel(DataModel):
-    devices: dict[str, DeviceNvmeData]
+    """NVMe collection output: parsed 'nvme list' entries and per-device command outputs."""
+
+    nvme_list: Optional[list[NvmeListEntry]] = Field(
+        default=None,
+        description="Parsed list of NVMe devices from 'nvme list'.",
+    )
+    devices: dict[str, DeviceNvmeData] = Field(default_factory=dict)
