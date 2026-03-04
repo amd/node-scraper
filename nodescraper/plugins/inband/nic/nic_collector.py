@@ -578,10 +578,20 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
         else:
             self.result.status = ExecutionStatus.OK
             self.result.message = f"Collected {len(results)} niccli/nicctl command results"
+
+        nicctl_card_logs = None
+        if card_show is not None:
+            nicctl_card_logs = {
+                "boot_fault": (card_show.logs_boot_fault or ""),
+                "persistent": (card_show.logs_persistent or ""),
+                "non_persistent": (card_show.logs_non_persistent or ""),
+            }
+
         return self.result, NicDataModel(
             results=results_for_model,
             card_show=None,
             cards=[],
+            nicctl_card_logs=nicctl_card_logs,
             port=port,
             lif=lif,
             qos=qos,

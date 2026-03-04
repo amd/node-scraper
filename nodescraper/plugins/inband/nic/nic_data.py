@@ -392,6 +392,12 @@ class NicDataModel(DataModel):
     pensando_nic_version_host_software: Optional[PensandoNicVersionHostSoftware] = None
     pensando_nic_version_firmware: List[PensandoNicVersionFirmware] = Field(default_factory=list)
 
+    # Raw nicctl card log output for regex-based error detection
+    nicctl_card_logs: Optional[Dict[str, str]] = Field(
+        default=None,
+        description="Log text from 'nicctl show card logs --boot-fault', --persistent, --non-persistent (keys: boot_fault, persistent, non_persistent).",
+    )
+
     def command_succeeded(self, command: str) -> bool:
         """Return True if the command ran and exited with code 0."""
         r = self.results.get(command)

@@ -49,6 +49,7 @@ class NicAnalyzerArgs(AnalyzerArgs):
         default="enabled",
         description="Expected Broadcom pcie_relaxed_ordering value (e.g. 'Relaxed ordering = enabled'); checked case-insensitively. Default enabled.",
     )
+    # Expected QoS from niccli getqos (priorities, PFC, ETS) — applied across all adapters when set.
     expected_qos_prio_map: Optional[Dict[Any, Any]] = Field(
         default=None,
         description="Expected priority-to-TC map (e.g. {0: 0, 1: 1}; keys may be int or str in config). Checked per device when set.",
@@ -68,4 +69,7 @@ class NicAnalyzerArgs(AnalyzerArgs):
     require_qos_consistent_across_adapters: bool = Field(
         default=True,
         description="When True and no expected_qos_* are set, require all adapters to have the same prio_map, pfc_enabled, and tsa_map.",
+    )
+    nicctl_log_error_regex: Optional[List[Dict[str, Any]]] = Field(
+        default=None, description="Optional list of error patterns for nicctl show card logs."
     )

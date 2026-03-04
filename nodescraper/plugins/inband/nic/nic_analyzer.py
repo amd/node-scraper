@@ -4,17 +4,89 @@
 #
 # Copyright (c) 2026 Advanced Micro Devices, Inc.
 #
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+#
 ###############################################################################
-"""Analyzer for NicPlugin: checks Broadcom support_rdma, performance_profile, pcie_relaxed_ordering, getqos (QoS across adapters), and other expected values."""
 
-from typing import Any, Dict, Optional
+import re
+from typing import Any, Dict, List, Optional
 
+from nodescraper.base.regexanalyzer import ErrorRegex
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
 from nodescraper.interfaces import DataAnalyzer
 from nodescraper.models import TaskResult
 
 from .analyzer_args import NicAnalyzerArgs
 from .nic_data import NicDataModel
+
+# Default regexes for nicctl show card logs (boot-fault, persistent, non-persistent)
+DEFAULT_NICCTL_LOG_ERROR_REGEX: List[ErrorRegex] = [
+    ErrorRegex(
+        regex=re.compile(r"\berror\b", re.IGNORECASE),
+        message="nicctl card log: error",
+        event_category=EventCategory.NETWORK,
+        event_priority=EventPriority.WARNING,
+    ),
+    ErrorRegex(
+        regex=re.compile(r"\bfail(?:ed|ure)?\b", re.IGNORECASE),
+        message="nicctl card log: fail/failed/failure",
+        event_category=EventCategory.NETWORK,
+        event_priority=EventPriority.WARNING,
+    ),
+    ErrorRegex(
+        regex=re.compile(r"\bfault\b", re.IGNORECASE),
+        message="nicctl card log: fault",
+        event_category=EventCategory.NETWORK,
+        event_priority=EventPriority.WARNING,
+    ),
+    ErrorRegex(
+        regex=re.compile(r"\bcritical\b", re.IGNORECASE),
+        message="nicctl card log: critical",
+        event_category=EventCategory.NETWORK,
+        event_priority=EventPriority.WARNING,
+    ),
+]
+
+
+def _nicctl_log_error_regex_list(
+    args: NicAnalyzerArgs,
+) -> List[ErrorRegex]:
+    """Return list of ErrorRegex for nicctl card logs (from args or default)."""
+    if not args.nicctl_log_error_regex:
+        return list(DEFAULT_NICCTL_LOG_ERROR_REGEX)
+    out: List[ErrorRegex] = []
+    for item in args.nicctl_log_error_regex:
+        if isinstance(item, ErrorRegex):
+            out.append(item)
+        elif isinstance(item, dict):
+            d = dict(item)
+            d["regex"] = re.compile(d["regex"]) if isinstance(d.get("regex"), str) else d["regex"]
+            if "event_category" in d and isinstance(d["event_category"], str):
+                d["event_category"] = EventCategory(d["event_category"])
+            if "event_priority" in d:
+                p = d["event_priority"]
+                if isinstance(p, str):
+                    d["event_priority"] = getattr(EventPriority, p.upper(), EventPriority.WARNING)
+                elif isinstance(p, int):
+                    d["event_priority"] = EventPriority(p)
+            out.append(ErrorRegex(**d))
+    return out
 
 
 def _normalize_prio_map(d: Optional[Dict[Any, Any]]) -> Optional[Dict[int, int]]:
@@ -42,8 +114,13 @@ class NicAnalyzer(DataAnalyzer[NicDataModel, NicAnalyzerArgs]):
         """Run checks on the collected data (Broadcom support_rdma, performance_profile, pcie_relaxed_ordering, getqos per device)."""
         if args is None:
             args = NicAnalyzerArgs()
-        if not data.broadcom_nic_support_rdma:
-            self.result.message = "No Broadcom support_rdma data to check"
+
+        has_broadcom = bool(data.broadcom_nic_support_rdma)
+        has_nicctl_logs = bool(
+            data.nicctl_card_logs and any((c or "").strip() for c in data.nicctl_card_logs.values())
+        )
+        if not has_broadcom and not has_nicctl_logs:
+            self.result.message = "No Broadcom support_rdma or nicctl card log data to check"
             self.result.status = ExecutionStatus.OK
             return self.result
 
@@ -194,7 +271,38 @@ class NicAnalyzer(DataAnalyzer[NicDataModel, NicAnalyzerArgs]):
                         priority=EventPriority.INFO,
                     )
 
-        if any_disabled or any_non_roce or any_relaxed_ordering_bad or any_qos_mismatch:
+        # nicctl card logs (boot-fault, persistent, non-persistent): run error regexes and log matches to user.
+        any_nicctl_log_errors = False
+        if data.nicctl_card_logs:
+            regex_list = _nicctl_log_error_regex_list(args)
+            for log_type, content in data.nicctl_card_logs.items():
+                if not (content or "").strip():
+                    continue
+                for err_regex in regex_list:
+                    for match in err_regex.regex.finditer(content):
+                        matched_text = match.group(0).strip() or match.group(0)
+                        if len(matched_text) > 500:
+                            matched_text = matched_text[:497] + "..."
+                        any_nicctl_log_errors = True
+                        self._log_event(
+                            category=err_regex.event_category,
+                            description=f"nicctl card log ({log_type}): {err_regex.message} — {matched_text!r}",
+                            data={
+                                "log_type": log_type,
+                                "message": err_regex.message,
+                                "match_content": matched_text,
+                            },
+                            priority=err_regex.event_priority,
+                            console_log=True,
+                        )
+
+        if (
+            any_disabled
+            or any_non_roce
+            or any_relaxed_ordering_bad
+            or any_qos_mismatch
+            or any_nicctl_log_errors
+        ):
             self.result.status = ExecutionStatus.WARNING
             parts = []
             if any_disabled:
@@ -205,8 +313,10 @@ class NicAnalyzer(DataAnalyzer[NicDataModel, NicAnalyzerArgs]):
                 parts.append("pcie_relaxed_ordering")
             if any_qos_mismatch:
                 parts.append("getqos")
-            self.result.message = f"Broadcom check(s) failed: {' and/or '.join(parts)}"
+            if any_nicctl_log_errors:
+                parts.append("nicctl_card_logs")
+            self.result.message = f"Broadcom/nic check(s) failed: {' and/or '.join(parts)}"
         else:
             self.result.status = ExecutionStatus.OK
-            self.result.message = "Broadcom support_rdma, performance_profile, pcie_relaxed_ordering, and getqos checks OK"
+            self.result.message = "Broadcom support_rdma, performance_profile, pcie_relaxed_ordering, getqos, and nicctl card logs checks OK"
         return self.result
