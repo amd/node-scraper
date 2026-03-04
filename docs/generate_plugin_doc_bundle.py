@@ -549,8 +549,8 @@ def main():
     headers = [
         "Plugin",
         "Collection",
-        "Analysis",
-        "Collection",
+        "Analyzer Args",
+        "Collection Args",
         "DataModel",
         "Collector",
         "Analyzer",
