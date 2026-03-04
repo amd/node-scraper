@@ -275,6 +275,33 @@ def extract_regexes_and_args_from_analyzer(
     return output
 
 
+def extract_collection_args_from_collector_args(args_cls: Optional[type]) -> List[str]:
+    """Extract collector/collection args from collector args class for the plugin table."""
+    if not inspect.isclass(args_cls):
+        return []
+    output: List[str] = []
+    # Prefer model_fields for Pydantic models (includes inherited); fallback to __annotations__
+    fields = get_attr(args_cls, "model_fields", None)
+    if fields and isinstance(fields, dict):
+        # Pydantic v2: model_fields is a dict of field names -> FieldInfo
+        for key in fields:
+            try:
+                finfo = fields[key]
+                ann = getattr(finfo, "annotation", None)
+                type_str = format_type_annotation(ann) if ann is not None else "Any"
+                output.append(f"- `{key}`: {type_str}")
+            except Exception:
+                pass
+    if not output:
+        anns = get_attr(args_cls, "__annotations__", {}) or {}
+        for key, value in anns.items():
+            type_str = format_type_annotation(value)
+            output.append(f"- `{key}`: {type_str}")
+    if output:
+        output.insert(0, "**Collection Args:**")
+    return output
+
+
 def md_header(text: str, level: int = 2) -> str:
     return f"{'#' * level} {text}\n\n"
 
@@ -346,6 +373,7 @@ def generate_plugin_table_rows(plugins: List[type]) -> List[List[str]]:
         col = get_attr(p, "COLLECTOR", None)
         an = get_attr(p, "ANALYZER", None)
         args = get_attr(p, "ANALYZER_ARGS", None)
+        collector_args_cls = get_attr(p, "COLLECTOR_ARGS", None)
         cmds = []
         if inspect.isclass(col):
             cmds += extract_cmds_from_classvars(col)
@@ -363,11 +391,19 @@ def generate_plugin_table_rows(plugins: List[type]) -> List[List[str]]:
         if inspect.isclass(an):
             regex_and_args = extract_regexes_and_args_from_analyzer(an, args)
 
+        # Extract collection args from collector args class
+        collection_args_lines = extract_collection_args_from_collector_args(collector_args_cls)
+
         rows.append(
             [
                 p.__name__,
                 "<br>".join(cmds).replace("|", "\\|") if cmds else "-",
                 "<br>".join(regex_and_args).replace("|", "\\|") if regex_and_args else "-",
+                (
+                    "<br>".join(collection_args_lines).replace("|", "\\|")
+                    if collection_args_lines
+                    else "-"
+                ),
                 link_anchor(dm, "model") if inspect.isclass(dm) else "-",
                 link_anchor(col, "collector") if inspect.isclass(col) else "-",
                 link_anchor(an, "analyzer") if inspect.isclass(an) else "-",
@@ -513,7 +549,8 @@ def main():
     headers = [
         "Plugin",
         "Collection",
-        "Analysis",
+        "Analyzer Args",
+        "Collection Args",
         "DataModel",
         "Collector",
         "Analyzer",
