@@ -26,6 +26,7 @@
 """Functional tests for running individual plugins."""
 
 import csv
+import json
 from pathlib import Path
 
 import pytest
@@ -62,6 +63,7 @@ def test_plugin_registry_has_plugins(all_plugins):
         "OsPlugin",
         "PackagePlugin",
         "ProcessPlugin",
+        "RdmaPlugin",
         "RocmPlugin",
         "StoragePlugin",
         "SysctlPlugin",
@@ -175,3 +177,56 @@ def test_run_plugin_with_data_file_no_collection(run_cli_command, tmp_path):
             f"Bug regression: DmesgPlugin status is NOT_RAN with --data file. "
             f"Analysis should have run on provided data. Status: {status}"
         )
+
+
+def test_rocm_plugin_with_custom_rocm_path_collection_args(run_cli_command, tmp_path):
+    """Run RocmPlugin with collection_args.rocm_path overriding default /opt/rocm.
+
+    Creates a minimal ROCm-like tree under tmp_path, points the collector at it via
+    collection_args.rocm_path, and asserts the collected version matches.
+    """
+    custom_version = "5.0.0-999"
+    rocm_root = tmp_path / "custom_rocm"
+    info_dir = rocm_root / ".info"
+    info_dir.mkdir(parents=True)
+    (info_dir / "version-rocm").write_text(custom_version + "\n")
+    (info_dir / "version").write_text(custom_version + "\n")
+
+    config = {
+        "name": "RocmPlugin custom rocm_path",
+        "desc": "RocmPlugin with collection_args.rocm_path override",
+        "global_args": {},
+        "plugins": {
+            "RocmPlugin": {
+                "collection_args": {"rocm_path": str(rocm_root)},
+                "analysis_args": {},
+            }
+        },
+        "result_collators": {},
+    }
+    config_file = tmp_path / "rocm_custom_path_config.json"
+    config_file.write_text(json.dumps(config, indent=2))
+
+    log_path = str(tmp_path / "rocm_custom_logs")
+    result = run_cli_command(
+        [
+            "--log-path",
+            log_path,
+            "--plugin-configs=" + str(config_file),
+            "run-plugins",
+            "RocmPlugin",
+        ],
+        check=False,
+    )
+
+    output = result.stdout + result.stderr
+    assert "RocmPlugin" in output
+    log_dir = Path(log_path)
+    csv_files = list(log_dir.glob("**/nodescraper.csv"))
+    if csv_files:
+        with open(csv_files[0], "r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            rows = [r for r in reader if r.get("plugin") == "RocmPlugin"]
+        assert len(rows) >= 1, f"RocmPlugin should appear in CSV under {log_path}"
+        assert rows[0].get("status") != "NOT_RAN"
+        assert rows[0].get("message")

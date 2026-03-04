@@ -11,18 +11,19 @@
 | DimmPlugin | sh -c 'dmidecode -t 17 \| tr -s " " \| grep -v "Volatile\\|None\\|Module" \| grep Size' 2>/dev/null<br>dmidecode<br>wmic memorychip get Capacity | - | **Collection Args:**<br>- `skip_sudo`: bool | [DimmDataModel](#DimmDataModel-Model) | [DimmCollector](#Collector-Class-DimmCollector) | - |
 | DkmsPlugin | dkms status<br>dkms --version | **Analyzer Args:**<br>- `dkms_status`: Union[str, list]<br>- `dkms_version`: Union[str, list]<br>- `regex_match`: bool | - | [DkmsDataModel](#DkmsDataModel-Model) | [DkmsCollector](#Collector-Class-DkmsCollector) | [DkmsAnalyzer](#Data-Analyzer-Class-DkmsAnalyzer) |
 | DmesgPlugin | dmesg --time-format iso -x<br>ls -1 /var/log/dmesg* 2>/dev/null \| grep -E '^/var/log/dmesg(\.[0-9]+(\.gz)?)?$' \|\| true | **Built-in Regexes:**<br>- Out of memory error: `(?:oom_kill_process.*)\|(?:Out of memory.*)`<br>- I/O Page Fault: `IO_PAGE_FAULT`<br>- Kernel Panic: `\bkernel panic\b.*`<br>- SQ Interrupt: `sq_intr`<br>- SRAM ECC: `sram_ecc.*`<br>- Failed to load driver. IP hardware init error.: `\[amdgpu\]\] \*ERROR\* hw_init of IP block.*`<br>- Failed to load driver. IP software init error.: `\[amdgpu\]\] \*ERROR\* sw_init of IP block.*`<br>- Real Time throttling activated: `sched: RT throttling activated.*`<br>- RCU preempt detected stalls: `rcu_preempt detected stalls.*`<br>- RCU preempt self-detected stall: `rcu_preempt self-detected stall.*`<br>- QCM fence timeout: `qcm fence wait loop timeout.*`<br>- General protection fault: `(?:[\w-]+(?:\[[0-9.]+\])?\s+)?general protectio...`<br>- Segmentation fault: `(?:segfault.*in .*\[)\|(?:[Ss]egmentation [Ff]au...`<br>- Failed to disallow cf state: `amdgpu: Failed to disallow cf state.*`<br>- Failed to terminate tmr: `\*ERROR\* Failed to terminate tmr.*`<br>- Suspend of IP block failed: `\*ERROR\* suspend of IP block <\w+> failed.*`<br>- amdgpu Page Fault: `(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:\s+\[\S...`<br>- Page Fault: `page fault for address.*`<br>- Fatal error during GPU init: `(?:amdgpu)(.*Fatal error during GPU init)\|(Fata...`<br>- PCIe AER Error Status: `(pcieport [\w:.]+: AER: aer_status:[^\n]*(?:\n[...`<br>- PCIe AER Correctable Error Status: `(.*aer_cor_status: 0x[0-9a-fA-F]+, aer_cor_mask...`<br>- PCIe AER Uncorrectable Error Status: `(.*aer_uncor_status: 0x[0-9a-fA-F]+, aer_uncor_...`<br>- PCIe AER Uncorrectable Error Severity with TLP Header: `(.*aer_uncor_severity: 0x[0-9a-fA-F]+.*)(\n.*TL...`<br>- Failed to read journal file: `Failed to read journal file.*`<br>- Journal file corrupted or uncleanly shut down: `journal corrupted or uncleanly shut down.*`<br>- ACPI BIOS Error: `ACPI BIOS Error`<br>- ACPI Error: `ACPI Error`<br>- Filesystem corrupted!: `EXT4-fs error \(device .*\):`<br>- Error in buffered IO, check filesystem integrity: `(Buffer I\/O error on dev)(?:ice)? (\w+)`<br>- PCIe card no longer present: `pcieport (\w+:\w+:\w+\.\w+):\s+(\w+):\s+(Slot\(...`<br>- PCIe Link Down: `pcieport (\w+:\w+:\w+\.\w+):\s+(\w+):\s+(Slot\(...`<br>- Mismatched clock configuration between PCIe device and host: `pcieport (\w+:\w+:\w+\.\w+):\s+(\w+):\s+(curren...`<br>- RAS Correctable Error: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- RAS Uncorrectable Error: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- RAS Deferred Error: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- RAS Corrected PCIe Error: `((?:\[Hardware Error\]:\s+)?event severity: cor...`<br>- GPU Reset: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- GPU reset failed: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- ACA Error: `(Accelerator Check Architecture[^\n]*)(?:\n[^\n...`<br>- ACA Error: `(Accelerator Check Architecture[^\n]*)(?:\n[^\n...`<br>- MCE Error: `\[Hardware Error\]:.+MC\d+_STATUS.*(?:\n.*){0,5}`<br>- Mode 2 Reset Failed: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)? (...`<br>- RAS Corrected Error: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- SGX Error: `x86/cpu: SGX disabled by BIOS`<br>- MMP Error: `Failed to load MMP firmware qat_4xxx_mmp.bin`<br>- GPU Throttled: `amdgpu \w{4}:\w{2}:\w{2}.\w: amdgpu: WARN: GPU ...`<br>- RAS Poison Consumed: `amdgpu[ 0-9a-fA-F:.]+:(?:\s*amdgpu:)?\s+(?:{\d+...`<br>- RAS Poison created: `amdgpu[ 0-9a-fA-F:.]+:(?:\s*amdgpu:)?\s+(?:{\d+...`<br>- Bad page threshold exceeded: `(amdgpu: Saved bad pages (\d+) reaches threshol...`<br>- RAS Hardware Error: `Hardware error from APEI Generic Hardware Error...`<br>- Error Address: `Error Address.*(?:\s.*)`<br>- RAS EDR Event: `EDR: EDR event received`<br>- DPC Event: `DPC: .*`<br>- LNet: ko2iblnd has no matching interfaces: `(?:\[[^\]]+\]\s*)?LNetError:.*ko2iblnd:\s*No ma...`<br>- LNet: Error starting up LNI: `(?:\[[^\]]+\]\s*)?LNetError:\s*.*Error\s*-?\d+\...`<br>- Lustre: network initialisation failed: `LustreError:.*ptlrpc_init_portals\(\).*network ...` | **Collection Args:**<br>- `collect_rotated_logs`: bool<br>- `skip_sudo`: bool<br>- `log_dmesg_data`: bool | [DmesgData](#DmesgData-Model) | [DmesgCollector](#Collector-Class-DmesgCollector) | [DmesgAnalyzer](#Data-Analyzer-Class-DmesgAnalyzer) |
-| FabricsPlugin | ibstat<br>ibv_devinfo<br>ls -l /sys/class/infiniband/*/device/net<br>mst start<br>mst status -v<br>ofed_info -s<br>rdma dev<br>rdma link | - | - | [FabricsDataModel](#FabricsDataModel-Model) | [FabricsCollector](#Collector-Class-FabricsCollector) | - |
+| FabricsPlugin | ibstat<br>ibv_devinfo<br>ls -l /sys/class/infiniband/*/device/net<br>mst start<br>mst status -v<br>ofed_info -s | - | - | [FabricsDataModel](#FabricsDataModel-Model) | [FabricsCollector](#Collector-Class-FabricsCollector) | - |
 | JournalPlugin | journalctl --no-pager --system --output=short-iso<br>journalctl --no-pager --system --output=json | **Analyzer Args:**<br>- `check_priority`: Optional[int]<br>- `group`: bool | **Collection Args:**<br>- `boot`: Optional[int] | [JournalData](#JournalData-Model) | [JournalCollector](#Collector-Class-JournalCollector) | [JournalAnalyzer](#Data-Analyzer-Class-JournalAnalyzer) |
 | KernelPlugin | sh -c 'uname -a'<br>sh -c 'cat /proc/sys/kernel/numa_balancing'<br>wmic os get Version /Value | **Analyzer Args:**<br>- `exp_kernel`: Union[str, list]<br>- `exp_numa`: Optional[int]<br>- `regex_match`: bool | - | [KernelDataModel](#KernelDataModel-Model) | [KernelCollector](#Collector-Class-KernelCollector) | [KernelAnalyzer](#Data-Analyzer-Class-KernelAnalyzer) |
 | KernelModulePlugin | cat /proc/modules<br>modinfo amdgpu<br>wmic os get Version /Value | **Analyzer Args:**<br>- `kernel_modules`: dict[str, dict]<br>- `regex_filter`: list[str] | - | [KernelModuleDataModel](#KernelModuleDataModel-Model) | [KernelModuleCollector](#Collector-Class-KernelModuleCollector) | [KernelModuleAnalyzer](#Data-Analyzer-Class-KernelModuleAnalyzer) |
 | MemoryPlugin | free -b<br>lsmem<br>numactl -H<br>wmic OS get FreePhysicalMemory /Value; wmic ComputerSystem get TotalPhysicalMemory /Value | **Analyzer Args:**<br>- `ratio`: float<br>- `memory_threshold`: str | - | [MemoryDataModel](#MemoryDataModel-Model) | [MemoryCollector](#Collector-Class-MemoryCollector) | [MemoryAnalyzer](#Data-Analyzer-Class-MemoryAnalyzer) |
-| NetworkPlugin | ip addr show<br>curl<br>ethtool {interface}<br>lldpcli show neighbor<br>lldpctl<br>ip neighbor show<br>niccli --dev {device_num} qos --ets --show<br>niccli --list_devices<br>nicctl show card<br>nicctl show dcqcn<br>nicctl show environment<br>nicctl show pcie ats<br>nicctl show port<br>nicctl show qos<br>nicctl show rdma statistics<br>nicctl show version firmware<br>nicctl show version host-software<br>ping<br>ip route show<br>ip rule show<br>wget | - | **Collection Args:**<br>- `url`: Optional[str]<br>- `netprobe`: Optional[Literal['ping', 'wget', 'curl']] | [NetworkDataModel](#NetworkDataModel-Model) | [NetworkCollector](#Collector-Class-NetworkCollector) | - |
+| NetworkPlugin | ip addr show<br>curl<br>ethtool -S {interface}<br>ethtool {interface}<br>lldpcli show neighbor<br>lldpctl<br>ip neighbor show<br>niccli --dev {device_num} qos --ets --show<br>niccli --list_devices<br>nicctl show card<br>nicctl show dcqcn<br>nicctl show environment<br>nicctl show pcie ats<br>nicctl show port<br>nicctl show qos<br>nicctl show rdma statistics<br>nicctl show version firmware<br>nicctl show version host-software<br>ping<br>ip route show<br>ip rule show<br>wget | - | **Collection Args:**<br>- `url`: Optional[str]<br>- `netprobe`: Optional[Literal['ping', 'wget', 'curl']] | [NetworkDataModel](#NetworkDataModel-Model) | [NetworkCollector](#Collector-Class-NetworkCollector) | - |
 | NvmePlugin | nvme smart-log {dev}<br>nvme error-log {dev} --log-entries=256<br>nvme id-ctrl {dev}<br>nvme id-ns {dev}{ns}<br>nvme fw-log {dev}<br>nvme self-test-log {dev}<br>nvme get-log {dev} --log-id=6 --log-len=512<br>nvme telemetry-log {dev} --output-file={dev}_{f_name}<br>nvme list -o json | - | - | [NvmeDataModel](#NvmeDataModel-Model) | [NvmeCollector](#Collector-Class-NvmeCollector) | - |
 | OsPlugin | sh -c '( lsb_release -ds \|\| (cat /etc/*release \| grep PRETTY_NAME) \|\| uname -om ) 2>/dev/null \| head -n1'<br>cat /etc/*release \| grep VERSION_ID<br>wmic os get Version /value<br>wmic os get Caption /Value | **Analyzer Args:**<br>- `exp_os`: Union[str, list]<br>- `exact_match`: bool | - | [OsDataModel](#OsDataModel-Model) | [OsCollector](#Collector-Class-OsCollector) | [OsAnalyzer](#Data-Analyzer-Class-OsAnalyzer) |
 | PackagePlugin | dnf list --installed<br>dpkg-query -W<br>pacman -Q<br>cat /etc/*release<br>wmic product get name,version | **Analyzer Args:**<br>- `exp_package_ver`: Dict[str, Optional[str]]<br>- `regex_match`: bool<br>- `rocm_regex`: Optional[str]<br>- `enable_rocm_regex`: bool | - | [PackageDataModel](#PackageDataModel-Model) | [PackageCollector](#Collector-Class-PackageCollector) | [PackageAnalyzer](#Data-Analyzer-Class-PackageAnalyzer) |
 | PciePlugin | lspci -d {vendor_id}: -nn<br>lspci -x<br>lspci -xxxx<br>lspci -PP<br>lspci -PP -d {vendor_id}:{dev_id}<br>lspci -vvv<br>lspci -vvvt | **Analyzer Args:**<br>- `exp_speed`: int<br>- `exp_width`: int<br>- `exp_sriov_count`: int<br>- `exp_gpu_count_override`: Optional[int]<br>- `exp_max_payload_size`: Union[Dict[int, int], int, NoneType]<br>- `exp_max_rd_req_size`: Union[Dict[int, int], int, NoneType]<br>- `exp_ten_bit_tag_req_en`: Union[Dict[int, int], int, NoneType] | - | [PcieDataModel](#PcieDataModel-Model) | [PcieCollector](#Collector-Class-PcieCollector) | [PcieAnalyzer](#Data-Analyzer-Class-PcieAnalyzer) |
 | ProcessPlugin | top -b -n 1<br>rocm-smi --showpids<br>top -b -n 1 -o %CPU  | **Analyzer Args:**<br>- `max_kfd_processes`: int<br>- `max_cpu_usage`: float | **Collection Args:**<br>- `top_n_process`: int | [ProcessDataModel](#ProcessDataModel-Model) | [ProcessCollector](#Collector-Class-ProcessCollector) | [ProcessAnalyzer](#Data-Analyzer-Class-ProcessAnalyzer) |
-| RocmPlugin | {rocm_path}/opencl/bin/*/clinfo<br>env \| grep -Ei 'rocm\|hsa\|hip\|mpi\|openmp\|ucx\|miopen'<br>ls /sys/class/kfd/kfd/proc/<br>grep -i -E 'rocm' /etc/ld.so.conf.d/*<br>{rocm_path}/bin/rocminfo<br>ls -v -d /opt/rocm*<br>ls -v -d /opt/rocm-[3-7]* \| tail -1<br>ldconfig -p \| grep -i -E 'rocm'<br>grep . -r /opt/rocm/.info/*<br>/opt/rocm/.info/version-rocm<br>/opt/rocm/.info/version | **Analyzer Args:**<br>- `exp_rocm`: Union[str, list]<br>- `exp_rocm_latest`: str<br>- `exp_rocm_sub_versions`: dict[str, Union[str, list]] | - | [RocmDataModel](#RocmDataModel-Model) | [RocmCollector](#Collector-Class-RocmCollector) | [RocmAnalyzer](#Data-Analyzer-Class-RocmAnalyzer) |
+| RdmaPlugin | rdma link -j<br>rdma dev<br>rdma link<br>rdma statistic -j | - | - | [RdmaDataModel](#RdmaDataModel-Model) | [RdmaCollector](#Collector-Class-RdmaCollector) | [RdmaAnalyzer](#Data-Analyzer-Class-RdmaAnalyzer) |
+| RocmPlugin | {rocm_path}/opencl/bin/*/clinfo<br>env \| grep -Ei 'rocm\|hsa\|hip\|mpi\|openmp\|ucx\|miopen'<br>ls /sys/class/kfd/kfd/proc/<br>grep -i -E 'rocm' /etc/ld.so.conf.d/*<br>{rocm_path}/bin/rocminfo<br>ls -v -d {rocm_path}*<br>ls -v -d {rocm_path}-[3-7]* \| tail -1<br>ldconfig -p \| grep -i -E 'rocm'<br>grep . -r {rocm_path}/.info/* | **Analyzer Args:**<br>- `exp_rocm`: Union[str, list]<br>- `exp_rocm_latest`: str<br>- `exp_rocm_sub_versions`: dict[str, Union[str, list]] | **Collection Args:**<br>- `rocm_path`: str | [RocmDataModel](#RocmDataModel-Model) | [RocmCollector](#Collector-Class-RocmCollector) | [RocmAnalyzer](#Data-Analyzer-Class-RocmAnalyzer) |
 | StoragePlugin | sh -c 'df -lH -B1 \| grep -v 'boot''<br>wmic LogicalDisk Where DriveType="3" Get DeviceId,Size,FreeSpace | - | **Collection Args:**<br>- `skip_sudo`: bool | [StorageDataModel](#StorageDataModel-Model) | [StorageCollector](#Collector-Class-StorageCollector) | [StorageAnalyzer](#Data-Analyzer-Class-StorageAnalyzer) |
 | SysSettingsPlugin | cat /sys/{}<br>ls -1 /sys/{} | **Analyzer Args:**<br>- `checks`: Optional[list[nodescraper.plugins.inband.sys_settings.analyzer_args.SysfsCheck]] | **Collection Args:**<br>- `paths`: list[str]<br>- `directory_paths`: list[str] | [SysSettingsDataModel](#SysSettingsDataModel-Model) | [SysSettingsCollector](#Collector-Class-SysSettingsCollector) | [SysSettingsAnalyzer](#Data-Analyzer-Class-SysSettingsAnalyzer) |
 | SysctlPlugin | sysctl -n | **Analyzer Args:**<br>- `exp_vm_swappiness`: Optional[int]<br>- `exp_vm_numa_balancing`: Optional[int]<br>- `exp_vm_oom_kill_allocating_task`: Optional[int]<br>- `exp_vm_compaction_proactiveness`: Optional[int]<br>- `exp_vm_compact_unevictable_allowed`: Optional[int]<br>- `exp_vm_extfrag_threshold`: Optional[int]<br>- `exp_vm_zone_reclaim_mode`: Optional[int]<br>- `exp_vm_dirty_background_ratio`: Optional[int]<br>- `exp_vm_dirty_ratio`: Optional[int]<br>- `exp_vm_dirty_writeback_centisecs`: Optional[int]<br>- `exp_kernel_numa_balancing`: Optional[int] | - | [SysctlDataModel](#SysctlDataModel-Model) | [SysctlCollector](#Collector-Class-SysctlCollector) | [SysctlAnalyzer](#Data-Analyzer-Class-SysctlAnalyzer) |
@@ -246,8 +247,6 @@ Collect InfiniBand/RDMA fabrics configuration details
 - **CMD_OFED_INFO**: `ofed_info -s`
 - **CMD_MST_START**: `mst start`
 - **CMD_MST_STATUS**: `mst status -v`
-- **CMD_RDMA_DEV**: `rdma dev`
-- **CMD_RDMA_LINK**: `rdma link`
 
 ### Provides Data
 
@@ -261,8 +260,6 @@ FabricsDataModel
 - mst start
 - mst status -v
 - ofed_info -s
-- rdma dev
-- rdma link
 
 ## Collector Class JournalCollector
 
@@ -386,6 +383,7 @@ Collect network configuration details using ip command
 - **CMD_RULE**: `ip rule show`
 - **CMD_NEIGHBOR**: `ip neighbor show`
 - **CMD_ETHTOOL_TEMPLATE**: `ethtool {interface}`
+- **CMD_ETHTOOL_S_TEMPLATE**: `ethtool -S {interface}`
 - **CMD_PING**: `ping`
 - **CMD_WGET**: `wget`
 - **CMD_CURL**: `curl`
@@ -411,6 +409,7 @@ NetworkDataModel
 
 - ip addr show
 - curl
+- ethtool -S {interface}
 - ethtool {interface}
 - lldpcli show neighbor
 - lldpctl
@@ -613,6 +612,35 @@ ProcessDataModel
 - rocm-smi --showpids
 - top -b -n 1 -o %CPU
 
+## Collector Class RdmaCollector
+
+### Description
+
+Collect RDMA status and statistics via rdma link and rdma statistic commands.
+
+**Bases**: ['InBandDataCollector']
+
+**Link to code**: [rdma_collector.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/rdma/rdma_collector.py)
+
+### Class Variables
+
+- **SUPPORTED_OS_FAMILY**: `{<OSFamily.LINUX: 3>}`
+- **CMD_LINK**: `rdma link -j`
+- **CMD_STATISTIC**: `rdma statistic -j`
+- **CMD_RDMA_DEV**: `rdma dev`
+- **CMD_RDMA_LINK**: `rdma link`
+
+### Provides Data
+
+RdmaDataModel
+
+### Commands
+
+- rdma link -j
+- rdma dev
+- rdma link
+- rdma statistic -j
+
 ## Collector Class RocmCollector
 
 ### Description
@@ -626,15 +654,14 @@ Collect ROCm version data
 ### Class Variables
 
 - **SUPPORTED_OS_FAMILY**: `{<OSFamily.LINUX: 3>}`
-- **CMD_VERSION_PATHS**: `['/opt/rocm/.info/version-rocm', '/opt/rocm/.info/version']`
-- **CMD_ROCM_SUB_VERSIONS**: `grep . -r /opt/rocm/.info/*`
-- **CMD_ROCMINFO**: `{rocm_path}/bin/rocminfo`
-- **CMD_ROCM_LATEST**: `ls -v -d /opt/rocm-[3-7]* | tail -1`
-- **CMD_ROCM_DIRS**: `ls -v -d /opt/rocm*`
+- **CMD_ROCM_SUB_VERSIONS_TMPL**: `grep . -r {rocm_path}/.info/*`
+- **CMD_ROCMINFO_TMPL**: `{rocm_path}/bin/rocminfo`
+- **CMD_ROCM_LATEST_TMPL**: `ls -v -d {rocm_path}-[3-7]* | tail -1`
+- **CMD_ROCM_DIRS_TMPL**: `ls -v -d {rocm_path}*`
 - **CMD_LD_CONF**: `grep -i -E 'rocm' /etc/ld.so.conf.d/*`
 - **CMD_ROCM_LIBS**: `ldconfig -p | grep -i -E 'rocm'`
 - **CMD_ENV_VARS**: `env | grep -Ei 'rocm|hsa|hip|mpi|openmp|ucx|miopen'`
-- **CMD_CLINFO**: `{rocm_path}/opencl/bin/*/clinfo`
+- **CMD_CLINFO_TMPL**: `{rocm_path}/opencl/bin/*/clinfo`
 - **CMD_KFD_PROC**: `ls /sys/class/kfd/kfd/proc/`
 
 ### Provides Data
@@ -648,12 +675,10 @@ RocmDataModel
 - ls /sys/class/kfd/kfd/proc/
 - grep -i -E 'rocm' /etc/ld.so.conf.d/*
 - {rocm_path}/bin/rocminfo
-- ls -v -d /opt/rocm*
-- ls -v -d /opt/rocm-[3-7]* | tail -1
+- ls -v -d {rocm_path}*
+- ls -v -d {rocm_path}-[3-7]* | tail -1
 - ldconfig -p | grep -i -E 'rocm'
-- grep . -r /opt/rocm/.info/*
-- /opt/rocm/.info/version-rocm
-- /opt/rocm/.info/version
+- grep . -r {rocm_path}/.info/*
 
 ## Collector Class StorageCollector
 
@@ -894,7 +919,6 @@ Complete InfiniBand/RDMA fabrics configuration data
 - **ibdev_netdev_mappings**: `List[nodescraper.plugins.inband.fabrics.fabricsdata.IbdevNetdevMapping]`
 - **ofed_info**: `Optional[nodescraper.plugins.inband.fabrics.fabricsdata.OfedInfo]`
 - **mst_status**: `Optional[nodescraper.plugins.inband.fabrics.fabricsdata.MstStatus]`
-- **rdma_info**: `Optional[nodescraper.plugins.inband.fabrics.fabricsdata.RdmaInfo]`
 
 ## JournalData Model
 
@@ -1061,6 +1085,23 @@ class for collection of PCIe data.
 - **kfd_process**: `Optional[int]`
 - **cpu_usage**: `Optional[float]`
 - **processes**: `Optional[list[tuple[str, str]]]`
+
+## RdmaDataModel Model
+
+### Description
+
+Data model for RDMA (Remote Direct Memory Access) statistics and link information.
+
+**Link to code**: [rdmadata.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/rdma/rdmadata.py)
+
+**Bases**: ['DataModel']
+
+### Model annotations and fields
+
+- **link_list**: `list[nodescraper.plugins.inband.rdma.rdmadata.RdmaLink]`
+- **statistic_list**: `list[nodescraper.plugins.inband.rdma.rdmadata.RdmaStatistics]`
+- **dev_list**: `list[nodescraper.plugins.inband.rdma.rdmadata.RdmaDevice]`
+- **link_list_text**: `list[nodescraper.plugins.inband.rdma.rdmadata.RdmaLinkText]`
 
 ## RocmDataModel Model
 
@@ -1436,6 +1477,108 @@ Check cpu and kfd processes are within allowed maximum cpu and gpu usage
 **Bases**: ['DataAnalyzer']
 
 **Link to code**: [process_analyzer.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/process/process_analyzer.py)
+
+## Data Analyzer Class RdmaAnalyzer
+
+### Description
+
+Check RDMA statistics for errors (RoCE and other RDMA error counters).
+
+**Bases**: ['DataAnalyzer']
+
+**Link to code**: [rdma_analyzer.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/rdma/rdma_analyzer.py)
+
+### Class Variables
+
+- **ERROR_FIELDS**: `[
+  recoverable_errors,
+  tx_roce_errors,
+  tx_roce_discards,
+  rx_roce_errors,
+  rx_roce_discards,
+  local_ack_timeout_err,
+  packet_seq_err,
+  max_retry_exceeded,
+  rnr_nak_retry_err,
+  implied_nak_seq_err,
+  unrecoverable_err,
+  bad_resp_err,
+  local_qp_op_err,
+  local_protection_err,
+  mem_mgmt_op_err,
+  req_remote_invalid_request,
+  req_remote_access_errors,
+  remote_op_err,
+  duplicate_request,
+  res_exceed_max,
+  resp_local_length_error,
+  res_exceeds_wqe,
+  res_opcode_err,
+  res_rx_invalid_rkey,
+  res_rx_domain_err,
+  res_rx_no_perm,
+  res_rx_range_err,
+  res_tx_invalid_rkey,
+  res_tx_domain_err,
+  res_tx_no_perm,
+  res_tx_range_err,
+  res_irrq_oflow,
+  res_unsup_opcode,
+  res_unaligned_atomic,
+  res_rem_inv_err,
+  res_mem_err,
+  res_srq_err,
+  res_cmp_err,
+  res_invalid_dup_rkey,
+  res_wqe_format_err,
+  res_cq_load_err,
+  res_srq_load_err,
+  res_tx_pci_err,
+  res_rx_pci_err,
+  out_of_buffer,
+  out_of_sequence,
+  req_cqe_error,
+  req_cqe_flush_error,
+  resp_cqe_error,
+  resp_cqe_flush_error,
+  resp_remote_access_errors,
+  req_rx_pkt_seq_err,
+  req_rx_rnr_retry_err,
+  req_rx_rmt_acc_err,
+  req_rx_rmt_req_err,
+  req_rx_oper_err,
+  req_rx_impl_nak_seq_err,
+  req_rx_cqe_err,
+  req_rx_cqe_flush,
+  req_rx_dup_response,
+  req_rx_inval_pkts,
+  req_tx_loc_acc_err,
+  req_tx_loc_oper_err,
+  req_tx_mem_mgmt_err,
+  req_tx_retry_excd_err,
+  req_tx_loc_sgl_inv_err,
+  resp_rx_dup_request,
+  resp_rx_outof_buf,
+  resp_rx_outouf_seq,
+  resp_rx_cqe_err,
+  resp_rx_cqe_flush,
+  resp_rx_loc_len_err,
+  resp_rx_inval_request,
+  resp_rx_loc_oper_err,
+  resp_rx_outof_atomic,
+  resp_tx_pkt_seq_err,
+  resp_tx_rmt_inval_req_err,
+  resp_tx_rmt_acc_err,
+  resp_tx_rmt_oper_err,
+  resp_tx_rnr_retry_err,
+  resp_tx_loc_sgl_inv_err,
+  resp_rx_s0_table_err,
+  resp_rx_ccl_cts_outouf_seq,
+  tx_rdma_ack_timeout,
+  tx_rdma_ccl_cts_ack_timeout,
+  rx_rdma_mtu_discard_pkts
+]`
+- **CRITICAL_ERROR_FIELDS**: `['unrecoverable_err', 'res_tx_pci_err', 'res_rx_pci_err', 'res_mem_err']`
 
 ## Data Analyzer Class RocmAnalyzer
 

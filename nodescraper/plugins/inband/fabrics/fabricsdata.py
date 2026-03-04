@@ -96,37 +96,6 @@ class MstStatus(BaseModel):
     raw_output: str = ""  # Raw command output
 
 
-class RdmaDevice(BaseModel):
-    """RDMA device information from rdma command"""
-
-    device: str  # Device name (e.g., "mlx5_0")
-    node_type: Optional[str] = None  # Node type
-    transport: Optional[str] = None  # Transport type
-    node_guid: Optional[str] = None  # Node GUID
-    sys_image_guid: Optional[str] = None  # System image GUID
-    state: Optional[str] = None  # Device state
-    attributes: Dict[str, str] = Field(default_factory=dict)  # Additional attributes
-
-
-class RdmaLink(BaseModel):
-    """RDMA link information"""
-
-    device: str  # Device name
-    port: int  # Port number
-    state: Optional[str] = None  # Link state
-    physical_state: Optional[str] = None  # Physical state
-    netdev: Optional[str] = None  # Associated network device
-    attributes: Dict[str, str] = Field(default_factory=dict)  # Additional attributes
-
-
-class RdmaInfo(BaseModel):
-    """Complete RDMA information from rdma command"""
-
-    devices: List[RdmaDevice] = Field(default_factory=list)  # RDMA devices
-    links: List[RdmaLink] = Field(default_factory=list)  # RDMA links
-    raw_output: str = ""  # Raw command output
-
-
 class FabricsDataModel(DataModel):
     """Complete InfiniBand/RDMA fabrics configuration data"""
 
@@ -137,4 +106,3 @@ class FabricsDataModel(DataModel):
     )  # ibdev2netdev output
     ofed_info: Optional[OfedInfo] = None  # OFED version info
     mst_status: Optional[MstStatus] = None  # MST status
-    rdma_info: Optional[RdmaInfo] = None  # RDMA information

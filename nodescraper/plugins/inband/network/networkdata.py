@@ -103,6 +103,8 @@ class EthtoolInfo(BaseModel):
     port: Optional[str] = None  # Port type (e.g., "Twisted Pair")
     auto_negotiation: Optional[str] = None  # Auto-negotiation status (e.g., "on", "off")
     link_detected: Optional[str] = None  # Link detection status (e.g., "yes", "no")
+    # ethtool -S (statistics) output: parsed key-value for error/health analysis
+    statistics: Dict[str, str] = Field(default_factory=dict)
 
 
 class BroadcomNicDevice(BaseModel):
