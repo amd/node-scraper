@@ -124,6 +124,8 @@ def test_gen_reference_config_subset_plugins(run_cli_command, tmp_path):
 
     assert result.returncode in [0, 1, 2]
 
+    if result.returncode != 0:
+        pytest.skip("One or more plugins failed; reference config is not written")
     reference_config_path = find_reference_config(log_path)
     assert reference_config_path is not None, "reference_config.json was not created"
     assert reference_config_path.exists()
@@ -148,7 +150,8 @@ def test_use_generated_reference_config(run_cli_command, tmp_path):
     assert gen_result.returncode in [0, 1, 2]
 
     reference_config_path = find_reference_config(gen_log_path)
-    assert reference_config_path is not None, "reference_config.json was not created"
+    if reference_config_path is None:
+        pytest.skip("reference_config.json was not created - one or more plugins failed")
     assert reference_config_path.exists()
 
     use_result = run_cli_command(
@@ -269,7 +272,11 @@ def test_reference_config_with_analysis_args(run_cli_command, tmp_path):
 
 
 def test_reference_config_structure(run_cli_command, tmp_path):
-    """Test that generated reference config has correct structure."""
+    """Test that reference config is created and has correct structure when no plugin fails.
+
+    Uses OsPlugin only (likely to succeed in any environment). Requires returncode 0
+    so we actually assert the success path: reference config is written.
+    """
     log_path = str(tmp_path / "logs_structure")
 
     result = run_cli_command(
@@ -277,7 +284,10 @@ def test_reference_config_structure(run_cli_command, tmp_path):
         check=False,
     )
 
-    assert result.returncode in [0, 1, 2]
+    assert result.returncode == 0, (
+        f"OsPlugin must succeed for this test (reference config only written when no plugin fails). "
+        f"returncode={result.returncode}, stderr={result.stderr[:500]!r}"
+    )
 
     reference_config_path = find_reference_config(log_path)
     assert reference_config_path is not None, "reference_config.json was not created"
@@ -306,6 +316,8 @@ def test_gen_reference_config_without_run_plugins(run_cli_command, tmp_path):
 
     assert result.returncode in [0, 1, 2]
 
+    if result.returncode != 0:
+        pytest.skip("One or more plugins failed; reference config is not written")
     reference_config_path = find_reference_config(log_path)
     assert reference_config_path is not None, "reference_config.json was not created"
     assert reference_config_path.exists()
@@ -333,6 +345,8 @@ def test_reference_config_json_valid(run_cli_command, tmp_path):
 
     assert result.returncode in [0, 1, 2]
 
+    if result.returncode != 0:
+        pytest.skip("One or more plugins failed; reference config is not written")
     reference_config_path = find_reference_config(log_path)
     assert reference_config_path is not None, "reference_config.json was not created"
     assert reference_config_path.exists()

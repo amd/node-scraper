@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# Copyright (c) 2025 Advanced Micro Devices, Inc.
+# Copyright (c) 2026 Advanced Micro Devices, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,24 +23,10 @@
 # SOFTWARE.
 #
 ###############################################################################
-from nodescraper.base import InBandDataPlugin
-
-from .analyzer_args import RocmAnalyzerArgs
-from .collector_args import RocmCollectorArgs
-from .rocm_analyzer import RocmAnalyzer
-from .rocm_collector import RocmCollector
-from .rocmdata import RocmDataModel
+from nodescraper.models import CollectorArgs
 
 
-class RocmPlugin(InBandDataPlugin[RocmDataModel, RocmCollectorArgs, RocmAnalyzerArgs]):
-    """Plugin for collection and analysis of rocm version data"""
+class RocmCollectorArgs(CollectorArgs):
+    """Collector arguments for RocmPlugin."""
 
-    DATA_MODEL = RocmDataModel
-
-    COLLECTOR = RocmCollector
-
-    COLLECTOR_ARGS = RocmCollectorArgs
-
-    ANALYZER = RocmAnalyzer
-
-    ANALYZER_ARGS = RocmAnalyzerArgs
+    rocm_path: str = "/opt/rocm"
