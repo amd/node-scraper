@@ -369,6 +369,10 @@ class NicDataModel(DataModel):
 
     broadcom_nic_devices: List[NicCliDevice] = Field(default_factory=list)
     broadcom_nic_qos: Dict[int, NicCliQos] = Field(default_factory=dict)
+    broadcom_nic_support_rdma: Dict[int, str] = Field(
+        default_factory=dict,
+        description="Per-device output of 'niccli -dev X nvm -getoption support_rdma -scope 0' (device_num -> raw stdout).",
+    )
     pensando_nic_cards: List[PensandoNicCard] = Field(default_factory=list)
     pensando_nic_dcqcn: List[PensandoNicDcqcn] = Field(default_factory=list)
     pensando_nic_environment: List[PensandoNicEnvironment] = Field(default_factory=list)

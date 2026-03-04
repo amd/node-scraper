@@ -69,9 +69,11 @@ NICCLI_LIST_DEVICES_CMD = "niccli --list_devices"
 NICCLI_DISCOVERY_CMDS = [
     NICCLI_LIST_DEVICES_CMD,
     NICCLI_LIST_CMD,
-]  # try in order, stop at first success
+]
+# Command template for support_rdma;
+NICCLI_SUPPORT_RDMA_CMD_TEMPLATE = "niccli -dev {device_num} nvm -getoption support_rdma -scope 0"
 NICCLI_PER_DEVICE_TEMPLATES = [
-    "niccli -dev {device_num} nvm -getoption support_rdma -scope 0",
+    NICCLI_SUPPORT_RDMA_CMD_TEMPLATE,
     "niccli -dev {device_num} nvm -getoption performance_profile",
     "niccli -dev {device_num} nvm -getoption pcie_relaxed_ordering",
     "niccli -dev {device_num} getqos",
@@ -544,7 +546,9 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
         }
 
         # Legacy text parsers: populate broadcom_nic_* and pensando_nic_* for the datamodel.
-        broadcom_devices, broadcom_qos_data = self._collect_broadcom_nic_structured(results)
+        broadcom_devices, broadcom_qos_data, broadcom_support_rdma = (
+            self._collect_broadcom_nic_structured(results)
+        )
         (
             pensando_cards,
             pensando_dcqcn,
@@ -573,6 +577,7 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
             version=version,
             broadcom_nic_devices=broadcom_devices,
             broadcom_nic_qos=broadcom_qos_data,
+            broadcom_nic_support_rdma=broadcom_support_rdma,
             pensando_nic_cards=pensando_cards,
             pensando_nic_dcqcn=pensando_dcqcn,
             pensando_nic_environment=pensando_environment,
@@ -587,10 +592,11 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
 
     def _collect_broadcom_nic_structured(
         self, results: Dict[str, NicCommandResult]
-    ) -> Tuple[List[NicCliDevice], Dict[int, NicCliQos]]:
+    ) -> Tuple[List[NicCliDevice], Dict[int, NicCliQos], Dict[int, str]]:
         """Build niccli (Broadcom) structured data from results using legacy text parsers."""
         devices: List[NicCliDevice] = []
         qos_data: Dict[int, NicCliQos] = {}
+        support_rdma: Dict[int, str] = {}
         list_stdout: Optional[str] = None
         for list_cmd in NICCLI_DISCOVERY_CMDS:
             r = results.get(list_cmd)
@@ -598,7 +604,7 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
                 list_stdout = r.stdout
                 break
         if not list_stdout:
-            return devices, qos_data
+            return devices, qos_data, support_rdma
         devices = self._parse_niccli_listdev(list_stdout)
         for device in devices:
             cmd = f"niccli -dev {device.device_num} getqos"
@@ -607,7 +613,11 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
                 qos_data[device.device_num] = self._parse_niccli_qos(
                     device.device_num, r.stdout or ""
                 )
-        return devices, qos_data
+            support_rdma_cmd = NICCLI_SUPPORT_RDMA_CMD_TEMPLATE.format(device_num=device.device_num)
+            r_sr = results.get(support_rdma_cmd)
+            if r_sr and r_sr.exit_code == 0 and (r_sr.stdout or "").strip():
+                support_rdma[device.device_num] = (r_sr.stdout or "").strip()
+        return devices, qos_data, support_rdma
 
     def _collect_pensando_nic_structured(self, results: Dict[str, NicCommandResult]) -> Tuple[
         List[PensandoNicCard],
