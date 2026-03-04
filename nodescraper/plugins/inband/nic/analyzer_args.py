@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# Copyright (c) 2025 Advanced Micro Devices, Inc.
+# Copyright (c) 2026 Advanced Micro Devices, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,7 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import Field
 
@@ -31,22 +31,21 @@ from nodescraper.models import AnalyzerArgs
 
 
 class NicAnalyzerArgs(AnalyzerArgs):
-    """Analyzer args for niccli/nicctl data, with expected_values keyed by canonical command key.
-
-    Use expected_values to define checks; the analyzer uses the data model's
-    structured fields (card_show, cards, port, lif, qos, etc.) and results to
-    run them. Keys are canonical keys (see nic_data.command_to_canonical_key), e.g.:
-      - nicctl_show_card_json
-      - nicctl_show_dcqcn_card_0_json
-      - niccli_list
-
-    Each value is a dict of checks the analyzer can apply. Common patterns:
-      - require_success: true  -> command must have exit_code 0 (from results)
-      - min_cards: 1           -> require at least N cards (from cards)
-      - <field>: <value>       -> require structured payload to have field equal to value
-    """
+    """Analyzer args for niccli/nicctl data"""
 
     expected_values: Optional[Dict[str, Dict[str, Any]]] = Field(
         default=None,
-        description="Per-command expected checks keyed by canonical key (see command_to_canonical_key).",
+        description="Per-command expected checks keyed by canonical key.",
+    )
+    performance_profile_expected: str = Field(
+        default="RoCE",
+        description="Expected Broadcom performance_profile value (case-insensitive). Default RoCE.",
+    )
+    support_rdma_disabled_values: List[str] = Field(
+        default_factory=lambda: ["0", "false", "disabled", "no", "off"],
+        description="Values that indicate RDMA is not supported (case-insensitive).",
+    )
+    pcie_relaxed_ordering_expected: str = Field(
+        default="enabled",
+        description="Expected Broadcom pcie_relaxed_ordering value.",
     )

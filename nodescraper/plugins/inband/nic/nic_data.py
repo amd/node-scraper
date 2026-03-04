@@ -371,7 +371,15 @@ class NicDataModel(DataModel):
     broadcom_nic_qos: Dict[int, NicCliQos] = Field(default_factory=dict)
     broadcom_nic_support_rdma: Dict[int, str] = Field(
         default_factory=dict,
-        description="Per-device output of 'niccli -dev X nvm -getoption support_rdma -scope 0' (device_num -> raw stdout).",
+        description="Per-device output of 'niccli -dev X nvm -getoption support_rdma -scope 0'.",
+    )
+    broadcom_nic_performance_profile: Dict[int, str] = Field(
+        default_factory=dict,
+        description="Per-device output of 'niccli -dev X nvm -getoption performance_profile'.",
+    )
+    broadcom_nic_pcie_relaxed_ordering: Dict[int, str] = Field(
+        default_factory=dict,
+        description="Per-device output of 'niccli -dev X nvm -getoption pcie_relaxed_ordering'.",
     )
     pensando_nic_cards: List[PensandoNicCard] = Field(default_factory=list)
     pensando_nic_dcqcn: List[PensandoNicDcqcn] = Field(default_factory=list)

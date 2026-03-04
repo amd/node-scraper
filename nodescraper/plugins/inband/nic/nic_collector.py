@@ -72,10 +72,16 @@ NICCLI_DISCOVERY_CMDS = [
 ]
 # Command template for support_rdma;
 NICCLI_SUPPORT_RDMA_CMD_TEMPLATE = "niccli -dev {device_num} nvm -getoption support_rdma -scope 0"
+NICCLI_PERFORMANCE_PROFILE_CMD_TEMPLATE = (
+    "niccli -dev {device_num} nvm -getoption performance_profile"
+)
+NICCLI_PCIE_RELAXED_ORDERING_CMD_TEMPLATE = (
+    "niccli -dev {device_num} nvm -getoption pcie_relaxed_ordering"
+)
 NICCLI_PER_DEVICE_TEMPLATES = [
     NICCLI_SUPPORT_RDMA_CMD_TEMPLATE,
-    "niccli -dev {device_num} nvm -getoption performance_profile",
-    "niccli -dev {device_num} nvm -getoption pcie_relaxed_ordering",
+    NICCLI_PERFORMANCE_PROFILE_CMD_TEMPLATE,
+    NICCLI_PCIE_RELAXED_ORDERING_CMD_TEMPLATE,
     "niccli -dev {device_num} getqos",
 ]
 # Text-format command for card discovery and pensando_nic_cards (no --json).
@@ -546,9 +552,13 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
         }
 
         # Legacy text parsers: populate broadcom_nic_* and pensando_nic_* for the datamodel.
-        broadcom_devices, broadcom_qos_data, broadcom_support_rdma = (
-            self._collect_broadcom_nic_structured(results)
-        )
+        (
+            broadcom_devices,
+            broadcom_qos_data,
+            broadcom_support_rdma,
+            broadcom_performance_profile,
+            broadcom_pcie_relaxed_ordering,
+        ) = self._collect_broadcom_nic_structured(results)
         (
             pensando_cards,
             pensando_dcqcn,
@@ -582,6 +592,8 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
             broadcom_nic_devices=broadcom_devices,
             broadcom_nic_qos=broadcom_qos_data,
             broadcom_nic_support_rdma=broadcom_support_rdma,
+            broadcom_nic_performance_profile=broadcom_performance_profile,
+            broadcom_nic_pcie_relaxed_ordering=broadcom_pcie_relaxed_ordering,
             pensando_nic_cards=pensando_cards,
             pensando_nic_dcqcn=pensando_dcqcn,
             pensando_nic_environment=pensando_environment,
@@ -596,11 +608,15 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
 
     def _collect_broadcom_nic_structured(
         self, results: Dict[str, NicCommandResult]
-    ) -> Tuple[List[NicCliDevice], Dict[int, NicCliQos], Dict[int, str]]:
+    ) -> Tuple[
+        List[NicCliDevice], Dict[int, NicCliQos], Dict[int, str], Dict[int, str], Dict[int, str]
+    ]:
         """Build niccli (Broadcom) structured data from results using legacy text parsers."""
         devices: List[NicCliDevice] = []
         qos_data: Dict[int, NicCliQos] = {}
         support_rdma: Dict[int, str] = {}
+        performance_profile: Dict[int, str] = {}
+        pcie_relaxed_ordering: Dict[int, str] = {}
         list_stdout: Optional[str] = None
         for list_cmd in NICCLI_DISCOVERY_CMDS:
             r = results.get(list_cmd)
@@ -608,7 +624,7 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
                 list_stdout = r.stdout
                 break
         if not list_stdout:
-            return devices, qos_data, support_rdma
+            return devices, qos_data, support_rdma, performance_profile, pcie_relaxed_ordering
         devices = self._parse_niccli_listdev(list_stdout)
         for device in devices:
             cmd = f"niccli -dev {device.device_num} getqos"
@@ -621,7 +637,15 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
             r_sr = results.get(support_rdma_cmd)
             if r_sr and r_sr.exit_code == 0 and (r_sr.stdout or "").strip():
                 support_rdma[device.device_num] = (r_sr.stdout or "").strip()
-        return devices, qos_data, support_rdma
+            perf_cmd = NICCLI_PERFORMANCE_PROFILE_CMD_TEMPLATE.format(device_num=device.device_num)
+            r_pp = results.get(perf_cmd)
+            if r_pp and r_pp.exit_code == 0 and (r_pp.stdout or "").strip():
+                performance_profile[device.device_num] = (r_pp.stdout or "").strip()
+            ro_cmd = NICCLI_PCIE_RELAXED_ORDERING_CMD_TEMPLATE.format(device_num=device.device_num)
+            r_ro = results.get(ro_cmd)
+            if r_ro and r_ro.exit_code == 0 and (r_ro.stdout or "").strip():
+                pcie_relaxed_ordering[device.device_num] = (r_ro.stdout or "").strip()
+        return devices, qos_data, support_rdma, performance_profile, pcie_relaxed_ordering
 
     def _collect_pensando_nic_structured(self, results: Dict[str, NicCommandResult]) -> Tuple[
         List[PensandoNicCard],
