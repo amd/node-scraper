@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# Copyright (c) 2025 Advanced Micro Devices, Inc.
+# Copyright (c) 2026 Advanced Micro Devices, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -371,15 +371,15 @@ class NicDataModel(DataModel):
     broadcom_nic_qos: Dict[int, NicCliQos] = Field(default_factory=dict)
     broadcom_nic_support_rdma: Dict[int, str] = Field(
         default_factory=dict,
-        description="Per-device output of 'niccli -dev X nvm -getoption support_rdma -scope 0'.",
+        description="Per-device output of 'niccli -dev X nvm -getoption support_rdma -scope 0' (device_num -> raw stdout).",
     )
     broadcom_nic_performance_profile: Dict[int, str] = Field(
         default_factory=dict,
-        description="Per-device output of 'niccli -dev X nvm -getoption performance_profile'.",
+        description="Per-device output of 'niccli -dev X nvm -getoption performance_profile' (device_num -> raw stdout).",
     )
     broadcom_nic_pcie_relaxed_ordering: Dict[int, str] = Field(
         default_factory=dict,
-        description="Per-device output of 'niccli -dev X nvm -getoption pcie_relaxed_ordering'.",
+        description="Per-device output of 'niccli -dev X nvm -getoption pcie_relaxed_ordering' (device_num -> raw stdout).",
     )
     pensando_nic_cards: List[PensandoNicCard] = Field(default_factory=list)
     pensando_nic_dcqcn: List[PensandoNicDcqcn] = Field(default_factory=list)

@@ -31,11 +31,11 @@ from nodescraper.models import AnalyzerArgs
 
 
 class NicAnalyzerArgs(AnalyzerArgs):
-    """Analyzer args for niccli/nicctl data"""
+    """Analyzer args for niccli/nicctl data, with expected_values keyed by canonical command key."""
 
     expected_values: Optional[Dict[str, Dict[str, Any]]] = Field(
         default=None,
-        description="Per-command expected checks keyed by canonical key.",
+        description="Per-command expected checks keyed by canonical key (see command_to_canonical_key).",
     )
     performance_profile_expected: str = Field(
         default="RoCE",
@@ -47,5 +47,25 @@ class NicAnalyzerArgs(AnalyzerArgs):
     )
     pcie_relaxed_ordering_expected: str = Field(
         default="enabled",
-        description="Expected Broadcom pcie_relaxed_ordering value.",
+        description="Expected Broadcom pcie_relaxed_ordering value (e.g. 'Relaxed ordering = enabled'); checked case-insensitively. Default enabled.",
+    )
+    expected_qos_prio_map: Optional[Dict[Any, Any]] = Field(
+        default=None,
+        description="Expected priority-to-TC map (e.g. {0: 0, 1: 1}; keys may be int or str in config). Checked per device when set.",
+    )
+    expected_qos_pfc_enabled: Optional[int] = Field(
+        default=None,
+        description="Expected PFC enabled value (0/1 or bitmask). Checked per device when set.",
+    )
+    expected_qos_tsa_map: Optional[Dict[Any, Any]] = Field(
+        default=None,
+        description="Expected TSA map for ETS (e.g. {0: 'ets', 1: 'strict'}; keys may be int or str in config). Checked per device when set.",
+    )
+    expected_qos_tc_bandwidth: Optional[List[int]] = Field(
+        default=None,
+        description="Expected TC bandwidth percentages. Checked per device when set.",
+    )
+    require_qos_consistent_across_adapters: bool = Field(
+        default=True,
+        description="When True and no expected_qos_* are set, require all adapters to have the same prio_map, pfc_enabled, and tsa_map.",
     )
