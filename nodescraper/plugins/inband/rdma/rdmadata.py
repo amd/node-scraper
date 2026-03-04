@@ -31,6 +31,18 @@ from typing_extensions import Self
 from nodescraper.models import DataModel
 
 
+class RdmaDevice(BaseModel):
+    """RDMA device from 'rdma dev' (text output)."""
+
+    device: str
+    node_type: Optional[str] = None
+    transport: Optional[str] = None
+    node_guid: Optional[str] = None
+    sys_image_guid: Optional[str] = None
+    state: Optional[str] = None
+    attributes: dict[str, str] = Field(default_factory=dict)
+
+
 class RdmaStatistics(BaseModel):
     """RDMA statistic entry from 'rdma statistic -j'."""
 
@@ -47,7 +59,7 @@ class RdmaStatistics(BaseModel):
 
 
 class RdmaLink(BaseModel):
-    """RDMA link entry from 'rdma link -j'."""
+    """RDMA link entry from 'rdma link -j' (JSON)."""
 
     ifindex: Optional[int] = None
     ifname: Optional[str] = None
@@ -64,14 +76,29 @@ class RdmaLink(BaseModel):
         return self
 
 
+class RdmaLinkText(BaseModel):
+    """RDMA link from 'rdma link' (text output)."""
+
+    device: str
+    port: int
+    state: Optional[str] = None
+    physical_state: Optional[str] = None
+    netdev: Optional[str] = None
+    attributes: dict[str, str] = Field(default_factory=dict)
+
+
 class RdmaDataModel(DataModel):
     """
     Data model for RDMA (Remote Direct Memory Access) statistics and link information.
 
     Attributes:
         statistic_list: List of RDMA statistics from 'rdma statistic -j'.
-        link_list: List of RDMA links from 'rdma link -j'.
+        link_list: List of RDMA links from 'rdma link -j' (JSON).
+        dev_list: List of RDMA devices from 'rdma dev' (text).
+        link_list_text: List of RDMA links from 'rdma link' (text).
     """
 
     link_list: list[RdmaLink] = Field(default_factory=list)
     statistic_list: list[RdmaStatistics] = Field(default_factory=list)
+    dev_list: list[RdmaDevice] = Field(default_factory=list)
+    link_list_text: list[RdmaLinkText] = Field(default_factory=list)

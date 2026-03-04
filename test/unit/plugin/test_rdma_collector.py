@@ -63,6 +63,8 @@ def test_collect_success(collector, conn_mock, rdma_link_output, rdma_statistic_
         CommandArtifact(
             exit_code=0, stdout=rdma_statistic_output, stderr="", command="rdma statistic -j"
         ),
+        CommandArtifact(exit_code=0, stdout="", stderr="", command="rdma dev"),
+        CommandArtifact(exit_code=0, stdout="", stderr="", command="rdma link"),
     ]
     res, data = collector.collect_data()
     assert res.status == ExecutionStatus.OK
@@ -77,7 +79,7 @@ def test_collect_success(collector, conn_mock, rdma_link_output, rdma_statistic_
 
 
 def test_collect_both_commands_fail(collector, conn_mock):
-    """When both rdma commands fail, status is EXECUTION_FAILURE and data is None."""
+    """When all rdma commands fail, status is EXECUTION_FAILURE and data is None."""
     collector.system_info.os_family = OSFamily.LINUX
     conn_mock.run_command.return_value = CommandArtifact(
         exit_code=1, stdout="", stderr="rdma command failed", command="rdma link -j"
@@ -93,8 +95,62 @@ def test_collect_empty_output(collector, conn_mock):
     conn_mock.run_command.side_effect = [
         CommandArtifact(exit_code=0, stdout="[]", stderr="", command="rdma link -j"),
         CommandArtifact(exit_code=0, stdout="[]", stderr="", command="rdma statistic -j"),
+        CommandArtifact(exit_code=0, stdout="", stderr="", command="rdma dev"),
+        CommandArtifact(exit_code=0, stdout="", stderr="", command="rdma link"),
     ]
     res, data = collector.collect_data()
     assert res.status == ExecutionStatus.WARNING
     assert res.message == "No RDMA devices found"
     assert data is None
+
+
+# Sample text output for rdma dev / rdma link (non-JSON)
+RDMA_DEV_OUTPUT = """0: abcdef25s0: node_type ca fw 1.117.1-a-63 node_guid 1234:56ff:890f:1111 sys_image_guid 1234:56ff:890f:1111
+1: abcdef105s0: node_type ca fw 1.117.1-a-63 node_guid 2222:81ff:3333:b450 sys_image_guid 2222:81ff:3333:b450"""
+
+RDMA_LINK_OUTPUT = """link rocep9s0/1 state DOWN physical_state POLLING netdev benic8p1
+link abcdef25s0/1 state DOWN physical_state POLLING netdev mock7p1
+"""
+
+
+def test_parse_rdma_dev_roce(collector):
+    """Test parsing rdma dev output with RoCE devices."""
+    devices = collector._parse_rdma_dev(RDMA_DEV_OUTPUT)
+    assert len(devices) == 2
+    device1 = devices[0]
+    assert device1.device == "abcdef25s0"
+    assert device1.node_type == "ca"
+    assert device1.attributes["fw_version"] == "1.117.1-a-63"
+    assert device1.node_guid == "1234:56ff:890f:1111"
+    assert device1.sys_image_guid == "1234:56ff:890f:1111"
+    device2 = devices[1]
+    assert device2.device == "abcdef105s0"
+    assert device2.node_type == "ca"
+    assert device2.node_guid == "2222:81ff:3333:b450"
+
+
+def test_parse_rdma_dev_empty(collector):
+    """Test parsing empty rdma dev output."""
+    devices = collector._parse_rdma_dev("")
+    assert len(devices) == 0
+
+
+def test_parse_rdma_link_text_roce(collector):
+    """Test parsing rdma link (text) output with RoCE devices."""
+    links = collector._parse_rdma_link_text(RDMA_LINK_OUTPUT)
+    assert len(links) == 2
+    link1 = next((link for link in links if link.device == "rocep9s0"), None)
+    assert link1 is not None
+    assert link1.port == 1
+    assert link1.state == "DOWN"
+    assert link1.physical_state == "POLLING"
+    assert link1.netdev == "benic8p1"
+    link2 = next((link for link in links if link.device == "abcdef25s0"), None)
+    assert link2 is not None
+    assert link2.netdev == "mock7p1"
+
+
+def test_parse_rdma_link_text_empty(collector):
+    """Test parsing empty rdma link (text) output."""
+    links = collector._parse_rdma_link_text("")
+    assert len(links) == 0

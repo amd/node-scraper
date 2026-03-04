@@ -24,6 +24,7 @@
 #
 ###############################################################################
 import json
+import re
 from typing import Optional
 
 from pydantic import ValidationError
@@ -33,7 +34,7 @@ from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSF
 from nodescraper.models import TaskResult
 from nodescraper.utils import get_exception_traceback
 
-from .rdmadata import RdmaDataModel, RdmaLink, RdmaStatistics
+from .rdmadata import RdmaDataModel, RdmaDevice, RdmaLink, RdmaLinkText, RdmaStatistics
 
 
 class RdmaCollector(InBandDataCollector[RdmaDataModel, None]):
@@ -44,6 +45,8 @@ class RdmaCollector(InBandDataCollector[RdmaDataModel, None]):
 
     CMD_LINK = "rdma link -j"
     CMD_STATISTIC = "rdma statistic -j"
+    CMD_RDMA_DEV = "rdma dev"
+    CMD_RDMA_LINK = "rdma link"
 
     def _run_rdma_command(self, cmd: str) -> Optional[list[dict]]:
         """Run rdma command with JSON output.
@@ -87,6 +90,86 @@ class RdmaCollector(InBandDataCollector[RdmaDataModel, None]):
                 console_log=True,
             )
             return None
+
+    def _parse_rdma_dev(self, output: str) -> list[RdmaDevice]:
+        """Parse 'rdma dev' output into RdmaDevice objects."""
+        devices = []
+        for line in output.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            parts = line.split()
+            if len(parts) < 2:
+                continue
+            device_name = None
+            start_idx = 0
+            if parts[0].endswith(":"):
+                start_idx = 1
+            if start_idx < len(parts):
+                device_name = parts[start_idx].rstrip(":")
+                start_idx += 1
+            if not device_name:
+                continue
+            device = RdmaDevice(device=device_name)
+            i = start_idx
+            while i < len(parts):
+                if parts[i] == "node_type" and i + 1 < len(parts):
+                    device.node_type = parts[i + 1]
+                    i += 2
+                elif parts[i] == "fw" and i + 1 < len(parts):
+                    device.attributes["fw_version"] = parts[i + 1]
+                    i += 2
+                elif parts[i] == "node_guid" and i + 1 < len(parts):
+                    device.node_guid = parts[i + 1]
+                    i += 2
+                elif parts[i] == "sys_image_guid" and i + 1 < len(parts):
+                    device.sys_image_guid = parts[i + 1]
+                    i += 2
+                elif parts[i] == "state" and i + 1 < len(parts):
+                    device.state = parts[i + 1]
+                    i += 2
+                else:
+                    if i + 1 < len(parts) and not parts[i + 1].startswith("-"):
+                        device.attributes[parts[i]] = parts[i + 1]
+                        i += 2
+                    else:
+                        i += 1
+            devices.append(device)
+        return devices
+
+    def _parse_rdma_link_text(self, output: str) -> list[RdmaLinkText]:
+        """Parse 'rdma link' (text) output into RdmaLinkText objects."""
+        links = []
+        for line in output.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            match = re.search(r"(\S+)/(\d+)", line)
+            if not match:
+                continue
+            device_name = match.group(1)
+            port = int(match.group(2))
+            link = RdmaLinkText(device=device_name, port=port)
+            parts = line.split()
+            i = 0
+            while i < len(parts):
+                if parts[i] == "state" and i + 1 < len(parts):
+                    link.state = parts[i + 1]
+                    i += 2
+                elif parts[i] == "physical_state" and i + 1 < len(parts):
+                    link.physical_state = parts[i + 1]
+                    i += 2
+                elif parts[i] == "netdev" and i + 1 < len(parts):
+                    link.netdev = parts[i + 1]
+                    i += 2
+                else:
+                    if i + 1 < len(parts) and not parts[i + 1].startswith("-"):
+                        link.attributes[parts[i]] = parts[i + 1]
+                        i += 2
+                    else:
+                        i += 1
+            links.append(link)
+        return links
 
     def _get_rdma_statistics(self) -> Optional[list[RdmaStatistics]]:
         """Get RDMA statistics from 'rdma statistic -j'."""
@@ -148,16 +231,50 @@ class RdmaCollector(InBandDataCollector[RdmaDataModel, None]):
         return links
 
     def collect_data(self, args: None = None) -> tuple[TaskResult, Optional[RdmaDataModel]]:
-        """Collect RDMA statistics and link data.
+        """Collect RDMA statistics, link data, and device/link text output.
 
         Returns:
-            Task result and RdmaDataModel, or None if both commands failed.
+            Task result and RdmaDataModel, or None if all commands failed.
         """
         try:
             links = self._get_rdma_link()
             statistics = self._get_rdma_statistics()
 
-            if statistics is None and links is None:
+            dev_list: list[RdmaDevice] = []
+            res_rdma_dev = self._run_sut_cmd(self.CMD_RDMA_DEV)
+            if res_rdma_dev.exit_code == 0:
+                dev_list = self._parse_rdma_dev(res_rdma_dev.stdout)
+                self._log_event(
+                    category=EventCategory.NETWORK,
+                    description=f"Collected {len(dev_list)} RDMA devices from 'rdma dev'",
+                    priority=EventPriority.INFO,
+                )
+            else:
+                self._log_event(
+                    category=EventCategory.NETWORK,
+                    description="Error or no output from 'rdma dev'",
+                    data={"command": self.CMD_RDMA_DEV, "exit_code": res_rdma_dev.exit_code},
+                    priority=EventPriority.WARNING,
+                )
+
+            link_list_text: list[RdmaLinkText] = []
+            res_rdma_link = self._run_sut_cmd(self.CMD_RDMA_LINK)
+            if res_rdma_link.exit_code == 0:
+                link_list_text = self._parse_rdma_link_text(res_rdma_link.stdout)
+                self._log_event(
+                    category=EventCategory.NETWORK,
+                    description=f"Collected {len(link_list_text)} RDMA links from 'rdma link'",
+                    priority=EventPriority.INFO,
+                )
+            else:
+                self._log_event(
+                    category=EventCategory.NETWORK,
+                    description="Error or no output from 'rdma link'",
+                    data={"command": self.CMD_RDMA_LINK, "exit_code": res_rdma_link.exit_code},
+                    priority=EventPriority.WARNING,
+                )
+
+            if statistics is None and links is None and not dev_list and not link_list_text:
                 self.result.status = ExecutionStatus.EXECUTION_FAILURE
                 self.result.message = "Failed to collect RDMA data"
                 return self.result, None
@@ -165,15 +282,23 @@ class RdmaCollector(InBandDataCollector[RdmaDataModel, None]):
             rdma_data = RdmaDataModel(
                 statistic_list=statistics if statistics is not None else [],
                 link_list=links if links is not None else [],
+                dev_list=dev_list,
+                link_list_text=link_list_text,
             )
-            if not rdma_data.statistic_list and not rdma_data.link_list:
+            if (
+                not rdma_data.statistic_list
+                and not rdma_data.link_list
+                and not rdma_data.dev_list
+                and not rdma_data.link_list_text
+            ):
                 self.result.status = ExecutionStatus.WARNING
                 self.result.message = "No RDMA devices found"
                 return self.result, None
 
             self.result.message = (
                 f"Collected {len(rdma_data.statistic_list)} RDMA statistics, "
-                f"{len(rdma_data.link_list)} RDMA links"
+                f"{len(rdma_data.link_list)} RDMA links (JSON), "
+                f"{len(rdma_data.dev_list)} devices, {len(rdma_data.link_list_text)} links (text)"
             )
             self.result.status = ExecutionStatus.OK
             return self.result, rdma_data
