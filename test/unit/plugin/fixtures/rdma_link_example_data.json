@@ -1,0 +1,38 @@
+[
+    {
+        "ifindex": 0,
+        "ifname": "ionic_0",
+        "port": 1,
+        "state": "ACTIVE",
+        "physical_state": "LINK_UP",
+        "netdev": "benic8p1",
+        "netdev_index": 3
+    },
+    {
+        "ifindex": 1,
+        "ifname": "ionic_1",
+        "port": 1,
+        "state": "ACTIVE",
+        "physical_state": "LINK_UP",
+        "netdev": "benic7p1",
+        "netdev_index": 6
+    },
+    {
+        "ifindex": 2,
+        "ifname": "ionic_2",
+        "port": 1,
+        "state": "ACTIVE",
+        "physical_state": "LINK_UP",
+        "netdev": "benic5p1",
+        "netdev_index": 8
+    },
+    {
+        "ifindex": 3,
+        "ifname": "ionic_3",
+        "port": 1,
+        "state": "ACTIVE",
+        "physical_state": "LINK_UP",
+        "netdev": "benic6p1",
+        "netdev_index": 9
+    }
+]
