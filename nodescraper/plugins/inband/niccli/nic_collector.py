@@ -33,7 +33,7 @@ from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
 from nodescraper.models import TaskResult
 
 from .collector_args import NicCollectorArgs
-from .niccli_data import (
+from .nic_data import (
     NicCliDevice,
     NicCliQos,
     NicCliQosAppEntry,
@@ -562,8 +562,12 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
             pensando_version_firmware,
         ) = self._collect_pensando_nic_structured(results)
 
-        self.result.status = ExecutionStatus.OK
-        self.result.message = f"Collected {len(results)} niccli/nicctl command results"
+        if not results or all(r.exit_code != 0 for r in results.values()):
+            self.result.status = ExecutionStatus.EXECUTION_FAILURE
+            self.result.message = "All niccli/nicctl commands failed or no commands were run"
+        else:
+            self.result.status = ExecutionStatus.OK
+            self.result.message = f"Collected {len(results)} niccli/nicctl command results"
         return self.result, NicDataModel(
             results=results_for_model,
             card_show=None,

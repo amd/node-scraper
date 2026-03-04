@@ -9,9 +9,9 @@ from nodescraper.base import InBandDataPlugin
 
 from .analyzer_args import NicAnalyzerArgs
 from .collector_args import NicCollectorArgs
-from .niccli_analyzer import NicAnalyzer
-from .niccli_collector import NicCollector
-from .niccli_data import NicDataModel
+from .nic_analyzer import NicAnalyzer
+from .nic_collector import NicCollector
+from .nic_data import NicDataModel
 
 
 class NicPlugin(InBandDataPlugin[NicDataModel, NicCollectorArgs, NicAnalyzerArgs]):

@@ -5,6 +5,7 @@
 # Copyright (c) 2025 Advanced Micro Devices, Inc.
 #
 ###############################################################################
+"""Analyzer for NicPlugin: checks Broadcom support_rdma and other expected values."""
 
 from typing import Optional
 
@@ -13,13 +14,14 @@ from nodescraper.interfaces import DataAnalyzer
 from nodescraper.models import TaskResult
 
 from .analyzer_args import NicAnalyzerArgs
-from .niccli_data import NicDataModel
+from .nic_data import NicDataModel
 
+# Values that indicate RDMA is not supported (case-insensitive).
 SUPPORT_RDMA_DISABLED_VALUES = frozenset({"0", "false", "disabled", "no", "off"})
 
 
 class NicAnalyzer(DataAnalyzer[NicDataModel, NicAnalyzerArgs]):
-    """Analyze niccli/nicctl data;"""
+    """Analyze niccli/nicctl data; checks Broadcom support_rdma (niccli -dev x nvm -getoption support_rdma -scope 0)."""
 
     DATA_MODEL = NicDataModel
 

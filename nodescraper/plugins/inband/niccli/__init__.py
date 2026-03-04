@@ -23,6 +23,6 @@
 # SOFTWARE.
 #
 ###############################################################################
-from .niccli_plugin import NicPlugin
+from .nic_plugin import NicPlugin
 
 __all__ = ["NicPlugin"]

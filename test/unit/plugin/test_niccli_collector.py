@@ -12,8 +12,8 @@ import pytest
 from nodescraper.enums.executionstatus import ExecutionStatus
 from nodescraper.enums.systeminteraction import SystemInteractionLevel
 from nodescraper.models.systeminfo import OSFamily
-from nodescraper.plugins.inband.niccli.niccli_collector import NicCollector
-from nodescraper.plugins.inband.niccli.niccli_data import (
+from nodescraper.plugins.inband.niccli.nic_collector import NicCollector
+from nodescraper.plugins.inband.niccli.nic_data import (
     NicCliDevice,
     NicCliQos,
     NicDataModel,
