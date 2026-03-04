@@ -480,21 +480,27 @@ def main(arg_input: Optional[list[str]] = None):
         dump_results_to_csv(results, sname, log_path, timestamp, logger)
 
         if parsed_args.reference_config:
-            ref_config = generate_reference_config(results, plugin_reg, logger)
-            if log_path:
-                path = os.path.join(log_path, "reference_config.json")
+            if any(result.status > ExecutionStatus.WARNING for result in results):
+                logger.warning("Skipping reference config write because one or more plugins failed")
             else:
-                path = os.path.join(os.getcwd(), "reference_config.json")
-            try:
-                with open(path, "w") as f:
-                    json.dump(
-                        ref_config.model_dump(mode="json", exclude_none=True),
-                        f,
-                        indent=2,
-                    )
-                    logger.info("Reference config written to: %s", path)
-            except Exception as exp:
-                logger.error(exp)
+                merged_plugin_config = PluginExecutor.merge_configs(plugin_config_inst_list)
+                ref_config = generate_reference_config(
+                    results, plugin_reg, logger, run_plugin_config=merged_plugin_config
+                )
+                if log_path:
+                    path = os.path.join(log_path, "reference_config.json")
+                else:
+                    path = os.path.join(os.getcwd(), "reference_config.json")
+                try:
+                    with open(path, "w") as f:
+                        json.dump(
+                            ref_config.model_dump(mode="json", exclude_none=True),
+                            f,
+                            indent=2,
+                        )
+                        logger.info("Reference config written to: %s", path)
+                except Exception as exp:
+                    logger.error(exp)
 
         if any(result.status > ExecutionStatus.WARNING for result in results):
             sys.exit(1)
