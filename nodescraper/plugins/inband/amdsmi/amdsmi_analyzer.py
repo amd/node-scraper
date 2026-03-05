@@ -35,7 +35,6 @@ from .amdsmidata import (
     AmdSmiDataModel,
     AmdSmiMetric,
     AmdSmiStatic,
-    AmdSmiTstData,
     EccData,
     Fw,
     Partition,
@@ -47,7 +46,7 @@ from .cper import CperAnalysisTaskMixin
 
 
 class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None]):
-    """Check AMD SMI Application data for PCIe, ECC errors, CPER data, and analyze amdsmitst metrics"""
+    """Check AMD SMI Application data for PCIe, ECC errors, and CPER data."""
 
     DATA_MODEL = AmdSmiDataModel
 
@@ -727,24 +726,6 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                 console_log=True,
             )
 
-    def check_amdsmitst(self, amdsmitst_data: AmdSmiTstData):
-        """Check AMD SMI test results
-
-        Args:
-            amdsmitst_data (AmdSmiTstData): AMD SMI test data
-        """
-        if amdsmitst_data.failed_test_count > 0:
-            self._log_event(
-                category=EventCategory.APPLICATION,
-                description=f"{amdsmitst_data.failed_test_count} failed tests running amdsmitst",
-                priority=EventPriority.ERROR,
-                data={
-                    "failed_test_count": amdsmitst_data.failed_test_count,
-                    "failed_tests": amdsmitst_data.failed_tests,
-                },
-                console_log=True,
-            )
-
     def analyze_data(
         self, data: AmdSmiDataModel, args: Optional[AmdSmiAnalyzerArgs] = None
     ) -> TaskResult:
@@ -829,8 +810,5 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
             self.check_expected_xgmi_link_speed(
                 data.xgmi_metric, expected_xgmi_speed=args.expected_xgmi_speed
             )
-
-        if data.amdsmitst_data and data.amdsmitst_data.failed_test_count > 0:
-            self.check_amdsmitst(data.amdsmitst_data)
 
         return self.result

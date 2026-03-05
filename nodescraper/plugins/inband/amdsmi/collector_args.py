@@ -32,4 +32,3 @@ class AmdSmiCollectorArgs(CollectorArgs):
     """Collector arguments for AmdSmiPlugin"""
 
     cper_file_path: Optional[str] = None
-    run_amdsmitst: Optional[bool] = False

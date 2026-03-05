@@ -33,7 +33,6 @@ from pydantic import BaseModel, ValidationError
 
 from nodescraper.base.inbandcollectortask import InBandDataCollector
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
-from nodescraper.enums.systeminteraction import SystemInteractionLevel
 from nodescraper.models import TaskResult
 from nodescraper.models.datamodel import FileModel
 from nodescraper.plugins.inband.amdsmi.amdsmidata import (
@@ -41,7 +40,6 @@ from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     AmdSmiListItem,
     AmdSmiMetric,
     AmdSmiStatic,
-    AmdSmiTstData,
     AmdSmiVersion,
     BadPages,
     EccState,
@@ -101,7 +99,6 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
     CMD_XGMI_LINK = "xgmi -l"
     CMD_RAS = "ras --cper --folder={folder}"
     CMD_RAS_AFID = "ras --afid --cper-file {cper_file}"
-    AMDSMITST_PATH = "/opt/rocm/share/amd_smi/tests/amdsmitst"
 
     def _check_amdsmi_installed(self) -> bool:
         """Check if amd-smi is installed
@@ -446,60 +443,6 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
 
         return xgmi_metrics or [], xgmi_links or []
 
-    def get_amdsmitst_data(self, version: Optional[AmdSmiVersion]) -> AmdSmiTstData:
-        """Run amdsmitst and parse passed/skipped/failed counts. Only runs when run_amdsmitst is True and system interaction is DISRUPTIVE."""
-        result = AmdSmiTstData()
-        try:
-            from packaging.version import Version as PackageVersion
-        except ImportError:
-            self.logger.info("packaging not installed; skipping amdsmitst")
-            return result
-
-        min_rocm = PackageVersion("6.4.2")
-        if version is None or not version.rocm_version:
-            return result
-        try:
-            if PackageVersion(version.rocm_version) < min_rocm:
-                self.logger.info("Skipping amdsmitst: ROCm %s < %s", version.rocm_version, min_rocm)
-                return result
-        except Exception:
-            return result
-
-        if self.system_interaction_level != SystemInteractionLevel.DISRUPTIVE:
-            return result
-
-        res = self._run_sut_cmd(self.AMDSMITST_PATH, sudo=True)
-        if res.exit_code != 0 or not res.stdout:
-            if res.exit_code != 0:
-                self._log_event(
-                    category=EventCategory.APPLICATION,
-                    description="Error running amdsmitst",
-                    data={"exit_code": res.exit_code, "stderr": res.stderr},
-                    priority=EventPriority.WARNING,
-                    console_log=True,
-                )
-            return result
-
-        passed_pat = re.compile(r"\[\s+OK\s+\]\s+(.*?)\s+\(\d+\s*ms\)")
-        skipped_pat = re.compile(r"\[\s+SKIPPED\s+\]\s+(.*?)\s+\(\d+\s*ms\)")
-        failed_pat = re.compile(r"\[\s+FAILED\s+\]\s+(.*?)\s+\(\d+\s*ms\)")
-        for line in res.stdout.splitlines():
-            m = passed_pat.match(line)
-            if m:
-                result.passed_tests.append(m.group(1).strip())
-                continue
-            m = skipped_pat.match(line)
-            if m:
-                result.skipped_tests.append(m.group(1).strip())
-                continue
-            m = failed_pat.match(line)
-            if m:
-                result.failed_tests.append(m.group(1).strip())
-        result.passed_test_count = len(result.passed_tests)
-        result.skipped_test_count = len(result.skipped_tests)
-        result.failed_test_count = len(result.failed_tests)
-        return result
-
     def _get_amdsmi_data(
         self, args: Optional[AmdSmiCollectorArgs] = None
     ) -> Optional[AmdSmiDataModel]:
@@ -520,11 +463,6 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
             bad_pages = self.get_bad_pages()
             xgmi_metric, xgmi_link = self.get_xgmi_data()
             cper_data, cper_afids = self.get_cper_data()
-            amdsmitst_data = (
-                self.get_amdsmitst_data(version)
-                if (args and getattr(args, "run_amdsmitst", False))
-                else AmdSmiTstData()
-            )
         except Exception as e:
             self._log_event(
                 category=EventCategory.APPLICATION,
@@ -551,7 +489,6 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
                 xgmi_link=xgmi_link or [],
                 cper_data=cper_data,
                 cper_afids=cper_afids,
-                amdsmitst_data=amdsmitst_data,
             )
         except ValidationError as err:
             self.logger.warning("Validation err: %s", err)

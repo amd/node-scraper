@@ -35,8 +35,6 @@ from nodescraper.enums.systeminteraction import SystemInteractionLevel
 from nodescraper.plugins.inband.amdsmi.amdsmi_collector import AmdSmiCollector
 from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     AmdSmiDataModel,
-    AmdSmiTstData,
-    AmdSmiVersion,
 )
 from nodescraper.plugins.inband.amdsmi.collector_args import AmdSmiCollectorArgs
 
@@ -777,109 +775,6 @@ def test_get_cper_data_no_cper_files(conn_mock, system_info, monkeypatch):
 
     assert cper_files == []
     assert cper_afids == {}
-
-
-def test_get_amdsmitst_data_returns_empty_when_version_none(collector):
-    """get_amdsmitst_data(None) returns empty AmdSmiTstData."""
-    result = collector.get_amdsmitst_data(None)
-    assert isinstance(result, AmdSmiTstData)
-    assert result.passed_test_count == 0
-    assert result.skipped_test_count == 0
-    assert result.failed_test_count == 0
-    assert result.passed_tests == []
-    assert result.skipped_tests == []
-    assert result.failed_tests == []
-
-
-def test_get_amdsmitst_data_returns_empty_when_rocm_below_min(conn_mock, system_info, monkeypatch):
-    """get_amdsmitst_data with ROCm < 6.4.2 returns empty (amdsmitst not run)."""
-    c = AmdSmiCollector(
-        system_info=system_info,
-        system_interaction_level=SystemInteractionLevel.DISRUPTIVE,
-        connection=conn_mock,
-    )
-    monkeypatch.setattr(c, "_run_sut_cmd", lambda *args, **kwargs: make_cmd_result(""))
-
-    version_old = AmdSmiVersion(
-        tool="amdsmi",
-        version="25.5.1",
-        amdsmi_library_version="25.5.1",
-        rocm_version="6.4.0",
-    )
-    result = c.get_amdsmitst_data(version_old)
-    assert isinstance(result, AmdSmiTstData)
-    assert result.passed_test_count == 0
-    assert result.failed_test_count == 0
-    assert result.skipped_test_count == 0
-
-
-def test_get_amdsmitst_data_parses_stdout(conn_mock, system_info, monkeypatch):
-    """get_amdsmitst_data parses [ OK ], [ SKIPPED ], [ FAILED ] lines when DISRUPTIVE and ROCm >= 6.4.2."""
-    amdsmitst_stdout = (
-        "[  OK  ] amdsmitstReadOnly.TestVersionRead (12 ms)\n"
-        "[  OK  ] amdsmitstReadOnly.TestStaticRead (5 ms)\n"
-        "[  OK  ] amdsmitstReadOnly.TestFirmwareRead (8 ms)\n"
-        "[  SKIPPED  ] amdsmitstReadWrite.TestXGMIReadWrite (0 ms)\n"
-        "[  FAILED  ] amdsmitstReadWrite.TestPerfDeterminism (100 ms)\n"
-        "[  FAILED  ] amdsmitstReadWrite.TestOtherFail (50 ms)\n"
-    )
-
-    def mock_run_sut_cmd(cmd: str, sudo: bool = False) -> MagicMock:
-        if cmd == AmdSmiCollector.AMDSMITST_PATH:
-            return make_cmd_result(amdsmitst_stdout)
-        return make_cmd_result("")
-
-    c = AmdSmiCollector(
-        system_info=system_info,
-        system_interaction_level=SystemInteractionLevel.DISRUPTIVE,
-        connection=conn_mock,
-    )
-    monkeypatch.setattr(c, "_run_sut_cmd", mock_run_sut_cmd)
-
-    version_ok = AmdSmiVersion(
-        tool="amdsmi",
-        version="25.5.1",
-        amdsmi_library_version="25.5.1",
-        rocm_version="6.4.2",
-    )
-    result = c.get_amdsmitst_data(version_ok)
-
-    assert result.passed_test_count == 3
-    assert result.skipped_test_count == 1
-    assert result.failed_test_count == 2
-    assert "amdsmitstReadOnly.TestVersionRead" in result.passed_tests
-    assert "amdsmitstReadWrite.TestXGMIReadWrite" in result.skipped_tests
-    assert "amdsmitstReadWrite.TestPerfDeterminism" in result.failed_tests
-    assert "amdsmitstReadWrite.TestOtherFail" in result.failed_tests
-
-
-def test_get_amdsmitst_data_returns_empty_on_command_failure(conn_mock, system_info, monkeypatch):
-    """get_amdsmitst_data returns empty AmdSmiTstData when amdsmitst command fails."""
-
-    def mock_run_sut_cmd(cmd: str, sudo: bool = False) -> MagicMock:
-        if cmd == AmdSmiCollector.AMDSMITST_PATH:
-            return make_cmd_result("", stderr="No such file or directory", exit_code=255)
-        return make_cmd_result("")
-
-    c = AmdSmiCollector(
-        system_info=system_info,
-        system_interaction_level=SystemInteractionLevel.DISRUPTIVE,
-        connection=conn_mock,
-    )
-    monkeypatch.setattr(c, "_run_sut_cmd", mock_run_sut_cmd)
-
-    version_ok = AmdSmiVersion(
-        tool="amdsmi",
-        version="25.5.1",
-        amdsmi_library_version="25.5.1",
-        rocm_version="6.4.2",
-    )
-    result = c.get_amdsmitst_data(version_ok)
-
-    assert result == AmdSmiTstData()
-    assert result.passed_test_count == 0
-    assert result.skipped_test_count == 0
-    assert result.failed_test_count == 0
 
 
 def test_collect_data_with_both_auto_and_custom_cper(conn_mock, system_info, monkeypatch):

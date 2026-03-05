@@ -34,7 +34,6 @@ from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     AmdSmiDataModel,
     AmdSmiMetric,
     AmdSmiStatic,
-    AmdSmiTstData,
     AmdSmiVersion,
     EccState,
     Fw,
@@ -682,43 +681,6 @@ def test_check_expected_xgmi_link_speed_missing_bit_rate(mock_analyzer):
     assert "XGMI link speed is not available" in analyzer.result.events[0].description
 
 
-def test_check_amdsmitst_success(mock_analyzer):
-    """Test check_amdsmitst passes when no tests failed."""
-    analyzer = mock_analyzer
-
-    tst_data = AmdSmiTstData(
-        passed_tests=["test1", "test2", "test3"],
-        skipped_tests=[],
-        failed_tests=[],
-        failed_test_count=0,
-    )
-
-    analyzer.check_amdsmitst(tst_data)
-
-    assert len(analyzer.result.events) == 0
-
-
-def test_check_amdsmitst_failures(mock_analyzer):
-    """Test check_amdsmitst logs error when tests failed."""
-    analyzer = mock_analyzer
-
-    tst_data = AmdSmiTstData(
-        passed_tests=["test1", "test2"],
-        skipped_tests=["test3"],
-        failed_tests=["test4", "test5"],
-        failed_test_count=2,
-    )
-
-    analyzer.check_amdsmitst(tst_data)
-
-    assert len(analyzer.result.events) == 1
-    assert analyzer.result.events[0].category == "APPLICATION"
-    assert analyzer.result.events[0].priority == EventPriority.ERROR
-    assert "2 failed tests running amdsmitst" in analyzer.result.events[0].description
-    assert analyzer.result.events[0].data["failed_test_count"] == 2
-    assert analyzer.result.events[0].data["failed_tests"] == ["test4", "test5"]
-
-
 def test_analyze_data_full_workflow(mock_analyzer):
     """Test full analyze_data workflow with various checks."""
     analyzer = mock_analyzer
@@ -769,12 +731,6 @@ def test_analyze_data_full_workflow(mock_analyzer):
                 ),
             ),
         ],
-        amdsmitst_data=AmdSmiTstData(
-            passed_tests=["test1", "test2"],
-            skipped_tests=[],
-            failed_tests=[],
-            failed_test_count=0,
-        ),
     )
 
     args = AmdSmiAnalyzerArgs(

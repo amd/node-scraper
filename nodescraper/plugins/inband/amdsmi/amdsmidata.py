@@ -927,17 +927,6 @@ class Topo(BaseModel):
     links: list[TopoLink]
 
 
-class AmdSmiTstData(BaseModel):
-    "Summary of amdsmitst results, with list and count of passing/skipped/failed tests"
-
-    passed_tests: list[str] = Field(default_factory=list)
-    skipped_tests: list[str] = Field(default_factory=list)
-    failed_tests: list[str] = Field(default_factory=list)
-    passed_test_count: int = 0
-    skipped_test_count: int = 0
-    failed_test_count: int = 0
-
-
 class AmdSmiDataModel(DataModel):
     """Data model for amd-smi data.
 
@@ -967,7 +956,6 @@ class AmdSmiDataModel(DataModel):
     xgmi_link: Optional[list[XgmiLinks]] = Field(default_factory=list)
     cper_data: Optional[list[FileModel]] = Field(default_factory=list)
     cper_afids: dict[str, int] = Field(default_factory=dict)
-    amdsmitst_data: AmdSmiTstData = Field(default_factory=AmdSmiTstData)
 
     def get_list(self, gpu: int) -> Optional[AmdSmiListItem]:
         """Get the gpu list item for the given gpu id."""
