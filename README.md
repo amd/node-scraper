@@ -85,7 +85,7 @@ options:
   --sys-platform STRING
                         Specify system platform (default: None)
   --plugin-configs [STRING ...]
-                        built-in config names or paths to plugin config JSONs. Available built-in configs: NodeStatus (default: None)
+                        built-in config names or paths to plugin config JSONs. Available built-in configs: AllPlugins, NodeStatus (default: None)
   --system-config STRING
                         Path to system config json (default: None)
   --connection-config STRING
@@ -370,7 +370,11 @@ Below is an example that skips sudo requiring plugins and disables analysis.
 ```
 
 #### Plugin config: **'--plugin-configs' command**
-A plugin config can be used to compare the system data against the config specifications:
+A plugin config can be used to compare the system data against the config specifications.
+Built-in configs include **NodeStatus** (a subset of plugins) and **AllPlugins** (runs every
+registered plugin with default arguments—useful for generating a reference config from the full system).
+
+Using a JSON file:
 ```sh
 node-scraper --plugin-configs plugin_config.json
 ```
@@ -431,7 +435,16 @@ Here is an example of a comprehensive plugin config that specifies analyzer args
 This command can be used to generate a reference config that is populated with current system
 configurations. Plugins that use analyzer args (where applicable) will be populated with system
 data.
-Sample command:
+
+**Generate a reference config using all registered plugins** (built-in `AllPlugins` config):
+```sh
+node-scraper --gen-reference-config --plugin-configs AllPlugins
+```
+This runs every plugin with default arguments and writes the resulting reference config to
+`./reference_config.json` (or to the log directory if `--log-path` is set). The subcommand
+`run-plugins` is the default, so it can be omitted.
+
+**Generate a reference config for specific plugins:**
 ```sh
 node-scraper --gen-reference-config run-plugins BiosPlugin OsPlugin
 
