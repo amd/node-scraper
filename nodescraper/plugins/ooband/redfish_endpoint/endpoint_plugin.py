@@ -39,12 +39,7 @@ class RedfishEndpointPlugin(
         RedfishEndpointAnalyzerArgs,
     ]
 ):
-    """Config-driven plugin: collect from Redfish URIs and check against thresholds/key-values.
-
-    - RF base address: set via connection config (RedfishConnectionManager).
-    - URIs to check: set in collection_args.uris or in a config file (collection_args.config_file).
-    - Key/value and threshold checks: set in analysis_args.checks (URI or '*' -> property_path -> constraint).
-    """
+    """Config-driven plugin: collect from Redfish URIs and check against thresholds/key-values."""
 
     DATA_MODEL = RedfishEndpointDataModel
     COLLECTOR = RedfishEndpointCollector

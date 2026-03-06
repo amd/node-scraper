@@ -130,7 +130,7 @@ In-band (SSH) connection:
 }
 ```
 
-Redfish (BMC) connection for Redfish-only plugins (see [docs/REDFISH_CONNECTION.md](docs/REDFISH_CONNECTION.md)):
+Redfish (BMC) connection for Redfish-only plugins:
 
 ```json
 {
