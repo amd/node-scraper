@@ -33,7 +33,9 @@ import pytest
 
 from nodescraper.enums.systeminteraction import SystemInteractionLevel
 from nodescraper.plugins.inband.amdsmi.amdsmi_collector import AmdSmiCollector
-from nodescraper.plugins.inband.amdsmi.amdsmidata import AmdSmiDataModel
+from nodescraper.plugins.inband.amdsmi.amdsmidata import (
+    AmdSmiDataModel,
+)
 from nodescraper.plugins.inband.amdsmi.collector_args import AmdSmiCollectorArgs
 
 
@@ -408,6 +410,85 @@ def test_cache_properties_parsing(collector):
     assert isinstance(item.cache.value, str) and item.cache.value.startswith("Label_")
     assert item.cache_properties
     assert {"PropertyA", "PropertyB", "PropertyC"}.issubset(set(item.cache_properties))
+
+
+def test_static_data_without_vbios_defaults_to_none(conn_mock, system_info, monkeypatch):
+    """When static JSON has no vbios block, get_static() yields AmdSmiStatic with vbios=None"""
+
+    static_payload = {
+        "gpu_data": [
+            {
+                "gpu": 0,
+                "asic": {
+                    "market_name": "SomeGPU",
+                    "vendor_id": "1002",
+                    "vendor_name": "AMD",
+                    "subvendor_id": "1ABC",
+                    "device_id": "0x1234",
+                    "subsystem_id": "0x5678",
+                    "rev_id": "A1",
+                    "asic_serial": "ASERIAL",
+                    "oam_id": 0,
+                    "num_compute_units": 224,
+                    "target_graphics_version": "GFX940",
+                },
+                "board": {
+                    "model_number": "Board-42",
+                    "product_serial": "SN0001",
+                    "fru_id": "FRU-1",
+                    "product_name": "ExampleBoard",
+                    "manufacturer_name": "ACME",
+                },
+                "bus": {
+                    "bdf": "0000:0b:00.0",
+                    "max_pcie_width": 16,
+                    "max_pcie_speed": 16.0,
+                    "pcie_interface_version": "PCIe 5.0",
+                    "slot_type": "PCIe",
+                },
+                "driver": {"driver_name": "amdgpu", "driver_version": "6.1.0"},
+                "numa": {"node": 3, "affinity": 0},
+                "vram": {
+                    "vram_type": "HBM3",
+                    "vram_vendor": "Micron",
+                    "vram_bit_width": 4096,
+                    "vram_size_mb": 65536,
+                },
+                "cache": {
+                    "cache": [
+                        {
+                            "cache_level": 1,
+                            "max_num_cu_shared": 8,
+                            "num_cache_instance": 32,
+                            "cache_size": 262144,
+                            "cache_properties": "PropertyA; PropertyB; PropertyC",
+                        }
+                    ]
+                },
+                "clock": {"frequency": [500, 1500, 2000], "current": 1},
+                "soc_pstate": {},
+                "xgmi_plpd": {},
+            }
+        ]
+    }
+
+    def mock_run_sut_cmd(cmd: str) -> MagicMock:
+        if "which amd-smi" in cmd:
+            return make_cmd_result("/usr/bin/amd-smi")
+        if "static -g all --json" in cmd:
+            return make_cmd_result(make_json_response(static_payload))
+        return make_cmd_result("")
+
+    c = AmdSmiCollector(
+        system_info=system_info,
+        system_interaction_level=SystemInteractionLevel.PASSIVE,
+        connection=conn_mock,
+    )
+    monkeypatch.setattr(c, "_run_sut_cmd", mock_run_sut_cmd)
+
+    stat = c.get_static()
+    assert stat is not None and len(stat) == 1
+    assert stat[0].vbios is None
 
 
 def test_json_parse_error(conn_mock, system_info, monkeypatch):

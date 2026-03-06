@@ -299,7 +299,7 @@ def test_invalid_rocm_version_format(collector):
 
 
 def test_collect_rocm_sub_versions(collector):
-    """Test collection of ROCm version and multiple sub-versions (mirrors error-scraper test_run_new_version)."""
+    """Test collection of ROCm version and multiple sub-versions."""
     sub_versions_stdout = (
         "/opt/rocm/.info/version:6.4.0-47\n"
         "/opt/rocm/.info/version-hip-libraries:6.4.0-47\n"
