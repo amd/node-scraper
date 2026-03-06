@@ -116,6 +116,8 @@ node-scraper --sys-name <remote_host> --sys-location REMOTE --connection-config 
 
 ##### Example: connection_config.json
 
+In-band (SSH) connection:
+
 ```json
 {
     "InBandConnectionManager": {
@@ -124,6 +126,20 @@ node-scraper --sys-name <remote_host> --sys-location REMOTE --connection-config 
         "username": "myuser",
         "password": "mypassword",
         "key_filename": "/path/to/private/key"
+    }
+}
+```
+
+Redfish (BMC) connection for Redfish-only plugins (see [docs/REDFISH_CONNECTION.md](docs/REDFISH_CONNECTION.md)):
+
+```json
+{
+    "RedfishConnectionManager": {
+        "host": "bmc.example.com",
+        "port": 443,
+        "username": "admin",
+        "password": "secret",
+        "use_https": true
     }
 }
 ```

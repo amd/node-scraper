@@ -87,7 +87,8 @@ def plugin_registry():
                 PluginConfig(plugins={"Plugin1": {"arg1": "val1", "argA": "valA"}}),
                 PluginConfig(plugins={"Plugin1": {"arg1": "val2"}}),
             ],
-            PluginConfig(plugins={"Plugin1": {"arg1": "val2"}}),
+            # Deep merge: later config's keys override, existing keys preserved.
+            PluginConfig(plugins={"Plugin1": {"arg1": "val2", "argA": "valA"}}),
         ),
         (
             [
