@@ -23,8 +23,6 @@
 # SOFTWARE.
 #
 ###############################################################################
-import json
-from pathlib import Path
 from typing import Optional
 
 from nodescraper.base import RedfishDataCollector
@@ -36,20 +34,10 @@ from .endpoint_data import RedfishEndpointDataModel
 
 
 def _uris_from_args(args: Optional[RedfishEndpointCollectorArgs]) -> list[str]:
-    """Resolve list of URIs from collector args, optionally loading from config_file."""
+    """Return list of URIs from collector args.uris."""
     if args is None:
         return []
-    uris = list(args.uris) if args.uris else []
-    if args.config_file:
-        path = Path(args.config_file)
-        if path.is_file():
-            try:
-                data = json.loads(path.read_text(encoding="utf-8"))
-                if isinstance(data, dict) and "uris" in data:
-                    uris = list(data["uris"]) or uris
-            except (json.JSONDecodeError, OSError):
-                pass
-    return uris
+    return list(args.uris) if args.uris else []
 
 
 class RedfishEndpointCollector(

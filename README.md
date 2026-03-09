@@ -139,10 +139,14 @@ Redfish (BMC) connection for Redfish-only plugins:
         "port": 443,
         "username": "admin",
         "password": "secret",
-        "use_https": true
+        "use_https": true,
+        "verify_ssl": true,
+        "api_root": "redfish/v1"
     }
 }
 ```
+
+- `api_root` (optional): Redfish API path (e.g. `redfish/v1`). If omitted, the default `redfish/v1` is used. Override this when your BMC uses a different API version path.
 
 **Notes:**
 - If using SSH keys, specify `key_filename` instead of `password`.

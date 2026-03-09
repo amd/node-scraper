@@ -28,6 +28,8 @@ from typing import Optional, Union
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 from pydantic.networks import IPvAnyAddress
 
+from .redfish_connection import DEFAULT_REDFISH_API_ROOT
+
 
 class RedfishConnectionParams(BaseModel):
     """Connection parameters for a Redfish (BMC) API endpoint."""
@@ -45,3 +47,7 @@ class RedfishConnectionParams(BaseModel):
     )
     timeout_seconds: float = Field(default=10.0, gt=0, le=300)
     use_session_auth: bool = True
+    api_root: str = Field(
+        default=DEFAULT_REDFISH_API_ROOT,
+        description="Redfish API path (e.g. 'redfish/v1'). Override for a different API version.",
+    )

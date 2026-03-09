@@ -34,6 +34,8 @@ from pydantic import BaseModel
 from requests import Response
 from requests.auth import HTTPBasicAuth
 
+DEFAULT_REDFISH_API_ROOT = "redfish/v1"
+
 
 class RedfishGetResult(BaseModel):
     """Artifact for the result of a Redfish GET request."""
@@ -64,8 +66,10 @@ class RedfishConnection:
         timeout: float = 10.0,
         use_session_auth: bool = True,
         verify_ssl: bool = True,
+        api_root: Optional[str] = None,
     ):
         self.base_url = base_url.rstrip("/")
+        self.api_root = (api_root or DEFAULT_REDFISH_API_ROOT).strip("/")
         self.username = username
         self.password = password or ""
         self.timeout = timeout
@@ -92,7 +96,7 @@ class RedfishConnection:
     def _login_session(self) -> None:
         """Create a Redfish session and set X-Auth-Token."""
         assert self._session is not None
-        sess_url = urljoin(self.base_url + "/", "redfish/v1/SessionService/Sessions")
+        sess_url = urljoin(self.base_url + "/", f"{self.api_root}/SessionService/Sessions")
         payload = {"UserName": self.username, "Password": self.password}
         resp = self._session.post(
             sess_url,
@@ -158,8 +162,8 @@ class RedfishConnection:
             )
 
     def get_service_root(self) -> dict[str, Any]:
-        """GET /redfish/v1/ (service root)."""
-        return self.get("/redfish/v1/")
+        """GET service root (e.g. /redfish/v1/)."""
+        return self.get(f"/{self.api_root}/")
 
     def close(self) -> None:
         """Release session and logout if session auth was used."""

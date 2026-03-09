@@ -109,6 +109,7 @@ class RedfishConnectionManager(ConnectionManager[RedfishConnection, RedfishConne
                 timeout=params.timeout_seconds,
                 use_session_auth=params.use_session_auth,
                 verify_ssl=params.verify_ssl,
+                api_root=params.api_root,
             )
             self.connection._ensure_session()
             self.connection.get_service_root()
