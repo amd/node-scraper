@@ -1,0 +1,10 @@
+###############################################################################
+#
+# MIT License
+#
+# Copyright (c) 2026 Advanced Micro Devices, Inc.
+#
+###############################################################################
+from .oem_diag_plugin import RedfishOemDiagPlugin
+
+__all__ = ["RedfishOemDiagPlugin"]

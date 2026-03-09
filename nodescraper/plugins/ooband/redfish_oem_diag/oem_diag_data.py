@@ -23,26 +23,22 @@
 # SOFTWARE.
 #
 ###############################################################################
-from .redfish_connection import (
-    RedfishConnection,
-    RedfishConnectionError,
-    RedfishGetResult,
-)
-from .redfish_manager import RedfishConnectionManager
-from .redfish_oem_diag import (
-    RedfishOemDiagCollectorArgs,
-    collect_oem_diagnostic_data,
-    get_oem_diagnostic_allowable_values,
-)
-from .redfish_params import RedfishConnectionParams
+from typing import Any, Optional
 
-__all__ = [
-    "RedfishConnection",
-    "RedfishConnectionError",
-    "RedfishGetResult",
-    "RedfishConnectionManager",
-    "RedfishConnectionParams",
-    "RedfishOemDiagCollectorArgs",
-    "collect_oem_diagnostic_data",
-    "get_oem_diagnostic_allowable_values",
-]
+from pydantic import Field
+
+from nodescraper.models import DataModel
+
+
+class OemDiagTypeResult(DataModel):
+    """Result of collecting one OEM diagnostic log type (no raw bytes; JSON-serializable)."""
+
+    success: bool = False
+    error: Optional[str] = None
+    metadata: Optional[dict[str, Any]] = None
+
+
+class RedfishOemDiagDataModel(DataModel):
+    """Collected Redfish OEM diagnostic log results: OEM type -> result (success, error, metadata)."""
+
+    results: dict[str, OemDiagTypeResult] = Field(default_factory=dict)

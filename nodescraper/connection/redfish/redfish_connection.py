@@ -34,6 +34,7 @@ from pydantic import BaseModel
 from requests import Response
 from requests.auth import HTTPBasicAuth
 
+# Default Redfish API path; override via connection config api_root if needed (e.g. future "redfish/v2").
 DEFAULT_REDFISH_API_ROOT = "redfish/v1"
 
 
@@ -122,15 +123,25 @@ class RedfishConnection:
 
     def get(self, path: str) -> dict[str, Any]:
         """GET a Redfish path and return the JSON body."""
-        session = self._ensure_session()
-        url = path if path.startswith("http") else urljoin(self.base_url + "/", path.lstrip("/"))
-        resp = session.get(url, timeout=self.timeout)
+        resp = self.get_response(path)
         if not resp.ok:
             raise RedfishConnectionError(
                 f"GET {path} failed: {resp.status_code} {resp.reason}",
                 response=resp,
             )
         return resp.json()
+
+    def get_response(self, path: str) -> Response:
+        """GET a Redfish path and return the raw Response (for headers, status_code, content)."""
+        session = self._ensure_session()
+        url = path if path.startswith("http") else urljoin(self.base_url + "/", path.lstrip("/"))
+        return session.get(url, timeout=self.timeout)
+
+    def post(self, path: str, json: Optional[dict[str, Any]] = None) -> Response:
+        """POST to a Redfish path and return the raw Response (for 202, Location, etc.)."""
+        session = self._ensure_session()
+        url = path if path.startswith("http") else urljoin(self.base_url + "/", path.lstrip("/"))
+        return session.post(url, json=json or {}, timeout=self.timeout)
 
     def run_get(self, path: str) -> RedfishGetResult:
         """Run a Redfish GET request and return a result object (no exception on failure)."""

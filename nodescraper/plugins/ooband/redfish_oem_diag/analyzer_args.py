@@ -23,26 +23,15 @@
 # SOFTWARE.
 #
 ###############################################################################
-from .redfish_connection import (
-    RedfishConnection,
-    RedfishConnectionError,
-    RedfishGetResult,
-)
-from .redfish_manager import RedfishConnectionManager
-from .redfish_oem_diag import (
-    RedfishOemDiagCollectorArgs,
-    collect_oem_diagnostic_data,
-    get_oem_diagnostic_allowable_values,
-)
-from .redfish_params import RedfishConnectionParams
+from pydantic import Field
 
-__all__ = [
-    "RedfishConnection",
-    "RedfishConnectionError",
-    "RedfishGetResult",
-    "RedfishConnectionManager",
-    "RedfishConnectionParams",
-    "RedfishOemDiagCollectorArgs",
-    "collect_oem_diagnostic_data",
-    "get_oem_diagnostic_allowable_values",
-]
+from nodescraper.models import AnalyzerArgs
+
+
+class RedfishOemDiagAnalyzerArgs(AnalyzerArgs):
+    """Analyzer args for Redfish OEM diagnostic log results."""
+
+    require_all_success: bool = Field(
+        default=False,
+        description="If True, analysis fails when any OEM type collection failed.",
+    )

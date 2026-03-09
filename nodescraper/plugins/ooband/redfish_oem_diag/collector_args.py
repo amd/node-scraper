@@ -23,26 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
-from .redfish_connection import (
-    RedfishConnection,
-    RedfishConnectionError,
-    RedfishGetResult,
-)
-from .redfish_manager import RedfishConnectionManager
-from .redfish_oem_diag import (
-    RedfishOemDiagCollectorArgs,
-    collect_oem_diagnostic_data,
-    get_oem_diagnostic_allowable_values,
-)
-from .redfish_params import RedfishConnectionParams
+from nodescraper.connection.redfish import RedfishOemDiagCollectorArgs
 
-__all__ = [
-    "RedfishConnection",
-    "RedfishConnectionError",
-    "RedfishGetResult",
-    "RedfishConnectionManager",
-    "RedfishConnectionParams",
-    "RedfishOemDiagCollectorArgs",
-    "collect_oem_diagnostic_data",
-    "get_oem_diagnostic_allowable_values",
-]
+# Re-export so plugin uses the same args (log_service_path, oem_diagnostic_types, task_timeout_s)
+__all__ = ["RedfishOemDiagCollectorArgs"]
