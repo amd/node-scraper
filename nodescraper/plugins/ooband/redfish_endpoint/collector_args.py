@@ -23,10 +23,18 @@
 # SOFTWARE.
 #
 ###############################################################################
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class RedfishEndpointCollectorArgs(BaseModel):
     """Collection args: uris to GET."""
 
     uris: list[str] = Field(default_factory=list)
+
+    @field_validator("uris", mode="before")
+    @classmethod
+    def strip_uris(cls, v: list[str]) -> list[str]:
+        """Strip whitespace from each URI in the list."""
+        if not v:
+            return v
+        return [str(uri).strip() for uri in v]

@@ -14,6 +14,7 @@ system debug.
     - ['run-plugins' sub command](#run-plugins-sub-command)
     - ['gen-plugin-config' sub command](#gen-plugin-config-sub-command)
     - ['compare-runs' subcommand](#compare-runs-subcommand)
+    - ['show-redfish-oem-allowable' subcommand](#show-redfish-oem-allowable-subcommand)
     - ['summary' sub command](#summary-sub-command)
 - [Configs](#configs)
   - [Global args](#global-args)
@@ -338,6 +339,63 @@ node-scraper compare-runs path1 path2 --include-plugins DmesgPlugin --dont-trunc
 ```
 
 You can pass multiple plugin names to `--skip-plugins` or `--include-plugins`.
+
+#### **'show-redfish-oem-allowable' subcommand**
+The `show-redfish-oem-allowable` subcommand fetches the list of OEM diagnostic types supported by your BMC (from the Redfish LogService `OEMDiagnosticDataType@Redfish.AllowableValues`). Use it to discover which types you can put in `oem_diagnostic_types_allowable` and `oem_diagnostic_types` in the Redfish OEM diag plugin config.
+
+**Requirements:** A Redfish connection config (same as for RedfishOemDiagPlugin).
+
+**Command:**
+```sh
+node-scraper --connection-config connection-config.json show-redfish-oem-allowable --log-service-path "redfish/v1/Systems/UBB/LogServices/DiagLogs"
+```
+
+Output is a JSON array of allowable type names (e.g. `["Dmesg", "JournalControl", "AllLogs", ...]`). Copy that list into your plugin config’s `oem_diagnostic_types_allowable` if you want to match your BMC.
+
+**Redfish OEM diag plugin config example**
+
+Use a plugin config that points at your LogService and lists the types to collect. Logs are written under the run log path (see `--log-path`).
+
+```json
+{
+  "name": "Redfish OEM diagnostic logs",
+  "desc": "Collect OEM diagnostic logs from Redfish LogService. Requires Redfish connection config.",
+  "global_args": {},
+  "plugins": {
+    "RedfishOemDiagPlugin": {
+      "collection_args": {
+        "log_service_path": "redfish/v1/Systems/UBB/LogServices/DiagLogs",
+        "oem_diagnostic_types_allowable": [
+          "JournalControl",
+          "AllLogs",
+            ...
+        ],
+        "oem_diagnostic_types": ["JournalControl", "AllLogs"],
+        "task_timeout_s": 600
+      },
+      "analysis_args": {
+        "require_all_success": false
+      }
+    }
+  },
+  "result_collators": {}
+}
+```
+
+- **`log_service_path`**: Redfish path to the LogService (e.g. DiagLogs). Must match your system (e.g. `UBB` vs. another system id).
+- **`oem_diagnostic_types_allowable`**: Full list of types the BMC supports (from `show-redfish-oem-allowable` or vendor docs).
+- **`oem_diagnostic_types`**: Subset of types to collect on each run (e.g. `["JournalControl", "AllLogs"]`).
+- **`task_timeout_s`**: Max seconds to wait per collection task.
+
+**How to use**
+
+1. **Discover allowable types** (optional): run `show-redfish-oem-allowable` and paste the output into `oem_diagnostic_types_allowable` in your plugin config.
+2. **Set `oem_diagnostic_types`** to the list you want to collect (e.g. `["JournalControl", "AllLogs"]`).
+3. **Run the plugin** with a Redfish connection config and your plugin config:
+   ```sh
+   node-scraper --connection-config connection-config.json --plugin-config plugin_config_redfish_oem_diag.json run-plugins RedfishOemDiagPlugin
+   ```
+4. Use **`--log-path`** to choose where run logs (and OEM diag archives) are written.
 
 #### **'summary' sub command**
 The 'summary' subcommand can be used to combine results from multiple runs of node-scraper to a

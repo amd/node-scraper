@@ -25,7 +25,7 @@
 ###############################################################################
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any, ClassVar, Optional, Union
 from urllib.parse import urljoin
 
 import requests
@@ -34,11 +34,17 @@ from pydantic import BaseModel
 from requests import Response
 from requests.auth import HTTPBasicAuth
 
+from .redfish_path import RedfishPath
+
 DEFAULT_REDFISH_API_ROOT = "redfish/v1"
 
 
 class RedfishGetResult(BaseModel):
-    """Artifact for the result of a Redfish GET request."""
+    """Artifact for the result of a Redfish GET request.
+    Logged under the same filename as inband command artifacts (command_artifacts.json).
+    """
+
+    ARTIFACT_LOG_BASENAME: ClassVar[str] = "command_artifacts"
 
     path: str
     success: bool
@@ -120,25 +126,41 @@ class RedfishConnection:
         else:
             self._session.auth = HTTPBasicAuth(self.username, self.password)
 
-    def get(self, path: str) -> dict[str, Any]:
-        """GET a Redfish path and return the JSON body."""
-        session = self._ensure_session()
-        url = path if path.startswith("http") else urljoin(self.base_url + "/", path.lstrip("/"))
-        resp = session.get(url, timeout=self.timeout)
+    def get(self, path: RedfishPath) -> dict[str, Any]:
+        """GET a Redfish path and return the JSON body. path must be a RedfishPath."""
+        path_str = str(path)
+        resp = self.get_response(path_str)
         if not resp.ok:
             raise RedfishConnectionError(
-                f"GET {path} failed: {resp.status_code} {resp.reason}",
+                f"GET {path_str} failed: {resp.status_code} {resp.reason}",
                 response=resp,
             )
         return resp.json()
 
-    def run_get(self, path: str) -> RedfishGetResult:
-        """Run a Redfish GET request and return a result object (no exception on failure)."""
-        path_norm = path.strip()
+    def get_response(self, path: Union[str, "RedfishPath"]) -> Response:
+        """GET a Redfish path and return the raw Response. path may be a string or RedfishPath."""
+        path = str(path)
+        session = self._ensure_session()
+        url = path if path.startswith("http") else urljoin(self.base_url + "/", path.lstrip("/"))
+        return session.get(url, timeout=self.timeout)
+
+    def post(
+        self, path: Union[str, "RedfishPath"], json: Optional[dict[str, Any]] = None
+    ) -> Response:
+        """POST to a Redfish path and return the raw Response. path may be a string or RedfishPath."""
+        path = str(path)
+        session = self._ensure_session()
+        url = path if path.startswith("http") else urljoin(self.base_url + "/", path.lstrip("/"))
+        return session.post(url, json=json or {}, timeout=self.timeout)
+
+    def run_get(self, path: Union[str, RedfishPath]) -> RedfishGetResult:
+        """Run a Redfish GET request and return a result object. path may be a string or RedfishPath."""
+        path_norm = str(path).strip()
         if not path_norm.startswith("/"):
             path_norm = "/" + path_norm
+        path_obj = RedfishPath(path_norm.strip("/")) if isinstance(path, str) else path
         try:
-            data = self.get(path_norm)
+            data = self.get(path_obj)
             return RedfishGetResult(
                 path=path_norm,
                 success=True,
@@ -163,7 +185,7 @@ class RedfishConnection:
 
     def get_service_root(self) -> dict[str, Any]:
         """GET service root (e.g. /redfish/v1/)."""
-        return self.get(f"/{self.api_root}/")
+        return self.get(RedfishPath(self.api_root))
 
     def close(self) -> None:
         """Release session and logout if session auth was used."""

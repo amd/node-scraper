@@ -30,6 +30,7 @@ from .redfish_connection import (
 )
 from .redfish_manager import RedfishConnectionManager
 from .redfish_params import RedfishConnectionParams
+from .redfish_path import RedfishPath
 
 __all__ = [
     "RedfishConnection",
@@ -37,4 +38,5 @@ __all__ = [
     "RedfishGetResult",
     "RedfishConnectionManager",
     "RedfishConnectionParams",
+    "RedfishPath",
 ]
