@@ -436,13 +436,11 @@ This command can be used to generate a reference config that is populated with c
 configurations. Plugins that use analyzer args (where applicable) will be populated with system
 data.
 
-**Generate a reference config using all registered plugins** (built-in `AllPlugins` config):
+**Run all registered plugins (AllPlugins config):**
 ```sh
-node-scraper --gen-reference-config --plugin-configs AllPlugins
+node-scraper --plugin-config AllPlugins
+
 ```
-This runs every plugin with default arguments and writes the resulting reference config to
-`./reference_config.json` (or to the log directory if `--log-path` is set). The subcommand
-`run-plugins` is the default, so it can be omitted.
 
 **Generate a reference config for specific plugins:**
 ```sh
