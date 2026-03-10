@@ -395,7 +395,7 @@ Use a plugin config that points at your LogService and lists the types to collec
    ```sh
    node-scraper --connection-config connection-config.json --plugin-config plugin_config_redfish_oem_diag.json run-plugins RedfishOemDiagPlugin
    ```
-4. Use **`--log-path`** to choose where run logs (and OEM diag archives) are written; archives go under `<log-path>/scraper_logs_<name>_<timestamp>/redfish_oem_diag_plugin/redfish_oem_diag_collector/`.
+4. Use **`--log-path`** to choose where run logs (and OEM diag archives) are written.
 
 #### **'summary' sub command**
 The 'summary' subcommand can be used to combine results from multiple runs of node-scraper to a

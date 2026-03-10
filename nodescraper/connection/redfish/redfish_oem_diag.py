@@ -204,13 +204,11 @@ def collect_oem_diagnostic_data(
         log_service_path: Path to LogService under Systems, e.g.
             "redfish/v1/Systems/UBB/LogServices/DiagLogs" (no leading slash).
         oem_diagnostic_type: OEM type for DiagnosticDataType OEM (e.g. "JournalControl", "AllLogs").
-        task_timeout_s: Max seconds to wait for BMC task (202 + task monitor).
+        task_timeout_s: Max seconds to wait for BMC task
         output_dir: If set, save log archive and LogEntry JSON here.
-        validate_type: If True, require oem_diagnostic_type to be in allowed_types (or fallback).
+        validate_type: If True, require oem_diagnostic_type to be in allowed_types.
         allowed_types: Allowable OEM diagnostic types for validation when validate_type is True.
-            Set from collector args (oem_diagnostic_types_allowable) per architecture.
-        logger: If set, use this logger for "log written to disk" messages so they match the
-            collector log format (e.g. "nodescraper" name). Otherwise use module logger.
+        logger: Logger
 
     Returns:
         (log_bytes, log_entry_metadata_dict, error_message).
