@@ -71,7 +71,8 @@ def test_collect_data_success(linux_sys_settings_collector, collection_args):
     assert isinstance(data, SysSettingsDataModel)
     assert data.readings.get(PATH_ENABLED) == "always"
     assert data.readings.get(PATH_DEFRAG) == "madvise"
-    assert "Sysfs collected 2 path(s)" in result.message
+    assert data.readings.get("/sys/class/net/*/device") == "[madvise] always never defer"
+    assert "Sysfs collected 3 path(s)" in result.message
 
 
 def test_collect_data_no_paths_not_ran(linux_sys_settings_collector):
@@ -134,8 +135,8 @@ def test_collect_data_uses_sys_only_command(linux_sys_settings_collector):
     result, data = linux_sys_settings_collector.collect_data(args)
 
     assert result.status == ExecutionStatus.OK
-    assert len(seen_commands) == 1
-    assert seen_commands[0].startswith("cat /sys/")
+    assert "cat /sys/kernel/mm/transparent_hugepage/enabled" in seen_commands
+    assert "ls -l /sys/class/net/*/device" in seen_commands
     assert data.readings.get(PATH_ENABLED) == "value"
 
 
@@ -158,8 +159,29 @@ def test_collect_data_skips_path_with_dotdot(linux_sys_settings_collector):
     result, data = linux_sys_settings_collector.collect_data(args)
 
     assert result.status == ExecutionStatus.OK
-    assert len(seen_commands) == 2
-    assert all(c.startswith("cat /sys/") for c in seen_commands)
+    cat_commands = [c for c in seen_commands if c.startswith("cat /sys/")]
+    assert len(cat_commands) == 2
+    assert "ls -l /sys/class/net/*/device" in seen_commands
     assert data.readings.get("/sys/kernel/mm/transparent_hugepage/enabled") == "safe"
     assert data.readings.get("/sys/kernel/mm/transparent_hugepage/defrag") == "safe"
     assert "/etc" not in str(seen_commands)
+
+
+def test_collect_data_netdev_map_failure_does_not_fail_collection(
+    linux_sys_settings_collector, collection_args
+):
+    """Netdev map failure should not fail if sysfs paths were read."""
+
+    def run_cmd(cmd, **kwargs):
+        if cmd == "ls -l /sys/class/net/*/device":
+            return make_artifact(1, "")
+        if "enabled" in cmd:
+            return make_artifact(0, "[always] madvise never")
+        return make_artifact(0, "[madvise] always never defer")
+
+    linux_sys_settings_collector._run_sut_cmd = run_cmd
+    result, data = linux_sys_settings_collector.collect_data(collection_args)
+
+    assert result.status == ExecutionStatus.OK
+    assert data is not None
+    assert "/sys/class/net/*/device" not in data.readings

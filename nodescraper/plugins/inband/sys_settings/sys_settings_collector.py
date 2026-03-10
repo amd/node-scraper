@@ -103,6 +103,8 @@ class SysSettingsCollector(InBandDataCollector[SysSettingsDataModel, SysSettings
 
     CMD = "cat /sys/{}"
     CMD_LS = "ls -1 /sys/{}"
+    CMD_NETDEV_MAP = "ls -l /sys/class/net/*/device"
+    NETDEV_MAP_KEY = "/sys/class/net/*/device"
 
     def collect_data(
         self, args: Optional[SysSettingsCollectorArgs] = None
@@ -188,6 +190,19 @@ class SysSettingsCollector(InBandDataCollector[SysSettingsDataModel, SysSettings
                     priority=EventPriority.WARNING,
                     console_log=True,
                 )
+
+        # Capture netdev -> device symlink mappings for networking topology checks.
+        res_netdev_map = self._run_sut_cmd(self.CMD_NETDEV_MAP, sudo=False)
+        if res_netdev_map.exit_code == 0:
+            readings[self.NETDEV_MAP_KEY] = res_netdev_map.stdout.strip() if res_netdev_map.stdout else ""
+        else:
+            self._log_event(
+                category=EventCategory.OS,
+                description=f"Failed to collect netdev mapping: {self.NETDEV_MAP_KEY}",
+                data={"exit_code": res_netdev_map.exit_code},
+                priority=EventPriority.WARNING,
+                console_log=True,
+            )
 
         if not readings:
             self.result.message = "Sysfs settings not read"
