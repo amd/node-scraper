@@ -57,7 +57,7 @@ from nodescraper.connection.redfish import (
 from nodescraper.connection.redfish.redfish_params import RedfishConnectionParams
 from nodescraper.constants import DEFAULT_LOGGER
 from nodescraper.enums import ExecutionStatus, SystemInteractionLevel, SystemLocation
-from nodescraper.models import SystemInfo
+from nodescraper.models import PluginConfig, SystemInfo
 from nodescraper.pluginexecutor import PluginExecutor
 from nodescraper.pluginregistry import PluginRegistry
 
@@ -176,6 +176,7 @@ def build_parser(
     )
 
     subparsers = parser.add_subparsers(dest="subcmd", help="Subcommands")
+    subparsers.default = "run-plugins"
 
     summary_parser = subparsers.add_parser(
         "summary",
@@ -370,6 +371,14 @@ def main(arg_input: Optional[list[str]] = None):
     plugin_reg = PluginRegistry()
 
     config_reg = ConfigRegistry()
+    # Add synthetic "AllPlugins" config that includes every registered plugin
+    config_reg.configs["AllPlugins"] = PluginConfig(
+        name="AllPlugins",
+        desc="Run all registered plugins with default arguments",
+        global_args={},
+        plugins={name: {} for name in plugin_reg.plugins},
+        result_collators={},
+    )
     parser, plugin_subparser_map = build_parser(plugin_reg, config_reg)
 
     try:
