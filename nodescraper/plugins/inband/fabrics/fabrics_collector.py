@@ -38,6 +38,7 @@ from .fabricsdata import (
     MstDevice,
     MstStatus,
     OfedInfo,
+    SlingshotData,
 )
 
 
@@ -51,6 +52,11 @@ class FabricsCollector(InBandDataCollector[FabricsDataModel, None]):
     CMD_OFED_INFO = "ofed_info -s"
     CMD_MST_START = "mst start"
     CMD_MST_STATUS = "mst status -v"
+    CMD_CASSINI_PCI = "lspci | grep -i cassini"
+    CMD_NET_LINK = "ip link show"
+    CMD_LIBFABRIC_INFO = "fi_info -p cxi"
+    CMD_CXI_STAT = "cxi_stat"
+    CMD_CXI_MODULES = "lsmod | grep cxi"
 
     def _parse_ibstat(self, output: str) -> List[IbstatDevice]:
         """Parse 'ibstat' output into IbstatDevice objects.
@@ -406,6 +412,7 @@ class FabricsCollector(InBandDataCollector[FabricsDataModel, None]):
         ibdev_netdev_mappings = []
         ofed_info = None
         mst_status = None
+        slingshot_data = None
 
         # Collect ibstat information
         res_ibstat = self._run_sut_cmd(self.CMD_IBSTAT)
@@ -522,24 +529,81 @@ class FabricsCollector(InBandDataCollector[FabricsDataModel, None]):
                 priority=EventPriority.INFO,
             )
 
+        # Slingshot fallback path:
+        # if no InfiniBand data was collected, probe for Cassini/CXI fabric.
+        ib_data_collected = bool(ibstat_devices or ibv_devices or ibdev_netdev_mappings)
+        if not ib_data_collected:
+            res_cassini = self._run_sut_cmd(self.CMD_CASSINI_PCI)
+            cassini_detected = res_cassini.exit_code == 0 and bool(res_cassini.stdout.strip())
+
+            if cassini_detected:
+                self._log_event(
+                    category=EventCategory.NETWORK,
+                    description="Detected Slingshot/Cassini fabrics hardware",
+                    priority=EventPriority.INFO,
+                )
+
+                res_net_link = self._run_sut_cmd(self.CMD_NET_LINK)
+                res_libfabric = self._run_sut_cmd(self.CMD_LIBFABRIC_INFO)
+                res_cxi_stat = self._run_sut_cmd(self.CMD_CXI_STAT)
+                res_cxi_modules = self._run_sut_cmd(self.CMD_CXI_MODULES)
+
+                slingshot_data = SlingshotData(
+                    cassini_pci=res_cassini.stdout,
+                    net_link=res_net_link.stdout if res_net_link.exit_code == 0 else None,
+                    libfabric_info=res_libfabric.stdout if res_libfabric.exit_code == 0 else None,
+                    cxi_stat=res_cxi_stat.stdout if res_cxi_stat.exit_code == 0 else None,
+                    cxi_modules=res_cxi_modules.stdout if res_cxi_modules.exit_code == 0 else None,
+                )
+
+                failed_cmds = []
+                for cmd_name, cmd_res in (
+                    ("ip link show", res_net_link),
+                    ("fi_info -p cxi", res_libfabric),
+                    ("cxi_stat", res_cxi_stat),
+                    ("lsmod | grep cxi", res_cxi_modules),
+                ):
+                    if cmd_res.exit_code != 0:
+                        failed_cmds.append(cmd_name)
+
+                if failed_cmds:
+                    self._log_event(
+                        category=EventCategory.NETWORK,
+                        description="Some Slingshot commands failed",
+                        data={"failed_commands": failed_cmds},
+                        priority=EventPriority.WARNING,
+                    )
+            else:
+                self._log_event(
+                    category=EventCategory.NETWORK,
+                    description="No Slingshot/Cassini hardware detected on this system",
+                    data={
+                        "command": res_cassini.command,
+                        "exit_code": res_cassini.exit_code,
+                    },
+                    priority=EventPriority.INFO,
+                )
+
         # Build the data model only if we collected any data
-        if ibstat_devices or ibv_devices or ibdev_netdev_mappings or ofed_info or mst_status:
+        if ibstat_devices or ibv_devices or ibdev_netdev_mappings or ofed_info or mst_status or slingshot_data:
             fabrics_data = FabricsDataModel(
                 ibstat_devices=ibstat_devices,
                 ibv_devices=ibv_devices,
                 ibdev_netdev_mappings=ibdev_netdev_mappings,
                 ofed_info=ofed_info,
                 mst_status=mst_status,
+                slingshot_data=slingshot_data,
             )
             self.result.message = (
                 f"Collected fabrics data: {len(ibstat_devices)} ibstat devices, "
                 f"{len(ibv_devices)} ibv devices, {len(ibdev_netdev_mappings)} mappings, "
                 f"OFED: {ofed_info.version if ofed_info else 'N/A'}, "
-                f"MST devices: {len(mst_status.devices) if mst_status else 0}"
+                f"MST devices: {len(mst_status.devices) if mst_status else 0}, "
+                f"Slingshot: {'detected' if slingshot_data else 'not detected'}"
             )
             self.result.status = ExecutionStatus.OK
             return self.result, fabrics_data
         else:
-            self.result.message = "No InfiniBand/RDMA fabrics hardware detected on this system"
+            self.result.message = "No InfiniBand/RDMA or Slingshot fabrics hardware detected on this system"
             self.result.status = ExecutionStatus.NOT_RAN
             return self.result, None

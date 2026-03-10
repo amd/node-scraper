@@ -25,7 +25,9 @@
 ###############################################################################
 
 import pytest
+from unittest.mock import MagicMock
 
+from nodescraper.enums.executionstatus import ExecutionStatus
 from nodescraper.enums.systeminteraction import SystemInteractionLevel
 from nodescraper.plugins.inband.fabrics.fabrics_collector import FabricsCollector
 from nodescraper.plugins.inband.fabrics.fabricsdata import (
@@ -312,3 +314,54 @@ def test_fabrics_data_model_empty(collector):
     assert len(data.ibdev_netdev_mappings) == 0
     assert data.ofed_info is None
     assert data.mst_status is None
+
+
+def test_collect_data_detects_slingshot_when_no_ib(collector):
+    """When IB is absent but Cassini is present, collect Slingshot command outputs."""
+
+    def run_sut_cmd_side_effect(cmd, *args, **kwargs):
+        responses = {
+            "ibstat": MagicMock(exit_code=1, stdout="", command=cmd),
+            "ibv_devinfo": MagicMock(exit_code=1, stdout="", command=cmd),
+            "ls -l /sys/class/infiniband/*/device/net": MagicMock(
+                exit_code=1, stdout="", command=cmd
+            ),
+            "ofed_info -s": MagicMock(exit_code=1, stdout="", command=cmd),
+            "mst start": MagicMock(exit_code=1, stdout="", command=cmd),
+            "mst status -v": MagicMock(exit_code=1, stdout="", command=cmd),
+            "lspci | grep -i cassini": MagicMock(
+                exit_code=0,
+                stdout="03:00.0 Processing accelerators: Vendor Cassini",
+                command=cmd,
+            ),
+            "ip link show": MagicMock(exit_code=0, stdout="1: lo: <LOOPBACK>", command=cmd),
+            "fi_info -p cxi": MagicMock(exit_code=0, stdout="provider: cxi", command=cmd),
+            "cxi_stat": MagicMock(exit_code=0, stdout="cxi stats output", command=cmd),
+            "lsmod | grep cxi": MagicMock(exit_code=0, stdout="cxi_core 123 0", command=cmd),
+        }
+        return responses[cmd]
+
+    collector._run_sut_cmd = MagicMock(side_effect=run_sut_cmd_side_effect)
+
+    result, data = collector.collect_data()
+
+    assert result.status == ExecutionStatus.OK
+    assert data is not None
+    assert data.slingshot_data is not None
+    assert "Cassini" in data.slingshot_data.cassini_pci
+    assert data.slingshot_data.libfabric_info == "provider: cxi"
+    assert data.slingshot_data.cxi_stat == "cxi stats output"
+
+
+def test_collect_data_not_ran_when_no_ib_and_no_slingshot(collector):
+    """Return NOT_RAN when neither IB nor Slingshot hardware is present."""
+
+    def run_sut_cmd_side_effect(cmd, *args, **kwargs):
+        return MagicMock(exit_code=1, stdout="", command=cmd)
+
+    collector._run_sut_cmd = MagicMock(side_effect=run_sut_cmd_side_effect)
+
+    result, data = collector.collect_data()
+
+    assert result.status == ExecutionStatus.NOT_RAN
+    assert data is None
