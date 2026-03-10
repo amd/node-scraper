@@ -1,0 +1,12 @@
+{
+  "plugins": {
+    "RedfishEndpointPlugin": {
+      "collection_args": {
+        "uris": ["/redfish/v1", "/redfish/v1/Systems"]
+      },
+      "analysis_args": {
+        "checks": {}
+      }
+    }
+  }
+}
