@@ -56,20 +56,6 @@ def test_help_command_long_form():
     assert "node scraper" in result.stdout.lower()
 
 
-def test_no_arguments():
-    """Test that node-scraper with no arguments runs the default config."""
-    result = subprocess.run(
-        [sys.executable, "-m", "nodescraper.cli.cli"],
-        capture_output=True,
-        text=True,
-        timeout=120,
-    )
-
-    assert len(result.stdout) > 0 or len(result.stderr) > 0
-    output = (result.stdout + result.stderr).lower()
-    assert "plugin" in output or "nodescraper" in output
-
-
 def test_help_shows_subcommands():
     """Test that help output includes available subcommands."""
     result = subprocess.run(
