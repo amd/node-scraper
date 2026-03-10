@@ -175,7 +175,14 @@ class TaskResult(BaseModel):
             if isinstance(artifact, BaseFileArtifact):
                 artifact.log_model(log_path)
             else:
-                name = f"{pascal_to_snake(artifact.__class__.__name__)}s"
+                name = (
+                    getattr(
+                        artifact.__class__,
+                        "ARTIFACT_LOG_BASENAME",
+                        None,
+                    )
+                    or f"{pascal_to_snake(artifact.__class__.__name__)}s"
+                )
                 if name in artifact_map:
                     artifact_map[name].append(artifact.model_dump(mode="json"))
                 else:

@@ -64,18 +64,21 @@ class RedfishOemDiagCollector(
                 Path(self.log_path)
                 / pascal_to_snake(self.parent or "")
                 / pascal_to_snake(self.__class__.__name__)
-            )
+                / "diag_logs"
+            ).resolve()
         else:
             output_dir = None
 
         if output_dir is not None:
+            output_dir.mkdir(parents=True, exist_ok=True)
             self.logger.info(
-                "(RedfishOemDiagPlugin) Writing diagnostic archives to: %s",
-                output_dir.resolve(),
+                "(RedfishOemDiagPlugin) Diagnostic archives (e.g. *.tar.xz) will be written to: %s",
+                output_dir,
             )
 
         results: dict[str, OemDiagTypeResult] = {}
         validate = bool(args.oem_diagnostic_types_allowable)
+        gathered = []
         for oem_type in types_to_collect:
             log_bytes, metadata, err = collect_oem_diagnostic_data(
                 self.connection,
@@ -85,7 +88,10 @@ class RedfishOemDiagCollector(
                 output_dir=output_dir,
                 validate_type=validate,
                 allowed_types=args.oem_diagnostic_types_allowable,
+                logger=self.logger,
             )
+            gathered.append((oem_type, log_bytes, metadata, err))
+        for oem_type, _log_bytes, metadata, err in gathered:
             if err:
                 self._log_event(
                     category=EventCategory.RUNTIME,

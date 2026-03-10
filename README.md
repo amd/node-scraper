@@ -366,28 +366,9 @@ Use a plugin config that points at your LogService and lists the types to collec
       "collection_args": {
         "log_service_path": "redfish/v1/Systems/UBB/LogServices/DiagLogs",
         "oem_diagnostic_types_allowable": [
-          "Dmesg",
           "JournalControl",
-          "NVJournalLogs",
-          "InternalLogServices",
-          "NetworkStatus",
-          "SysLog",
-          "FPGADump",
-          "GPURegisters",
-          "RMRegisters",
-          "RetimerDump",
-          "OAMandUBBRegCfg",
-          "UBBandOAMFRU",
-          "FWVersions",
           "AllLogs",
-          "AllCPERs",
-          "VRFaultDump",
-          "EROTLogs",
-          "RetLTSSM",
-          "APMLAllOAM",
-          "SysDebug",
-          "MemDebug",
-          "MarginTest"
+            ...
         ],
         "oem_diagnostic_types": ["JournalControl", "AllLogs"],
         "task_timeout_s": 600
@@ -402,7 +383,7 @@ Use a plugin config that points at your LogService and lists the types to collec
 ```
 
 - **`log_service_path`**: Redfish path to the LogService (e.g. DiagLogs). Must match your system (e.g. `UBB` vs. another system id).
-- **`oem_diagnostic_types_allowable`**: Full list of types the BMC supports (from `show-redfish-oem-allowable` or vendor docs). Used for validation and as the default for `oem_diagnostic_types` when that list is empty.
+- **`oem_diagnostic_types_allowable`**: Full list of types the BMC supports (from `show-redfish-oem-allowable` or vendor docs).
 - **`oem_diagnostic_types`**: Subset of types to collect on each run (e.g. `["JournalControl", "AllLogs"]`).
 - **`task_timeout_s`**: Max seconds to wait per collection task.
 

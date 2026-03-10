@@ -59,7 +59,7 @@ class RedfishEndpointCollector(
 
         responses: dict[str, dict] = {}
         for uri in uris:
-            path = uri.strip()
+            path = uri
             if not path:
                 continue
             if not path.startswith("/"):

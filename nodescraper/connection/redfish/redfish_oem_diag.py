@@ -23,18 +23,10 @@
 # SOFTWARE.
 #
 ###############################################################################
-"""
-OEM diagnostic log collection via Redfish API.
-
-Uses the same HTTP library as RedfishConnection (requests). Flow:
-1. POST LogService.CollectDiagnosticData with OEM type
-2. Poll task monitor until completion
-3. GET task result, then LogEntry, then download AdditionalDataURI
-4. Save log archive and metadata to the filesystem
-"""
 from __future__ import annotations
 
 import json
+import logging
 import time
 from pathlib import Path
 from typing import Any, Optional
@@ -44,13 +36,39 @@ from requests import Response
 from requests.status_codes import codes
 
 from .redfish_connection import RedfishConnection, RedfishConnectionError
+from .redfish_path import RedfishPath
+
+_module_logger = logging.getLogger(__name__)
+
+_LOG_RESPONSE_BODY_LIMIT = 1500
+
+
+def _log_collect_diag_response(
+    log: logging.Logger,
+    status: int,
+    body: Any,
+    raw_text: str = "",
+) -> None:
+    """Log CollectDiagnosticData response at INFO when no Location/TaskMonitor found."""
+    if isinstance(body, dict):
+        snippet = json.dumps(body, indent=2)
+    else:
+        snippet = raw_text or str(body)
+    if len(snippet) > _LOG_RESPONSE_BODY_LIMIT:
+        snippet = snippet[:_LOG_RESPONSE_BODY_LIMIT] + "... (truncated)"
+    log.info(
+        "CollectDiagnosticData response (no Location/TaskMonitor): status=%s body=%s",
+        status,
+        snippet,
+    )
+
 
 # Redfish JSON key for resource link
 RF_ODATA_ID = "@odata.id"
 
 RF_ANNOTATION_ALLOWABLE = "OEMDiagnosticDataType@Redfish.AllowableValues"
 
-# Default max wait for async task (seconds)
+# Default max wait for BMC task (seconds)
 DEFAULT_TASK_TIMEOUT_S = 600
 
 
@@ -69,7 +87,7 @@ def get_oem_diagnostic_allowable_values(
     """
     path = log_service_path.strip().strip("/")
     try:
-        data = conn.get(path)
+        data = conn.get(RedfishPath(path))
     except RedfishConnectionError:
         return None
     if not isinstance(data, dict):
@@ -107,7 +125,7 @@ class RedfishOemDiagCollectorArgs(BaseModel):
         default=DEFAULT_TASK_TIMEOUT_S,
         ge=1,
         le=3600,
-        description="Max seconds to wait for each async collection task.",
+        description="Max seconds to wait for each BMC task (202 + task monitor).",
     )
 
     @model_validator(mode="after")
@@ -139,6 +157,35 @@ def _get_path_from_connection(conn: RedfishConnection, path: str) -> str:
     return path.lstrip("/")
 
 
+def _get_task_monitor_uri(body: dict, conn: RedfishConnection) -> Optional[str]:
+    """Extract task monitor URI from a Task-like body (DSP0266 or OEM variants)."""
+    for key in ("TaskMonitor", "Monitor", "TaskMonitorUri"):
+        uri = body.get(key)
+        if isinstance(uri, str) and uri.strip():
+            if not uri.startswith("http"):
+                uri = _resolve_path(conn, uri.strip().lstrip("/"))
+            return uri
+    oem = body.get("Oem")
+    if isinstance(oem, dict):
+        for vendor_dict in oem.values():
+            if isinstance(vendor_dict, dict):
+                for k in ("TaskMonitor", "Monitor", "TaskMonitorUri"):
+                    uri = vendor_dict.get(k)
+                    if isinstance(uri, str) and uri.strip():
+                        if not uri.startswith("http"):
+                            uri = _resolve_path(conn, uri.strip().lstrip("/"))
+                        return uri
+    return None
+
+
+# Workaround for LogEntry URL containing :443
+def _strip_port_443(url: str) -> Optional[str]:
+    """Return URL with :443 removed, or None if unchanged (for 404 retry)."""
+    if ":443" in url:
+        return url.replace(":443", "", 1)
+    return None
+
+
 def collect_oem_diagnostic_data(
     conn: RedfishConnection,
     log_service_path: str,
@@ -147,27 +194,29 @@ def collect_oem_diagnostic_data(
     output_dir: Optional[Path] = None,
     validate_type: bool = False,
     allowed_types: Optional[list[str]] = None,
+    logger: Optional[logging.Logger] = None,
 ) -> tuple[Optional[bytes], Optional[dict[str, Any]], Optional[str]]:
     """
     Initiate OEM diagnostic collection, poll until done, download log and metadata.
-
-    Uses RedfishConnection (requests) only; no urllib3 or other HTTP libs.
 
     Args:
         conn: Redfish connection (session already established).
         log_service_path: Path to LogService under Systems, e.g.
             "redfish/v1/Systems/UBB/LogServices/DiagLogs" (no leading slash).
         oem_diagnostic_type: OEM type for DiagnosticDataType OEM (e.g. "JournalControl", "AllLogs").
-        task_timeout_s: Max seconds to wait for async task.
+        task_timeout_s: Max seconds to wait for BMC task (202 + task monitor).
         output_dir: If set, save log archive and LogEntry JSON here.
         validate_type: If True, require oem_diagnostic_type to be in allowed_types (or fallback).
         allowed_types: Allowable OEM diagnostic types for validation when validate_type is True.
             Set from collector args (oem_diagnostic_types_allowable) per architecture.
+        logger: If set, use this logger for "log written to disk" messages so they match the
+            collector log format (e.g. "nodescraper" name). Otherwise use module logger.
 
     Returns:
         (log_bytes, log_entry_metadata_dict, error_message).
         On success: (bytes, dict, None). On failure: (None, None, error_str).
     """
+    log = logger if logger is not None else _module_logger
     if validate_type and allowed_types and oem_diagnostic_type not in allowed_types:
         return (
             None,
@@ -183,54 +232,85 @@ def collect_oem_diagnostic_data(
     except RedfishConnectionError as e:
         return None, None, str(e)
 
-    if resp.status_code != codes.accepted:
+    if resp.status_code not in (codes.ok, codes.accepted):
         return (
             None,
             None,
             f"Unexpected status {resp.status_code} for CollectDiagnosticData: {resp.text}",
         )
 
-    task_monitor = resp.headers.get("Location")
-    if task_monitor and not task_monitor.startswith("http"):
-        task_monitor = _resolve_path(conn, task_monitor)
+    # DSP0266 12.2: 202 shall include Location (task monitor URI), optionally Retry-After
+    location_header = resp.headers.get("Location") or resp.headers.get("Content-Location")
+    if location_header and not location_header.startswith("http"):
+        location_header = _resolve_path(conn, location_header)
     sleep_s = int(resp.headers.get("Retry-After", 1) or 1)
-    oem_response = resp.json()
+    try:
+        oem_response = resp.json()
+    except Exception:
+        oem_response = {}
 
-    # AMD/Supermicro workaround: some BMCs omit Location; get TaskMonitor from body
-    if not task_monitor:
-        task_monitor_odata = oem_response.get(RF_ODATA_ID)
-        if task_monitor_odata:
-            task_path = _get_path_from_connection(conn, task_monitor_odata)
+    # 200 OK with TaskState=Completed: synchronous completion, body is the Task
+    task_json: Optional[dict[str, Any]] = None
+    if resp.status_code == codes.ok and isinstance(oem_response, dict):
+        if oem_response.get("TaskState") == "Completed":
+            headers_list = oem_response.get("Payload", {}).get("HttpHeaders", []) or []
+            if any(isinstance(h, str) and "Location:" in h for h in headers_list):
+                task_json = oem_response
+
+    # When TaskMonitor is implemented
+    task_monitor: Optional[str] = None
+    if task_json is None:
+        task_monitor = location_header or _get_task_monitor_uri(oem_response, conn)
+        # AMD and others: 202 body has @odata.id (Task) but no TaskMonitor; use /Monitor
+        if not task_monitor and oem_response.get(RF_ODATA_ID):
+            odata_id = oem_response[RF_ODATA_ID]
+            if isinstance(odata_id, str) and odata_id.strip():
+                monitor_path = odata_id.strip().rstrip("/") + "/Monitor"
+                task_monitor = _resolve_path(conn, monitor_path)
+        if not task_monitor and oem_response.get(RF_ODATA_ID):
+            task_path = _get_path_from_connection(conn, oem_response[RF_ODATA_ID])
             task_resp = conn.get_response(task_path)
             if task_resp.status_code == codes.ok:
-                task_monitor = task_resp.json().get("TaskMonitor")
-                if task_monitor and not task_monitor.startswith("http"):
-                    task_monitor = _resolve_path(conn, task_monitor)
+                fetched = task_resp.json()
+                task_monitor = _get_task_monitor_uri(fetched, conn)
+                if not task_monitor and isinstance(fetched, dict):
+                    task_monitor = fetched.get("TaskMonitor")
+                    if not task_monitor and fetched.get(RF_ODATA_ID):
+                        mid = fetched[RF_ODATA_ID]
+                        if isinstance(mid, str) and mid.strip():
+                            task_monitor = _resolve_path(conn, mid.strip().rstrip("/") + "/Monitor")
+                    if task_monitor and not task_monitor.startswith("http"):
+                        task_monitor = _resolve_path(conn, task_monitor)
         if not task_monitor:
+            _log_collect_diag_response(
+                log, resp.status_code, oem_response, getattr(resp, "text", "") or ""
+            )
             return None, None, "No TaskMonitor in response and no Location header"
 
-    # Poll task monitor until no longer 202/404
-    start = time.time()
-    while True:
-        if time.time() - start > task_timeout_s:
-            return None, None, f"Task did not complete within {task_timeout_s}s"
-        time.sleep(sleep_s)
-        monitor_path = _get_path_from_connection(conn, task_monitor)
-        poll_resp = conn.get_response(monitor_path)
-        if poll_resp.status_code not in (codes.accepted, codes.not_found):
-            break
+    if task_json is None:
+        assert task_monitor is not None
+        # Poll task monitor until no longer 202/404
+        start = time.time()
+        while True:
+            if time.time() - start > task_timeout_s:
+                return None, None, f"Task did not complete within {task_timeout_s}s"
+            time.sleep(sleep_s)
+            monitor_path = _get_path_from_connection(conn, task_monitor)
+            poll_resp = conn.get_response(monitor_path)
+            if poll_resp.status_code not in (codes.accepted, codes.not_found):
+                break
 
-    # Task resource URI: remove /Monitor suffix
-    task_uri = task_monitor.rstrip("/")
-    if task_uri.endswith("/Monitor"):
-        task_uri = task_uri[: -len("/Monitor")]
-    task_path = _get_path_from_connection(conn, task_uri)
-    task_resp = conn.get_response(task_path)
-    if task_resp.status_code != codes.ok:
-        return None, None, f"Task GET failed: {task_resp.status_code}"
-    task_json = task_resp.json()
-    if task_json.get("TaskState") != "Completed":
-        return None, None, f"Task did not complete: TaskState={task_json.get('TaskState')}"
+        # Task resource URI: remove /Monitor suffix
+        task_uri = task_monitor.rstrip("/")
+        if task_uri.endswith("/Monitor"):
+            task_uri = task_uri[: -len("/Monitor")]
+        task_path = _get_path_from_connection(conn, task_uri)
+        task_resp = conn.get_response(task_path)
+        if task_resp.status_code != codes.ok:
+            return None, None, f"Task GET failed: {task_resp.status_code}"
+        task_json = task_resp.json()
+        if task_json.get("TaskState") != "Completed":
+            return None, None, f"Task did not complete: TaskState={task_json.get('TaskState')}"
 
     # LogEntry location from Payload.HttpHeaders
     headers_list = task_json.get("Payload", {}).get("HttpHeaders", []) or []
@@ -242,15 +322,38 @@ def collect_oem_diagnostic_data(
     if not location:
         return None, None, "Location header missing in task Payload.HttpHeaders"
     if location.startswith("http"):
-        location = _get_path_from_connection(conn, location)
+        log_entry_path = location
     else:
-        location = location.lstrip("/")
+        log_entry_path = location.lstrip("/")
 
-    # GET LogEntry resource
-    log_entry_resp = conn.get_response(location)
-    if log_entry_resp.status_code != codes.ok:
-        return None, None, f"LogEntry GET failed: {log_entry_resp.status_code}"
-    log_entry_json = log_entry_resp.json()
+    # GET LogEntry (some BMCs 404 when URL includes :443; try without :443 first)
+    log_entry_alt = _strip_port_443(log_entry_path)
+    if log_entry_alt is None and not log_entry_path.startswith("http") and ":443" in conn.base_url:
+        log_entry_alt = _strip_port_443(
+            conn.base_url.rstrip("/") + "/" + log_entry_path.lstrip("/")
+        )
+    paths_to_try = [log_entry_alt, log_entry_path] if log_entry_alt else [log_entry_path]
+    log_entry_json = None
+    first_status: Optional[int] = codes.not_found
+    first_error = ""
+    for try_path in paths_to_try:
+        if try_path is None:
+            continue
+        try:
+            log_entry_resp = conn.get_response(try_path)
+            if log_entry_resp.status_code == codes.ok:
+                log_entry_json = log_entry_resp.json()
+                break
+            if try_path == paths_to_try[0]:
+                first_status = log_entry_resp.status_code
+        except Exception as e:
+            if try_path == paths_to_try[0]:
+                first_status = None
+                first_error = str(e)
+            continue
+    if log_entry_json is None:
+        err = first_error if first_status is None else f"status {first_status}"
+        return None, None, f"LogEntry GET failed: {err} (GET {log_entry_path})"
 
     # Download binary log if AdditionalDataURI present
     log_bytes: Optional[bytes] = None
@@ -265,10 +368,15 @@ def collect_oem_diagnostic_data(
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
         if log_bytes is not None:
-            (output_dir / f"{oem_diagnostic_type}.tar.xz").write_bytes(log_bytes)
+            archive_path = output_dir / f"{oem_diagnostic_type}.tar.xz"
+            archive_path.write_bytes(log_bytes)
+            log.info("Log written to disk: %s -> %s", oem_diagnostic_type, archive_path.name)
         metadata_file = output_dir / f"{oem_diagnostic_type}_log_entry.json"
         try:
             metadata_file.write_text(json.dumps(log_entry_json, indent=2), encoding="utf-8")
+            log.info(
+                "Log metadata written to disk: %s -> %s", oem_diagnostic_type, metadata_file.name
+            )
         except Exception:
             pass
 

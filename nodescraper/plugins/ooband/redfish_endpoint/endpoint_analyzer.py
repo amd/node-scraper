@@ -29,7 +29,7 @@ from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
 from nodescraper.interfaces import DataAnalyzer
 from nodescraper.models import TaskResult
 
-from .analyzer_args import RedfishConstraint, RedfishEndpointAnalyzerArgs
+from .analyzer_args import ConstraintKey, RedfishConstraint, RedfishEndpointAnalyzerArgs
 from .endpoint_data import RedfishEndpointDataModel
 
 
@@ -59,27 +59,27 @@ def _get_by_path(obj: Any, path: str) -> Any:
 def _check_constraint(actual: Any, constraint: RedfishConstraint) -> tuple[bool, str]:
     """Compare actual value to constraint."""
     if isinstance(constraint, dict):
-        if "eq" in constraint:
-            ok = actual == constraint["eq"]
-            return ok, f"expected eq {constraint['eq']}, got {actual!r}"
-        if "min" in constraint or "max" in constraint:
+        if ConstraintKey.EQ in constraint:
+            ok = actual == constraint[ConstraintKey.EQ]
+            return ok, f"expected eq {constraint[ConstraintKey.EQ]}, got {actual!r}"
+        if ConstraintKey.MIN in constraint or ConstraintKey.MAX in constraint:
             try:
                 val = float(actual) if actual is not None else None
                 if val is None:
                     return False, f"expected numeric, got {actual!r}"
-                if "min" in constraint and val < constraint["min"]:
-                    return False, f"value {val} below min {constraint['min']}"
-                if "max" in constraint and val > constraint["max"]:
-                    return False, f"value {val} above max {constraint['max']}"
+                if ConstraintKey.MIN in constraint and val < constraint[ConstraintKey.MIN]:
+                    return False, f"value {val} below min {constraint[ConstraintKey.MIN]}"
+                if ConstraintKey.MAX in constraint and val > constraint[ConstraintKey.MAX]:
+                    return False, f"value {val} above max {constraint[ConstraintKey.MAX]}"
                 return True, ""
             except (TypeError, ValueError):
                 return False, f"expected numeric, got {actual!r}"
-        if "oneOf" in constraint:
-            allowed = constraint["oneOf"]
+        if ConstraintKey.ANY_OF in constraint:
+            allowed = constraint[ConstraintKey.ANY_OF]
             if not isinstance(allowed, list):
-                return False, "oneOf must be a list"
+                return False, "anyOf must be a list"
             ok = actual in allowed
-            return ok, f"expected one of {allowed}, got {actual!r}"
+            return ok, f"expected any of {allowed}, got {actual!r}"
     ok = actual == constraint
     return ok, f"expected {constraint!r}, got {actual!r}"
 
@@ -132,7 +132,7 @@ class RedfishEndpointAnalyzer(DataAnalyzer[RedfishEndpointDataModel, RedfishEndp
             first = failed[0]
             detail = f"{first['uri']} {first['path']}: {first['reason']}"
             self._log_event(
-                category=EventCategory.RUNTIME,
+                category=EventCategory.TELEMETRY,
                 description=f"Redfish endpoint checks failed: {len(failed)} failure(s) — {detail}",
                 data={"failures": failed},
                 priority=EventPriority.WARNING,

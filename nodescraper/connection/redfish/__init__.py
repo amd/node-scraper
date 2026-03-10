@@ -35,6 +35,7 @@ from .redfish_oem_diag import (
     get_oem_diagnostic_allowable_values,
 )
 from .redfish_params import RedfishConnectionParams
+from .redfish_path import RedfishPath
 
 __all__ = [
     "RedfishConnection",
@@ -42,6 +43,7 @@ __all__ = [
     "RedfishGetResult",
     "RedfishConnectionManager",
     "RedfishConnectionParams",
+    "RedfishPath",
     "RedfishOemDiagCollectorArgs",
     "collect_oem_diagnostic_data",
     "get_oem_diagnostic_allowable_values",
