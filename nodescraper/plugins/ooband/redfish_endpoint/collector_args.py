@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# Copyright (c) 2025 Advanced Micro Devices, Inc.
+# Copyright (c) 2026 Advanced Micro Devices, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,17 +23,18 @@
 # SOFTWARE.
 #
 ###############################################################################
-from typing import Generic
-
-from nodescraper.connection.inband import InBandConnectionManager, SSHConnectionParams
-from nodescraper.generictypes import TAnalyzeArg, TCollectArg, TDataModel
-from nodescraper.interfaces import DataPlugin
+from pydantic import BaseModel, Field, field_validator
 
 
-class InBandDataPlugin(
-    DataPlugin[InBandConnectionManager, SSHConnectionParams, TDataModel, TCollectArg, TAnalyzeArg],
-    Generic[TDataModel, TCollectArg, TAnalyzeArg],
-):
-    """Base class for in band plugins."""
+class RedfishEndpointCollectorArgs(BaseModel):
+    """Collection args: uris to GET."""
 
-    CONNECTION_TYPE = InBandConnectionManager
+    uris: list[str] = Field(default_factory=list)
+
+    @field_validator("uris", mode="before")
+    @classmethod
+    def strip_uris(cls, v: list[str]) -> list[str]:
+        """Strip whitespace from each URI in the list."""
+        if not v:
+            return v
+        return [str(uri).strip() for uri in v]
