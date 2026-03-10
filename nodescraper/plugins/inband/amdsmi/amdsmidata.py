@@ -471,9 +471,18 @@ class PageData(BaseModel):
     value: Optional[int]
 
 
+def _bad_pages_retired_list(v: object) -> list[PageData]:
+    """Coerce 'No bad pages found.' to empty list."""
+    if v == "No bad pages found.":
+        return []
+    return v  # type: ignore[return-value]
+
+
 class BadPages(BaseModel):
     gpu: int
     retired: list[PageData]
+
+    _retired_validator = field_validator("retired", mode="before")(_bad_pages_retired_list)
 
 
 # Metric Data
@@ -653,6 +662,8 @@ class MetricThrottleVu(BaseModel):
     value: Optional[dict[str, list[Union[int, str]]]] = Field(deprecated=True, default=None)
     unit: str = Field(deprecated=True, default="")
 
+    _value_na = field_validator("value", mode="before")(na_to_none)
+
 
 class MetricThrottle(AmdSmiBaseModel):
     accumulation_counter: Optional[Union[MetricThrottleVu, ValueUnit]] = None
@@ -806,6 +817,7 @@ class LinkStatusTable(Enum):
     UP = "U"
     DOWN = "D"
     DISABLED = "X"
+    SELF = "SELF"
 
 
 class BiDirectionalTable(Enum):
@@ -915,17 +927,6 @@ class Topo(BaseModel):
     links: list[TopoLink]
 
 
-class AmdSmiTstData(BaseModel):
-    "Summary of amdsmitst results, with list and count of passing/skipped/failed tests"
-
-    passed_tests: list[str] = Field(default_factory=list)
-    skipped_tests: list[str] = Field(default_factory=list)
-    failed_tests: list[str] = Field(default_factory=list)
-    passed_test_count: int = 0
-    skipped_test_count: int = 0
-    failed_test_count: int = 0
-
-
 class AmdSmiDataModel(DataModel):
     """Data model for amd-smi data.
 
@@ -955,7 +956,6 @@ class AmdSmiDataModel(DataModel):
     xgmi_link: Optional[list[XgmiLinks]] = Field(default_factory=list)
     cper_data: Optional[list[FileModel]] = Field(default_factory=list)
     cper_afids: dict[str, int] = Field(default_factory=dict)
-    amdsmitst_data: AmdSmiTstData = Field(default_factory=AmdSmiTstData)
 
     def get_list(self, gpu: int) -> Optional[AmdSmiListItem]:
         """Get the gpu list item for the given gpu id."""
