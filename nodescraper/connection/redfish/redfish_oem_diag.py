@@ -67,11 +67,9 @@ def _log_collect_diag_response(
 RF_ODATA_ID = "@odata.id"
 
 # @Redfish.AllowableValues: Redfish annotation for the list of allowable values for a string
-# property in modification requests or action parameters.
 REDFISH_ANNOTATION_ALLOWABLE_VALUES = "Redfish.AllowableValues"
 
 # OEMDiagnosticDataType: LogService CollectDiagnosticData action parameter
-# (https://redfish.dmtf.org/schemas/v1/LogService.v1_9_0.json#/definitions/CollectDiagnosticData/parameters/OEMDiagnosticDataType)
 OEM_DIAGNOSTIC_DATA_TYPE_PARAM = "OEMDiagnosticDataType"
 
 RF_ANNOTATION_ALLOWABLE = f"{OEM_DIAGNOSTIC_DATA_TYPE_PARAM}@{REDFISH_ANNOTATION_ALLOWABLE_VALUES}"
