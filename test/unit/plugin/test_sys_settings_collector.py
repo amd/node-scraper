@@ -76,19 +76,11 @@ def test_collect_data_success(linux_sys_settings_collector, collection_args):
 
 
 def test_collect_data_no_paths_not_ran(linux_sys_settings_collector):
-    """No paths still collects netdev mapping."""
-
-    def run_cmd(cmd, **kwargs):
-        if cmd == "ls -l /sys/class/net/*/device":
-            return make_artifact(0, "lrwxrwxrwx ... /sys/devices/pci0000:00/...")
-        return make_artifact(1, "")
-
-    linux_sys_settings_collector._run_sut_cmd = run_cmd
+    """No paths in args -> NOT_RAN."""
     result, data = linux_sys_settings_collector.collect_data({})
-    assert result.status == ExecutionStatus.OK
-    assert data is not None
-    assert "/sys/class/net/*/device" in data.readings
-    assert "Sysfs collected 1 path(s)" in result.message
+    assert result.status == ExecutionStatus.NOT_RAN
+    assert "No paths configured" in result.message
+    assert data is None
 
 
 def test_collect_data_enabled_fails(linux_sys_settings_collector, collection_args):
