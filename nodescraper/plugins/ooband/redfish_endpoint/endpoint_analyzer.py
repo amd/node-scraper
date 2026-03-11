@@ -129,11 +129,10 @@ class RedfishEndpointAnalyzer(DataAnalyzer[RedfishEndpointDataModel, RedfishEndp
                         )
 
         if failed:
-            first = failed[0]
-            detail = f"{first['uri']} {first['path']}: {first['reason']}"
+            details = "; ".join(f"{f['uri']} {f['path']}: {f['reason']}" for f in failed)
             self._log_event(
                 category=EventCategory.TELEMETRY,
-                description=f"Redfish endpoint checks failed: {len(failed)} failure(s) — {detail}",
+                description=f"Redfish endpoint checks failed: {len(failed)} failure(s) — {details}",
                 data={"failures": failed},
                 priority=EventPriority.WARNING,
                 console_log=True,
