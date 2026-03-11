@@ -27,11 +27,11 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 from pathlib import Path
 from typing import Any, Optional
 
-from pydantic import BaseModel, Field, model_validator
 from requests import Response
 from requests.status_codes import codes
 
@@ -66,10 +66,18 @@ def _log_collect_diag_response(
 # Redfish JSON key for resource link
 RF_ODATA_ID = "@odata.id"
 
-RF_ANNOTATION_ALLOWABLE = "OEMDiagnosticDataType@Redfish.AllowableValues"
+# @Redfish.AllowableValues: Redfish annotation for the list of allowable values for a string
+# property in modification requests or action parameters.
+REDFISH_ANNOTATION_ALLOWABLE_VALUES = "Redfish.AllowableValues"
+
+# OEMDiagnosticDataType: LogService CollectDiagnosticData action parameter
+# (https://redfish.dmtf.org/schemas/v1/LogService.v1_9_0.json#/definitions/CollectDiagnosticData/parameters/OEMDiagnosticDataType)
+OEM_DIAGNOSTIC_DATA_TYPE_PARAM = "OEMDiagnosticDataType"
+
+RF_ANNOTATION_ALLOWABLE = f"{OEM_DIAGNOSTIC_DATA_TYPE_PARAM}@{REDFISH_ANNOTATION_ALLOWABLE_VALUES}"
 
 # Default max wait for BMC task (seconds)
-DEFAULT_TASK_TIMEOUT_S = 600
+DEFAULT_TASK_TIMEOUT_S = 1800
 
 
 def get_oem_diagnostic_allowable_values(
@@ -92,9 +100,6 @@ def get_oem_diagnostic_allowable_values(
         return None
     if not isinstance(data, dict):
         return None
-    allow = data.get(RF_ANNOTATION_ALLOWABLE)
-    if isinstance(allow, list) and all(isinstance(x, str) for x in allow):
-        return list(allow)
     actions = data.get("Actions") or {}
     collect_action = actions.get("LogService.CollectDiagnosticData") or actions.get(
         "#LogService.CollectDiagnosticData"
@@ -104,37 +109,6 @@ def get_oem_diagnostic_allowable_values(
         if isinstance(allow, list) and all(isinstance(x, str) for x in allow):
             return list(allow)
     return None
-
-
-class RedfishOemDiagCollectorArgs(BaseModel):
-    """Collector/analyzer args for Redfish OEM diagnostic log collection."""
-
-    log_service_path: str = Field(
-        default="redfish/v1/Systems/UBB/LogServices/DiagLogs",
-        description="Redfish path to the LogService (e.g. DiagLogs).",
-    )
-    oem_diagnostic_types_allowable: Optional[list[str]] = Field(
-        default=None,
-        description="Allowable OEM diagnostic types for this architecture/BMC. When set, used for validation and as default for oem_diagnostic_types when empty.",
-    )
-    oem_diagnostic_types: list[str] = Field(
-        default_factory=list,
-        description="OEM diagnostic types to collect. When empty and oem_diagnostic_types_allowable is set, defaults to that list.",
-    )
-    task_timeout_s: int = Field(
-        default=DEFAULT_TASK_TIMEOUT_S,
-        ge=1,
-        le=3600,
-        description="Max seconds to wait for each BMC task (202 + task monitor).",
-    )
-
-    @model_validator(mode="after")
-    def _default_oem_diagnostic_types(self) -> "RedfishOemDiagCollectorArgs":
-        if not self.oem_diagnostic_types and self.oem_diagnostic_types_allowable:
-            return self.model_copy(
-                update={"oem_diagnostic_types": list(self.oem_diagnostic_types_allowable)}
-            )
-        return self
 
 
 def _resolve_path(conn: RedfishConnection, path: str) -> str:
@@ -175,15 +149,53 @@ def _get_task_monitor_uri(body: dict, conn: RedfishConnection) -> Optional[str]:
                         if not uri.startswith("http"):
                             uri = _resolve_path(conn, uri.strip().lstrip("/"))
                         return uri
+    mid = body.get(RF_ODATA_ID)
+    if isinstance(mid, str) and mid.strip():
+        return _resolve_path(conn, mid.strip().rstrip("/") + "/Monitor")
     return None
 
 
-# Workaround for LogEntry URL containing :443
-def _strip_port_443(url: str) -> Optional[str]:
-    """Return URL with :443 removed, or None if unchanged (for 404 retry)."""
-    if ":443" in url:
-        return url.replace(":443", "", 1)
+# Workaround for LogEntry URL: some BMCs 404 when URL includes port
+def _strip_port_from_url(url: str) -> Optional[str]:
+    """Return URL with port removed from authority (e.g. host:443 -> host)."""
+    if re.search(r"://[^/]+:\d+", url):
+        return re.sub(r"(://[^:/]+):\d+", r"\1", url, count=1)
     return None
+
+
+def _download_log_and_save(
+    conn: RedfishConnection,
+    log_entry_json: dict[str, Any],
+    oem_diagnostic_type: str,
+    output_dir: Optional[Path],
+    log: logging.Logger,
+) -> Optional[bytes]:
+    # Download binary log if AdditionalDataURI present
+    log_bytes: Optional[bytes] = None
+    data_uri = log_entry_json.get("AdditionalDataURI")
+    if data_uri:
+        data_path = _get_path_from_connection(conn, data_uri)
+        data_resp = conn.get_response(data_path)
+        if data_resp.status_code == codes.ok:
+            log_bytes = data_resp.content
+
+    if output_dir:
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        if log_bytes is not None:
+            archive_path = output_dir / f"{oem_diagnostic_type}.tar.xz"
+            archive_path.write_bytes(log_bytes)
+            log.info("Log written to disk: %s -> %s", oem_diagnostic_type, archive_path.name)
+        metadata_file = output_dir / f"{oem_diagnostic_type}_log_entry.json"
+        try:
+            metadata_file.write_text(json.dumps(log_entry_json, indent=2), encoding="utf-8")
+            log.info(
+                "Log metadata written to disk: %s -> %s", oem_diagnostic_type, metadata_file.name
+            )
+        except Exception as e:
+            log.exception("Failed to write log metadata to %s: %s", metadata_file, e)
+
+    return log_bytes
 
 
 def collect_oem_diagnostic_data(
@@ -271,14 +283,6 @@ def collect_oem_diagnostic_data(
             if task_resp.status_code == codes.ok:
                 fetched = task_resp.json()
                 task_monitor = _get_task_monitor_uri(fetched, conn)
-                if not task_monitor and isinstance(fetched, dict):
-                    task_monitor = fetched.get("TaskMonitor")
-                    if not task_monitor and fetched.get(RF_ODATA_ID):
-                        mid = fetched[RF_ODATA_ID]
-                        if isinstance(mid, str) and mid.strip():
-                            task_monitor = _resolve_path(conn, mid.strip().rstrip("/") + "/Monitor")
-                    if task_monitor and not task_monitor.startswith("http"):
-                        task_monitor = _resolve_path(conn, task_monitor)
         if not task_monitor:
             _log_collect_diag_response(
                 log, resp.status_code, oem_response, getattr(resp, "text", "") or ""
@@ -298,10 +302,8 @@ def collect_oem_diagnostic_data(
             if poll_resp.status_code not in (codes.accepted, codes.not_found):
                 break
 
-        # Task resource URI: remove /Monitor suffix
-        task_uri = task_monitor.rstrip("/")
-        if task_uri.endswith("/Monitor"):
-            task_uri = task_uri[: -len("/Monitor")]
+        # Task resource URI: parent of task monitor
+        task_uri = task_monitor.rstrip("/").rsplit("/", 1)[0]
         task_path = _get_path_from_connection(conn, task_uri)
         task_resp = conn.get_response(task_path)
         if task_resp.status_code != codes.ok:
@@ -324,10 +326,10 @@ def collect_oem_diagnostic_data(
     else:
         log_entry_path = location.lstrip("/")
 
-    # GET LogEntry (some BMCs 404 when URL includes :443; try without :443 first)
-    log_entry_alt = _strip_port_443(log_entry_path)
-    if log_entry_alt is None and not log_entry_path.startswith("http") and ":443" in conn.base_url:
-        log_entry_alt = _strip_port_443(
+    # GET LogEntry (some BMCs 404 when URL includes explicit port; try without port first)
+    log_entry_alt = _strip_port_from_url(log_entry_path)
+    if log_entry_alt is None and not log_entry_path.startswith("http"):
+        log_entry_alt = _strip_port_from_url(
             conn.base_url.rstrip("/") + "/" + log_entry_path.lstrip("/")
         )
     paths_to_try = [log_entry_alt, log_entry_path] if log_entry_alt else [log_entry_path]
@@ -353,29 +355,5 @@ def collect_oem_diagnostic_data(
         err = first_error if first_status is None else f"status {first_status}"
         return None, None, f"LogEntry GET failed: {err} (GET {log_entry_path})"
 
-    # Download binary log if AdditionalDataURI present
-    log_bytes: Optional[bytes] = None
-    data_uri = log_entry_json.get("AdditionalDataURI")
-    if data_uri:
-        data_path = _get_path_from_connection(conn, data_uri)
-        data_resp = conn.get_response(data_path)
-        if data_resp.status_code == codes.ok:
-            log_bytes = data_resp.content
-
-    if output_dir:
-        output_dir = Path(output_dir)
-        output_dir.mkdir(parents=True, exist_ok=True)
-        if log_bytes is not None:
-            archive_path = output_dir / f"{oem_diagnostic_type}.tar.xz"
-            archive_path.write_bytes(log_bytes)
-            log.info("Log written to disk: %s -> %s", oem_diagnostic_type, archive_path.name)
-        metadata_file = output_dir / f"{oem_diagnostic_type}_log_entry.json"
-        try:
-            metadata_file.write_text(json.dumps(log_entry_json, indent=2), encoding="utf-8")
-            log.info(
-                "Log metadata written to disk: %s -> %s", oem_diagnostic_type, metadata_file.name
-            )
-        except Exception:
-            pass
-
+    log_bytes = _download_log_and_save(conn, log_entry_json, oem_diagnostic_type, output_dir, log)
     return log_bytes, log_entry_json, None
