@@ -23,26 +23,30 @@
 # SOFTWARE.
 #
 ###############################################################################
-from .redfish_connection import (
-    RedfishConnection,
-    RedfishConnectionError,
-    RedfishGetResult,
-)
-from .redfish_manager import RedfishConnectionManager
-from .redfish_oem_diag import (
-    collect_oem_diagnostic_data,
-    get_oem_diagnostic_allowable_values,
-)
-from .redfish_params import RedfishConnectionParams
-from .redfish_path import RedfishPath
+from nodescraper.base import OOBandDataPlugin
 
-__all__ = [
-    "RedfishConnection",
-    "RedfishConnectionError",
-    "RedfishGetResult",
-    "RedfishConnectionManager",
-    "RedfishConnectionParams",
-    "RedfishPath",
-    "collect_oem_diagnostic_data",
-    "get_oem_diagnostic_allowable_values",
-]
+from .analyzer_args import RedfishOemDiagAnalyzerArgs
+from .collector_args import RedfishOemDiagCollectorArgs
+from .oem_diag_analyzer import RedfishOemDiagAnalyzer
+from .oem_diag_collector import RedfishOemDiagCollector
+from .oem_diag_data import RedfishOemDiagDataModel
+
+
+class RedfishOemDiagPlugin(
+    OOBandDataPlugin[
+        RedfishOemDiagDataModel,
+        RedfishOemDiagCollectorArgs,
+        RedfishOemDiagAnalyzerArgs,
+    ]
+):
+    """Collect Redfish OEM diagnostic logs (e.g. JournalControl, AllLogs, Dmesg) via LogService.CollectDiagnosticData.
+
+    Uses RedfishConnectionManager. Configure log_service_path, oem_diagnostic_types (and optional output_dir)
+    in collection_args; use analysis_args.require_all_success to fail if any type fails.
+    """
+
+    DATA_MODEL = RedfishOemDiagDataModel
+    COLLECTOR = RedfishOemDiagCollector
+    ANALYZER = RedfishOemDiagAnalyzer
+    COLLECTOR_ARGS = RedfishOemDiagCollectorArgs
+    ANALYZER_ARGS = RedfishOemDiagAnalyzerArgs

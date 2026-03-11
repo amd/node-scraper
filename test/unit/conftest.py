@@ -50,6 +50,11 @@ def conn_mock():
     return MagicMock()
 
 
+@pytest.fixture
+def redfish_conn_mock():
+    return MagicMock()
+
+
 class DummyDataModel(DataModel):
     foo: int
 
