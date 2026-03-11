@@ -35,6 +35,8 @@ from typing import Any, Optional
 from requests import Response
 from requests.status_codes import codes
 
+from nodescraper.enums import TaskState
+
 from .redfish_connection import RedfishConnection, RedfishConnectionError
 from .redfish_path import RedfishPath
 
@@ -130,26 +132,36 @@ def _get_path_from_connection(conn: RedfishConnection, path: str) -> str:
 
 
 def _get_task_monitor_uri(body: dict, conn: RedfishConnection) -> Optional[str]:
-    """Extract task monitor URI from a Task-like body (DSP0266 or OEM variants)."""
+    """Extract task monitor URI from a Task-like body (DSP0266 or OEM variants).
+
+    TaskMonitor may be a string URI or an object with @odata.id (e.g. TaskService/TaskMonitors/378).
+    """
+
+    def _resolve_uri(uri: str) -> str:
+        if not uri.startswith("http"):
+            uri = _resolve_path(conn, uri.strip().lstrip("/"))
+        return uri
+
     for key in ("TaskMonitor", "Monitor", "TaskMonitorUri"):
-        uri = body.get(key)
-        if isinstance(uri, str) and uri.strip():
-            if not uri.startswith("http"):
-                uri = _resolve_path(conn, uri.strip().lstrip("/"))
-            return uri
+        val = body.get(key)
+        if isinstance(val, str) and val.strip():
+            return _resolve_uri(val)
+        if isinstance(val, dict):
+            odata_id = val.get(RF_ODATA_ID)
+            if isinstance(odata_id, str) and odata_id.strip():
+                return _resolve_uri(odata_id)
     oem = body.get("Oem")
     if isinstance(oem, dict):
         for vendor_dict in oem.values():
             if isinstance(vendor_dict, dict):
                 for k in ("TaskMonitor", "Monitor", "TaskMonitorUri"):
-                    uri = vendor_dict.get(k)
-                    if isinstance(uri, str) and uri.strip():
-                        if not uri.startswith("http"):
-                            uri = _resolve_path(conn, uri.strip().lstrip("/"))
-                        return uri
-    mid = body.get(RF_ODATA_ID)
-    if isinstance(mid, str) and mid.strip():
-        return _resolve_path(conn, mid.strip().rstrip("/") + "/Monitor")
+                    val = vendor_dict.get(k)
+                    if isinstance(val, str) and val.strip():
+                        return _resolve_uri(val)
+                    if isinstance(val, dict):
+                        odata_id = val.get(RF_ODATA_ID)
+                        if isinstance(odata_id, str) and odata_id.strip():
+                            return _resolve_uri(odata_id)
     return None
 
 
@@ -199,7 +211,7 @@ def _download_log_and_save(
 def collect_oem_diagnostic_data(
     conn: RedfishConnection,
     log_service_path: str,
-    oem_diagnostic_type: str = "JournalControl",
+    oem_diagnostic_type: Optional[str] = None,
     task_timeout_s: int = DEFAULT_TASK_TIMEOUT_S,
     output_dir: Optional[Path] = None,
     validate_type: bool = False,
@@ -213,7 +225,7 @@ def collect_oem_diagnostic_data(
         conn: Redfish connection (session already established).
         log_service_path: Path to LogService under Systems, e.g.
             "redfish/v1/Systems/UBB/LogServices/DiagLogs" (no leading slash).
-        oem_diagnostic_type: OEM type for DiagnosticDataType OEM (e.g. "JournalControl", "AllLogs").
+        oem_diagnostic_type: OEM type for DiagnosticDataType OEM (e.g. "JournalControl", "AllLogs"). Required.
         task_timeout_s: Max seconds to wait for BMC task
         output_dir: If set, save log archive and LogEntry JSON here.
         validate_type: If True, require oem_diagnostic_type to be in allowed_types.
@@ -225,6 +237,8 @@ def collect_oem_diagnostic_data(
         On success: (bytes, dict, None). On failure: (None, None, error_str).
     """
     log = logger if logger is not None else _module_logger
+    if not oem_diagnostic_type or not oem_diagnostic_type.strip():
+        return None, None, "oem_diagnostic_type is required"
     if validate_type and allowed_types and oem_diagnostic_type not in allowed_types:
         return (
             None,
@@ -260,23 +274,19 @@ def collect_oem_diagnostic_data(
     # 200 OK with TaskState=Completed: synchronous completion, body is the Task
     task_json: Optional[dict[str, Any]] = None
     if resp.status_code == codes.ok and isinstance(oem_response, dict):
-        if oem_response.get("TaskState") == "Completed":
+        if oem_response.get("TaskState") == TaskState.completed.value:
             headers_list = oem_response.get("Payload", {}).get("HttpHeaders", []) or []
             if any(isinstance(h, str) and "Location:" in h for h in headers_list):
                 task_json = oem_response
 
     # When TaskMonitor is implemented
     task_monitor: Optional[str] = None
+    task_path: Optional[str] = None
     if task_json is None:
         task_monitor = location_header or _get_task_monitor_uri(oem_response, conn)
-        # AMD and others: 202 body has @odata.id (Task) but no TaskMonitor; use /Monitor
-        if not task_monitor and oem_response.get(RF_ODATA_ID):
-            odata_id = oem_response[RF_ODATA_ID]
-            if isinstance(odata_id, str) and odata_id.strip():
-                monitor_path = odata_id.strip().rstrip("/") + "/Monitor"
-                task_monitor = _resolve_path(conn, monitor_path)
-        if not task_monitor and oem_response.get(RF_ODATA_ID):
+        if oem_response.get(RF_ODATA_ID):
             task_path = _get_path_from_connection(conn, oem_response[RF_ODATA_ID])
+        if not task_monitor and task_path:
             task_resp = conn.get_response(task_path)
             if task_resp.status_code == codes.ok:
                 fetched = task_resp.json()
@@ -289,8 +299,9 @@ def collect_oem_diagnostic_data(
 
     if task_json is None:
         assert task_monitor is not None
-        # Poll task monitor until no longer 202/404
+        # Poll task monitor until no longer 202/404 (e.g. GET /redfish/v1/TaskService/TaskMonitors/378)
         start = time.time()
+        poll_resp = None
         while True:
             if time.time() - start > task_timeout_s:
                 return None, None, f"Task did not complete within {task_timeout_s}s"
@@ -300,14 +311,23 @@ def collect_oem_diagnostic_data(
             if poll_resp.status_code not in (codes.accepted, codes.not_found):
                 break
 
-        # Task resource URI: parent of task monitor
-        task_uri = task_monitor.rstrip("/").rsplit("/", 1)[0]
-        task_path = _get_path_from_connection(conn, task_uri)
+        # TaskMonitor response body has @odata.id pointing to the Task (e.g. /redfish/v1/TaskService/Tasks/5)
+        try:
+            monitor_body = poll_resp.json() if poll_resp else {}
+        except Exception:
+            monitor_body = {}
+        task_uri_from_monitor = (
+            monitor_body.get(RF_ODATA_ID) if isinstance(monitor_body, dict) else None
+        )
+        if isinstance(task_uri_from_monitor, str) and task_uri_from_monitor.strip():
+            task_path = _get_path_from_connection(conn, task_uri_from_monitor.strip())
+        elif not task_path:
+            task_path = _get_path_from_connection(conn, task_monitor.rstrip("/").rsplit("/", 1)[0])
         task_resp = conn.get_response(task_path)
         if task_resp.status_code != codes.ok:
             return None, None, f"Task GET failed: {task_resp.status_code}"
         task_json = task_resp.json()
-        if task_json.get("TaskState") != "Completed":
+        if task_json.get("TaskState") != TaskState.completed.value:
             return None, None, f"Task did not complete: TaskState={task_json.get('TaskState')}"
 
     # LogEntry location from Payload.HttpHeaders
