@@ -162,6 +162,10 @@ def _get_task_monitor_uri(body: dict, conn: RedfishConnection) -> Optional[str]:
                         odata_id = val.get(RF_ODATA_ID)
                         if isinstance(odata_id, str) and odata_id.strip():
                             return _resolve_uri(odata_id)
+    odata_id = body.get(RF_ODATA_ID)
+    if isinstance(odata_id, str) and odata_id.strip():
+        base_uri = _resolve_uri(odata_id)
+        return f"{base_uri.rstrip('/')}/Monitor"
     return None
 
 
