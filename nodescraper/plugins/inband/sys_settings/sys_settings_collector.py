@@ -137,9 +137,12 @@ class SysSettingsCollector(InBandDataCollector[SysSettingsDataModel, SysSettings
                 console_log=True,
             )
         if not paths and not directory_paths:
-            self.result.message = "No paths configured for sysfs collection"
-            self.result.status = ExecutionStatus.NOT_RAN
-            return self.result, None
+            self._log_event(
+                category=EventCategory.OS,
+                description="No explicit sysfs paths configured; collecting netdev mapping only",
+                priority=EventPriority.INFO,
+                console_log=True,
+            )
 
         readings: dict[str, str] = {}
         for path in paths:
