@@ -216,6 +216,7 @@ class DataPlugin(
                     max_event_priority_level=max_event_priority_level,
                     parent=self.__class__.__name__,
                     task_result_hooks=self.task_result_hooks,
+                    log_path=self.log_path,
                 )
                 self.collection_result, self._data = collection_task.collect_data(collection_args)
 

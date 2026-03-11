@@ -29,6 +29,7 @@ from .executionstatus import ExecutionStatus
 from .osfamily import OSFamily
 from .systeminteraction import SystemInteractionLevel
 from .systemlocation import SystemLocation
+from .taskstate import TaskState
 
 __all__ = [
     "ExecutionStatus",
@@ -37,4 +38,5 @@ __all__ = [
     "SystemLocation",
     "EventCategory",
     "EventPriority",
+    "TaskState",
 ]

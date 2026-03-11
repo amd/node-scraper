@@ -367,8 +367,8 @@ Use a plugin config that points at your LogService and lists the types to collec
         "log_service_path": "redfish/v1/Systems/UBB/LogServices/DiagLogs",
         "oem_diagnostic_types_allowable": [
           "JournalControl",
-          "AllLogs",
             ...
+          "AllLogs",
         ],
         "oem_diagnostic_types": ["JournalControl", "AllLogs"],
         "task_timeout_s": 600
@@ -395,7 +395,56 @@ Use a plugin config that points at your LogService and lists the types to collec
    ```sh
    node-scraper --connection-config connection-config.json --plugin-config plugin_config_redfish_oem_diag.json run-plugins RedfishOemDiagPlugin
    ```
-4. Use **`--log-path`** to choose where run logs (and OEM diag archives) are written.
+4. Use **`--log-path`** to choose where run logs (and OEM diag archives) are written; archives go under `<log-path>/scraper_logs_<name>_<timestamp>/redfish_oem_diag_plugin/redfish_oem_diag_collector/`.
+
+#### **RedfishEndpointPlugin**
+
+The RedfishEndpointPlugin collects Redfish URIs (GET responses) and optionally runs checks on the returned JSON. It requires a Redfish connection config (same as RedfishOemDiagPlugin).
+
+**How to run**
+
+1. Create a connection config (e.g. `connection-config.json`) with `RedfishConnectionManager` and your BMC host, credentials, and API root.
+2. Create a plugin config with `uris` to collect and optional `checks` for analysis (see example below). For example save as `plugin_config_redfish_endpoint.json`.
+3. Run:
+   ```sh
+   node-scraper --connection-config connection-config.json --plugin-config plugin_config_redfish_endpoint.json run-plugins RedfishEndpointPlugin
+   ```
+
+**Sample plugin config** (`plugin_config_redfish_endpoint.json`):
+
+```json
+{
+  "name": "RedfishEndpointPlugin",
+  "desc": "Redfish endpoint: collect URIs and optional checks",
+  "global_args": {},
+  "plugins": {
+    "RedfishEndpointPlugin": {
+      "collection_args": {
+        "uris": [
+          "/redfish/v1/",
+          "/redfish/v1/Systems/1",
+          "/redfish/v1/Chassis/1/Power"
+        ]
+      },
+      "analysis_args": {
+        "checks": {
+          "/redfish/v1/Systems/1": {
+            "PowerState": "On",
+            "Status/Health": { "anyOf": ["OK", "Warning"] }
+          },
+          "/redfish/v1/Chassis/1/Power": {
+            "PowerControl/0/PowerConsumedWatts": { "max": 1000 }
+          }
+        }
+      }
+    }
+  },
+  "result_collators": {}
+}
+```
+
+- **`uris`**: List of Redfish paths (e.g. `/redfish/v1/`, `/redfish/v1/Systems/1`) to GET and store.
+- **`checks`**: Optional. Map of URI to expected values or constraints for analysis. Supports exact match (e.g. `"PowerState": "On"`), `anyOf`, `min`/`max`, etc.
 
 #### **'summary' sub command**
 The 'summary' subcommand can be used to combine results from multiple runs of node-scraper to a
@@ -523,7 +572,6 @@ node-scraper --plugin-config AllPlugins
 **Generate a reference config for specific plugins:**
 ```sh
 node-scraper --gen-reference-config run-plugins BiosPlugin OsPlugin
-
 ```
 This will generate the following config:
 ```json
