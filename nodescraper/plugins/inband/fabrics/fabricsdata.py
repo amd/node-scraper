@@ -96,6 +96,16 @@ class MstStatus(BaseModel):
     raw_output: str = ""  # Raw command output
 
 
+class SlingshotData(BaseModel):
+    """Slingshot/Cassini fabrics command outputs"""
+
+    cassini_pci: str = ""  # Output of lspci Cassini probe
+    net_link: Optional[str] = None  # Output of ip link show
+    libfabric_info: Optional[str] = None  # Output of fi_info -p cxi
+    cxi_stat: Optional[str] = None  # Output of cxi_stat
+    cxi_modules: Optional[str] = None  # Output of lsmod | grep cxi
+
+
 class FabricsDataModel(DataModel):
     """Complete InfiniBand/RDMA fabrics configuration data"""
 
@@ -106,3 +116,4 @@ class FabricsDataModel(DataModel):
     )  # ibdev2netdev output
     ofed_info: Optional[OfedInfo] = None  # OFED version info
     mst_status: Optional[MstStatus] = None  # MST status
+    slingshot_data: Optional[SlingshotData] = None  # Slingshot/Cassini command outputs
