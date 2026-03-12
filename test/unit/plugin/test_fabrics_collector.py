@@ -36,9 +36,6 @@ from nodescraper.plugins.inband.fabrics.fabricsdata import (
     MstDevice,
     MstStatus,
     OfedInfo,
-    RdmaDevice,
-    RdmaInfo,
-    RdmaLink,
 )
 
 
@@ -121,19 +118,6 @@ ConnectX7(rev:0)        /dev/mst/ab1234_pciconf9    0000:ec:00.0  mlx5_4        
 ConnectX7(rev:0)        /dev/mst/cd5678_pciconf8    0000:d4:00.0  mlx5_6          net-mock211s0np0         1"""
 
 MST_STATUS_EMPTY = ""
-
-# rdma dev output - RoCE devices
-RDMA_DEV_OUTPUT = """0: abcdef25s0: node_type ca fw 1.117.1-a-63 node_guid 1234:56ff:890f:1111 sys_image_guid 1234:56ff:890f:1111
-1: abcdef105s0: node_type ca fw 1.117.1-a-63 node_guid 2222:81ff:3333:b450 sys_image_guid 2222:81ff:3333:b450"""
-
-RDMA_DEV_EMPTY = ""
-
-# rdma link output - RoCE devices
-RDMA_LINK_OUTPUT = """link rocep9s0/1 state DOWN physical_state POLLING netdev benic8p1
-link abcdef25s0/1 state DOWN physical_state POLLING netdev mock7p1
-"""
-
-RDMA_LINK_EMPTY = ""
 
 
 def test_parse_ibstat_basic(collector):
@@ -264,60 +248,6 @@ def test_parse_mst_status_empty(collector):
     assert len(mst_status.devices) == 0
 
 
-def test_parse_rdma_dev_roce(collector):
-    """Test parsing rdma dev output with RoCE devices"""
-    devices = collector._parse_rdma_dev(RDMA_DEV_OUTPUT)
-
-    assert len(devices) == 2
-
-    # Check first device
-    device1 = devices[0]
-    assert device1.device == "abcdef25s0"
-    assert device1.node_type == "ca"
-    assert device1.attributes["fw_version"] == "1.117.1-a-63"
-    assert device1.node_guid == "1234:56ff:890f:1111"
-    assert device1.sys_image_guid == "1234:56ff:890f:1111"
-
-    # Check second device
-    device2 = devices[1]
-    assert device2.device == "abcdef105s0"
-    assert device2.node_type == "ca"
-    assert device2.node_guid == "2222:81ff:3333:b450"
-    assert device2.sys_image_guid == "2222:81ff:3333:b450"
-
-
-def test_parse_rdma_dev_empty(collector):
-    """Test parsing empty rdma dev output"""
-    devices = collector._parse_rdma_dev(RDMA_DEV_EMPTY)
-    assert len(devices) == 0
-
-
-def test_parse_rdma_link_roce(collector):
-    """Test parsing rdma link output with RoCE devices"""
-    links = collector._parse_rdma_link(RDMA_LINK_OUTPUT)
-
-    assert len(links) == 2
-
-    # Check first link
-    link1 = next((link for link in links if link.device == "rocep9s0"), None)
-    assert link1 is not None
-    assert link1.port == 1
-    assert link1.state == "DOWN"
-    assert link1.physical_state == "POLLING"
-    assert link1.netdev == "benic8p1"
-
-    # Check second link
-    link2 = next((link for link in links if link.device == "abcdef25s0"), None)
-    assert link2 is not None
-    assert link2.netdev == "mock7p1"
-
-
-def test_parse_rdma_link_empty(collector):
-    """Test parsing empty rdma link output"""
-    links = collector._parse_rdma_link(RDMA_LINK_EMPTY)
-    assert len(links) == 0
-
-
 def test_fabrics_data_model_creation(collector):
     """Test creating FabricsDataModel with all components"""
     ibstat_device = IbstatDevice(
@@ -352,30 +282,12 @@ def test_fabrics_data_model_creation(collector):
     )
     mst_status = MstStatus(mst_started=True, devices=[mst_device], raw_output=MST_STATUS_OUTPUT)
 
-    rdma_device = RdmaDevice(
-        device="abcdef25s0",
-        node_type="ca",
-        node_guid="1234:56ff:890f:1111",
-        attributes={"fw_version": "1.117.1-a-63"},
-    )
-
-    rdma_link = RdmaLink(
-        device="abcdef25s0",
-        port=1,
-        state="DOWN",
-        physical_state="POLLING",
-        netdev="mock7p1",
-    )
-
-    rdma_info = RdmaInfo(devices=[rdma_device], links=[rdma_link], raw_output=RDMA_DEV_OUTPUT)
-
     data = FabricsDataModel(
         ibstat_devices=[ibstat_device],
         ibv_devices=[ibv_device],
         ibdev_netdev_mappings=[mapping],
         ofed_info=ofed_info,
         mst_status=mst_status,
-        rdma_info=rdma_info,
     )
 
     assert len(data.ibstat_devices) == 1
@@ -383,8 +295,6 @@ def test_fabrics_data_model_creation(collector):
     assert len(data.ibdev_netdev_mappings) == 1
     assert data.ofed_info.version == "OFED-internal-25.11-1.2.3"
     assert len(data.mst_status.devices) == 1
-    assert len(data.rdma_info.devices) == 1
-    assert len(data.rdma_info.links) == 1
 
 
 def test_fabrics_data_model_empty(collector):
@@ -395,7 +305,6 @@ def test_fabrics_data_model_empty(collector):
         ibdev_netdev_mappings=[],
         ofed_info=None,
         mst_status=None,
-        rdma_info=None,
     )
 
     assert len(data.ibstat_devices) == 0
@@ -403,4 +312,3 @@ def test_fabrics_data_model_empty(collector):
     assert len(data.ibdev_netdev_mappings) == 0
     assert data.ofed_info is None
     assert data.mst_status is None
-    assert data.rdma_info is None

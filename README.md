@@ -14,6 +14,7 @@ system debug.
     - ['run-plugins' sub command](#run-plugins-sub-command)
     - ['gen-plugin-config' sub command](#gen-plugin-config-sub-command)
     - ['compare-runs' subcommand](#compare-runs-subcommand)
+    - ['show-redfish-oem-allowable' subcommand](#show-redfish-oem-allowable-subcommand)
     - ['summary' sub command](#summary-sub-command)
 - [Configs](#configs)
   - [Global args](#global-args)
@@ -85,7 +86,7 @@ options:
   --sys-platform STRING
                         Specify system platform (default: None)
   --plugin-configs [STRING ...]
-                        built-in config names or paths to plugin config JSONs. Available built-in configs: NodeStatus (default: None)
+                        built-in config names or paths to plugin config JSONs. Available built-in configs: AllPlugins, NodeStatus (default: None)
   --system-config STRING
                         Path to system config json (default: None)
   --connection-config STRING
@@ -116,6 +117,8 @@ node-scraper --sys-name <remote_host> --sys-location REMOTE --connection-config 
 
 ##### Example: connection_config.json
 
+In-band (SSH) connection:
+
 ```json
 {
     "InBandConnectionManager": {
@@ -127,6 +130,24 @@ node-scraper --sys-name <remote_host> --sys-location REMOTE --connection-config 
     }
 }
 ```
+
+Redfish (BMC) connection for Redfish-only plugins:
+
+```json
+{
+    "RedfishConnectionManager": {
+        "host": "bmc.example.com",
+        "port": 443,
+        "username": "admin",
+        "password": "secret",
+        "use_https": true,
+        "verify_ssl": true,
+        "api_root": "redfish/v1"
+    }
+}
+```
+
+- `api_root` (optional): Redfish API path (e.g. `redfish/v1`). If omitted, the default `redfish/v1` is used. Override this when your BMC uses a different API version path.
 
 **Notes:**
 - If using SSH keys, specify `key_filename` instead of `password`.
@@ -319,6 +340,112 @@ node-scraper compare-runs path1 path2 --include-plugins DmesgPlugin --dont-trunc
 
 You can pass multiple plugin names to `--skip-plugins` or `--include-plugins`.
 
+#### **'show-redfish-oem-allowable' subcommand**
+The `show-redfish-oem-allowable` subcommand fetches the list of OEM diagnostic types supported by your BMC (from the Redfish LogService `OEMDiagnosticDataType@Redfish.AllowableValues`). Use it to discover which types you can put in `oem_diagnostic_types_allowable` and `oem_diagnostic_types` in the Redfish OEM diag plugin config.
+
+**Requirements:** A Redfish connection config (same as for RedfishOemDiagPlugin).
+
+**Command:**
+```sh
+node-scraper --connection-config connection-config.json show-redfish-oem-allowable --log-service-path "redfish/v1/Systems/UBB/LogServices/DiagLogs"
+```
+
+Output is a JSON array of allowable type names (e.g. `["Dmesg", "JournalControl", "AllLogs", ...]`). Copy that list into your plugin config’s `oem_diagnostic_types_allowable` if you want to match your BMC.
+
+**Redfish OEM diag plugin config example**
+
+Use a plugin config that points at your LogService and lists the types to collect. Logs are written under the run log path (see `--log-path`).
+
+```json
+{
+  "name": "Redfish OEM diagnostic logs",
+  "desc": "Collect OEM diagnostic logs from Redfish LogService. Requires Redfish connection config.",
+  "global_args": {},
+  "plugins": {
+    "RedfishOemDiagPlugin": {
+      "collection_args": {
+        "log_service_path": "redfish/v1/Systems/UBB/LogServices/DiagLogs",
+        "oem_diagnostic_types_allowable": [
+          "JournalControl",
+            ...
+          "AllLogs",
+        ],
+        "oem_diagnostic_types": ["JournalControl", "AllLogs"],
+        "task_timeout_s": 600
+      },
+      "analysis_args": {
+        "require_all_success": false
+      }
+    }
+  },
+  "result_collators": {}
+}
+```
+
+- **`log_service_path`**: Redfish path to the LogService (e.g. DiagLogs). Must match your system (e.g. `UBB` vs. another system id).
+- **`oem_diagnostic_types_allowable`**: Full list of types the BMC supports (from `show-redfish-oem-allowable` or vendor docs).
+- **`oem_diagnostic_types`**: Subset of types to collect on each run (e.g. `["JournalControl", "AllLogs"]`).
+- **`task_timeout_s`**: Max seconds to wait per collection task.
+
+**How to use**
+
+1. **Discover allowable types** (optional): run `show-redfish-oem-allowable` and paste the output into `oem_diagnostic_types_allowable` in your plugin config.
+2. **Set `oem_diagnostic_types`** to the list you want to collect (e.g. `["JournalControl", "AllLogs"]`).
+3. **Run the plugin** with a Redfish connection config and your plugin config:
+   ```sh
+   node-scraper --connection-config connection-config.json --plugin-config plugin_config_redfish_oem_diag.json run-plugins RedfishOemDiagPlugin
+   ```
+4. Use **`--log-path`** to choose where run logs (and OEM diag archives) are written; archives go under `<log-path>/scraper_logs_<name>_<timestamp>/redfish_oem_diag_plugin/redfish_oem_diag_collector/`.
+
+#### **RedfishEndpointPlugin**
+
+The RedfishEndpointPlugin collects Redfish URIs (GET responses) and optionally runs checks on the returned JSON. It requires a Redfish connection config (same as RedfishOemDiagPlugin).
+
+**How to run**
+
+1. Create a connection config (e.g. `connection-config.json`) with `RedfishConnectionManager` and your BMC host, credentials, and API root.
+2. Create a plugin config with `uris` to collect and optional `checks` for analysis (see example below). For example save as `plugin_config_redfish_endpoint.json`.
+3. Run:
+   ```sh
+   node-scraper --connection-config connection-config.json --plugin-config plugin_config_redfish_endpoint.json run-plugins RedfishEndpointPlugin
+   ```
+
+**Sample plugin config** (`plugin_config_redfish_endpoint.json`):
+
+```json
+{
+  "name": "RedfishEndpointPlugin",
+  "desc": "Redfish endpoint: collect URIs and optional checks",
+  "global_args": {},
+  "plugins": {
+    "RedfishEndpointPlugin": {
+      "collection_args": {
+        "uris": [
+          "/redfish/v1/",
+          "/redfish/v1/Systems/1",
+          "/redfish/v1/Chassis/1/Power"
+        ]
+      },
+      "analysis_args": {
+        "checks": {
+          "/redfish/v1/Systems/1": {
+            "PowerState": "On",
+            "Status/Health": { "anyOf": ["OK", "Warning"] }
+          },
+          "/redfish/v1/Chassis/1/Power": {
+            "PowerControl/0/PowerConsumedWatts": { "max": 1000 }
+          }
+        }
+      }
+    }
+  },
+  "result_collators": {}
+}
+```
+
+- **`uris`**: List of Redfish paths (e.g. `/redfish/v1/`, `/redfish/v1/Systems/1`) to GET and store.
+- **`checks`**: Optional. Map of URI to expected values or constraints for analysis. Supports exact match (e.g. `"PowerState": "On"`), `anyOf`, `min`/`max`, etc.
+
 #### **'summary' sub command**
 The 'summary' subcommand can be used to combine results from multiple runs of node-scraper to a
 single summary.csv file. Sample run:
@@ -370,7 +497,11 @@ Below is an example that skips sudo requiring plugins and disables analysis.
 ```
 
 #### Plugin config: **'--plugin-configs' command**
-A plugin config can be used to compare the system data against the config specifications:
+A plugin config can be used to compare the system data against the config specifications.
+Built-in configs include **NodeStatus** (a subset of plugins) and **AllPlugins** (runs every
+registered plugin with default arguments—useful for generating a reference config from the full system).
+
+Using a JSON file:
 ```sh
 node-scraper --plugin-configs plugin_config.json
 ```
@@ -431,10 +562,16 @@ Here is an example of a comprehensive plugin config that specifies analyzer args
 This command can be used to generate a reference config that is populated with current system
 configurations. Plugins that use analyzer args (where applicable) will be populated with system
 data.
-Sample command:
+
+**Run all registered plugins (AllPlugins config):**
+```sh
+node-scraper --plugin-config AllPlugins
+
+```
+
+**Generate a reference config for specific plugins:**
 ```sh
 node-scraper --gen-reference-config run-plugins BiosPlugin OsPlugin
-
 ```
 This will generate the following config:
 ```json

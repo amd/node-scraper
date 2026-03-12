@@ -241,6 +241,7 @@ def test_reference_config_with_analysis_args(run_cli_command, tmp_path):
         "OsPlugin",
         "PackagePlugin",
         "ProcessPlugin",
+        "RdmaPlugin",
         "RocmPlugin",
         "SysctlPlugin",
     ]

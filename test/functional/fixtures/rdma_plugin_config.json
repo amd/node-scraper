@@ -1,0 +1,9 @@
+{
+    "global_args": {},
+    "plugins": {
+      "RdmaPlugin": {}
+    },
+    "result_collators": {},
+    "name": "RdmaPlugin config",
+    "desc": "Config for testing RdmaPlugin"
+  }

@@ -97,11 +97,37 @@ class PluginExecutor:
         self.logger.info("System location: %s", self.system_info.location)
 
     @staticmethod
+    def _deep_merge_plugin_args(existing: dict, incoming: dict) -> dict:
+        """Merge incoming plugin args into existing; do not let empty dicts overwrite
+        For instance when --plugin--configs and run-plugin is used in same cmd."""
+        result = dict(existing)
+        for k, v in incoming.items():
+            if v is None:
+                continue
+            if k in ("collection_args", "analysis_args") and isinstance(v, dict):
+                existing_sub = result.get(k)
+                if isinstance(existing_sub, dict) and v:
+                    result[k] = {**existing_sub, **v}
+                elif v:
+                    result[k] = dict(v)
+            else:
+                result[k] = v
+        return result
+
+    @staticmethod
     def merge_configs(plugin_configs: list[PluginConfig]) -> PluginConfig:
         merged_config = PluginConfig()
         for config in plugin_configs:
             merged_config.global_args.update(config.global_args)
-            merged_config.plugins.update(config.plugins)
+            for plugin_name, plugin_args in config.plugins.items():
+                if plugin_name in merged_config.plugins and plugin_args:
+                    merged_config.plugins[plugin_name] = PluginExecutor._deep_merge_plugin_args(
+                        merged_config.plugins[plugin_name], plugin_args
+                    )
+                elif plugin_name in merged_config.plugins:
+                    pass  # dont overwrite with empty from run-plugins subparser
+                else:
+                    merged_config.plugins[plugin_name] = dict(plugin_args)
             merged_config.result_collators.update(config.result_collators)
 
         return merged_config

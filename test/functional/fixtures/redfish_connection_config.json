@@ -1,0 +1,9 @@
+{
+  "RedfishConnectionManager": {
+    "host": "https://bmc.example.com",
+    "username": "ADMIN",
+    "password": "placeholder",
+    "verify_ssl": false,
+    "timeout_seconds": 30
+  }
+}
