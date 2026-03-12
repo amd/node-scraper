@@ -31,6 +31,10 @@ from nodescraper.base import InBandDataCollector
 from nodescraper.connection.inband import TextFileArtifact
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
 from nodescraper.models import TaskResult
+from nodescraper.utils import (
+    command_result_event_data,
+    has_command_error_output,
+)
 
 from .collector_args import NicCollectorArgs
 from .nic_data import (
@@ -557,12 +561,20 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
             is_niccli = cmd.strip().startswith("niccli")
             sudo = use_sudo_niccli if is_niccli else use_sudo_nicctl
             res = self._run_sut_cmd(cmd, sudo=sudo)
+            has_error_output = has_command_error_output(res.stderr or "", res.stdout or "")
             if _is_artifact_only_command(cmd):
                 if res.exit_code != 0:
                     self._log_event(
                         category=EventCategory.NETWORK,
                         description=f"niccli/nicctl command failed: {cmd}",
-                        data={"exit_code": res.exit_code, "stderr": (res.stderr or "")[:500]},
+                        data=command_result_event_data(res),
+                        priority=EventPriority.WARNING,
+                    )
+                elif has_error_output:
+                    self._log_event(
+                        category=EventCategory.NETWORK,
+                        description=f"niccli/nicctl reported errors (exit 0): {cmd}",
+                        data=command_result_event_data(res),
                         priority=EventPriority.WARNING,
                     )
                 continue
@@ -576,7 +588,14 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
                 self._log_event(
                     category=EventCategory.NETWORK,
                     description=f"niccli/nicctl command failed: {cmd}",
-                    data={"exit_code": res.exit_code, "stderr": (res.stderr or "")[:500]},
+                    data=command_result_event_data(res),
+                    priority=EventPriority.WARNING,
+                )
+            elif has_error_output:
+                self._log_event(
+                    category=EventCategory.NETWORK,
+                    description=f"niccli/nicctl reported errors (exit 0): {cmd}",
+                    data=command_result_event_data(res),
                     priority=EventPriority.WARNING,
                 )
 
