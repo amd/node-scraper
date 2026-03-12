@@ -183,7 +183,8 @@ def test_collect_data_glob_path_uses_ls_long(linux_sys_settings_collector):
     assert result.status == ExecutionStatus.OK
     assert data is not None
     assert len(seen_commands) == 1
-    assert seen_commands[0] == "ls -l /sys/class/net/*/device"
+    assert "ls -l /sys/class/net/*/device" in seen_commands[0]
+    assert "bash -c" in seen_commands[0]
     assert data.readings.get("/sys/class/net/*/device") == (
         "lrwxrwxrwx 1 root root 0 Jan  1 00:00 device -> ../../pci0000:00/0000:00:01.0"
     )
