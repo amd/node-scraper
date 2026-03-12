@@ -12,8 +12,8 @@ import pytest
 from nodescraper.enums.executionstatus import ExecutionStatus
 from nodescraper.enums.systeminteraction import SystemInteractionLevel
 from nodescraper.models.systeminfo import OSFamily
-from nodescraper.plugins.inband.niccli.nic_collector import NicCollector
-from nodescraper.plugins.inband.niccli.nic_data import (
+from nodescraper.plugins.inband.nic.nic_collector import NicCollector
+from nodescraper.plugins.inband.nic.nic_data import (
     NicCliDevice,
     NicCliQos,
     NicDataModel,
@@ -248,16 +248,17 @@ def test_collect_data_success(collector, conn_mock):
 
     def run_sut_cmd_side_effect(cmd, **kwargs):
         if "niccli" in cmd and ("--list" in cmd or "--list_devices" in cmd):
-            return MagicMock(exit_code=0, stdout=NICCLI_LISTDEV_OUTPUT, command=cmd)
+            return MagicMock(exit_code=0, stdout=NICCLI_LISTDEV_OUTPUT, stderr="", command=cmd)
         if cmd.strip() == "nicctl show card":
             return MagicMock(
                 exit_code=0,
                 stdout="1111111-4c32-3533-3330-12345000000 0000:06:00.0\n",
+                stderr="",
                 command=cmd,
             )
         if "nicctl" in cmd or "niccli" in cmd:
-            return MagicMock(exit_code=0, stdout="", command=cmd)
-        return MagicMock(exit_code=1, stdout="", command=cmd)
+            return MagicMock(exit_code=0, stdout="", stderr="", command=cmd)
+        return MagicMock(exit_code=1, stdout="", stderr="", command=cmd)
 
     collector._run_sut_cmd = MagicMock(side_effect=run_sut_cmd_side_effect)
 

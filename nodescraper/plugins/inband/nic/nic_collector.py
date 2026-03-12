@@ -287,9 +287,12 @@ def _parse_niccli_qos_app_entries(stdout: str) -> List[NicCliQosAppEntry]:
             if val and not val.isdigit():
                 current.protocol = val
             else:
-                current.protocol = {"udp or dccp": "UDP or DCCP"}.get(
-                    key, key.replace("_", " ").title()
-                )
+                current.protocol = {
+                    "udp or dccp": "UDP or DCCP",
+                    "tcp": "TCP",
+                    "udp": "UDP",
+                    "dccp": "DCCP",
+                }.get(key, key.replace("_", " ").title() if val.isdigit() else val)
             if val:
                 try:
                     current.port = int(val)
@@ -882,9 +885,8 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
                 m = re.search(r"PFC enabled:\s*(\d+)", line, re.I)
                 if m:
                     pfc_enabled = int(m.group(1))
-            if "APP#" in line:
+            if "APP#" in line and not app_entries:
                 app_entries = _parse_niccli_qos_app_entries(stdout)
-                break
             if "TC Rate Limit:" in line:
                 tc_rate_limit = [int(x) for x in re.findall(r"(\d+)%", line)]
         return NicCliQos(
