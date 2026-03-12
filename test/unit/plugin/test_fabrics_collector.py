@@ -24,8 +24,9 @@
 #
 ###############################################################################
 
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 from nodescraper.enums.executionstatus import ExecutionStatus
 from nodescraper.enums.systeminteraction import SystemInteractionLevel

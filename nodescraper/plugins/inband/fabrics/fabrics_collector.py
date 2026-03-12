@@ -585,7 +585,14 @@ class FabricsCollector(InBandDataCollector[FabricsDataModel, None]):
                 )
 
         # Build the data model only if we collected any data
-        if ibstat_devices or ibv_devices or ibdev_netdev_mappings or ofed_info or mst_status or slingshot_data:
+        if (
+            ibstat_devices
+            or ibv_devices
+            or ibdev_netdev_mappings
+            or ofed_info
+            or mst_status
+            or slingshot_data
+        ):
             fabrics_data = FabricsDataModel(
                 ibstat_devices=ibstat_devices,
                 ibv_devices=ibv_devices,
@@ -604,6 +611,8 @@ class FabricsCollector(InBandDataCollector[FabricsDataModel, None]):
             self.result.status = ExecutionStatus.OK
             return self.result, fabrics_data
         else:
-            self.result.message = "No InfiniBand/RDMA or Slingshot fabrics hardware detected on this system"
+            self.result.message = (
+                "No InfiniBand/RDMA or Slingshot fabrics hardware detected on this system"
+            )
             self.result.status = ExecutionStatus.NOT_RAN
             return self.result, None
