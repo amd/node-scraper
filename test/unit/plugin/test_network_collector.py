@@ -321,7 +321,8 @@ def test_collect_data_success(collector, conn_mock):
     assert len(data.routes) == 3
     assert len(data.rules) == 3
     assert len(data.neighbors) == 2
-    assert result.message == "Network data collected successfully"
+    # Ethtool/LLDP are mocked to fail; collector still reports success
+    assert "Network data collected successfully" in result.message
 
 
 def test_collect_data_addr_failure(collector, conn_mock):
