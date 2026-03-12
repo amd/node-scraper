@@ -23,26 +23,22 @@
 # SOFTWARE.
 #
 ###############################################################################
-from .redfish_connection import (
-    RedfishConnection,
-    RedfishConnectionError,
-    RedfishGetResult,
-)
-from .redfish_manager import RedfishConnectionManager
-from .redfish_oem_diag import (
-    collect_oem_diagnostic_data,
-    get_oem_diagnostic_allowable_values,
-)
-from .redfish_params import RedfishConnectionParams
-from .redfish_path import RedfishPath
+import enum
 
-__all__ = [
-    "RedfishConnection",
-    "RedfishConnectionError",
-    "RedfishGetResult",
-    "RedfishConnectionManager",
-    "RedfishConnectionParams",
-    "RedfishPath",
-    "collect_oem_diagnostic_data",
-    "get_oem_diagnostic_allowable_values",
-]
+
+class TaskState(enum.Enum):
+    """Redfish Task resource TaskState."""
+
+    new = "New"
+    starting = "Starting"
+    running = "Running"
+    suspended = "Suspended"
+    interrupted = "Interrupted"
+    pending = "Pending"
+    stopping = "Stopping"
+    completed = "Completed"
+    killed = "Killed"
+    exception = "Exception"
+    service = "Service"
+    cancelling = "Cancelling"
+    cancelled = "Cancelled"
