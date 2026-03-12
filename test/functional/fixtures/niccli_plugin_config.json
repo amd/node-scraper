@@ -1,1 +1,19 @@
-{"name":"NicPlugin config","desc":"Minimal config for NicPlugin (uses default command list)","global_args":{},"plugins":{"NicPlugin":{"collection_args":{}}},"result_collators":{}}
+{
+  "name": "NicPlugin config",
+  "desc": "Config for NicPlugin",
+  "global_args": {},
+  "plugins": {
+    "NicPlugin": {
+      "collection_args": {},
+      "analysis_args": {
+        "performance_profile_expected": "RoCE",
+        "support_rdma_disabled_values": ["0", "false", "disabled", "no", "off"],
+        "pcie_relaxed_ordering_expected": "enabled",
+        "expected_qos_pfc_enabled": 255,
+        "expected_qos_tc_bandwidth": [50, 50],
+        "require_qos_consistent_across_adapters": true
+      }
+    }
+  },
+  "result_collators": {}
+}
