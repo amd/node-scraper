@@ -156,7 +156,7 @@ class NicAnalyzer(DataAnalyzer[NicDataModel, NicAnalyzerArgs]):
         if data.broadcom_nic_performance_profile:
             for device_num, value in sorted(data.broadcom_nic_performance_profile.items()):
                 value_normalized = (value or "").strip().lower()
-                if value_normalized != expected_profile_lower:
+                if expected_profile_lower not in value_normalized:
                     any_non_roce = True
                     self._log_event(
                         category=EventCategory.NETWORK,

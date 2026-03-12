@@ -64,26 +64,61 @@ from .nic_data import (
 )
 
 # Default commands: niccli (Broadcom) and nicctl (Pensando). Use {device_num} and {card_id} placeholders.
+NICCLI_VERSION_CMD = "niccli --version"
+NICCLI_VERSION_LEGACY_MAX = 233  # Commands below use -dev/-getoption/getqos; for version > this use --dev/--getoption/qos --ets --show
 NICCLI_LIST_CMD = "niccli --list"
-NICCLI_LIST_DEVICES_CMD = "niccli --list_devices"
-NICCLI_DISCOVERY_CMDS = [
+NICCLI_LIST_DEVICES_CMD = "niccli --list_devices"  # new (> v233)
+NICCLI_LIST_DEVICES_CMD_LEGACY = "niccli --listdev"  # legacy (<= v233)
+NICCLI_DISCOVERY_CMDS_LEGACY = [
+    NICCLI_LIST_DEVICES_CMD_LEGACY,
+    NICCLI_LIST_CMD,
+]
+NICCLI_DISCOVERY_CMDS_NEW = [
     NICCLI_LIST_DEVICES_CMD,
     NICCLI_LIST_CMD,
 ]
-# Command template for support_rdma;
-NICCLI_SUPPORT_RDMA_CMD_TEMPLATE = "niccli -dev {device_num} nvm -getoption support_rdma -scope 0"
-NICCLI_PERFORMANCE_PROFILE_CMD_TEMPLATE = (
+# All discovery command variants (for canonical key); default list for backward compat = legacy
+NICCLI_DISCOVERY_CMDS = NICCLI_DISCOVERY_CMDS_LEGACY
+NICCLI_DISCOVERY_CMDS_ALL = frozenset(
+    [NICCLI_LIST_DEVICES_CMD_LEGACY, NICCLI_LIST_DEVICES_CMD, NICCLI_LIST_CMD]
+)
+# Legacy (<= v233): single-dash options and getqos
+NICCLI_SUPPORT_RDMA_CMD_TEMPLATE_LEGACY = (
+    "niccli -dev {device_num} nvm -getoption support_rdma -scope 0"
+)
+NICCLI_PERFORMANCE_PROFILE_CMD_TEMPLATE_LEGACY = (
     "niccli -dev {device_num} nvm -getoption performance_profile"
 )
-NICCLI_PCIE_RELAXED_ORDERING_CMD_TEMPLATE = (
+NICCLI_PCIE_RELAXED_ORDERING_CMD_TEMPLATE_LEGACY = (
     "niccli -dev {device_num} nvm -getoption pcie_relaxed_ordering"
 )
-NICCLI_PER_DEVICE_TEMPLATES = [
-    NICCLI_SUPPORT_RDMA_CMD_TEMPLATE,
-    NICCLI_PERFORMANCE_PROFILE_CMD_TEMPLATE,
-    NICCLI_PCIE_RELAXED_ORDERING_CMD_TEMPLATE,
-    "niccli -dev {device_num} getqos",
+NICCLI_QOS_CMD_TEMPLATE_LEGACY = "niccli -dev {device_num} getqos"
+NICCLI_PER_DEVICE_TEMPLATES_LEGACY = [
+    NICCLI_SUPPORT_RDMA_CMD_TEMPLATE_LEGACY,
+    NICCLI_PERFORMANCE_PROFILE_CMD_TEMPLATE_LEGACY,
+    NICCLI_PCIE_RELAXED_ORDERING_CMD_TEMPLATE_LEGACY,
+    NICCLI_QOS_CMD_TEMPLATE_LEGACY,
 ]
+# New (> v233): double-dash options and qos --ets --show
+NICCLI_SUPPORT_RDMA_CMD_TEMPLATE_NEW = "niccli --dev {device_num} nvm --getoption support_rdma"
+NICCLI_PERFORMANCE_PROFILE_CMD_TEMPLATE_NEW = (
+    "niccli --dev {device_num} nvm --getoption performance_profile"
+)
+NICCLI_PCIE_RELAXED_ORDERING_CMD_TEMPLATE_NEW = (
+    "niccli --dev {device_num} nvm --getoption pcie_relaxed_ordering"
+)
+NICCLI_QOS_CMD_TEMPLATE_NEW = "niccli --dev {device_num} qos --ets --show"
+NICCLI_PER_DEVICE_TEMPLATES_NEW = [
+    NICCLI_SUPPORT_RDMA_CMD_TEMPLATE_NEW,
+    NICCLI_PERFORMANCE_PROFILE_CMD_TEMPLATE_NEW,
+    NICCLI_PCIE_RELAXED_ORDERING_CMD_TEMPLATE_NEW,
+    NICCLI_QOS_CMD_TEMPLATE_NEW,
+]
+# Backward compatibility: default to legacy templates (used by _default_commands and any code that imports these)
+NICCLI_SUPPORT_RDMA_CMD_TEMPLATE = NICCLI_SUPPORT_RDMA_CMD_TEMPLATE_LEGACY
+NICCLI_PERFORMANCE_PROFILE_CMD_TEMPLATE = NICCLI_PERFORMANCE_PROFILE_CMD_TEMPLATE_LEGACY
+NICCLI_PCIE_RELAXED_ORDERING_CMD_TEMPLATE = NICCLI_PCIE_RELAXED_ORDERING_CMD_TEMPLATE_LEGACY
+NICCLI_PER_DEVICE_TEMPLATES = NICCLI_PER_DEVICE_TEMPLATES_LEGACY
 # Text-format command for card discovery and pensando_nic_cards (no --json).
 NICCTL_CARD_TEXT_CMD = "nicctl show card"
 NICCTL_GLOBAL_COMMANDS = [
@@ -133,6 +168,41 @@ MAX_COMMAND_LENGTH_IN_DATAMODEL = 256
 MAX_STDERR_LENGTH_IN_DATAMODEL = 512
 
 
+def _parse_niccli_version(stdout: str) -> Optional[int]:
+    """Parse niccli version number from 'niccli --version' output.
+    Handles formats like 'niccli v233', 'v233', 'version 233', '233'.
+    Returns None if version cannot be parsed.
+    """
+    if not stdout or not stdout.strip():
+        return None
+    # Match v233, v 233, version 233, niccli 233, etc.
+    match = re.search(r"v?\s*(\d+)|version\s+(\d+)|\b(\d{2,})\b", stdout.strip(), re.I)
+    if match:
+        for g in match.groups():
+            if g is not None:
+                return int(g)
+    return None
+
+
+def _get_niccli_per_device_templates(version: Optional[int]) -> List[str]:
+    """Return the per-device command templates for the given niccli version.
+    For version > NICCLI_VERSION_LEGACY_MAX (233) use new syntax (--dev, --getoption, qos --ets --show).
+    Otherwise use legacy syntax (-dev, -getoption, getqos). If version is None, default to legacy.
+    """
+    if version is not None and version > NICCLI_VERSION_LEGACY_MAX:
+        return NICCLI_PER_DEVICE_TEMPLATES_NEW.copy()
+    return NICCLI_PER_DEVICE_TEMPLATES_LEGACY.copy()
+
+
+def _get_niccli_discovery_commands(version: Optional[int]) -> List[str]:
+    """Return the discovery commands for the given niccli version.
+    Legacy (<= v233) uses --listdev; new (> v233) uses --list_devices. If version is None, default to legacy.
+    """
+    if version is not None and version > NICCLI_VERSION_LEGACY_MAX:
+        return NICCLI_DISCOVERY_CMDS_NEW.copy()
+    return NICCLI_DISCOVERY_CMDS_LEGACY.copy()
+
+
 # Commands whose output is very long; store only as file artifacts, not in data model.
 def _is_artifact_only_command(cmd: str) -> bool:
     c = cmd.strip()
@@ -155,7 +225,7 @@ def _is_artifact_only_command(cmd: str) -> bool:
 
 def _merged_canonical_key(cmd: str) -> str:
     """Return a single canonical key for commands that collect the same data."""
-    if cmd in NICCLI_DISCOVERY_CMDS:
+    if cmd in NICCLI_DISCOVERY_CMDS_ALL:
         return "niccli_discovery"
     return command_to_canonical_key(cmd)
 
@@ -406,9 +476,22 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
 
         results: dict[str, NicCommandResult] = {}
 
+        # Detect niccli version to choose command set (legacy <= v233 vs new > v233)
+        niccli_version: Optional[int] = None
+        res_version = self._run_sut_cmd(NICCLI_VERSION_CMD, sudo=use_sudo_niccli)
+        if res_version.exit_code == 0 and res_version.stdout:
+            niccli_version = _parse_niccli_version(res_version.stdout)
+        results[NICCLI_VERSION_CMD] = NicCommandResult(
+            command=NICCLI_VERSION_CMD,
+            stdout=res_version.stdout or "",
+            stderr=res_version.stderr or "",
+            exit_code=res_version.exit_code,
+        )
+
         # Discovery: device numbers from niccli
         device_nums: List[int] = []
-        for list_cmd in NICCLI_DISCOVERY_CMDS:
+        discovery_cmds = _get_niccli_discovery_commands(niccli_version)
+        for list_cmd in discovery_cmds:
             res = self._run_sut_cmd(list_cmd, sudo=use_sudo_niccli)
             results[list_cmd] = NicCommandResult(
                 command=list_cmd,
@@ -451,7 +534,8 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
         else:
             commands_to_run = []
             # niccli list already stored
-            for tpl in NICCLI_PER_DEVICE_TEMPLATES:
+            per_device_templates = _get_niccli_per_device_templates(niccli_version)
+            for tpl in per_device_templates:
                 for d in device_nums:
                     commands_to_run.append(tpl.format(device_num=d))
             # nicctl global (card discovery already done via NICCTL_CARD_TEXT_CMD)
@@ -558,7 +642,7 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
             broadcom_support_rdma,
             broadcom_performance_profile,
             broadcom_pcie_relaxed_ordering,
-        ) = self._collect_broadcom_nic_structured(results)
+        ) = self._collect_broadcom_nic_structured(results, niccli_version=niccli_version)
         (
             pensando_cards,
             pensando_dcqcn,
@@ -617,7 +701,9 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
         )
 
     def _collect_broadcom_nic_structured(
-        self, results: Dict[str, NicCommandResult]
+        self,
+        results: Dict[str, NicCommandResult],
+        niccli_version: Optional[int] = None,
     ) -> Tuple[
         List[NicCliDevice], Dict[int, NicCliQos], Dict[int, str], Dict[int, str], Dict[int, str]
     ]:
@@ -628,7 +714,8 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
         performance_profile: Dict[int, str] = {}
         pcie_relaxed_ordering: Dict[int, str] = {}
         list_stdout: Optional[str] = None
-        for list_cmd in NICCLI_DISCOVERY_CMDS:
+        discovery_cmds = _get_niccli_discovery_commands(niccli_version)
+        for list_cmd in discovery_cmds:
             r = results.get(list_cmd)
             if r and r.exit_code == 0 and (r.stdout or "").strip():
                 list_stdout = r.stdout
@@ -636,22 +723,29 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
         if not list_stdout:
             return devices, qos_data, support_rdma, performance_profile, pcie_relaxed_ordering
         devices = self._parse_niccli_listdev(list_stdout)
+        templates = _get_niccli_per_device_templates(niccli_version)
+        support_rdma_tpl, perf_tpl, pcie_ro_tpl, qos_tpl = (
+            templates[0],
+            templates[1],
+            templates[2],
+            templates[3],
+        )
         for device in devices:
-            cmd = f"niccli -dev {device.device_num} getqos"
-            r = results.get(cmd)
+            qos_cmd = qos_tpl.format(device_num=device.device_num)
+            r = results.get(qos_cmd)
             if r and r.exit_code == 0 and (r.stdout or "").strip():
                 qos_data[device.device_num] = self._parse_niccli_qos(
                     device.device_num, r.stdout or ""
                 )
-            support_rdma_cmd = NICCLI_SUPPORT_RDMA_CMD_TEMPLATE.format(device_num=device.device_num)
+            support_rdma_cmd = support_rdma_tpl.format(device_num=device.device_num)
             r_sr = results.get(support_rdma_cmd)
             if r_sr and r_sr.exit_code == 0 and (r_sr.stdout or "").strip():
                 support_rdma[device.device_num] = (r_sr.stdout or "").strip()
-            perf_cmd = NICCLI_PERFORMANCE_PROFILE_CMD_TEMPLATE.format(device_num=device.device_num)
+            perf_cmd = perf_tpl.format(device_num=device.device_num)
             r_pp = results.get(perf_cmd)
             if r_pp and r_pp.exit_code == 0 and (r_pp.stdout or "").strip():
                 performance_profile[device.device_num] = (r_pp.stdout or "").strip()
-            ro_cmd = NICCLI_PCIE_RELAXED_ORDERING_CMD_TEMPLATE.format(device_num=device.device_num)
+            ro_cmd = pcie_ro_tpl.format(device_num=device.device_num)
             r_ro = results.get(ro_cmd)
             if r_ro and r_ro.exit_code == 0 and (r_ro.stdout or "").strip():
                 pcie_relaxed_ordering[device.device_num] = (r_ro.stdout or "").strip()
