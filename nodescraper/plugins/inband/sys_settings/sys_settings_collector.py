@@ -153,7 +153,8 @@ class SysSettingsCollector(InBandDataCollector[SysSettingsDataModel, SysSettings
                 continue
             full_path = _sysfs_full_path(suffix)
             if "*" in suffix:
-                res = self._run_sut_cmd(self.CMD_LS_LONG.format(suffix), sudo=False)
+                cmd = self.CMD_LS_LONG.format(suffix)
+                res = self._run_sut_cmd(f"bash -c {cmd!r}", sudo=False)
                 if res.exit_code == 0:
                     readings[full_path] = res.stdout.strip() if res.stdout else ""
                 else:
