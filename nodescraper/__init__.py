@@ -27,6 +27,6 @@
 from importlib.metadata import PackageNotFoundError, version
 
 try:
-    __version__ = version("node-scraper")
+    __version__ = version("amd-node-scraper")
 except PackageNotFoundError:
     __version__ = "unknown"
