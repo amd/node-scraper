@@ -821,8 +821,6 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
             version_firmware_entries,
         )
 
-    # --- Legacy text parsers (human-readable niccli/nicctl output) ---
-
     def _parse_niccli_listdev(self, stdout: str) -> List[NicCliDevice]:
         """Parse niccli --list_devices output into NicCliDevice list."""
         devices: List[NicCliDevice] = []
