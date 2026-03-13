@@ -16,7 +16,8 @@
 | KernelPlugin | sh -c 'uname -a'<br>sh -c 'cat /proc/sys/kernel/numa_balancing'<br>wmic os get Version /Value | **Analyzer Args:**<br>- `exp_kernel`: Union[str, list]<br>- `exp_numa`: Optional[int]<br>- `regex_match`: bool | - | [KernelDataModel](#KernelDataModel-Model) | [KernelCollector](#Collector-Class-KernelCollector) | [KernelAnalyzer](#Data-Analyzer-Class-KernelAnalyzer) |
 | KernelModulePlugin | cat /proc/modules<br>modinfo amdgpu<br>wmic os get Version /Value | **Analyzer Args:**<br>- `kernel_modules`: dict[str, dict]<br>- `regex_filter`: list[str] | - | [KernelModuleDataModel](#KernelModuleDataModel-Model) | [KernelModuleCollector](#Collector-Class-KernelModuleCollector) | [KernelModuleAnalyzer](#Data-Analyzer-Class-KernelModuleAnalyzer) |
 | MemoryPlugin | free -b<br>lsmem<br>numactl -H<br>wmic OS get FreePhysicalMemory /Value; wmic ComputerSystem get TotalPhysicalMemory /Value | **Analyzer Args:**<br>- `ratio`: float<br>- `memory_threshold`: str | - | [MemoryDataModel](#MemoryDataModel-Model) | [MemoryCollector](#Collector-Class-MemoryCollector) | [MemoryAnalyzer](#Data-Analyzer-Class-MemoryAnalyzer) |
-| NetworkPlugin | ip addr show<br>curl<br>ethtool -S {interface}<br>ethtool {interface}<br>lldpcli show neighbor<br>lldpctl<br>ip neighbor show<br>niccli --dev {device_num} qos --ets --show<br>niccli --list_devices<br>nicctl show card<br>nicctl show dcqcn<br>nicctl show environment<br>nicctl show pcie ats<br>nicctl show port<br>nicctl show qos<br>nicctl show rdma statistics<br>nicctl show version firmware<br>nicctl show version host-software<br>ping<br>ip route show<br>ip rule show<br>wget | - | **Collection Args:**<br>- `url`: Optional[str]<br>- `netprobe`: Optional[Literal['ping', 'wget', 'curl']] | [NetworkDataModel](#NetworkDataModel-Model) | [NetworkCollector](#Collector-Class-NetworkCollector) | - |
+| NetworkPlugin | ip addr show<br>curl<br>ethtool -S {interface}<br>ethtool {interface}<br>lldpcli show neighbor<br>lldpctl<br>ip neighbor show<br>ping<br>ip route show<br>ip rule show<br>wget | - | **Collection Args:**<br>- `url`: Optional[str]<br>- `netprobe`: Optional[Literal['ping', 'wget', 'curl']] | [NetworkDataModel](#NetworkDataModel-Model) | [NetworkCollector](#Collector-Class-NetworkCollector) | - |
+| NicPlugin | - | **Analyzer Args:**<br>- `expected_values`: Optional[Dict[str, Dict[str, Any]]]<br>- `performance_profile_expected`: str<br>- `support_rdma_disabled_values`: List[str]<br>- `pcie_relaxed_ordering_expected`: str<br>- `expected_qos_prio_map`: Optional[Dict[Any, Any]]<br>- `expected_qos_pfc_enabled`: Optional[int]<br>- `expected_qos_tsa_map`: Optional[Dict[Any, Any]]<br>- `expected_qos_tc_bandwidth`: Optional[List[int]]<br>- `require_qos_consistent_across_adapters`: bool<br>- `nicctl_log_error_regex`: Optional[List[Dict[str, Any]]] | **Collection Args:**<br>- `commands`: Optional[List[str]]<br>- `use_sudo_niccli`: bool<br>- `use_sudo_nicctl`: bool | [NicDataModel](#NicDataModel-Model) | [NicCollector](#Collector-Class-NicCollector) | [NicAnalyzer](#Data-Analyzer-Class-NicAnalyzer) |
 | NvmePlugin | nvme smart-log {dev}<br>nvme error-log {dev} --log-entries=256<br>nvme id-ctrl {dev}<br>nvme id-ns {dev}{ns}<br>nvme fw-log {dev}<br>nvme self-test-log {dev}<br>nvme get-log {dev} --log-id=6 --log-len=512<br>nvme telemetry-log {dev} --output-file={dev}_{f_name}<br>nvme list -o json | - | - | [NvmeDataModel](#NvmeDataModel-Model) | [NvmeCollector](#Collector-Class-NvmeCollector) | - |
 | OsPlugin | sh -c '( lsb_release -ds \|\| (cat /etc/*release \| grep PRETTY_NAME) \|\| uname -om ) 2>/dev/null \| head -n1'<br>cat /etc/*release \| grep VERSION_ID<br>wmic os get Version /value<br>wmic os get Caption /Value | **Analyzer Args:**<br>- `exp_os`: Union[str, list]<br>- `exact_match`: bool | - | [OsDataModel](#OsDataModel-Model) | [OsCollector](#Collector-Class-OsCollector) | [OsAnalyzer](#Data-Analyzer-Class-OsAnalyzer) |
 | PackagePlugin | dnf list --installed<br>dpkg-query -W<br>pacman -Q<br>cat /etc/*release<br>wmic product get name,version | **Analyzer Args:**<br>- `exp_package_ver`: Dict[str, Optional[str]]<br>- `regex_match`: bool<br>- `rocm_regex`: Optional[str]<br>- `enable_rocm_regex`: bool | - | [PackageDataModel](#PackageDataModel-Model) | [PackageCollector](#Collector-Class-PackageCollector) | [PackageAnalyzer](#Data-Analyzer-Class-PackageAnalyzer) |
@@ -409,17 +410,6 @@ Collect network configuration details using ip command
 - **CMD_CURL**: `curl`
 - **CMD_LLDPCLI_NEIGHBOR**: `lldpcli show neighbor`
 - **CMD_LLDPCTL**: `lldpctl`
-- **CMD_NICCLI_LISTDEV**: `niccli --list_devices`
-- **CMD_NICCLI_GETQOS_TEMPLATE**: `niccli --dev {device_num} qos --ets --show`
-- **CMD_NICCTL_CARD**: `nicctl show card`
-- **CMD_NICCTL_DCQCN**: `nicctl show dcqcn`
-- **CMD_NICCTL_ENVIRONMENT**: `nicctl show environment`
-- **CMD_NICCTL_PCIE_ATS**: `nicctl show pcie ats`
-- **CMD_NICCTL_PORT**: `nicctl show port`
-- **CMD_NICCTL_QOS**: `nicctl show qos`
-- **CMD_NICCTL_RDMA_STATISTICS**: `nicctl show rdma statistics`
-- **CMD_NICCTL_VERSION_HOST_SOFTWARE**: `nicctl show version host-software`
-- **CMD_NICCTL_VERSION_FIRMWARE**: `nicctl show version firmware`
 
 ### Provides Data
 
@@ -434,21 +424,24 @@ NetworkDataModel
 - lldpcli show neighbor
 - lldpctl
 - ip neighbor show
-- niccli --dev {device_num} qos --ets --show
-- niccli --list_devices
-- nicctl show card
-- nicctl show dcqcn
-- nicctl show environment
-- nicctl show pcie ats
-- nicctl show port
-- nicctl show qos
-- nicctl show rdma statistics
-- nicctl show version firmware
-- nicctl show version host-software
 - ping
 - ip route show
 - ip rule show
 - wget
+
+## Collector Class NicCollector
+
+### Description
+
+Collect raw output from niccli (Broadcom) and nicctl (Pensando) commands.
+
+**Bases**: ['InBandDataCollector']
+
+**Link to code**: [nic_collector.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/nic/nic_collector.py)
+
+### Provides Data
+
+NicDataModel
 
 ## Collector Class NvmeCollector
 
@@ -1014,18 +1007,46 @@ Complete network configuration data
 - **rules**: `List[nodescraper.plugins.inband.network.networkdata.RoutingRule]`
 - **neighbors**: `List[nodescraper.plugins.inband.network.networkdata.Neighbor]`
 - **ethtool_info**: `Dict[str, nodescraper.plugins.inband.network.networkdata.EthtoolInfo]`
-- **broadcom_nic_devices**: `List[nodescraper.plugins.inband.network.networkdata.BroadcomNicDevice]`
-- **broadcom_nic_qos**: `Dict[int, nodescraper.plugins.inband.network.networkdata.BroadcomNicQos]`
-- **pensando_nic_cards**: `List[nodescraper.plugins.inband.network.networkdata.PensandoNicCard]`
-- **pensando_nic_dcqcn**: `List[nodescraper.plugins.inband.network.networkdata.PensandoNicDcqcn]`
-- **pensando_nic_environment**: `List[nodescraper.plugins.inband.network.networkdata.PensandoNicEnvironment]`
-- **pensando_nic_pcie_ats**: `List[nodescraper.plugins.inband.network.networkdata.PensandoNicPcieAts]`
-- **pensando_nic_ports**: `List[nodescraper.plugins.inband.network.networkdata.PensandoNicPort]`
-- **pensando_nic_qos**: `List[nodescraper.plugins.inband.network.networkdata.PensandoNicQos]`
-- **pensando_nic_rdma_statistics**: `List[nodescraper.plugins.inband.network.networkdata.PensandoNicRdmaStatistics]`
-- **pensando_nic_version_host_software**: `Optional[nodescraper.plugins.inband.network.networkdata.PensandoNicVersionHostSoftware]`
-- **pensando_nic_version_firmware**: `List[nodescraper.plugins.inband.network.networkdata.PensandoNicVersionFirmware]`
 - **accessible**: `Optional[bool]`
+
+## NicDataModel Model
+
+### Description
+
+Collected output of niccli (Broadcom) and nicctl (Pensando) commands.
+
+**Link to code**: [nic_data.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/nic/nic_data.py)
+
+**Bases**: ['DataModel']
+
+### Model annotations and fields
+
+- **results**: `Dict[str, nodescraper.plugins.inband.nic.nic_data.NicCommandResult]`
+- **card_show**: `Optional[nodescraper.plugins.inband.nic.nic_data.NicCtlCardShow]`
+- **cards**: `List[nodescraper.plugins.inband.nic.nic_data.NicCtlCard]`
+- **port**: `Optional[nodescraper.plugins.inband.nic.nic_data.NicCtlPort]`
+- **lif**: `Optional[nodescraper.plugins.inband.nic.nic_data.NicCtlLif]`
+- **qos**: `Optional[nodescraper.plugins.inband.nic.nic_data.NicCtlQos]`
+- **rdma**: `Optional[nodescraper.plugins.inband.nic.nic_data.NicCtlRdma]`
+- **dcqcn**: `Optional[nodescraper.plugins.inband.nic.nic_data.NicCtlDcqcn]`
+- **environment**: `Optional[nodescraper.plugins.inband.nic.nic_data.NicCtlEnvironment]`
+- **version**: `Optional[nodescraper.plugins.inband.nic.nic_data.NicCtlVersion]`
+- **broadcom_nic_devices**: `List[nodescraper.plugins.inband.nic.nic_data.NicCliDevice]`
+- **broadcom_nic_qos**: `Dict[int, nodescraper.plugins.inband.nic.nic_data.NicCliQos]`
+- **broadcom_nic_support_rdma**: `Dict[int, str]`
+- **broadcom_nic_performance_profile**: `Dict[int, str]`
+- **broadcom_nic_pcie_relaxed_ordering**: `Dict[int, str]`
+- **pensando_nic_cards**: `List[nodescraper.plugins.inband.nic.nic_data.PensandoNicCard]`
+- **pensando_nic_dcqcn**: `List[nodescraper.plugins.inband.nic.nic_data.PensandoNicDcqcn]`
+- **pensando_nic_environment**: `List[nodescraper.plugins.inband.nic.nic_data.PensandoNicEnvironment]`
+- **pensando_nic_lif**: `List[nodescraper.plugins.inband.nic.nic_data.PensandoNicLif]`
+- **pensando_nic_pcie_ats**: `List[nodescraper.plugins.inband.nic.nic_data.PensandoNicPcieAts]`
+- **pensando_nic_ports**: `List[nodescraper.plugins.inband.nic.nic_data.PensandoNicPort]`
+- **pensando_nic_qos**: `List[nodescraper.plugins.inband.nic.nic_data.PensandoNicQos]`
+- **pensando_nic_rdma_statistics**: `List[nodescraper.plugins.inband.nic.nic_data.PensandoNicRdmaStatistics]`
+- **pensando_nic_version_host_software**: `Optional[nodescraper.plugins.inband.nic.nic_data.PensandoNicVersionHostSoftware]`
+- **pensando_nic_version_firmware**: `List[nodescraper.plugins.inband.nic.nic_data.PensandoNicVersionFirmware]`
+- **nicctl_card_logs**: `Optional[Dict[str, str]]`
 
 ## NvmeDataModel Model
 
@@ -1442,6 +1463,16 @@ Check memory usage is within the maximum allowed used memory
 
 **Link to code**: [memory_analyzer.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/memory/memory_analyzer.py)
 
+## Data Analyzer Class NicAnalyzer
+
+### Description
+
+Analyze niccli/nicctl data; checks Broadcom support_rdma, performance_profile (RoCE), pcie_relaxed_ordering (enabled), and getqos (expected QoS across adapters).
+
+**Bases**: ['DataAnalyzer']
+
+**Link to code**: [nic_analyzer.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/nic/nic_analyzer.py)
+
 ## Data Analyzer Class OsAnalyzer
 
 ### Description
@@ -1770,6 +1801,29 @@ Arguments for journal analyzer
 
 - **ratio**: `float`
 - **memory_threshold**: `str`
+
+## Analyzer Args Class NicAnalyzerArgs
+
+### Description
+
+Analyzer args for niccli/nicctl data, with expected_values keyed by canonical command key.
+
+**Bases**: ['AnalyzerArgs']
+
+**Link to code**: [analyzer_args.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/nic/analyzer_args.py)
+
+### Annotations / fields
+
+- **expected_values**: `Optional[Dict[str, Dict[str, Any]]]`
+- **performance_profile_expected**: `str`
+- **support_rdma_disabled_values**: `List[str]`
+- **pcie_relaxed_ordering_expected**: `str`
+- **expected_qos_prio_map**: `Optional[Dict[Any, Any]]`
+- **expected_qos_pfc_enabled**: `Optional[int]`
+- **expected_qos_tsa_map**: `Optional[Dict[Any, Any]]`
+- **expected_qos_tc_bandwidth**: `Optional[List[int]]`
+- **require_qos_consistent_across_adapters**: `bool`
+- **nicctl_log_error_regex**: `Optional[List[Dict[str, Any]]]`
 
 ## Analyzer Args Class OsAnalyzerArgs
 
