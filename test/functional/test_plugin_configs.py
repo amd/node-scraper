@@ -51,6 +51,7 @@ def plugin_config_files(fixtures_dir):
         "KernelPlugin": fixtures_dir / "kernel_plugin_config.json",
         "KernelModulePlugin": fixtures_dir / "kernel_module_plugin_config.json",
         "MemoryPlugin": fixtures_dir / "memory_plugin_config.json",
+        "NicPlugin": fixtures_dir / "niccli_plugin_config.json",
         "NvmePlugin": fixtures_dir / "nvme_plugin_config.json",
         "OsPlugin": fixtures_dir / "os_plugin_config.json",
         "PackagePlugin": fixtures_dir / "package_plugin_config.json",
