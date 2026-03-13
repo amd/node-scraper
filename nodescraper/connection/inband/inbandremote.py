@@ -157,8 +157,8 @@ class RemoteShell(InBandConnection):
                 stdin.flush()
                 stdin.channel.shutdown_write()
 
-            stdout_str = stdout.read().decode("utf-8")
-            stderr_str = stderr.read().decode("utf-8")
+            stdout_str = stdout.read().decode("utf-8", errors="replace")
+            stderr_str = stderr.read().decode("utf-8", errors="replace")
             exit_code = stdout.channel.recv_exit_status()
         except TimeoutError:
             stderr_str = "Command timed out"

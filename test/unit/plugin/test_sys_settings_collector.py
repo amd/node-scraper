@@ -163,3 +163,53 @@ def test_collect_data_skips_path_with_dotdot(linux_sys_settings_collector):
     assert data.readings.get("/sys/kernel/mm/transparent_hugepage/enabled") == "safe"
     assert data.readings.get("/sys/kernel/mm/transparent_hugepage/defrag") == "safe"
     assert "/etc" not in str(seen_commands)
+
+
+def test_collect_data_glob_path_uses_ls_long(linux_sys_settings_collector):
+    seen_commands = []
+
+    def run_cmd(cmd, **kwargs):
+        seen_commands.append(cmd)
+        if "ls -l" in cmd:
+            return make_artifact(
+                0, "lrwxrwxrwx 1 root root 0 Jan  1 00:00 device -> ../../pci0000:00/0000:00:01.0"
+            )
+        return make_artifact(0, "[always] madvise never")
+
+    linux_sys_settings_collector._run_sut_cmd = run_cmd
+    args = {"paths": ["class/net/*/device"]}
+    result, data = linux_sys_settings_collector.collect_data(args)
+
+    assert result.status == ExecutionStatus.OK
+    assert data is not None
+    assert len(seen_commands) == 1
+    assert "ls -l /sys/class/net/*/device" in seen_commands[0]
+    assert "bash -c" in seen_commands[0]
+    assert data.readings.get("/sys/class/net/*/device") == (
+        "lrwxrwxrwx 1 root root 0 Jan  1 00:00 device -> ../../pci0000:00/0000:00:01.0"
+    )
+
+
+def test_collect_data_mixed_paths_cat_and_glob(linux_sys_settings_collector):
+
+    def run_cmd(cmd, **kwargs):
+        if "ls -l" in cmd:
+            return make_artifact(0, "lrwx 1 root root 0 device -> ../../device")
+        if "enabled" in cmd:
+            return make_artifact(0, "[always] madvise never")
+        return make_artifact(0, "[madvise] always never defer")
+
+    linux_sys_settings_collector._run_sut_cmd = run_cmd
+    args = {
+        "paths": [PATH_ENABLED, "class/net/*/device", PATH_DEFRAG],
+    }
+    result, data = linux_sys_settings_collector.collect_data(args)
+
+    assert result.status == ExecutionStatus.OK
+    assert data is not None
+    assert data.readings.get(PATH_ENABLED) == "always"
+    assert data.readings.get(PATH_DEFRAG) == "madvise"
+    assert (
+        data.readings.get("/sys/class/net/*/device") == "lrwx 1 root root 0 device -> ../../device"
+    )
+    assert "Sysfs collected 3 path(s)" in result.message

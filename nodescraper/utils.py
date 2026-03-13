@@ -28,7 +28,18 @@ import os
 import re
 import traceback
 from enum import Enum
-from typing import Any, List, Optional, Set, Type, TypeVar, Union, get_args, get_origin
+from typing import (
+    Any,
+    Dict,
+    List,
+    Optional,
+    Set,
+    Type,
+    TypeVar,
+    Union,
+    get_args,
+    get_origin,
+)
 
 T = TypeVar("T")
 
@@ -88,6 +99,28 @@ def str_or_none(val: object) -> Optional[str]:
         return None
     s = val.strip() if isinstance(val, str) else str(val).strip()
     return s if s else None
+
+
+MAX_STDERR_STDOUT_LENGTH_IN_EVENT = 4096
+
+
+def has_command_error_output(stderr: str, stdout: str) -> bool:
+    """True if the tool reported anything to stderr (errors are typically written to stderr)."""
+    return bool((stderr or "").strip())
+
+
+def command_result_event_data(
+    res: Any,
+    max_length: int = MAX_STDERR_STDOUT_LENGTH_IN_EVENT,
+) -> Dict[str, Any]:
+    """Build event data dict from a command result (stderr and optionally stdout)."""
+    stderr = (getattr(res, "stderr", None) or "")[:max_length]
+    exit_code = getattr(res, "exit_code", None)
+    data: Dict[str, Any] = {"exit_code": exit_code, "stderr": stderr}
+    stdout = getattr(res, "stdout", None) or ""
+    if stdout and (exit_code != 0 or (stderr or "").strip()):
+        data["stdout"] = stdout[:max_length]
+    return data
 
 
 def convert_to_bytes(value: str, si=False) -> int:

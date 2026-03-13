@@ -26,17 +26,20 @@
 from nodescraper.base import InBandDataPlugin
 
 from .analyzer_args import RocmAnalyzerArgs
+from .collector_args import RocmCollectorArgs
 from .rocm_analyzer import RocmAnalyzer
 from .rocm_collector import RocmCollector
 from .rocmdata import RocmDataModel
 
 
-class RocmPlugin(InBandDataPlugin[RocmDataModel, None, RocmAnalyzerArgs]):
+class RocmPlugin(InBandDataPlugin[RocmDataModel, RocmCollectorArgs, RocmAnalyzerArgs]):
     """Plugin for collection and analysis of rocm version data"""
 
     DATA_MODEL = RocmDataModel
 
     COLLECTOR = RocmCollector
+
+    COLLECTOR_ARGS = RocmCollectorArgs
 
     ANALYZER = RocmAnalyzer
 

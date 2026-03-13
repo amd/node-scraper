@@ -33,7 +33,6 @@ from nodescraper.models import TaskResult
 from .collector_args import SysSettingsCollectorArgs
 from .sys_settings_data import SysSettingsDataModel
 
-# Sysfs format: "[always] madvise never" -> extract bracketed value
 BRACKETED_RE = re.compile(r"\[(\w+)\]")
 
 
@@ -103,6 +102,7 @@ class SysSettingsCollector(InBandDataCollector[SysSettingsDataModel, SysSettings
 
     CMD = "cat /sys/{}"
     CMD_LS = "ls -1 /sys/{}"
+    CMD_LS_LONG = "ls -l /sys/{}"
 
     def collect_data(
         self, args: Optional[SysSettingsCollectorArgs] = None
@@ -152,18 +152,32 @@ class SysSettingsCollector(InBandDataCollector[SysSettingsDataModel, SysSettings
                 )
                 continue
             full_path = _sysfs_full_path(suffix)
-            res = self._run_sut_cmd(self.CMD.format(suffix), sudo=False)
-            if res.exit_code == 0 and res.stdout:
-                value = _parse_bracketed_setting(res.stdout) or res.stdout.strip()
-                readings[full_path] = value
+            if "*" in suffix:
+                cmd = self.CMD_LS_LONG.format(suffix)
+                res = self._run_sut_cmd(f"bash -c {cmd!r}", sudo=False)
+                if res.exit_code == 0:
+                    readings[full_path] = res.stdout.strip() if res.stdout else ""
+                else:
+                    self._log_event(
+                        category=EventCategory.OS,
+                        description=f"Failed to run ls -l for sysfs path: {full_path}",
+                        data={"exit_code": res.exit_code},
+                        priority=EventPriority.WARNING,
+                        console_log=True,
+                    )
             else:
-                self._log_event(
-                    category=EventCategory.OS,
-                    description=f"Failed to read sysfs path: {full_path}",
-                    data={"exit_code": res.exit_code},
-                    priority=EventPriority.WARNING,
-                    console_log=True,
-                )
+                res = self._run_sut_cmd(self.CMD.format(suffix), sudo=False)
+                if res.exit_code == 0 and res.stdout:
+                    value = _parse_bracketed_setting(res.stdout) or res.stdout.strip()
+                    readings[full_path] = value
+                else:
+                    self._log_event(
+                        category=EventCategory.OS,
+                        description=f"Failed to read sysfs path: {full_path}",
+                        data={"exit_code": res.exit_code},
+                        priority=EventPriority.WARNING,
+                        console_log=True,
+                    )
 
         for path in directory_paths:
             suffix = _path_under_sys(path)

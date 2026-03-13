@@ -38,9 +38,7 @@ from .fabricsdata import (
     MstDevice,
     MstStatus,
     OfedInfo,
-    RdmaDevice,
-    RdmaInfo,
-    RdmaLink,
+    SlingshotData,
 )
 
 
@@ -54,8 +52,11 @@ class FabricsCollector(InBandDataCollector[FabricsDataModel, None]):
     CMD_OFED_INFO = "ofed_info -s"
     CMD_MST_START = "mst start"
     CMD_MST_STATUS = "mst status -v"
-    CMD_RDMA_DEV = "rdma dev"
-    CMD_RDMA_LINK = "rdma link"
+    CMD_CASSINI_PCI = "lspci | grep -i cassini"
+    CMD_NET_LINK = "ip link show"
+    CMD_LIBFABRIC_INFO = "fi_info -p cxi"
+    CMD_CXI_STAT = "cxi_stat"
+    CMD_CXI_MODULES = "lsmod | grep cxi"
 
     def _parse_ibstat(self, output: str) -> List[IbstatDevice]:
         """Parse 'ibstat' output into IbstatDevice objects.
@@ -396,128 +397,6 @@ class FabricsCollector(InBandDataCollector[FabricsDataModel, None]):
         mst_status.devices = devices
         return mst_status
 
-    def _parse_rdma_dev(self, output: str) -> List[RdmaDevice]:
-        """Parse 'rdma dev' output into RdmaDevice objects.
-
-        Args:
-            output: Raw output from 'rdma dev' command
-
-        Returns:
-            List of RdmaDevice objects
-        """
-        devices = []
-
-        for line in output.splitlines():
-            line = line.strip()
-            if not line:
-                continue
-
-            # Example InfiniBand format: 0: mlx5_0: node_type ca fw 16.28.2006 node_guid 0c42:a103:00b3:bfa0 sys_image_guid 0c42:a103:00b3:bfa0
-            # Example RoCE format: 0: rocep9s0: node_type ca fw 1.117.1-a-63 node_guid 0690:81ff:fe4a:6c40 sys_image_guid 0690:81ff:fe4a:6c40
-            parts = line.split()
-            if len(parts) < 2:
-                continue
-
-            # First part might be index followed by colon
-            device_name = None
-            start_idx = 0
-
-            if parts[0].endswith(":"):
-                # Skip index (e.g., "0:")
-                start_idx = 1
-
-            if start_idx < len(parts):
-                device_name = parts[start_idx].rstrip(":")
-                start_idx += 1
-
-            if not device_name:
-                continue
-
-            device = RdmaDevice(device=device_name)
-
-            # Parse remaining attributes
-            i = start_idx
-            while i < len(parts):
-                if parts[i] == "node_type" and i + 1 < len(parts):
-                    device.node_type = parts[i + 1]
-                    i += 2
-                elif parts[i] == "fw" and i + 1 < len(parts):
-                    device.attributes["fw_version"] = parts[i + 1]
-                    i += 2
-                elif parts[i] == "node_guid" and i + 1 < len(parts):
-                    device.node_guid = parts[i + 1]
-                    i += 2
-                elif parts[i] == "sys_image_guid" and i + 1 < len(parts):
-                    device.sys_image_guid = parts[i + 1]
-                    i += 2
-                elif parts[i] == "state" and i + 1 < len(parts):
-                    device.state = parts[i + 1]
-                    i += 2
-                else:
-                    # Store as generic attribute
-                    if i + 1 < len(parts) and not parts[i + 1].startswith("-"):
-                        device.attributes[parts[i]] = parts[i + 1]
-                        i += 2
-                    else:
-                        i += 1
-
-            devices.append(device)
-
-        return devices
-
-    def _parse_rdma_link(self, output: str) -> List[RdmaLink]:
-        """Parse 'rdma link' output into RdmaLink objects.
-
-        Args:
-            output: Raw output from 'rdma link' command
-
-        Returns:
-            List of RdmaLink objects
-        """
-        links = []
-
-        for line in output.splitlines():
-            line = line.strip()
-            if not line:
-                continue
-
-            # Example InfiniBand format: link mlx5_0/1 state ACTIVE physical_state LINK_UP netdev ib0
-            # Example RoCE format: link rocep9s0/1 state DOWN physical_state POLLING netdev benic8p1
-            # Example alternate format: 0/1: mlx5_0/1: state ACTIVE physical_state LINK_UP
-            match = re.search(r"(\S+)/(\d+)", line)
-            if not match:
-                continue
-
-            device_name = match.group(1)
-            port = int(match.group(2))
-
-            link = RdmaLink(device=device_name, port=port)
-
-            # Parse remaining attributes
-            parts = line.split()
-            i = 0
-            while i < len(parts):
-                if parts[i] == "state" and i + 1 < len(parts):
-                    link.state = parts[i + 1]
-                    i += 2
-                elif parts[i] == "physical_state" and i + 1 < len(parts):
-                    link.physical_state = parts[i + 1]
-                    i += 2
-                elif parts[i] == "netdev" and i + 1 < len(parts):
-                    link.netdev = parts[i + 1]
-                    i += 2
-                else:
-                    # Store as generic attribute if it's a key-value pair
-                    if i + 1 < len(parts) and not parts[i + 1].startswith("-"):
-                        link.attributes[parts[i]] = parts[i + 1]
-                        i += 2
-                    else:
-                        i += 1
-
-            links.append(link)
-
-        return links
-
     def collect_data(
         self,
         args=None,
@@ -533,7 +412,7 @@ class FabricsCollector(InBandDataCollector[FabricsDataModel, None]):
         ibdev_netdev_mappings = []
         ofed_info = None
         mst_status = None
-        rdma_info = None
+        slingshot_data = None
 
         # Collect ibstat information
         res_ibstat = self._run_sut_cmd(self.CMD_IBSTAT)
@@ -650,49 +529,60 @@ class FabricsCollector(InBandDataCollector[FabricsDataModel, None]):
                 priority=EventPriority.INFO,
             )
 
-        # Collect RDMA device information
-        rdma_devices = []
-        res_rdma_dev = self._run_sut_cmd(self.CMD_RDMA_DEV)
-        if res_rdma_dev.exit_code == 0:
-            rdma_devices = self._parse_rdma_dev(res_rdma_dev.stdout)
-            self._log_event(
-                category=EventCategory.NETWORK,
-                description=f"Collected {len(rdma_devices)} RDMA devices",
-                priority=EventPriority.INFO,
-            )
-        else:
-            self._log_event(
-                category=EventCategory.NETWORK,
-                description="Error collecting RDMA device information",
-                data={"command": res_rdma_dev.command, "exit_code": res_rdma_dev.exit_code},
-                priority=EventPriority.WARNING,
-            )
+        # Slingshot fallback path:
+        # if no InfiniBand data was collected, probe for Cassini/CXI fabric.
+        ib_data_collected = bool(ibstat_devices or ibv_devices or ibdev_netdev_mappings)
+        if not ib_data_collected:
+            res_cassini = self._run_sut_cmd(self.CMD_CASSINI_PCI)
+            cassini_detected = res_cassini.exit_code == 0 and bool(res_cassini.stdout.strip())
 
-        # Collect RDMA link information
-        rdma_links = []
-        res_rdma_link = self._run_sut_cmd(self.CMD_RDMA_LINK)
-        if res_rdma_link.exit_code == 0:
-            rdma_links = self._parse_rdma_link(res_rdma_link.stdout)
-            self._log_event(
-                category=EventCategory.NETWORK,
-                description=f"Collected {len(rdma_links)} RDMA links",
-                priority=EventPriority.INFO,
-            )
-        else:
-            self._log_event(
-                category=EventCategory.NETWORK,
-                description="Error collecting RDMA link information",
-                data={"command": res_rdma_link.command, "exit_code": res_rdma_link.exit_code},
-                priority=EventPriority.WARNING,
-            )
+            if cassini_detected:
+                self._log_event(
+                    category=EventCategory.NETWORK,
+                    description="Detected Slingshot/Cassini fabrics hardware",
+                    priority=EventPriority.INFO,
+                )
 
-        # Combine RDMA information
-        if rdma_devices or rdma_links:
-            rdma_info = RdmaInfo(
-                devices=rdma_devices,
-                links=rdma_links,
-                raw_output=res_rdma_dev.stdout + "\n" + res_rdma_link.stdout,
-            )
+                res_net_link = self._run_sut_cmd(self.CMD_NET_LINK)
+                res_libfabric = self._run_sut_cmd(self.CMD_LIBFABRIC_INFO)
+                res_cxi_stat = self._run_sut_cmd(self.CMD_CXI_STAT)
+                res_cxi_modules = self._run_sut_cmd(self.CMD_CXI_MODULES)
+
+                slingshot_data = SlingshotData(
+                    cassini_pci=res_cassini.stdout,
+                    net_link=res_net_link.stdout if res_net_link.exit_code == 0 else None,
+                    libfabric_info=res_libfabric.stdout if res_libfabric.exit_code == 0 else None,
+                    cxi_stat=res_cxi_stat.stdout if res_cxi_stat.exit_code == 0 else None,
+                    cxi_modules=res_cxi_modules.stdout if res_cxi_modules.exit_code == 0 else None,
+                )
+
+                failed_cmds = []
+                for cmd_name, cmd_res in (
+                    ("ip link show", res_net_link),
+                    ("fi_info -p cxi", res_libfabric),
+                    ("cxi_stat", res_cxi_stat),
+                    ("lsmod | grep cxi", res_cxi_modules),
+                ):
+                    if cmd_res.exit_code != 0:
+                        failed_cmds.append(cmd_name)
+
+                if failed_cmds:
+                    self._log_event(
+                        category=EventCategory.NETWORK,
+                        description="Some Slingshot commands failed",
+                        data={"failed_commands": failed_cmds},
+                        priority=EventPriority.WARNING,
+                    )
+            else:
+                self._log_event(
+                    category=EventCategory.NETWORK,
+                    description="No Slingshot/Cassini hardware detected on this system",
+                    data={
+                        "command": res_cassini.command,
+                        "exit_code": res_cassini.exit_code,
+                    },
+                    priority=EventPriority.INFO,
+                )
 
         # Build the data model only if we collected any data
         if (
@@ -701,7 +591,7 @@ class FabricsCollector(InBandDataCollector[FabricsDataModel, None]):
             or ibdev_netdev_mappings
             or ofed_info
             or mst_status
-            or rdma_info
+            or slingshot_data
         ):
             fabrics_data = FabricsDataModel(
                 ibstat_devices=ibstat_devices,
@@ -709,18 +599,20 @@ class FabricsCollector(InBandDataCollector[FabricsDataModel, None]):
                 ibdev_netdev_mappings=ibdev_netdev_mappings,
                 ofed_info=ofed_info,
                 mst_status=mst_status,
-                rdma_info=rdma_info,
+                slingshot_data=slingshot_data,
             )
             self.result.message = (
                 f"Collected fabrics data: {len(ibstat_devices)} ibstat devices, "
                 f"{len(ibv_devices)} ibv devices, {len(ibdev_netdev_mappings)} mappings, "
                 f"OFED: {ofed_info.version if ofed_info else 'N/A'}, "
                 f"MST devices: {len(mst_status.devices) if mst_status else 0}, "
-                f"RDMA devices: {len(rdma_info.devices) if rdma_info else 0}"
+                f"Slingshot: {'detected' if slingshot_data else 'not detected'}"
             )
             self.result.status = ExecutionStatus.OK
             return self.result, fabrics_data
         else:
-            self.result.message = "No InfiniBand/RDMA fabrics hardware detected on this system"
+            self.result.message = (
+                "No InfiniBand/RDMA or Slingshot fabrics hardware detected on this system"
+            )
             self.result.status = ExecutionStatus.NOT_RAN
             return self.result, None

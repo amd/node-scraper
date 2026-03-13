@@ -316,20 +316,27 @@ def extract_analyzer_args_from_model(
 
 
 def generate_reference_config(
-    results: list[PluginResult], plugin_reg: PluginRegistry, logger: logging.Logger
+    results: list[PluginResult],
+    plugin_reg: PluginRegistry,
+    logger: logging.Logger,
+    run_plugin_config: Optional[PluginConfig] = None,
 ) -> PluginConfig:
-    """Generate reference config from plugin results
+    """Generate reference config from plugin results.
 
     Args:
-        results (list[PluginResult]): list of plugin results
-        plugin_reg (PluginRegistry): registry containing all registered plugins
-        logger (logging.Logger): logger
+        results: List of plugin results from the run.
+        plugin_reg: Registry containing all registered plugins.
+        logger: Logger instance.
+        run_plugin_config: Optional merged plugin config used for the run;
 
     Returns:
-        PluginConfig: holds model that defines final reference config
+        PluginConfig: Reference config with plugins dict containing
+        collection_args and analysis_args for each successful plugin.
     """
     plugin_config = PluginConfig()
     plugins = {}
+    run_plugins = (run_plugin_config.plugins if run_plugin_config else {}) or {}
+
     for obj in results:
         if obj.result_data.collection_result.status != ExecutionStatus.OK:
             logger.warning(
@@ -348,6 +355,10 @@ def generate_reference_config(
 
         if obj.source not in plugins:
             plugins[obj.source] = {}
+
+        run_args = run_plugins.get(obj.source) or {}
+        if run_args.get("collection_args"):
+            plugins[obj.source]["collection_args"] = dict(run_args["collection_args"])
 
         a_args = extract_analyzer_args_from_model(plugin, data_model, logger)
         if a_args:

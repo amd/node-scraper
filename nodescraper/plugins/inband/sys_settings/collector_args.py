@@ -29,7 +29,7 @@ from pydantic import BaseModel
 class SysSettingsCollectorArgs(BaseModel):
     """Collection args for SysSettingsCollector.
 
-    paths: sysfs paths to read (cat).
+    paths: sysfs paths to read (cat). If a path contains '*', collect with ls -l instead (e.g. class/net/*/device).
     directory_paths: sysfs paths to list (ls -1); use for checks that match entry names by regex.
     """
 

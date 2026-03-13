@@ -50,9 +50,14 @@ from nodescraper.cli.helper import (
 )
 from nodescraper.cli.inputargtypes import ModelArgHandler, json_arg, log_path_arg
 from nodescraper.configregistry import ConfigRegistry
+from nodescraper.connection.redfish import (
+    RedfishConnection,
+    get_oem_diagnostic_allowable_values,
+)
+from nodescraper.connection.redfish.redfish_params import RedfishConnectionParams
 from nodescraper.constants import DEFAULT_LOGGER
 from nodescraper.enums import ExecutionStatus, SystemInteractionLevel, SystemLocation
-from nodescraper.models import SystemInfo
+from nodescraper.models import PluginConfig, SystemInfo
 from nodescraper.pluginexecutor import PluginExecutor
 from nodescraper.pluginregistry import PluginRegistry
 
@@ -171,6 +176,7 @@ def build_parser(
     )
 
     subparsers = parser.add_subparsers(dest="subcmd", help="Subcommands")
+    subparsers.default = "run-plugins"
 
     summary_parser = subparsers.add_parser(
         "summary",
@@ -259,6 +265,17 @@ def build_parser(
         dest="dont_truncate",
         help="Do not truncate the Message column; show full error text and all errors (not just first 3)",
     )
+
+    show_redfish_allowable_parser = subparsers.add_parser(
+        "show-redfish-oem-allowable",
+        help="Fetch OEM diagnostic allowable types from Redfish LogService (for oem_diagnostic_types_allowable)",
+    )
+    show_redfish_allowable_parser.add_argument(
+        "--log-service-path",
+        required=True,
+        help="Redfish path to LogService (e.g. redfish/v1/Systems/UBB/LogServices/DiagLogs)",
+    )
+
     config_builder_parser.add_argument(
         "--plugins",
         nargs="*",
@@ -354,6 +371,14 @@ def main(arg_input: Optional[list[str]] = None):
     plugin_reg = PluginRegistry()
 
     config_reg = ConfigRegistry()
+    # Add synthetic "AllPlugins" config that includes every registered plugin
+    config_reg.configs["AllPlugins"] = PluginConfig(
+        name="AllPlugins",
+        desc="Run all registered plugins with default arguments",
+        global_args={},
+        plugins={name: {} for name in plugin_reg.plugins},
+        result_collators={},
+    )
     parser, plugin_subparser_map = build_parser(plugin_reg, config_reg)
 
     try:
@@ -407,6 +432,40 @@ def main(arg_input: Optional[list[str]] = None):
                 include_plugins=getattr(parsed_args, "include_plugins", None),
                 truncate_message=not getattr(parsed_args, "dont_truncate", False),
             )
+            sys.exit(0)
+
+        if parsed_args.subcmd == "show-redfish-oem-allowable":
+            if not parsed_args.connection_config:
+                parser.error("show-redfish-oem-allowable requires --connection-config")
+            raw = parsed_args.connection_config.get("RedfishConnectionManager")
+            if not raw:
+                logger.error("Connection config must contain RedfishConnectionManager")
+                sys.exit(1)
+            params = RedfishConnectionParams.model_validate(raw)
+            password = params.password.get_secret_value() if params.password else None
+            base_url = f"{'https' if params.use_https else 'http'}://{params.host}" + (
+                f":{params.port}" if params.port else ""
+            )
+            conn = RedfishConnection(
+                base_url=base_url,
+                username=params.username,
+                password=password,
+                timeout=params.timeout_seconds,
+                use_session_auth=params.use_session_auth,
+                verify_ssl=params.verify_ssl,
+                api_root=params.api_root,
+            )
+            try:
+                conn._ensure_session()
+                allowable = get_oem_diagnostic_allowable_values(conn, parsed_args.log_service_path)
+                if allowable is None:
+                    logger.warning(
+                        "Could not read OEMDiagnosticDataType@Redfish.AllowableValues from LogService"
+                    )
+                    sys.exit(1)
+                print(json.dumps(allowable, indent=2))  # noqa: T201
+            finally:
+                conn.close()
             sys.exit(0)
 
         if parsed_args.subcmd == "gen-plugin-config":
@@ -480,21 +539,27 @@ def main(arg_input: Optional[list[str]] = None):
         dump_results_to_csv(results, sname, log_path, timestamp, logger)
 
         if parsed_args.reference_config:
-            ref_config = generate_reference_config(results, plugin_reg, logger)
-            if log_path:
-                path = os.path.join(log_path, "reference_config.json")
+            if any(result.status > ExecutionStatus.WARNING for result in results):
+                logger.warning("Skipping reference config write because one or more plugins failed")
             else:
-                path = os.path.join(os.getcwd(), "reference_config.json")
-            try:
-                with open(path, "w") as f:
-                    json.dump(
-                        ref_config.model_dump(mode="json", exclude_none=True),
-                        f,
-                        indent=2,
-                    )
-                    logger.info("Reference config written to: %s", path)
-            except Exception as exp:
-                logger.error(exp)
+                merged_plugin_config = PluginExecutor.merge_configs(plugin_config_inst_list)
+                ref_config = generate_reference_config(
+                    results, plugin_reg, logger, run_plugin_config=merged_plugin_config
+                )
+                if log_path:
+                    path = os.path.join(log_path, "reference_config.json")
+                else:
+                    path = os.path.join(os.getcwd(), "reference_config.json")
+                try:
+                    with open(path, "w") as f:
+                        json.dump(
+                            ref_config.model_dump(mode="json", exclude_none=True),
+                            f,
+                            indent=2,
+                        )
+                        logger.info("Reference config written to: %s", path)
+                except Exception as exp:
+                    logger.error(exp)
 
         if any(result.status > ExecutionStatus.WARNING for result in results):
             sys.exit(1)

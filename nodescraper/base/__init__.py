@@ -25,10 +25,14 @@
 ###############################################################################
 from .inbandcollectortask import InBandDataCollector
 from .inbanddataplugin import InBandDataPlugin
+from .oobanddataplugin import OOBandDataPlugin
+from .redfishcollectortask import RedfishDataCollector
 from .regexanalyzer import RegexAnalyzer
 
 __all__ = [
     "InBandDataCollector",
     "InBandDataPlugin",
+    "OOBandDataPlugin",
+    "RedfishDataCollector",
     "RegexAnalyzer",
 ]

@@ -1,0 +1,37 @@
+{
+  "name": "NicPlugin config with all analyzer_args",
+  "desc": "NicPlugin check.",
+  "global_args": {},
+  "plugins": {
+    "NicPlugin": {
+      "collection_args": {},
+      "analysis_args": {
+        "expected_values": {
+          "niccli_list": {"require_success": true},
+          "niccli_list_devices": {"require_success": true}
+        },
+        "performance_profile_expected": "RoCE",
+        "support_rdma_disabled_values": ["0", "false", "disabled", "no", "off"],
+        "pcie_relaxed_ordering_expected": "enabled",
+        "expected_qos_prio_map": {
+          "0": 0,
+          "1": 1,
+          "2": 0,
+          "3": 1,
+          "4": 0,
+          "5": 1,
+          "6": 0,
+          "7": 1
+        },
+        "expected_qos_pfc_enabled": 255,
+        "expected_qos_tsa_map": {
+          "0": "ets",
+          "1": "ets"
+        },
+        "expected_qos_tc_bandwidth": [50, 50],
+        "require_qos_consistent_across_adapters": true
+      }
+    }
+  },
+  "result_collators": {}
+}
