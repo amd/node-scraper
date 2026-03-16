@@ -342,8 +342,8 @@ node-scraper compare-runs path1 path2 --include-plugins DmesgPlugin --dont-trunc
 
 You can pass multiple plugin names to `--skip-plugins` or `--include-plugins`.
 
-#### **Discovering allowable OEM diagnostic types**
-The `show-redfish-oem-allowable` command fetches the list of OEM diagnostic types supported by your BMC (from the Redfish LogService `OEMDiagnosticDataType@Redfish.AllowableValues`). Use it to discover which types you can put in `oem_diagnostic_types_allowable` and `oem_diagnostic_types` in the Redfish OEM diag plugin config.
+#### **'show-redfish-oem-allowable' subcommand**
+The `show-redfish-oem-allowable` subcommand fetches the list of OEM diagnostic types supported by your BMC (from the Redfish LogService `OEMDiagnosticDataType@Redfish.AllowableValues`). Use it to discover which types you can put in `oem_diagnostic_types_allowable` and `oem_diagnostic_types` in the Redfish OEM diag plugin config.
 
 **Requirements:** A Redfish connection config (same as for RedfishOemDiagPlugin).
 
