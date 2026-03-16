@@ -14,7 +14,6 @@ system debug.
     - ['run-plugins' sub command](#run-plugins-sub-command)
     - ['gen-plugin-config' sub command](#gen-plugin-config-sub-command)
     - ['compare-runs' subcommand](#compare-runs-subcommand)
-    - ['show-redfish-oem-allowable' subcommand](#show-redfish-oem-allowable-subcommand)
     - ['summary' sub command](#summary-sub-command)
 - [Configs](#configs)
   - [Global args](#global-args)
@@ -63,17 +62,20 @@ options are available:
 usage: node-scraper [-h] [--sys-name STRING] [--sys-location {LOCAL,REMOTE}] [--sys-interaction-level {PASSIVE,INTERACTIVE,DISRUPTIVE}] [--sys-sku STRING]
                     [--sys-platform STRING] [--plugin-configs [STRING ...]] [--system-config STRING] [--connection-config STRING] [--log-path STRING]
                     [--log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}] [--gen-reference-config] [--skip-sudo]
-                    {summary,run-plugins,describe,gen-plugin-config} ...
+                    {summary,run-plugins,describe,gen-plugin-config,compare-runs,show-redfish-oem-allowable} ...
 
 node scraper CLI
 
 positional arguments:
-  {summary,run-plugins,describe,gen-plugin-config}
+  {summary,run-plugins,describe,gen-plugin-config,compare-runs,show-redfish-oem-allowable}
                         Subcommands
     summary             Generates summary csv file
     run-plugins         Run a series of plugins
     describe            Display details on a built-in config or plugin
     gen-plugin-config   Generate a config for a plugin or list of plugins
+    compare-runs        Compare datamodels from two run log directories
+    show-redfish-oem-allowable
+                        Fetch OEM diagnostic allowable types from Redfish LogService (for oem_diagnostic_types_allowable)
 
 options:
   -h, --help            show this help message and exit
@@ -340,8 +342,8 @@ node-scraper compare-runs path1 path2 --include-plugins DmesgPlugin --dont-trunc
 
 You can pass multiple plugin names to `--skip-plugins` or `--include-plugins`.
 
-#### **'show-redfish-oem-allowable' subcommand**
-The `show-redfish-oem-allowable` subcommand fetches the list of OEM diagnostic types supported by your BMC (from the Redfish LogService `OEMDiagnosticDataType@Redfish.AllowableValues`). Use it to discover which types you can put in `oem_diagnostic_types_allowable` and `oem_diagnostic_types` in the Redfish OEM diag plugin config.
+#### **Discovering allowable OEM diagnostic types**
+The `show-redfish-oem-allowable` command fetches the list of OEM diagnostic types supported by your BMC (from the Redfish LogService `OEMDiagnosticDataType@Redfish.AllowableValues`). Use it to discover which types you can put in `oem_diagnostic_types_allowable` and `oem_diagnostic_types` in the Redfish OEM diag plugin config.
 
 **Requirements:** A Redfish connection config (same as for RedfishOemDiagPlugin).
 
