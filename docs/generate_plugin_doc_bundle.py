@@ -28,12 +28,16 @@ Usage
 python generate_plugin_doc_bundle.py \
   --package /home/alexbara/node-scraper/nodescraper/plugins/inband \
   --output PLUGIN_DOC.md
+  --update-readme-help
+
 """
 import argparse
 import importlib
 import inspect
 import os
 import pkgutil
+import re
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Iterable, List, Optional, Type
@@ -513,6 +517,44 @@ def render_analyzer_args_section(args_cls: type, link_base: str, rel_root: Optio
     return s
 
 
+# Markers in README.md that bracket the node-scraper -h block (HTML comments, not rendered).
+README_HELP_BLOCK_START = "<!-- node-scraper -h start -->"
+README_HELP_BLOCK_END = "<!-- node-scraper -h end -->"
+
+
+def update_readme_help(readme_path: Path) -> bool:
+    """
+    Update the node-scraper -h output block in README.md.
+    The block must be wrapped with <!-- node-scraper -h start --> and <!-- node-scraper -h end -->.
+    """
+    result = subprocess.run(
+        [sys.executable, "-m", "nodescraper.cli.cli", "-h"],
+        capture_output=True,
+        text=True,
+        cwd=readme_path.parent,
+    )
+    if result.returncode != 0:
+        return False
+    help_text = result.stdout.strip()
+    # Redact hostname in --sys-name default so README does not show machine name
+    help_text = re.sub(
+        r"(--sys-name STRING\s+System name \(default: )\S+",
+        r"\g<1><current hostname>)",
+        help_text,
+    )
+    content = readme_path.read_text(encoding="utf-8")
+    start_idx = content.find(README_HELP_BLOCK_START)
+    end_idx = content.find(README_HELP_BLOCK_END)
+    if start_idx == -1 or end_idx == -1 or end_idx <= start_idx:
+        return False
+    # Replace the entire bracketed block (from start marker through end marker)
+    block_end = end_idx + len(README_HELP_BLOCK_END)
+    new_block = f"{README_HELP_BLOCK_START}\n```sh\n{help_text}\n```\n{README_HELP_BLOCK_END}"
+    new_content = content[:start_idx] + new_block + content[block_end:]
+    readme_path.write_text(new_content, encoding="utf-8")
+    return True
+
+
 def main():
     ap = argparse.ArgumentParser(
         description="Generate Plugin Table and detail sections with setup_link + rel-root."
@@ -521,6 +563,16 @@ def main():
         "--package", default=DEFAULT_ROOT_PACKAGE, help="Dotted package or filesystem path"
     )
     ap.add_argument("--output", default="PLUGIN_DOC.md", help="Output Markdown file")
+    ap.add_argument(
+        "--update-readme-help",
+        action="store_true",
+        help="Update the node-scraper -h output block in README.md (run from repo root or with correct cwd)",
+    )
+    ap.add_argument(
+        "--readme",
+        default=None,
+        help="Path to README.md (default: README.md in current working directory)",
+    )
     args = ap.parse_args()
 
     root = args.package
@@ -601,7 +653,26 @@ def main():
         for a in args_classes:
             out.append(render_analyzer_args_section(a, LINK_BASE_DEFAULT, REL_ROOT_DEFAULT))
 
-    Path(args.output).write_text("".join(out), encoding="utf-8")
+    repo_root = Path(__file__).resolve().parent.parent
+    output_path = Path(args.output)
+    if not output_path.is_absolute():
+        output_path = repo_root / output_path
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text("".join(out), encoding="utf-8")
+
+    if args.update_readme_help:
+        readme_path = Path(args.readme) if args.readme else Path.cwd() / "README.md"
+        if not readme_path.is_file():
+            readme_path = Path(__file__).resolve().parent.parent / "README.md"
+        if readme_path.is_file():
+            if update_readme_help(readme_path):
+                print(f"Updated node-scraper -h block in {readme_path}")  # noqa: T201
+            else:
+                print(f"Could not find or update -h block in {readme_path}")  # noqa: T201
+                sys.exit(1)
+        else:
+            print(f"README not found: {readme_path}")  # noqa: T201
+            sys.exit(1)
 
 
 if __name__ == "__main__":

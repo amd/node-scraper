@@ -38,7 +38,8 @@ jobs:
         source venv/bin/activate
         python docs/generate_plugin_doc_bundle.py \
           --package nodescraper.plugins.inband \
-          --output docs/PLUGIN_DOC.md
+          --output docs/PLUGIN_DOC.md \
+          --update-readme-help
 
     - name: Clean pre-commit cache
       run: |
@@ -50,7 +51,7 @@ jobs:
       run: |
         source venv/bin/activate
         pre-commit install-hooks || true
-        pre-commit run --files docs/PLUGIN_DOC.md || true
+        pre-commit run --files docs/PLUGIN_DOC.md README.md || true
 
     - name: Create Pull Request
       uses: peter-evans/create-pull-request@v6
