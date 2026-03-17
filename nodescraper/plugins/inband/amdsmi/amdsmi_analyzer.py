@@ -666,9 +666,6 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
             )
             return
 
-        expected_str = ", ".join(str(s) for s in expected_xgmi_speed)
-        mismatches: list[dict] = []
-
         for xgmi_data in xgmi_metric:
             link_metric = xgmi_data.link_metrics
             try:
@@ -687,7 +684,7 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                     continue
 
                 xgmi_float = float(link_metric.bit_rate.value)
-            except ValueError:
+            except (ValueError, TypeError):
                 self._log_event(
                     category=EventCategory.IO,
                     description="XGMI link speed is not a valid number",
@@ -701,30 +698,18 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                 )
                 continue
 
-            if xgmi_float not in expected_xgmi_speed:
-                mismatches.append(
-                    {
+            expected_floats = [float(e) for e in expected_xgmi_speed]
+            if xgmi_float not in expected_floats:
+                self._log_event(
+                    category=EventCategory.IO,
+                    description="XGMI link speed is not as expected",
+                    priority=EventPriority.ERROR,
+                    data={
+                        "expected_xgmi_speed": expected_xgmi_speed,
+                        "xgmi_bit_rate": xgmi_float,
                         "gpu": xgmi_data.gpu,
-                        "actual_gt_s": xgmi_float,
-                        "expected_gt_s": expected_str,
-                    }
+                    },
                 )
-
-        if mismatches:
-            details = "; ".join(
-                f"GPU {m['gpu']} {m['actual_gt_s']} GT/s (expected {m['expected_gt_s']})"
-                for m in mismatches
-            )
-            self._log_event(
-                category=EventCategory.IO,
-                description=f"XGMI link speed is not as expected: {details}",
-                priority=EventPriority.ERROR,
-                data={
-                    "expected_gt_s": expected_str,
-                    "mismatches": mismatches,
-                },
-                console_log=True,
-            )
 
     def analyze_data(
         self, data: AmdSmiDataModel, args: Optional[AmdSmiAnalyzerArgs] = None
