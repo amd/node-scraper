@@ -23,10 +23,15 @@
 # SOFTWARE.
 #
 ###############################################################################
+from pydantic import Field
+
 from nodescraper.models import CollectorArgs
 
 
 class RocmCollectorArgs(CollectorArgs):
     """Collector arguments for RocmPlugin."""
 
-    rocm_path: str = "/opt/rocm"
+    rocm_path: str = Field(
+        default="/opt/rocm",
+        description="Base path to ROCm installation (e.g. /opt/rocm). Used for rocminfo, clinfo, and version discovery.",
+    )

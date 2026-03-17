@@ -26,9 +26,17 @@
 
 from typing import Literal, Optional
 
+from pydantic import Field
+
 from nodescraper.models import CollectorArgs
 
 
 class NetworkCollectorArgs(CollectorArgs):
-    url: Optional[str] = None
-    netprobe: Optional[Literal["ping", "wget", "curl"]] = None
+    url: Optional[str] = Field(
+        default=None,
+        description="Optional URL to probe for network connectivity (used with netprobe).",
+    )
+    netprobe: Optional[Literal["ping", "wget", "curl"]] = Field(
+        default=None,
+        description="Tool to use for network connectivity probe: ping, wget, or curl.",
+    )
