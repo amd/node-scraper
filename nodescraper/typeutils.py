@@ -25,7 +25,7 @@
 ###############################################################################
 import inspect
 import types
-from typing import Any, Callable, Optional, Type, Union, get_args, get_origin
+from typing import Annotated, Any, Callable, Optional, Type, Union, get_args, get_origin
 
 from pydantic import BaseModel, Field
 
@@ -120,6 +120,9 @@ class TypeUtils:
             list[TypeClass]: list of TypeClass objects containing type class and inner type information
         """
         origin = get_origin(input_type)
+        if origin is Annotated:
+            input_type = get_args(input_type)[0]
+            origin = get_origin(input_type)
         if origin is None:
             return [TypeClass(type_class=input_type)]
         if origin is Union or getattr(types, "UnionType", None) is origin:
