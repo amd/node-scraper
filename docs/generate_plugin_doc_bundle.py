@@ -329,6 +329,15 @@ def extract_collection_args_from_collector_args(args_cls: Optional[type]) -> Lis
     return output
 
 
+def escape_table_cell(s: str) -> str:
+    """Escape content for a markdown table cell so pipes and newlines don't break columns.
+    Use HTML entity for pipe so all markdown parsers treat it as content, not column separator.
+    """
+    if not s:
+        return s
+    return s.replace("|", "&#124;").replace("\n", " ").replace("\r", " ")
+
+
 def md_header(text: str, level: int = 2) -> str:
     return f"{'#' * level} {text}\n\n"
 
@@ -453,10 +462,10 @@ def generate_plugin_table_rows(plugins: List[type]) -> List[List[str]]:
         rows.append(
             [
                 p.__name__,
-                "<br>".join(cmds).replace("|", "\\|") if cmds else "-",
-                "<br>".join(regex_and_args).replace("|", "\\|") if regex_and_args else "-",
+                escape_table_cell("<br>".join(cmds)) if cmds else "-",
+                escape_table_cell("<br>".join(regex_and_args)) if regex_and_args else "-",
                 (
-                    "<br>".join(collection_args_lines).replace("|", "\\|")
+                    escape_table_cell("<br>".join(collection_args_lines))
                     if collection_args_lines
                     else "-"
                 ),
