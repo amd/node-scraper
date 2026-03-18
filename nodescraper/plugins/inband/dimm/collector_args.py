@@ -24,8 +24,13 @@
 #
 ###############################################################################
 
+from pydantic import Field
+
 from nodescraper.models import CollectorArgs
 
 
 class DimmCollectorArgs(CollectorArgs):
-    skip_sudo: bool = False
+    skip_sudo: bool = Field(
+        default=False,
+        description="If True, do not use sudo when running dmidecode or wmic for memory info.",
+    )

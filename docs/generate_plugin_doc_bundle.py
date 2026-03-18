@@ -27,7 +27,7 @@
 Usage
 python generate_plugin_doc_bundle.py \
   --package /home/alexbara/node-scraper/nodescraper/plugins/inband \
-  --output PLUGIN_DOC.md
+  --output PLUGIN_DOC.md \
   --update-readme-help
 
 """
@@ -266,15 +266,32 @@ def extract_regexes_and_args_from_analyzer(
             elif isinstance(val, str):
                 output.append(f"**{attr}**: `{val}`")
 
-    # Extract analyzer args if provided
+    # Extract analyzer args if provided (prefer model_fields for descriptions)
     if inspect.isclass(args_cls):
-        anns = get_attr(args_cls, "__annotations__", {}) or {}
-        if anns:
+        fields = get_attr(args_cls, "model_fields", None)
+        if fields and isinstance(fields, dict):
             output.append("**Analyzer Args:**")
-            for key, value in anns.items():
-                # Format the type annotation
-                type_str = format_type_annotation(value)
-                output.append(f"- `{key}`: {type_str}")
+            for key in fields:
+                try:
+                    finfo = fields[key]
+                    ann = getattr(finfo, "annotation", None)
+                    type_str = format_type_annotation(ann) if ann is not None else "Any"
+                    line = f"- `{key}`: {type_str}"
+                    desc = get_field_description(
+                        finfo, for_table=True, model_cls=args_cls, field_name=key
+                    )
+                    if desc:
+                        line += f" — {desc}"
+                    output.append(line)
+                except Exception:
+                    pass
+        else:
+            anns = get_attr(args_cls, "__annotations__", {}) or {}
+            if anns:
+                output.append("**Analyzer Args:**")
+                for key, value in anns.items():
+                    type_str = format_type_annotation(value)
+                    output.append(f"- `{key}`: {type_str}")
 
     return output
 
@@ -293,7 +310,13 @@ def extract_collection_args_from_collector_args(args_cls: Optional[type]) -> Lis
                 finfo = fields[key]
                 ann = getattr(finfo, "annotation", None)
                 type_str = format_type_annotation(ann) if ann is not None else "Any"
-                output.append(f"- `{key}`: {type_str}")
+                line = f"- `{key}`: {type_str}"
+                desc = get_field_description(
+                    finfo, for_table=True, model_cls=args_cls, field_name=key
+                )
+                if desc:
+                    line += f" — {desc}"
+                output.append(line)
             except Exception:
                 pass
     if not output:
@@ -304,6 +327,15 @@ def extract_collection_args_from_collector_args(args_cls: Optional[type]) -> Lis
     if output:
         output.insert(0, "**Collection Args:**")
     return output
+
+
+def escape_table_cell(s: str) -> str:
+    """Escape content for a markdown table cell so pipes and newlines don't break columns.
+    Use HTML entity for pipe so all markdown parsers treat it as content, not column separator.
+    """
+    if not s:
+        return s
+    return s.replace("|", "&#124;").replace("\n", " ").replace("\r", " ")
 
 
 def md_header(text: str, level: int = 2) -> str:
@@ -337,6 +369,35 @@ def format_type_annotation(type_ann: Any) -> str:
     type_str = re.sub(r"<bound method\s+(\S+)\s+of\s+.+?>", r"\1", type_str)
     type_str = re.sub(r"<class '([^']+)'>", r"\1", type_str)
     return type_str
+
+
+def get_field_description(
+    finfo: Any,
+    for_table: bool = False,
+    max_len: Optional[int] = 120,
+    model_cls: Optional[Type] = None,
+    field_name: Optional[str] = None,
+) -> Optional[str]:
+    """Get description from a Pydantic FieldInfo. If for_table, single-line and escape pipes.
+    Falls back to model JSON schema description when model_cls and field_name are provided.
+    """
+    desc = getattr(finfo, "description", None)
+    if (not desc or not isinstance(desc, str)) and model_cls and field_name:
+        try:
+            schema = model_cls.model_json_schema()
+            desc = schema.get("properties", {}).get(field_name, {}).get("description")
+        except Exception:
+            pass
+    if not desc or not isinstance(desc, str):
+        return None
+    desc = desc.strip()
+    if not desc:
+        return None
+    if for_table:
+        desc = desc.replace("\n", " ").replace("|", "\\|")
+        if max_len and len(desc) > max_len:
+            desc = desc[: max_len - 3].rstrip() + "..."
+    return desc
 
 
 def annotations_for_model(model_cls: type) -> List[str]:
@@ -401,10 +462,10 @@ def generate_plugin_table_rows(plugins: List[type]) -> List[List[str]]:
         rows.append(
             [
                 p.__name__,
-                "<br>".join(cmds).replace("|", "\\|") if cmds else "-",
-                "<br>".join(regex_and_args).replace("|", "\\|") if regex_and_args else "-",
+                escape_table_cell("<br>".join(cmds)) if cmds else "-",
+                escape_table_cell("<br>".join(regex_and_args)) if regex_and_args else "-",
                 (
-                    "<br>".join(collection_args_lines).replace("|", "\\|")
+                    escape_table_cell("<br>".join(collection_args_lines))
                     if collection_args_lines
                     else "-"
                 ),
@@ -510,10 +571,33 @@ def render_analyzer_args_section(args_cls: type, link_base: str, rel_root: Optio
     _url = setup_link(args_cls, link_base, rel_root)
     s += md_kv("Link to code", f"[{Path(_url).name}]({_url})")
 
-    anns = get_attr(args_cls, "__annotations__", {}) or {}
-    if anns:
-        ann_items = [f"**{k}**: `{format_type_annotation(v)}`" for k, v in anns.items()]
-        s += md_header("Annotations / fields", 3) + md_list(ann_items)
+    fields = get_attr(args_cls, "model_fields", None)
+    if fields and isinstance(fields, dict):
+        ann_items = []
+        for k in fields:
+            try:
+                finfo = fields[k]
+                ann = getattr(finfo, "annotation", None)
+                type_str = format_type_annotation(ann) if ann is not None else "Any"
+                item = f"**{k}**: `{type_str}`"
+                field_desc = get_field_description(
+                    finfo, for_table=False, model_cls=args_cls, field_name=k
+                )
+                if field_desc:
+                    item += f" — {field_desc}"
+                ann_items.append(item)
+            except Exception:
+                ann = getattr(fields[k], "annotation", None)
+                ann_items.append(
+                    f"**{k}**: `{format_type_annotation(ann) if ann is not None else 'Any'}`"
+                )
+        if ann_items:
+            s += md_header("Annotations / fields", 3) + md_list(ann_items)
+    else:
+        anns = get_attr(args_cls, "__annotations__", {}) or {}
+        if anns:
+            ann_items = [f"**{k}**: `{format_type_annotation(v)}`" for k, v in anns.items()]
+            s += md_header("Annotations / fields", 3) + md_list(ann_items)
     return s
 
 
@@ -556,6 +640,11 @@ def update_readme_help(readme_path: Path) -> bool:
 
 
 def main():
+    # Prefer loading plugins from repo root so Field descriptions are picked up
+    _repo_root = Path(__file__).resolve().parent.parent
+    if str(_repo_root) not in sys.path:
+        sys.path.insert(0, str(_repo_root))
+
     ap = argparse.ArgumentParser(
         description="Generate Plugin Table and detail sections with setup_link + rel-root."
     )

@@ -24,7 +24,15 @@
 #
 ###############################################################################
 import argparse
-from typing import Literal, Optional, Type, get_args, get_origin
+from typing import (
+    Annotated,
+    Literal,
+    Optional,
+    Type,
+    get_args,
+    get_origin,
+    get_type_hints,
+)
 
 from pydantic import BaseModel
 
@@ -33,6 +41,20 @@ from nodescraper.cli.inputargtypes import bool_arg, dict_arg
 from nodescraper.interfaces.plugin import PluginInterface
 from nodescraper.models import DataModel
 from nodescraper.typeutils import TypeUtils
+
+
+def _get_run_arg_help(plugin_class: Type[PluginInterface], arg: str) -> str:
+    """Get help text for a run() parameter from typing.Annotated metadata on the parameter."""
+    try:
+        hints = get_type_hints(plugin_class.run, include_extras=True)
+        anno = hints.get(arg)
+        if anno is not None and get_origin(anno) is Annotated:
+            args = get_args(anno)
+            if len(args) >= 2 and isinstance(args[1], str):
+                return args[1]
+    except Exception:
+        pass
+    return ""
 
 
 class DynamicParserBuilder:
@@ -69,7 +91,10 @@ class DynamicParserBuilder:
                 for model_arg in model_args:
                     model_type_map[model_arg] = arg
             else:
-                self.add_argument(type_class_map, arg.replace("_", "-"), arg_data.required)
+                help_text = _get_run_arg_help(self.plugin_class, arg)
+                self.add_argument(
+                    type_class_map, arg.replace("_", "-"), arg_data.required, help_text=help_text
+                )
 
         return model_type_map
 
@@ -118,6 +143,7 @@ class DynamicParserBuilder:
         arg_name: str,
         required: bool,
         annotation: Optional[Type] = None,
+        help_text: Optional[str] = None,
     ) -> None:
         """Add an argument to a parser with an appropriate type
 
@@ -126,7 +152,9 @@ class DynamicParserBuilder:
             arg_name (str): argument name
             required (bool): whether or not the arg is required
             annotation (Optional[Type]): full type annotation for extracting Literal choices
+            help_text (Optional[str]): help text for the argument (shown in -h output).
         """
+        add_kw = {} if help_text is None else {"help": help_text}
         # Check for Literal types and extract choices
         literal_choices = None
         if Literal in type_class_map and annotation:
@@ -145,6 +173,7 @@ class DynamicParserBuilder:
                 type=type_class.inner_type if type_class.inner_type else str,
                 required=required,
                 metavar=META_VAR_MAP.get(type_class.inner_type, "STRING"),
+                **add_kw,
             )
         elif bool in type_class_map:
             self.parser.add_argument(
@@ -152,6 +181,7 @@ class DynamicParserBuilder:
                 type=bool_arg,
                 required=required,
                 choices=[True, False],
+                **add_kw,
             )
         elif Literal in type_class_map and literal_choices:
             # Add argument with choices for Literal types
@@ -161,26 +191,47 @@ class DynamicParserBuilder:
                 required=required,
                 choices=literal_choices,
                 metavar=f"{{{','.join(literal_choices)}}}",
+                **add_kw,
             )
         elif float in type_class_map:
             self.parser.add_argument(
-                f"--{arg_name}", type=float, required=required, metavar=META_VAR_MAP[float]
+                f"--{arg_name}",
+                type=float,
+                required=required,
+                metavar=META_VAR_MAP[float],
+                **add_kw,
             )
         elif int in type_class_map:
             self.parser.add_argument(
-                f"--{arg_name}", type=int, required=required, metavar=META_VAR_MAP[int]
+                f"--{arg_name}",
+                type=int,
+                required=required,
+                metavar=META_VAR_MAP[int],
+                **add_kw,
             )
         elif str in type_class_map:
             self.parser.add_argument(
-                f"--{arg_name}", type=str, required=required, metavar=META_VAR_MAP[str]
+                f"--{arg_name}",
+                type=str,
+                required=required,
+                metavar=META_VAR_MAP[str],
+                **add_kw,
             )
         elif dict in type_class_map or self.get_model_arg(type_class_map):
             self.parser.add_argument(
-                f"--{arg_name}", type=dict_arg, required=required, metavar=META_VAR_MAP[dict]
+                f"--{arg_name}",
+                type=dict_arg,
+                required=required,
+                metavar=META_VAR_MAP[dict],
+                **add_kw,
             )
         else:
             self.parser.add_argument(
-                f"--{arg_name}", type=str, required=required, metavar=META_VAR_MAP[str]
+                f"--{arg_name}",
+                type=str,
+                required=required,
+                metavar=META_VAR_MAP[str],
+                **add_kw,
             )
 
     def build_model_arg_parser(self, model: type[BaseModel], required: bool) -> list[str]:
@@ -203,10 +254,21 @@ class DynamicParserBuilder:
             if type(None) in type_class_map and len(attr_data.type_classes) == 1:
                 continue
 
-            # Get the full annotation from the model field
+            # Get the full annotation and description from the model field
             field = model.model_fields.get(attr)
             annotation = field.annotation if field else None
+            help_text = None
+            if field is not None:
+                desc = getattr(field, "description", None)
+                if isinstance(desc, str) and desc.strip():
+                    help_text = desc.strip()
 
-            self.add_argument(type_class_map, attr.replace("_", "-"), required, annotation)
+            self.add_argument(
+                type_class_map,
+                attr.replace("_", "-"),
+                required,
+                annotation,
+                help_text=help_text,
+            )
 
         return list(type_map.keys())

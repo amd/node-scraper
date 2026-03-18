@@ -25,17 +25,19 @@
 ###############################################################################
 from typing import Optional
 
+from pydantic import Field
+
 from nodescraper.models import TimeRangeAnalysisArgs
 
 
 class JournalAnalyzerArgs(TimeRangeAnalysisArgs):
     """Arguments for journal analyzer"""
 
-    check_priority: Optional[int] = None
-    """Check against journal log priority levels.
-    emergency(0), alert(1), critical(2), error(3), warning(4), notice(5), info(6), debug(7).
-    If a journal log entry has a priority level less than or equal to check_priority,
-    an ERROR event will be raised."""
-
-    group: bool = True
-    """Groups entries if they have the same priority and the same message"""
+    check_priority: Optional[int] = Field(
+        default=None,
+        description="Check against journal log priority (0=emergency..7=debug). If an entry has priority <= check_priority, an ERROR event is raised.",
+    )
+    group: bool = Field(
+        default=True,
+        description="If True, group entries that have the same priority and message.",
+    )

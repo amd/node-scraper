@@ -23,14 +23,22 @@
 # SOFTWARE.
 #
 ###############################################################################
+from pydantic import Field
+
 from nodescraper.models.analyzerargs import AnalyzerArgs
 
 from .memorydata import MemoryDataModel
 
 
 class MemoryAnalyzerArgs(AnalyzerArgs):
-    ratio: float = 0.66
-    memory_threshold: str = "30Gi"
+    ratio: float = Field(
+        default=0.66,
+        description="Required free-memory ratio (0-1). Analysis fails if free/total < ratio.",
+    )
+    memory_threshold: str = Field(
+        default="30Gi",
+        description="Minimum free memory required (e.g. '30Gi', '1T'). Used when ratio is not sufficient.",
+    )
 
     @classmethod
     def build_from_model(cls, datamodel: MemoryDataModel) -> "MemoryAnalyzerArgs":

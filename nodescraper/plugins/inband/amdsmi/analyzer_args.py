@@ -26,25 +26,57 @@
 from datetime import datetime
 from typing import Optional
 
+from pydantic import Field
+
 from nodescraper.models import AnalyzerArgs
 
 
 class AmdSmiAnalyzerArgs(AnalyzerArgs):
-
-    check_static_data: bool = False
-    expected_gpu_processes: Optional[int] = None
-    expected_max_power: Optional[int] = None
-    expected_driver_version: Optional[str] = None
-    expected_memory_partition_mode: Optional[str] = None
-    expected_compute_partition_mode: Optional[str] = None
-    expected_pldm_version: Optional[str] = None
-    l0_to_recovery_count_error_threshold: Optional[int] = 3
-    l0_to_recovery_count_warning_threshold: Optional[int] = 1
-    vendorid_ep: Optional[str] = None
-    vendorid_ep_vf: Optional[str] = None
-    devid_ep: Optional[str] = None
-    devid_ep_vf: Optional[str] = None
-    sku_name: Optional[str] = None
-    expected_xgmi_speed: Optional[list[float]] = None
-    analysis_range_start: Optional[datetime] = None
-    analysis_range_end: Optional[datetime] = None
+    check_static_data: bool = Field(
+        default=False,
+        description="If True, run static data checks (e.g. driver version, partition mode).",
+    )
+    expected_gpu_processes: Optional[int] = Field(
+        default=None, description="Expected number of GPU processes."
+    )
+    expected_max_power: Optional[int] = Field(
+        default=None, description="Expected maximum power value (e.g. watts)."
+    )
+    expected_driver_version: Optional[str] = Field(
+        default=None, description="Expected AMD driver version string."
+    )
+    expected_memory_partition_mode: Optional[str] = Field(
+        default=None, description="Expected memory partition mode (e.g. sp3, dp)."
+    )
+    expected_compute_partition_mode: Optional[str] = Field(
+        default=None, description="Expected compute partition mode."
+    )
+    expected_pldm_version: Optional[str] = Field(
+        default=None, description="Expected PLDM version string."
+    )
+    l0_to_recovery_count_error_threshold: Optional[int] = Field(
+        default=3,
+        description="L0-to-recovery count above which an error is raised.",
+    )
+    l0_to_recovery_count_warning_threshold: Optional[int] = Field(
+        default=1,
+        description="L0-to-recovery count above which a warning is raised.",
+    )
+    vendorid_ep: Optional[str] = Field(
+        default=None, description="Expected endpoint vendor ID (e.g. for PCIe)."
+    )
+    vendorid_ep_vf: Optional[str] = Field(
+        default=None, description="Expected endpoint VF vendor ID."
+    )
+    devid_ep: Optional[str] = Field(default=None, description="Expected endpoint device ID.")
+    devid_ep_vf: Optional[str] = Field(default=None, description="Expected endpoint VF device ID.")
+    sku_name: Optional[str] = Field(default=None, description="Expected SKU name string for GPU.")
+    expected_xgmi_speed: Optional[list[float]] = Field(
+        default=None, description="Expected xGMI speed value(s) (e.g. link rate)."
+    )
+    analysis_range_start: Optional[datetime] = Field(
+        default=None, description="Start of time range for time-windowed analysis."
+    )
+    analysis_range_end: Optional[datetime] = Field(
+        default=None, description="End of time range for time-windowed analysis."
+    )

@@ -31,8 +31,23 @@ from nodescraper.models.analyzerargs import AnalyzerArgs
 
 
 class StorageAnalyzerArgs(AnalyzerArgs):
-    min_required_free_space_abs: Optional[str] = None
-    min_required_free_space_prct: Optional[int] = None
-    ignore_devices: Optional[list[str]] = Field(default_factory=list)
-    check_devices: Optional[list[str]] = Field(default_factory=list)
-    regex_match: bool = False
+    min_required_free_space_abs: Optional[str] = Field(
+        default=None,
+        description="Minimum required free space per mount (e.g. '10G', '1T').",
+    )
+    min_required_free_space_prct: Optional[int] = Field(
+        default=None,
+        description="Minimum required free space as percentage of total (0–100).",
+    )
+    ignore_devices: Optional[list[str]] = Field(
+        default_factory=list,
+        description="Mount points or devices to exclude from free-space checks.",
+    )
+    check_devices: Optional[list[str]] = Field(
+        default_factory=list,
+        description="If non-empty, only these mount points or devices are checked.",
+    )
+    regex_match: bool = Field(
+        default=False,
+        description="If True, match device/mount names with regex; otherwise exact match.",
+    )
