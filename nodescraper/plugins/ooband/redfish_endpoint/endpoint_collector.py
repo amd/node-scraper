@@ -89,7 +89,9 @@ def _discover_tree(
 ) -> tuple[list[str], dict[str, dict], list[RedfishGetResult]]:
     """
     Traverse the Redfish resource tree from the service root.
-    Returns (sorted paths, path -> JSON body for successful GETs, list of all GET results for artifacts).
+
+    max_depth matches collection_args.tree_max_depth: 1 = service root only; 2 = root + one link
+    level; child links are only enqueued when depth + 1 < max_depth (root is depth 0).
     """
     root_path = _normalize_path(api_root, api_root) or ("/" + api_root.strip("/"))
     seen: set[str] = set()
@@ -109,7 +111,8 @@ def _discover_tree(
             responses[path] = res.data
             for odata_id in _extract_odata_ids(res.data):
                 link_path = _normalize_path(odata_id, api_root)
-                if link_path and link_path not in seen and depth + 1 <= max_depth:
+                # Follow only if the child depth stays strictly below max_depth (1 = root only).
+                if link_path and link_path not in seen and depth + 1 < max_depth:
                     to_visit.append((link_path, depth + 1))
     return sorted(seen), responses, results
 
@@ -119,6 +122,13 @@ def _uris_from_args(args: Optional[RedfishEndpointCollectorArgs]) -> list[str]:
     if args is None:
         return []
     return list(args.uris) if args.uris else []
+
+
+def _discover_tree_enabled(args: Optional[RedfishEndpointCollectorArgs]) -> bool:
+    """True only when tree discovery is explicitly enabled (avoids string/other truthy junk)."""
+    if args is None:
+        return False
+    return getattr(args, "discover_tree", False) is True
 
 
 def _fetch_one(connection_copy: RedfishConnection, path: str) -> RedfishGetResult:
@@ -136,13 +146,15 @@ class RedfishEndpointCollector(
     def collect_data(
         self, args: Optional[RedfishEndpointCollectorArgs] = None
     ) -> tuple[TaskResult, Optional[RedfishEndpointDataModel]]:
-        """GET each configured Redfish URI (or discover from tree); when max_workers > 1, fetches run concurrently."""
-        responses: dict[str, dict] = {}
-        results: list[RedfishGetResult] = []
-        if args and getattr(args, "discover_tree", False):
+        """Collect via tree discovery, or via explicit URIs, or skip if neither is configured."""
+        uris = _uris_from_args(args)
+        use_tree = _discover_tree_enabled(args)
+
+        # 1) Tree discovery: only when discover_tree is explicitly true
+        if use_tree:
             api_root = getattr(self.connection, "api_root", "redfish/v1")
-            max_depth = getattr(args, "tree_max_depth", 2)
-            max_endpoints = getattr(args, "tree_max_endpoints", 0) or 0
+            max_depth = getattr(args, "tree_max_depth", 2) if args else 2
+            max_endpoints = (getattr(args, "tree_max_endpoints", 0) or 0) if args else 0
             _paths, responses, results = _discover_tree(
                 self.connection,
                 api_root,
@@ -166,25 +178,24 @@ class RedfishEndpointCollector(
             self.result.message = f"Collected {len(responses)} Redfish endpoint(s) from tree"
             self.result.status = ExecutionStatus.OK
             return self.result, data
-        else:
-            uris = _uris_from_args(args)
-            if not uris:
-                self.logger.info(
-                    "(RedfishEndpointCollector) No URIs; discover_tree=%s (args=%s). Set discover_tree=true in collection_args to use tree discovery.",
-                    getattr(args, "discover_tree", None) if args else None,
-                    type(args).__name__ if args else "None",
-                )
-                self.result.message = "No Redfish URIs configured"
-                self.result.status = ExecutionStatus.NOT_RAN
-                return self.result, None
-            paths = []
-            for uri in uris:
-                path = uri.strip() if uri else ""
-                if not path:
-                    continue
-                if not path.startswith("/"):
-                    path = "/" + path
-                paths.append(path)
+
+        # 2) URI list: when discover_tree is false/absent and uris are provided
+        if not uris:
+            self.result.message = (
+                "No collection mode configured: set collection_args.discover_tree to true "
+                "or provide collection_args.uris"
+            )
+            self.result.status = ExecutionStatus.NOT_RAN
+            return self.result, None
+
+        paths = []
+        for uri in uris:
+            path = uri.strip() if uri else ""
+            if not path:
+                continue
+            if not path.startswith("/"):
+                path = "/" + path
+            paths.append(path)
 
         max_workers = getattr(args, "max_workers", 1) if args else 1
         max_workers = min(max_workers, len(paths))
