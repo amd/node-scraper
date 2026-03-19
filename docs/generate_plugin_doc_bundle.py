@@ -439,17 +439,9 @@ def generate_plugin_table_rows(plugins: List[type]) -> List[List[str]]:
         an = get_attr(p, "ANALYZER", None)
         args = get_attr(p, "ANALYZER_ARGS", None)
         collector_args_cls = get_attr(p, "COLLECTOR_ARGS", None)
-        cmds = []
+        cmds: List[str] = []
         if inspect.isclass(col):
-            cmds += extract_cmds_from_classvars(col)
-            seen = set()
-            uniq = []
-            for c in cmds:
-                key = " ".join(c.split())
-                if key not in seen:
-                    seen.add(key)
-                    uniq.append(c)
-            cmds = uniq
+            cmds = extract_cmds_from_classvars(col)
 
         # Extract regexes and args from analyzer
         regex_and_args = []
@@ -505,16 +497,8 @@ def render_collector_section(col: type, link_base: str, rel_root: Optional[str])
     dm = get_attr(col, "DATA_MODEL", None)
     s += md_header("Provides Data", 3) + (f"{dm.__name__}\n\n" if inspect.isclass(dm) else "-\n\n")
 
-    cmds = []
-    cmds += extract_cmds_from_classvars(col)
+    cmds = extract_cmds_from_classvars(col)
     if cmds:
-        seen, uniq = set(), []
-        for c in cmds:
-            key = " ".join(c.split())
-            if key not in seen:
-                seen.add(key)
-                uniq.append(c)
-        cmds = uniq
         s += md_header("Commands", 3) + md_list(cmds)
 
     return s
