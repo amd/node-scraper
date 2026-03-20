@@ -32,7 +32,7 @@ import sys
 def test_help_command():
     """Test that node-scraper -h displays help information."""
     result = subprocess.run(
-        [sys.executable, "-m", "nodescraper.cli.cli", "-h"],
+        [sys.executable, "-m", "nodescraper.cli.main", "-h"],
         capture_output=True,
         text=True,
     )
@@ -46,7 +46,7 @@ def test_help_command():
 def test_help_command_long_form():
     """Test that node-scraper --help displays help information."""
     result = subprocess.run(
-        [sys.executable, "-m", "nodescraper.cli.cli", "--help"],
+        [sys.executable, "-m", "nodescraper.cli.main", "--help"],
         capture_output=True,
         text=True,
     )
@@ -59,7 +59,7 @@ def test_help_command_long_form():
 def test_help_shows_subcommands():
     """Test that help output includes available subcommands."""
     result = subprocess.run(
-        [sys.executable, "-m", "nodescraper.cli.cli", "-h"],
+        [sys.executable, "-m", "nodescraper.cli.main", "-h"],
         capture_output=True,
         text=True,
     )

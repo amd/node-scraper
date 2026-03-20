@@ -28,8 +28,23 @@
 import subprocess
 import sys
 from typing import List
+from unittest.mock import MagicMock
 
 import pytest
+
+from nodescraper.models.systeminfo import OSFamily, SystemInfo
+
+
+@pytest.fixture
+def system_info():
+    """Minimal SystemInfo for collectors that require it (same shape as test/unit/conftest)."""
+    return SystemInfo(name="test_host", platform="X", os_family=OSFamily.LINUX, sku="GOOD")
+
+
+@pytest.fixture
+def redfish_conn_mock():
+    """MagicMock Redfish connection for Redfish plugin tests."""
+    return MagicMock()
 
 
 @pytest.fixture
@@ -46,7 +61,7 @@ def run_cli_command():
         Returns:
             subprocess.CompletedProcess instance
         """
-        cmd = [sys.executable, "-m", "nodescraper.cli.cli"] + args
+        cmd = [sys.executable, "-m", "nodescraper.cli.main"] + args
         return subprocess.run(
             cmd,
             capture_output=True,

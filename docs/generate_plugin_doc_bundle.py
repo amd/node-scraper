@@ -596,7 +596,7 @@ def update_readme_help(readme_path: Path) -> bool:
     The block must be wrapped with <!-- node-scraper -h start --> and <!-- node-scraper -h end -->.
     """
     result = subprocess.run(
-        [sys.executable, "-m", "nodescraper.cli.cli", "-h"],
+        [sys.executable, "-m", "nodescraper.cli.main", "-h"],
         capture_output=True,
         text=True,
         cwd=readme_path.parent,

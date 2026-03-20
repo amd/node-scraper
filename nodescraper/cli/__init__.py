@@ -24,6 +24,12 @@
 #
 ###############################################################################
 
-from .cli import main as cli_entry
+from .common_args import (
+    add_nodescraper_core_arguments,
+    build_nodescraper_core_parent_parser,
+)
 
-__all__ = ["cli_entry"]
+__all__ = [
+    "add_nodescraper_core_arguments",
+    "build_nodescraper_core_parent_parser",
+]

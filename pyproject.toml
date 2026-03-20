@@ -48,7 +48,7 @@ include = ['nodescraper']
 include-package-data = true
 
 [project.scripts]
-node-scraper = "nodescraper.cli:cli_entry"
+node-scraper = "nodescraper.cli.main:main"
 
 [tool.black]
 line-length = 100
