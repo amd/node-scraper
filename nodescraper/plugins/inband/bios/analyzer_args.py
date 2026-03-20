@@ -32,8 +32,14 @@ from nodescraper.plugins.inband.os.osdata import OsDataModel
 
 
 class BiosAnalyzerArgs(AnalyzerArgs):
-    exp_bios_version: list[str] = Field(default_factory=list)
-    regex_match: bool = False
+    exp_bios_version: list[str] = Field(
+        default_factory=list,
+        description="Expected BIOS version(s) to match against collected value (str or list).",
+    )
+    regex_match: bool = Field(
+        default=False,
+        description="If True, match exp_bios_version as regex; otherwise exact match.",
+    )
 
     @field_validator("exp_bios_version", mode="before")
     @classmethod

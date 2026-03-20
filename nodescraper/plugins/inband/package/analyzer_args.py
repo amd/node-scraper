@@ -32,11 +32,22 @@ from nodescraper.plugins.inband.package.packagedata import PackageDataModel
 
 
 class PackageAnalyzerArgs(AnalyzerArgs):
-    exp_package_ver: Dict[str, Optional[str]] = Field(default_factory=dict)
-    regex_match: bool = False
-    # rocm_regex is optional and should be specified in plugin_config.json if needed
-    rocm_regex: Optional[str] = None
-    enable_rocm_regex: bool = False
+    exp_package_ver: Dict[str, Optional[str]] = Field(
+        default_factory=dict,
+        description="Map package name -> expected version (None = any version). Checked against installed packages.",
+    )
+    regex_match: bool = Field(
+        default=False,
+        description="If True, match package versions with regex; otherwise exact or prefix match.",
+    )
+    rocm_regex: Optional[str] = Field(
+        default=None,
+        description="Optional regex to identify ROCm package version (used when enable_rocm_regex is True).",
+    )
+    enable_rocm_regex: bool = Field(
+        default=False,
+        description="If True, use rocm_regex (or default pattern) to extract ROCm version for checks.",
+    )
 
     @classmethod
     def build_from_model(cls, datamodel: PackageDataModel) -> "PackageAnalyzerArgs":

@@ -25,12 +25,23 @@
 ###############################################################################
 from typing import List, Optional
 
+from pydantic import Field
+
 from nodescraper.models import CollectorArgs
 
 
 class NicCollectorArgs(CollectorArgs):
-    """ """
+    """Collector arguments for NicPlugin (niccli/nicctl)."""
 
-    commands: Optional[List[str]] = None
-    use_sudo_niccli: bool = True
-    use_sudo_nicctl: bool = True
+    commands: Optional[List[str]] = Field(
+        default=None,
+        description="Optional list of niccli/nicctl commands to run. When None, default command set is used.",
+    )
+    use_sudo_niccli: bool = Field(
+        default=True,
+        description="If True, run niccli commands with sudo when required.",
+    )
+    use_sudo_nicctl: bool = Field(
+        default=True,
+        description="If True, run nicctl commands with sudo when required.",
+    )

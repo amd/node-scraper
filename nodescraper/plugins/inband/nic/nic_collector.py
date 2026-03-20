@@ -67,105 +67,8 @@ from .nic_data import (
     command_to_canonical_key,
 )
 
-# Default commands: niccli (Broadcom) and nicctl (Pensando). Use {device_num} and {card_id} placeholders.
-NICCLI_VERSION_CMD = "niccli --version"
-NICCLI_VERSION_LEGACY_MAX = 233  # Commands below use -dev/-getoption/getqos; for version > this use --dev/--getoption/qos --ets --show
-NICCLI_LIST_CMD = "niccli --list"
-NICCLI_LIST_DEVICES_CMD = "niccli --list_devices"  # new (> v233)
-NICCLI_LIST_DEVICES_CMD_LEGACY = "niccli --listdev"  # legacy (<= v233)
-NICCLI_DISCOVERY_CMDS_LEGACY = [
-    NICCLI_LIST_DEVICES_CMD_LEGACY,
-    NICCLI_LIST_CMD,
-]
-NICCLI_DISCOVERY_CMDS_NEW = [
-    NICCLI_LIST_DEVICES_CMD,
-    NICCLI_LIST_CMD,
-]
-# All discovery command variants (for canonical key); default list for backward compat = legacy
-NICCLI_DISCOVERY_CMDS = NICCLI_DISCOVERY_CMDS_LEGACY
-NICCLI_DISCOVERY_CMDS_ALL = frozenset(
-    [NICCLI_LIST_DEVICES_CMD_LEGACY, NICCLI_LIST_DEVICES_CMD, NICCLI_LIST_CMD]
-)
-# Legacy (<= v233): single-dash options and getqos
-NICCLI_SUPPORT_RDMA_CMD_TEMPLATE_LEGACY = (
-    "niccli -dev {device_num} nvm -getoption support_rdma -scope 0"
-)
-NICCLI_PERFORMANCE_PROFILE_CMD_TEMPLATE_LEGACY = (
-    "niccli -dev {device_num} nvm -getoption performance_profile"
-)
-NICCLI_PCIE_RELAXED_ORDERING_CMD_TEMPLATE_LEGACY = (
-    "niccli -dev {device_num} nvm -getoption pcie_relaxed_ordering"
-)
-NICCLI_QOS_CMD_TEMPLATE_LEGACY = "niccli -dev {device_num} getqos"
-NICCLI_PER_DEVICE_TEMPLATES_LEGACY = [
-    NICCLI_SUPPORT_RDMA_CMD_TEMPLATE_LEGACY,
-    NICCLI_PERFORMANCE_PROFILE_CMD_TEMPLATE_LEGACY,
-    NICCLI_PCIE_RELAXED_ORDERING_CMD_TEMPLATE_LEGACY,
-    NICCLI_QOS_CMD_TEMPLATE_LEGACY,
-]
-# New (> v233): double-dash options and qos --ets --show
-NICCLI_SUPPORT_RDMA_CMD_TEMPLATE_NEW = "niccli --dev {device_num} nvm --getoption support_rdma"
-NICCLI_PERFORMANCE_PROFILE_CMD_TEMPLATE_NEW = (
-    "niccli --dev {device_num} nvm --getoption performance_profile"
-)
-NICCLI_PCIE_RELAXED_ORDERING_CMD_TEMPLATE_NEW = (
-    "niccli --dev {device_num} nvm --getoption pcie_relaxed_ordering"
-)
-NICCLI_QOS_CMD_TEMPLATE_NEW = "niccli --dev {device_num} qos --ets --show"
-NICCLI_PER_DEVICE_TEMPLATES_NEW = [
-    NICCLI_SUPPORT_RDMA_CMD_TEMPLATE_NEW,
-    NICCLI_PERFORMANCE_PROFILE_CMD_TEMPLATE_NEW,
-    NICCLI_PCIE_RELAXED_ORDERING_CMD_TEMPLATE_NEW,
-    NICCLI_QOS_CMD_TEMPLATE_NEW,
-]
-# Backward compatibility: default to legacy templates (used by _default_commands and any code that imports these)
-NICCLI_SUPPORT_RDMA_CMD_TEMPLATE = NICCLI_SUPPORT_RDMA_CMD_TEMPLATE_LEGACY
-NICCLI_PERFORMANCE_PROFILE_CMD_TEMPLATE = NICCLI_PERFORMANCE_PROFILE_CMD_TEMPLATE_LEGACY
-NICCLI_PCIE_RELAXED_ORDERING_CMD_TEMPLATE = NICCLI_PCIE_RELAXED_ORDERING_CMD_TEMPLATE_LEGACY
-NICCLI_PER_DEVICE_TEMPLATES = NICCLI_PER_DEVICE_TEMPLATES_LEGACY
-# Text-format command for card discovery and pensando_nic_cards (no --json).
-NICCTL_CARD_TEXT_CMD = "nicctl show card"
-NICCTL_GLOBAL_COMMANDS = [
-    "nicctl --version",
-    "nicctl show card flash partition --json",
-    "nicctl show card interrupts --json",
-    "nicctl show card logs --non-persistent",
-    "nicctl show card logs --boot-fault",
-    "nicctl show card logs --persistent",
-    "nicctl show card profile --json",
-    "nicctl show card time --json",
-    "nicctl show card statistics packet-buffer summary --json",
-    "nicctl show lif statistics --json",
-    "nicctl show lif internal queue-to-ud-pinning",
-    "nicctl show pipeline internal anomalies",
-    "nicctl show pipeline internal rsq-ring",
-    "nicctl show pipeline internal statistics memory",
-    "nicctl show port fsm",
-    "nicctl show port transceiver --json",
-    "nicctl show port statistics --json",
-    "nicctl show port internal mac",
-    "nicctl show qos headroom --json",
-    "nicctl show rdma queue --json",
-    "nicctl show rdma queue-pair --detail --json",
-    "nicctl show version firmware",
-]
-NICCTL_PER_CARD_TEMPLATES = [
-    "nicctl show dcqcn --card {card_id} --json",
-    "nicctl show card hardware-config --card {card_id}",
-]
-
-# Legacy text-format commands for Pensando (no --json); parsed by _parse_nicctl_* into pensando_nic_*.
-NICCTL_LEGACY_TEXT_COMMANDS = [
-    "nicctl show card",
-    "nicctl show dcqcn",
-    "nicctl show environment",
-    "nicctl show lif",
-    "nicctl show pcie ats",
-    "nicctl show port",
-    "nicctl show qos",
-    "nicctl show rdma statistics",
-    "nicctl show version host-software",
-]
+# niccli version threshold: legacy (<=233) vs new (>233) command syntax.
+NICCLI_VERSION_LEGACY_MAX = 233  # Commands use -dev/-getoption/getqos; for version > this use --dev/--getoption/qos --ets --show
 
 # Max lengths for fields included in the serialized datamodel (keeps nicclidatamodel.json small).
 MAX_COMMAND_LENGTH_IN_DATAMODEL = 256
@@ -186,64 +89,6 @@ def _parse_niccli_version(stdout: str) -> Optional[int]:
             if g is not None:
                 return int(g)
     return None
-
-
-def _get_niccli_per_device_templates(version: Optional[int]) -> List[str]:
-    """Return the per-device command templates for the given niccli version.
-    For version > NICCLI_VERSION_LEGACY_MAX (233) use new syntax (--dev, --getoption, qos --ets --show).
-    Otherwise use legacy syntax (-dev, -getoption, getqos). If version is None, default to legacy.
-    """
-    if version is not None and version > NICCLI_VERSION_LEGACY_MAX:
-        return NICCLI_PER_DEVICE_TEMPLATES_NEW.copy()
-    return NICCLI_PER_DEVICE_TEMPLATES_LEGACY.copy()
-
-
-def _get_niccli_discovery_commands(version: Optional[int]) -> List[str]:
-    """Return the discovery commands for the given niccli version.
-    Legacy (<= v233) uses --listdev; new (> v233) uses --list_devices. If version is None, default to legacy.
-    """
-    if version is not None and version > NICCLI_VERSION_LEGACY_MAX:
-        return NICCLI_DISCOVERY_CMDS_NEW.copy()
-    return NICCLI_DISCOVERY_CMDS_LEGACY.copy()
-
-
-# Commands whose output is very long; store only as file artifacts, not in data model.
-def _is_artifact_only_command(cmd: str) -> bool:
-    c = cmd.strip()
-    if c.startswith("nicctl show card logs "):
-        return True
-    if "nicctl show card hardware-config --card " in c:
-        return True
-    if c == "nicctl show port fsm":
-        return True
-    if c.startswith("nicctl show pipeline internal "):
-        return True
-    if c == "nicctl show rdma queue-pair --detail --json":
-        return True
-    if c == "nicctl show lif internal queue-to-ud-pinning":
-        return True
-    if c == "nicctl show port internal mac":
-        return True
-    return False
-
-
-def _merged_canonical_key(cmd: str) -> str:
-    """Return a single canonical key for commands that collect the same data."""
-    if cmd in NICCLI_DISCOVERY_CMDS_ALL:
-        return "niccli_discovery"
-    return command_to_canonical_key(cmd)
-
-
-def _default_commands() -> List[str]:
-    """Return the default flat list of command templates (with placeholders)."""
-    out: List[str] = [NICCLI_LIST_CMD]
-    for t in NICCLI_PER_DEVICE_TEMPLATES:
-        out.append(t)
-    for c in NICCTL_GLOBAL_COMMANDS:
-        out.append(c)
-    for t in NICCTL_PER_CARD_TEMPLATES:
-        out.append(t)
-    return out
 
 
 def _parse_niccli_qos_app_entries(stdout: str) -> List[NicCliQosAppEntry]:
@@ -472,6 +317,106 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
 
     DATA_MODEL = NicDataModel
 
+    # Default commands: niccli (Broadcom) and nicctl (Pensando). Use {device_num} and {card_id} placeholders.
+    # Names use CMD_* so docs/generate_plugin_doc_bundle.py can list them (dir(NicCollector) CMD*).
+    CMD_NICCLI_VERSION = "niccli --version"
+    CMD_NICCLI_LIST = "niccli --list"
+    CMD_NICCLI_LIST_DEVICES = "niccli --list_devices"  # new (> v233)
+    CMD_NICCLI_LIST_DEVICES_LEGACY = "niccli --listdev"  # legacy (<= v233)
+    CMD_NICCLI_DISCOVERY_LEGACY = [
+        CMD_NICCLI_LIST_DEVICES_LEGACY,
+        CMD_NICCLI_LIST,
+    ]
+    CMD_NICCLI_DISCOVERY_NEW = [
+        CMD_NICCLI_LIST_DEVICES,
+        CMD_NICCLI_LIST,
+    ]
+    # All discovery command variants (for canonical key); default list for backward compat = legacy
+    CMD_NICCLI_DISCOVERY = CMD_NICCLI_DISCOVERY_LEGACY
+    CMD_NICCLI_DISCOVERY_ALL = frozenset(
+        [CMD_NICCLI_LIST_DEVICES_LEGACY, CMD_NICCLI_LIST_DEVICES, CMD_NICCLI_LIST]
+    )
+    # Legacy (<= v233): single-dash options and getqos
+    CMD_NICCLI_SUPPORT_RDMA_TEMPLATE_LEGACY = (
+        "niccli -dev {device_num} nvm -getoption support_rdma -scope 0"
+    )
+    CMD_NICCLI_PERFORMANCE_PROFILE_TEMPLATE_LEGACY = (
+        "niccli -dev {device_num} nvm -getoption performance_profile"
+    )
+    CMD_NICCLI_PCIE_RELAXED_ORDERING_TEMPLATE_LEGACY = (
+        "niccli -dev {device_num} nvm -getoption pcie_relaxed_ordering"
+    )
+    CMD_NICCLI_QOS_TEMPLATE_LEGACY = "niccli -dev {device_num} getqos"
+    CMD_NICCLI_PER_DEVICE_LEGACY = [
+        CMD_NICCLI_SUPPORT_RDMA_TEMPLATE_LEGACY,
+        CMD_NICCLI_PERFORMANCE_PROFILE_TEMPLATE_LEGACY,
+        CMD_NICCLI_PCIE_RELAXED_ORDERING_TEMPLATE_LEGACY,
+        CMD_NICCLI_QOS_TEMPLATE_LEGACY,
+    ]
+    # New (> v233): double-dash options and qos --ets --show
+    CMD_NICCLI_SUPPORT_RDMA_TEMPLATE_NEW = "niccli --dev {device_num} nvm --getoption support_rdma"
+    CMD_NICCLI_PERFORMANCE_PROFILE_TEMPLATE_NEW = (
+        "niccli --dev {device_num} nvm --getoption performance_profile"
+    )
+    CMD_NICCLI_PCIE_RELAXED_ORDERING_TEMPLATE_NEW = (
+        "niccli --dev {device_num} nvm --getoption pcie_relaxed_ordering"
+    )
+    CMD_NICCLI_QOS_TEMPLATE_NEW = "niccli --dev {device_num} qos --ets --show"
+    CMD_NICCLI_PER_DEVICE_NEW = [
+        CMD_NICCLI_SUPPORT_RDMA_TEMPLATE_NEW,
+        CMD_NICCLI_PERFORMANCE_PROFILE_TEMPLATE_NEW,
+        CMD_NICCLI_PCIE_RELAXED_ORDERING_TEMPLATE_NEW,
+        CMD_NICCLI_QOS_TEMPLATE_NEW,
+    ]
+    # Backward compatibility: default to legacy templates
+    CMD_NICCLI_SUPPORT_RDMA_TEMPLATE = CMD_NICCLI_SUPPORT_RDMA_TEMPLATE_LEGACY
+    CMD_NICCLI_PERFORMANCE_PROFILE_TEMPLATE = CMD_NICCLI_PERFORMANCE_PROFILE_TEMPLATE_LEGACY
+    CMD_NICCLI_PCIE_RELAXED_ORDERING_TEMPLATE = CMD_NICCLI_PCIE_RELAXED_ORDERING_TEMPLATE_LEGACY
+    CMD_NICCLI_PER_DEVICE = CMD_NICCLI_PER_DEVICE_LEGACY
+    # Text-format command for card discovery and pensando_nic_cards (no --json).
+    CMD_NICCTL_CARD_TEXT = "nicctl show card"
+    CMD_NICCTL_GLOBAL = [
+        "nicctl --version",
+        "nicctl show card flash partition --json",
+        "nicctl show card interrupts --json",
+        "nicctl show card logs --non-persistent",
+        "nicctl show card logs --boot-fault",
+        "nicctl show card logs --persistent",
+        "nicctl show card profile --json",
+        "nicctl show card time --json",
+        "nicctl show card statistics packet-buffer summary --json",
+        "nicctl show lif statistics --json",
+        "nicctl show lif internal queue-to-ud-pinning",
+        "nicctl show pipeline internal anomalies",
+        "nicctl show pipeline internal rsq-ring",
+        "nicctl show pipeline internal statistics memory",
+        "nicctl show port fsm",
+        "nicctl show port transceiver --json",
+        "nicctl show port statistics --json",
+        "nicctl show port internal mac",
+        "nicctl show qos headroom --json",
+        "nicctl show rdma queue --json",
+        "nicctl show rdma queue-pair --detail --json",
+        "nicctl show version firmware",
+    ]
+    CMD_NICCTL_PER_CARD = [
+        "nicctl show dcqcn --card {card_id} --json",
+        "nicctl show card hardware-config --card {card_id}",
+    ]
+
+    # Legacy text-format commands for Pensando (no --json); parsed by _parse_nicctl_* into pensando_nic_*.
+    CMD_NICCTL_LEGACY_TEXT = [
+        "nicctl show card",
+        "nicctl show dcqcn",
+        "nicctl show environment",
+        "nicctl show lif",
+        "nicctl show pcie ats",
+        "nicctl show port",
+        "nicctl show qos",
+        "nicctl show rdma statistics",
+        "nicctl show version host-software",
+    ]
+
     def collect_data(
         self,
         args: Optional[NicCollectorArgs] = None,
@@ -485,11 +430,11 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
 
         # Detect niccli version to choose command set (legacy <= v233 vs new > v233)
         niccli_version: Optional[int] = None
-        res_version = self._run_sut_cmd(NICCLI_VERSION_CMD, sudo=use_sudo_niccli)
+        res_version = self._run_sut_cmd(NicCollector.CMD_NICCLI_VERSION, sudo=use_sudo_niccli)
         if res_version.exit_code == 0 and res_version.stdout:
             niccli_version = _parse_niccli_version(res_version.stdout)
-        results[NICCLI_VERSION_CMD] = NicCommandResult(
-            command=NICCLI_VERSION_CMD,
+        results[NicCollector.CMD_NICCLI_VERSION] = NicCommandResult(
+            command=NicCollector.CMD_NICCLI_VERSION,
             stdout=res_version.stdout or "",
             stderr=res_version.stderr or "",
             exit_code=res_version.exit_code,
@@ -514,9 +459,9 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
         # Discovery: card IDs from nicctl show card (text); same output used for pensando_nic_cards
         card_ids: List[str] = []
         card_list_from_text: List[Dict[str, Any]] = []
-        res_card = self._run_sut_cmd(NICCTL_CARD_TEXT_CMD, sudo=use_sudo_nicctl)
-        results[NICCTL_CARD_TEXT_CMD] = NicCommandResult(
-            command=NICCTL_CARD_TEXT_CMD,
+        res_card = self._run_sut_cmd(NicCollector.CMD_NICCTL_CARD_TEXT, sudo=use_sudo_nicctl)
+        results[NicCollector.CMD_NICCTL_CARD_TEXT] = NicCommandResult(
+            command=NicCollector.CMD_NICCTL_CARD_TEXT,
             stdout=res_card.stdout or "",
             stderr=res_card.stderr or "",
             exit_code=res_card.exit_code,
@@ -545,13 +490,13 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
             for tpl in per_device_templates:
                 for d in device_nums:
                     commands_to_run.append(tpl.format(device_num=d))
-            # nicctl global (card discovery already done via NICCTL_CARD_TEXT_CMD)
-            for c in NICCTL_GLOBAL_COMMANDS:
+            # nicctl global (card discovery already done via CMD_NICCTL_CARD_TEXT)
+            for c in NicCollector.CMD_NICCTL_GLOBAL:
                 commands_to_run.append(c)
-            for tpl in NICCTL_PER_CARD_TEMPLATES:
+            for tpl in NicCollector.CMD_NICCTL_PER_CARD:
                 for cid in card_ids:
                     commands_to_run.append(tpl.format(card_id=cid))
-            for cmd in NICCTL_LEGACY_TEXT_COMMANDS:
+            for cmd in NicCollector.CMD_NICCTL_LEGACY_TEXT:
                 commands_to_run.append(cmd)
 
         # Run each command and store (artifact-only commands are not added to results / data model).
@@ -1310,3 +1255,61 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
                 )
             )
         return entries
+
+
+def _get_niccli_per_device_templates(version: Optional[int]) -> List[str]:
+    """Return the per-device command templates for the given niccli version.
+    For version > NICCLI_VERSION_LEGACY_MAX (233) use new syntax (--dev, --getoption, qos --ets --show).
+    Otherwise use legacy syntax (-dev, -getoption, getqos). If version is None, default to legacy.
+    """
+    if version is not None and version > NICCLI_VERSION_LEGACY_MAX:
+        return NicCollector.CMD_NICCLI_PER_DEVICE_NEW.copy()
+    return NicCollector.CMD_NICCLI_PER_DEVICE_LEGACY.copy()
+
+
+def _get_niccli_discovery_commands(version: Optional[int]) -> List[str]:
+    """Return the discovery commands for the given niccli version.
+    Legacy (<= v233) uses --listdev; new (> v233) uses --list_devices. If version is None, default to legacy.
+    """
+    if version is not None and version > NICCLI_VERSION_LEGACY_MAX:
+        return NicCollector.CMD_NICCLI_DISCOVERY_NEW.copy()
+    return NicCollector.CMD_NICCLI_DISCOVERY_LEGACY.copy()
+
+
+# Commands whose output is very long; store only as file artifacts, not in data model.
+def _is_artifact_only_command(cmd: str) -> bool:
+    c = cmd.strip()
+    if c.startswith("nicctl show card logs "):
+        return True
+    if "nicctl show card hardware-config --card " in c:
+        return True
+    if c == "nicctl show port fsm":
+        return True
+    if c.startswith("nicctl show pipeline internal "):
+        return True
+    if c == "nicctl show rdma queue-pair --detail --json":
+        return True
+    if c == "nicctl show lif internal queue-to-ud-pinning":
+        return True
+    if c == "nicctl show port internal mac":
+        return True
+    return False
+
+
+def _merged_canonical_key(cmd: str) -> str:
+    """Return a single canonical key for commands that collect the same data."""
+    if cmd in NicCollector.CMD_NICCLI_DISCOVERY_ALL:
+        return "niccli_discovery"
+    return command_to_canonical_key(cmd)
+
+
+def _default_commands() -> List[str]:
+    """Return the default flat list of command templates (with placeholders)."""
+    out: List[str] = [NicCollector.CMD_NICCLI_LIST]
+    for t in NicCollector.CMD_NICCLI_PER_DEVICE:
+        out.append(t)
+    for c in NicCollector.CMD_NICCTL_GLOBAL:
+        out.append(c)
+    for t in NicCollector.CMD_NICCTL_PER_CARD:
+        out.append(t)
+    return out

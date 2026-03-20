@@ -25,13 +25,30 @@
 ###############################################################################
 from typing import Optional, Union
 
+from pydantic import Field
+
 from nodescraper.base.regexanalyzer import ErrorRegex
 from nodescraper.models import TimeRangeAnalysisArgs
 
 
 class DmesgAnalyzerArgs(TimeRangeAnalysisArgs):
-    check_unknown_dmesg_errors: Optional[bool] = True
-    exclude_category: Optional[set[str]] = None
-    interval_to_collapse_event: int = 60
-    num_timestamps: int = 3
-    error_regex: Optional[Union[list[ErrorRegex], list[dict]]] = None
+    check_unknown_dmesg_errors: Optional[bool] = Field(
+        default=True,
+        description="If True, treat unknown/unmatched dmesg error lines as failures.",
+    )
+    exclude_category: Optional[set[str]] = Field(
+        default=None,
+        description="Set of error categories to exclude from analysis.",
+    )
+    interval_to_collapse_event: int = Field(
+        default=60,
+        description="Seconds within which repeated events are collapsed into one (for rate limiting).",
+    )
+    num_timestamps: int = Field(
+        default=3,
+        description="Number of timestamps to include per event in output.",
+    )
+    error_regex: Optional[Union[list[ErrorRegex], list[dict]]] = Field(
+        default=None,
+        description="Custom error regex patterns; each item can be ErrorRegex or dict with category/pattern.",
+    )

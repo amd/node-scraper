@@ -85,7 +85,7 @@ positional arguments:
                         Fetch OEM diagnostic allowable types from Redfish
                         LogService (for oem_diagnostic_types_allowable)
 
-optional arguments:
+options:
   -h, --help            show this help message and exit
   --version             show program's version number and exit
   --sys-name STRING     System name (default: <current hostname>)

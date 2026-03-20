@@ -23,6 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
+from pydantic import Field
 
 from nodescraper.models import CollectorArgs
 
@@ -34,6 +35,15 @@ class DmesgCollectorArgs(CollectorArgs):
         CollectorArgs (CollectorArgs): specific dmesg collector args
     """
 
-    collect_rotated_logs: bool = False
-    skip_sudo: bool = False
-    log_dmesg_data: bool = True
+    collect_rotated_logs: bool = Field(
+        default=False,
+        description="If True, also collect rotated dmesg log files from /var/log/dmesg*.",
+    )
+    skip_sudo: bool = Field(
+        default=False,
+        description="If True, do not use sudo when running dmesg or listing log files.",
+    )
+    log_dmesg_data: bool = Field(
+        default=True,
+        description="If True, log the collected dmesg output in artifacts.",
+    )

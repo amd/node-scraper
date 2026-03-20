@@ -4,31 +4,31 @@
 
 | Plugin | Collection | Analyzer Args | Collection Args | DataModel | Collector | Analyzer |
 | --- | --- | --- | --- | --- | --- | --- |
-| AmdSmiPlugin | bad-pages<br>firmware --json<br>list --json<br>metric -g all<br>partition --json<br>process --json<br>ras --cper --folder={folder}<br>ras --afid --cper-file {cper_file}<br>static -g all --json<br>static -g {gpu_id} --json<br>topology<br>version --json<br>xgmi -l<br>xgmi -m | **Analyzer Args:**<br>- `check_static_data`: bool<br>- `expected_gpu_processes`: Optional[int]<br>- `expected_max_power`: Optional[int]<br>- `expected_driver_version`: Optional[str]<br>- `expected_memory_partition_mode`: Optional[str]<br>- `expected_compute_partition_mode`: Optional[str]<br>- `expected_pldm_version`: Optional[str]<br>- `l0_to_recovery_count_error_threshold`: Optional[int]<br>- `l0_to_recovery_count_warning_threshold`: Optional[int]<br>- `vendorid_ep`: Optional[str]<br>- `vendorid_ep_vf`: Optional[str]<br>- `devid_ep`: Optional[str]<br>- `devid_ep_vf`: Optional[str]<br>- `sku_name`: Optional[str]<br>- `expected_xgmi_speed`: Optional[list[float]]<br>- `analysis_range_start`: Optional[datetime.datetime]<br>- `analysis_range_end`: Optional[datetime.datetime] | **Collection Args:**<br>- `cper_file_path`: Optional[str] | [AmdSmiDataModel](#AmdSmiDataModel-Model) | [AmdSmiCollector](#Collector-Class-AmdSmiCollector) | [AmdSmiAnalyzer](#Data-Analyzer-Class-AmdSmiAnalyzer) |
-| BiosPlugin | sh -c 'cat /sys/devices/virtual/dmi/id/bios_version'<br>wmic bios get SMBIOSBIOSVersion /Value | **Analyzer Args:**<br>- `exp_bios_version`: list[str]<br>- `regex_match`: bool | - | [BiosDataModel](#BiosDataModel-Model) | [BiosCollector](#Collector-Class-BiosCollector) | [BiosAnalyzer](#Data-Analyzer-Class-BiosAnalyzer) |
-| CmdlinePlugin | cat /proc/cmdline | **Analyzer Args:**<br>- `required_cmdline`: Union[str, List]<br>- `banned_cmdline`: Union[str, List]<br>- `os_overrides`: Dict[str, nodescraper.plugins.inband.cmdline.cmdlineconfig.OverrideConfig]<br>- `platform_overrides`: Dict[str, nodescraper.plugins.inband.cmdline.cmdlineconfig.OverrideConfig] | - | [CmdlineDataModel](#CmdlineDataModel-Model) | [CmdlineCollector](#Collector-Class-CmdlineCollector) | [CmdlineAnalyzer](#Data-Analyzer-Class-CmdlineAnalyzer) |
-| DeviceEnumerationPlugin | powershell -Command "(Get-WmiObject -Class Win32_Processor \| Measure-Object).Count"<br>lspci -d {vendorid_ep}: \| grep -i 'VGA\\|Display\\|3D' \| wc -l<br>powershell -Command "(wmic path win32_VideoController get name \| findstr AMD \| Measure-Object).Count"<br>lscpu<br>lshw<br>lspci -d {vendorid_ep}: \| grep -i 'Virtual Function' \| wc -l<br>powershell -Command "(Get-VMHostPartitionableGpu \| Measure-Object).Count" | **Analyzer Args:**<br>- `cpu_count`: Optional[list[int]]<br>- `gpu_count`: Optional[list[int]]<br>- `vf_count`: Optional[list[int]] | - | [DeviceEnumerationDataModel](#DeviceEnumerationDataModel-Model) | [DeviceEnumerationCollector](#Collector-Class-DeviceEnumerationCollector) | [DeviceEnumerationAnalyzer](#Data-Analyzer-Class-DeviceEnumerationAnalyzer) |
-| DimmPlugin | sh -c 'dmidecode -t 17 \| tr -s " " \| grep -v "Volatile\\|None\\|Module" \| grep Size' 2>/dev/null<br>dmidecode<br>wmic memorychip get Capacity | - | **Collection Args:**<br>- `skip_sudo`: bool | [DimmDataModel](#DimmDataModel-Model) | [DimmCollector](#Collector-Class-DimmCollector) | - |
-| DkmsPlugin | dkms status<br>dkms --version | **Analyzer Args:**<br>- `dkms_status`: Union[str, list]<br>- `dkms_version`: Union[str, list]<br>- `regex_match`: bool | - | [DkmsDataModel](#DkmsDataModel-Model) | [DkmsCollector](#Collector-Class-DkmsCollector) | [DkmsAnalyzer](#Data-Analyzer-Class-DkmsAnalyzer) |
-| DmesgPlugin | dmesg --time-format iso -x<br>ls -1 /var/log/dmesg* 2>/dev/null \| grep -E '^/var/log/dmesg(\.[0-9]+(\.gz)?)?$' \|\| true | **Built-in Regexes:**<br>- Out of memory error: `(?:oom_kill_process.*)\|(?:Out of memory.*)`<br>- I/O Page Fault: `IO_PAGE_FAULT`<br>- Kernel Panic: `\bkernel panic\b.*`<br>- SQ Interrupt: `sq_intr`<br>- SRAM ECC: `sram_ecc.*`<br>- Failed to load driver. IP hardware init error.: `\[amdgpu\]\] \*ERROR\* hw_init of IP block.*`<br>- Failed to load driver. IP software init error.: `\[amdgpu\]\] \*ERROR\* sw_init of IP block.*`<br>- Real Time throttling activated: `sched: RT throttling activated.*`<br>- RCU preempt detected stalls: `rcu_preempt detected stalls.*`<br>- RCU preempt self-detected stall: `rcu_preempt self-detected stall.*`<br>- QCM fence timeout: `qcm fence wait loop timeout.*`<br>- General protection fault: `(?:[\w-]+(?:\[[0-9.]+\])?\s+)?general protectio...`<br>- Segmentation fault: `(?:segfault.*in .*\[)\|(?:[Ss]egmentation [Ff]au...`<br>- Failed to disallow cf state: `amdgpu: Failed to disallow cf state.*`<br>- Failed to terminate tmr: `\*ERROR\* Failed to terminate tmr.*`<br>- Suspend of IP block failed: `\*ERROR\* suspend of IP block <\w+> failed.*`<br>- amdgpu Page Fault: `(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:\s+\[\S...`<br>- Page Fault: `page fault for address.*`<br>- Fatal error during GPU init: `(?:amdgpu)(.*Fatal error during GPU init)\|(Fata...`<br>- PCIe AER Error Status: `(pcieport [\w:.]+: AER: aer_status:[^\n]*(?:\n[...`<br>- PCIe AER Correctable Error Status: `(.*aer_cor_status: 0x[0-9a-fA-F]+, aer_cor_mask...`<br>- PCIe AER Uncorrectable Error Status: `(.*aer_uncor_status: 0x[0-9a-fA-F]+, aer_uncor_...`<br>- PCIe AER Uncorrectable Error Severity with TLP Header: `(.*aer_uncor_severity: 0x[0-9a-fA-F]+.*)(\n.*TL...`<br>- Failed to read journal file: `Failed to read journal file.*`<br>- Journal file corrupted or uncleanly shut down: `journal corrupted or uncleanly shut down.*`<br>- ACPI BIOS Error: `ACPI BIOS Error`<br>- ACPI Error: `ACPI Error`<br>- Filesystem corrupted!: `EXT4-fs error \(device .*\):`<br>- Error in buffered IO, check filesystem integrity: `(Buffer I\/O error on dev)(?:ice)? (\w+)`<br>- PCIe card no longer present: `pcieport (\w+:\w+:\w+\.\w+):\s+(\w+):\s+(Slot\(...`<br>- PCIe Link Down: `pcieport (\w+:\w+:\w+\.\w+):\s+(\w+):\s+(Slot\(...`<br>- Mismatched clock configuration between PCIe device and host: `pcieport (\w+:\w+:\w+\.\w+):\s+(\w+):\s+(curren...`<br>- RAS Correctable Error: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- RAS Uncorrectable Error: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- RAS Deferred Error: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- RAS Corrected PCIe Error: `((?:\[Hardware Error\]:\s+)?event severity: cor...`<br>- GPU Reset: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- GPU reset failed: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- ACA Error: `(Accelerator Check Architecture[^\n]*)(?:\n[^\n...`<br>- ACA Error: `(Accelerator Check Architecture[^\n]*)(?:\n[^\n...`<br>- MCE Error: `\[Hardware Error\]:.+MC\d+_STATUS.*(?:\n.*){0,5}`<br>- Mode 2 Reset Failed: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)? (...`<br>- RAS Corrected Error: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- SGX Error: `x86/cpu: SGX disabled by BIOS`<br>- MMP Error: `Failed to load MMP firmware qat_4xxx_mmp.bin`<br>- GPU Throttled: `amdgpu \w{4}:\w{2}:\w{2}.\w: amdgpu: WARN: GPU ...`<br>- RAS Poison Consumed: `amdgpu[ 0-9a-fA-F:.]+:(?:\s*amdgpu:)?\s+(?:{\d+...`<br>- RAS Poison created: `amdgpu[ 0-9a-fA-F:.]+:(?:\s*amdgpu:)?\s+(?:{\d+...`<br>- Bad page threshold exceeded: `(amdgpu: Saved bad pages (\d+) reaches threshol...`<br>- RAS Hardware Error: `Hardware error from APEI Generic Hardware Error...`<br>- Error Address: `Error Address.*(?:\s.*)`<br>- RAS EDR Event: `EDR: EDR event received`<br>- DPC Event: `DPC: .*`<br>- LNet: ko2iblnd has no matching interfaces: `(?:\[[^\]]+\]\s*)?LNetError:.*ko2iblnd:\s*No ma...`<br>- LNet: Error starting up LNI: `(?:\[[^\]]+\]\s*)?LNetError:\s*.*Error\s*-?\d+\...`<br>- Lustre: network initialisation failed: `LustreError:.*ptlrpc_init_portals\(\).*network ...` | **Collection Args:**<br>- `collect_rotated_logs`: bool<br>- `skip_sudo`: bool<br>- `log_dmesg_data`: bool | [DmesgData](#DmesgData-Model) | [DmesgCollector](#Collector-Class-DmesgCollector) | [DmesgAnalyzer](#Data-Analyzer-Class-DmesgAnalyzer) |
-| FabricsPlugin | lspci \| grep -i cassini<br>lsmod \| grep cxi<br>cxi_stat<br>ibstat<br>ibv_devinfo<br>ls -l /sys/class/infiniband/*/device/net<br>fi_info -p cxi<br>mst start<br>mst status -v<br>ip link show<br>ofed_info -s | - | - | [FabricsDataModel](#FabricsDataModel-Model) | [FabricsCollector](#Collector-Class-FabricsCollector) | - |
-| JournalPlugin | journalctl --no-pager --system --output=short-iso<br>journalctl --no-pager --system --output=json | **Analyzer Args:**<br>- `check_priority`: Optional[int]<br>- `group`: bool | **Collection Args:**<br>- `boot`: Optional[int] | [JournalData](#JournalData-Model) | [JournalCollector](#Collector-Class-JournalCollector) | [JournalAnalyzer](#Data-Analyzer-Class-JournalAnalyzer) |
-| KernelPlugin | sh -c 'uname -a'<br>sh -c 'cat /proc/sys/kernel/numa_balancing'<br>wmic os get Version /Value | **Analyzer Args:**<br>- `exp_kernel`: Union[str, list]<br>- `exp_numa`: Optional[int]<br>- `regex_match`: bool | - | [KernelDataModel](#KernelDataModel-Model) | [KernelCollector](#Collector-Class-KernelCollector) | [KernelAnalyzer](#Data-Analyzer-Class-KernelAnalyzer) |
-| KernelModulePlugin | cat /proc/modules<br>modinfo amdgpu<br>wmic os get Version /Value | **Analyzer Args:**<br>- `kernel_modules`: dict[str, dict]<br>- `regex_filter`: list[str] | - | [KernelModuleDataModel](#KernelModuleDataModel-Model) | [KernelModuleCollector](#Collector-Class-KernelModuleCollector) | [KernelModuleAnalyzer](#Data-Analyzer-Class-KernelModuleAnalyzer) |
-| MemoryPlugin | free -b<br>lsmem<br>numactl -H<br>wmic OS get FreePhysicalMemory /Value; wmic ComputerSystem get TotalPhysicalMemory /Value | **Analyzer Args:**<br>- `ratio`: float<br>- `memory_threshold`: str | - | [MemoryDataModel](#MemoryDataModel-Model) | [MemoryCollector](#Collector-Class-MemoryCollector) | [MemoryAnalyzer](#Data-Analyzer-Class-MemoryAnalyzer) |
-| NetworkPlugin | ip addr show<br>curl<br>ethtool -S {interface}<br>ethtool {interface}<br>lldpcli show neighbor<br>lldpctl<br>ip neighbor show<br>ping<br>ip route show<br>ip rule show<br>wget | - | **Collection Args:**<br>- `url`: Optional[str]<br>- `netprobe`: Optional[Literal['ping', 'wget', 'curl']] | [NetworkDataModel](#NetworkDataModel-Model) | [NetworkCollector](#Collector-Class-NetworkCollector) | - |
-| NicPlugin | - | **Analyzer Args:**<br>- `expected_values`: Optional[Dict[str, Dict[str, Any]]]<br>- `performance_profile_expected`: str<br>- `support_rdma_disabled_values`: List[str]<br>- `pcie_relaxed_ordering_expected`: str<br>- `expected_qos_prio_map`: Optional[Dict[Any, Any]]<br>- `expected_qos_pfc_enabled`: Optional[int]<br>- `expected_qos_tsa_map`: Optional[Dict[Any, Any]]<br>- `expected_qos_tc_bandwidth`: Optional[List[int]]<br>- `require_qos_consistent_across_adapters`: bool<br>- `nicctl_log_error_regex`: Optional[List[Dict[str, Any]]] | **Collection Args:**<br>- `commands`: Optional[List[str]]<br>- `use_sudo_niccli`: bool<br>- `use_sudo_nicctl`: bool | [NicDataModel](#NicDataModel-Model) | [NicCollector](#Collector-Class-NicCollector) | [NicAnalyzer](#Data-Analyzer-Class-NicAnalyzer) |
+| AmdSmiPlugin | bad-pages<br>firmware --json<br>list --json<br>metric -g all<br>partition --json<br>process --json<br>ras --cper --folder={folder}<br>ras --afid --cper-file {cper_file}<br>static -g all --json<br>static -g {gpu_id} --json<br>topology<br>version --json<br>xgmi -l<br>xgmi -m | **Analyzer Args:**<br>- `check_static_data`: bool — If True, run static data checks (e.g. driver version, partition mode).<br>- `expected_gpu_processes`: Optional[int] — Expected number of GPU processes.<br>- `expected_max_power`: Optional[int] — Expected maximum power value (e.g. watts).<br>- `expected_driver_version`: Optional[str] — Expected AMD driver version string.<br>- `expected_memory_partition_mode`: Optional[str] — Expected memory partition mode (e.g. sp3, dp).<br>- `expected_compute_partition_mode`: Optional[str] — Expected compute partition mode.<br>- `expected_pldm_version`: Optional[str] — Expected PLDM version string.<br>- `l0_to_recovery_count_error_threshold`: Optional[int] — L0-to-recovery count above which an error is raised.<br>- `l0_to_recovery_count_warning_threshold`: Optional[int] — L0-to-recovery count above which a warning is raised.<br>- `vendorid_ep`: Optional[str] — Expected endpoint vendor ID (e.g. for PCIe).<br>- `vendorid_ep_vf`: Optional[str] — Expected endpoint VF vendor ID.<br>- `devid_ep`: Optional[str] — Expected endpoint device ID.<br>- `devid_ep_vf`: Optional[str] — Expected endpoint VF device ID.<br>- `sku_name`: Optional[str] — Expected SKU name string for GPU.<br>- `expected_xgmi_speed`: Optional[list[float]] — Expected xGMI speed value(s) (e.g. link rate).<br>- `analysis_range_start`: Optional[datetime.datetime] — Start of time range for time-windowed analysis.<br>- `analysis_range_end`: Optional[datetime.datetime] — End of time range for time-windowed analysis. | **Collection Args:**<br>- `cper_file_path`: Optional[str] — Path to CPER folder or file for RAS AFID collection (ras --afid --cper-file). | [AmdSmiDataModel](#AmdSmiDataModel-Model) | [AmdSmiCollector](#Collector-Class-AmdSmiCollector) | [AmdSmiAnalyzer](#Data-Analyzer-Class-AmdSmiAnalyzer) |
+| BiosPlugin | sh -c 'cat /sys/devices/virtual/dmi/id/bios_version'<br>wmic bios get SMBIOSBIOSVersion /Value | **Analyzer Args:**<br>- `exp_bios_version`: list[str] — Expected BIOS version(s) to match against collected value (str or list).<br>- `regex_match`: bool — If True, match exp_bios_version as regex; otherwise exact match. | - | [BiosDataModel](#BiosDataModel-Model) | [BiosCollector](#Collector-Class-BiosCollector) | [BiosAnalyzer](#Data-Analyzer-Class-BiosAnalyzer) |
+| CmdlinePlugin | cat /proc/cmdline | **Analyzer Args:**<br>- `required_cmdline`: Union[str, List] — Command-line parameters that must be present (e.g. 'pci=bfsort').<br>- `banned_cmdline`: Union[str, List] — Command-line parameters that must not be present.<br>- `os_overrides`: Dict[str, nodescraper.plugins.inband.cmdline.cmdlineconfig.OverrideConfig] — Per-OS overrides for required_cmdline and banned_cmdline (keyed by OS identifier).<br>- `platform_overrides`: Dict[str, nodescraper.plugins.inband.cmdline.cmdlineconfig.OverrideConfig] — Per-platform overrides for required_cmdline and banned_cmdline (keyed by platform). | - | [CmdlineDataModel](#CmdlineDataModel-Model) | [CmdlineCollector](#Collector-Class-CmdlineCollector) | [CmdlineAnalyzer](#Data-Analyzer-Class-CmdlineAnalyzer) |
+| DeviceEnumerationPlugin | powershell -Command "(Get-WmiObject -Class Win32_Processor &#124; Measure-Object).Count"<br>lspci -d {vendorid_ep}: &#124; grep -i 'VGA\&#124;Display\&#124;3D' &#124; wc -l<br>powershell -Command "(wmic path win32_VideoController get name &#124; findstr AMD &#124; Measure-Object).Count"<br>lscpu<br>lshw<br>lspci -d {vendorid_ep}: &#124; grep -i 'Virtual Function' &#124; wc -l<br>powershell -Command "(Get-VMHostPartitionableGpu &#124; Measure-Object).Count" | **Analyzer Args:**<br>- `cpu_count`: Optional[list[int]] — Expected CPU count(s); pass as int or list of ints. Analysis passes if actual is in list.<br>- `gpu_count`: Optional[list[int]] — Expected GPU count(s); pass as int or list of ints. Analysis passes if actual is in list.<br>- `vf_count`: Optional[list[int]] — Expected virtual function count(s); pass as int or list of ints. Analysis passes if actual is in list. | - | [DeviceEnumerationDataModel](#DeviceEnumerationDataModel-Model) | [DeviceEnumerationCollector](#Collector-Class-DeviceEnumerationCollector) | [DeviceEnumerationAnalyzer](#Data-Analyzer-Class-DeviceEnumerationAnalyzer) |
+| DimmPlugin | sh -c 'dmidecode -t 17 &#124; tr -s " " &#124; grep -v "Volatile\&#124;None\&#124;Module" &#124; grep Size' 2>/dev/null<br>dmidecode<br>wmic memorychip get Capacity | - | **Collection Args:**<br>- `skip_sudo`: bool — If True, do not use sudo when running dmidecode or wmic for memory info. | [DimmDataModel](#DimmDataModel-Model) | [DimmCollector](#Collector-Class-DimmCollector) | - |
+| DkmsPlugin | dkms status<br>dkms --version | **Analyzer Args:**<br>- `dkms_status`: Union[str, list] — Expected dkms status string(s) to match (e.g. 'amd/1.0.0'). At least one of dkms_status or dkms_version required.<br>- `dkms_version`: Union[str, list] — Expected dkms version string(s) to match. At least one of dkms_status or dkms_version required.<br>- `regex_match`: bool — If True, match dkms_status and dkms_version as regex; otherwise exact match. | - | [DkmsDataModel](#DkmsDataModel-Model) | [DkmsCollector](#Collector-Class-DkmsCollector) | [DkmsAnalyzer](#Data-Analyzer-Class-DkmsAnalyzer) |
+| DmesgPlugin | dmesg --time-format iso -x<br>ls -1 /var/log/dmesg* 2>/dev/null &#124; grep -E '^/var/log/dmesg(\.[0-9]+(\.gz)?)?$' &#124;&#124; true | **Built-in Regexes:**<br>- Out of memory error: `(?:oom_kill_process.*)&#124;(?:Out of memory.*)`<br>- I/O Page Fault: `IO_PAGE_FAULT`<br>- Kernel Panic: `\bkernel panic\b.*`<br>- SQ Interrupt: `sq_intr`<br>- SRAM ECC: `sram_ecc.*`<br>- Failed to load driver. IP hardware init error.: `\[amdgpu\]\] \*ERROR\* hw_init of IP block.*`<br>- Failed to load driver. IP software init error.: `\[amdgpu\]\] \*ERROR\* sw_init of IP block.*`<br>- Real Time throttling activated: `sched: RT throttling activated.*`<br>- RCU preempt detected stalls: `rcu_preempt detected stalls.*`<br>- RCU preempt self-detected stall: `rcu_preempt self-detected stall.*`<br>- QCM fence timeout: `qcm fence wait loop timeout.*`<br>- General protection fault: `(?:[\w-]+(?:\[[0-9.]+\])?\s+)?general protectio...`<br>- Segmentation fault: `(?:segfault.*in .*\[)&#124;(?:[Ss]egmentation [Ff]au...`<br>- Failed to disallow cf state: `amdgpu: Failed to disallow cf state.*`<br>- Failed to terminate tmr: `\*ERROR\* Failed to terminate tmr.*`<br>- Suspend of IP block failed: `\*ERROR\* suspend of IP block <\w+> failed.*`<br>- amdgpu Page Fault: `(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:\s+\[\S...`<br>- Page Fault: `page fault for address.*`<br>- Fatal error during GPU init: `(?:amdgpu)(.*Fatal error during GPU init)&#124;(Fata...`<br>- PCIe AER Error Status: `(pcieport [\w:.]+: AER: aer_status:[^\n]*(?:\n[...`<br>- PCIe AER Correctable Error Status: `(.*aer_cor_status: 0x[0-9a-fA-F]+, aer_cor_mask...`<br>- PCIe AER Uncorrectable Error Status: `(.*aer_uncor_status: 0x[0-9a-fA-F]+, aer_uncor_...`<br>- PCIe AER Uncorrectable Error Severity with TLP Header: `(.*aer_uncor_severity: 0x[0-9a-fA-F]+.*)(\n.*TL...`<br>- Failed to read journal file: `Failed to read journal file.*`<br>- Journal file corrupted or uncleanly shut down: `journal corrupted or uncleanly shut down.*`<br>- ACPI BIOS Error: `ACPI BIOS Error`<br>- ACPI Error: `ACPI Error`<br>- Filesystem corrupted!: `EXT4-fs error \(device .*\):`<br>- Error in buffered IO, check filesystem integrity: `(Buffer I\/O error on dev)(?:ice)? (\w+)`<br>- PCIe card no longer present: `pcieport (\w+:\w+:\w+\.\w+):\s+(\w+):\s+(Slot\(...`<br>- PCIe Link Down: `pcieport (\w+:\w+:\w+\.\w+):\s+(\w+):\s+(Slot\(...`<br>- Mismatched clock configuration between PCIe device and host: `pcieport (\w+:\w+:\w+\.\w+):\s+(\w+):\s+(curren...`<br>- RAS Correctable Error: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- RAS Uncorrectable Error: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- RAS Deferred Error: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- RAS Corrected PCIe Error: `((?:\[Hardware Error\]:\s+)?event severity: cor...`<br>- GPU Reset: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- GPU reset failed: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- ACA Error: `(Accelerator Check Architecture[^\n]*)(?:\n[^\n...`<br>- ACA Error: `(Accelerator Check Architecture[^\n]*)(?:\n[^\n...`<br>- MCE Error: `\[Hardware Error\]:.+MC\d+_STATUS.*(?:\n.*){0,5}`<br>- Mode 2 Reset Failed: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)? (...`<br>- RAS Corrected Error: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- SGX Error: `x86/cpu: SGX disabled by BIOS`<br>- MMP Error: `Failed to load MMP firmware qat_4xxx_mmp.bin`<br>- GPU Throttled: `amdgpu \w{4}:\w{2}:\w{2}.\w: amdgpu: WARN: GPU ...`<br>- RAS Poison Consumed: `amdgpu[ 0-9a-fA-F:.]+:(?:\s*amdgpu:)?\s+(?:{\d+...`<br>- RAS Poison created: `amdgpu[ 0-9a-fA-F:.]+:(?:\s*amdgpu:)?\s+(?:{\d+...`<br>- Bad page threshold exceeded: `(amdgpu: Saved bad pages (\d+) reaches threshol...`<br>- RAS Hardware Error: `Hardware error from APEI Generic Hardware Error...`<br>- Error Address: `Error Address.*(?:\s.*)`<br>- RAS EDR Event: `EDR: EDR event received`<br>- DPC Event: `DPC: .*`<br>- LNet: ko2iblnd has no matching interfaces: `(?:\[[^\]]+\]\s*)?LNetError:.*ko2iblnd:\s*No ma...`<br>- LNet: Error starting up LNI: `(?:\[[^\]]+\]\s*)?LNetError:\s*.*Error\s*-?\d+\...`<br>- Lustre: network initialisation failed: `LustreError:.*ptlrpc_init_portals\(\).*network ...` | **Collection Args:**<br>- `collect_rotated_logs`: bool — If True, also collect rotated dmesg log files from /var/log/dmesg*.<br>- `skip_sudo`: bool — If True, do not use sudo when running dmesg or listing log files.<br>- `log_dmesg_data`: bool — If True, log the collected dmesg output in artifacts. | [DmesgData](#DmesgData-Model) | [DmesgCollector](#Collector-Class-DmesgCollector) | [DmesgAnalyzer](#Data-Analyzer-Class-DmesgAnalyzer) |
+| FabricsPlugin | lspci &#124; grep -i cassini<br>lsmod &#124; grep cxi<br>cxi_stat<br>ibstat<br>ibv_devinfo<br>ls -l /sys/class/infiniband/*/device/net<br>fi_info -p cxi<br>mst start<br>mst status -v<br>ip link show<br>ofed_info -s | - | - | [FabricsDataModel](#FabricsDataModel-Model) | [FabricsCollector](#Collector-Class-FabricsCollector) | - |
+| JournalPlugin | journalctl --no-pager --system --output=short-iso<br>journalctl --no-pager --system --output=json | **Analyzer Args:**<br>- `analysis_range_start`: Optional[datetime.datetime] — Start of time range for analysis (ISO format). Only events on or after this time are analyzed.<br>- `analysis_range_end`: Optional[datetime.datetime] — End of time range for analysis (ISO format). Only events before this time are analyzed.<br>- `check_priority`: Optional[int] — Check against journal log priority (0=emergency..7=debug). If an entry has priority <= check_priority, an ERROR event...<br>- `group`: bool — If True, group entries that have the same priority and message. | **Collection Args:**<br>- `boot`: Optional[int] — Optional boot ID to limit journal collection to a specific boot. | [JournalData](#JournalData-Model) | [JournalCollector](#Collector-Class-JournalCollector) | [JournalAnalyzer](#Data-Analyzer-Class-JournalAnalyzer) |
+| KernelPlugin | sh -c 'uname -a'<br>sh -c 'cat /proc/sys/kernel/numa_balancing'<br>wmic os get Version /Value | **Analyzer Args:**<br>- `exp_kernel`: Union[str, list] — Expected kernel version string(s) to match (e.g. from uname -a).<br>- `exp_numa`: Optional[int] — Expected value for kernel.numa_balancing (e.g. 0 or 1).<br>- `regex_match`: bool — If True, match exp_kernel as regex; otherwise exact match. | - | [KernelDataModel](#KernelDataModel-Model) | [KernelCollector](#Collector-Class-KernelCollector) | [KernelAnalyzer](#Data-Analyzer-Class-KernelAnalyzer) |
+| KernelModulePlugin | cat /proc/modules<br>modinfo amdgpu<br>wmic os get Version /Value | **Analyzer Args:**<br>- `kernel_modules`: dict[str, dict] — Expected kernel module name -> {version, etc.}. Analyzer checks collected modules match.<br>- `regex_filter`: list[str] — List of regex patterns to filter which collected modules are checked (default: amd). | - | [KernelModuleDataModel](#KernelModuleDataModel-Model) | [KernelModuleCollector](#Collector-Class-KernelModuleCollector) | [KernelModuleAnalyzer](#Data-Analyzer-Class-KernelModuleAnalyzer) |
+| MemoryPlugin | free -b<br>lsmem<br>numactl -H<br>wmic OS get FreePhysicalMemory /Value; wmic ComputerSystem get TotalPhysicalMemory /Value | **Analyzer Args:**<br>- `ratio`: float — Required free-memory ratio (0-1). Analysis fails if free/total < ratio.<br>- `memory_threshold`: str — Minimum free memory required (e.g. '30Gi', '1T'). Used when ratio is not sufficient. | - | [MemoryDataModel](#MemoryDataModel-Model) | [MemoryCollector](#Collector-Class-MemoryCollector) | [MemoryAnalyzer](#Data-Analyzer-Class-MemoryAnalyzer) |
+| NetworkPlugin | ip addr show<br>curl<br>ethtool -S {interface}<br>ethtool {interface}<br>lldpcli show neighbor<br>lldpctl<br>ip neighbor show<br>ping<br>ip route show<br>ip rule show<br>wget | - | **Collection Args:**<br>- `url`: Optional[str] — Optional URL to probe for network connectivity (used with netprobe).<br>- `netprobe`: Optional[Literal['ping', 'wget', 'curl']] — Tool to use for network connectivity probe: ping, wget, or curl. | [NetworkDataModel](#NetworkDataModel-Model) | [NetworkCollector](#Collector-Class-NetworkCollector) | - |
+| NicPlugin | niccli --listdev<br>niccli --list<br>niccli --list_devices<br>niccli -dev {device_num} nvm -getoption pcie_relaxed_ordering<br>niccli --dev {device_num} nvm --getoption pcie_relaxed_ordering<br>niccli -dev {device_num} nvm -getoption performance_profile<br>niccli --dev {device_num} nvm --getoption performance_profile<br>niccli -dev {device_num} nvm -getoption support_rdma -scope 0<br>niccli -dev {device_num} getqos<br>niccli --dev {device_num} nvm --getoption support_rdma<br>niccli --dev {device_num} qos --ets --show<br>niccli --version<br>nicctl show card<br>nicctl --version<br>nicctl show card flash partition --json<br>nicctl show card interrupts --json<br>nicctl show card logs --non-persistent<br>nicctl show card logs --boot-fault<br>nicctl show card logs --persistent<br>nicctl show card profile --json<br>nicctl show card time --json<br>nicctl show card statistics packet-buffer summary --json<br>nicctl show lif statistics --json<br>nicctl show lif internal queue-to-ud-pinning<br>nicctl show pipeline internal anomalies<br>nicctl show pipeline internal rsq-ring<br>nicctl show pipeline internal statistics memory<br>nicctl show port fsm<br>nicctl show port transceiver --json<br>nicctl show port statistics --json<br>nicctl show port internal mac<br>nicctl show qos headroom --json<br>nicctl show rdma queue --json<br>nicctl show rdma queue-pair --detail --json<br>nicctl show version firmware<br>nicctl show dcqcn<br>nicctl show environment<br>nicctl show lif<br>nicctl show pcie ats<br>nicctl show port<br>nicctl show qos<br>nicctl show rdma statistics<br>nicctl show version host-software<br>nicctl show dcqcn --card {card_id} --json<br>nicctl show card hardware-config --card {card_id} | **Analyzer Args:**<br>- `expected_values`: Optional[Dict[str, Dict[str, Any]]] — Per-command expected checks keyed by canonical key (see command_to_canonical_key).<br>- `performance_profile_expected`: str — Expected Broadcom performance_profile value (case-insensitive). Default RoCE.<br>- `support_rdma_disabled_values`: List[str] — Values that indicate RDMA is not supported (case-insensitive).<br>- `pcie_relaxed_ordering_expected`: str — Expected Broadcom pcie_relaxed_ordering value (e.g. 'Relaxed ordering = enabled'); checked case-insensitively. Defaul...<br>- `expected_qos_prio_map`: Optional[Dict[Any, Any]] — Expected priority-to-TC map (e.g. {0: 0, 1: 1}; keys may be int or str in config). Checked per device when set.<br>- `expected_qos_pfc_enabled`: Optional[int] — Expected PFC enabled value (0/1 or bitmask). Checked per device when set.<br>- `expected_qos_tsa_map`: Optional[Dict[Any, Any]] — Expected TSA map for ETS (e.g. {0: 'ets', 1: 'strict'}; keys may be int or str in config). Checked per device when set.<br>- `expected_qos_tc_bandwidth`: Optional[List[int]] — Expected TC bandwidth percentages. Checked per device when set.<br>- `require_qos_consistent_across_adapters`: bool — When True and no expected_qos_* are set, require all adapters to have the same prio_map, pfc_enabled, and tsa_map.<br>- `nicctl_log_error_regex`: Optional[List[Dict[str, Any]]] — Optional list of error patterns for nicctl show card logs. | **Collection Args:**<br>- `commands`: Optional[List[str]] — Optional list of niccli/nicctl commands to run. When None, default command set is used.<br>- `use_sudo_niccli`: bool — If True, run niccli commands with sudo when required.<br>- `use_sudo_nicctl`: bool — If True, run nicctl commands with sudo when required. | [NicDataModel](#NicDataModel-Model) | [NicCollector](#Collector-Class-NicCollector) | [NicAnalyzer](#Data-Analyzer-Class-NicAnalyzer) |
 | NvmePlugin | nvme smart-log {dev}<br>nvme error-log {dev} --log-entries=256<br>nvme id-ctrl {dev}<br>nvme id-ns {dev}{ns}<br>nvme fw-log {dev}<br>nvme self-test-log {dev}<br>nvme get-log {dev} --log-id=6 --log-len=512<br>nvme telemetry-log {dev} --output-file={dev}_{f_name}<br>nvme list -o json | - | - | [NvmeDataModel](#NvmeDataModel-Model) | [NvmeCollector](#Collector-Class-NvmeCollector) | - |
-| OsPlugin | sh -c '( lsb_release -ds \|\| (cat /etc/*release \| grep PRETTY_NAME) \|\| uname -om ) 2>/dev/null \| head -n1'<br>cat /etc/*release \| grep VERSION_ID<br>wmic os get Version /value<br>wmic os get Caption /Value | **Analyzer Args:**<br>- `exp_os`: Union[str, list]<br>- `exact_match`: bool | - | [OsDataModel](#OsDataModel-Model) | [OsCollector](#Collector-Class-OsCollector) | [OsAnalyzer](#Data-Analyzer-Class-OsAnalyzer) |
-| PackagePlugin | dnf list --installed<br>dpkg-query -W<br>pacman -Q<br>cat /etc/*release<br>wmic product get name,version | **Analyzer Args:**<br>- `exp_package_ver`: Dict[str, Optional[str]]<br>- `regex_match`: bool<br>- `rocm_regex`: Optional[str]<br>- `enable_rocm_regex`: bool | - | [PackageDataModel](#PackageDataModel-Model) | [PackageCollector](#Collector-Class-PackageCollector) | [PackageAnalyzer](#Data-Analyzer-Class-PackageAnalyzer) |
-| PciePlugin | lspci -d {vendor_id}: -nn<br>lspci -x<br>lspci -xxxx<br>lspci -PP<br>lspci -PP -d {vendor_id}:{dev_id}<br>lspci -vvv<br>lspci -vvvt | **Analyzer Args:**<br>- `exp_speed`: int<br>- `exp_width`: int<br>- `exp_sriov_count`: int<br>- `exp_gpu_count_override`: Optional[int]<br>- `exp_max_payload_size`: Union[Dict[int, int], int, NoneType]<br>- `exp_max_rd_req_size`: Union[Dict[int, int], int, NoneType]<br>- `exp_ten_bit_tag_req_en`: Union[Dict[int, int], int, NoneType] | - | [PcieDataModel](#PcieDataModel-Model) | [PcieCollector](#Collector-Class-PcieCollector) | [PcieAnalyzer](#Data-Analyzer-Class-PcieAnalyzer) |
-| ProcessPlugin | top -b -n 1<br>rocm-smi --showpids<br>top -b -n 1 -o %CPU  | **Analyzer Args:**<br>- `max_kfd_processes`: int<br>- `max_cpu_usage`: float | **Collection Args:**<br>- `top_n_process`: int | [ProcessDataModel](#ProcessDataModel-Model) | [ProcessCollector](#Collector-Class-ProcessCollector) | [ProcessAnalyzer](#Data-Analyzer-Class-ProcessAnalyzer) |
+| OsPlugin | sh -c '( lsb_release -ds &#124;&#124; (cat /etc/*release &#124; grep PRETTY_NAME) &#124;&#124; uname -om ) 2>/dev/null &#124; head -n1'<br>cat /etc/*release &#124; grep VERSION_ID<br>wmic os get Version /value<br>wmic os get Caption /Value | **Analyzer Args:**<br>- `exp_os`: Union[str, list] — Expected OS name/version string(s) to match (e.g. from lsb_release or /etc/os-release).<br>- `exact_match`: bool — If True, require exact match for exp_os; otherwise substring match. | - | [OsDataModel](#OsDataModel-Model) | [OsCollector](#Collector-Class-OsCollector) | [OsAnalyzer](#Data-Analyzer-Class-OsAnalyzer) |
+| PackagePlugin | dnf list --installed<br>dpkg-query -W<br>pacman -Q<br>cat /etc/*release<br>wmic product get name,version | **Analyzer Args:**<br>- `exp_package_ver`: Dict[str, Optional[str]] — Map package name -> expected version (None = any version). Checked against installed packages.<br>- `regex_match`: bool — If True, match package versions with regex; otherwise exact or prefix match.<br>- `rocm_regex`: Optional[str] — Optional regex to identify ROCm package version (used when enable_rocm_regex is True).<br>- `enable_rocm_regex`: bool — If True, use rocm_regex (or default pattern) to extract ROCm version for checks. | - | [PackageDataModel](#PackageDataModel-Model) | [PackageCollector](#Collector-Class-PackageCollector) | [PackageAnalyzer](#Data-Analyzer-Class-PackageAnalyzer) |
+| PciePlugin | lspci -d {vendor_id}: -nn<br>lspci -x<br>lspci -xxxx<br>lspci -PP<br>lspci -PP -d {vendor_id}:{dev_id}<br>lspci -vvv<br>lspci -vvvt | **Analyzer Args:**<br>- `exp_speed`: int — Expected PCIe link speed (generation 1–5).<br>- `exp_width`: int — Expected PCIe link width in lanes (1–16).<br>- `exp_sriov_count`: int — Expected SR-IOV virtual function count.<br>- `exp_gpu_count_override`: Optional[int] — Override expected GPU count for validation.<br>- `exp_max_payload_size`: Union[Dict[int, int], int, NoneType] — Expected max payload size: int for all devices, or dict keyed by device ID.<br>- `exp_max_rd_req_size`: Union[Dict[int, int], int, NoneType] — Expected max read request size: int for all devices, or dict keyed by device ID.<br>- `exp_ten_bit_tag_req_en`: Union[Dict[int, int], int, NoneType] — Expected 10-bit tag request enable: int for all devices, or dict keyed by device ID. | - | [PcieDataModel](#PcieDataModel-Model) | [PcieCollector](#Collector-Class-PcieCollector) | [PcieAnalyzer](#Data-Analyzer-Class-PcieAnalyzer) |
+| ProcessPlugin | top -b -n 1<br>rocm-smi --showpids<br>top -b -n 1 -o %CPU  | **Analyzer Args:**<br>- `max_kfd_processes`: int — Maximum allowed number of KFD (Kernel Fusion Driver) processes; 0 disables the check.<br>- `max_cpu_usage`: float — Maximum allowed CPU usage (percent) for process checks. | **Collection Args:**<br>- `top_n_process`: int — Number of top processes by CPU usage to collect (e.g. for top -b -n 1 -o %CPU). | [ProcessDataModel](#ProcessDataModel-Model) | [ProcessCollector](#Collector-Class-ProcessCollector) | [ProcessAnalyzer](#Data-Analyzer-Class-ProcessAnalyzer) |
 | RdmaPlugin | rdma link -j<br>rdma dev<br>rdma link<br>rdma statistic -j | - | - | [RdmaDataModel](#RdmaDataModel-Model) | [RdmaCollector](#Collector-Class-RdmaCollector) | [RdmaAnalyzer](#Data-Analyzer-Class-RdmaAnalyzer) |
-| RocmPlugin | {rocm_path}/opencl/bin/*/clinfo<br>env \| grep -Ei 'rocm\|hsa\|hip\|mpi\|openmp\|ucx\|miopen'<br>ls /sys/class/kfd/kfd/proc/<br>grep -i -E 'rocm' /etc/ld.so.conf.d/*<br>{rocm_path}/bin/rocminfo<br>ls -v -d {rocm_path}*<br>ls -v -d {rocm_path}-[3-7]* \| tail -1<br>ldconfig -p \| grep -i -E 'rocm'<br>grep . -r {rocm_path}/.info/* | **Analyzer Args:**<br>- `exp_rocm`: Union[str, list]<br>- `exp_rocm_latest`: str<br>- `exp_rocm_sub_versions`: dict[str, Union[str, list]] | **Collection Args:**<br>- `rocm_path`: str | [RocmDataModel](#RocmDataModel-Model) | [RocmCollector](#Collector-Class-RocmCollector) | [RocmAnalyzer](#Data-Analyzer-Class-RocmAnalyzer) |
-| StoragePlugin | sh -c 'df -lH -B1 \| grep -v 'boot''<br>wmic LogicalDisk Where DriveType="3" Get DeviceId,Size,FreeSpace | - | **Collection Args:**<br>- `skip_sudo`: bool | [StorageDataModel](#StorageDataModel-Model) | [StorageCollector](#Collector-Class-StorageCollector) | [StorageAnalyzer](#Data-Analyzer-Class-StorageAnalyzer) |
-| SysSettingsPlugin | cat /sys/{}<br>ls -1 /sys/{}<br>ls -l /sys/{} | **Analyzer Args:**<br>- `checks`: Optional[list[nodescraper.plugins.inband.sys_settings.analyzer_args.SysfsCheck]] | **Collection Args:**<br>- `paths`: list[str]<br>- `directory_paths`: list[str] | [SysSettingsDataModel](#SysSettingsDataModel-Model) | [SysSettingsCollector](#Collector-Class-SysSettingsCollector) | [SysSettingsAnalyzer](#Data-Analyzer-Class-SysSettingsAnalyzer) |
-| SysctlPlugin | sysctl -n | **Analyzer Args:**<br>- `exp_vm_swappiness`: Optional[int]<br>- `exp_vm_numa_balancing`: Optional[int]<br>- `exp_vm_oom_kill_allocating_task`: Optional[int]<br>- `exp_vm_compaction_proactiveness`: Optional[int]<br>- `exp_vm_compact_unevictable_allowed`: Optional[int]<br>- `exp_vm_extfrag_threshold`: Optional[int]<br>- `exp_vm_zone_reclaim_mode`: Optional[int]<br>- `exp_vm_dirty_background_ratio`: Optional[int]<br>- `exp_vm_dirty_ratio`: Optional[int]<br>- `exp_vm_dirty_writeback_centisecs`: Optional[int]<br>- `exp_kernel_numa_balancing`: Optional[int] | - | [SysctlDataModel](#SysctlDataModel-Model) | [SysctlCollector](#Collector-Class-SysctlCollector) | [SysctlAnalyzer](#Data-Analyzer-Class-SysctlAnalyzer) |
-| SyslogPlugin | ls -1 /var/log/syslog* 2>/dev/null \| grep -E '^/var/log/syslog(\.[0-9]+(\.gz)?)?$' \|\| true | - | - | [SyslogData](#SyslogData-Model) | [SyslogCollector](#Collector-Class-SyslogCollector) | - |
+| RocmPlugin | {rocm_path}/opencl/bin/*/clinfo<br>env &#124; grep -Ei 'rocm&#124;hsa&#124;hip&#124;mpi&#124;openmp&#124;ucx&#124;miopen'<br>ls /sys/class/kfd/kfd/proc/<br>grep -i -E 'rocm' /etc/ld.so.conf.d/*<br>{rocm_path}/bin/rocminfo<br>ls -v -d {rocm_path}*<br>ls -v -d {rocm_path}-[3-7]* &#124; tail -1<br>ldconfig -p &#124; grep -i -E 'rocm'<br>grep . -r {rocm_path}/.info/* | **Analyzer Args:**<br>- `exp_rocm`: Union[str, list] — Expected ROCm version string(s) to match (e.g. from rocminfo).<br>- `exp_rocm_latest`: str — Expected 'latest' ROCm path or version string for versioned installs.<br>- `exp_rocm_sub_versions`: dict[str, Union[str, list]] — Map sub-version name (e.g. version_rocm) to expected string or list of allowed strings. | **Collection Args:**<br>- `rocm_path`: str — Base path to ROCm installation (e.g. /opt/rocm). Used for rocminfo, clinfo, and version discovery. | [RocmDataModel](#RocmDataModel-Model) | [RocmCollector](#Collector-Class-RocmCollector) | [RocmAnalyzer](#Data-Analyzer-Class-RocmAnalyzer) |
+| StoragePlugin | sh -c 'df -lH -B1 &#124; grep -v 'boot''<br>wmic LogicalDisk Where DriveType="3" Get DeviceId,Size,FreeSpace | - | **Collection Args:**<br>- `skip_sudo`: bool — If True, do not use sudo when running df and related storage commands. | [StorageDataModel](#StorageDataModel-Model) | [StorageCollector](#Collector-Class-StorageCollector) | [StorageAnalyzer](#Data-Analyzer-Class-StorageAnalyzer) |
+| SysSettingsPlugin | cat /sys/{}<br>ls -1 /sys/{}<br>ls -l /sys/{} | **Analyzer Args:**<br>- `checks`: Optional[list[nodescraper.plugins.inband.sys_settings.analyzer_args.SysfsCheck]] — List of sysfs checks (path, expected values or pattern, display name). | **Collection Args:**<br>- `paths`: list[str] — Sysfs paths to read (cat). Paths with '*' are collected with ls -l (e.g. class/net/*/device).<br>- `directory_paths`: list[str] — Sysfs paths to list (ls -1); used for checks that match entry names by regex. | [SysSettingsDataModel](#SysSettingsDataModel-Model) | [SysSettingsCollector](#Collector-Class-SysSettingsCollector) | [SysSettingsAnalyzer](#Data-Analyzer-Class-SysSettingsAnalyzer) |
+| SysctlPlugin | sysctl -n | **Analyzer Args:**<br>- `exp_vm_swappiness`: Optional[int] — Expected vm.swappiness value.<br>- `exp_vm_numa_balancing`: Optional[int] — Expected vm.numa_balancing value.<br>- `exp_vm_oom_kill_allocating_task`: Optional[int] — Expected vm.oom_kill_allocating_task value.<br>- `exp_vm_compaction_proactiveness`: Optional[int] — Expected vm.compaction_proactiveness value.<br>- `exp_vm_compact_unevictable_allowed`: Optional[int] — Expected vm.compact_unevictable_allowed value.<br>- `exp_vm_extfrag_threshold`: Optional[int] — Expected vm.extfrag_threshold value.<br>- `exp_vm_zone_reclaim_mode`: Optional[int] — Expected vm.zone_reclaim_mode value.<br>- `exp_vm_dirty_background_ratio`: Optional[int] — Expected vm.dirty_background_ratio value.<br>- `exp_vm_dirty_ratio`: Optional[int] — Expected vm.dirty_ratio value.<br>- `exp_vm_dirty_writeback_centisecs`: Optional[int] — Expected vm.dirty_writeback_centisecs value.<br>- `exp_kernel_numa_balancing`: Optional[int] — Expected kernel.numa_balancing value. | - | [SysctlDataModel](#SysctlDataModel-Model) | [SysctlCollector](#Collector-Class-SysctlCollector) | [SysctlAnalyzer](#Data-Analyzer-Class-SysctlAnalyzer) |
+| SyslogPlugin | ls -1 /var/log/syslog* 2>/dev/null &#124; grep -E '^/var/log/syslog(\.[0-9]+(\.gz)?)?$' &#124;&#124; true | - | - | [SyslogData](#SyslogData-Model) | [SyslogCollector](#Collector-Class-SyslogCollector) | - |
 | UptimePlugin | uptime | - | - | [UptimeDataModel](#UptimeDataModel-Model) | [UptimeCollector](#Collector-Class-UptimeCollector) | - |
 
 # Collectors
@@ -439,9 +439,134 @@ Collect raw output from niccli (Broadcom) and nicctl (Pensando) commands.
 
 **Link to code**: [nic_collector.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/nic/nic_collector.py)
 
+### Class Variables
+
+- **CMD_NICCLI_VERSION**: `niccli --version`
+- **CMD_NICCLI_LIST**: `niccli --list`
+- **CMD_NICCLI_LIST_DEVICES**: `niccli --list_devices`
+- **CMD_NICCLI_LIST_DEVICES_LEGACY**: `niccli --listdev`
+- **CMD_NICCLI_DISCOVERY_LEGACY**: `['niccli --listdev', 'niccli --list']`
+- **CMD_NICCLI_DISCOVERY_NEW**: `['niccli --list_devices', 'niccli --list']`
+- **CMD_NICCLI_DISCOVERY**: `['niccli --listdev', 'niccli --list']`
+- **CMD_NICCLI_DISCOVERY_ALL**: `frozenset({'niccli --list_devices', 'niccli --list', 'niccli --listdev'})`
+- **CMD_NICCLI_SUPPORT_RDMA_TEMPLATE_LEGACY**: `niccli -dev {device_num} nvm -getoption support_rdma -scope 0`
+- **CMD_NICCLI_PERFORMANCE_PROFILE_TEMPLATE_LEGACY**: `niccli -dev {device_num} nvm -getoption performance_profile`
+- **CMD_NICCLI_PCIE_RELAXED_ORDERING_TEMPLATE_LEGACY**: `niccli -dev {device_num} nvm -getoption pcie_relaxed_ordering`
+- **CMD_NICCLI_QOS_TEMPLATE_LEGACY**: `niccli -dev {device_num} getqos`
+- **CMD_NICCLI_PER_DEVICE_LEGACY**: `[
+  niccli -dev {device_num} nvm -getoption support_rdma -scope 0,
+  niccli -dev {device_num} nvm -getoption performance_profile,
+  niccli -dev {device_num} nvm -getoption pcie_relaxed_ordering,
+  niccli -dev {device_num} getqos
+]`
+- **CMD_NICCLI_SUPPORT_RDMA_TEMPLATE_NEW**: `niccli --dev {device_num} nvm --getoption support_rdma`
+- **CMD_NICCLI_PERFORMANCE_PROFILE_TEMPLATE_NEW**: `niccli --dev {device_num} nvm --getoption performance_profile`
+- **CMD_NICCLI_PCIE_RELAXED_ORDERING_TEMPLATE_NEW**: `niccli --dev {device_num} nvm --getoption pcie_relaxed_ordering`
+- **CMD_NICCLI_QOS_TEMPLATE_NEW**: `niccli --dev {device_num} qos --ets --show`
+- **CMD_NICCLI_PER_DEVICE_NEW**: `[
+  niccli --dev {device_num} nvm --getoption support_rdma,
+  niccli --dev {device_num} nvm --getoption performance_profile,
+  niccli --dev {device_num} nvm --getoption pcie_relaxed_ordering,
+  niccli --dev {device_num} qos --ets --show
+]`
+- **CMD_NICCLI_SUPPORT_RDMA_TEMPLATE**: `niccli -dev {device_num} nvm -getoption support_rdma -scope 0`
+- **CMD_NICCLI_PERFORMANCE_PROFILE_TEMPLATE**: `niccli -dev {device_num} nvm -getoption performance_profile`
+- **CMD_NICCLI_PCIE_RELAXED_ORDERING_TEMPLATE**: `niccli -dev {device_num} nvm -getoption pcie_relaxed_ordering`
+- **CMD_NICCLI_PER_DEVICE**: `[
+  niccli -dev {device_num} nvm -getoption support_rdma -scope 0,
+  niccli -dev {device_num} nvm -getoption performance_profile,
+  niccli -dev {device_num} nvm -getoption pcie_relaxed_ordering,
+  niccli -dev {device_num} getqos
+]`
+- **CMD_NICCTL_CARD_TEXT**: `nicctl show card`
+- **CMD_NICCTL_GLOBAL**: `[
+  nicctl --version,
+  nicctl show card flash partition --json,
+  nicctl show card interrupts --json,
+  nicctl show card logs --non-persistent,
+  nicctl show card logs --boot-fault,
+  nicctl show card logs --persistent,
+  nicctl show card profile --json,
+  nicctl show card time --json,
+  nicctl show card statistics packet-buffer summary --json,
+  nicctl show lif statistics --json,
+  nicctl show lif internal queue-to-ud-pinning,
+  nicctl show pipeline internal anomalies,
+  nicctl show pipeline internal rsq-ring,
+  nicctl show pipeline internal statistics memory,
+  nicctl show port fsm,
+  nicctl show port transceiver --json,
+  nicctl show port statistics --json,
+  nicctl show port internal mac,
+  nicctl show qos headroom --json,
+  nicctl show rdma queue --json,
+  nicctl show rdma queue-pair --detail --json,
+  nicctl show version firmware
+]`
+- **CMD_NICCTL_PER_CARD**: `['nicctl show dcqcn --card {card_id} --json', 'nicctl show card hardware-config --card {card_id}']`
+- **CMD_NICCTL_LEGACY_TEXT**: `[
+  nicctl show card,
+  nicctl show dcqcn,
+  nicctl show environment,
+  nicctl show lif,
+  nicctl show pcie ats,
+  nicctl show port,
+  nicctl show qos,
+  nicctl show rdma statistics,
+  nicctl show version host-software
+]`
+
 ### Provides Data
 
 NicDataModel
+
+### Commands
+
+- niccli --listdev
+- niccli --list
+- niccli --list_devices
+- niccli -dev {device_num} nvm -getoption pcie_relaxed_ordering
+- niccli --dev {device_num} nvm --getoption pcie_relaxed_ordering
+- niccli -dev {device_num} nvm -getoption performance_profile
+- niccli --dev {device_num} nvm --getoption performance_profile
+- niccli -dev {device_num} nvm -getoption support_rdma -scope 0
+- niccli -dev {device_num} getqos
+- niccli --dev {device_num} nvm --getoption support_rdma
+- niccli --dev {device_num} qos --ets --show
+- niccli --version
+- nicctl show card
+- nicctl --version
+- nicctl show card flash partition --json
+- nicctl show card interrupts --json
+- nicctl show card logs --non-persistent
+- nicctl show card logs --boot-fault
+- nicctl show card logs --persistent
+- nicctl show card profile --json
+- nicctl show card time --json
+- nicctl show card statistics packet-buffer summary --json
+- nicctl show lif statistics --json
+- nicctl show lif internal queue-to-ud-pinning
+- nicctl show pipeline internal anomalies
+- nicctl show pipeline internal rsq-ring
+- nicctl show pipeline internal statistics memory
+- nicctl show port fsm
+- nicctl show port transceiver --json
+- nicctl show port statistics --json
+- nicctl show port internal mac
+- nicctl show qos headroom --json
+- nicctl show rdma queue --json
+- nicctl show rdma queue-pair --detail --json
+- nicctl show version firmware
+- nicctl show dcqcn
+- nicctl show environment
+- nicctl show lif
+- nicctl show pcie ats
+- nicctl show port
+- nicctl show qos
+- nicctl show rdma statistics
+- nicctl show version host-software
+- nicctl show dcqcn --card {card_id} --json
+- nicctl show card hardware-config --card {card_id}
 
 ## Collector Class NvmeCollector
 
@@ -1687,23 +1812,23 @@ Check sysctl matches expected sysctl details
 
 ### Annotations / fields
 
-- **check_static_data**: `bool`
-- **expected_gpu_processes**: `Optional[int]`
-- **expected_max_power**: `Optional[int]`
-- **expected_driver_version**: `Optional[str]`
-- **expected_memory_partition_mode**: `Optional[str]`
-- **expected_compute_partition_mode**: `Optional[str]`
-- **expected_pldm_version**: `Optional[str]`
-- **l0_to_recovery_count_error_threshold**: `Optional[int]`
-- **l0_to_recovery_count_warning_threshold**: `Optional[int]`
-- **vendorid_ep**: `Optional[str]`
-- **vendorid_ep_vf**: `Optional[str]`
-- **devid_ep**: `Optional[str]`
-- **devid_ep_vf**: `Optional[str]`
-- **sku_name**: `Optional[str]`
-- **expected_xgmi_speed**: `Optional[list[float]]`
-- **analysis_range_start**: `Optional[datetime.datetime]`
-- **analysis_range_end**: `Optional[datetime.datetime]`
+- **check_static_data**: `bool` — If True, run static data checks (e.g. driver version, partition mode).
+- **expected_gpu_processes**: `Optional[int]` — Expected number of GPU processes.
+- **expected_max_power**: `Optional[int]` — Expected maximum power value (e.g. watts).
+- **expected_driver_version**: `Optional[str]` — Expected AMD driver version string.
+- **expected_memory_partition_mode**: `Optional[str]` — Expected memory partition mode (e.g. sp3, dp).
+- **expected_compute_partition_mode**: `Optional[str]` — Expected compute partition mode.
+- **expected_pldm_version**: `Optional[str]` — Expected PLDM version string.
+- **l0_to_recovery_count_error_threshold**: `Optional[int]` — L0-to-recovery count above which an error is raised.
+- **l0_to_recovery_count_warning_threshold**: `Optional[int]` — L0-to-recovery count above which a warning is raised.
+- **vendorid_ep**: `Optional[str]` — Expected endpoint vendor ID (e.g. for PCIe).
+- **vendorid_ep_vf**: `Optional[str]` — Expected endpoint VF vendor ID.
+- **devid_ep**: `Optional[str]` — Expected endpoint device ID.
+- **devid_ep_vf**: `Optional[str]` — Expected endpoint VF device ID.
+- **sku_name**: `Optional[str]` — Expected SKU name string for GPU.
+- **expected_xgmi_speed**: `Optional[list[float]]` — Expected xGMI speed value(s) (e.g. link rate).
+- **analysis_range_start**: `Optional[datetime.datetime]` — Start of time range for time-windowed analysis.
+- **analysis_range_end**: `Optional[datetime.datetime]` — End of time range for time-windowed analysis.
 
 ## Analyzer Args Class BiosAnalyzerArgs
 
@@ -1713,8 +1838,8 @@ Check sysctl matches expected sysctl details
 
 ### Annotations / fields
 
-- **exp_bios_version**: `list[str]`
-- **regex_match**: `bool`
+- **exp_bios_version**: `list[str]` — Expected BIOS version(s) to match against collected value (str or list).
+- **regex_match**: `bool` — If True, match exp_bios_version as regex; otherwise exact match.
 
 ## Analyzer Args Class CmdlineAnalyzerArgs
 
@@ -1724,10 +1849,10 @@ Check sysctl matches expected sysctl details
 
 ### Annotations / fields
 
-- **required_cmdline**: `Union[str, List]`
-- **banned_cmdline**: `Union[str, List]`
-- **os_overrides**: `Dict[str, nodescraper.plugins.inband.cmdline.cmdlineconfig.OverrideConfig]`
-- **platform_overrides**: `Dict[str, nodescraper.plugins.inband.cmdline.cmdlineconfig.OverrideConfig]`
+- **required_cmdline**: `Union[str, List]` — Command-line parameters that must be present (e.g. 'pci=bfsort').
+- **banned_cmdline**: `Union[str, List]` — Command-line parameters that must not be present.
+- **os_overrides**: `Dict[str, nodescraper.plugins.inband.cmdline.cmdlineconfig.OverrideConfig]` — Per-OS overrides for required_cmdline and banned_cmdline (keyed by OS identifier).
+- **platform_overrides**: `Dict[str, nodescraper.plugins.inband.cmdline.cmdlineconfig.OverrideConfig]` — Per-platform overrides for required_cmdline and banned_cmdline (keyed by platform).
 
 ## Analyzer Args Class DeviceEnumerationAnalyzerArgs
 
@@ -1737,9 +1862,9 @@ Check sysctl matches expected sysctl details
 
 ### Annotations / fields
 
-- **cpu_count**: `Optional[list[int]]`
-- **gpu_count**: `Optional[list[int]]`
-- **vf_count**: `Optional[list[int]]`
+- **cpu_count**: `Optional[list[int]]` — Expected CPU count(s); pass as int or list of ints. Analysis passes if actual is in list.
+- **gpu_count**: `Optional[list[int]]` — Expected GPU count(s); pass as int or list of ints. Analysis passes if actual is in list.
+- **vf_count**: `Optional[list[int]]` — Expected virtual function count(s); pass as int or list of ints. Analysis passes if actual is in list.
 
 ## Analyzer Args Class DkmsAnalyzerArgs
 
@@ -1749,9 +1874,9 @@ Check sysctl matches expected sysctl details
 
 ### Annotations / fields
 
-- **dkms_status**: `Union[str, list]`
-- **dkms_version**: `Union[str, list]`
-- **regex_match**: `bool`
+- **dkms_status**: `Union[str, list]` — Expected dkms status string(s) to match (e.g. 'amd/1.0.0'). At least one of dkms_status or dkms_version required.
+- **dkms_version**: `Union[str, list]` — Expected dkms version string(s) to match. At least one of dkms_status or dkms_version required.
+- **regex_match**: `bool` — If True, match dkms_status and dkms_version as regex; otherwise exact match.
 
 ## Analyzer Args Class JournalAnalyzerArgs
 
@@ -1765,8 +1890,10 @@ Arguments for journal analyzer
 
 ### Annotations / fields
 
-- **check_priority**: `Optional[int]`
-- **group**: `bool`
+- **analysis_range_start**: `Optional[datetime.datetime]` — Start of time range for analysis (ISO format). Only events on or after this time are analyzed.
+- **analysis_range_end**: `Optional[datetime.datetime]` — End of time range for analysis (ISO format). Only events before this time are analyzed.
+- **check_priority**: `Optional[int]` — Check against journal log priority (0=emergency..7=debug). If an entry has priority <= check_priority, an ERROR event is raised.
+- **group**: `bool` — If True, group entries that have the same priority and message.
 
 ## Analyzer Args Class KernelAnalyzerArgs
 
@@ -1776,9 +1903,9 @@ Arguments for journal analyzer
 
 ### Annotations / fields
 
-- **exp_kernel**: `Union[str, list]`
-- **exp_numa**: `Optional[int]`
-- **regex_match**: `bool`
+- **exp_kernel**: `Union[str, list]` — Expected kernel version string(s) to match (e.g. from uname -a).
+- **exp_numa**: `Optional[int]` — Expected value for kernel.numa_balancing (e.g. 0 or 1).
+- **regex_match**: `bool` — If True, match exp_kernel as regex; otherwise exact match.
 
 ## Analyzer Args Class KernelModuleAnalyzerArgs
 
@@ -1788,8 +1915,8 @@ Arguments for journal analyzer
 
 ### Annotations / fields
 
-- **kernel_modules**: `dict[str, dict]`
-- **regex_filter**: `list[str]`
+- **kernel_modules**: `dict[str, dict]` — Expected kernel module name -> {version, etc.}. Analyzer checks collected modules match.
+- **regex_filter**: `list[str]` — List of regex patterns to filter which collected modules are checked (default: amd).
 
 ## Analyzer Args Class MemoryAnalyzerArgs
 
@@ -1799,8 +1926,8 @@ Arguments for journal analyzer
 
 ### Annotations / fields
 
-- **ratio**: `float`
-- **memory_threshold**: `str`
+- **ratio**: `float` — Required free-memory ratio (0-1). Analysis fails if free/total < ratio.
+- **memory_threshold**: `str` — Minimum free memory required (e.g. '30Gi', '1T'). Used when ratio is not sufficient.
 
 ## Analyzer Args Class NicAnalyzerArgs
 
@@ -1814,16 +1941,16 @@ Analyzer args for niccli/nicctl data, with expected_values keyed by canonical co
 
 ### Annotations / fields
 
-- **expected_values**: `Optional[Dict[str, Dict[str, Any]]]`
-- **performance_profile_expected**: `str`
-- **support_rdma_disabled_values**: `List[str]`
-- **pcie_relaxed_ordering_expected**: `str`
-- **expected_qos_prio_map**: `Optional[Dict[Any, Any]]`
-- **expected_qos_pfc_enabled**: `Optional[int]`
-- **expected_qos_tsa_map**: `Optional[Dict[Any, Any]]`
-- **expected_qos_tc_bandwidth**: `Optional[List[int]]`
-- **require_qos_consistent_across_adapters**: `bool`
-- **nicctl_log_error_regex**: `Optional[List[Dict[str, Any]]]`
+- **expected_values**: `Optional[Dict[str, Dict[str, Any]]]` — Per-command expected checks keyed by canonical key (see command_to_canonical_key).
+- **performance_profile_expected**: `str` — Expected Broadcom performance_profile value (case-insensitive). Default RoCE.
+- **support_rdma_disabled_values**: `List[str]` — Values that indicate RDMA is not supported (case-insensitive).
+- **pcie_relaxed_ordering_expected**: `str` — Expected Broadcom pcie_relaxed_ordering value (e.g. 'Relaxed ordering = enabled'); checked case-insensitively. Default enabled.
+- **expected_qos_prio_map**: `Optional[Dict[Any, Any]]` — Expected priority-to-TC map (e.g. {0: 0, 1: 1}; keys may be int or str in config). Checked per device when set.
+- **expected_qos_pfc_enabled**: `Optional[int]` — Expected PFC enabled value (0/1 or bitmask). Checked per device when set.
+- **expected_qos_tsa_map**: `Optional[Dict[Any, Any]]` — Expected TSA map for ETS (e.g. {0: 'ets', 1: 'strict'}; keys may be int or str in config). Checked per device when set.
+- **expected_qos_tc_bandwidth**: `Optional[List[int]]` — Expected TC bandwidth percentages. Checked per device when set.
+- **require_qos_consistent_across_adapters**: `bool` — When True and no expected_qos_* are set, require all adapters to have the same prio_map, pfc_enabled, and tsa_map.
+- **nicctl_log_error_regex**: `Optional[List[Dict[str, Any]]]` — Optional list of error patterns for nicctl show card logs.
 
 ## Analyzer Args Class OsAnalyzerArgs
 
@@ -1833,8 +1960,8 @@ Analyzer args for niccli/nicctl data, with expected_values keyed by canonical co
 
 ### Annotations / fields
 
-- **exp_os**: `Union[str, list]`
-- **exact_match**: `bool`
+- **exp_os**: `Union[str, list]` — Expected OS name/version string(s) to match (e.g. from lsb_release or /etc/os-release).
+- **exact_match**: `bool` — If True, require exact match for exp_os; otherwise substring match.
 
 ## Analyzer Args Class PackageAnalyzerArgs
 
@@ -1844,10 +1971,10 @@ Analyzer args for niccli/nicctl data, with expected_values keyed by canonical co
 
 ### Annotations / fields
 
-- **exp_package_ver**: `Dict[str, Optional[str]]`
-- **regex_match**: `bool`
-- **rocm_regex**: `Optional[str]`
-- **enable_rocm_regex**: `bool`
+- **exp_package_ver**: `Dict[str, Optional[str]]` — Map package name -> expected version (None = any version). Checked against installed packages.
+- **regex_match**: `bool` — If True, match package versions with regex; otherwise exact or prefix match.
+- **rocm_regex**: `Optional[str]` — Optional regex to identify ROCm package version (used when enable_rocm_regex is True).
+- **enable_rocm_regex**: `bool` — If True, use rocm_regex (or default pattern) to extract ROCm version for checks.
 
 ## Analyzer Args Class PcieAnalyzerArgs
 
@@ -1861,13 +1988,13 @@ Arguments for PCIe analyzer
 
 ### Annotations / fields
 
-- **exp_speed**: `int`
-- **exp_width**: `int`
-- **exp_sriov_count**: `int`
-- **exp_gpu_count_override**: `Optional[int]`
-- **exp_max_payload_size**: `Union[Dict[int, int], int, NoneType]`
-- **exp_max_rd_req_size**: `Union[Dict[int, int], int, NoneType]`
-- **exp_ten_bit_tag_req_en**: `Union[Dict[int, int], int, NoneType]`
+- **exp_speed**: `int` — Expected PCIe link speed (generation 1–5).
+- **exp_width**: `int` — Expected PCIe link width in lanes (1–16).
+- **exp_sriov_count**: `int` — Expected SR-IOV virtual function count.
+- **exp_gpu_count_override**: `Optional[int]` — Override expected GPU count for validation.
+- **exp_max_payload_size**: `Union[Dict[int, int], int, NoneType]` — Expected max payload size: int for all devices, or dict keyed by device ID.
+- **exp_max_rd_req_size**: `Union[Dict[int, int], int, NoneType]` — Expected max read request size: int for all devices, or dict keyed by device ID.
+- **exp_ten_bit_tag_req_en**: `Union[Dict[int, int], int, NoneType]` — Expected 10-bit tag request enable: int for all devices, or dict keyed by device ID.
 
 ## Analyzer Args Class ProcessAnalyzerArgs
 
@@ -1877,8 +2004,8 @@ Arguments for PCIe analyzer
 
 ### Annotations / fields
 
-- **max_kfd_processes**: `int`
-- **max_cpu_usage**: `float`
+- **max_kfd_processes**: `int` — Maximum allowed number of KFD (Kernel Fusion Driver) processes; 0 disables the check.
+- **max_cpu_usage**: `float` — Maximum allowed CPU usage (percent) for process checks.
 
 ## Analyzer Args Class RocmAnalyzerArgs
 
@@ -1888,9 +2015,9 @@ Arguments for PCIe analyzer
 
 ### Annotations / fields
 
-- **exp_rocm**: `Union[str, list]`
-- **exp_rocm_latest**: `str`
-- **exp_rocm_sub_versions**: `dict[str, Union[str, list]]`
+- **exp_rocm**: `Union[str, list]` — Expected ROCm version string(s) to match (e.g. from rocminfo).
+- **exp_rocm_latest**: `str` — Expected 'latest' ROCm path or version string for versioned installs.
+- **exp_rocm_sub_versions**: `dict[str, Union[str, list]]` — Map sub-version name (e.g. version_rocm) to expected string or list of allowed strings.
 
 ## Analyzer Args Class SysSettingsAnalyzerArgs
 
@@ -1907,7 +2034,7 @@ Sysfs settings for analysis via a list of checks (path, expected values, name).
 
 ### Annotations / fields
 
-- **checks**: `Optional[list[nodescraper.plugins.inband.sys_settings.analyzer_args.SysfsCheck]]`
+- **checks**: `Optional[list[nodescraper.plugins.inband.sys_settings.analyzer_args.SysfsCheck]]` — List of sysfs checks (path, expected values or pattern, display name).
 
 ## Analyzer Args Class SysctlAnalyzerArgs
 
@@ -1917,14 +2044,14 @@ Sysfs settings for analysis via a list of checks (path, expected values, name).
 
 ### Annotations / fields
 
-- **exp_vm_swappiness**: `Optional[int]`
-- **exp_vm_numa_balancing**: `Optional[int]`
-- **exp_vm_oom_kill_allocating_task**: `Optional[int]`
-- **exp_vm_compaction_proactiveness**: `Optional[int]`
-- **exp_vm_compact_unevictable_allowed**: `Optional[int]`
-- **exp_vm_extfrag_threshold**: `Optional[int]`
-- **exp_vm_zone_reclaim_mode**: `Optional[int]`
-- **exp_vm_dirty_background_ratio**: `Optional[int]`
-- **exp_vm_dirty_ratio**: `Optional[int]`
-- **exp_vm_dirty_writeback_centisecs**: `Optional[int]`
-- **exp_kernel_numa_balancing**: `Optional[int]`
+- **exp_vm_swappiness**: `Optional[int]` — Expected vm.swappiness value.
+- **exp_vm_numa_balancing**: `Optional[int]` — Expected vm.numa_balancing value.
+- **exp_vm_oom_kill_allocating_task**: `Optional[int]` — Expected vm.oom_kill_allocating_task value.
+- **exp_vm_compaction_proactiveness**: `Optional[int]` — Expected vm.compaction_proactiveness value.
+- **exp_vm_compact_unevictable_allowed**: `Optional[int]` — Expected vm.compact_unevictable_allowed value.
+- **exp_vm_extfrag_threshold**: `Optional[int]` — Expected vm.extfrag_threshold value.
+- **exp_vm_zone_reclaim_mode**: `Optional[int]` — Expected vm.zone_reclaim_mode value.
+- **exp_vm_dirty_background_ratio**: `Optional[int]` — Expected vm.dirty_background_ratio value.
+- **exp_vm_dirty_ratio**: `Optional[int]` — Expected vm.dirty_ratio value.
+- **exp_vm_dirty_writeback_centisecs**: `Optional[int]` — Expected vm.dirty_writeback_centisecs value.
+- **exp_kernel_numa_balancing**: `Optional[int]` — Expected kernel.numa_balancing value.

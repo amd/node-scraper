@@ -32,9 +32,18 @@ from nodescraper.plugins.inband.kernel.kerneldata import KernelDataModel
 
 
 class KernelAnalyzerArgs(AnalyzerArgs):
-    exp_kernel: Union[str, list] = Field(default_factory=list)
-    exp_numa: Optional[int] = None
-    regex_match: bool = False
+    exp_kernel: Union[str, list] = Field(
+        default_factory=list,
+        description="Expected kernel version string(s) to match (e.g. from uname -a).",
+    )
+    exp_numa: Optional[int] = Field(
+        default=None,
+        description="Expected value for kernel.numa_balancing (e.g. 0 or 1).",
+    )
+    regex_match: bool = Field(
+        default=False,
+        description="If True, match exp_kernel as regex; otherwise exact match.",
+    )
 
     @field_validator("exp_kernel", mode="before")
     @classmethod

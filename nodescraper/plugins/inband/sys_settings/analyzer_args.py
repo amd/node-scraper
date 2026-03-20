@@ -37,10 +37,16 @@ class SysfsCheck(BaseModel):
     For directory paths: use pattern (regex); at least one directory entry must match (e.g. ^hsn[0-9]+).
     """
 
-    path: str
-    expected: list[str] = Field(default_factory=list)
-    name: str
-    pattern: Optional[str] = None
+    path: str = Field(description="Sysfs path to read (file) or list (directory).")
+    expected: list[str] = Field(
+        default_factory=list,
+        description="For file paths: list of acceptable values; if empty, check passes.",
+    )
+    name: str = Field(description="Display name for this check in reports.")
+    pattern: Optional[str] = Field(
+        default=None,
+        description="For directory paths: regex; at least one entry must match (e.g. ^hsn[0-9]+).",
+    )
 
 
 class SysSettingsAnalyzerArgs(AnalyzerArgs):
@@ -50,7 +56,10 @@ class SysSettingsAnalyzerArgs(AnalyzerArgs):
     when collection_args is derived from analysis_args (e.g. by the plugin).
     """
 
-    checks: Optional[list[SysfsCheck]] = None
+    checks: Optional[list[SysfsCheck]] = Field(
+        default=None,
+        description="List of sysfs checks (path, expected values or pattern, display name).",
+    )
 
     def paths_to_collect(self) -> list[str]:
         """Return unique sysfs file paths from checks (those without pattern), for use by the collector."""

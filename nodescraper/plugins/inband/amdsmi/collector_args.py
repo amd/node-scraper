@@ -25,10 +25,15 @@
 ###############################################################################
 from typing import Optional
 
+from pydantic import Field
+
 from nodescraper.models import CollectorArgs
 
 
 class AmdSmiCollectorArgs(CollectorArgs):
     """Collector arguments for AmdSmiPlugin"""
 
-    cper_file_path: Optional[str] = None
+    cper_file_path: Optional[str] = Field(
+        default=None,
+        description="Path to CPER folder or file for RAS AFID collection (ras --afid --cper-file).",
+    )
