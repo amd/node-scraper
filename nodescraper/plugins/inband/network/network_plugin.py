@@ -26,6 +26,7 @@
 from nodescraper.base import InBandDataPlugin
 
 from .collector_args import NetworkCollectorArgs
+from .network_analyzer import NetworkAnalyzer
 from .network_collector import NetworkCollector
 from .networkdata import NetworkDataModel
 
@@ -38,3 +39,5 @@ class NetworkPlugin(InBandDataPlugin[NetworkDataModel, NetworkCollectorArgs, Non
     COLLECTOR = NetworkCollector
 
     COLLECTOR_ARGS = NetworkCollectorArgs
+
+    ANALYZER = NetworkAnalyzer
