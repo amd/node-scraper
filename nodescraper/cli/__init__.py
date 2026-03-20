@@ -28,8 +28,10 @@ from .common_args import (
     add_nodescraper_core_arguments,
     build_nodescraper_core_parent_parser,
 )
+from .main import main as cli_entry
 
 __all__ = [
     "add_nodescraper_core_arguments",
     "build_nodescraper_core_parent_parser",
+    "cli_entry",
 ]
