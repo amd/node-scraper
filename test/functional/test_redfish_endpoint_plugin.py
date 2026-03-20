@@ -47,7 +47,10 @@ def redfish_endpoint_collector(system_info, redfish_conn_mock):
 def test_redfish_endpoint_collector_no_uris(redfish_endpoint_collector):
     result, data = redfish_endpoint_collector.collect_data()
     assert result.status == ExecutionStatus.NOT_RAN
-    assert result.message == "No Redfish URIs configured"
+    assert (
+        result.message
+        == "No collection mode configured: set collection_args.discover_tree to true or provide collection_args.uris"
+    )
     assert data is None
 
 
@@ -355,7 +358,7 @@ def test_collect_data_discover_tree_no_responses(redfish_endpoint_collector, red
         args=RedfishEndpointCollectorArgs(discover_tree=True)
     )
     assert result.status == ExecutionStatus.ERROR
-    assert result.message == "No Redfish endpoints discovered from tree"
+    assert "No Redfish endpoints discovered from tree" in result.message
     assert data is None
 
 
