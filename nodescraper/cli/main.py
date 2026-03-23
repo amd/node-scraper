@@ -275,15 +275,25 @@ def setup_logger(log_level: str = "INFO", log_path: Optional[str] = None) -> log
     return logger
 
 
-def main(arg_input: Optional[list[str]] = None):
-    """Main entry point for the CLI
+def main(
+    arg_input: Optional[list[str]] = None,
+    *,
+    parsed_top_level: Optional[argparse.Namespace] = None,
+    plugin_arg_map: Optional[dict[str, list[str]]] = None,
+    invalid_plugins: Optional[list[str]] = None,
+) -> None:
+    """Main entry point for the CLI.
 
     Args:
-        arg_input (Optional[list[str]], optional): list of args to parse. Defaults to None.
+        arg_input: Tokens after the program name; used only when *parsed_top_level* is ``None``.
+            If ``None`` in that case, ``sys.argv[1:]`` is used.
+        parsed_top_level: If set, skip ``process_args`` / top-level ``parse_args`` and run using
+            this namespace (same shape as from the root parser), e.g. when another driver already
+            parsed equivalent options.
+        plugin_arg_map: Raw tokens per plugin after the plugin name; if ``None`` and
+            *parsed_top_level* is set, defaults to ``{plugin_name: []}`` when ``plugin_name`` is set.
+        invalid_plugins: Plugin names to warn as ignored when using *parsed_top_level*; default [].
     """
-    if arg_input is None:
-        arg_input = sys.argv[1:]
-
     plugin_reg = PluginRegistry()
 
     config_reg = ConfigRegistry()
@@ -298,11 +308,20 @@ def main(arg_input: Optional[list[str]] = None):
     parser, plugin_subparser_map = build_parser(plugin_reg, config_reg)
 
     try:
-        top_level_args, plugin_arg_map, invalid_plugins = process_args(
-            arg_input, list(plugin_subparser_map.keys())
-        )
-
-        parsed_args = parser.parse_args(top_level_args)
+        if parsed_top_level is not None:
+            parsed_args = parsed_top_level
+            if plugin_arg_map is None:
+                pn = getattr(parsed_top_level, "plugin_name", None)
+                plugin_arg_map = {pn: []} if pn else {}
+            if invalid_plugins is None:
+                invalid_plugins = []
+        else:
+            if arg_input is None:
+                arg_input = sys.argv[1:]
+            top_level_args, plugin_arg_map, invalid_plugins = process_args(
+                arg_input, list(plugin_subparser_map.keys())
+            )
+            parsed_args = parser.parse_args(top_level_args)
         system_info = get_system_info(parsed_args)
         sname = system_info.name.lower().replace("-", "_").replace(".", "_")
         timestamp = datetime.datetime.now().strftime("%Y_%m_%d-%I_%M_%S_%p")

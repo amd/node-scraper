@@ -36,8 +36,9 @@ def add_nodescraper_core_arguments(
         config_reg: If set, ``--plugin-configs`` help lists built-in config names.
         sys_interaction_level_default: Default for ``--system-interaction-level``
             / ``--sys-interaction-level``.
-        sys_interaction_level_choices: Allowed names; default is node-scraper's
-            :class:`~nodescraper.enums.SystemInteractionLevel`. Pass a custom list
+        sys_interaction_level_choices: Allowed names; default is names from
+            :class:`~nodescraper.enums.SystemInteractionLevel`. Override with a custom list when
+            the host application uses different level labels with the same parser.
     """
     interaction_choices = (
         sys_interaction_level_choices

@@ -261,8 +261,8 @@ def test_generate_summary(tmp_path):
     subdir = tmp_path / "sub"
     subdir.mkdir()
 
-    errorscraper_path = subdir / "nodescraper.csv"
-    with open(errorscraper_path, "w", newline="") as f:
+    sample_csv = subdir / "nodescraper.csv"
+    with open(sample_csv, "w", newline="") as f:
         writer = csv.DictWriter(
             f, fieldnames=["nodename", "plugin", "status", "timestamp", "message"]
         )
