@@ -26,6 +26,7 @@
 import pytest
 
 from nodescraper.enums import EventPriority, ExecutionStatus
+from nodescraper.plugins.inband.network.analyzer_args import NetworkAnalyzerArgs
 from nodescraper.plugins.inband.network.network_analyzer import NetworkAnalyzer
 from nodescraper.plugins.inband.network.networkdata import (
     EthtoolInfo,
@@ -282,3 +283,32 @@ def test_mixed_interfaces_with_and_without_errors(network_analyzer):
     assert len(result.events) == 2
     interfaces_with_errors = {event.data["interface"] for event in result.events}
     assert interfaces_with_errors == {"eth0", "eth2"}
+
+
+def test_custom_error_regex_detected(network_analyzer):
+    """Test that custom regex in analyzer args is applied in addition to defaults."""
+    ethtool = EthtoolInfo(
+        interface="eth0",
+        raw_output="dummy",
+        statistics={
+            "custom_tx_drops": "9",  # Matched via custom regex only
+            "tx_pfc_frames": "0",
+        },
+    )
+    model = NetworkDataModel(ethtool_info={"eth0": ethtool})
+    args = NetworkAnalyzerArgs(
+        error_regex=[
+            {
+                "regex": r"^custom_tx_drops$",
+                "message": "Custom tx drops",
+                "event_category": "NETWORK",
+            }
+        ]
+    )
+
+    result = network_analyzer.analyze_data(model, args=args)
+
+    assert result.status == ExecutionStatus.ERROR
+    assert len(result.events) == 1
+    assert result.events[0].data["interface"] == "eth0"
+    assert result.events[0].data["errors"] == {"custom_tx_drops": 9}
