@@ -31,23 +31,14 @@ from nodescraper.plugins.inband.process.processdata import ProcessDataModel
 
 
 class ProcessAnalyzerArgs(AnalyzerArgs):
-    max_kfd_processes: int = Field(
-        default=0,
-        description="Maximum allowed number of KFD (Kernel Fusion Driver) processes; 0 disables the check.",
-    )
     max_cpu_usage: float = Field(
         default=20.0,
-        description="Maximum allowed CPU usage (percent) for process checks.",
+        description="Maximum allowed aggregate CPU usage (percent) for process checks.",
     )
 
     @classmethod
     def build_from_model(cls, datamodel: ProcessDataModel) -> "ProcessAnalyzerArgs":
-        """build analyzer args from data model
-
-        Args:
-            datamodel (ProcessDataModel): data model for plugin
-
-        Returns:
-            ProcessAnalyzerArgs: instance of analyzer args class
-        """
-        return cls(max_kfd_processes=datamodel.kfd_process, max_cpu_usage=datamodel.cpu_usage)
+        """Build analyzer args from collected process data (threshold defaults if cpu_usage unset)."""
+        if datamodel.cpu_usage is not None:
+            return cls(max_cpu_usage=float(datamodel.cpu_usage))
+        return cls()

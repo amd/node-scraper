@@ -185,12 +185,14 @@ def test_sysctl_analyzer_args_build_from_model():
 
 def test_process_analyzer_args_build_from_model():
     """Test ProcessAnalyzerArgs.build_from_model includes all fields"""
-    datamodel = ProcessDataModel(kfd_process=5, cpu_usage=15.5)
+    datamodel = ProcessDataModel(cpu_usage=15.5)
     args = ProcessAnalyzerArgs.build_from_model(datamodel)
 
     assert isinstance(args, ProcessAnalyzerArgs)
-    assert args.max_kfd_processes == 5
     assert args.max_cpu_usage == 15.5
+
+    args_default = ProcessAnalyzerArgs.build_from_model(ProcessDataModel())
+    assert args_default.max_cpu_usage == 20.0
 
 
 def test_kernel_module_analyzer_args_build_from_model():
