@@ -28,11 +28,27 @@ import logging
 import re
 import uuid
 from enum import Enum
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 from pydantic import BaseModel, Field, field_serializer, field_validator
 
 from nodescraper.enums import EventPriority
+
+
+def _data_to_json_safe(obj: Any) -> Any:
+    """Recursively convert event data to JSON-serializable form (e.g. exceptions -> str)."""
+    if isinstance(obj, BaseException):
+        return str(obj)
+    if isinstance(obj, dict):
+        return {k: _data_to_json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_data_to_json_safe(v) for v in obj]
+    if isinstance(obj, (str, int, float, bool, type(None))):
+        return obj
+    if isinstance(obj, (Enum, datetime.datetime, uuid.UUID)):
+        return str(obj)
+    return str(obj)
+
 
 LOG_LEVEL_MAP = {
     logging.INFO: EventPriority.INFO,
@@ -126,6 +142,11 @@ class Event(BaseModel):
             str: priority name string
         """
         return priority.name
+
+    @field_serializer("data")
+    def serialize_data(self, data: dict, _info) -> dict:
+        """Ensure data is JSON-serializable (e.g. convert nested exceptions to str)."""
+        return _data_to_json_safe(data)
 
     @field_validator("data")
     @classmethod

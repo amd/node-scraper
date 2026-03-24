@@ -27,9 +27,34 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class RedfishEndpointCollectorArgs(BaseModel):
-    """Collection args: uris to GET."""
+    """Collection args: uris to GET (or discover from tree), optional concurrency and tree discovery."""
 
-    uris: list[str] = Field(default_factory=list)
+    uris: list[str] = Field(
+        default_factory=list,
+        description="Redfish URIs to GET. Ignored when discover_tree is True.",
+    )
+    discover_tree: bool = Field(
+        default=False,
+        description="If True, discover endpoints from the BMC Redfish tree (service root and links) instead of using uris.",
+    )
+    tree_max_depth: int = Field(
+        default=2,
+        ge=1,
+        le=10,
+        description="When discover_tree is True: max traversal depth (1=service root only, 2=root + collections, 3=+ members).",
+    )
+    tree_max_endpoints: int = Field(
+        default=0,
+        ge=0,
+        le=10_000,
+        description="When discover_tree is True: max endpoints to discover (0=no limit).",
+    )
+    max_workers: int = Field(
+        default=1,
+        ge=1,
+        le=32,
+        description="Max concurrent GETs (1=sequential). Use >1 for async endpoint fetches.",
+    )
 
     @field_validator("uris", mode="before")
     @classmethod
