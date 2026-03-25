@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# Copyright (c) 2025 Advanced Micro Devices, Inc.
+# Copyright (c) 2026 Advanced Micro Devices, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,8 +23,37 @@
 # SOFTWARE.
 #
 ###############################################################################
-"""Legacy import path ``nodescraper.cli.cli``; delegates to :mod:`nodescraper.cli.main`."""
+"""Typed bundle for the plugin-executor phase of the CLI (after argparse)."""
 
-from nodescraper.cli.main import main
+from __future__ import annotations
 
-__all__ = ["main"]
+import argparse
+import logging
+from dataclasses import dataclass
+from typing import Optional
+
+from nodescraper.models import PluginConfig, SystemInfo
+from nodescraper.pluginregistry import PluginRegistry
+
+
+@dataclass
+class PluginRunInvocation:
+    """Everything needed to construct :class:`~nodescraper.pluginexecutor.PluginExecutor` and finish the run.
+
+    Built by :meth:`nodescraper.cli.app.NodeScraperCliApp.prepare_plugin_run`; consumed by
+    :meth:`nodescraper.cli.app.NodeScraperCliApp.execute_plugin_run`.
+    """
+
+    plugin_reg: PluginRegistry
+    parsed_args: argparse.Namespace
+    plugin_config_inst_list: list[PluginConfig]
+    system_info: SystemInfo
+    log_path: Optional[str]
+    logger: logging.Logger
+    timestamp: str
+    sname: str
+
+
+CLI_INVOCATION_API = 1
+
+__all__ = ["CLI_INVOCATION_API", "PluginRunInvocation"]

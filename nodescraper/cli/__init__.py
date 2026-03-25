@@ -24,15 +24,23 @@
 #
 ###############################################################################
 
+from .app import CLI_APP_API, NodeScraperCliApp
 from .common_args import (
     add_nodescraper_core_arguments,
     build_nodescraper_core_parent_parser,
 )
-from .host_integration import HOST_CLI_API, build_cli_parser
+from .extension import CLI_EXTENSION_API, CliExtension
+from .host_integration import build_cli_parser
+from .invocation import CLI_INVOCATION_API, PluginRunInvocation
 from .main import main as cli_entry
 
 __all__ = [
-    "HOST_CLI_API",
+    "CLI_APP_API",
+    "CLI_EXTENSION_API",
+    "CLI_INVOCATION_API",
+    "CliExtension",
+    "NodeScraperCliApp",
+    "PluginRunInvocation",
     "add_nodescraper_core_arguments",
     "build_cli_parser",
     "build_nodescraper_core_parent_parser",

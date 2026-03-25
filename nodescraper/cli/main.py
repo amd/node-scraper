@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# Copyright (c) 2025 Advanced Micro Devices, Inc.
+# Copyright (c) 2026 Advanced Micro Devices, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,84 +23,16 @@
 # SOFTWARE.
 #
 ###############################################################################
+"""CLI entry point; delegates to :class:`~nodescraper.cli.app.NodeScraperCliApp`."""
+
+from __future__ import annotations
+
 import argparse
-import datetime
-import json
-import logging
-import os
-import sys
+from collections.abc import Sequence
 from typing import Optional
 
-from nodescraper.cli.compare_runs import run_compare_runs
-from nodescraper.cli.constants import DEFAULT_CONFIG
-from nodescraper.cli.helper import (
-    dump_results_to_csv,
-    generate_reference_config,
-    generate_reference_config_from_logs,
-    generate_summary,
-    get_plugin_configs,
-    get_system_info,
-    log_system_info,
-    parse_describe,
-    parse_gen_plugin_config,
-    process_args,
-)
-from nodescraper.cli.host_integration import build_cli_parser
-from nodescraper.configregistry import ConfigRegistry
-from nodescraper.connection.redfish import (
-    RedfishConnection,
-    get_oem_diagnostic_allowable_values,
-)
-from nodescraper.connection.redfish.redfish_params import RedfishConnectionParams
-from nodescraper.constants import DEFAULT_LOGGER
-from nodescraper.enums import ExecutionStatus
-from nodescraper.models import PluginConfig
-from nodescraper.pluginexecutor import PluginExecutor
-from nodescraper.pluginregistry import PluginRegistry
-
-
-def build_parser(
-    plugin_reg: PluginRegistry,
-    config_reg: ConfigRegistry,
-) -> tuple[argparse.ArgumentParser, dict[str, tuple[argparse.ArgumentParser, dict]]]:
-    """Build an argument parser (delegates to :func:`~nodescraper.cli.host_integration.build_cli_parser`)."""
-    return build_cli_parser(plugin_reg, config_reg)
-
-
-def setup_logger(log_level: str = "INFO", log_path: Optional[str] = None) -> logging.Logger:
-    """set up root logger when using the CLI
-
-    Args:
-        log_level (str): log level to use
-        log_path (Optional[str]): optional path to filesystem log location
-
-    Returns:
-        logging.Logger: logger intstance
-    """
-    log_level = getattr(logging, log_level, "INFO")
-
-    handlers: list[logging.Handler] = [logging.StreamHandler(stream=sys.stdout)]
-
-    if log_path:
-        log_file_name = os.path.join(log_path, "nodescraper.log")
-        handlers.append(
-            logging.FileHandler(filename=log_file_name, mode="wt", encoding="utf-8"),
-        )
-
-    logging.basicConfig(
-        force=True,
-        level=log_level,
-        format="%(asctime)25s %(levelname)10s %(name)25s | %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S %Z",
-        handlers=handlers,
-        encoding="utf-8",
-    )
-    logging.root.setLevel(logging.INFO)
-    logging.getLogger("paramiko").setLevel(logging.ERROR)
-
-    logger = logging.getLogger(DEFAULT_LOGGER)
-
-    return logger
+from nodescraper.cli.app import NodeScraperCliApp
+from nodescraper.cli.extension import CliExtension
 
 
 def main(
@@ -109,228 +41,23 @@ def main(
     parsed_top_level: Optional[argparse.Namespace] = None,
     plugin_arg_map: Optional[dict[str, list[str]]] = None,
     invalid_plugins: Optional[list[str]] = None,
+    extensions: Sequence[CliExtension] = (),
 ) -> None:
-    """Main entry point for the CLI.
+    """Run the nodescraper CLI (may call ``sys.exit``).
 
     Args:
-        arg_input: Tokens after the program name; used only when *parsed_top_level* is ``None``.
-            If ``None`` in that case, ``sys.argv[1:]`` is used.
-        parsed_top_level: If set, skip ``process_args`` / top-level ``parse_args`` and run using
-            this namespace (same shape as from the root parser), e.g. when another driver already
-            parsed equivalent options.
-        plugin_arg_map: Raw tokens per plugin after the plugin name; if ``None`` and
-            *parsed_top_level* is set, defaults to ``{plugin_name: []}`` when ``plugin_name`` is set.
-        invalid_plugins: Plugin names to warn as ignored when using *parsed_top_level*; default [].
+        arg_input: Tokens after the program name when not using *parsed_top_level*.
+        parsed_top_level: Skip ``process_args`` / top-level ``parse_args`` when embedding.
+        plugin_arg_map: Per-plugin argv tokens when embedding.
+        invalid_plugins: Unknown plugin names to warn about when embedding.
+        extensions: Host :class:`~nodescraper.cli.extension.CliExtension` instances (registries + parser).
     """
-    plugin_reg = PluginRegistry()
-
-    config_reg = ConfigRegistry()
-    # Add synthetic "AllPlugins" config that includes every registered plugin
-    config_reg.configs["AllPlugins"] = PluginConfig(
-        name="AllPlugins",
-        desc="Run all registered plugins with default arguments",
-        global_args={},
-        plugins={name: {} for name in plugin_reg.plugins},
-        result_collators={},
+    NodeScraperCliApp(extensions=tuple(extensions)).main(
+        arg_input,
+        parsed_top_level=parsed_top_level,
+        plugin_arg_map=plugin_arg_map,
+        invalid_plugins=invalid_plugins,
     )
-    parser, plugin_subparser_map = build_parser(plugin_reg, config_reg)
-
-    try:
-        if parsed_top_level is not None:
-            parsed_args = parsed_top_level
-            if plugin_arg_map is None:
-                pn = getattr(parsed_top_level, "plugin_name", None)
-                plugin_arg_map = {pn: []} if pn else {}
-            if invalid_plugins is None:
-                invalid_plugins = []
-        else:
-            if arg_input is None:
-                arg_input = sys.argv[1:]
-            top_level_args, plugin_arg_map, invalid_plugins = process_args(
-                arg_input, list(plugin_subparser_map.keys())
-            )
-            parsed_args = parser.parse_args(top_level_args)
-        system_info = get_system_info(parsed_args)
-        sname = system_info.name.lower().replace("-", "_").replace(".", "_")
-        timestamp = datetime.datetime.now().strftime("%Y_%m_%d-%I_%M_%S_%p")
-
-        if parsed_args.log_path and parsed_args.subcmd not in [
-            "gen-plugin-config",
-            "describe",
-            "compare-runs",
-        ]:
-            log_path = os.path.join(
-                parsed_args.log_path,
-                f"scraper_logs_{sname}_{timestamp}",
-            )
-            os.makedirs(log_path)
-        else:
-            log_path = None
-
-        logger = setup_logger(parsed_args.log_level, log_path)
-        if log_path:
-            logger.info("Log path: %s", log_path)
-
-        # Log warning if invalid plugin names were provided
-        if invalid_plugins:
-            logger.warning(
-                "Invalid plugin name(s) ignored: %s. Use 'describe plugin' to list available plugins.",
-                ", ".join(invalid_plugins),
-            )
-
-        if parsed_args.subcmd == "summary":
-            generate_summary(parsed_args.search_path, parsed_args.output_path, logger)
-            sys.exit(0)
-
-        if parsed_args.subcmd == "describe":
-            parse_describe(parsed_args, plugin_reg, config_reg, logger)
-
-        if parsed_args.subcmd == "compare-runs":
-            run_compare_runs(
-                parsed_args.path1,
-                parsed_args.path2,
-                plugin_reg,
-                logger,
-                skip_plugins=getattr(parsed_args, "skip_plugins", None) or [],
-                include_plugins=getattr(parsed_args, "include_plugins", None),
-                truncate_message=not getattr(parsed_args, "dont_truncate", False),
-            )
-            sys.exit(0)
-
-        if parsed_args.subcmd == "show-redfish-oem-allowable":
-            if not parsed_args.connection_config:
-                parser.error("show-redfish-oem-allowable requires --connection-config")
-            raw = parsed_args.connection_config.get("RedfishConnectionManager")
-            if not raw:
-                logger.error("Connection config must contain RedfishConnectionManager")
-                sys.exit(1)
-            params = RedfishConnectionParams.model_validate(raw)
-            password = params.password.get_secret_value() if params.password else None
-            base_url = f"{'https' if params.use_https else 'http'}://{params.host}" + (
-                f":{params.port}" if params.port else ""
-            )
-            conn = RedfishConnection(
-                base_url=base_url,
-                username=params.username,
-                password=password,
-                timeout=params.timeout_seconds,
-                use_session_auth=params.use_session_auth,
-                verify_ssl=params.verify_ssl,
-                api_root=params.api_root,
-            )
-            try:
-                conn._ensure_session()
-                allowable = get_oem_diagnostic_allowable_values(conn, parsed_args.log_service_path)
-                if allowable is None:
-                    logger.warning(
-                        "Could not read OEMDiagnosticDataType@Redfish.AllowableValues from LogService"
-                    )
-                    sys.exit(1)
-                print(json.dumps(allowable, indent=2))  # noqa: T201
-            finally:
-                conn.close()
-            sys.exit(0)
-
-        if parsed_args.subcmd == "gen-plugin-config":
-
-            if parsed_args.reference_config_from_logs:
-                ref_config = generate_reference_config_from_logs(
-                    parsed_args.reference_config_from_logs, plugin_reg, logger
-                )
-                output_path = os.getcwd()
-                if parsed_args.output_path:
-                    output_path = parsed_args.output_path
-                path = os.path.join(output_path, "reference_config.json")
-                try:
-                    with open(path, "w") as f:
-                        json.dump(
-                            ref_config.model_dump(mode="json", exclude_none=True),
-                            f,
-                            indent=2,
-                        )
-                        logger.info("Reference config written to: %s", path)
-                except Exception as exp:
-                    logger.error(exp)
-                sys.exit(0)
-
-            parse_gen_plugin_config(parsed_args, plugin_reg, config_reg, logger)
-
-        parsed_plugin_args = {}
-        for plugin, plugin_args in plugin_arg_map.items():
-            try:
-                parsed_plugin_args[plugin] = plugin_subparser_map[plugin][0].parse_args(plugin_args)
-            except Exception as e:
-                logger.error("%s exception parsing args for plugin: %s", str(e), plugin)
-
-        if not parsed_plugin_args and not parsed_args.plugin_configs:
-            logger.info(
-                "No plugins config args specified, running default config: %s", DEFAULT_CONFIG
-            )
-            plugin_configs = [DEFAULT_CONFIG]
-        else:
-            plugin_configs = parsed_args.plugin_configs or []
-
-        plugin_config_inst_list = get_plugin_configs(
-            plugin_config_input=plugin_configs,
-            system_interaction_level=parsed_args.sys_interaction_level,
-            built_in_configs=config_reg.configs,
-            parsed_plugin_args=parsed_plugin_args,
-            plugin_subparser_map=plugin_subparser_map,
-        )
-
-        if parsed_args.skip_sudo:
-            plugin_config_inst_list[-1].global_args.setdefault("collection_args", {})[
-                "skip_sudo"
-            ] = True
-
-        log_system_info(log_path, system_info, logger)
-    except Exception as e:
-        parser.error(str(e))
-
-    plugin_executor = PluginExecutor(
-        logger=logger,
-        plugin_configs=plugin_config_inst_list,
-        connections=parsed_args.connection_config,
-        system_info=system_info,
-        log_path=log_path,
-        plugin_registry=plugin_reg,
-    )
-
-    try:
-        results = plugin_executor.run_queue()
-
-        dump_results_to_csv(results, sname, log_path or os.getcwd(), timestamp, logger)
-
-        if parsed_args.reference_config:
-            if any(result.status > ExecutionStatus.WARNING for result in results):
-                logger.warning("Skipping reference config write because one or more plugins failed")
-            else:
-                merged_plugin_config = PluginExecutor.merge_configs(plugin_config_inst_list)
-                ref_config = generate_reference_config(
-                    results, plugin_reg, logger, run_plugin_config=merged_plugin_config
-                )
-                if log_path:
-                    path = os.path.join(log_path, "reference_config.json")
-                else:
-                    path = os.path.join(os.getcwd(), "reference_config.json")
-                try:
-                    with open(path, "w") as f:
-                        json.dump(
-                            ref_config.model_dump(mode="json", exclude_none=True),
-                            f,
-                            indent=2,
-                        )
-                        logger.info("Reference config written to: %s", path)
-                except Exception as exp:
-                    logger.error(exp)
-
-        if any(result.status > ExecutionStatus.WARNING for result in results):
-            sys.exit(1)
-        else:
-            sys.exit(0)
-    except KeyboardInterrupt:
-        logger.info("Received Ctrl+C. Shutting down...")
-        sys.exit(130)
 
 
 if __name__ == "__main__":

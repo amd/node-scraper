@@ -2,19 +2,34 @@
 #
 # MIT License
 #
-# Copyright (c) 2025 Advanced Micro Devices, Inc.
+# Copyright (c) 2026 Advanced Micro Devices, Inc.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
 #
 ###############################################################################
-"""Stable CLI hooks for embedding node-scraper in other applications.
-
-Bump *HOST_CLI_API* when adding or changing symbols that downstream hosts rely on.
-Native ``nodescraper`` ``main`` composes the same registrars via :func:`build_cli_parser`.
-"""
+"""Low-level argparse composition for the node-scraper CLI."""
 
 from __future__ import annotations
 
 import argparse
 import os
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
 import nodescraper
@@ -23,17 +38,15 @@ from nodescraper.cli.common_args import (
     build_nodescraper_core_parent_parser,
 )
 from nodescraper.cli.dynamicparserbuilder import DynamicParserBuilder
+from nodescraper.cli.extension import CliExtension
 from nodescraper.cli.inputargtypes import log_path_arg
 
 if TYPE_CHECKING:
     from nodescraper.configregistry import ConfigRegistry
     from nodescraper.pluginregistry import PluginRegistry
 
-HOST_CLI_API = 1
-
 
 __all__ = [
-    "HOST_CLI_API",
     "add_nodescraper_core_arguments",
     "add_run_plugins_top_level_parser",
     "attach_nested_plugin_subparsers",
@@ -195,8 +208,14 @@ def register_show_redfish_oem_allowable_subparser(subparsers: Any) -> argparse.A
 def build_cli_parser(
     plugin_reg: PluginRegistry,
     config_reg: ConfigRegistry,
+    *,
+    extensions: Sequence[CliExtension] = (),
 ) -> tuple[argparse.ArgumentParser, dict[str, tuple[argparse.ArgumentParser, dict]]]:
-    """Compose the native node-scraper CLI parser (same result as legacy ``build_parser``)."""
+    """Compose the node-scraper CLI :class:`argparse.ArgumentParser` and plugin subparser map.
+
+    *extensions* receive :meth:`~nodescraper.cli.extension.CliExtension.alter_cli_parser` after
+    nested plugin subparsers are attached (add host-specific flags, etc.).
+    """
     core_parent = build_nodescraper_core_parent_parser(config_reg=config_reg)
 
     parser = argparse.ArgumentParser(
@@ -223,6 +242,15 @@ def build_cli_parser(
     add_gen_plugin_config_remaining_arguments(config_builder_parser, plugin_reg, config_reg)
 
     plugin_subparser_map = attach_nested_plugin_subparsers(run_plugin_parser, plugin_reg)
+    for ext in extensions:
+        ext.alter_cli_parser(
+            root_parser=parser,
+            subparsers=subparsers,
+            run_plugins_parser=run_plugin_parser,
+            plugin_reg=plugin_reg,
+            config_reg=config_reg,
+            plugin_subparser_map=plugin_subparser_map,
+        )
     return parser, plugin_subparser_map
 
 
