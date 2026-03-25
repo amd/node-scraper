@@ -31,14 +31,8 @@ import os
 import sys
 from typing import Optional
 
-import nodescraper
-from nodescraper.cli.common_args import (
-    build_nodescraper_core_parent_parser,
-    log_path_arg,
-)
 from nodescraper.cli.compare_runs import run_compare_runs
 from nodescraper.cli.constants import DEFAULT_CONFIG
-from nodescraper.cli.dynamicparserbuilder import DynamicParserBuilder
 from nodescraper.cli.helper import (
     dump_results_to_csv,
     generate_reference_config,
@@ -51,6 +45,7 @@ from nodescraper.cli.helper import (
     parse_gen_plugin_config,
     process_args,
 )
+from nodescraper.cli.host_integration import build_cli_parser
 from nodescraper.configregistry import ConfigRegistry
 from nodescraper.connection.redfish import (
     RedfishConnection,
@@ -68,175 +63,8 @@ def build_parser(
     plugin_reg: PluginRegistry,
     config_reg: ConfigRegistry,
 ) -> tuple[argparse.ArgumentParser, dict[str, tuple[argparse.ArgumentParser, dict]]]:
-    """Build an argument parser
-
-    Args:
-        plugin_reg (PluginRegistry): registry of plugins
-
-    Returns:
-        tuple[argparse.ArgumentParser, dict[str, tuple[argparse.ArgumentParser, dict]]]: tuple containing main
-        parser and subparsers for each plugin module
-    """
-    core_parent = build_nodescraper_core_parent_parser(config_reg=config_reg)
-
-    parser = argparse.ArgumentParser(
-        description="node scraper CLI",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-        parents=[core_parent],
-    )
-
-    parser.add_argument(
-        "--version",
-        action="version",
-        version=f"%(prog)s {nodescraper.__version__}",
-    )
-
-    subparsers = parser.add_subparsers(dest="subcmd", help="Subcommands")
-    subparsers.default = "run-plugins"
-
-    summary_parser = subparsers.add_parser(
-        "summary",
-        help="Generates summary csv file",
-    )
-
-    summary_parser.add_argument(
-        "--search-path",
-        dest="search_path",
-        type=log_path_arg,
-        help="Path to node-scraper previously generated results.",
-    )
-
-    summary_parser.add_argument(
-        "--output-path",
-        dest="output_path",
-        type=log_path_arg,
-        help="Specifies path for summary.csv.",
-    )
-
-    run_plugin_parser = subparsers.add_parser(
-        "run-plugins",
-        help="Run a series of plugins",
-    )
-
-    describe_parser = subparsers.add_parser(
-        "describe",
-        help="Display details on a built-in config or plugin",
-    )
-
-    describe_parser.add_argument(
-        "type",
-        choices=["config", "plugin"],
-        help="Type of object to describe (config or plugin)",
-    )
-
-    describe_parser.add_argument(
-        "name",
-        nargs="?",
-        help="Name of the config or plugin to describe",
-    )
-
-    config_builder_parser = subparsers.add_parser(
-        "gen-plugin-config",
-        help="Generate a config for a plugin or list of plugins",
-    )
-
-    config_builder_parser.add_argument(
-        "--gen-reference-config-from-logs",
-        dest="reference_config_from_logs",
-        type=log_path_arg,
-        help="Generate reference config from previous run logfiles. Writes to --output-path/reference_config.json if provided, otherwise ./reference_config.json.",
-    )
-
-    compare_runs_parser = subparsers.add_parser(
-        "compare-runs",
-        help="Compare datamodels from two run log directories",
-    )
-    compare_runs_parser.add_argument(
-        "path1",
-        type=str,
-        help="Path to first run log directory",
-    )
-    compare_runs_parser.add_argument(
-        "path2",
-        type=str,
-        help="Path to second run log directory",
-    )
-    compare_runs_parser.add_argument(
-        "--skip-plugins",
-        nargs="*",
-        choices=list(plugin_reg.plugins.keys()),
-        metavar="PLUGIN",
-        help="Plugin names to exclude from comparison",
-    )
-    compare_runs_parser.add_argument(
-        "--include-plugins",
-        nargs="*",
-        choices=list(plugin_reg.plugins.keys()),
-        metavar="PLUGIN",
-        help="If set, only compare data for these plugins (default: compare all found)",
-    )
-    compare_runs_parser.add_argument(
-        "--dont-truncate",
-        action="store_true",
-        dest="dont_truncate",
-        help="Do not truncate the Message column; show full error text and all errors (not just first 3)",
-    )
-
-    show_redfish_allowable_parser = subparsers.add_parser(
-        "show-redfish-oem-allowable",
-        help="Fetch OEM diagnostic allowable types from Redfish LogService (for oem_diagnostic_types_allowable)",
-    )
-    show_redfish_allowable_parser.add_argument(
-        "--log-service-path",
-        required=True,
-        help="Redfish path to LogService (e.g. redfish/v1/Systems/UBB/LogServices/DiagLogs)",
-    )
-
-    config_builder_parser.add_argument(
-        "--plugins",
-        nargs="*",
-        choices=list(plugin_reg.plugins.keys()),
-        help="Plugins to generate config for",
-    )
-
-    config_builder_parser.add_argument(
-        "--built-in-configs",
-        nargs="*",
-        choices=list(config_reg.configs.keys()),
-        help="Built in config names",
-    )
-
-    config_builder_parser.add_argument(
-        "--output-path",
-        default=os.getcwd(),
-        help="Directory to store config",
-    )
-
-    config_builder_parser.add_argument(
-        "--config-name",
-        default="plugin_config.json",
-        help="Name of config file",
-    )
-
-    plugin_subparsers = run_plugin_parser.add_subparsers(
-        dest="plugin_name", help="Available plugins"
-    )
-
-    plugin_subparser_map = {}
-    for plugin_name, plugin_class in plugin_reg.plugins.items():
-        plugin_subparser = plugin_subparsers.add_parser(
-            plugin_name,
-            help=f"Run {plugin_name} plugin",
-        )
-        try:
-            parser_builder = DynamicParserBuilder(plugin_subparser, plugin_class)
-            model_type_map = parser_builder.build_plugin_parser()
-        except Exception as e:
-            print(f"Exception building arg parsers for {plugin_name}: {str(e)}")  # noqa: T201
-            continue
-        plugin_subparser_map[plugin_name] = (plugin_subparser, model_type_map)
-
-    return parser, plugin_subparser_map
+    """Build an argument parser (delegates to :func:`~nodescraper.cli.host_integration.build_cli_parser`)."""
+    return build_cli_parser(plugin_reg, config_reg)
 
 
 def setup_logger(log_level: str = "INFO", log_path: Optional[str] = None) -> logging.Logger:

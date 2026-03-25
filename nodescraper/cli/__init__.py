@@ -28,10 +28,13 @@ from .common_args import (
     add_nodescraper_core_arguments,
     build_nodescraper_core_parent_parser,
 )
+from .host_integration import HOST_CLI_API, build_cli_parser
 from .main import main as cli_entry
 
 __all__ = [
+    "HOST_CLI_API",
     "add_nodescraper_core_arguments",
+    "build_cli_parser",
     "build_nodescraper_core_parent_parser",
     "cli_entry",
 ]
