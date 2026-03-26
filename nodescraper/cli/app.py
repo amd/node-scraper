@@ -69,8 +69,6 @@ from nodescraper.models import PluginConfig
 from nodescraper.pluginexecutor import PluginExecutor
 from nodescraper.pluginregistry import PluginRegistry
 
-CLI_APP_API = 1
-
 
 class NodeScraperCliApp:
     """Single entry for CLI lifecycle: registries, argparse, and plugin run."""
@@ -344,4 +342,4 @@ class NodeScraperCliApp:
         sys.exit(code)
 
 
-__all__ = ["CLI_APP_API", "NodeScraperCliApp"]
+__all__ = ["NodeScraperCliApp"]

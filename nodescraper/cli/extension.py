@@ -34,8 +34,6 @@ if TYPE_CHECKING:
     from nodescraper.configregistry import ConfigRegistry
     from nodescraper.pluginregistry import PluginRegistry
 
-CLI_EXTENSION_API = 1
-
 
 class CliExtension:
     """Optional hooks; default implementations are no-ops.
@@ -64,4 +62,4 @@ class CliExtension:
         """Invoked after native subcommands and per-plugin nested parsers are registered."""
 
 
-__all__ = ["CLI_EXTENSION_API", "CliExtension"]
+__all__ = ["CliExtension"]

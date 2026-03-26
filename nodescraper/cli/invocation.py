@@ -54,6 +54,4 @@ class PluginRunInvocation:
     sname: str
 
 
-CLI_INVOCATION_API = 1
-
-__all__ = ["CLI_INVOCATION_API", "PluginRunInvocation"]
+__all__ = ["PluginRunInvocation"]
