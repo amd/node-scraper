@@ -405,6 +405,21 @@ def annotations_for_model(model_cls: type) -> List[str]:
     return [f"**{k}**: `{format_type_annotation(v)}`" for k, v in anns.items()]
 
 
+def format_class_var_value(val: Any) -> str:
+    """Stable string for docs. set/frozenset repr order depends on PYTHONHASHSEED."""
+    if isinstance(val, frozenset):
+        if not val:
+            return "frozenset()"
+        items = sorted(val, key=lambda x: (type(x).__name__, repr(x)))
+        return "frozenset({" + ", ".join(repr(x) for x in items) + "})"
+    if isinstance(val, set):
+        if not val:
+            return "set()"
+        items = sorted(val, key=lambda x: (type(x).__name__, repr(x)))
+        return "{" + ", ".join(repr(x) for x in items) + "}"
+    return str(val)
+
+
 def class_vars_dump(cls: type, exclude: set) -> List[str]:
     ignore = {"abc_impl", "_abc_impl", "__abstractmethods__"}
     exclude = set(exclude) | ignore
@@ -427,7 +442,7 @@ def class_vars_dump(cls: type, exclude: set) -> List[str]:
             else:
                 out.append(f"**{name}**: `{val}`")
         else:
-            out.append(f"**{name}**: `{val}`")
+            out.append(f"**{name}**: `{format_class_var_value(val)}`")
     return out
 
 

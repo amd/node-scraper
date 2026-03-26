@@ -448,7 +448,7 @@ Collect raw output from niccli (Broadcom) and nicctl (Pensando) commands.
 - **CMD_NICCLI_DISCOVERY_LEGACY**: `['niccli --listdev', 'niccli --list']`
 - **CMD_NICCLI_DISCOVERY_NEW**: `['niccli --list_devices', 'niccli --list']`
 - **CMD_NICCLI_DISCOVERY**: `['niccli --listdev', 'niccli --list']`
-- **CMD_NICCLI_DISCOVERY_ALL**: `frozenset({'niccli --listdev', 'niccli --list', 'niccli --list_devices'})`
+- **CMD_NICCLI_DISCOVERY_ALL**: `frozenset({'niccli --list', 'niccli --list_devices', 'niccli --listdev'})`
 - **CMD_NICCLI_SUPPORT_RDMA_TEMPLATE_LEGACY**: `niccli -dev {device_num} nvm -getoption support_rdma -scope 0`
 - **CMD_NICCLI_PERFORMANCE_PROFILE_TEMPLATE_LEGACY**: `niccli -dev {device_num} nvm -getoption performance_profile`
 - **CMD_NICCLI_PCIE_RELAXED_ORDERING_TEMPLATE_LEGACY**: `niccli -dev {device_num} nvm -getoption pcie_relaxed_ordering`
