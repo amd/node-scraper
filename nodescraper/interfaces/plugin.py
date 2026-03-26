@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# Copyright (c) 2025 Advanced Micro Devices, Inc.
+# Copyright (c) 2026 Advanced Micro Devices, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -58,7 +58,7 @@ class PluginInterface(abc.ABC, Generic[TConnectionManager, TConnectArg]):
             system_info (Optional[SystemInfo], optional): system info object. Defaults to None.
             logger (Optional[logging.Logger], optional): python logger instance. Defaults to None.
             connection_manager (Optional[TConnectionManager], optional): connection manager instance. Defaults to None.
-            connection_args (Optional[Union[TConnectArg  , dict]], optional): connection args. Defaults to None.
+            connection_args (Optional[Union[TConnectArg , dict]], optional): connection args. Defaults to None.
             task_result_hooks (Optional[list[TaskResultHook]], optional): list of task result hooks. Defaults to None.
             log_path (Optional[str], optional): path for file system logs. Defaults to None.
             queue_callback (Optional[Callable], optional): function to add additional plugins to plugin executor queue. Defaults to None.
