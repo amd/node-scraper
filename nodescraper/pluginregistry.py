@@ -24,10 +24,10 @@
 #
 ###############################################################################
 import importlib
-import importlib.metadata
 import inspect
 import pkgutil
 import types
+from collections.abc import Sequence
 from typing import Optional
 
 import nodescraper.connection as internal_connections
@@ -38,6 +38,7 @@ from nodescraper.interfaces import (
     PluginInterface,
     PluginResultCollator,
 )
+from nodescraper.plugin_entrypoints import load_plugin_entry_points
 
 
 class PluginRegistry:
@@ -47,6 +48,9 @@ class PluginRegistry:
         plugin_pkg: Optional[list[types.ModuleType]] = None,
         load_internal_plugins: bool = True,
         load_entry_point_plugins: bool = True,
+        *,
+        entry_point_group: str = "nodescraper.plugins",
+        prefer_distribution_names: Optional[Sequence[str]] = None,
     ) -> None:
         """Initialize the PluginRegistry with optional plugin packages.
 
@@ -54,6 +58,9 @@ class PluginRegistry:
             plugin_pkg (Optional[list[types.ModuleType]], optional): The module to search for plugins in. Defaults to None.
             load_internal_plugins (bool, optional): Whether internal plugin should be loaded. Defaults to True.
             load_entry_point_plugins (bool, optional): Whether to load plugins from entry points. Defaults to True.
+            entry_point_group: Entry-point group to load when *load_entry_point_plugins* is true.
+            prefer_distribution_names: If set, entry points from these distributions override
+                same ``plugin_class.__name__`` from others (see :func:`~nodescraper.plugin_entrypoints.load_plugin_entry_points`).
         """
         if load_internal_plugins:
             self.plugin_pkg = [internal_plugins, internal_connections, internal_collators]
@@ -74,7 +81,10 @@ class PluginRegistry:
         )
 
         if load_entry_point_plugins:
-            entry_point_plugins = self.load_plugins_from_entry_points()
+            entry_point_plugins = PluginRegistry.load_plugins_from_entry_points(
+                group=entry_point_group,
+                prefer_distribution_names=prefer_distribution_names,
+            )
             self.plugins.update(entry_point_plugins)
 
     @staticmethod
@@ -113,40 +123,20 @@ class PluginRegistry:
         return registry
 
     @staticmethod
-    def load_plugins_from_entry_points() -> dict[str, type]:
-        """Load plugins registered via entry points.
+    def load_plugins_from_entry_points(
+        *,
+        group: str = "nodescraper.plugins",
+        prefer_distribution_names: Optional[Sequence[str]] = None,
+    ) -> dict[str, type[PluginInterface]]:
+        """Load plugins registered via *group* entry points.
+
+        Uses :func:`~nodescraper.plugin_entrypoints.load_plugin_entry_points` for consistent
+        validation and optional distribution preference ordering.
 
         Returns:
-            dict[str, type]: A dictionary mapping plugin names to their classes.
+            Map of plugin class name to plugin class.
         """
-        plugins = {}
-
-        try:
-            # Python 3.10+ supports group parameter
-            try:
-                eps = importlib.metadata.entry_points(group="nodescraper.plugins")  # type: ignore[call-arg]
-            except TypeError:
-                # Python 3.9 - entry_points() returns dict-like object
-                all_eps = importlib.metadata.entry_points()  # type: ignore[assignment]
-                eps = all_eps.get("nodescraper.plugins", [])  # type: ignore[assignment, attr-defined, arg-type]
-
-            for entry_point in eps:
-                try:
-                    plugin_class = entry_point.load()  # type: ignore[attr-defined]
-
-                    if (
-                        inspect.isclass(plugin_class)
-                        and issubclass(plugin_class, PluginInterface)
-                        and not inspect.isabstract(plugin_class)
-                    ):
-                        if hasattr(plugin_class, "is_valid") and not plugin_class.is_valid():
-                            continue
-
-                        plugins[plugin_class.__name__] = plugin_class
-                except Exception:
-                    pass
-
-        except Exception:
-            pass
-
-        return plugins
+        return load_plugin_entry_points(
+            group=group,
+            prefer_distribution_names=prefer_distribution_names,
+        )

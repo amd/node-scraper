@@ -37,15 +37,19 @@ from .host_namespace import (
 )
 from .invocation import PluginRunInvocation
 from .main import main as cli_entry
+from .main import run_cli_main
+from .prefer_distribution_extension import PreferDistributionPluginsExtension
 
 __all__ = [
     "CliExtension",
     "NodeScraperCliApp",
     "PluginRunInvocation",
+    "PreferDistributionPluginsExtension",
     "add_nodescraper_core_arguments",
     "build_cli_parser",
     "build_nodescraper_core_parent_parser",
     "build_run_plugins_parsed_top_level",
     "cli_entry",
     "nodescraper_core_cli_dests",
+    "run_cli_main",
 ]

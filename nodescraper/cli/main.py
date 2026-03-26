@@ -60,5 +60,42 @@ def main(
     )
 
 
+def run_cli_main(
+    arg_input: Optional[list[str]] = None,
+    *,
+    parsed_top_level: Optional[argparse.Namespace] = None,
+    plugin_arg_map: Optional[dict[str, list[str]]] = None,
+    invalid_plugins: Optional[list[str]] = None,
+    extensions: Sequence[CliExtension] = (),
+) -> int:
+    """Run the nodescraper CLI and return an exit code (does not propagate ``SystemExit``).
+
+    Prefer this when embedding in another application. :func:`main` uses ``sys.exit`` and
+    may raise :exc:`SystemExit`; this helper converts that to an ``int`` return value.
+
+    Args:
+        Same as :func:`main`.
+
+    Returns:
+        Process exit code (``0`` for success; non-zero for errors or CLI early-exit codes).
+    """
+    try:
+        main(
+            arg_input,
+            parsed_top_level=parsed_top_level,
+            plugin_arg_map=plugin_arg_map,
+            invalid_plugins=invalid_plugins,
+            extensions=extensions,
+        )
+    except SystemExit as exc:
+        code = exc.code
+        if code is None:
+            return 0
+        if isinstance(code, int):
+            return code
+        return 1
+    return 0
+
+
 if __name__ == "__main__":
     main()
