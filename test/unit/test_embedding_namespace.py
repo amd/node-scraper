@@ -9,13 +9,13 @@ import argparse
 import unittest
 
 from nodescraper.cli.common_args import add_nodescraper_core_arguments
-from nodescraper.cli.host_namespace import (
+from nodescraper.cli.embed import (
     build_run_plugins_parsed_top_level,
     nodescraper_core_cli_dests,
 )
 
 
-class TestHostNamespace(unittest.TestCase):
+class TestEmbeddingNamespace(unittest.TestCase):
     def test_core_dests_includes_expected_fields(self):
         dests = nodescraper_core_cli_dests()
         self.assertIn("sys_name", dests)
@@ -53,6 +53,26 @@ class TestHostNamespace(unittest.TestCase):
             map_sys_interaction_level=lambda s: {"STANDARD": "INTERACTIVE"}.get(s, s),
         )
         self.assertEqual(top.sys_interaction_level, "INTERACTIVE")
+
+    def test_build_copies_connection_config_dict_from_host(self):
+        """``connection_config`` is a core dest; hosts may pre-build InBand JSON shape."""
+        host = argparse.Namespace(
+            sys_name="remote-host",
+            sys_location="REMOTE",
+            sys_interaction_level="INTERACTIVE",
+            connection_config={
+                "InBandConnectionManager": {
+                    "hostname": "remote-host",
+                    "username": "alice",
+                    "port": 2222,
+                }
+            },
+        )
+        top = build_run_plugins_parsed_top_level(host, "DmesgPlugin")
+        ib = top.connection_config["InBandConnectionManager"]
+        self.assertEqual(ib["hostname"], "remote-host")
+        self.assertEqual(ib["username"], "alice")
+        self.assertEqual(ib["port"], 2222)
 
 
 if __name__ == "__main__":

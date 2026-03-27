@@ -29,12 +29,13 @@ from .common_args import (
     add_nodescraper_core_arguments,
     build_nodescraper_core_parent_parser,
 )
-from .extension import CliExtension
-from .host_integration import build_cli_parser
-from .host_namespace import (
+from .embed import (
     build_run_plugins_parsed_top_level,
     nodescraper_core_cli_dests,
+    run_cli_embedded,
 )
+from .extension import CliExtension
+from .host_integration import build_cli_parser
 from .invocation import PluginRunInvocation
 from .main import main as cli_entry
 from .main import run_cli_main
@@ -51,5 +52,6 @@ __all__ = [
     "build_run_plugins_parsed_top_level",
     "cli_entry",
     "nodescraper_core_cli_dests",
+    "run_cli_embedded",
     "run_cli_main",
 ]

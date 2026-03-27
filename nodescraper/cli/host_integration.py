@@ -37,9 +37,12 @@ from nodescraper.cli.common_args import (
     add_nodescraper_core_arguments,
     build_nodescraper_core_parent_parser,
 )
-from nodescraper.cli.dynamicparserbuilder import DynamicParserBuilder
 from nodescraper.cli.extension import CliExtension
 from nodescraper.cli.inputargtypes import log_path_arg
+from nodescraper.cli.run_plugins_parser import (
+    add_run_plugins_top_level_parser,
+    attach_nested_plugin_subparsers,
+)
 
 if TYPE_CHECKING:
     from nodescraper.configregistry import ConfigRegistry
@@ -79,14 +82,6 @@ def register_summary_subparser(subparsers: Any) -> argparse.ArgumentParser:
         help="Specifies path for summary.csv.",
     )
     return p
-
-
-def add_run_plugins_top_level_parser(subparsers: Any) -> argparse.ArgumentParser:
-    """Add ``run-plugins`` without per-plugin nested subparsers (attach those separately)."""
-    return subparsers.add_parser(
-        "run-plugins",
-        help="Run a series of plugins",
-    )
 
 
 def register_describe_subparser(subparsers: Any) -> argparse.ArgumentParser:
@@ -252,27 +247,3 @@ def build_cli_parser(
             plugin_subparser_map=plugin_subparser_map,
         )
     return parser, plugin_subparser_map
-
-
-def attach_nested_plugin_subparsers(
-    run_plugin_parser: argparse.ArgumentParser,
-    plugin_reg: PluginRegistry,
-) -> dict[str, tuple[argparse.ArgumentParser, dict]]:
-    """Add ``run-plugins <PluginName>`` nested subparsers and dynamic plugin args."""
-    plugin_subparsers = run_plugin_parser.add_subparsers(
-        dest="plugin_name", help="Available plugins"
-    )
-    plugin_subparser_map: dict[str, tuple[argparse.ArgumentParser, dict]] = {}
-    for plugin_name, plugin_class in plugin_reg.plugins.items():
-        plugin_subparser = plugin_subparsers.add_parser(
-            plugin_name,
-            help=f"Run {plugin_name} plugin",
-        )
-        try:
-            parser_builder = DynamicParserBuilder(plugin_subparser, plugin_class)
-            model_type_map = parser_builder.build_plugin_parser()
-        except Exception as e:
-            print(f"Exception building arg parsers for {plugin_name}: {str(e)}")  # noqa: T201
-            continue
-        plugin_subparser_map[plugin_name] = (plugin_subparser, model_type_map)
-    return plugin_subparser_map

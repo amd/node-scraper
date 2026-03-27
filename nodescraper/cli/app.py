@@ -26,7 +26,9 @@
 """Composed CLI application: registries, parser, parse, and plugin run execution.
 
 Hosts embed :class:`NodeScraperCliApp` (or call :func:`nodescraper.cli.main.main` with
-``extensions=``) instead of importing many symbols from :mod:`nodescraper.cli.host_integration`.
+``extensions=``). Use :func:`~nodescraper.cli.host_integration.build_cli_parser` for the stock
+parser tree; use :mod:`nodescraper.cli.embed` only for in-process ``run-plugins`` mapping and
+:func:`~nodescraper.cli.embed.run_cli_embedded`.
 """
 
 from __future__ import annotations
