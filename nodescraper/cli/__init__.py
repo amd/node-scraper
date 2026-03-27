@@ -35,7 +35,7 @@ from .embed import (
     run_cli_embedded,
 )
 from .extension import CliExtension
-from .host_integration import build_cli_parser
+from .host_integration import build_cli_parser, register_nodescraper_cli_subcommands
 from .invocation import PluginRunInvocation
 from .main import main as cli_entry
 from .main import run_cli_main
@@ -48,6 +48,7 @@ __all__ = [
     "PreferDistributionPluginsExtension",
     "add_nodescraper_core_arguments",
     "build_cli_parser",
+    "register_nodescraper_cli_subcommands",
     "build_nodescraper_core_parent_parser",
     "build_run_plugins_parsed_top_level",
     "cli_entry",

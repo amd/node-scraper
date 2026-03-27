@@ -75,24 +75,46 @@ from nodescraper.pluginregistry import PluginRegistry
 class NodeScraperCliApp:
     """Single entry for CLI lifecycle: registries, argparse, and plugin run."""
 
-    def __init__(self, *, extensions: Sequence[CliExtension] = ()):
+    def __init__(
+        self,
+        *,
+        extensions: Sequence[CliExtension] = (),
+        host_parser: Optional[argparse.ArgumentParser] = None,
+        host_plugin_reg: Optional[PluginRegistry] = None,
+        host_config_reg: Optional[ConfigRegistry] = None,
+        host_plugin_subparser_map: Optional[dict[str, tuple[argparse.ArgumentParser, dict]]] = None,
+    ):
         self.extensions: tuple[CliExtension, ...] = tuple(extensions)
-        self.plugin_reg = PluginRegistry()
-        self.config_reg = ConfigRegistry()
-        for ext in self.extensions:
-            ext.prepare_registries(self.plugin_reg, self.config_reg)
-        self.config_reg.configs["AllPlugins"] = PluginConfig(
-            name="AllPlugins",
-            desc="Run all registered plugins with default arguments",
-            global_args={},
-            plugins={name: {} for name in self.plugin_reg.plugins},
-            result_collators={},
-        )
-        self.parser, self.plugin_subparser_map = build_cli_parser(
-            self.plugin_reg,
-            self.config_reg,
-            extensions=self.extensions,
-        )
+        if host_parser is not None:
+            if (
+                host_plugin_reg is None
+                or host_config_reg is None
+                or host_plugin_subparser_map is None
+            ):
+                raise ValueError(
+                    "host_parser requires host_plugin_reg, host_config_reg, and host_plugin_subparser_map"
+                )
+            self.plugin_reg = host_plugin_reg
+            self.config_reg = host_config_reg
+            self.parser = host_parser
+            self.plugin_subparser_map = host_plugin_subparser_map
+        else:
+            self.plugin_reg = PluginRegistry()
+            self.config_reg = ConfigRegistry()
+            for ext in self.extensions:
+                ext.prepare_registries(self.plugin_reg, self.config_reg)
+            self.config_reg.configs["AllPlugins"] = PluginConfig(
+                name="AllPlugins",
+                desc="Run all registered plugins with default arguments",
+                global_args={},
+                plugins={name: {} for name in self.plugin_reg.plugins},
+                result_collators={},
+            )
+            self.parser, self.plugin_subparser_map = build_cli_parser(
+                self.plugin_reg,
+                self.config_reg,
+                extensions=self.extensions,
+            )
 
     @staticmethod
     def setup_logger(log_level: str = "INFO", log_path: Optional[str] = None) -> logging.Logger:
@@ -164,35 +186,30 @@ class NodeScraperCliApp:
             inv.logger.info("Received Ctrl+C. Shutting down...")
             return 130
 
-    def main(
+    def run_from_parsed_args(
         self,
-        arg_input: Optional[list[str]] = None,
+        parsed_args: argparse.Namespace,
         *,
-        parsed_top_level: Optional[argparse.Namespace] = None,
         plugin_arg_map: Optional[dict[str, list[str]]] = None,
         invalid_plugins: Optional[list[str]] = None,
     ) -> None:
-        """Same behavior as :func:`nodescraper.cli.main.main` (may call ``sys.exit``)."""
+        """Run post-parse CLI behavior (``subcmd`` or host ``command``). May :func:`sys.exit`."""
+        if getattr(parsed_args, "subcmd", None) is None:
+            cmd = getattr(parsed_args, "command", None)
+            if cmd is not None:
+                parsed_args.subcmd = cmd
         parser = self.parser
         plugin_reg = self.plugin_reg
         config_reg = self.config_reg
         plugin_subparser_map = self.plugin_subparser_map
 
+        if plugin_arg_map is None:
+            pn = getattr(parsed_args, "plugin_name", None)
+            plugin_arg_map = {pn: []} if pn else {}
+        if invalid_plugins is None:
+            invalid_plugins = []
+
         try:
-            if parsed_top_level is not None:
-                parsed_args = parsed_top_level
-                if plugin_arg_map is None:
-                    pn = getattr(parsed_top_level, "plugin_name", None)
-                    plugin_arg_map = {pn: []} if pn else {}
-                if invalid_plugins is None:
-                    invalid_plugins = []
-            else:
-                if arg_input is None:
-                    arg_input = sys.argv[1:]
-                top_level_args, plugin_arg_map, invalid_plugins = process_args(
-                    arg_input, list(plugin_subparser_map.keys())
-                )
-                parsed_args = parser.parse_args(top_level_args)
             system_info = get_system_info(parsed_args)
             sname = system_info.name.lower().replace("-", "_").replace(".", "_")
             timestamp = datetime.datetime.now().strftime("%Y_%m_%d-%I_%M_%S_%p")
@@ -342,6 +359,39 @@ class NodeScraperCliApp:
         )
         code = self.execute_plugin_run(inv)
         sys.exit(code)
+
+    def main(
+        self,
+        arg_input: Optional[list[str]] = None,
+        *,
+        parsed_top_level: Optional[argparse.Namespace] = None,
+        plugin_arg_map: Optional[dict[str, list[str]]] = None,
+        invalid_plugins: Optional[list[str]] = None,
+    ) -> None:
+        """Same behavior as :func:`nodescraper.cli.main.main` (may call ``sys.exit``)."""
+        parser = self.parser
+        plugin_subparser_map = self.plugin_subparser_map
+
+        if parsed_top_level is not None:
+            parsed_args = parsed_top_level
+            if plugin_arg_map is None:
+                pn = getattr(parsed_top_level, "plugin_name", None)
+                plugin_arg_map = {pn: []} if pn else {}
+            if invalid_plugins is None:
+                invalid_plugins = []
+        else:
+            if arg_input is None:
+                arg_input = sys.argv[1:]
+            top_level_args, plugin_arg_map, invalid_plugins = process_args(
+                arg_input, list(plugin_subparser_map.keys())
+            )
+            parsed_args = parser.parse_args(top_level_args)
+
+        self.run_from_parsed_args(
+            parsed_args,
+            plugin_arg_map=plugin_arg_map,
+            invalid_plugins=invalid_plugins,
+        )
 
 
 __all__ = ["NodeScraperCliApp"]

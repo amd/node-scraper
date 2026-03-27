@@ -40,6 +40,16 @@ class TestEmbeddingNamespace(unittest.TestCase):
         self.assertEqual(top.plugin_name, "DmesgPlugin")
         self.assertEqual(top.sys_name, "host-a")
 
+    def test_build_omits_plugin_name_for_bare_run_plugins(self):
+        """Bare ``run-plugins`` (no plugin token) uses default config in :class:`NodeScraperCliApp`."""
+        p = argparse.ArgumentParser()
+        add_nodescraper_core_arguments(p)
+        ns = p.parse_args(["--sys-name", "host-b", "--sys-location", "LOCAL"])
+        top = build_run_plugins_parsed_top_level(ns, None)
+        self.assertEqual(top.subcmd, "run-plugins")
+        self.assertFalse(hasattr(top, "plugin_name"))
+        self.assertEqual(top.sys_name, "host-b")
+
     def test_map_sys_interaction_level_optional(self):
         p = argparse.ArgumentParser()
         add_nodescraper_core_arguments(

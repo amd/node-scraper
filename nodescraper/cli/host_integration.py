@@ -58,6 +58,7 @@ __all__ = [
     "register_describe_subparser",
     "add_gen_plugin_config_remaining_arguments",
     "register_gen_plugin_config_subparser_partial",
+    "register_nodescraper_cli_subcommands",
     "register_show_redfish_oem_allowable_subparser",
     "register_summary_subparser",
     "build_cli_parser",
@@ -200,6 +201,50 @@ def register_show_redfish_oem_allowable_subparser(subparsers: Any) -> argparse.A
     return p
 
 
+def register_nodescraper_cli_subcommands(
+    subparsers: Any,
+    plugin_reg: PluginRegistry,
+    config_reg: ConfigRegistry,
+    *,
+    root_parser: argparse.ArgumentParser,
+    extensions: Sequence[CliExtension] = (),
+) -> tuple[argparse.ArgumentParser, dict[str, tuple[argparse.ArgumentParser, dict]]]:
+    """Register stock node-scraper subcommands on an existing ``subparsers`` action.
+
+    Host CLIs (e.g. error-scraper) call this after adding their own subparsers so ``summary``,
+    ``run-plugins``, ``describe``, etc. stay aligned with :func:`build_cli_parser`.
+
+    Args:
+        subparsers: ``parser.add_subparsers(...)`` return value.
+        plugin_reg: Registry used for nested ``run-plugins`` parsers and compare/gen choices.
+        config_reg: Built-in config registry for ``gen-plugin-config``.
+        root_parser: Host root parser (passed to :meth:`CliExtension.alter_cli_parser`).
+        extensions: Optional :class:`~nodescraper.cli.extension.CliExtension` instances.
+
+    Returns:
+        ``(run_plugins_parser, plugin_subparser_map)`` for host bookkeeping / parse helpers.
+    """
+    register_summary_subparser(subparsers)
+    run_plugin_parser = add_run_plugins_top_level_parser(subparsers)
+    register_describe_subparser(subparsers)
+    config_builder_parser = register_gen_plugin_config_subparser_partial(subparsers)
+    register_compare_runs_subparser(subparsers, plugin_reg)
+    register_show_redfish_oem_allowable_subparser(subparsers)
+    add_gen_plugin_config_remaining_arguments(config_builder_parser, plugin_reg, config_reg)
+
+    plugin_subparser_map = attach_nested_plugin_subparsers(run_plugin_parser, plugin_reg)
+    for ext in extensions:
+        ext.alter_cli_parser(
+            root_parser=root_parser,
+            subparsers=subparsers,
+            run_plugins_parser=run_plugin_parser,
+            plugin_reg=plugin_reg,
+            config_reg=config_reg,
+            plugin_subparser_map=plugin_subparser_map,
+        )
+    return run_plugin_parser, plugin_subparser_map
+
+
 def build_cli_parser(
     plugin_reg: PluginRegistry,
     config_reg: ConfigRegistry,
@@ -228,22 +273,11 @@ def build_cli_parser(
     subparsers = parser.add_subparsers(dest="subcmd", help="Subcommands")
     subparsers.default = "run-plugins"
 
-    register_summary_subparser(subparsers)
-    run_plugin_parser = add_run_plugins_top_level_parser(subparsers)
-    register_describe_subparser(subparsers)
-    config_builder_parser = register_gen_plugin_config_subparser_partial(subparsers)
-    register_compare_runs_subparser(subparsers, plugin_reg)
-    register_show_redfish_oem_allowable_subparser(subparsers)
-    add_gen_plugin_config_remaining_arguments(config_builder_parser, plugin_reg, config_reg)
-
-    plugin_subparser_map = attach_nested_plugin_subparsers(run_plugin_parser, plugin_reg)
-    for ext in extensions:
-        ext.alter_cli_parser(
-            root_parser=parser,
-            subparsers=subparsers,
-            run_plugins_parser=run_plugin_parser,
-            plugin_reg=plugin_reg,
-            config_reg=config_reg,
-            plugin_subparser_map=plugin_subparser_map,
-        )
+    _, plugin_subparser_map = register_nodescraper_cli_subcommands(
+        subparsers,
+        plugin_reg,
+        config_reg,
+        root_parser=parser,
+        extensions=extensions,
+    )
     return parser, plugin_subparser_map

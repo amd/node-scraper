@@ -55,21 +55,25 @@ def nodescraper_core_cli_dests() -> frozenset[str]:
 
 def build_run_plugins_parsed_top_level(
     host_namespace: argparse.Namespace,
-    plugin_name: str,
+    plugin_name: str | None = None,
     *,
     map_sys_interaction_level: Optional[Callable[[str], str]] = None,
 ) -> argparse.Namespace:
     """Build *parsed_top_level* for in-process ``run-plugins``.
 
     Copies attributes present on *host_namespace* whose names appear in
-    :func:`nodescraper_core_cli_dests`, then sets ``subcmd="run-plugins"`` and *plugin_name*.
+    :func:`nodescraper_core_cli_dests`, then sets ``subcmd="run-plugins"``. If *plugin_name*
+    is set, ``plugin_name`` is copied onto the namespace; if omitted (bare ``run-plugins``),
+    :class:`~nodescraper.cli.app.NodeScraperCliApp` uses the default built-in config
+    (``NodeStatus``) when *plugin_arg_map* is empty.
     """
     data: dict[str, Any] = {}
     for dest in nodescraper_core_cli_dests():
         if hasattr(host_namespace, dest):
             data[dest] = getattr(host_namespace, dest)
     data["subcmd"] = "run-plugins"
-    data["plugin_name"] = plugin_name
+    if plugin_name:
+        data["plugin_name"] = plugin_name
     ns = argparse.Namespace(**data)
     if map_sys_interaction_level is not None and hasattr(ns, "sys_interaction_level"):
         ns.sys_interaction_level = map_sys_interaction_level(str(ns.sys_interaction_level))
