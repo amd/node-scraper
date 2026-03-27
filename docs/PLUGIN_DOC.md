@@ -22,7 +22,7 @@
 | OsPlugin | sh -c '( lsb_release -ds &#124;&#124; (cat /etc/*release &#124; grep PRETTY_NAME) &#124;&#124; uname -om ) 2>/dev/null &#124; head -n1'<br>cat /etc/*release &#124; grep VERSION_ID<br>wmic os get Version /value<br>wmic os get Caption /Value | **Analyzer Args:**<br>- `exp_os`: Union[str, list] — Expected OS name/version string(s) to match (e.g. from lsb_release or /etc/os-release).<br>- `exact_match`: bool — If True, require exact match for exp_os; otherwise substring match. | - | [OsDataModel](#OsDataModel-Model) | [OsCollector](#Collector-Class-OsCollector) | [OsAnalyzer](#Data-Analyzer-Class-OsAnalyzer) |
 | PackagePlugin | dnf list --installed<br>dpkg-query -W<br>pacman -Q<br>cat /etc/*release<br>wmic product get name,version | **Analyzer Args:**<br>- `exp_package_ver`: Dict[str, Optional[str]] — Map package name -> expected version (None = any version). Checked against installed packages.<br>- `regex_match`: bool — If True, match package versions with regex; otherwise exact or prefix match.<br>- `rocm_regex`: Optional[str] — Optional regex to identify ROCm package version (used when enable_rocm_regex is True).<br>- `enable_rocm_regex`: bool — If True, use rocm_regex (or default pattern) to extract ROCm version for checks. | - | [PackageDataModel](#PackageDataModel-Model) | [PackageCollector](#Collector-Class-PackageCollector) | [PackageAnalyzer](#Data-Analyzer-Class-PackageAnalyzer) |
 | PciePlugin | lspci -d {vendor_id}: -nn<br>lspci -x<br>lspci -xxxx<br>lspci -PP<br>lspci -PP -d {vendor_id}:{dev_id}<br>lspci -vvv<br>lspci -vvvt | **Analyzer Args:**<br>- `exp_speed`: int — Expected PCIe link speed (generation 1–5).<br>- `exp_width`: int — Expected PCIe link width in lanes (1–16).<br>- `exp_sriov_count`: int — Expected SR-IOV virtual function count.<br>- `exp_gpu_count_override`: Optional[int] — Override expected GPU count for validation.<br>- `exp_max_payload_size`: Union[Dict[int, int], int, NoneType] — Expected max payload size: int for all devices, or dict keyed by device ID.<br>- `exp_max_rd_req_size`: Union[Dict[int, int], int, NoneType] — Expected max read request size: int for all devices, or dict keyed by device ID.<br>- `exp_ten_bit_tag_req_en`: Union[Dict[int, int], int, NoneType] — Expected 10-bit tag request enable: int for all devices, or dict keyed by device ID. | - | [PcieDataModel](#PcieDataModel-Model) | [PcieCollector](#Collector-Class-PcieCollector) | [PcieAnalyzer](#Data-Analyzer-Class-PcieAnalyzer) |
-| ProcessPlugin | top -b -n 1<br>rocm-smi --showpids<br>top -b -n 1 -o %CPU  | **Analyzer Args:**<br>- `max_kfd_processes`: int — Maximum allowed number of KFD (Kernel Fusion Driver) processes; 0 disables the check.<br>- `max_cpu_usage`: float — Maximum allowed CPU usage (percent) for process checks. | **Collection Args:**<br>- `top_n_process`: int — Number of top processes by CPU usage to collect (e.g. for top -b -n 1 -o %CPU). | [ProcessDataModel](#ProcessDataModel-Model) | [ProcessCollector](#Collector-Class-ProcessCollector) | [ProcessAnalyzer](#Data-Analyzer-Class-ProcessAnalyzer) |
+| ProcessPlugin | cat /proc/stat<br>shell loop over /proc/*/stat (with ``__SAMPLER__`` marker)<br>batched ``cat /proc/<pid>/comm`` | **Analyzer Args:**<br>- `max_cpu_usage`: float — Maximum allowed aggregate CPU usage (percent). | **Collection Args:**<br>- `top_n_process`: int — Max process rows ranked by CPU share over the sample window.<br>- `sample_interval_seconds`: float — Wall seconds between two /proc samples (default 1.0). | [ProcessDataModel](#ProcessDataModel-Model) | [ProcessCollector](#Collector-Class-ProcessCollector) | [ProcessAnalyzer](#Data-Analyzer-Class-ProcessAnalyzer) |
 | RdmaPlugin | rdma link -j<br>rdma dev<br>rdma link<br>rdma statistic -j | - | - | [RdmaDataModel](#RdmaDataModel-Model) | [RdmaCollector](#Collector-Class-RdmaCollector) | [RdmaAnalyzer](#Data-Analyzer-Class-RdmaAnalyzer) |
 | RocmPlugin | {rocm_path}/opencl/bin/*/clinfo<br>env &#124; grep -Ei 'rocm&#124;hsa&#124;hip&#124;mpi&#124;openmp&#124;ucx&#124;miopen'<br>ls /sys/class/kfd/kfd/proc/<br>grep -i -E 'rocm' /etc/ld.so.conf.d/*<br>{rocm_path}/bin/rocminfo<br>ls -v -d {rocm_path}*<br>ls -v -d {rocm_path}-[3-7]* &#124; tail -1<br>ldconfig -p &#124; grep -i -E 'rocm'<br>grep . -r {rocm_path}/.info/* | **Analyzer Args:**<br>- `exp_rocm`: Union[str, list] — Expected ROCm version string(s) to match (e.g. from rocminfo).<br>- `exp_rocm_latest`: str — Expected 'latest' ROCm path or version string for versioned installs.<br>- `exp_rocm_sub_versions`: dict[str, Union[str, list]] — Map sub-version name (e.g. version_rocm) to expected string or list of allowed strings. | **Collection Args:**<br>- `rocm_path`: str — Base path to ROCm installation (e.g. /opt/rocm). Used for rocminfo, clinfo, and version discovery. | [RocmDataModel](#RocmDataModel-Model) | [RocmCollector](#Collector-Class-RocmCollector) | [RocmAnalyzer](#Data-Analyzer-Class-RocmAnalyzer) |
 | StoragePlugin | sh -c 'df -lH -B1 &#124; grep -v 'boot''<br>wmic LogicalDisk Where DriveType="3" Get DeviceId,Size,FreeSpace | - | **Collection Args:**<br>- `skip_sudo`: bool — If True, do not use sudo when running df and related storage commands. | [StorageDataModel](#StorageDataModel-Model) | [StorageCollector](#Collector-Class-StorageCollector) | [StorageAnalyzer](#Data-Analyzer-Class-StorageAnalyzer) |
@@ -727,7 +727,7 @@ PcieDataModel
 
 ### Description
 
-Collect Process details
+Collect aggregate CPU usage and top processes from Linux ``/proc`` (two samples of ``/proc/stat`` and ``/proc/<pid>/stat``; no ``top`` or ROCm SMI).
 
 **Bases**: ['InBandDataCollector']
 
@@ -736,9 +736,9 @@ Collect Process details
 ### Class Variables
 
 - **SUPPORTED_OS_FAMILY**: `{<OSFamily.LINUX: 3>}`
-- **CMD_KFD**: `rocm-smi --showpids`
-- **CMD_CPU_USAGE**: `top -b -n 1`
-- **CMD_PROCESS**: `top -b -n 1 -o %CPU `
+- **CMD_PROC_STAT**: read aggregate CPU counters from ``/proc/stat``
+- **CMD_PROC_PID_STAT_DUMP**: shell loop dumping ``/proc/<pid>/stat`` with ``__SAMPLER__`` marker
+- **CMD_PROC_COMM_BATCH**: batched ``comm`` reads; format with ``{pids}`` (space-separated PID list)
 
 ### Provides Data
 
@@ -746,9 +746,9 @@ ProcessDataModel
 
 ### Commands
 
-- top -b -n 1
-- rocm-smi --showpids
-- top -b -n 1 -o %CPU
+- ``CMD_PROC_STAT`` (`cat /proc/stat`)
+- ``CMD_PROC_PID_STAT_DUMP``
+- ``CMD_PROC_COMM_BATCH.format(pids=...)``
 
 ## Collector Class RdmaCollector
 
@@ -1250,9 +1250,8 @@ class for collection of PCIe data.
 
 ### Model annotations and fields
 
-- **kfd_process**: `Optional[int]`
-- **cpu_usage**: `Optional[float]`
-- **processes**: `Optional[list[tuple[str, str]]]`
+- **cpu_usage**: `Optional[float]` — Aggregate non-idle CPU percent over the sample window.
+- **processes**: `Optional[list[tuple[str, str]]]` — Up to ``top_n_process`` rows: ``(comm, cpu_share_percent_str)``.
 
 ## RdmaDataModel Model
 
@@ -1650,7 +1649,7 @@ Check PCIe Data for errors
 
 ### Description
 
-Check cpu and kfd processes are within allowed maximum cpu and gpu usage
+Check aggregate ``cpu_usage`` against ``max_cpu_usage`` (see [ProcessDataModel](#ProcessDataModel-Model)).
 
 **Bases**: ['DataAnalyzer']
 
@@ -2004,8 +2003,7 @@ Arguments for PCIe analyzer
 
 ### Annotations / fields
 
-- **max_kfd_processes**: `int` — Maximum allowed number of KFD (Kernel Fusion Driver) processes; 0 disables the check.
-- **max_cpu_usage**: `float` — Maximum allowed CPU usage (percent) for process checks.
+- **max_cpu_usage**: `float` — Maximum allowed aggregate CPU usage (percent) for process checks.
 
 ## Analyzer Args Class RocmAnalyzerArgs
 

@@ -31,5 +31,9 @@ from nodescraper.models import CollectorArgs
 class ProcessCollectorArgs(CollectorArgs):
     top_n_process: int = Field(
         default=10,
-        description="Number of top processes by CPU usage to collect (e.g. for top -b -n 1 -o %CPU).",
+        description="Max process rows to return, ranked by CPU share over the sample window (from /proc).",
+    )
+    sample_interval_seconds: float = Field(
+        default=1.0,
+        description="Wall time between two /proc samples for CPU utilization (must be > 0; invalid values use 1.0).",
     )

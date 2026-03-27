@@ -23,12 +23,13 @@
 # SOFTWARE.
 #
 ###############################################################################
-from typing import Optional
+from typing import List, Optional, Tuple
 
 from nodescraper.models import DataModel
 
 
 class ProcessDataModel(DataModel):
-    kfd_process: Optional[int] = None
+    """Aggregate CPU usage and top processes from ``/proc`` sampling."""
+
     cpu_usage: Optional[float] = None
-    processes: Optional[list[tuple[str, str]]] = None
+    processes: Optional[List[Tuple[str, str]]] = None
