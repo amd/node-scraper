@@ -23,13 +23,6 @@
 # SOFTWARE.
 #
 ###############################################################################
-"""Composed CLI application: registries, parser, parse, and plugin run execution.
-
-Hosts embed :class:`NodeScraperCliApp` (or call :func:`nodescraper.cli.main.main` with
-``extensions=``). Use :func:`~nodescraper.cli.host_integration.build_cli_parser` for the stock
-parser tree; use :mod:`nodescraper.cli.embed` only for in-process ``run-plugins`` mapping and
-:func:`~nodescraper.cli.embed.run_cli_embedded`.
-"""
 
 from __future__ import annotations
 
@@ -73,7 +66,7 @@ from nodescraper.pluginregistry import PluginRegistry
 
 
 class NodeScraperCliApp:
-    """Single entry for CLI lifecycle: registries, argparse, and plugin run."""
+    """CLI lifecycle: registries, argparse, and plugin run."""
 
     def __init__(
         self,
@@ -84,6 +77,7 @@ class NodeScraperCliApp:
         host_config_reg: Optional[ConfigRegistry] = None,
         host_plugin_subparser_map: Optional[dict[str, tuple[argparse.ArgumentParser, dict]]] = None,
     ):
+        """Build parsers and registries, or adopt a host parser and maps."""
         self.extensions: tuple[CliExtension, ...] = tuple(extensions)
         if host_parser is not None:
             if (
@@ -193,7 +187,7 @@ class NodeScraperCliApp:
         plugin_arg_map: Optional[dict[str, list[str]]] = None,
         invalid_plugins: Optional[list[str]] = None,
     ) -> None:
-        """Run post-parse CLI behavior (``subcmd`` or host ``command``). May :func:`sys.exit`."""
+        """Dispatch by ``subcmd`` (or host ``command``); may :func:`sys.exit`."""
         if getattr(parsed_args, "subcmd", None) is None:
             cmd = getattr(parsed_args, "command", None)
             if cmd is not None:

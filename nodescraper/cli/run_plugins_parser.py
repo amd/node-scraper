@@ -4,8 +4,25 @@
 #
 # Copyright (c) 2026 Advanced Micro Devices, Inc.
 #
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+#
 ###############################################################################
-"""``run-plugins`` argparse layout (top-level subcommand + per-plugin nested parsers)."""
 
 from __future__ import annotations
 
@@ -17,7 +34,7 @@ from nodescraper.pluginregistry import PluginRegistry
 
 
 def add_run_plugins_top_level_parser(subparsers: Any) -> argparse.ArgumentParser:
-    """Add ``run-plugins`` without per-plugin nested subparsers (attach those separately)."""
+    """Add top-level ``run-plugins`` subparser only."""
     return subparsers.add_parser(
         "run-plugins",
         help="Run a series of plugins",
@@ -28,7 +45,7 @@ def attach_nested_plugin_subparsers(
     run_plugin_parser: argparse.ArgumentParser,
     plugin_reg: PluginRegistry,
 ) -> dict[str, tuple[argparse.ArgumentParser, dict]]:
-    """Add ``run-plugins <PluginName>`` nested subparsers and dynamic plugin args."""
+    """Attach per-plugin subparsers and dynamic args under ``run-plugins``."""
     plugin_subparsers = run_plugin_parser.add_subparsers(
         dest="plugin_name", help="Available plugins"
     )

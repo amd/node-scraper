@@ -23,7 +23,6 @@
 # SOFTWARE.
 #
 ###############################################################################
-"""Low-level argparse composition for the node-scraper CLI."""
 
 from __future__ import annotations
 
@@ -104,7 +103,7 @@ def register_describe_subparser(subparsers: Any) -> argparse.ArgumentParser:
 
 
 def register_gen_plugin_config_subparser_partial(subparsers: Any) -> argparse.ArgumentParser:
-    """Create ``gen-plugin-config`` and the first flag only (matches legacy build order)."""
+    """Add ``gen-plugin-config`` subparser with only the reference-from-logs flag."""
     p = subparsers.add_parser(
         "gen-plugin-config",
         help="Generate a config for a plugin or list of plugins",
@@ -123,7 +122,7 @@ def add_gen_plugin_config_remaining_arguments(
     plugin_reg: PluginRegistry,
     config_reg: ConfigRegistry,
 ) -> None:
-    """Remaining ``gen-plugin-config`` flags (after compare-runs / show-redfish registration)."""
+    """Add the rest of ``gen-plugin-config`` arguments."""
     config_builder_parser.add_argument(
         "--plugins",
         nargs="*",
@@ -209,20 +208,17 @@ def register_nodescraper_cli_subcommands(
     root_parser: argparse.ArgumentParser,
     extensions: Sequence[CliExtension] = (),
 ) -> tuple[argparse.ArgumentParser, dict[str, tuple[argparse.ArgumentParser, dict]]]:
-    """Register stock node-scraper subcommands on an existing ``subparsers`` action.
-
-    Host CLIs (e.g. error-scraper) call this after adding their own subparsers so ``summary``,
-    ``run-plugins``, ``describe``, etc. stay aligned with :func:`build_cli_parser`.
+    """Register stock subcommands on *subparsers* (same order as :func:`build_cli_parser`).
 
     Args:
         subparsers: ``parser.add_subparsers(...)`` return value.
-        plugin_reg: Registry used for nested ``run-plugins`` parsers and compare/gen choices.
-        config_reg: Built-in config registry for ``gen-plugin-config``.
-        root_parser: Host root parser (passed to :meth:`CliExtension.alter_cli_parser`).
+        plugin_reg: Plugin registry.
+        config_reg: Built-in config registry.
+        root_parser: Root parser for :meth:`CliExtension.alter_cli_parser`.
         extensions: Optional :class:`~nodescraper.cli.extension.CliExtension` instances.
 
     Returns:
-        ``(run_plugins_parser, plugin_subparser_map)`` for host bookkeeping / parse helpers.
+        ``(run_plugins_parser, plugin_subparser_map)``.
     """
     register_summary_subparser(subparsers)
     run_plugin_parser = add_run_plugins_top_level_parser(subparsers)
@@ -251,10 +247,15 @@ def build_cli_parser(
     *,
     extensions: Sequence[CliExtension] = (),
 ) -> tuple[argparse.ArgumentParser, dict[str, tuple[argparse.ArgumentParser, dict]]]:
-    """Compose the node-scraper CLI :class:`argparse.ArgumentParser` and plugin subparser map.
+    """Build the root parser and plugin subparser map.
 
-    *extensions* receive :meth:`~nodescraper.cli.extension.CliExtension.alter_cli_parser` after
-    nested plugin subparsers are attached (add host-specific flags, etc.).
+    Args:
+        plugin_reg: Plugin registry.
+        config_reg: Built-in config registry.
+        extensions: Optional :class:`~nodescraper.cli.extension.CliExtension` instances.
+
+    Returns:
+        ``(parser, plugin_subparser_map)``.
     """
     core_parent = build_nodescraper_core_parent_parser(config_reg=config_reg)
 

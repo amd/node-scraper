@@ -4,7 +4,26 @@
 #
 # Copyright (c) 2026 Advanced Micro Devices, Inc.
 #
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+#
 ###############################################################################
+
 import argparse
 import unittest
 
@@ -41,7 +60,6 @@ class TestEmbeddingNamespace(unittest.TestCase):
         self.assertEqual(top.sys_name, "host-a")
 
     def test_build_omits_plugin_name_for_bare_run_plugins(self):
-        """Bare ``run-plugins`` (no plugin token) uses default config in :class:`NodeScraperCliApp`."""
         p = argparse.ArgumentParser()
         add_nodescraper_core_arguments(p)
         ns = p.parse_args(["--sys-name", "host-b", "--sys-location", "LOCAL"])
@@ -65,7 +83,6 @@ class TestEmbeddingNamespace(unittest.TestCase):
         self.assertEqual(top.sys_interaction_level, "INTERACTIVE")
 
     def test_build_copies_connection_config_dict_from_host(self):
-        """``connection_config`` is a core dest; hosts may pre-build InBand JSON shape."""
         host = argparse.Namespace(
             sys_name="remote-host",
             sys_location="REMOTE",

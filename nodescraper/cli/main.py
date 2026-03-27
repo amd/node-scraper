@@ -23,7 +23,6 @@
 # SOFTWARE.
 #
 ###############################################################################
-"""CLI entry point; delegates to :class:`~nodescraper.cli.app.NodeScraperCliApp`."""
 
 from __future__ import annotations
 
@@ -46,11 +45,11 @@ def main(
     """Run the nodescraper CLI (may call ``sys.exit``).
 
     Args:
-        arg_input: Tokens after the program name when not using *parsed_top_level*.
+        arg_input: Argv tail when not using *parsed_top_level*.
         parsed_top_level: Skip ``process_args`` / top-level ``parse_args`` when embedding.
-        plugin_arg_map: Per-plugin argv tokens when embedding.
+        plugin_arg_map: Per-plugin argv fragments when embedding.
         invalid_plugins: Unknown plugin names to warn about when embedding.
-        extensions: Host :class:`~nodescraper.cli.extension.CliExtension` instances (registries + parser).
+        extensions: :class:`~nodescraper.cli.extension.CliExtension` instances.
     """
     NodeScraperCliApp(extensions=tuple(extensions)).main(
         arg_input,
@@ -68,16 +67,13 @@ def run_cli_main(
     invalid_plugins: Optional[list[str]] = None,
     extensions: Sequence[CliExtension] = (),
 ) -> int:
-    """Run the nodescraper CLI and return an exit code (does not propagate ``SystemExit``).
-
-    Prefer this when embedding in another application. :func:`main` uses ``sys.exit`` and
-    may raise :exc:`SystemExit`; this helper converts that to an ``int`` return value.
+    """Run the CLI and return an exit code (converts :exc:`SystemExit` from :func:`main`).
 
     Args:
         Same as :func:`main`.
 
     Returns:
-        Process exit code (``0`` for success; non-zero for errors or CLI early-exit codes).
+        Exit code (``0`` success; non-zero on error or early CLI exit).
     """
     try:
         main(

@@ -23,7 +23,6 @@
 # SOFTWARE.
 #
 ###############################################################################
-"""Host extension hooks for the node-scraper CLI."""
 
 from __future__ import annotations
 
@@ -36,18 +35,14 @@ if TYPE_CHECKING:
 
 
 class CliExtension:
-    """Optional hooks; default implementations are no-ops.
-
-    Override :meth:`prepare_registries` to merge entry points, register connection managers, etc.
-    Override :meth:`alter_cli_parser` to add flags to the root parser or ``run-plugins`` parser.
-    """
+    """Optional hooks for registries and parser layout (defaults are no-ops)."""
 
     def prepare_registries(
         self,
         plugin_reg: PluginRegistry,
         config_reg: ConfigRegistry,
     ) -> None:
-        """Invoked once after default registries are constructed, before :func:`build_cli_parser`."""
+        """Called before :func:`~nodescraper.cli.host_integration.build_cli_parser`."""
 
     def alter_cli_parser(
         self,
@@ -59,7 +54,7 @@ class CliExtension:
         config_reg: ConfigRegistry,
         plugin_subparser_map: dict[str, tuple[argparse.ArgumentParser, dict]],
     ) -> None:
-        """Invoked after native subcommands and per-plugin nested parsers are registered."""
+        """Called after stock subcommands and per-plugin parsers are registered."""
 
 
 __all__ = ["CliExtension"]

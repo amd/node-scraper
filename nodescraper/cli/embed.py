@@ -4,19 +4,25 @@
 #
 # Copyright (c) 2026 Advanced Micro Devices, Inc.
 #
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+#
 ###############################################################################
-"""Minimal API for in-process ``run-plugins`` inside another application.
-
-- :func:`run_cli_embedded` — run node-scraper’s CLI and return an exit code (lazy-imports main).
-- :func:`build_run_plugins_parsed_top_level` / :func:`nodescraper_core_cli_dests` — map a host
-  namespace (built with node-scraper core ``dest`` names) into what
-  :class:`~nodescraper.cli.app.NodeScraperCliApp` expects.
-
-For attaching ``run-plugins`` subparsers to your own root parser, use
-:mod:`nodescraper.cli.run_plugins_parser` (same helpers the stock CLI uses via
-:mod:`~nodescraper.cli.host_integration`). Host-specific merged parsing belongs in the host
-(e.g. error-scraper), using :func:`~nodescraper.cli.helper.process_args` for argv splitting.
-"""
 
 from __future__ import annotations
 
@@ -37,7 +43,7 @@ _CACHED_CORE_DESTS: frozenset[str] | None = None
 
 
 def nodescraper_core_cli_dests() -> frozenset[str]:
-    """Return ``dest`` names registered by :func:`~nodescraper.cli.common_args.add_nodescraper_core_arguments`."""
+    """Dest names from :func:`~nodescraper.cli.common_args.add_nodescraper_core_arguments`."""
     global _CACHED_CORE_DESTS
     if _CACHED_CORE_DESTS is not None:
         return _CACHED_CORE_DESTS
@@ -59,14 +65,7 @@ def build_run_plugins_parsed_top_level(
     *,
     map_sys_interaction_level: Optional[Callable[[str], str]] = None,
 ) -> argparse.Namespace:
-    """Build *parsed_top_level* for in-process ``run-plugins``.
-
-    Copies attributes present on *host_namespace* whose names appear in
-    :func:`nodescraper_core_cli_dests`, then sets ``subcmd="run-plugins"``. If *plugin_name*
-    is set, ``plugin_name`` is copied onto the namespace; if omitted (bare ``run-plugins``),
-    :class:`~nodescraper.cli.app.NodeScraperCliApp` uses the default built-in config
-    (``NodeStatus``) when *plugin_arg_map* is empty.
-    """
+    """Map host namespace to ``parsed_top_level`` for ``run-plugins`` (omit ``plugin_name`` for default config)."""
     data: dict[str, Any] = {}
     for dest in nodescraper_core_cli_dests():
         if hasattr(host_namespace, dest):
@@ -88,11 +87,7 @@ def run_cli_embedded(
     invalid_plugins: list[str] | None = None,
     extensions: Sequence[CliExtension] = (),
 ) -> int:
-    """Run node-scraper’s CLI and return an exit code.
-
-    Same contract as :func:`~nodescraper.cli.main.run_cli_main`, imported lazily so this module
-    stays loadable from :mod:`~nodescraper.cli.app` without circular imports.
-    """
+    """Run node-scraper CLI; same contract as :func:`~nodescraper.cli.main.run_cli_main` (lazy import)."""
     from nodescraper.cli.main import run_cli_main
 
     return run_cli_main(
