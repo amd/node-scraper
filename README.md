@@ -4,6 +4,7 @@ system debug.
 
 ## Table of Contents
 - [Installation](#installation)
+  - [Install from PyPI](#install-from-pypi)
   - [Install From Source](#install-from-source)
 - [CLI Usage](#cli-usage)
   - [Execution Methods](#execution-methods)
@@ -24,6 +25,19 @@ system debug.
 invoked by collectors** -> See [docs/PLUGIN_DOC.md](docs/PLUGIN_DOC.md)
 
 ## Installation
+### Install from PyPI
+Node Scraper is published on [PyPI](https://pypi.org/project/amd-node-scraper/) as **amd-node-scraper**. Install it with Python 3.9 or newer:
+
+```sh
+pip install amd-node-scraper
+```
+
+Use a virtual environment if you prefer. After installation, confirm the CLI is available:
+
+```sh
+node-scraper --help
+```
+
 ### Install From Source
 Node Scraper requires Python 3.9+ for installation. After cloning this repository,
 call dev-setup.sh script with 'source'. This script creates an editable install of Node Scraper in

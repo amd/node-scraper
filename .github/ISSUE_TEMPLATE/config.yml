@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions / discussions
+    url: https://github.com/amd/node-scraper/discussions
+    about: Please ask and answer questions here.
+  - name: Security reports
+    url: https://github.com/amd/node-scraper/security/policy
+    about: Please report security issues privately.
