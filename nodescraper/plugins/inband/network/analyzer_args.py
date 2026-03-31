@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# Copyright (c) 2025 Advanced Micro Devices, Inc.
+# Copyright (c) 2026 Advanced Micro Devices, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -25,9 +25,16 @@
 ###############################################################################
 from typing import Optional, Union
 
+from pydantic import Field
+
 from nodescraper.base.regexanalyzer import ErrorRegex
 from nodescraper.models import AnalyzerArgs
 
 
 class NetworkAnalyzerArgs(AnalyzerArgs):
-    error_regex: Optional[Union[list[ErrorRegex], list[dict]]] = None
+    """Arguments for the network analyzer plugin."""
+
+    error_regex: Optional[Union[list[ErrorRegex], list[dict]]] = Field(
+        default=None,
+        description="Custom error regex patterns; each item can be ErrorRegex or dict with category/pattern.",
+    )
