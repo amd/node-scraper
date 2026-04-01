@@ -23,7 +23,6 @@
 # SOFTWARE.
 #
 ###############################################################################
-"""Plugin run invocation context for embedded hosts (e.g. error-scraper OOB)."""
 
 from __future__ import annotations
 

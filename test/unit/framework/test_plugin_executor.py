@@ -164,3 +164,20 @@ def test_apply_global_args_to_plugin():
         "foo": "analyzed",
         "regex_match": False,
     }
+
+
+def test_connection_manager_from_plugin_when_not_in_registry():
+    """CONNECTION_TYPE may come from an external package without a registry entry."""
+    registry = PluginRegistry()
+    registry.plugins = {"TestPluginB": TestPluginB}
+    registry.connection_managers = {}
+
+    executor = PluginExecutor(
+        plugin_configs=[PluginConfig(plugins={"TestPluginB": {}})],
+        plugin_registry=registry,
+    )
+    results = executor.run_queue()
+
+    assert len(results) == 1
+    assert results[0].source == "testB"
+    assert results[0].status == ExecutionStatus.OK
