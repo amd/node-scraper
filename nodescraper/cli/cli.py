@@ -49,6 +49,7 @@ from nodescraper.cli.helper import (
     process_args,
 )
 from nodescraper.cli.inputargtypes import ModelArgHandler, json_arg, log_path_arg
+from nodescraper.cli.invocation import run_plugin_queue_with_invocation
 from nodescraper.configregistry import ConfigRegistry
 from nodescraper.connection.redfish import (
     RedfishConnection,
@@ -359,11 +360,17 @@ def setup_logger(log_level: str = "INFO", log_path: Optional[str] = None) -> log
     return logger
 
 
-def main(arg_input: Optional[list[str]] = None):
+def main(
+    arg_input: Optional[list[str]] = None,
+    *,
+    host_cli_args: Optional[argparse.Namespace] = None,
+):
     """Main entry point for the CLI
 
     Args:
         arg_input (Optional[list[str]], optional): list of args to parse. Defaults to None.
+        host_cli_args: Optional namespace from an embedding host (e.g. detect-errors) for code that
+            calls get_plugin_run_invocation during the plugin queue.
     """
     if arg_input is None:
         arg_input = sys.argv[1:]
@@ -524,17 +531,18 @@ def main(arg_input: Optional[list[str]] = None):
     except Exception as e:
         parser.error(str(e))
 
-    plugin_executor = PluginExecutor(
-        logger=logger,
-        plugin_configs=plugin_config_inst_list,
-        connections=parsed_args.connection_config,
-        system_info=system_info,
-        log_path=log_path,
-        plugin_registry=plugin_reg,
-    )
-
     try:
-        results = plugin_executor.run_queue()
+        results = run_plugin_queue_with_invocation(
+            plugin_reg=plugin_reg,
+            parsed_args=parsed_args,
+            plugin_config_inst_list=plugin_config_inst_list,
+            system_info=system_info,
+            log_path=log_path,
+            logger=logger,
+            timestamp=timestamp,
+            sname=sname,
+            host_cli_args=host_cli_args,
+        )
 
         dump_results_to_csv(results, sname, log_path, timestamp, logger)
 

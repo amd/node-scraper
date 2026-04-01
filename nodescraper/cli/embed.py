@@ -23,21 +23,31 @@
 # SOFTWARE.
 #
 ###############################################################################
+"""In-process CLI entry without adding new argparse flags."""
 
-from .cli import main as cli_entry
-from .embed import run_main_return_code
-from .invocation import (
-    PluginRunInvocation,
-    get_plugin_run_invocation,
-    plugin_run_invocation_scope,
-    run_plugin_queue_with_invocation,
-)
+from __future__ import annotations
 
-__all__ = [
-    "cli_entry",
-    "run_main_return_code",
-    "PluginRunInvocation",
-    "get_plugin_run_invocation",
-    "plugin_run_invocation_scope",
-    "run_plugin_queue_with_invocation",
-]
+import argparse
+from typing import Optional
+
+__all__ = ["run_main_return_code"]
+
+
+def run_main_return_code(
+    arg_input: list[str],
+    *,
+    host_cli_args: Optional[argparse.Namespace] = None,
+) -> int:
+    """Runs the nodescraper main entrypoint and maps SystemExit to an integer return code."""
+    from nodescraper.cli.cli import main
+
+    try:
+        main(arg_input, host_cli_args=host_cli_args)
+    except SystemExit as exc:
+        code = exc.code
+        if code is None:
+            return 0
+        if isinstance(code, int):
+            return code
+        return 1
+    return 0
