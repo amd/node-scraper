@@ -1,0 +1,38 @@
+name: Feature request
+description: Suggest an enhancement or new capability
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion. Please describe the problem you're trying to solve and what success looks like.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+      description: What problem are you trying to solve?
+      placeholder: "I want to..."
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What would you like Node Scraper to do?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What else have you tried or considered?
+    validations:
+      required: false
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope / impact
+      description: What plugins/OSes/environments would this affect?
+    validations:
+      required: false
