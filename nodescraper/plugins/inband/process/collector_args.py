@@ -31,5 +31,7 @@ from nodescraper.models import CollectorArgs
 class ProcessCollectorArgs(CollectorArgs):
     top_n_process: int = Field(
         default=10,
-        description="Number of top processes by CPU usage to collect (e.g. for top -b -n 1 -o %CPU).",
+        description=(
+            "Number of top processes by CPU usage to collect " "(e.g. for top -b -n 1 -o %%CPU)."
+        ),
     )
