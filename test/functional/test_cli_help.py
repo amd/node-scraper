@@ -28,6 +28,12 @@
 import subprocess
 import sys
 
+import pytest
+
+from nodescraper.pluginregistry import PluginRegistry
+
+_REGISTERED_PLUGIN_NAMES = tuple(sorted(PluginRegistry().plugins.keys()))
+
 
 def test_help_command():
     """Test that node-scraper -h displays help information."""
@@ -67,3 +73,29 @@ def test_help_shows_subcommands():
     assert result.returncode == 0
     output = result.stdout.lower()
     assert "run-plugins" in output or "commands:" in output or "positional arguments:" in output
+
+
+@pytest.mark.parametrize("plugin_name", _REGISTERED_PLUGIN_NAMES)
+def test_run_plugins_help_for_each_registered_plugin(plugin_name, tmp_path):
+    """``run-plugins <Plugin> -h`` must succeed for every plugin in the registry."""
+    log_path = str(tmp_path / "logs")
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "nodescraper.cli.cli",
+            "--log-path",
+            log_path,
+            "run-plugins",
+            plugin_name,
+            "-h",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, (
+        f"run-plugins {plugin_name} -h failed:\n"
+        f"stdout={result.stdout!r}\nstderr={result.stderr!r}"
+    )
+    combined = (result.stdout or "") + (result.stderr or "")
+    assert "usage:" in combined.lower()
