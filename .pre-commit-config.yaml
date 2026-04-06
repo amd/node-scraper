@@ -3,7 +3,7 @@ repos:
     hooks:
       - id: plugin-convention-warnings
         name: plugin convention warnings (non-blocking)
-        entry: python3 scripts/plugin_convention_warnings.py
+        entry: python3 .github/scripts/plugin_convention_warnings.py
         language: system
         pass_filenames: false
         always_run: true

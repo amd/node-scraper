@@ -1,15 +1,4 @@
 #!/usr/bin/env python3
-"""Static checks for nodescraper plugin conventions.
-
-Emits warnings to stderr for:
-  - *collector* / *analyzer* modules: string command class attributes must be named
-    CMD or with the CMD_ prefix (framework attrs like DATA_MODEL are skipped).
-  - *collector_args.py* / *analyzer_args.py*: each field in *Args classes must use
-    pydantic Field(...) with a non-empty description= for CLI help and docs.
-
-Always exits 0 so pre-commit never blocks commits; violations are advisory only.
-"""
-
 from __future__ import annotations
 
 import ast
@@ -17,7 +6,8 @@ import re
 import sys
 from pathlib import Path
 
-PLUGIN_ROOT = Path(__file__).resolve().parent.parent / "nodescraper" / "plugins"
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+PLUGIN_ROOT = _REPO_ROOT / "nodescraper" / "plugins"
 
 # Class-level names in collectors/analyzers that are not shell-command strings.
 _CMD_CHECK_SKIP_NAMES = frozenset(
@@ -222,7 +212,7 @@ def main() -> None:
 
     all_msgs: list[str] = []
     for path in sorted(PLUGIN_ROOT.rglob("*.py")):
-        rel = path.relative_to(PLUGIN_ROOT.parent.parent)
+        rel = path.relative_to(_REPO_ROOT)
         name = path.name
         try:
             src = path.read_text(encoding="utf-8")
