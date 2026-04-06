@@ -29,6 +29,7 @@ from typing import Optional
 from pydantic import Field
 
 from nodescraper.models import AnalyzerArgs
+from nodescraper.plugins.inband.amdsmi.amdsmidata import AmdSmiDataModel
 
 
 class AmdSmiAnalyzerArgs(AnalyzerArgs):
@@ -80,3 +81,31 @@ class AmdSmiAnalyzerArgs(AnalyzerArgs):
     analysis_range_end: Optional[datetime] = Field(
         default=None, description="End of time range for time-windowed analysis."
     )
+
+    @classmethod
+    def build_from_model(cls, datamodel: AmdSmiDataModel) -> "AmdSmiAnalyzerArgs":
+        """Build analyzer args from data model (reference snapshot set by collector).
+
+        Args:
+            datamodel (AmdSmiDataModel): data model for plugin
+
+        Returns:
+            AmdSmiAnalyzerArgs: instance of analyzer args class
+        """
+        r = datamodel.analysis_ref
+        if r is None:
+            return cls()
+        return cls(
+            expected_gpu_processes=r.gpu_processes_max,
+            expected_max_power=r.max_power_w,
+            expected_driver_version=r.amdgpu_drv_version,
+            expected_memory_partition_mode=r.mem_part_mode,
+            expected_compute_partition_mode=r.compute_part_mode,
+            expected_pldm_version=r.pldm_version,
+            vendorid_ep=r.ep_vendor_id,
+            vendorid_ep_vf=r.ep_subvendor_id,
+            devid_ep=r.ep_device_id,
+            devid_ep_vf=r.ep_subsystem_id,
+            sku_name=r.ep_market_name,
+            expected_xgmi_speed=r.xgmi_rates,
+        )

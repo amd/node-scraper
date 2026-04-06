@@ -661,8 +661,9 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
         if expected_xgmi_speed is None or len(expected_xgmi_speed) == 0:
             self._log_event(
                 category=EventCategory.IO,
-                description="Expected XGMI speed not configured, skipping XGMI link speed check",
-                priority=EventPriority.WARNING,
+                description=("Expected XGMI link speed not set; skipping XGMI link speed analysis"),
+                priority=EventPriority.INFO,
+                console_log=True,
             )
             return
 

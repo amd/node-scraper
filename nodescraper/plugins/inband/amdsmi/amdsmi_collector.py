@@ -71,6 +71,7 @@ from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     ValueUnit,
     XgmiLinks,
     XgmiMetrics,
+    build_amd_smi_analysis_ref,
 )
 from nodescraper.plugins.inband.amdsmi.collector_args import AmdSmiCollectorArgs
 from nodescraper.utils import get_exception_traceback
@@ -475,6 +476,9 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
             return None
 
         try:
+            analysis_ref = build_amd_smi_analysis_ref(
+                statics, processes, partition, firmware, xgmi_metric
+            )
             return AmdSmiDataModel(
                 version=version,
                 gpu_list=gpu_list,
@@ -489,6 +493,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
                 xgmi_link=xgmi_link or [],
                 cper_data=cper_data,
                 cper_afids=cper_afids,
+                analysis_ref=analysis_ref,
             )
         except ValidationError as err:
             self.logger.warning("Validation err: %s", err)
