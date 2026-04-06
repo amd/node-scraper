@@ -235,7 +235,7 @@ def main() -> None:
             sys.stderr.write(f"  WARNING: {m}\n")
     else:
         # Match the style of hooks like mypy ("Success: no issues found") for clean runs.
-        sys.stdout.write("Success: no plugin convention warnings (commit not blocked).\n")
+        sys.stdout.write("Success: no plugin convention warnings.\n")
     sys.exit(0)
 
 
