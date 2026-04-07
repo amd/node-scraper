@@ -90,3 +90,14 @@ You can also run hooks manually:
 # Run all hooks on all files
 pre-commit run --all-files
 ```
+
+### Plugin conventions
+
+We follow a few plugin design conventions so that
+generation and downstream doc tooling run cleanly—for example, naming
+command strings on `*Collector` / `*Analyzer` classes as `CMD` or `CMD_*`, and
+using `pydantic.Field(..., description=...)` on args models. The
+`plugin-convention-warnings` hook in pre-commit runs
+[`.github/scripts/plugin_convention_warnings.py`](.github/scripts/plugin_convention_warnings.py)
+to flag violations (warnings only); read the script’s module docstring for the
+exact rules.

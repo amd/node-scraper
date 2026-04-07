@@ -1,4 +1,21 @@
 #!/usr/bin/env python3
+"""Checks conventions under ``nodescraper/plugins`` (stderr warnings only; non-blocking).
+
+1. **Command strings in collectors/analyzers** , for  ``Collector``
+   or ``Analyzer`` classes: a *class-level* assignment to a string (or f-string) that
+   looks like a shell/CLI invocation must use the name ``CMD`` or
+   ``CMD_<suffix>`` (e.g. ``CMD_LIST``). Names starting with ``_`` and names
+   listed in ``_CMD_CHECK_SKIP_NAMES`` are ignored; see
+   ``_looks_like_shell_command_literal`` for what counts as command-like.
+
+2. **Args models** — In ``collector_args.py`` and ``analyzer_args.py``,
+   for classes named ``*Args`` that subclass ``BaseModel``, ``CollectorArgs``,
+   ``AnalyzerArgs``, or another ``*Args``: each public field should assign
+   ``pydantic.Field(...)`` with a non-empty ``description=`` (for help/CLI
+   text). ``ClassVar`` fields, ``_``-prefixed names, and ``model_config`` are
+   skipped.
+"""
+
 from __future__ import annotations
 
 import ast
@@ -101,6 +118,7 @@ def _field_has_nonempty_description(call: ast.Call) -> bool:
 
 
 def _check_cmd_prefixes(path: Path, tree: ast.Module) -> list[str]:
+    """Rule #1: warn when a command-like class attr is not ``CMD`` / ``CMD_*``."""
     msgs: list[str] = []
     for node in tree.body:
         # Keeps only classes whose names end with Collector or Analyzer (e.g. ProcessCollector, PcieAnalyzer).
@@ -158,6 +176,7 @@ def _annotation_mentions_classvar(ann: ast.expr | None) -> bool:
 
 
 def _check_args_fields(path: Path, tree: ast.Module) -> list[str]:
+    """Rule #2: warn when Args fields lack ``Field`` with a non-empty ``description``."""
     msgs: list[str] = []
     for node in tree.body:
         if not isinstance(node, ast.ClassDef) or not _is_args_class(node):
