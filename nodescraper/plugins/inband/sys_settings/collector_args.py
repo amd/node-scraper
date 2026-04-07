@@ -23,7 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class SysSettingsCollectorArgs(BaseModel):
@@ -33,5 +33,11 @@ class SysSettingsCollectorArgs(BaseModel):
     directory_paths: sysfs paths to list (ls -1); use for checks that match entry names by regex.
     """
 
-    paths: list[str] = []
-    directory_paths: list[str] = []
+    paths: list[str] = Field(
+        default_factory=list,
+        description="Sysfs paths to read (cat). Paths with '*' are collected with ls -l (e.g. class/net/*/device).",
+    )
+    directory_paths: list[str] = Field(
+        default_factory=list,
+        description="Sysfs paths to list (ls -1); used for checks that match entry names by regex.",
+    )

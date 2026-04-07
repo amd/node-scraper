@@ -40,10 +40,22 @@ from nodescraper.plugins.inband.cmdline.cmdlinedata import CmdlineDataModel
 
 
 class CmdlineAnalyzerArgs(AnalyzerArgs):
-    required_cmdline: Union[str, List] = Field(default_factory=list)
-    banned_cmdline: Union[str, List] = Field(default_factory=list)
-    os_overrides: Dict[str, OverrideConfig] = Field(default_factory=dict)
-    platform_overrides: Dict[str, OverrideConfig] = Field(default_factory=dict)
+    required_cmdline: Union[str, List] = Field(
+        default_factory=list,
+        description="Command-line parameters that must be present (e.g. 'pci=bfsort').",
+    )
+    banned_cmdline: Union[str, List] = Field(
+        default_factory=list,
+        description="Command-line parameters that must not be present.",
+    )
+    os_overrides: Dict[str, OverrideConfig] = Field(
+        default_factory=dict,
+        description="Per-OS overrides for required_cmdline and banned_cmdline (keyed by OS identifier).",
+    )
+    platform_overrides: Dict[str, OverrideConfig] = Field(
+        default_factory=dict,
+        description="Per-platform overrides for required_cmdline and banned_cmdline (keyed by platform).",
+    )
 
     @field_validator("required_cmdline", mode="before")
     @classmethod

@@ -32,8 +32,14 @@ from nodescraper.plugins.inband.os.osdata import OsDataModel
 
 
 class OsAnalyzerArgs(AnalyzerArgs):
-    exp_os: Union[str, list] = Field(default_factory=list)
-    exact_match: bool = True
+    exp_os: Union[str, list] = Field(
+        default_factory=list,
+        description="Expected OS name/version string(s) to match (e.g. from lsb_release or /etc/os-release).",
+    )
+    exact_match: bool = Field(
+        default=True,
+        description="If True, require exact match for exp_os; otherwise substring match.",
+    )
 
     @field_validator("exp_os", mode="before")
     @classmethod

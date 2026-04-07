@@ -26,6 +26,8 @@
 import datetime
 from typing import Optional
 
+from pydantic import Field
+
 from nodescraper.models import AnalyzerArgs
 
 
@@ -34,5 +36,11 @@ class TimeRangeAnalysisArgs(AnalyzerArgs):
     Model for time range analysis arguments.
     """
 
-    analysis_range_start: Optional[datetime.datetime] = None
-    analysis_range_end: Optional[datetime.datetime] = None
+    analysis_range_start: Optional[datetime.datetime] = Field(
+        default=None,
+        description="Start of time range for analysis (ISO format). Only events on or after this time are analyzed.",
+    )
+    analysis_range_end: Optional[datetime.datetime] = Field(
+        default=None,
+        description="End of time range for analysis (ISO format). Only events before this time are analyzed.",
+    )

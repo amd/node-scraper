@@ -27,7 +27,7 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Any, Generic, Optional, Type, Union
+from typing import Annotated, Any, Generic, Optional, Type, Union
 
 from nodescraper.enums import EventPriority, ExecutionStatus, SystemInteractionLevel
 from nodescraper.generictypes import TAnalyzeArg, TCollectArg, TDataModel
@@ -297,14 +297,24 @@ class DataPlugin(
 
     def run(
         self,
-        collection: bool = True,
-        analysis: bool = True,
+        collection: Annotated[
+            bool,
+            "Run the collector (True) or skip it (False).",
+        ] = True,
+        analysis: Annotated[
+            bool,
+            "Run the analyzer (True) or skip it (False).",
+        ] = True,
         max_event_priority_level: Union[EventPriority, str] = EventPriority.CRITICAL,
-        system_interaction_level: Union[
-            SystemInteractionLevel, str
+        system_interaction_level: Annotated[
+            Union[SystemInteractionLevel, str],
+            "System interaction level (e.g. PASSIVE, INTERACTIVE, DISRUPTIVE).",
         ] = SystemInteractionLevel.INTERACTIVE,
         preserve_connection: bool = False,
-        data: Optional[Union[str, dict, TDataModel]] = None,
+        data: Annotated[
+            Optional[Union[str, dict, TDataModel]],
+            "Path to pre-collected data (file or directory). Load this data instead of collecting; use with --collection False to run only the analyzer.",
+        ] = None,
         collection_args: Optional[Union[TCollectArg, dict]] = None,
         analysis_args: Optional[Union[TAnalyzeArg, dict]] = None,
     ) -> PluginResult:

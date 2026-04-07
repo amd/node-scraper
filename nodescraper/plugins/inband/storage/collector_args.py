@@ -23,9 +23,13 @@
 # SOFTWARE.
 #
 ###############################################################################
+from pydantic import Field
 
 from nodescraper.models import CollectorArgs
 
 
 class StorageCollectorArgs(CollectorArgs):
-    skip_sudo: bool = False
+    skip_sudo: bool = Field(
+        default=False,
+        description="If True, do not use sudo when running df and related storage commands.",
+    )

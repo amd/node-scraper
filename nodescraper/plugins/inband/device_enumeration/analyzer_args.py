@@ -25,7 +25,7 @@
 ###############################################################################
 from typing import Any, Optional
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 
 from nodescraper.models import AnalyzerArgs
 
@@ -33,9 +33,18 @@ from .deviceenumdata import DeviceEnumerationDataModel
 
 
 class DeviceEnumerationAnalyzerArgs(AnalyzerArgs):
-    cpu_count: Optional[list[int]] = None
-    gpu_count: Optional[list[int]] = None
-    vf_count: Optional[list[int]] = None
+    cpu_count: Optional[list[int]] = Field(
+        default=None,
+        description="Expected CPU count(s); pass as int or list of ints. Analysis passes if actual is in list.",
+    )
+    gpu_count: Optional[list[int]] = Field(
+        default=None,
+        description="Expected GPU count(s); pass as int or list of ints. Analysis passes if actual is in list.",
+    )
+    vf_count: Optional[list[int]] = Field(
+        default=None,
+        description="Expected virtual function count(s); pass as int or list of ints. Analysis passes if actual is in list.",
+    )
 
     @field_validator("cpu_count", "gpu_count", "vf_count", mode="before")
     @classmethod

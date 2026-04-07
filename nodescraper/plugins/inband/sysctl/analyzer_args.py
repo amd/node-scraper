@@ -25,22 +25,46 @@
 ###############################################################################
 from typing import Optional
 
+from pydantic import Field
+
 from nodescraper.models import AnalyzerArgs
 from nodescraper.plugins.inband.sysctl.sysctldata import SysctlDataModel
 
 
 class SysctlAnalyzerArgs(AnalyzerArgs):
-    exp_vm_swappiness: Optional[int] = None
-    exp_vm_numa_balancing: Optional[int] = None
-    exp_vm_oom_kill_allocating_task: Optional[int] = None
-    exp_vm_compaction_proactiveness: Optional[int] = None
-    exp_vm_compact_unevictable_allowed: Optional[int] = None
-    exp_vm_extfrag_threshold: Optional[int] = None
-    exp_vm_zone_reclaim_mode: Optional[int] = None
-    exp_vm_dirty_background_ratio: Optional[int] = None
-    exp_vm_dirty_ratio: Optional[int] = None
-    exp_vm_dirty_writeback_centisecs: Optional[int] = None
-    exp_kernel_numa_balancing: Optional[int] = None
+    exp_vm_swappiness: Optional[int] = Field(
+        default=None, description="Expected vm.swappiness value."
+    )
+    exp_vm_numa_balancing: Optional[int] = Field(
+        default=None, description="Expected vm.numa_balancing value."
+    )
+    exp_vm_oom_kill_allocating_task: Optional[int] = Field(
+        default=None, description="Expected vm.oom_kill_allocating_task value."
+    )
+    exp_vm_compaction_proactiveness: Optional[int] = Field(
+        default=None, description="Expected vm.compaction_proactiveness value."
+    )
+    exp_vm_compact_unevictable_allowed: Optional[int] = Field(
+        default=None, description="Expected vm.compact_unevictable_allowed value."
+    )
+    exp_vm_extfrag_threshold: Optional[int] = Field(
+        default=None, description="Expected vm.extfrag_threshold value."
+    )
+    exp_vm_zone_reclaim_mode: Optional[int] = Field(
+        default=None, description="Expected vm.zone_reclaim_mode value."
+    )
+    exp_vm_dirty_background_ratio: Optional[int] = Field(
+        default=None, description="Expected vm.dirty_background_ratio value."
+    )
+    exp_vm_dirty_ratio: Optional[int] = Field(
+        default=None, description="Expected vm.dirty_ratio value."
+    )
+    exp_vm_dirty_writeback_centisecs: Optional[int] = Field(
+        default=None, description="Expected vm.dirty_writeback_centisecs value."
+    )
+    exp_kernel_numa_balancing: Optional[int] = Field(
+        default=None, description="Expected kernel.numa_balancing value."
+    )
 
     @classmethod
     def build_from_model(cls, datamodel: SysctlDataModel) -> "SysctlAnalyzerArgs":

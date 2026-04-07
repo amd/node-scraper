@@ -1,0 +1,26 @@
+{
+  "plugins": {
+    "RedfishEndpointPlugin": {
+      "collection_args": {
+        "uris": ["/redfish/v1", "/redfish/v1/Systems"],
+        "discover_tree": false,
+        "tree_max_depth": 3,
+        "tree_max_endpoints": 100,
+        "max_workers": 2
+      },
+      "analysis_args": {
+        "checks": {
+          "/redfish/v1/Systems/1": {
+            "Status/Health": { "anyOf": ["OK", "Warning"] },
+            "PowerState": { "eq": "On" },
+            "PowerConsumedWatts": { "min": 0, "max": 500 }
+          },
+          "*": {
+            "Status/State": { "eq": "Enabled" },
+            "Status/Health": { "anyOf": ["OK", "Warning"] }
+          }
+        }
+      }
+    }
+  }
+}
