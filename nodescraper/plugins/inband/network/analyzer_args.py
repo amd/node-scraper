@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# Copyright (c) 2025 Advanced Micro Devices, Inc.
+# Copyright (c) 2026 Advanced Micro Devices, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,24 +23,18 @@
 # SOFTWARE.
 #
 ###############################################################################
-from nodescraper.base import InBandDataPlugin
+from typing import Optional, Union
 
-from .analyzer_args import NetworkAnalyzerArgs
-from .collector_args import NetworkCollectorArgs
-from .network_analyzer import NetworkAnalyzer
-from .network_collector import NetworkCollector
-from .networkdata import NetworkDataModel
+from pydantic import Field
+
+from nodescraper.base.regexanalyzer import ErrorRegex
+from nodescraper.models import AnalyzerArgs
 
 
-class NetworkPlugin(InBandDataPlugin[NetworkDataModel, NetworkCollectorArgs, NetworkAnalyzerArgs]):
-    """Plugin for collection of network configuration data"""
+class NetworkAnalyzerArgs(AnalyzerArgs):
+    """Arguments for the network analyzer plugin."""
 
-    DATA_MODEL = NetworkDataModel
-
-    COLLECTOR = NetworkCollector
-
-    COLLECTOR_ARGS = NetworkCollectorArgs
-
-    ANALYZER = NetworkAnalyzer
-
-    ANALYZER_ARGS = NetworkAnalyzerArgs
+    error_regex: Optional[Union[list[ErrorRegex], list[dict]]] = Field(
+        default=None,
+        description="Custom error regex patterns; each item can be ErrorRegex or dict with category/pattern.",
+    )
