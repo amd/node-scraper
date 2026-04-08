@@ -422,8 +422,6 @@ def main(arg_input: Optional[list[str]] = None):
             log_path = None
 
         if parsed_args.no_console_log and not log_path:
-            # Same layout as a normal run: <base>/scraper_logs_<host>_<timestamp>/
-            # Use "." when --log-path None (or unset); otherwise respect the given base directory.
             base_dir = parsed_args.log_path if parsed_args.log_path else "."
             log_path = os.path.join(base_dir, f"scraper_logs_{sname}_{timestamp}")
             os.makedirs(log_path, exist_ok=True)
