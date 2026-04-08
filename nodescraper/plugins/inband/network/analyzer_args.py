@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# Copyright (c) 2025 Advanced Micro Devices, Inc.
+# Copyright (c) 2026 Advanced Micro Devices, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,15 +23,18 @@
 # SOFTWARE.
 #
 ###############################################################################
+from typing import Optional, Union
+
 from pydantic import Field
 
-from nodescraper.models import CollectorArgs
+from nodescraper.base.regexanalyzer import ErrorRegex
+from nodescraper.models import AnalyzerArgs
 
 
-class ProcessCollectorArgs(CollectorArgs):
-    top_n_process: int = Field(
-        default=10,
-        description=(
-            "Number of top processes by CPU usage to collect " "(e.g. for top -b -n 1 -o %%CPU)."
-        ),
+class NetworkAnalyzerArgs(AnalyzerArgs):
+    """Arguments for the network analyzer plugin."""
+
+    error_regex: Optional[Union[list[ErrorRegex], list[dict]]] = Field(
+        default=None,
+        description="Custom error regex patterns; each item can be ErrorRegex or dict with category/pattern.",
     )
