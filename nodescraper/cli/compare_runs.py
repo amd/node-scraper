@@ -25,6 +25,7 @@
 ###############################################################################
 import json
 import logging
+import os
 import re
 import sys
 from pathlib import Path
@@ -359,6 +360,7 @@ def run_compare_runs(
     include_plugins: Optional[Sequence[str]] = None,
     output_path: Optional[str] = None,
     truncate_message: bool = True,
+    artifact_dir: Optional[str] = None,
 ) -> None:
     """Compare datamodels from two run log directories and log results.
 
@@ -369,8 +371,10 @@ def run_compare_runs(
         logger: Logger for output.
         skip_plugins: Optional list of plugin names to exclude from comparison.
         include_plugins: Optional list of plugin names to include; if set, only these are compared.
-        output_path: Optional path for full diff report; default is <path1>_<path2>_diff.txt.
+        output_path: Optional path for full diff report; default is <path1>_<path2>_diff.txt
+            in the current directory, or under artifact_dir when set.
         truncate_message: If True, truncate message text and show only first 3 errors; if False, show full text and all.
+        artifact_dir: When set and output_path is not, write the diff file inside this directory (e.g. CLI run log dir).
     """
     p1 = Path(path1)
     p2 = Path(path2)
@@ -482,11 +486,11 @@ def run_compare_runs(
 
     out_file = output_path
     if not out_file:
-        out_file = f"{Path(path1).name}_{Path(path2).name}_diff.txt"
+        basename = f"{Path(path1).name}_{Path(path2).name}_diff.txt"
+        out_file = os.path.join(artifact_dir, basename) if artifact_dir else basename
     full_report = _build_full_diff_report(path1, path2, data1, data2, all_plugins)
     Path(out_file).write_text(full_report, encoding="utf-8")
     logger.info("Full diff report written to: %s", out_file)
 
     table_summary = TableSummary(logger=logger)
     table_summary.collate_results(plugin_results=plugin_results, connection_results=[])
-    print(f"Diff file written to {out_file}")  # noqa: T201
