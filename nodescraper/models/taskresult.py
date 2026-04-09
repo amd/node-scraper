@@ -209,6 +209,18 @@ class TaskResult(BaseModel):
             with open(event_log, "w", encoding="utf-8") as log_file:
                 json.dump(all_events, log_file, indent=2)
 
+    @staticmethod
+    def _event_occurrence_count(event: Event) -> int:
+        """Occurrences represented by one event (RegexAnalyzer groups repeats in data['count'])."""
+        raw = event.data.get("count")
+        if raw is None:
+            return 1
+        try:
+            n = int(raw)
+        except (TypeError, ValueError):
+            return 1
+        return max(1, n)
+
     def _get_event_summary(self) -> str:
         """Get summary string for events
 
@@ -219,12 +231,13 @@ class TaskResult(BaseModel):
         warning_msg_counts: dict[str, int] = {}
 
         for event in self.events:
+            n = self._event_occurrence_count(event)
             if event.priority == EventPriority.WARNING:
                 warning_msg_counts[event.description] = (
-                    warning_msg_counts.get(event.description, 0) + 1
+                    warning_msg_counts.get(event.description, 0) + n
                 )
             elif event.priority >= EventPriority.ERROR:
-                error_msg_counts[event.description] = error_msg_counts.get(event.description, 0) + 1
+                error_msg_counts[event.description] = error_msg_counts.get(event.description, 0) + n
 
         summary_parts = []
 
