@@ -75,11 +75,7 @@ class RegexSearchAnalyzer(RegexAnalyzer[RegexSearchData, RegexSearchAnalyzerArgs
         """
         if args is None or not args.error_regex:
             self.result.status = ExecutionStatus.NOT_RAN
-            self.result.message = (
-                "No error_regex patterns provided; nothing to analyze"
-                if args is not None
-                else "No analysis_args provided; nothing to analyze"
-            )
+            self.result.message = "Analysis args need to be provided for the analyzer to run"
             return self.result
 
         final_regex = self._convert_and_extend_error_regex(args.error_regex, [])

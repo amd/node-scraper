@@ -23,9 +23,12 @@
 # SOFTWARE.
 #
 ###############################################################################
+from typing import Optional, Union
+
 from nodescraper.connection.inband import InBandConnectionManager, SSHConnectionParams
+from nodescraper.enums import EventPriority
 from nodescraper.interfaces import DataPlugin
-from nodescraper.models import CollectorArgs
+from nodescraper.models import CollectorArgs, TaskResult
 
 from .analyzer_args import RegexSearchAnalyzerArgs
 from .regex_search_analyzer import RegexSearchAnalyzer
@@ -45,3 +48,29 @@ class RegexSearchPlugin(
 
     DATA_MODEL = RegexSearchData
     ANALYZER = RegexSearchAnalyzer
+
+    def analyze(
+        self,
+        max_event_priority_level: Optional[Union[EventPriority, str]] = EventPriority.CRITICAL,
+        analysis_args: Optional[Union[RegexSearchAnalyzerArgs, dict]] = None,
+        data: Optional[Union[str, dict, RegexSearchData]] = None,
+    ) -> TaskResult:
+        if analysis_args is None:
+            missing_error_regex = True
+        elif isinstance(analysis_args, RegexSearchAnalyzerArgs):
+            missing_error_regex = not bool(analysis_args.error_regex)
+        elif isinstance(analysis_args, dict):
+            er = analysis_args.get("error_regex")
+            missing_error_regex = er is None or er == []
+        else:
+            missing_error_regex = True
+        if missing_error_regex:
+            self.logger.warning(
+                "RegexSearchPlugin: analysis args need to be provided for the analyzer to run "
+                "(e.g. --error-regex for each pattern)."
+            )
+        return super().analyze(
+            max_event_priority_level=max_event_priority_level,
+            analysis_args=analysis_args,
+            data=data,
+        )

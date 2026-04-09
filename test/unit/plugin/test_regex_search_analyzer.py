@@ -76,14 +76,18 @@ def test_regex_search_analyzer_match(system_info):
 def test_regex_search_analyzer_missing_args(system_info):
     data = RegexSearchData(content="x")
     analyzer = RegexSearchAnalyzer(system_info=system_info)
+    expected = "Analysis args need to be provided for the analyzer to run"
     result = analyzer.analyze_data(data, None)
     assert result.status == ExecutionStatus.NOT_RAN
+    assert result.message == expected
 
     result = analyzer.analyze_data(data, RegexSearchAnalyzerArgs(error_regex=None))
     assert result.status == ExecutionStatus.NOT_RAN
+    assert result.message == expected
 
     result = analyzer.analyze_data(data, RegexSearchAnalyzerArgs(error_regex=[]))
     assert result.status == ExecutionStatus.NOT_RAN
+    assert result.message == expected
 
 
 def test_regex_search_plugin_analyzer_only(system_info, logger):
