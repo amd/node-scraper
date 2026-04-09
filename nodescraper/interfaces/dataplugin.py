@@ -29,6 +29,8 @@ import os
 from pathlib import Path
 from typing import Annotated, Any, Generic, Optional, Type, Union
 
+from pydantic import Field
+
 from nodescraper.enums import EventPriority, ExecutionStatus, SystemInteractionLevel
 from nodescraper.generictypes import TAnalyzeArg, TCollectArg, TDataModel
 from nodescraper.interfaces.dataanalyzertask import DataAnalyzer
@@ -313,7 +315,12 @@ class DataPlugin(
         preserve_connection: bool = False,
         data: Annotated[
             Optional[Union[str, dict, TDataModel]],
-            "Path to pre-collected data (file or directory). Load this data instead of collecting; use with --collection False to run only the analyzer.",
+            Field(
+                description=(
+                    "Path to pre-collected data"
+                    "; use with --collection False to run the analyzer only."
+                ),
+            ),
         ] = None,
         collection_args: Optional[Union[TCollectArg, dict]] = None,
         analysis_args: Optional[Union[TAnalyzeArg, dict]] = None,
