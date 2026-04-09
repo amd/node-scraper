@@ -476,15 +476,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
 
         try:
             fw_ids = args.analysis_firmware_ids if args and args.analysis_firmware_ids else None
-            analysis_ref = AmdSmiDataModel.build_analysis_ref(
-                statics,
-                processes,
-                partition,
-                firmware,
-                xgmi_metric,
-                firmware_ids=fw_ids,
-            )
-            return AmdSmiDataModel(
+            base = AmdSmiDataModel(
                 version=version,
                 gpu_list=gpu_list,
                 process=processes,
@@ -498,8 +490,10 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
                 xgmi_link=xgmi_link or [],
                 cper_data=cper_data,
                 cper_afids=cper_afids,
-                analysis_ref=analysis_ref,
+                analysis_firmware_ids=fw_ids,
+                analysis_ref=None,
             )
+            return base.model_copy(update={"analysis_ref": base.build_analysis_ref()})
         except ValidationError as err:
             self.logger.warning("Validation err: %s", err)
             self._log_event(

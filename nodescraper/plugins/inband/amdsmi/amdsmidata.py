@@ -930,8 +930,6 @@ class Topo(BaseModel):
 class AmdSmiAnalysisRef(BaseModel):
     """Collector-filled summary for reference config"""
 
-    model_config = ConfigDict(extra="forbid")
-
     gpu_processes_max: Optional[int] = None
     max_power_w: Optional[int] = None
     amdgpu_drv_version: Optional[str] = None
@@ -976,6 +974,11 @@ class AmdSmiDataModel(DataModel):
     xgmi_link: Optional[list[XgmiLinks]] = Field(default_factory=list)
     cper_data: Optional[list[FileModel]] = Field(default_factory=list)
     cper_afids: dict[str, int] = Field(default_factory=dict)
+
+    analysis_firmware_ids: Optional[list[str]] = Field(
+        default=None,
+        description="fw_id values used when snapshotting firmware_versions into analysis_ref.",
+    )
 
     analysis_ref: Optional[AmdSmiAnalysisRef] = None
 
@@ -1024,101 +1027,134 @@ class AmdSmiDataModel(DataModel):
                 return item
         return None
 
-    @classmethod
-    def build_analysis_ref(
-        cls,
-        static: Optional[list[AmdSmiStatic]],
-        process: Optional[list[Processes]],
-        partition: Optional[Partition],
-        firmware: Optional[list[Fw]],
-        xgmi_metric: Optional[list[XgmiMetrics]],
-        *,
-        firmware_ids: Optional[list[str]] = None,
-    ) -> AmdSmiAnalysisRef:
-        """Build ``AmdSmiAnalysisRef`` from collected fields (used when constructing this model)."""
-        static = static or []
+    def _sorted_static_gpus(self) -> list[AmdSmiStatic]:
+        return sorted(self.static or [], key=lambda s: s.gpu)
 
-        gpu_processes_max: Optional[int] = None
-        if process:
-            counts: list[int] = []
-            for proc in process:
-                if not proc.process_list:
-                    continue
-                if isinstance(proc.process_list[0].process_info, str):
-                    continue
-                counts.append(len(proc.process_list))
-            if counts:
-                gpu_processes_max = max(counts)
+    @property
+    def ref_gpu_processes_max(self) -> Optional[int]:
+        """Max process-list length across GPUs (for analysis reference snapshot)."""
+        proc = self.process
+        if not proc:
+            return None
+        counts: list[int] = []
+        for p in proc:
+            if not p.process_list:
+                continue
+            if isinstance(p.process_list[0].process_info, str):
+                continue
+            counts.append(len(p.process_list))
+        return max(counts) if counts else None
 
-        max_power_w: Optional[int] = None
-        for gpu in sorted(static, key=lambda s: s.gpu):
+    @property
+    def ref_max_power_w(self) -> Optional[int]:
+        """First available max power limit (W) from static data, lowest GPU index first."""
+        for gpu in self._sorted_static_gpus():
             lim = gpu.limit
             if lim is None or lim.max_power is None or lim.max_power.value is None:
                 continue
             try:
-                max_power_w = int(float(lim.max_power.value))
-                break
+                return int(float(lim.max_power.value))
             except (TypeError, ValueError):
                 continue
+        return None
 
-        amdgpu_drv_version: Optional[str] = None
-        for gpu in sorted(static, key=lambda s: s.gpu):
+    @property
+    def ref_amdgpu_drv_version(self) -> Optional[str]:
+        """Driver version from the lowest-index GPU with static data."""
+        for gpu in self._sorted_static_gpus():
             if gpu.driver and gpu.driver.version:
-                amdgpu_drv_version = gpu.driver.version
-                break
+                return gpu.driver.version
+        return None
 
-        mem_part_mode: Optional[str] = None
-        compute_part_mode: Optional[str] = None
-        if partition:
-            mps = partition.memory_partition
-            if mps:
-                mem_part_mode = sorted(mps, key=lambda p: p.gpu_id)[0].partition_type
-            cps = partition.compute_partition
-            if cps:
-                compute_part_mode = sorted(cps, key=lambda p: p.gpu_id)[0].partition_type
+    @property
+    def ref_mem_part_mode(self) -> Optional[str]:
+        if self.partition is None:
+            return None
+        mps = self.partition.memory_partition
+        if not mps:
+            return None
+        return sorted(mps, key=lambda p: p.gpu_id)[0].partition_type
 
-        ids = list(firmware_ids) if firmware_ids is not None else list(_DEFAULT_ANALYSIS_FW_IDS)
-        firmware_versions = _first_observed_fw_versions(firmware, ids) or None
-        pldm_version = firmware_versions.get("PLDM_BUNDLE") if firmware_versions else None
+    @property
+    def ref_compute_part_mode(self) -> Optional[str]:
+        if self.partition is None:
+            return None
+        cps = self.partition.compute_partition
+        if not cps:
+            return None
+        return sorted(cps, key=lambda p: p.gpu_id)[0].partition_type
 
-        ep_vendor_id = ep_subvendor_id = ep_device_id = ep_subsystem_id = ep_market_name = None
-        if static:
-            first = sorted(static, key=lambda s: s.gpu)[0]
-            asic = first.asic
-            ep_vendor_id = asic.vendor_id
-            ep_subvendor_id = asic.subvendor_id
-            ep_device_id = asic.device_id
-            ep_subsystem_id = asic.subsystem_id
-            ep_market_name = asic.market_name
+    @property
+    def ref_firmware_versions(self) -> Optional[dict[str, str]]:
+        ids = (
+            list(self.analysis_firmware_ids)
+            if self.analysis_firmware_ids is not None
+            else list(_DEFAULT_ANALYSIS_FW_IDS)
+        )
+        return _first_observed_fw_versions(self.firmware, ids) or None
 
-        xgmi_rates: Optional[list[float]] = None
-        if xgmi_metric:
-            rates: set[float] = set()
-            for xm in xgmi_metric:
-                br = xm.link_metrics.bit_rate
-                if br is None or br.value is None:
-                    continue
-                try:
-                    rates.add(float(br.value))
-                except (TypeError, ValueError):
-                    continue
-            if rates:
-                xgmi_rates = sorted(rates)
+    @property
+    def ref_pldm_version(self) -> Optional[str]:
+        fw = self.ref_firmware_versions
+        return fw.get("PLDM_BUNDLE") if fw else None
 
+    @property
+    def ref_ep_vendor_id(self) -> Optional[str]:
+        ss = self._sorted_static_gpus()
+        return ss[0].asic.vendor_id if ss else None
+
+    @property
+    def ref_ep_subvendor_id(self) -> Optional[str]:
+        ss = self._sorted_static_gpus()
+        return ss[0].asic.subvendor_id if ss else None
+
+    @property
+    def ref_ep_device_id(self) -> Optional[str]:
+        ss = self._sorted_static_gpus()
+        return ss[0].asic.device_id if ss else None
+
+    @property
+    def ref_ep_subsystem_id(self) -> Optional[str]:
+        ss = self._sorted_static_gpus()
+        return ss[0].asic.subsystem_id if ss else None
+
+    @property
+    def ref_ep_market_name(self) -> Optional[str]:
+        ss = self._sorted_static_gpus()
+        return ss[0].asic.market_name if ss else None
+
+    @property
+    def ref_xgmi_rates(self) -> Optional[list[float]]:
+        xm = self.xgmi_metric
+        if not xm:
+            return None
+        rates: set[float] = set()
+        for m in xm:
+            br = m.link_metrics.bit_rate
+            if br is None or br.value is None:
+                continue
+            try:
+                rates.add(float(br.value))
+            except (TypeError, ValueError):
+                continue
+        return sorted(rates) if rates else None
+
+    def build_analysis_ref(self) -> AmdSmiAnalysisRef:
+        """Build ``AmdSmiAnalysisRef`` from current field values"""
         return AmdSmiAnalysisRef(
-            gpu_processes_max=gpu_processes_max,
-            max_power_w=max_power_w,
-            amdgpu_drv_version=amdgpu_drv_version,
-            mem_part_mode=mem_part_mode,
-            compute_part_mode=compute_part_mode,
-            firmware_versions=firmware_versions,
-            pldm_version=pldm_version,
-            ep_vendor_id=ep_vendor_id,
-            ep_subvendor_id=ep_subvendor_id,
-            ep_device_id=ep_device_id,
-            ep_subsystem_id=ep_subsystem_id,
-            ep_market_name=ep_market_name,
-            xgmi_rates=xgmi_rates,
+            gpu_processes_max=self.ref_gpu_processes_max,
+            max_power_w=self.ref_max_power_w,
+            amdgpu_drv_version=self.ref_amdgpu_drv_version,
+            mem_part_mode=self.ref_mem_part_mode,
+            compute_part_mode=self.ref_compute_part_mode,
+            firmware_versions=self.ref_firmware_versions,
+            pldm_version=self.ref_pldm_version,
+            ep_vendor_id=self.ref_ep_vendor_id,
+            ep_subvendor_id=self.ref_ep_subvendor_id,
+            ep_device_id=self.ref_ep_device_id,
+            ep_subsystem_id=self.ref_ep_subsystem_id,
+            ep_market_name=self.ref_ep_market_name,
+            xgmi_rates=self.ref_xgmi_rates,
         )
 
 
