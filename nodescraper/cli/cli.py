@@ -162,6 +162,14 @@ def build_parser(
     )
 
     parser.add_argument(
+        "--no-console-log",
+        action="store_true",
+        help="Write logs only to nodescraper.log under the run directory; do not print to stdout. "
+        "If no run log directory would be created (e.g. --log-path None), uses ./scraper_logs_<host>_<timestamp>/ "
+        "like the default layout.",
+    )
+
+    parser.add_argument(
         "--gen-reference-config",
         dest="reference_config",
         action="store_true",
@@ -316,26 +324,36 @@ def build_parser(
             parser_builder = DynamicParserBuilder(plugin_subparser, plugin_class)
             model_type_map = parser_builder.build_plugin_parser()
         except Exception as e:
-            print(f"Exception building arg parsers for {plugin_name}: {str(e)}")  # noqa: T201
+            logging.getLogger(DEFAULT_LOGGER).error(
+                "Exception building arg parsers for %s: %s", plugin_name, e, exc_info=True
+            )
             continue
         plugin_subparser_map[plugin_name] = (plugin_subparser, model_type_map)
 
     return parser, plugin_subparser_map
 
 
-def setup_logger(log_level: str = "INFO", log_path: Optional[str] = None) -> logging.Logger:
+def setup_logger(
+    log_level: str = "INFO",
+    log_path: Optional[str] = None,
+    *,
+    console: bool = True,
+) -> logging.Logger:
     """set up root logger when using the CLI
 
     Args:
         log_level (str): log level to use
         log_path (Optional[str]): optional path to filesystem log location
+        console (bool): if False, omit the stdout StreamHandler (file-only when log_path is set)
 
     Returns:
         logging.Logger: logger intstance
     """
-    log_level = getattr(logging, log_level, "INFO")
+    log_level_no = getattr(logging, log_level, logging.INFO)
 
-    handlers = [logging.StreamHandler(stream=sys.stdout)]
+    handlers: list[logging.Handler] = []
+    if console:
+        handlers.append(logging.StreamHandler(stream=sys.stdout))
 
     if log_path:
         log_file_name = os.path.join(log_path, "nodescraper.log")
@@ -343,15 +361,18 @@ def setup_logger(log_level: str = "INFO", log_path: Optional[str] = None) -> log
             logging.FileHandler(filename=log_file_name, mode="wt", encoding="utf-8"),
         )
 
+    if not handlers:
+        handlers.append(logging.NullHandler())
+
     logging.basicConfig(
         force=True,
-        level=log_level,
+        level=log_level_no,
         format="%(asctime)25s %(levelname)10s %(name)25s | %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S %Z",
         handlers=handlers,
         encoding="utf-8",
     )
-    logging.root.setLevel(logging.INFO)
+    logging.root.setLevel(log_level_no)
     logging.getLogger("paramiko").setLevel(logging.ERROR)
 
     logger = logging.getLogger(DEFAULT_LOGGER)
@@ -391,11 +412,7 @@ def main(arg_input: Optional[list[str]] = None):
         sname = system_info.name.lower().replace("-", "_").replace(".", "_")
         timestamp = datetime.datetime.now().strftime("%Y_%m_%d-%I_%M_%S_%p")
 
-        if parsed_args.log_path and parsed_args.subcmd not in [
-            "gen-plugin-config",
-            "describe",
-            "compare-runs",
-        ]:
+        if parsed_args.log_path:
             log_path = os.path.join(
                 parsed_args.log_path,
                 f"scraper_logs_{sname}_{timestamp}",
@@ -404,7 +421,16 @@ def main(arg_input: Optional[list[str]] = None):
         else:
             log_path = None
 
-        logger = setup_logger(parsed_args.log_level, log_path)
+        if parsed_args.no_console_log and not log_path:
+            base_dir = parsed_args.log_path if parsed_args.log_path else "."
+            log_path = os.path.join(base_dir, f"scraper_logs_{sname}_{timestamp}")
+            os.makedirs(log_path, exist_ok=True)
+
+        logger = setup_logger(
+            parsed_args.log_level,
+            log_path,
+            console=not parsed_args.no_console_log,
+        )
         if log_path:
             logger.info("Log path: %s", log_path)
 
@@ -416,7 +442,12 @@ def main(arg_input: Optional[list[str]] = None):
             )
 
         if parsed_args.subcmd == "summary":
-            generate_summary(parsed_args.search_path, parsed_args.output_path, logger)
+            generate_summary(
+                parsed_args.search_path,
+                parsed_args.output_path,
+                logger,
+                artifact_dir=log_path,
+            )
             sys.exit(0)
 
         if parsed_args.subcmd == "describe":
@@ -431,6 +462,7 @@ def main(arg_input: Optional[list[str]] = None):
                 skip_plugins=getattr(parsed_args, "skip_plugins", None) or [],
                 include_plugins=getattr(parsed_args, "include_plugins", None),
                 truncate_message=not getattr(parsed_args, "dont_truncate", False),
+                artifact_dir=log_path,
             )
             sys.exit(0)
 
@@ -463,7 +495,7 @@ def main(arg_input: Optional[list[str]] = None):
                         "Could not read OEMDiagnosticDataType@Redfish.AllowableValues from LogService"
                     )
                     sys.exit(1)
-                print(json.dumps(allowable, indent=2))  # noqa: T201
+                logger.info("%s", json.dumps(allowable, indent=2))
             finally:
                 conn.close()
             sys.exit(0)
@@ -474,10 +506,8 @@ def main(arg_input: Optional[list[str]] = None):
                 ref_config = generate_reference_config_from_logs(
                     parsed_args.reference_config_from_logs, plugin_reg, logger
                 )
-                output_path = os.getcwd()
-                if parsed_args.output_path:
-                    output_path = parsed_args.output_path
-                path = os.path.join(output_path, "reference_config.json")
+                out_dir = log_path if log_path else parsed_args.output_path
+                path = os.path.join(out_dir, "reference_config.json")
                 try:
                     with open(path, "w") as f:
                         json.dump(
@@ -490,7 +520,9 @@ def main(arg_input: Optional[list[str]] = None):
                     logger.error(exp)
                 sys.exit(0)
 
-            parse_gen_plugin_config(parsed_args, plugin_reg, config_reg, logger)
+            parse_gen_plugin_config(
+                parsed_args, plugin_reg, config_reg, logger, artifact_dir=log_path
+            )
 
         parsed_plugin_args = {}
         for plugin, plugin_args in plugin_arg_map.items():

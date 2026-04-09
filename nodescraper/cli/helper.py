@@ -31,7 +31,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional, Sequence, Tuple
 
 from pydantic import BaseModel
 
@@ -187,6 +187,13 @@ def build_config(
     return config
 
 
+def log_cli_text_block(logger: logging.Logger, lines: Sequence[str]) -> None:
+    """Emit user-facing multi-line text through logging (respects handlers / --no-console-log)."""
+    text = "\n".join(lines).rstrip("\n")
+    if text:
+        logger.info("%s", text)
+
+
 def parse_describe(
     parsed_args: argparse.Namespace,
     plugin_reg: PluginRegistry,
@@ -202,15 +209,18 @@ def parse_describe(
         logger (logging.Logger): logger instance
     """
     if not parsed_args.name:
+        out: list[str] = []
         if parsed_args.type == "config":
-            print("Available built-in configs:")  # noqa: T201
+            out.append("Available built-in configs:")
             for name in config_reg.configs:
-                print(f"  {name}")  # noqa: T201
+                out.append(f"  {name}")
         elif parsed_args.type == "plugin":
-            print("Available plugins:")  # noqa: T201
+            out.append("Available plugins:")
             for name in plugin_reg.plugins:
-                print(f"  {name}")  # noqa: T201
-        print(f"\nUsage: describe {parsed_args.type} <name>")  # noqa: T201
+                out.append(f"  {name}")
+        out.append("")
+        out.append(f"Usage: describe {parsed_args.type} <name>")
+        log_cli_text_block(logger, out)
         sys.exit(0)
 
     if parsed_args.type == "config":
@@ -218,19 +228,25 @@ def parse_describe(
             logger.error("No config found for name: %s", parsed_args.name)
             sys.exit(1)
         config_model = config_reg.configs[parsed_args.name]
-        print(f"Config Name: {parsed_args.name}")  # noqa: T201
-        print(f"Description: {getattr(config_model, 'desc', '')}")  # noqa: T201
-        print("Plugins:")  # noqa: T201
+        out = [
+            f"Config Name: {parsed_args.name}",
+            f"Description: {getattr(config_model, 'desc', '')}",
+            "Plugins:",
+        ]
         for plugin in getattr(config_model, "plugins", []):
-            print(f"\t{plugin}")  # noqa: T201
+            out.append(f"\t{plugin}")
+        log_cli_text_block(logger, out)
 
     elif parsed_args.type == "plugin":
         if parsed_args.name not in plugin_reg.plugins:
             logger.error("No plugin found for name: %s", parsed_args.name)
             sys.exit(1)
         plugin_class = plugin_reg.plugins[parsed_args.name]
-        print(f"Plugin Name: {parsed_args.name}")  # noqa: T201
-        print(f"Description: {getattr(plugin_class, '__doc__', '')}")  # noqa: T201
+        out = [
+            f"Plugin Name: {parsed_args.name}",
+            f"Description: {getattr(plugin_class, '__doc__', '')}",
+        ]
+        log_cli_text_block(logger, out)
 
     sys.exit(0)
 
@@ -240,6 +256,7 @@ def parse_gen_plugin_config(
     plugin_reg: PluginRegistry,
     config_reg: ConfigRegistry,
     logger: logging.Logger,
+    artifact_dir: Optional[str] = None,
 ):
     """parse 'gen_plugin_config' cmd line argument
 
@@ -248,6 +265,7 @@ def parse_gen_plugin_config(
         plugin_reg (PluginRegistry): plugin registry instance
         config_reg (ConfigRegistry): config registry instance
         logger (logging.Logger): logger instance
+        artifact_dir (Optional[str]): if set, write the config under this directory (CLI run log dir)
     """
     try:
         config = build_config(
@@ -256,7 +274,8 @@ def parse_gen_plugin_config(
 
         config.name = parsed_args.config_name.split(".")[0]
         config.desc = "Auto generated config"
-        output_path = os.path.join(parsed_args.output_path, parsed_args.config_name)
+        out_dir = artifact_dir if artifact_dir else parsed_args.output_path
+        output_path = os.path.join(out_dir, parsed_args.config_name)
         with open(output_path, "w", encoding="utf-8") as out_file:
             out_file.write(config.model_dump_json(indent=2))
 
@@ -576,13 +595,19 @@ def dump_to_csv(all_rows: list, filename: str, fieldnames: list[str], logger: lo
     logger.info("Data written to csv file: %s", filename)
 
 
-def generate_summary(search_path: str, output_path: Optional[str], logger: logging.Logger):
+def generate_summary(
+    search_path: str,
+    output_path: Optional[str],
+    logger: logging.Logger,
+    artifact_dir: Optional[str] = None,
+):
     """Concatenate csv files into 1 summary csv file
 
     Args:
         search_path (str): Path for previous runs
-        output_path (Optional[str]): Path for new summary csv file
+        output_path (Optional[str]): Directory for new summary.csv (ignored when artifact_dir is set)
         logger (logging.Logger): instance of logger
+        artifact_dir (Optional[str]): if set, write summary.csv under this directory (CLI run log dir)
     """
 
     fieldnames = ["nodename", "plugin", "status", "timestamp", "message"]
@@ -606,8 +631,6 @@ def generate_summary(search_path: str, output_path: Optional[str], logger: loggi
         logger.error("No data rows found in matched CSV files.")
         return
 
-    if not output_path:
-        output_path = os.getcwd()
-
-    output_path = os.path.join(output_path, "summary.csv")
-    dump_to_csv(all_rows, output_path, fieldnames, logger)
+    base_dir = artifact_dir if artifact_dir else (output_path or os.getcwd())
+    out_file = os.path.join(base_dir, "summary.csv")
+    dump_to_csv(all_rows, out_file, fieldnames, logger)

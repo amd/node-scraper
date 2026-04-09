@@ -25,6 +25,8 @@
 ###############################################################################
 """Functional tests for CLI describe command."""
 
+from pathlib import Path
+
 
 def test_describe_command_list_plugins(run_cli_command):
     """Test that describe command can list all plugins."""
@@ -53,3 +55,26 @@ def test_describe_invalid_plugin(run_cli_command):
     assert result.returncode != 0
     output = (result.stdout + result.stderr).lower()
     assert "error" in output or "not found" in output or "invalid" in output
+
+
+def test_describe_no_console_log_writes_nodescraper_log(run_cli_command, tmp_path):
+    """With --no-console-log, describe output is only in nodescraper.log under scraper_logs_*."""
+    log_base = str(tmp_path / "logs")
+    result = run_cli_command(
+        [
+            "--log-path",
+            log_base,
+            "--no-console-log",
+            "describe",
+            "plugin",
+            "BiosPlugin",
+        ],
+        check=False,
+    )
+    assert result.returncode == 0
+    run_dirs = list(Path(log_base).glob("scraper_logs_*"))
+    assert len(run_dirs) == 1
+    log_file = run_dirs[0] / "nodescraper.log"
+    assert log_file.is_file()
+    text = log_file.read_text(encoding="utf-8").lower()
+    assert "bios" in text

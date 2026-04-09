@@ -16,7 +16,7 @@
 | KernelPlugin | sh -c 'uname -a'<br>sh -c 'cat /proc/sys/kernel/numa_balancing'<br>wmic os get Version /Value | **Analyzer Args:**<br>- `exp_kernel`: Union[str, list] — Expected kernel version string(s) to match (e.g. from uname -a).<br>- `exp_numa`: Optional[int] — Expected value for kernel.numa_balancing (e.g. 0 or 1).<br>- `regex_match`: bool — If True, match exp_kernel as regex; otherwise exact match. | - | [KernelDataModel](#KernelDataModel-Model) | [KernelCollector](#Collector-Class-KernelCollector) | [KernelAnalyzer](#Data-Analyzer-Class-KernelAnalyzer) |
 | KernelModulePlugin | cat /proc/modules<br>modinfo amdgpu<br>wmic os get Version /Value | **Analyzer Args:**<br>- `kernel_modules`: dict[str, dict] — Expected kernel module name -> {version, etc.}. Analyzer checks collected modules match.<br>- `regex_filter`: list[str] — List of regex patterns to filter which collected modules are checked (default: amd). | - | [KernelModuleDataModel](#KernelModuleDataModel-Model) | [KernelModuleCollector](#Collector-Class-KernelModuleCollector) | [KernelModuleAnalyzer](#Data-Analyzer-Class-KernelModuleAnalyzer) |
 | MemoryPlugin | free -b<br>lsmem<br>numactl -H<br>wmic OS get FreePhysicalMemory /Value; wmic ComputerSystem get TotalPhysicalMemory /Value | **Analyzer Args:**<br>- `ratio`: float — Required free-memory ratio (0-1). Analysis fails if free/total < ratio.<br>- `memory_threshold`: str — Minimum free memory required (e.g. '30Gi', '1T'). Used when ratio is not sufficient. | - | [MemoryDataModel](#MemoryDataModel-Model) | [MemoryCollector](#Collector-Class-MemoryCollector) | [MemoryAnalyzer](#Data-Analyzer-Class-MemoryAnalyzer) |
-| NetworkPlugin | ip addr show<br>curl<br>ethtool -S {interface}<br>ethtool {interface}<br>lldpcli show neighbor<br>lldpctl<br>ip neighbor show<br>ping<br>ip route show<br>ip rule show<br>wget | - | **Collection Args:**<br>- `url`: Optional[str] — Optional URL to probe for network connectivity (used with netprobe).<br>- `netprobe`: Optional[Literal['ping', 'wget', 'curl']] — Tool to use for network connectivity probe: ping, wget, or curl. | [NetworkDataModel](#NetworkDataModel-Model) | [NetworkCollector](#Collector-Class-NetworkCollector) | - |
+| NetworkPlugin | ip addr show<br>curl<br>ethtool -S {interface}<br>ethtool {interface}<br>lldpcli show neighbor<br>lldpctl<br>ip neighbor show<br>ping<br>ip route show<br>ip rule show<br>wget | **Built-in Regexes:**<br>- tx_pfc_frames is non-zero: `^tx_pfc_frames$`<br>- tx_pfc_ena_frames_pri* is non-zero: `^tx_pfc_ena_frames_pri\d+$`<br>- pfc_pri*_tx_transitions is non-zero: `^pfc_pri\d+_tx_transitions$`<br>**Analyzer Args:**<br>- `error_regex`: Union[list[nodescraper.base.regexanalyzer.ErrorRegex], list[dict], NoneType] — Custom error regex patterns; each item can be ErrorRegex or dict with category/pattern. | **Collection Args:**<br>- `url`: Optional[str] — Optional URL to probe for network connectivity (used with netprobe).<br>- `netprobe`: Optional[Literal['ping', 'wget', 'curl']] — Tool to use for network connectivity probe: ping, wget, or curl. | [NetworkDataModel](#NetworkDataModel-Model) | [NetworkCollector](#Collector-Class-NetworkCollector) | [NetworkAnalyzer](#Data-Analyzer-Class-NetworkAnalyzer) |
 | NicPlugin | niccli --listdev<br>niccli --list<br>niccli --list_devices<br>niccli -dev {device_num} nvm -getoption pcie_relaxed_ordering<br>niccli --dev {device_num} nvm --getoption pcie_relaxed_ordering<br>niccli -dev {device_num} nvm -getoption performance_profile<br>niccli --dev {device_num} nvm --getoption performance_profile<br>niccli -dev {device_num} nvm -getoption support_rdma -scope 0<br>niccli -dev {device_num} getqos<br>niccli --dev {device_num} nvm --getoption support_rdma<br>niccli --dev {device_num} qos --ets --show<br>niccli --version<br>nicctl show card<br>nicctl --version<br>nicctl show card flash partition --json<br>nicctl show card interrupts --json<br>nicctl show card logs --non-persistent<br>nicctl show card logs --boot-fault<br>nicctl show card logs --persistent<br>nicctl show card profile --json<br>nicctl show card time --json<br>nicctl show card statistics packet-buffer summary --json<br>nicctl show lif statistics --json<br>nicctl show lif internal queue-to-ud-pinning<br>nicctl show pipeline internal anomalies<br>nicctl show pipeline internal rsq-ring<br>nicctl show pipeline internal statistics memory<br>nicctl show port fsm<br>nicctl show port transceiver --json<br>nicctl show port statistics --json<br>nicctl show port internal mac<br>nicctl show qos headroom --json<br>nicctl show rdma queue --json<br>nicctl show rdma queue-pair --detail --json<br>nicctl show version firmware<br>nicctl show dcqcn<br>nicctl show environment<br>nicctl show lif<br>nicctl show pcie ats<br>nicctl show port<br>nicctl show qos<br>nicctl show rdma statistics<br>nicctl show version host-software<br>nicctl show dcqcn --card {card_id} --json<br>nicctl show card hardware-config --card {card_id} | **Analyzer Args:**<br>- `expected_values`: Optional[Dict[str, Dict[str, Any]]] — Per-command expected checks keyed by canonical key (see command_to_canonical_key).<br>- `performance_profile_expected`: str — Expected Broadcom performance_profile value (case-insensitive). Default RoCE.<br>- `support_rdma_disabled_values`: List[str] — Values that indicate RDMA is not supported (case-insensitive).<br>- `pcie_relaxed_ordering_expected`: str — Expected Broadcom pcie_relaxed_ordering value (e.g. 'Relaxed ordering = enabled'); checked case-insensitively. Defaul...<br>- `expected_qos_prio_map`: Optional[Dict[Any, Any]] — Expected priority-to-TC map (e.g. {0: 0, 1: 1}; keys may be int or str in config). Checked per device when set.<br>- `expected_qos_pfc_enabled`: Optional[int] — Expected PFC enabled value (0/1 or bitmask). Checked per device when set.<br>- `expected_qos_tsa_map`: Optional[Dict[Any, Any]] — Expected TSA map for ETS (e.g. {0: 'ets', 1: 'strict'}; keys may be int or str in config). Checked per device when set.<br>- `expected_qos_tc_bandwidth`: Optional[List[int]] — Expected TC bandwidth percentages. Checked per device when set.<br>- `require_qos_consistent_across_adapters`: bool — When True and no expected_qos_* are set, require all adapters to have the same prio_map, pfc_enabled, and tsa_map.<br>- `nicctl_log_error_regex`: Optional[List[Dict[str, Any]]] — Optional list of error patterns for nicctl show card logs. | **Collection Args:**<br>- `commands`: Optional[List[str]] — Optional list of niccli/nicctl commands to run. When None, default command set is used.<br>- `use_sudo_niccli`: bool — If True, run niccli commands with sudo when required.<br>- `use_sudo_nicctl`: bool — If True, run nicctl commands with sudo when required. | [NicDataModel](#NicDataModel-Model) | [NicCollector](#Collector-Class-NicCollector) | [NicAnalyzer](#Data-Analyzer-Class-NicAnalyzer) |
 | NvmePlugin | nvme smart-log {dev}<br>nvme error-log {dev} --log-entries=256<br>nvme id-ctrl {dev}<br>nvme id-ns {dev}{ns}<br>nvme fw-log {dev}<br>nvme self-test-log {dev}<br>nvme get-log {dev} --log-id=6 --log-len=512<br>nvme telemetry-log {dev} --output-file={dev}_{f_name}<br>nvme list -o json | - | - | [NvmeDataModel](#NvmeDataModel-Model) | [NvmeCollector](#Collector-Class-NvmeCollector) | - |
 | OsPlugin | sh -c '( lsb_release -ds &#124;&#124; (cat /etc/*release &#124; grep PRETTY_NAME) &#124;&#124; uname -om ) 2>/dev/null &#124; head -n1'<br>cat /etc/*release &#124; grep VERSION_ID<br>wmic os get Version /value<br>wmic os get Caption /Value | **Analyzer Args:**<br>- `exp_os`: Union[str, list] — Expected OS name/version string(s) to match (e.g. from lsb_release or /etc/os-release).<br>- `exact_match`: bool — If True, require exact match for exp_os; otherwise substring match. | - | [OsDataModel](#OsDataModel-Model) | [OsCollector](#Collector-Class-OsCollector) | [OsAnalyzer](#Data-Analyzer-Class-OsAnalyzer) |
@@ -1588,6 +1588,31 @@ Check memory usage is within the maximum allowed used memory
 
 **Link to code**: [memory_analyzer.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/memory/memory_analyzer.py)
 
+## Data Analyzer Class NetworkAnalyzer
+
+### Description
+
+Check network statistics for errors (PFC and other network error counters).
+
+**Bases**: ['RegexAnalyzer']
+
+**Link to code**: [network_analyzer.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/network/network_analyzer.py)
+
+### Class Variables
+
+- **ERROR_REGEX**: `[
+  regex=re.compile('^tx_pfc_frames$') message='tx_pfc_frames is non-zero' event_category=<EventCategory.NETWORK: 'NETWORK'> event_priority=<EventPriority.ERROR: 3>,
+  regex=re.compile('^tx_pfc_ena_frames_pri\\d+$') message='tx_pfc_ena_frames_pri* is non-zero' event_category=<EventCategory.NETWORK: 'NETWORK'> event_priority=<EventPriority.ERROR: 3>,
+  regex=re.compile('^pfc_pri\\d+_tx_transitions$') message='pfc_pri*_tx_transitions is non-zero' event_category=<EventCategory.NETWORK: 'NETWORK'> event_priority=<EventPriority.ERROR: 3>
+]`
+
+### Regex Patterns
+
+- **Built-in Regexes:**
+- - tx_pfc_frames is non-zero: `^tx_pfc_frames$`
+- - tx_pfc_ena_frames_pri* is non-zero: `^tx_pfc_ena_frames_pri\d+$`
+- - pfc_pri*_tx_transitions is non-zero: `^pfc_pri\d+_tx_transitions$`
+
 ## Data Analyzer Class NicAnalyzer
 
 ### Description
@@ -1928,6 +1953,20 @@ Arguments for journal analyzer
 
 - **ratio**: `float` — Required free-memory ratio (0-1). Analysis fails if free/total < ratio.
 - **memory_threshold**: `str` — Minimum free memory required (e.g. '30Gi', '1T'). Used when ratio is not sufficient.
+
+## Analyzer Args Class NetworkAnalyzerArgs
+
+### Description
+
+Arguments for the network analyzer plugin.
+
+**Bases**: ['AnalyzerArgs']
+
+**Link to code**: [analyzer_args.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/network/analyzer_args.py)
+
+### Annotations / fields
+
+- **error_regex**: `Union[list[nodescraper.base.regexanalyzer.ErrorRegex], list[dict], NoneType]` — Custom error regex patterns; each item can be ErrorRegex or dict with category/pattern.
 
 ## Analyzer Args Class NicAnalyzerArgs
 
