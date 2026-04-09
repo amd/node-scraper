@@ -534,18 +534,14 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
             "per_gpu": per_gpu_list,
         }
 
-    def check_pldm_version(
+    def check_firmware_versions(
         self,
         amdsmi_fw_data: Optional[list[Fw]],
-        expected_pldm_version: Optional[str],
-    ):
-        """Check expected pldm version
-
-        Args:
-            amdsmi_fw_data (Optional[list[Fw]]): data model
-            expected_pldm_version (Optional[str]): expected pldm version
-        """
-        PLDM_STRING = "PLDM_BUNDLE"
+        expected_firmware_versions: dict[str, str],
+    ) -> None:
+        """Check that each GPU reports the expected version for each ``fw_id``."""
+        if not expected_firmware_versions:
+            return
         if amdsmi_fw_data is None or len(amdsmi_fw_data) == 0:
             self._log_event(
                 category=EventCategory.PLATFORM,
@@ -554,30 +550,37 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                 data={"amdsmi_fw_data": amdsmi_fw_data},
             )
             return
-        mismatched_gpus: list[int] = []
-        pldm_missing_gpus: list[int] = []
+        mismatches: list[dict[str, object]] = []
+        missing: list[dict[str, object]] = []
         for fw_data in amdsmi_fw_data:
             gpu = fw_data.gpu
             if isinstance(fw_data.fw_list, str):
-                pldm_missing_gpus.append(gpu)
+                for fw_id in expected_firmware_versions:
+                    missing.append({"gpu": gpu, "fw_id": fw_id})
                 continue
-            for fw_info in fw_data.fw_list:
-                if PLDM_STRING == fw_info.fw_id and expected_pldm_version != fw_info.fw_version:
-                    mismatched_gpus.append(gpu)
-                if PLDM_STRING == fw_info.fw_id:
-                    break
-            else:
-                pldm_missing_gpus.append(gpu)
+            actual_by_id = {item.fw_id: item.fw_version for item in fw_data.fw_list}
+            for fw_id, expected_ver in expected_firmware_versions.items():
+                if fw_id not in actual_by_id:
+                    missing.append({"gpu": gpu, "fw_id": fw_id})
+                elif actual_by_id[fw_id] != expected_ver:
+                    mismatches.append(
+                        {
+                            "gpu": gpu,
+                            "fw_id": fw_id,
+                            "expected": expected_ver,
+                            "actual": actual_by_id[fw_id],
+                        }
+                    )
 
-        if mismatched_gpus or pldm_missing_gpus:
+        if mismatches or missing:
             self._log_event(
                 category=EventCategory.FW,
-                description="PLDM Version Mismatch",
+                description="Firmware version mismatch",
                 priority=EventPriority.ERROR,
                 data={
-                    "mismatched_gpus": mismatched_gpus,
-                    "pldm_missing_gpus": pldm_missing_gpus,
-                    "expected_pldm_version": expected_pldm_version,
+                    "expected_firmware_versions": expected_firmware_versions,
+                    "mismatches": mismatches,
+                    "missing": missing,
                 },
             )
 
@@ -779,8 +782,8 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                 args.expected_compute_partition_mode,
             )
 
-        if args.expected_pldm_version:
-            self.check_pldm_version(data.firmware, args.expected_pldm_version)
+        if args.expected_firmware_versions:
+            self.check_firmware_versions(data.firmware, args.expected_firmware_versions)
 
         if data.cper_data:
             self.analyzer_cpers(

@@ -476,8 +476,14 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
             return None
 
         try:
+            fw_ids = args.analysis_firmware_ids if args and args.analysis_firmware_ids else None
             analysis_ref = build_amd_smi_analysis_ref(
-                statics, processes, partition, firmware, xgmi_metric
+                statics,
+                processes,
+                partition,
+                firmware,
+                xgmi_metric,
+                firmware_ids=fw_ids,
             )
             return AmdSmiDataModel(
                 version=version,

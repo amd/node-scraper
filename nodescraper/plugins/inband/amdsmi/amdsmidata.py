@@ -937,6 +937,7 @@ class AmdSmiAnalysisRef(BaseModel):
     amdgpu_drv_version: Optional[str] = None
     mem_part_mode: Optional[str] = None
     compute_part_mode: Optional[str] = None
+    firmware_versions: Optional[dict[str, str]] = None
     pldm_version: Optional[str] = None
     ep_vendor_id: Optional[str] = None
     ep_subvendor_id: Optional[str] = None
@@ -1024,7 +1025,25 @@ class AmdSmiDataModel(DataModel):
         return None
 
 
-_PLDM_FW_ID = "PLDM_BUNDLE"
+_DEFAULT_ANALYSIS_FW_IDS: tuple[str, ...] = ("PLDM_BUNDLE",)
+
+
+def _first_observed_fw_versions(firmware: Optional[list[Fw]], fw_ids: list[str]) -> dict[str, str]:
+    """For each ``fw_id``, take the version from the lowest GPU index that reports it."""
+    out: dict[str, str] = {}
+    if not firmware or not fw_ids:
+        return out
+    need = set(fw_ids)
+    for fw in sorted(firmware, key=lambda f: f.gpu):
+        if isinstance(fw.fw_list, str):
+            continue
+        for item in fw.fw_list:
+            if item.fw_id in need and item.fw_id not in out:
+                out[item.fw_id] = item.fw_version
+                need.discard(item.fw_id)
+        if not need:
+            break
+    return out
 
 
 def build_amd_smi_analysis_ref(
@@ -1033,6 +1052,8 @@ def build_amd_smi_analysis_ref(
     partition: Optional[Partition],
     firmware: Optional[list[Fw]],
     xgmi_metric: Optional[list[XgmiMetrics]],
+    *,
+    firmware_ids: Optional[list[str]] = None,
 ) -> AmdSmiAnalysisRef:
     """Build analysis summary from collected structures (called by AmdSmiCollector)."""
     static = static or []
@@ -1076,17 +1097,9 @@ def build_amd_smi_analysis_ref(
         if cps:
             compute_part_mode = sorted(cps, key=lambda p: p.gpu_id)[0].partition_type
 
-    pldm_version: Optional[str] = None
-    if firmware:
-        for fw in sorted(firmware, key=lambda f: f.gpu):
-            if isinstance(fw.fw_list, str):
-                continue
-            for item in fw.fw_list:
-                if item.fw_id == _PLDM_FW_ID:
-                    pldm_version = item.fw_version
-                    break
-            if pldm_version is not None:
-                break
+    ids = list(firmware_ids) if firmware_ids is not None else list(_DEFAULT_ANALYSIS_FW_IDS)
+    firmware_versions = _first_observed_fw_versions(firmware, ids) or None
+    pldm_version = firmware_versions.get("PLDM_BUNDLE") if firmware_versions else None
 
     ep_vendor_id = ep_subvendor_id = ep_device_id = ep_subsystem_id = ep_market_name = None
     if static:
@@ -1118,6 +1131,7 @@ def build_amd_smi_analysis_ref(
         amdgpu_drv_version=amdgpu_drv_version,
         mem_part_mode=mem_part_mode,
         compute_part_mode=compute_part_mode,
+        firmware_versions=firmware_versions,
         pldm_version=pldm_version,
         ep_vendor_id=ep_vendor_id,
         ep_subvendor_id=ep_subvendor_id,

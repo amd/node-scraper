@@ -33,6 +33,10 @@ from nodescraper.models import CollectorArgs
 class AmdSmiCollectorArgs(CollectorArgs):
     """Collector arguments for AmdSmiPlugin"""
 
+    analysis_firmware_ids: Optional[list[str]] = Field(
+        default=None,
+        description=("amd-smi fw_id values to record in analysis_ref.firmware_versions "),
+    )
     cper_file_path: Optional[str] = Field(
         default=None,
         description="Path to CPER folder or file for RAS AFID collection (ras --afid --cper-file).",
