@@ -23,6 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
+import logging
 import os
 import tempfile
 
@@ -31,6 +32,8 @@ from nodescraper.plugins.regex_search.analyzer_args import RegexSearchAnalyzerAr
 from nodescraper.plugins.regex_search.regex_search_analyzer import RegexSearchAnalyzer
 from nodescraper.plugins.regex_search.regex_search_data import RegexSearchData
 from nodescraper.plugins.regex_search.regex_search_plugin import RegexSearchPlugin
+
+EXPECTED_MISSING_ANALYSIS_MSG = "Analysis args need to be provided for the analyzer to run"
 
 
 def test_regex_search_data_from_file():
@@ -68,7 +71,9 @@ def test_regex_search_analyzer_match(system_info):
         error_regex=[{"regex": r"FATAL:.*", "message": "fatal seen"}],
     )
     result = analyzer.analyze_data(data, args)
-    assert result.status == ExecutionStatus.OK
+    assert result.status == ExecutionStatus.ERROR
+    assert "task detected errors" in result.message
+    assert "fatal seen" in result.message
     assert len(result.events) == 1
     assert result.events[0].description == "fatal seen"
 
@@ -76,18 +81,69 @@ def test_regex_search_analyzer_match(system_info):
 def test_regex_search_analyzer_missing_args(system_info):
     data = RegexSearchData(content="x")
     analyzer = RegexSearchAnalyzer(system_info=system_info)
-    expected = "Analysis args need to be provided for the analyzer to run"
     result = analyzer.analyze_data(data, None)
     assert result.status == ExecutionStatus.NOT_RAN
-    assert result.message == expected
+    assert result.message == EXPECTED_MISSING_ANALYSIS_MSG
 
     result = analyzer.analyze_data(data, RegexSearchAnalyzerArgs(error_regex=None))
     assert result.status == ExecutionStatus.NOT_RAN
-    assert result.message == expected
+    assert result.message == EXPECTED_MISSING_ANALYSIS_MSG
 
     result = analyzer.analyze_data(data, RegexSearchAnalyzerArgs(error_regex=[]))
     assert result.status == ExecutionStatus.NOT_RAN
-    assert result.message == expected
+    assert result.message == EXPECTED_MISSING_ANALYSIS_MSG
+
+
+def test_regex_search_plugin_missing_error_regex_not_ran_and_warning(
+    system_info, logger, caplog, tmp_path
+):
+    log_file = tmp_path / "sample.log"
+    log_file.write_text("line\n", encoding="utf-8")
+    plugin = RegexSearchPlugin(system_info=system_info, logger=logger)
+    with caplog.at_level(logging.WARNING, logger=logger.name):
+        out = plugin.run(
+            collection=False,
+            analysis=True,
+            data=str(log_file),
+            analysis_args=None,
+        )
+    assert out.result_data.analysis_result.status == ExecutionStatus.NOT_RAN
+    assert out.result_data.analysis_result.message == EXPECTED_MISSING_ANALYSIS_MSG
+    assert any(
+        "analysis args need to be provided" in r.getMessage().lower() for r in caplog.records
+    )
+
+
+def test_regex_search_plugin_empty_analysis_args_dict_not_ran(system_info, logger, tmp_path):
+    log_file = tmp_path / "sample.log"
+    log_file.write_text("line\n", encoding="utf-8")
+    plugin = RegexSearchPlugin(system_info=system_info, logger=logger)
+    out = plugin.run(
+        collection=False,
+        analysis=True,
+        data=str(log_file),
+        analysis_args={},
+    )
+    assert out.result_data.analysis_result.status == ExecutionStatus.NOT_RAN
+    assert out.result_data.analysis_result.message == EXPECTED_MISSING_ANALYSIS_MSG
+
+
+def test_regex_search_plugin_no_data_warns_and_data_message(system_info, logger, caplog):
+    plugin = RegexSearchPlugin(system_info=system_info, logger=logger)
+    with caplog.at_level(logging.WARNING, logger=logger.name):
+        out = plugin.run(
+            collection=False,
+            analysis=True,
+            data=None,
+            analysis_args=None,
+        )
+    assert out.result_data.analysis_result.status == ExecutionStatus.NOT_RAN
+    assert "No data available to analyze for RegexSearchPlugin" in (
+        out.result_data.analysis_result.message
+    )
+    assert any(
+        "analysis args need to be provided" in r.getMessage().lower() for r in caplog.records
+    )
 
 
 def test_regex_search_plugin_analyzer_only(system_info, logger):
@@ -104,8 +160,10 @@ def test_regex_search_plugin_analyzer_only(system_info, logger):
                 "error_regex": [{"regex": r"match_me_here", "message": "found"}],
             },
         )
-        assert out.status == ExecutionStatus.OK
-        assert out.result_data.analysis_result.status == ExecutionStatus.OK
+        assert out.status == ExecutionStatus.ERROR
+        assert "Analysis error:" in out.message
+        assert "found" in out.message
+        assert out.result_data.analysis_result.status == ExecutionStatus.ERROR
         assert len(out.result_data.analysis_result.events) == 1
         desc = out.result_data.analysis_result.events[0].description
         assert "found" in desc
