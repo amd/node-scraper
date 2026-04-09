@@ -167,12 +167,22 @@ class DynamicParserBuilder:
 
         if list in type_class_map:
             type_class = type_class_map[list]
+            inner = type_class.inner_type
+            if inner is dict or get_origin(inner) is dict:
+                elt_type = dict_arg
+                metavar = META_VAR_MAP[dict]
+            elif inner is not None:
+                elt_type = inner
+                metavar = META_VAR_MAP.get(inner, "STRING")
+            else:
+                elt_type = str
+                metavar = "STRING"
             self.parser.add_argument(
                 f"--{arg_name}",
                 nargs="*",
-                type=type_class.inner_type if type_class.inner_type else str,
+                type=elt_type,
                 required=required,
-                metavar=META_VAR_MAP.get(type_class.inner_type, "STRING"),
+                metavar=metavar,
                 **add_kw,
             )
         elif bool in type_class_map:

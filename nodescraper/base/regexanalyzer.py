@@ -35,6 +35,24 @@ from nodescraper.interfaces.dataanalyzertask import DataAnalyzer
 from nodescraper.models.event import Event
 
 
+def _coerce_event_priority_from_dict(value: Union[str, int, EventPriority]) -> EventPriority:
+    """Turn a string name, integer level, or already-coerced value into the canonical priority member.
+
+    Args:
+        value: Member name (case-insensitive), numeric level, or same-type value passthrough.
+
+    Returns:
+        Matching priority member for the configured level.
+    """
+    if isinstance(value, EventPriority):
+        return value
+    if isinstance(value, int):
+        return EventPriority(value)
+    if isinstance(value, str):
+        return EventPriority[value.upper()]
+    raise TypeError(f"Invalid event_priority: {value!r}")
+
+
 class ErrorRegex(BaseModel):
     regex: re.Pattern
     message: str
@@ -135,13 +153,13 @@ class RegexAnalyzer(DataAnalyzer[TDataModel, TAnalyzeArg]):
             if isinstance(item, ErrorRegex):
                 converted_regex.append(item)
             elif isinstance(item, dict):
-                # Convert dict to ErrorRegex
-                item["regex"] = re.compile(item["regex"])
-                if "event_category" in item:
-                    item["event_category"] = EventCategory(item["event_category"])
-                if "event_priority" in item:
-                    item["event_priority"] = EventPriority(item["event_priority"])
-                converted_regex.append(ErrorRegex(**item))
+                d = dict(item)
+                d["regex"] = re.compile(d["regex"])
+                if "event_category" in d:
+                    d["event_category"] = EventCategory(d["event_category"])
+                if "event_priority" in d:
+                    d["event_priority"] = _coerce_event_priority_from_dict(d["event_priority"])
+                converted_regex.append(ErrorRegex(**d))
 
         return converted_regex + list(base_regex)
 

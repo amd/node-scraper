@@ -398,7 +398,8 @@ def process_args(
         else:
             cur_plugin = None
             for arg in plugin_args:
-                if not arg.startswith("-") and "," in arg:
+                # Only split on commas before a plugin context is set (e.g. "P1,P2").
+                if not arg.startswith("-") and "," in arg and cur_plugin is None:
                     for potential_plugin in arg.split(","):
                         potential_plugin = potential_plugin.strip()
                         if potential_plugin in plugin_names:
