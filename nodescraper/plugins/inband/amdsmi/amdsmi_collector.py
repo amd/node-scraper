@@ -71,7 +71,6 @@ from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     ValueUnit,
     XgmiLinks,
     XgmiMetrics,
-    build_amd_smi_analysis_ref,
 )
 from nodescraper.plugins.inband.amdsmi.collector_args import AmdSmiCollectorArgs
 from nodescraper.utils import get_exception_traceback
@@ -477,7 +476,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
 
         try:
             fw_ids = args.analysis_firmware_ids if args and args.analysis_firmware_ids else None
-            analysis_ref = build_amd_smi_analysis_ref(
+            analysis_ref = AmdSmiDataModel.build_analysis_ref(
                 statics,
                 processes,
                 partition,
