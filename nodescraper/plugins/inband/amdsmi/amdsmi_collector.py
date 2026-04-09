@@ -774,7 +774,9 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
             normalized: list[FwListItem] = []
             for e in fw_list_raw:
                 if isinstance(e, dict):
-                    fid = e.get("fw_name")
+                    fid = e.get("fw_id")
+                    if fid is None:
+                        fid = e.get("fw_name")
                     ver = e.get("fw_version")
                     normalized.append(
                         FwListItem(
