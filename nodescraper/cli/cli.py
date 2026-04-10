@@ -527,7 +527,6 @@ def main(
                 "skip_sudo"
             ] = True
 
-        log_system_info(log_path, system_info, logger)
     except Exception as e:
         parser.error(str(e))
 
@@ -543,6 +542,8 @@ def main(
             sname=sname,
             host_cli_args=host_cli_args,
         )
+
+        log_system_info(log_path, system_info, logger)
 
         dump_results_to_csv(results, sname, log_path, timestamp, logger)
 
