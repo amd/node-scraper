@@ -24,6 +24,7 @@
 #
 ###############################################################################
 import logging
+from enum import Enum
 from typing import Optional, Tuple
 
 import pytest
@@ -123,6 +124,32 @@ def test_good_sku_and_platform(conn_mock):
     args = {"name": "h", "sku": "GOOD", "platform": "X", "os_family": 1}
     info = SystemInfo(**args)
     col = DummyCollector(info, conn_mock)
+    res, data = col.collect_data()
+    assert res.status == ExecutionStatus.OK
+
+
+class _SampleSku(Enum):
+    GOOD = 1
+
+
+def test_supported_skus_may_use_enum_members(conn_mock):
+    class EnumSkuCollector(DummyCollector):
+        SUPPORTED_SKUS = {_SampleSku.GOOD}
+
+    args = {"name": "h", "sku": "GOOD", "platform": "X", "os_family": 1}
+    info = SystemInfo(**args)
+    col = EnumSkuCollector(info, conn_mock)
+    res, data = col.collect_data()
+    assert res.status == ExecutionStatus.OK
+
+
+def test_supported_skus_not_enforced_when_system_sku_is_none(conn_mock):
+    class RestrictedSkuCollector(DummyCollector):
+        SUPPORTED_SKUS = {_SampleSku.GOOD}
+
+    args = {"name": "h", "sku": None, "platform": "X", "os_family": 1}
+    info = SystemInfo(**args)
+    col = RestrictedSkuCollector(info, conn_mock)
     res, data = col.collect_data()
     assert res.status == ExecutionStatus.OK
 
