@@ -81,7 +81,7 @@ usage: cli.py [-h] [--version] [--sys-name STRING]
               [--plugin-configs [STRING ...]] [--system-config STRING]
               [--connection-config STRING] [--log-path STRING]
               [--log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}]
-              [--gen-reference-config] [--skip-sudo]
+              [--no-console-log] [--gen-reference-config] [--skip-sudo]
               {summary,run-plugins,describe,gen-plugin-config,compare-runs,show-redfish-oem-allowable}
               ...
 
@@ -124,6 +124,11 @@ options:
                         to disable logging (default: .)
   --log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}
                         Change python log level (default: INFO)
+  --no-console-log      Write logs only to nodescraper.log under the run
+                        directory; do not print to stdout. If no run log
+                        directory would be created (e.g. --log-path None),
+                        uses ./scraper_logs_<host>_<timestamp>/ like the
+                        default layout. (default: False)
   --gen-reference-config
                         Generate reference config from system. Writes to
                         ./reference_config.json. (default: False)
