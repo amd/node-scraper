@@ -538,6 +538,17 @@ A plugin config can be used to compare the system data against the config specif
 Built-in configs include **NodeStatus** (a subset of plugins) and **AllPlugins** (runs every
 registered plugin with default arguments—useful for generating a reference config from the full system).
 
+**NodeStatus plus additional plugins** — built-in configs merge with plugins named after `run-plugins`.
+Use **`--plugin-configs=<name>`** (equals form): with a space
+after `--plugin-configs`. See below for examples:
+```sh
+node-scraper --plugin-configs=NodeStatus run-plugins PciePlugin
+```
+
+```sh
+node-scraper --log-path ./logs --plugin-configs=NodeStatus run-plugins PciePlugin
+```
+
 Using a JSON file:
 ```sh
 node-scraper --plugin-configs plugin_config.json
