@@ -30,7 +30,7 @@ from pathlib import Path
 
 def test_describe_command_list_plugins(run_cli_command):
     """Test that describe command can list all plugins."""
-    result = run_cli_command(["describe", "plugin"])
+    result = run_cli_command(["--log-path", "None", "describe", "plugin"])
 
     assert result.returncode == 0
     assert len(result.stdout) > 0
@@ -40,7 +40,7 @@ def test_describe_command_list_plugins(run_cli_command):
 
 def test_describe_command_single_plugin(run_cli_command):
     """Test that describe command can describe a single plugin."""
-    result = run_cli_command(["describe", "plugin", "BiosPlugin"])
+    result = run_cli_command(["--log-path", "None", "describe", "plugin", "BiosPlugin"])
 
     assert result.returncode == 0
     assert len(result.stdout) > 0
@@ -50,7 +50,7 @@ def test_describe_command_single_plugin(run_cli_command):
 
 def test_describe_invalid_plugin(run_cli_command):
     """Test that describe command handles invalid plugin gracefully."""
-    result = run_cli_command(["describe", "plugin", "NonExistentPlugin"])
+    result = run_cli_command(["--log-path", "None", "describe", "plugin", "NonExistentPlugin"])
 
     assert result.returncode != 0
     output = (result.stdout + result.stderr).lower()
