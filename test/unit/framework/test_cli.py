@@ -148,6 +148,25 @@ def test_system_info_builder():
                 [],
             ),
         ),
+        (
+            [
+                "run-plugins",
+                "RegexSearchPlugin",
+                "--error-regex",
+                '{"regex":"a","message":"b","event_category":"UNKNOWN"}',
+            ],
+            ["RegexSearchPlugin"],
+            (
+                ["run-plugins"],
+                {
+                    "RegexSearchPlugin": [
+                        "--error-regex",
+                        '{"regex":"a","message":"b","event_category":"UNKNOWN"}',
+                    ],
+                },
+                [],
+            ),
+        ),
     ],
 )
 def test_process_args(raw_arg_input, plugin_names, exp_output):

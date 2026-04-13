@@ -1,0 +1,4 @@
+2026-04-09T10:00:00Z service started OK
+2026-04-09T10:01:00Z ERROR: connection reset by peer
+2026-04-09T10:02:00Z routine check passed
+2026-04-09T10:03:00Z WARNING: disk full on /var
