@@ -61,7 +61,8 @@ def run_cli_command():
         Returns:
             subprocess.CompletedProcess instance
         """
-        cmd = [sys.executable, "-m", "nodescraper.cli.cli"] + args
+        # -W: avoid runpy RuntimeWarning when nodescraper.cli was imported before -m nodescraper.cli.cli
+        cmd = [sys.executable, "-W", "ignore::RuntimeWarning", "-m", "nodescraper.cli.cli"] + args
         return subprocess.run(
             cmd,
             capture_output=True,
