@@ -475,7 +475,8 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
             return None
 
         try:
-            return AmdSmiDataModel(
+            fw_ids = args.analysis_firmware_ids if args and args.analysis_firmware_ids else None
+            base = AmdSmiDataModel(
                 version=version,
                 gpu_list=gpu_list,
                 process=processes,
@@ -489,7 +490,10 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
                 xgmi_link=xgmi_link or [],
                 cper_data=cper_data,
                 cper_afids=cper_afids,
+                analysis_firmware_ids=fw_ids,
+                analysis_ref=None,
             )
+            return base.model_copy(update={"analysis_ref": base.build_analysis_ref()})
         except ValidationError as err:
             self.logger.warning("Validation err: %s", err)
             self._log_event(
@@ -763,7 +767,9 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
             normalized: list[FwListItem] = []
             for e in fw_list_raw:
                 if isinstance(e, dict):
-                    fid = e.get("fw_name")
+                    fid = e.get("fw_id")
+                    if fid is None:
+                        fid = e.get("fw_name")
                     ver = e.get("fw_version")
                     normalized.append(
                         FwListItem(

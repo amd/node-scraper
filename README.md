@@ -4,6 +4,7 @@ system debug.
 
 ## Table of Contents
 - [Installation](#installation)
+  - [Install from PyPI](#install-from-pypi)
   - [Install From Source](#install-from-source)
 - [CLI Usage](#cli-usage)
   - [Execution Methods](#execution-methods)
@@ -24,6 +25,19 @@ system debug.
 invoked by collectors** -> See [docs/PLUGIN_DOC.md](docs/PLUGIN_DOC.md)
 
 ## Installation
+### Install from PyPI
+Node Scraper is published on [PyPI](https://pypi.org/project/amd-node-scraper/) as **amd-node-scraper**. Install it with Python 3.9 or newer:
+
+```sh
+pip install amd-node-scraper
+```
+
+Use a virtual environment if you prefer. After installation, confirm the CLI is available:
+
+```sh
+node-scraper --help
+```
+
 ### Install From Source
 Node Scraper requires Python 3.9+ for installation. After cloning this repository,
 call dev-setup.sh script with 'source'. This script creates an editable install of Node Scraper in
@@ -67,7 +81,7 @@ usage: cli.py [-h] [--version] [--sys-name STRING]
               [--plugin-configs [STRING ...]] [--system-config STRING]
               [--connection-config STRING] [--log-path STRING]
               [--log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}]
-              [--gen-reference-config] [--skip-sudo]
+              [--no-console-log] [--gen-reference-config] [--skip-sudo]
               {summary,run-plugins,describe,gen-plugin-config,compare-runs,show-redfish-oem-allowable}
               ...
 
@@ -110,6 +124,11 @@ options:
                         to disable logging (default: .)
   --log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}
                         Change python log level (default: INFO)
+  --no-console-log      Write logs only to nodescraper.log under the run
+                        directory; do not print to stdout. If no run log
+                        directory would be created (e.g. --log-path None),
+                        uses ./scraper_logs_<host>_<timestamp>/ like the
+                        default layout. (default: False)
   --gen-reference-config
                         Generate reference config from system. Writes to
                         ./reference_config.json. (default: False)
@@ -518,6 +537,17 @@ Below is an example that skips sudo requiring plugins and disables analysis.
 A plugin config can be used to compare the system data against the config specifications.
 Built-in configs include **NodeStatus** (a subset of plugins) and **AllPlugins** (runs every
 registered plugin with default arguments—useful for generating a reference config from the full system).
+
+**NodeStatus plus additional plugins** — built-in configs merge with plugins named after `run-plugins`.
+Use **`--plugin-configs=<name>`** (equals form): with a space
+after `--plugin-configs`. See below for examples:
+```sh
+node-scraper --plugin-configs=NodeStatus run-plugins PciePlugin
+```
+
+```sh
+node-scraper --log-path ./logs --plugin-configs=NodeStatus run-plugins PciePlugin
+```
 
 Using a JSON file:
 ```sh

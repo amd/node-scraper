@@ -43,15 +43,40 @@ from nodescraper.models import DataModel
 from nodescraper.typeutils import TypeUtils
 
 
+def _help_from_annotated(anno: object) -> str:
+    """Pull CLI help from ``Annotated[T, metadata...]`` (string or ``Field(description=...)``)."""
+    if anno is None or get_origin(anno) is not Annotated:
+        return ""
+    for meta in get_args(anno)[1:]:
+        if isinstance(meta, str):
+            return meta
+        desc = getattr(meta, "description", None)
+        if isinstance(desc, str) and desc.strip():
+            return desc
+    return ""
+
+
 def _get_run_arg_help(plugin_class: Type[PluginInterface], arg: str) -> str:
     """Get help text for a run() parameter from typing.Annotated metadata on the parameter."""
     try:
-        hints = get_type_hints(plugin_class.run, include_extras=True)
-        anno = hints.get(arg)
-        if anno is not None and get_origin(anno) is Annotated:
-            args = get_args(anno)
-            if len(args) >= 2 and isinstance(args[1], str):
-                return args[1]
+        run_obj = None
+        for cls in plugin_class.__mro__:
+            if "run" in cls.__dict__:
+                run_obj = cls.__dict__["run"]
+                break
+        if run_obj is None:
+            run_obj = plugin_class.run
+        run_fn = run_obj
+        if isinstance(run_obj, staticmethod):
+            run_fn = run_obj.__func__
+        elif isinstance(run_obj, classmethod):
+            run_fn = run_obj.__func__
+        raw = getattr(run_fn, "__annotations__", {}).get(arg)
+        text = _help_from_annotated(raw)
+        if text:
+            return text
+        hints = get_type_hints(run_fn, include_extras=True)
+        return _help_from_annotated(hints.get(arg))
     except Exception:
         pass
     return ""
@@ -167,12 +192,22 @@ class DynamicParserBuilder:
 
         if list in type_class_map:
             type_class = type_class_map[list]
+            inner = type_class.inner_type
+            if inner is dict or get_origin(inner) is dict:
+                elt_type = dict_arg
+                metavar = META_VAR_MAP[dict]
+            elif inner is not None:
+                elt_type = inner
+                metavar = META_VAR_MAP.get(inner, "STRING")
+            else:
+                elt_type = str
+                metavar = "STRING"
             self.parser.add_argument(
                 f"--{arg_name}",
                 nargs="*",
-                type=type_class.inner_type if type_class.inner_type else str,
+                type=elt_type,
                 required=required,
-                metavar=META_VAR_MAP.get(type_class.inner_type, "STRING"),
+                metavar=metavar,
                 **add_kw,
             )
         elif bool in type_class_map:

@@ -23,21 +23,18 @@
 # SOFTWARE.
 #
 ###############################################################################
-from typing import Optional
+from typing import Optional, Union
 
 from pydantic import Field
 
-from nodescraper.models import CollectorArgs
+from nodescraper.base.regexanalyzer import ErrorRegex
+from nodescraper.models import AnalyzerArgs
 
 
-class AmdSmiCollectorArgs(CollectorArgs):
-    """Collector arguments for AmdSmiPlugin"""
+class NetworkAnalyzerArgs(AnalyzerArgs):
+    """Arguments for the network analyzer plugin."""
 
-    analysis_firmware_ids: Optional[list[str]] = Field(
+    error_regex: Optional[Union[list[ErrorRegex], list[dict]]] = Field(
         default=None,
-        description=("amd-smi fw_id values to record in analysis_ref.firmware_versions "),
-    )
-    cper_file_path: Optional[str] = Field(
-        default=None,
-        description="Path to CPER folder or file for RAS AFID collection (ras --afid --cper-file).",
+        description="Custom error regex patterns; each item can be ErrorRegex or dict with category/pattern.",
     )

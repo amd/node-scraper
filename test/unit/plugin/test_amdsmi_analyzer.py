@@ -461,8 +461,8 @@ def test_check_static_data_mismatch(mock_analyzer):
     assert len(analyzer.result.events) >= 1
 
 
-def test_check_pldm_version_success(mock_analyzer):
-    """Test check_pldm_version passes when PLDM version matches."""
+def test_check_firmware_versions_pldm_success(mock_analyzer):
+    """Test check_firmware_versions passes when PLDM version matches."""
     analyzer = mock_analyzer
 
     firmware_data = [
@@ -474,13 +474,13 @@ def test_check_pldm_version_success(mock_analyzer):
         ),
     ]
 
-    analyzer.check_pldm_version(firmware_data, "1.2.3")
+    analyzer.check_firmware_versions(firmware_data, {"PLDM_BUNDLE": "1.2.3"})
 
     assert len(analyzer.result.events) == 0
 
 
-def test_check_pldm_version_mismatch(mock_analyzer):
-    """Test check_pldm_version logs error when PLDM version doesn't match."""
+def test_check_firmware_versions_pldm_mismatch(mock_analyzer):
+    """Test check_firmware_versions logs error when PLDM version doesn't match."""
     analyzer = mock_analyzer
 
     firmware_data = [
@@ -492,14 +492,14 @@ def test_check_pldm_version_mismatch(mock_analyzer):
         ),
     ]
 
-    analyzer.check_pldm_version(firmware_data, "1.2.4")
+    analyzer.check_firmware_versions(firmware_data, {"PLDM_BUNDLE": "1.2.4"})
 
     assert len(analyzer.result.events) == 1
     assert analyzer.result.events[0].priority == EventPriority.ERROR
 
 
-def test_check_pldm_version_missing(mock_analyzer):
-    """Test check_pldm_version handles missing PLDM firmware."""
+def test_check_firmware_versions_pldm_missing(mock_analyzer):
+    """Test check_firmware_versions handles missing PLDM firmware."""
     analyzer = mock_analyzer
 
     firmware_data = [
@@ -511,8 +511,47 @@ def test_check_pldm_version_missing(mock_analyzer):
         ),
     ]
 
-    analyzer.check_pldm_version(firmware_data, "1.2.3")
+    analyzer.check_firmware_versions(firmware_data, {"PLDM_BUNDLE": "1.2.3"})
 
+    assert len(analyzer.result.events) == 1
+    assert analyzer.result.events[0].priority == EventPriority.ERROR
+
+
+def test_check_firmware_versions_multiple_fw_ids_success(mock_analyzer):
+    """Test check_firmware_versions passes when all fw_ids match on each GPU."""
+    analyzer = mock_analyzer
+    firmware_data = [
+        Fw(
+            gpu=0,
+            fw_list=[
+                FwListItem(fw_id="PLDM_BUNDLE", fw_version="1.2.3"),
+                FwListItem(fw_id="OTHER_FW", fw_version="9.0"),
+            ],
+        ),
+    ]
+    analyzer.check_firmware_versions(
+        firmware_data,
+        {"PLDM_BUNDLE": "1.2.3", "OTHER_FW": "9.0"},
+    )
+    assert len(analyzer.result.events) == 0
+
+
+def test_check_firmware_versions_one_id_mismatch(mock_analyzer):
+    """Test check_firmware_versions errors when any fw_id version differs."""
+    analyzer = mock_analyzer
+    firmware_data = [
+        Fw(
+            gpu=0,
+            fw_list=[
+                FwListItem(fw_id="PLDM_BUNDLE", fw_version="1.2.3"),
+                FwListItem(fw_id="OTHER_FW", fw_version="8.0"),
+            ],
+        ),
+    ]
+    analyzer.check_firmware_versions(
+        firmware_data,
+        {"PLDM_BUNDLE": "1.2.3", "OTHER_FW": "9.0"},
+    )
     assert len(analyzer.result.events) == 1
     assert analyzer.result.events[0].priority == EventPriority.ERROR
 
