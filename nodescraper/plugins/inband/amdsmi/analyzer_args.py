@@ -29,6 +29,7 @@ from typing import Optional
 from pydantic import Field
 
 from nodescraper.models import AnalyzerArgs
+from nodescraper.plugins.inband.amdsmi.amdsmidata import AmdSmiDataModel
 
 
 class AmdSmiAnalyzerArgs(AnalyzerArgs):
@@ -51,8 +52,9 @@ class AmdSmiAnalyzerArgs(AnalyzerArgs):
     expected_compute_partition_mode: Optional[str] = Field(
         default=None, description="Expected compute partition mode."
     )
-    expected_pldm_version: Optional[str] = Field(
-        default=None, description="Expected PLDM version string."
+    expected_firmware_versions: Optional[dict[str, str]] = Field(
+        default=None,
+        description="Expected firmware versions keyed by amd-smi fw_id (e.g. PLDM_BUNDLE).",
     )
     l0_to_recovery_count_error_threshold: Optional[int] = Field(
         default=3,
@@ -80,3 +82,36 @@ class AmdSmiAnalyzerArgs(AnalyzerArgs):
     analysis_range_end: Optional[datetime] = Field(
         default=None, description="End of time range for time-windowed analysis."
     )
+
+    @classmethod
+    def build_from_model(cls, datamodel: AmdSmiDataModel) -> "AmdSmiAnalyzerArgs":
+        """Build analyzer args from data model (reference snapshot set by collector).
+
+        Args:
+            datamodel (AmdSmiDataModel): data model for plugin
+
+        Returns:
+            AmdSmiAnalyzerArgs: instance of analyzer args class
+        """
+        r = datamodel.analysis_ref
+        if r is None:
+            return cls()
+        fw_expect: dict[str, str] = {}
+        if r.firmware_versions:
+            fw_expect.update(r.firmware_versions)
+        if r.pldm_version is not None and "PLDM_BUNDLE" not in fw_expect:
+            fw_expect["PLDM_BUNDLE"] = r.pldm_version
+        return cls(
+            expected_gpu_processes=r.gpu_processes_max,
+            expected_max_power=r.max_power_w,
+            expected_driver_version=r.amdgpu_drv_version,
+            expected_memory_partition_mode=r.mem_part_mode,
+            expected_compute_partition_mode=r.compute_part_mode,
+            expected_firmware_versions=dict(fw_expect) if fw_expect else None,
+            vendorid_ep=r.ep_vendor_id,
+            vendorid_ep_vf=r.ep_subvendor_id,
+            devid_ep=r.ep_device_id,
+            devid_ep_vf=r.ep_subsystem_id,
+            sku_name=r.ep_market_name,
+            expected_xgmi_speed=r.xgmi_rates,
+        )
