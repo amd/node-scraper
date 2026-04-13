@@ -24,13 +24,21 @@
 #
 ###############################################################################
 
+from pydantic import Field
+
 from nodescraper.models import AnalyzerArgs
 from nodescraper.plugins.inband.process.processdata import ProcessDataModel
 
 
 class ProcessAnalyzerArgs(AnalyzerArgs):
-    max_kfd_processes: int = 0
-    max_cpu_usage: float = 20.0
+    max_kfd_processes: int = Field(
+        default=0,
+        description="Maximum allowed number of KFD (Kernel Fusion Driver) processes; 0 disables the check.",
+    )
+    max_cpu_usage: float = Field(
+        default=20.0,
+        description="Maximum allowed CPU usage (percent) for process checks.",
+    )
 
     @classmethod
     def build_from_model(cls, datamodel: ProcessDataModel) -> "ProcessAnalyzerArgs":

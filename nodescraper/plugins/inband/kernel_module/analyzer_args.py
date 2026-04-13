@@ -25,6 +25,8 @@
 ###############################################################################
 import re
 
+from pydantic import Field
+
 from nodescraper.models import AnalyzerArgs
 from nodescraper.plugins.inband.kernel_module.kernel_module_data import (
     KernelModuleDataModel,
@@ -32,8 +34,14 @@ from nodescraper.plugins.inband.kernel_module.kernel_module_data import (
 
 
 class KernelModuleAnalyzerArgs(AnalyzerArgs):
-    kernel_modules: dict[str, dict] = {}
-    regex_filter: list[str] = ["amd"]
+    kernel_modules: dict[str, dict] = Field(
+        default_factory=dict,
+        description="Expected kernel module name -> {version, etc.}. Analyzer checks collected modules match.",
+    )
+    regex_filter: list[str] = Field(
+        default_factory=lambda: ["amd"],
+        description="List of regex patterns to filter which collected modules are checked (default: amd).",
+    )
 
     @classmethod
     def build_from_model(cls, datamodel: KernelModuleDataModel) -> "KernelModuleAnalyzerArgs":

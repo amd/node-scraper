@@ -26,8 +26,13 @@
 
 from typing import Optional
 
+from pydantic import Field
+
 from nodescraper.models import CollectorArgs
 
 
 class JournalCollectorArgs(CollectorArgs):
-    boot: Optional[int] = None
+    boot: Optional[int] = Field(
+        default=None,
+        description="Optional boot ID to limit journal collection to a specific boot.",
+    )

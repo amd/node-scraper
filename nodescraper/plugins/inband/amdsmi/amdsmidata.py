@@ -927,6 +927,24 @@ class Topo(BaseModel):
     links: list[TopoLink]
 
 
+class AmdSmiAnalysisRef(BaseModel):
+    """Collector-filled summary for reference config"""
+
+    gpu_processes_max: Optional[int] = None
+    max_power_w: Optional[int] = None
+    amdgpu_drv_version: Optional[str] = None
+    mem_part_mode: Optional[str] = None
+    compute_part_mode: Optional[str] = None
+    firmware_versions: Optional[dict[str, str]] = None
+    pldm_version: Optional[str] = None
+    ep_vendor_id: Optional[str] = None
+    ep_subvendor_id: Optional[str] = None
+    ep_device_id: Optional[str] = None
+    ep_subsystem_id: Optional[str] = None
+    ep_market_name: Optional[str] = None
+    xgmi_rates: Optional[list[float]] = None
+
+
 class AmdSmiDataModel(DataModel):
     """Data model for amd-smi data.
 
@@ -956,6 +974,13 @@ class AmdSmiDataModel(DataModel):
     xgmi_link: Optional[list[XgmiLinks]] = Field(default_factory=list)
     cper_data: Optional[list[FileModel]] = Field(default_factory=list)
     cper_afids: dict[str, int] = Field(default_factory=dict)
+
+    analysis_firmware_ids: Optional[list[str]] = Field(
+        default=None,
+        description="fw_id values used when snapshotting firmware_versions into analysis_ref.",
+    )
+
+    analysis_ref: Optional[AmdSmiAnalysisRef] = None
 
     def get_list(self, gpu: int) -> Optional[AmdSmiListItem]:
         """Get the gpu list item for the given gpu id."""
@@ -1001,3 +1026,154 @@ class AmdSmiDataModel(DataModel):
             if item.gpu == gpu:
                 return item
         return None
+
+    def _sorted_static_gpus(self) -> list[AmdSmiStatic]:
+        return sorted(self.static or [], key=lambda s: s.gpu)
+
+    @property
+    def ref_gpu_processes_max(self) -> Optional[int]:
+        """Max process-list length across GPUs (for analysis reference snapshot)."""
+        proc = self.process
+        if not proc:
+            return None
+        counts: list[int] = []
+        for p in proc:
+            if not p.process_list:
+                continue
+            if isinstance(p.process_list[0].process_info, str):
+                continue
+            counts.append(len(p.process_list))
+        return max(counts) if counts else None
+
+    @property
+    def ref_max_power_w(self) -> Optional[int]:
+        """First available max power limit (W) from static data, lowest GPU index first."""
+        for gpu in self._sorted_static_gpus():
+            lim = gpu.limit
+            if lim is None or lim.max_power is None or lim.max_power.value is None:
+                continue
+            try:
+                return int(float(lim.max_power.value))
+            except (TypeError, ValueError):
+                continue
+        return None
+
+    @property
+    def ref_amdgpu_drv_version(self) -> Optional[str]:
+        """Driver version from the lowest-index GPU with static data."""
+        for gpu in self._sorted_static_gpus():
+            if gpu.driver and gpu.driver.version:
+                return gpu.driver.version
+        return None
+
+    @property
+    def ref_mem_part_mode(self) -> Optional[str]:
+        if self.partition is None:
+            return None
+        mps = self.partition.memory_partition
+        if not mps:
+            return None
+        return sorted(mps, key=lambda p: p.gpu_id)[0].partition_type
+
+    @property
+    def ref_compute_part_mode(self) -> Optional[str]:
+        if self.partition is None:
+            return None
+        cps = self.partition.compute_partition
+        if not cps:
+            return None
+        return sorted(cps, key=lambda p: p.gpu_id)[0].partition_type
+
+    @property
+    def ref_firmware_versions(self) -> Optional[dict[str, str]]:
+        ids = (
+            list(self.analysis_firmware_ids)
+            if self.analysis_firmware_ids is not None
+            else list(_DEFAULT_ANALYSIS_FW_IDS)
+        )
+        return _first_observed_fw_versions(self.firmware, ids) or None
+
+    @property
+    def ref_pldm_version(self) -> Optional[str]:
+        fw = self.ref_firmware_versions
+        return fw.get("PLDM_BUNDLE") if fw else None
+
+    @property
+    def ref_ep_vendor_id(self) -> Optional[str]:
+        ss = self._sorted_static_gpus()
+        return ss[0].asic.vendor_id if ss else None
+
+    @property
+    def ref_ep_subvendor_id(self) -> Optional[str]:
+        ss = self._sorted_static_gpus()
+        return ss[0].asic.subvendor_id if ss else None
+
+    @property
+    def ref_ep_device_id(self) -> Optional[str]:
+        ss = self._sorted_static_gpus()
+        return ss[0].asic.device_id if ss else None
+
+    @property
+    def ref_ep_subsystem_id(self) -> Optional[str]:
+        ss = self._sorted_static_gpus()
+        return ss[0].asic.subsystem_id if ss else None
+
+    @property
+    def ref_ep_market_name(self) -> Optional[str]:
+        ss = self._sorted_static_gpus()
+        return ss[0].asic.market_name if ss else None
+
+    @property
+    def ref_xgmi_rates(self) -> Optional[list[float]]:
+        xm = self.xgmi_metric
+        if not xm:
+            return None
+        rates: set[float] = set()
+        for m in xm:
+            br = m.link_metrics.bit_rate
+            if br is None or br.value is None:
+                continue
+            try:
+                rates.add(float(br.value))
+            except (TypeError, ValueError):
+                continue
+        return sorted(rates) if rates else None
+
+    def build_analysis_ref(self) -> AmdSmiAnalysisRef:
+        """Build ``AmdSmiAnalysisRef`` from current field values"""
+        return AmdSmiAnalysisRef(
+            gpu_processes_max=self.ref_gpu_processes_max,
+            max_power_w=self.ref_max_power_w,
+            amdgpu_drv_version=self.ref_amdgpu_drv_version,
+            mem_part_mode=self.ref_mem_part_mode,
+            compute_part_mode=self.ref_compute_part_mode,
+            firmware_versions=self.ref_firmware_versions,
+            pldm_version=self.ref_pldm_version,
+            ep_vendor_id=self.ref_ep_vendor_id,
+            ep_subvendor_id=self.ref_ep_subvendor_id,
+            ep_device_id=self.ref_ep_device_id,
+            ep_subsystem_id=self.ref_ep_subsystem_id,
+            ep_market_name=self.ref_ep_market_name,
+            xgmi_rates=self.ref_xgmi_rates,
+        )
+
+
+_DEFAULT_ANALYSIS_FW_IDS: tuple[str, ...] = ("PLDM_BUNDLE",)
+
+
+def _first_observed_fw_versions(firmware: Optional[list[Fw]], fw_ids: list[str]) -> dict[str, str]:
+    """For each ``fw_id``, take the version from the lowest GPU index that reports it."""
+    out: dict[str, str] = {}
+    if not firmware or not fw_ids:
+        return out
+    need = set(fw_ids)
+    for fw in sorted(firmware, key=lambda f: f.gpu):
+        if isinstance(fw.fw_list, str):
+            continue
+        for item in fw.fw_list:
+            if item.fw_id in need and item.fw_id not in out:
+                out[item.fw_id] = item.fw_version
+                need.discard(item.fw_id)
+        if not need:
+            break
+    return out

@@ -25,6 +25,8 @@
 ###############################################################################
 from typing import Dict, Optional, Union
 
+from pydantic import Field
+
 from nodescraper.models import AnalyzerArgs
 
 
@@ -41,13 +43,24 @@ class PcieAnalyzerArgs(AnalyzerArgs):
         exp_ten_bit_tag_req_en: Expected 10-bit tag request enable (int for all devices, dict for specific device IDs)
     """
 
-    exp_speed: int = 5
-    exp_width: int = 16
-    exp_sriov_count: int = 0
-    exp_gpu_count_override: Optional[int] = None
-    exp_max_payload_size: Optional[Union[Dict[int, int], int]] = None
-    exp_max_rd_req_size: Optional[Union[Dict[int, int], int]] = None
-    exp_ten_bit_tag_req_en: Optional[Union[Dict[int, int], int]] = None
+    exp_speed: int = Field(default=5, description="Expected PCIe link speed (generation 1–5).")
+    exp_width: int = Field(default=16, description="Expected PCIe link width in lanes (1–16).")
+    exp_sriov_count: int = Field(default=0, description="Expected SR-IOV virtual function count.")
+    exp_gpu_count_override: Optional[int] = Field(
+        default=None, description="Override expected GPU count for validation."
+    )
+    exp_max_payload_size: Optional[Union[Dict[int, int], int]] = Field(
+        default=None,
+        description="Expected max payload size: int for all devices, or dict keyed by device ID.",
+    )
+    exp_max_rd_req_size: Optional[Union[Dict[int, int], int]] = Field(
+        default=None,
+        description="Expected max read request size: int for all devices, or dict keyed by device ID.",
+    )
+    exp_ten_bit_tag_req_en: Optional[Union[Dict[int, int], int]] = Field(
+        default=None,
+        description="Expected 10-bit tag request enable: int for all devices, or dict keyed by device ID.",
+    )
 
 
 def normalize_to_dict(

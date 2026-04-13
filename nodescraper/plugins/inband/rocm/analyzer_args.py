@@ -32,10 +32,18 @@ from nodescraper.plugins.inband.rocm.rocmdata import RocmDataModel
 
 
 class RocmAnalyzerArgs(AnalyzerArgs):
-    exp_rocm: Union[str, list] = Field(default_factory=list)
-    exp_rocm_latest: str = Field(default="")
-    # Key = sub-version name (e.g. version_rocm); value = expected string or list of allowed strings
-    exp_rocm_sub_versions: dict[str, Union[str, list]] = Field(default_factory=dict)
+    exp_rocm: Union[str, list] = Field(
+        default_factory=list,
+        description="Expected ROCm version string(s) to match (e.g. from rocminfo).",
+    )
+    exp_rocm_latest: str = Field(
+        default="",
+        description="Expected 'latest' ROCm path or version string for versioned installs.",
+    )
+    exp_rocm_sub_versions: dict[str, Union[str, list]] = Field(
+        default_factory=dict,
+        description="Map sub-version name (e.g. version_rocm) to expected string or list of allowed strings.",
+    )
 
     @field_validator("exp_rocm", mode="before")
     @classmethod

@@ -534,18 +534,14 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
             "per_gpu": per_gpu_list,
         }
 
-    def check_pldm_version(
+    def check_firmware_versions(
         self,
         amdsmi_fw_data: Optional[list[Fw]],
-        expected_pldm_version: Optional[str],
-    ):
-        """Check expected pldm version
-
-        Args:
-            amdsmi_fw_data (Optional[list[Fw]]): data model
-            expected_pldm_version (Optional[str]): expected pldm version
-        """
-        PLDM_STRING = "PLDM_BUNDLE"
+        expected_firmware_versions: dict[str, str],
+    ) -> None:
+        """Check that each GPU reports the expected version for each ``fw_id``."""
+        if not expected_firmware_versions:
+            return
         if amdsmi_fw_data is None or len(amdsmi_fw_data) == 0:
             self._log_event(
                 category=EventCategory.PLATFORM,
@@ -554,30 +550,37 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                 data={"amdsmi_fw_data": amdsmi_fw_data},
             )
             return
-        mismatched_gpus: list[int] = []
-        pldm_missing_gpus: list[int] = []
+        mismatches: list[dict[str, object]] = []
+        missing: list[dict[str, object]] = []
         for fw_data in amdsmi_fw_data:
             gpu = fw_data.gpu
             if isinstance(fw_data.fw_list, str):
-                pldm_missing_gpus.append(gpu)
+                for fw_id in expected_firmware_versions:
+                    missing.append({"gpu": gpu, "fw_id": fw_id})
                 continue
-            for fw_info in fw_data.fw_list:
-                if PLDM_STRING == fw_info.fw_id and expected_pldm_version != fw_info.fw_version:
-                    mismatched_gpus.append(gpu)
-                if PLDM_STRING == fw_info.fw_id:
-                    break
-            else:
-                pldm_missing_gpus.append(gpu)
+            actual_by_id = {item.fw_id: item.fw_version for item in fw_data.fw_list}
+            for fw_id, expected_ver in expected_firmware_versions.items():
+                if fw_id not in actual_by_id:
+                    missing.append({"gpu": gpu, "fw_id": fw_id})
+                elif actual_by_id[fw_id] != expected_ver:
+                    mismatches.append(
+                        {
+                            "gpu": gpu,
+                            "fw_id": fw_id,
+                            "expected": expected_ver,
+                            "actual": actual_by_id[fw_id],
+                        }
+                    )
 
-        if mismatched_gpus or pldm_missing_gpus:
+        if mismatches or missing:
             self._log_event(
                 category=EventCategory.FW,
-                description="PLDM Version Mismatch",
+                description="Firmware version mismatch",
                 priority=EventPriority.ERROR,
                 data={
-                    "mismatched_gpus": mismatched_gpus,
-                    "pldm_missing_gpus": pldm_missing_gpus,
-                    "expected_pldm_version": expected_pldm_version,
+                    "expected_firmware_versions": expected_firmware_versions,
+                    "mismatches": mismatches,
+                    "missing": missing,
                 },
             )
 
@@ -661,13 +664,11 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
         if expected_xgmi_speed is None or len(expected_xgmi_speed) == 0:
             self._log_event(
                 category=EventCategory.IO,
-                description="Expected XGMI speed not configured, skipping XGMI link speed check",
-                priority=EventPriority.WARNING,
+                description=("Expected XGMI link speed not set; skipping XGMI link speed analysis"),
+                priority=EventPriority.INFO,
+                console_log=True,
             )
             return
-
-        expected_str = ", ".join(str(s) for s in expected_xgmi_speed)
-        mismatches: list[dict] = []
 
         for xgmi_data in xgmi_metric:
             link_metric = xgmi_data.link_metrics
@@ -687,7 +688,7 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                     continue
 
                 xgmi_float = float(link_metric.bit_rate.value)
-            except ValueError:
+            except (ValueError, TypeError):
                 self._log_event(
                     category=EventCategory.IO,
                     description="XGMI link speed is not a valid number",
@@ -701,30 +702,18 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                 )
                 continue
 
-            if xgmi_float not in expected_xgmi_speed:
-                mismatches.append(
-                    {
+            expected_floats = [float(e) for e in expected_xgmi_speed]
+            if xgmi_float not in expected_floats:
+                self._log_event(
+                    category=EventCategory.IO,
+                    description="XGMI link speed is not as expected",
+                    priority=EventPriority.ERROR,
+                    data={
+                        "expected_xgmi_speed": expected_xgmi_speed,
+                        "xgmi_bit_rate": xgmi_float,
                         "gpu": xgmi_data.gpu,
-                        "actual_gt_s": xgmi_float,
-                        "expected_gt_s": expected_str,
-                    }
+                    },
                 )
-
-        if mismatches:
-            details = "; ".join(
-                f"GPU {m['gpu']} {m['actual_gt_s']} GT/s (expected {m['expected_gt_s']})"
-                for m in mismatches
-            )
-            self._log_event(
-                category=EventCategory.IO,
-                description=f"XGMI link speed is not as expected: {details}",
-                priority=EventPriority.ERROR,
-                data={
-                    "expected_gt_s": expected_str,
-                    "mismatches": mismatches,
-                },
-                console_log=True,
-            )
 
     def analyze_data(
         self, data: AmdSmiDataModel, args: Optional[AmdSmiAnalyzerArgs] = None
@@ -793,8 +782,8 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                 args.expected_compute_partition_mode,
             )
 
-        if args.expected_pldm_version:
-            self.check_pldm_version(data.firmware, args.expected_pldm_version)
+        if args.expected_firmware_versions:
+            self.check_firmware_versions(data.firmware, args.expected_firmware_versions)
 
         if data.cper_data:
             self.analyzer_cpers(

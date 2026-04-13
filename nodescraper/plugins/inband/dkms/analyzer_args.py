@@ -32,9 +32,18 @@ from nodescraper.plugins.inband.dkms.dkmsdata import DkmsDataModel
 
 
 class DkmsAnalyzerArgs(AnalyzerArgs):
-    dkms_status: Union[str, list] = Field(default_factory=list)
-    dkms_version: Union[str, list] = Field(default_factory=list)
-    regex_match: bool = False
+    dkms_status: Union[str, list] = Field(
+        default_factory=list,
+        description="Expected dkms status string(s) to match (e.g. 'amd/1.0.0'). At least one of dkms_status or dkms_version required.",
+    )
+    dkms_version: Union[str, list] = Field(
+        default_factory=list,
+        description="Expected dkms version string(s) to match. At least one of dkms_status or dkms_version required.",
+    )
+    regex_match: bool = Field(
+        default=False,
+        description="If True, match dkms_status and dkms_version as regex; otherwise exact match.",
+    )
 
     def model_post_init(self, __context: Any) -> None:
         if not self.dkms_status and not self.dkms_version:

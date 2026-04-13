@@ -183,6 +183,18 @@ class RedfishConnection:
                 status_code=None,
             )
 
+    def copy(self) -> "RedfishConnection":
+        """Return a new connection with the same config and its own session (for concurrent use)."""
+        return RedfishConnection(
+            base_url=self.base_url,
+            username=self.username,
+            password=self.password,
+            timeout=self.timeout,
+            use_session_auth=self.use_session_auth,
+            verify_ssl=self.verify_ssl,
+            api_root=self.api_root,
+        )
+
     def get_service_root(self) -> dict[str, Any]:
         """GET service root (e.g. /redfish/v1/)."""
         return self.get(RedfishPath(self.api_root))

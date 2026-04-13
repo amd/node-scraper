@@ -4,6 +4,7 @@ system debug.
 
 ## Table of Contents
 - [Installation](#installation)
+  - [Install from PyPI](#install-from-pypi)
   - [Install From Source](#install-from-source)
 - [CLI Usage](#cli-usage)
   - [Execution Methods](#execution-methods)
@@ -14,7 +15,6 @@ system debug.
     - ['run-plugins' sub command](#run-plugins-sub-command)
     - ['gen-plugin-config' sub command](#gen-plugin-config-sub-command)
     - ['compare-runs' subcommand](#compare-runs-subcommand)
-    - ['show-redfish-oem-allowable' subcommand](#show-redfish-oem-allowable-subcommand)
     - ['summary' sub command](#summary-sub-command)
 - [Configs](#configs)
   - [Global args](#global-args)
@@ -25,6 +25,19 @@ system debug.
 invoked by collectors** -> See [docs/PLUGIN_DOC.md](docs/PLUGIN_DOC.md)
 
 ## Installation
+### Install from PyPI
+Node Scraper is published on [PyPI](https://pypi.org/project/amd-node-scraper/) as **amd-node-scraper**. Install it with Python 3.9 or newer:
+
+```sh
+pip install amd-node-scraper
+```
+
+Use a virtual environment if you prefer. After installation, confirm the CLI is available:
+
+```sh
+node-scraper --help
+```
+
 ### Install From Source
 Node Scraper requires Python 3.9+ for installation. After cloning this repository,
 call dev-setup.sh script with 'source'. This script creates an editable install of Node Scraper in
@@ -59,46 +72,70 @@ Sets up pre-commit hooks for code quality checks. On Debian/Ubuntu, you may need
 The Node Scraper CLI can be used to run Node Scraper plugins on a target system. The following CLI
 options are available:
 
+<!-- node-scraper -h start -->
 ```sh
-usage: node-scraper [-h] [--sys-name STRING] [--sys-location {LOCAL,REMOTE}] [--sys-interaction-level {PASSIVE,INTERACTIVE,DISRUPTIVE}] [--sys-sku STRING]
-                    [--sys-platform STRING] [--plugin-configs [STRING ...]] [--system-config STRING] [--connection-config STRING] [--log-path STRING]
-                    [--log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}] [--gen-reference-config] [--skip-sudo]
-                    {summary,run-plugins,describe,gen-plugin-config} ...
+usage: cli.py [-h] [--version] [--sys-name STRING]
+              [--sys-location {LOCAL,REMOTE}]
+              [--sys-interaction-level {PASSIVE,INTERACTIVE,DISRUPTIVE}]
+              [--sys-sku STRING] [--sys-platform STRING]
+              [--plugin-configs [STRING ...]] [--system-config STRING]
+              [--connection-config STRING] [--log-path STRING]
+              [--log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}]
+              [--no-console-log] [--gen-reference-config] [--skip-sudo]
+              {summary,run-plugins,describe,gen-plugin-config,compare-runs,show-redfish-oem-allowable}
+              ...
 
 node scraper CLI
 
 positional arguments:
-  {summary,run-plugins,describe,gen-plugin-config}
+  {summary,run-plugins,describe,gen-plugin-config,compare-runs,show-redfish-oem-allowable}
                         Subcommands
     summary             Generates summary csv file
     run-plugins         Run a series of plugins
     describe            Display details on a built-in config or plugin
     gen-plugin-config   Generate a config for a plugin or list of plugins
+    compare-runs        Compare datamodels from two run log directories
+    show-redfish-oem-allowable
+                        Fetch OEM diagnostic allowable types from Redfish
+                        LogService (for oem_diagnostic_types_allowable)
 
 options:
   -h, --help            show this help message and exit
-  --sys-name STRING     System name (default: <my_system_name>)
+  --version             show program's version number and exit
+  --sys-name STRING     System name (default: <current hostname>)
   --sys-location {LOCAL,REMOTE}
                         Location of target system (default: LOCAL)
   --sys-interaction-level {PASSIVE,INTERACTIVE,DISRUPTIVE}
-                        Specify system interaction level, used to determine the type of actions that plugins can perform (default: INTERACTIVE)
+                        Specify system interaction level, used to determine
+                        the type of actions that plugins can perform (default:
+                        INTERACTIVE)
   --sys-sku STRING      Manually specify SKU of system (default: None)
   --sys-platform STRING
                         Specify system platform (default: None)
   --plugin-configs [STRING ...]
-                        built-in config names or paths to plugin config JSONs. Available built-in configs: AllPlugins, NodeStatus (default: None)
+                        built-in config names or paths to plugin config JSONs.
+                        Available built-in configs: NodeStatus, AllPlugins
+                        (default: None)
   --system-config STRING
                         Path to system config json (default: None)
   --connection-config STRING
                         Path to connection config json (default: None)
-  --log-path STRING     Specifies local path for node scraper logs, use 'None' to disable logging (default: .)
+  --log-path STRING     Specifies local path for node scraper logs, use 'None'
+                        to disable logging (default: .)
   --log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}
                         Change python log level (default: INFO)
+  --no-console-log      Write logs only to nodescraper.log under the run
+                        directory; do not print to stdout. If no run log
+                        directory would be created (e.g. --log-path None),
+                        uses ./scraper_logs_<host>_<timestamp>/ like the
+                        default layout. (default: False)
   --gen-reference-config
-                        Generate reference config from system. Writes to ./reference_config.json. (default: False)
-  --skip-sudo           Skip plugins that require sudo permissions (default: False)
-
+                        Generate reference config from system. Writes to
+                        ./reference_config.json. (default: False)
+  --skip-sudo           Skip plugins that require sudo permissions (default:
+                        False)
 ```
+<!-- node-scraper -h end -->
 
 ### Execution Methods
 
@@ -500,6 +537,17 @@ Below is an example that skips sudo requiring plugins and disables analysis.
 A plugin config can be used to compare the system data against the config specifications.
 Built-in configs include **NodeStatus** (a subset of plugins) and **AllPlugins** (runs every
 registered plugin with default arguments—useful for generating a reference config from the full system).
+
+**NodeStatus plus additional plugins** — built-in configs merge with plugins named after `run-plugins`.
+Use **`--plugin-configs=<name>`** (equals form): with a space
+after `--plugin-configs`. See below for examples:
+```sh
+node-scraper --plugin-configs=NodeStatus run-plugins PciePlugin
+```
+
+```sh
+node-scraper --log-path ./logs --plugin-configs=NodeStatus run-plugins PciePlugin
+```
 
 Using a JSON file:
 ```sh
