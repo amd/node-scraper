@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# Copyright (c) 2025 Advanced Micro Devices, Inc.
+# Copyright (C) 2026 Advanced Micro Devices, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -25,5 +25,19 @@
 ###############################################################################
 
 from .cli import main as cli_entry
+from .embed import run_main_return_code
+from .invocation import (
+    PluginRunInvocation,
+    get_plugin_run_invocation,
+    plugin_run_invocation_scope,
+    run_plugin_queue_with_invocation,
+)
 
-__all__ = ["cli_entry"]
+__all__ = [
+    "cli_entry",
+    "run_main_return_code",
+    "PluginRunInvocation",
+    "get_plugin_run_invocation",
+    "plugin_run_invocation_scope",
+    "run_plugin_queue_with_invocation",
+]
