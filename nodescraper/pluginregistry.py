@@ -47,6 +47,7 @@ class PluginRegistry:
         plugin_pkg: Optional[list[types.ModuleType]] = None,
         load_internal_plugins: bool = True,
         load_entry_point_plugins: bool = True,
+        load_entry_point_connection_managers: bool = True,
     ) -> None:
         """Initialize the PluginRegistry with optional plugin packages.
 
@@ -54,6 +55,8 @@ class PluginRegistry:
             plugin_pkg (Optional[list[types.ModuleType]], optional): The module to search for plugins in. Defaults to None.
             load_internal_plugins (bool, optional): Whether internal plugin should be loaded. Defaults to True.
             load_entry_point_plugins (bool, optional): Whether to load plugins from entry points. Defaults to True.
+            load_entry_point_connection_managers (bool, optional): Whether to load connection managers from the
+                ``nodescraper.connection_managers`` entry-point group. Defaults to True.
         """
         if load_internal_plugins:
             self.plugin_pkg = [internal_plugins, internal_connections, internal_collators]
@@ -72,6 +75,13 @@ class PluginRegistry:
         self.result_collators: dict[str, type[PluginResultCollator]] = PluginRegistry.load_plugins(
             PluginResultCollator, self.plugin_pkg
         )
+
+        if load_entry_point_connection_managers:
+            for (
+                name,
+                mgr_cls,
+            ) in PluginRegistry.load_connection_managers_from_entry_points().items():
+                self.connection_managers[name] = mgr_cls
 
         if load_entry_point_plugins:
             entry_point_plugins = self.load_plugins_from_entry_points()
@@ -111,6 +121,51 @@ class PluginRegistry:
         for pkg in search_modules:
             _recurse_pkg(pkg, base_class)
         return registry
+
+    @staticmethod
+    def load_connection_managers_from_entry_points() -> dict[str, type]:
+        """Load ConnectionManager subclasses from ``nodescraper.connection_managers`` entry points.
+
+        The class ``__name__`` is always a lookup key. If the distribution entry-point name
+        differs, it is registered as an alias (for ``--connection-config`` JSON keys).
+
+        Returns:
+            dict[str, type]: Map of lookup key to connection manager class.
+        """
+        managers: dict[str, type] = {}
+
+        try:
+            try:
+                eps = importlib.metadata.entry_points(  # type: ignore[call-arg]
+                    group="nodescraper.connection_managers"
+                )
+            except TypeError:
+                all_eps = importlib.metadata.entry_points()  # type: ignore[assignment]
+                eps = all_eps.get("nodescraper.connection_managers", [])  # type: ignore[assignment, attr-defined, arg-type]
+
+            for entry_point in eps:
+                try:
+                    loaded = entry_point.load()  # type: ignore[attr-defined]
+                    if not (
+                        inspect.isclass(loaded)
+                        and issubclass(loaded, ConnectionManager)
+                        and not inspect.isabstract(loaded)
+                    ):
+                        continue
+                    if hasattr(loaded, "is_valid") and not loaded.is_valid():
+                        continue
+                    cls = loaded
+                    managers[cls.__name__] = cls
+                    ep_name = getattr(entry_point, "name", None)
+                    if ep_name and ep_name != cls.__name__:
+                        managers[ep_name] = cls
+                except Exception:
+                    pass
+
+        except Exception:
+            pass
+
+        return managers
 
     @staticmethod
     def load_plugins_from_entry_points() -> dict[str, type]:
