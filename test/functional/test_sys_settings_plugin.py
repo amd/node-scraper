@@ -54,7 +54,7 @@ def test_sys_settings_plugin_with_config_file(run_cli_command, sys_settings_conf
 
     log_path = str(tmp_path / "logs_sys_settings")
     result = run_cli_command(
-        ["--log-path", log_path, "--plugin-configs", str(sys_settings_config_file)], check=False
+        ["--log-path", log_path, f"--plugin-configs={sys_settings_config_file}"], check=False
     )
 
     assert result.returncode in [0, 1, 2]
@@ -85,7 +85,7 @@ def test_sys_settings_plugin_output_contains_plugin_result(
 
     log_path = str(tmp_path / "logs_sys_settings_result")
     result = run_cli_command(
-        ["--log-path", log_path, "--plugin-configs", str(sys_settings_config_file)], check=False
+        ["--log-path", log_path, f"--plugin-configs={sys_settings_config_file}"], check=False
     )
 
     output = result.stdout + result.stderr
@@ -99,7 +99,7 @@ def test_sys_settings_plugin_with_plugin_config_json(run_cli_command, plugin_con
 
     log_path = str(tmp_path / "logs_plugin_config")
     result = run_cli_command(
-        ["--log-path", log_path, "--plugin-configs", str(plugin_config_json)], check=False
+        ["--log-path", log_path, f"--plugin-configs={plugin_config_json}"], check=False
     )
 
     assert result.returncode in [0, 1, 2]

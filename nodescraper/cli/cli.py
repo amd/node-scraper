@@ -64,6 +64,11 @@ from nodescraper.pluginexecutor import PluginExecutor
 from nodescraper.pluginregistry import PluginRegistry
 
 
+def _parse_plugin_configs_csv(value: str) -> list[str]:
+    """Split a comma-separated ``--plugin-configs`` value into names/paths."""
+    return [p.strip() for p in value.split(",") if p.strip()]
+
+
 def build_parser(
     plugin_reg: PluginRegistry,
     config_reg: ConfigRegistry,
@@ -126,10 +131,13 @@ def build_parser(
 
     parser.add_argument(
         "--plugin-configs",
-        type=str,
-        nargs="*",
-        help=f"built-in config names or paths to plugin config JSONs.\nAvailable built-in configs: {', '.join(config_reg.configs.keys())}",
-        metavar=META_VAR_MAP[str],
+        type=_parse_plugin_configs_csv,
+        default=None,
+        help=(
+            "Comma-separated built-in names and/or plugin config JSON paths "
+            f"(e.g. --plugin-configs=NodeStatus,/path/c.json). Built-ins: {', '.join(config_reg.configs.keys())}"
+        ),
+        metavar="LIST",
     )
 
     parser.add_argument(

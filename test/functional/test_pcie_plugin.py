@@ -54,7 +54,7 @@ def test_pcie_plugin_with_basic_config(run_cli_command, pcie_config_file, tmp_pa
 
     log_path = str(tmp_path / "logs_pcie_basic")
     result = run_cli_command(
-        ["--log-path", log_path, "--plugin-configs", str(pcie_config_file)], check=False
+        ["--log-path", log_path, f"--plugin-configs={pcie_config_file}"], check=False
     )
 
     assert result.returncode in [0, 1, 2]
@@ -69,7 +69,7 @@ def test_pcie_plugin_with_advanced_config(run_cli_command, pcie_advanced_config_
 
     log_path = str(tmp_path / "logs_pcie_advanced")
     result = run_cli_command(
-        ["--log-path", log_path, "--plugin-configs", str(pcie_advanced_config_file)],
+        ["--log-path", log_path, f"--plugin-configs={pcie_advanced_config_file}"],
         check=False,
     )
 
@@ -97,8 +97,7 @@ def test_pcie_plugin_with_passive_interaction(run_cli_command, pcie_config_file,
             log_path,
             "--sys-interaction-level",
             "PASSIVE",
-            "--plugin-configs",
-            str(pcie_config_file),
+            f"--plugin-configs={pcie_config_file}",
         ],
         check=False,
     )
@@ -116,8 +115,7 @@ def test_pcie_plugin_skip_sudo(run_cli_command, pcie_config_file, tmp_path):
             "--log-path",
             log_path,
             "--skip-sudo",
-            "--plugin-configs",
-            str(pcie_config_file),
+            f"--plugin-configs={pcie_config_file}",
         ],
         check=False,
     )
@@ -136,9 +134,7 @@ def test_pcie_plugin_combined_configs(
         [
             "--log-path",
             log_path,
-            "--plugin-configs",
-            str(pcie_config_file),
-            str(pcie_advanced_config_file),
+            f"--plugin-configs={pcie_config_file},{pcie_advanced_config_file}",
         ],
         check=False,
     )
