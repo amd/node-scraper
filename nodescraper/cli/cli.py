@@ -25,6 +25,7 @@
 ###############################################################################
 import argparse
 import datetime
+import functools
 import json
 import logging
 import os
@@ -332,6 +333,41 @@ def build_parser(
         plugin_subparser_map[plugin_name] = (plugin_subparser, model_type_map)
 
     return parser, plugin_subparser_map
+
+
+def _top_level_subcommand_names(root: argparse.ArgumentParser) -> tuple[str, ...]:
+    """Return ``dest=subcmd`` subparser names from the root CLI parser.
+
+    Args:
+        root: Parser returned by :func:`build_parser`.
+
+    Returns:
+        Tuple of top-level subcommand strings.
+    """
+    for action in root._actions:
+        if isinstance(action, argparse._SubParsersAction) and action.dest == "subcmd":
+            return tuple(action.choices.keys())
+    raise RuntimeError("nodescraper CLI root parser has no subcmd subparsers")
+
+
+@functools.lru_cache(maxsize=1)
+def get_cli_top_level_subcommands() -> tuple[str, ...]:
+    """Return top-level subcommand names from a parser built like :func:`main` (cached).
+
+    Returns:
+        Tuple of ``subcmd`` subparser names; call ``cache_clear()`` if registries change in-process.
+    """
+    plugin_reg = PluginRegistry()
+    config_reg = ConfigRegistry()
+    config_reg.configs["AllPlugins"] = PluginConfig(
+        name="AllPlugins",
+        desc="Run all registered plugins with default arguments",
+        global_args={},
+        plugins={name: {} for name in plugin_reg.plugins},
+        result_collators={},
+    )
+    parser, _plugin_subparser_map = build_parser(plugin_reg, config_reg)
+    return _top_level_subcommand_names(parser)
 
 
 def setup_logger(
