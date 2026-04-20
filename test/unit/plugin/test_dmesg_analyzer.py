@@ -25,7 +25,10 @@
 ###############################################################################
 import datetime
 import pathlib
+import re
 
+from nodescraper.base.regexanalyzer import ErrorRegex
+from nodescraper.enums.eventcategory import EventCategory
 from nodescraper.enums.eventpriority import EventPriority
 from nodescraper.enums.executionstatus import ExecutionStatus
 from nodescraper.plugins.inband.dmesg.analyzer_args import DmesgAnalyzerArgs
@@ -706,6 +709,157 @@ def test_custom_regex_empty_list(system_info):
 
     assert len(res.events) == 1
     assert res.events[0].description == "Out of memory error"
+
+
+def test_resolve_priority_no_match(system_info):
+    """No rule matches → returns None (keep original priority)."""
+    analyzer = DmesgAnalyzer(system_info=system_info)
+    regex_obj = ErrorRegex(
+        regex=re.compile(r"GPU reset failed"),
+        message="GPU reset failed",
+        event_category=EventCategory.RAS,
+    )
+    rules = [{"event_category": "SW_DRIVER", "new_priority": "WARNING"}]
+    assert analyzer.resolve_priority(regex_obj, rules) is None
+
+
+def test_resolve_priority_match_by_category(system_info):
+    """Rule with event_category filter matches and returns the new priority."""
+    analyzer = DmesgAnalyzer(system_info=system_info)
+    regex_obj = ErrorRegex(
+        regex=re.compile(r"GPU reset failed"),
+        message="GPU reset failed",
+        event_category=EventCategory.RAS,
+    )
+    rules = [{"event_category": "RAS", "new_priority": "WARNING"}]
+    result = analyzer.resolve_priority(regex_obj, rules)
+    assert result == EventPriority.WARNING
+
+
+def test_resolve_priority_match_by_message_list(system_info):
+    """Rule with a list for message matches when the object's message is in the list."""
+    analyzer = DmesgAnalyzer(system_info=system_info)
+    regex_obj = ErrorRegex(
+        regex=re.compile(r"Mode2 reset failed"),
+        message="Mode 2 Reset Failed",
+        event_category=EventCategory.RAS,
+    )
+    rules = [
+        {
+            "message": ["Mode 2 Reset Failed", "GPU reset failed"],
+            "new_priority": "WARNING",
+        }
+    ]
+    result = analyzer.resolve_priority(regex_obj, rules)
+    assert result == EventPriority.WARNING
+
+
+def test_resolve_priority_no_change(system_info):
+    """new_priority=NO_CHANGE → returns None (keep original priority)."""
+    analyzer = DmesgAnalyzer(system_info=system_info)
+    regex_obj = ErrorRegex(
+        regex=re.compile(r"GPU reset failed"),
+        message="GPU reset failed",
+        event_category=EventCategory.RAS,
+    )
+    rules = [{"event_category": "RAS", "new_priority": "NO_CHANGE"}]
+    assert analyzer.resolve_priority(regex_obj, rules) is None
+
+
+def test_resolve_priority_first_match_wins(system_info):
+    """First matching rule wins; subsequent matching rules are ignored."""
+    analyzer = DmesgAnalyzer(system_info=system_info)
+    regex_obj = ErrorRegex(
+        regex=re.compile(r"GPU reset failed"),
+        message="GPU reset failed",
+        event_category=EventCategory.RAS,
+    )
+    rules = [
+        {"event_category": "RAS", "new_priority": "WARNING"},
+        {"event_category": "RAS", "new_priority": "ERROR"},
+    ]
+    result = analyzer.resolve_priority(regex_obj, rules)
+    assert result == EventPriority.WARNING
+
+
+def test_resolve_priority_multiple_filter_fields(system_info):
+    """All filter fields must match (AND logic)."""
+    analyzer = DmesgAnalyzer(system_info=system_info)
+    # Matches both category AND message
+    regex_obj = ErrorRegex(
+        regex=re.compile(r"GPU reset failed"),
+        message="GPU reset failed",
+        event_category=EventCategory.RAS,
+    )
+    rules = [
+        {"event_category": "RAS", "message": "GPU reset failed", "new_priority": "WARNING"},
+    ]
+    assert analyzer.resolve_priority(regex_obj, rules) == EventPriority.WARNING
+
+    # Does NOT match because message differs
+    rules_mismatch = [
+        {"event_category": "RAS", "message": "ACA Error", "new_priority": "WARNING"},
+    ]
+    assert analyzer.resolve_priority(regex_obj, rules_mismatch) is None
+
+
+def test_priority_override_rules_in_analyze_data(system_info):
+    """priority_override_rules passed via DmesgAnalyzerArgs overrides matched regex priorities."""
+    dmesg_data = DmesgData(
+        dmesg_content=(
+            # RAS event — default ERROR, should become WARNING
+            "kern  :err   : 2024-10-07T10:17:15,145363-04:00 "
+            "amdgpu 0000:0c:00.0: amdgpu: socket: 4 1 correctable hardware errors detected in total in gfx block\n"
+            # SW_DRIVER event — default ERROR, should stay ERROR (no matching rule)
+            "kern  :err   : 2024-10-07T10:17:15,145363-04:00 IO_PAGE_FAULT\n"
+        )
+    )
+
+    analyzer = DmesgAnalyzer(system_info=system_info)
+    res = analyzer.analyze_data(
+        dmesg_data,
+        args=DmesgAnalyzerArgs(
+            check_unknown_dmesg_errors=False,
+            priority_override_rules=[
+                {"event_category": "RAS", "new_priority": "WARNING"},
+            ],
+        ),
+    )
+
+    assert res.status == ExecutionStatus.ERROR
+    ras_events = [e for e in res.events if e.category == "RAS"]
+    sw_events = [e for e in res.events if e.category == "SW_DRIVER"]
+
+    assert all(
+        e.priority == EventPriority.WARNING for e in ras_events
+    ), f"Expected all RAS events to be WARNING, got {[e.priority for e in ras_events]}"
+    assert all(
+        e.priority == EventPriority.ERROR for e in sw_events
+    ), f"Expected SW_DRIVER events to remain ERROR, got {[e.priority for e in sw_events]}"
+
+
+def test_priority_override_no_change_keeps_original(system_info):
+    """NO_CHANGE rule leaves the original event priority intact."""
+    dmesg_data = DmesgData(
+        dmesg_content=(
+            "kern  :err   : 2024-10-07T10:17:15,145363-04:00 "
+            "amdgpu 0000:0c:00.0: amdgpu: socket: 4 1 correctable hardware errors detected in total in gfx block\n"
+        )
+    )
+
+    analyzer = DmesgAnalyzer(system_info=system_info)
+    res = analyzer.analyze_data(
+        dmesg_data,
+        args=DmesgAnalyzerArgs(
+            check_unknown_dmesg_errors=False,
+            priority_override_rules=[
+                {"event_category": "RAS", "new_priority": "NO_CHANGE"},
+            ],
+        ),
+    )
+
+    assert len(res.events) == 1
+    assert res.events[0].priority == EventPriority.ERROR
 
 
 def test_custom_regex_with_multiline_pattern(system_info):
