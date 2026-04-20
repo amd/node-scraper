@@ -803,6 +803,69 @@ def test_resolve_priority_multiple_filter_fields(system_info):
     assert analyzer.resolve_priority(regex_obj, rules_mismatch) is None
 
 
+def test_resolve_priority_match_all_matches_any_regex(system_info):
+    """match_all=True with no other filter fields always matches any ErrorRegex."""
+    analyzer = DmesgAnalyzer(system_info=system_info)
+    for regex_obj in [
+        ErrorRegex(
+            regex=re.compile(r"GPU reset failed"),
+            message="GPU reset failed",
+            event_category=EventCategory.RAS,
+        ),
+        ErrorRegex(
+            regex=re.compile(r"IO_PAGE_FAULT"),
+            message="I/O Page Fault",
+            event_category=EventCategory.SW_DRIVER,
+        ),
+    ]:
+        result = analyzer.resolve_priority(
+            regex_obj, [{"match_all": True, "new_priority": "WARNING"}]
+        )
+        assert (
+            result == EventPriority.WARNING
+        ), f"Expected WARNING for {regex_obj.message}, got {result}"
+
+
+def test_resolve_priority_match_all_ignores_non_matching_filters(system_info):
+    """match_all=True ignores filter fields that would otherwise not match."""
+    analyzer = DmesgAnalyzer(system_info=system_info)
+    regex_obj = ErrorRegex(
+        regex=re.compile(r"GPU reset failed"),
+        message="GPU reset failed",
+        event_category=EventCategory.RAS,
+    )
+    # event_category is RAS, but filter says SW_DRIVER — would normally NOT match.
+    # match_all=True should bypass this check and still apply the rule.
+    result = analyzer.resolve_priority(
+        regex_obj,
+        [{"match_all": True, "event_category": "SW_DRIVER", "new_priority": "WARNING"}],
+    )
+    assert result == EventPriority.WARNING
+
+
+def test_resolve_priority_match_all_false_still_filters(system_info):
+    """match_all=False (explicit) falls through to normal filter logic."""
+    analyzer = DmesgAnalyzer(system_info=system_info)
+    regex_obj = ErrorRegex(
+        regex=re.compile(r"GPU reset failed"),
+        message="GPU reset failed",
+        event_category=EventCategory.RAS,
+    )
+    # match_all=False with a non-matching filter → should NOT match
+    result = analyzer.resolve_priority(
+        regex_obj,
+        [{"match_all": False, "event_category": "SW_DRIVER", "new_priority": "WARNING"}],
+    )
+    assert result is None
+
+    # match_all=False with a matching filter → should match
+    result = analyzer.resolve_priority(
+        regex_obj,
+        [{"match_all": False, "event_category": "RAS", "new_priority": "WARNING"}],
+    )
+    assert result == EventPriority.WARNING
+
+
 def test_priority_override_rules_in_analyze_data(system_info):
     """priority_override_rules passed via DmesgAnalyzerArgs overrides matched regex priorities."""
     dmesg_data = DmesgData(

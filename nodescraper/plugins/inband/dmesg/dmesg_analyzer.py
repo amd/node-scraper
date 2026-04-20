@@ -566,22 +566,24 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
             filter_fields = {key: value for key, value in rule.items() if key not in _EXCLUDED_KEYS}
 
             matched = True
-            # check for matches in all fields of the current rule
-            for field, filter_value in filter_fields.items():
-                obj_value = getattr(regex_obj, field, None)
+            # if match_all is True, don't check attributes, simply move to priority update
+            if rule.get("match_all", False) is False:
+                # check for matches in all fields of the current rule
+                for field, filter_value in filter_fields.items():
+                    obj_value = getattr(regex_obj, field, None)
 
-                # Normalize enum values to their name for string comparison
-                if hasattr(obj_value, "name"):
-                    obj_value = obj_value.name
+                    # Normalize enum values to their name for string comparison
+                    if hasattr(obj_value, "name"):
+                        obj_value = obj_value.name
 
-                if isinstance(filter_value, list):
-                    if obj_value not in filter_value:
-                        matched = False
-                        break
-                else:
-                    if obj_value != filter_value:
-                        matched = False
-                        break
+                    if isinstance(filter_value, list):
+                        if obj_value not in filter_value:
+                            matched = False
+                            break
+                    else:
+                        if obj_value != filter_value:
+                            matched = False
+                            break
 
             if matched:  # return on encountering first fully matched rule
                 new_priority = rule.get("new_priority", _NO_CHANGE)
