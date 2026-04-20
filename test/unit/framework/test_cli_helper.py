@@ -25,6 +25,7 @@
 ###############################################################################
 import argparse
 import csv
+import datetime
 import json
 import logging
 import os
@@ -39,6 +40,7 @@ from pydantic import BaseModel
 
 from nodescraper.cli.helper import (
     build_config,
+    drop_skipped_plugins_from_configs,
     dump_results_to_csv,
     dump_to_csv,
     find_datamodel_and_result,
@@ -52,7 +54,25 @@ from nodescraper.enums import ExecutionStatus, SystemInteractionLevel
 from nodescraper.models import PluginConfig, TaskResult
 from nodescraper.models.datapluginresult import DataPluginResult
 from nodescraper.models.pluginresult import PluginResult
+from nodescraper.pluginexecutor import PluginExecutor
 from nodescraper.pluginregistry import PluginRegistry
+
+
+def test_drop_skipped_plugins_from_configs():
+    cfg_a = PluginConfig(plugins={"P1": {}, "P2": {}})
+    cfg_b = PluginConfig(plugins={"P2": {"collection_args": {"a": 1}}, "P3": {}})
+    lst = [
+        PluginConfig(
+            global_args={"system_interaction_level": SystemInteractionLevel.PASSIVE},
+            plugins={},
+            result_collators={"TableSummary": {}},
+        ),
+        cfg_a,
+        cfg_b,
+    ]
+    drop_skipped_plugins_from_configs(lst, ["P1", "P2"])
+    merged = PluginExecutor.merge_configs(lst)
+    assert merged.plugins == {"P3": {}}
 
 
 def test_generate_reference_config(plugin_registry):
@@ -122,6 +142,22 @@ def test_get_plugin_configs():
             },
         ),
     ]
+
+
+def test_get_plugin_configs_global_analysis_range():
+    dt_s = datetime.datetime(2025, 6, 1, 12, 0, 0, tzinfo=datetime.timezone.utc)
+    dt_e = datetime.datetime(2025, 6, 2, 12, 0, 0, tzinfo=datetime.timezone.utc)
+    plugin_configs = get_plugin_configs(
+        system_interaction_level="PASSIVE",
+        plugin_config_input=[],
+        built_in_configs={},
+        parsed_plugin_args={},
+        plugin_subparser_map={},
+        global_analysis_range_start=dt_s,
+        global_analysis_range_end=dt_e,
+    )
+    assert plugin_configs[0].global_args["analysis_args"]["analysis_range_start"] == dt_s
+    assert plugin_configs[0].global_args["analysis_args"]["analysis_range_end"] == dt_e
 
 
 def test_config_builder(plugin_registry):
@@ -261,8 +297,8 @@ def test_generate_summary(tmp_path):
     subdir = tmp_path / "sub"
     subdir.mkdir()
 
-    errorscraper_path = subdir / "nodescraper.csv"
-    with open(errorscraper_path, "w", newline="") as f:
+    nodescraper_csv_path = subdir / "nodescraper.csv"
+    with open(nodescraper_csv_path, "w", newline="") as f:
         writer = csv.DictWriter(
             f, fieldnames=["nodename", "plugin", "status", "timestamp", "message"]
         )

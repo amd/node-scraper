@@ -25,6 +25,7 @@
 ###############################################################################
 import argparse
 import datetime
+import functools
 import json
 import logging
 import os
@@ -37,6 +38,7 @@ from nodescraper.cli.compare_runs import run_compare_runs
 from nodescraper.cli.constants import DEFAULT_CONFIG, META_VAR_MAP
 from nodescraper.cli.dynamicparserbuilder import DynamicParserBuilder
 from nodescraper.cli.helper import (
+    drop_skipped_plugins_from_configs,
     dump_results_to_csv,
     generate_reference_config,
     generate_reference_config_from_logs,
@@ -61,6 +63,23 @@ from nodescraper.enums import ExecutionStatus, SystemInteractionLevel, SystemLoc
 from nodescraper.models import PluginConfig, SystemInfo
 from nodescraper.pluginexecutor import PluginExecutor
 from nodescraper.pluginregistry import PluginRegistry
+
+
+def _parse_plugin_configs_csv(value: str) -> list[str]:
+    """Split a comma-separated ``--plugin-configs`` value into names/paths."""
+    return [p.strip() for p in value.split(",") if p.strip()]
+
+
+class _PluginConfigsEqualsAction(argparse.Action):
+    """Store plugin config list; require ``--plugin-configs=…`` (not ``--plugin-configs …``)."""
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        if option_string is not None and "=" not in option_string:
+            parser.error(
+                "argument --plugin-configs: must use equals form "
+                "(e.g. --plugin-configs=NodeStatus or --plugin-configs=a.json,b.json)"
+            )
+        setattr(namespace, self.dest, values)
 
 
 def build_parser(
@@ -125,10 +144,14 @@ def build_parser(
 
     parser.add_argument(
         "--plugin-configs",
-        type=str,
-        nargs="*",
-        help=f"built-in config names or paths to plugin config JSONs.\nAvailable built-in configs: {', '.join(config_reg.configs.keys())}",
-        metavar=META_VAR_MAP[str],
+        action=_PluginConfigsEqualsAction,
+        type=_parse_plugin_configs_csv,
+        default=None,
+        help=(
+            "After '=' only: comma-separated built-in names and/or plugin config JSON paths "
+            f"(e.g. --plugin-configs=NodeStatus,/path/c.json). Built-ins: {', '.join(config_reg.configs.keys())}"
+        ),
+        metavar="LIST",
     )
 
     parser.add_argument(
@@ -182,6 +205,19 @@ def build_parser(
         dest="skip_sudo",
         action="store_true",
         help="Skip plugins that require sudo permissions",
+    )
+
+    parser.add_argument(
+        "--skip-plugin",
+        dest="skip_plugin",
+        action="extend",
+        nargs=1,
+        metavar="PLUGIN",
+        choices=sorted(plugin_reg.plugins.keys()),
+        help=(
+            "Registered plugin class name(s) to exclude from this run (repeat the flag for "
+            "multiple). Same idea as error-scraper ``--skip-task``."
+        ),
     )
 
     subparsers = parser.add_subparsers(dest="subcmd", help="Subcommands")
@@ -332,6 +368,41 @@ def build_parser(
         plugin_subparser_map[plugin_name] = (plugin_subparser, model_type_map)
 
     return parser, plugin_subparser_map
+
+
+def _top_level_subcommand_names(root: argparse.ArgumentParser) -> tuple[str, ...]:
+    """Return ``dest=subcmd`` subparser names from the root CLI parser.
+
+    Args:
+        root: Parser returned by :func:`build_parser`.
+
+    Returns:
+        Tuple of top-level subcommand strings.
+    """
+    for action in root._actions:
+        if isinstance(action, argparse._SubParsersAction) and action.dest == "subcmd":
+            return tuple(action.choices.keys())
+    raise RuntimeError("nodescraper CLI root parser has no subcmd subparsers")
+
+
+@functools.lru_cache(maxsize=1)
+def get_cli_top_level_subcommands() -> tuple[str, ...]:
+    """Return top-level subcommand names from a parser built like :func:`main` (cached).
+
+    Returns:
+        Tuple of ``subcmd`` subparser names; call ``cache_clear()`` if registries change in-process.
+    """
+    plugin_reg = PluginRegistry()
+    config_reg = ConfigRegistry()
+    config_reg.configs["AllPlugins"] = PluginConfig(
+        name="AllPlugins",
+        desc="Run all registered plugins with default arguments",
+        global_args={},
+        plugins={name: {} for name in plugin_reg.plugins},
+        result_collators={},
+    )
+    parser, _plugin_subparser_map = build_parser(plugin_reg, config_reg)
+    return _top_level_subcommand_names(parser)
 
 
 def setup_logger(
@@ -553,6 +624,15 @@ def main(
             parsed_plugin_args=parsed_plugin_args,
             plugin_subparser_map=plugin_subparser_map,
         )
+
+        skip_plugin_list = getattr(parsed_args, "skip_plugin", None) or []
+        drop_skipped_plugins_from_configs(plugin_config_inst_list, skip_plugin_list)
+        merged_for_skip_check = PluginExecutor.merge_configs(plugin_config_inst_list)
+        if not merged_for_skip_check.plugins:
+            logger.error(
+                "No plugins remain to run after applying --skip-plugin; check your config and skip list."
+            )
+            sys.exit(2)
 
         if parsed_args.skip_sudo:
             plugin_config_inst_list[-1].global_args.setdefault("collection_args", {})[

@@ -78,7 +78,7 @@ usage: cli.py [-h] [--version] [--sys-name STRING]
               [--sys-location {LOCAL,REMOTE}]
               [--sys-interaction-level {PASSIVE,INTERACTIVE,DISRUPTIVE}]
               [--sys-sku STRING] [--sys-platform STRING]
-              [--plugin-configs [STRING ...]] [--system-config STRING]
+              [--plugin-configs=LIST] [--system-config STRING]
               [--connection-config STRING] [--log-path STRING]
               [--log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}]
               [--no-console-log] [--gen-reference-config] [--skip-sudo]
@@ -112,9 +112,9 @@ options:
   --sys-sku STRING      Manually specify SKU of system (default: None)
   --sys-platform STRING
                         Specify system platform (default: None)
-  --plugin-configs [STRING ...]
-                        built-in config names or paths to plugin config JSONs.
-                        Available built-in configs: NodeStatus, AllPlugins
+  --plugin-configs=LIST
+                        Comma-separated built-in names and/or plugin config JSON
+                        paths (equals form only). Built-in: NodeStatus, AllPlugins
                         (default: None)
   --system-config STRING
                         Path to system config json (default: None)
@@ -151,6 +151,8 @@ To use remote execution, specify `--sys-location REMOTE` and provide a connectio
 ```sh
 node-scraper --sys-name <remote_host> --sys-location REMOTE --connection-config ./connection_config.json run-plugins DmesgPlugin
 ```
+
+The file path given to `--connection-config` is JSON. The built-in CLI loads it as a mapping from registered connection manager names to their argument objects, so it may contain **only** the connection blocks below. This repository also defines `nodescraper.connection_profile.load_connection_profile` and the setuptools entry-point group `nodescraper.connection_profile_loaders`; a subclass of `nodescraper.connection_profile.loader.ConnectionProfileLoader` registered there can load a richer document that still includes those blocks plus optional host fields (for example `sys_*`, SSH, or OOB-related entries), depending on the loader you use.
 
 ##### Example: connection_config.json
 
@@ -348,7 +350,7 @@ You can extend the built-in error detection with custom regex patterns. Create a
 Save this to `dmesg_custom_config.json` and run:
 
 ```sh
-node-scraper --plugin-configs dmesg_custom_config.json run-plugins DmesgPlugin
+node-scraper --plugin-configs=dmesg_custom_config.json run-plugins DmesgPlugin
 ```
 
 #### **'compare-runs' subcommand**
@@ -539,8 +541,9 @@ Built-in configs include **NodeStatus** (a subset of plugins) and **AllPlugins**
 registered plugin with default arguments—useful for generating a reference config from the full system).
 
 **NodeStatus plus additional plugins** — built-in configs merge with plugins named after `run-plugins`.
-Use **`--plugin-configs=<name>`** (equals form): with a space
-after `--plugin-configs`. See below for examples:
+Use **`--plugin-configs=`** only (never `--plugin-configs` followed by a separate token). Values are
+comma-separated, e.g. `--plugin-configs=NodeStatus,/path/extra.json`.
+Examples:
 ```sh
 node-scraper --plugin-configs=NodeStatus run-plugins PciePlugin
 ```
@@ -551,7 +554,7 @@ node-scraper --log-path ./logs --plugin-configs=NodeStatus run-plugins PciePlugi
 
 Using a JSON file:
 ```sh
-node-scraper --plugin-configs plugin_config.json
+node-scraper --plugin-configs=plugin_config.json
 ```
 Here is an example of a comprehensive plugin config that specifies analyzer args for each plugin:
 ```json
@@ -613,7 +616,7 @@ data.
 
 **Run all registered plugins (AllPlugins config):**
 ```sh
-node-scraper --plugin-config AllPlugins
+node-scraper --plugin-configs=AllPlugins
 
 ```
 
@@ -647,7 +650,7 @@ This will generate the following config:
 ```
 This config can later be used on a different platform for comparison, using the steps at #2:
 ```sh
-node-scraper --plugin-configs reference_config.json
+node-scraper --plugin-configs=reference_config.json
 
 ```
 

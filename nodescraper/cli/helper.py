@@ -30,6 +30,7 @@ import json
 import logging
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Optional, Sequence, Tuple
 
@@ -89,6 +90,8 @@ def get_plugin_configs(
     built_in_configs: dict[str, PluginConfig],
     parsed_plugin_args: dict[str, argparse.Namespace],
     plugin_subparser_map: dict[str, tuple[argparse.ArgumentParser, dict]],
+    global_analysis_range_start: Optional[datetime] = None,
+    global_analysis_range_end: Optional[datetime] = None,
 ) -> list[PluginConfig]:
     """Build list of plugin configs based on input args
 
@@ -98,6 +101,8 @@ def get_plugin_configs(
         built_in_configs (dict[str, PluginConfig]): built-in plugin configs, mapping from config name to PluginConfig instance
         parsed_plugin_args (dict[str, argparse.Namespace]): parsed plugin arguments, mapping from plugin name to parsed args
         plugin_subparser_map (dict[str, tuple[argparse.ArgumentParser, dict]]): plugin subparser map, mapping from plugin name to tuple of parser and model type map
+        global_analysis_range_start: optional global analysis window start (merged into ``global_args.analysis_args``)
+        global_analysis_range_end: optional global analysis window end (merged into ``global_args.analysis_args``)
 
     Raises:
         argparse.ArgumentTypeError: if system interaction level is invalid
@@ -114,6 +119,14 @@ def get_plugin_configs(
     base_config = PluginConfig(result_collators={str(TableSummary.__name__): {}})
 
     base_config.global_args["system_interaction_level"] = system_interaction_level
+
+    if global_analysis_range_start is not None or global_analysis_range_end is not None:
+        ar: dict = {}
+        if global_analysis_range_start is not None:
+            ar["analysis_range_start"] = global_analysis_range_start
+        if global_analysis_range_end is not None:
+            ar["analysis_range_end"] = global_analysis_range_end
+        base_config.global_args.setdefault("analysis_args", {}).update(ar)
 
     plugin_configs = [base_config]
 
@@ -148,6 +161,24 @@ def get_plugin_configs(
         plugin_configs.append(plugin_input_config)
 
     return plugin_configs
+
+
+def drop_skipped_plugins_from_configs(
+    plugin_configs: list[PluginConfig],
+    plugins_to_drop: Optional[list[str]],
+) -> None:
+    """Remove named plugins from every ``PluginConfig.plugins`` (in-place).
+
+    Intended for ``--skip-plugin``: after built-in / JSON configs and ``run-plugins``
+    selections are merged into a list of :class:`PluginConfig`, drop entries so they
+    never reach :meth:`~nodescraper.pluginexecutor.PluginExecutor.merge_configs`.
+    """
+    if not plugins_to_drop:
+        return
+    drop_set = set(plugins_to_drop)
+    for cfg in plugin_configs:
+        for name in drop_set:
+            cfg.plugins.pop(name, None)
 
 
 def build_config(

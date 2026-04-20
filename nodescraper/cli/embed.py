@@ -30,7 +30,24 @@ from __future__ import annotations
 import argparse
 from typing import Optional
 
-__all__ = ["run_main_return_code"]
+__all__ = ["run_cli_return_code", "run_main_return_code"]
+
+
+def run_cli_return_code(
+    argv: list[str],
+    *,
+    host_cli_args: Optional[argparse.Namespace] = None,
+) -> int:
+    """Run nodescraper in-process; same behavior as :func:`run_main_return_code`.
+
+    Args:
+        argv: Tokens after the program name.
+        host_cli_args: Optional host namespace forwarded to :func:`nodescraper.cli.cli.main`.
+
+    Returns:
+        Integer exit code (``SystemExit`` is mapped, not raised).
+    """
+    return run_main_return_code(argv, host_cli_args=host_cli_args)
 
 
 def run_main_return_code(
@@ -38,7 +55,7 @@ def run_main_return_code(
     *,
     host_cli_args: Optional[argparse.Namespace] = None,
 ) -> int:
-    """Runs the nodescraper main entrypoint and maps SystemExit to an integer return code."""
+    """Run :func:`nodescraper.cli.cli.main` and map ``SystemExit`` to an exit code."""
     from nodescraper.cli.cli import main
 
     try:
