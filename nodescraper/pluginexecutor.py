@@ -53,7 +53,6 @@ class PluginExecutor:
         logger: Optional[logging.Logger] = None,
         plugin_registry: Optional[PluginRegistry] = None,
         log_path: Optional[str] = None,
-        disable_result_colour: bool = False,
     ):
 
         if logger is None:
@@ -71,7 +70,6 @@ class PluginExecutor:
         self.connection_library: dict[type[ConnectionManager], ConnectionManager] = {}
 
         self.log_path = log_path
-        self.disable_result_colour = disable_result_colour
 
         self.connection_result_hooks = []
         if log_path:
@@ -213,16 +211,8 @@ class PluginExecutor:
                         # Merge analysis_args and collection_args
                         for args_key in ["analysis_args", "collection_args"]:
                             if args_key in global_run_args and args_key in run_payload:
-                                if args_key == "analysis_args":
-                                    # Global defaults first; per-plugin analysis_args override on key collision.
-                                    g = global_run_args[args_key]
-                                    g_dict = g if isinstance(g, dict) else {}
-                                    p = run_payload.get(args_key)
-                                    p_dict = p if isinstance(p, dict) else {}
-                                    run_payload[args_key] = {**g_dict, **p_dict}
-                                else:
-                                    # collection_args: global keys override plugin (historical behavior).
-                                    run_payload[args_key].update(global_run_args[args_key])
+                                # Merge: global args override plugin-specific args keys specified in both global and plugin-specific args
+                                run_payload[args_key].update(global_run_args[args_key])
                                 del global_run_args[args_key]
                         run_payload.update(global_run_args)
                     except ValueError as ve:
@@ -256,17 +246,13 @@ class PluginExecutor:
 
                     self.logger.info("Running %s result collator", collator)
                     collator_inst = collator_class(logger=self.logger, log_path=self.log_path)
-                    merged_collator_args = {
-                        **collator_args,
-                        "disable_result_colour": self.disable_result_colour,
-                    }
                     collator_inst.collate_results(
                         plugin_results,
                         [
                             connection_manager.result
                             for connection_manager in self.connection_library.values()
                         ],
-                        **merged_collator_args,
+                        **collator_args,
                     )
             for connection_manager in self.connection_library.values():
                 connection_manager.disconnect()
