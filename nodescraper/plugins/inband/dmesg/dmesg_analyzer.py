@@ -539,14 +539,14 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
         self,
         regex_obj: ErrorRegex,
         priority_override_rules: list[dict],
-    ) -> Optional[EventPriority]:
-        """
+    ) -> EventPriority:
+        """Determine the new priority of an ErrorRegex based on provided rules
+
         Walk the priority_override_rules in order (first-match-wins).
-        All keys in each rule except 'new_priority' and 'match_all' are treated
-        as filter fields compared against ErrorRegex attributes. Filter values
-        may be a single value or a list of values (match if any value matches).
-        Enum fields are compared by their name. Returns the overriding
-        EventPriority, or None to keep the original.
+        Each rule should be a dict with only these keys allowed:
+        1. Any attribute of an ErrorRegex object by which to filter. Currently this include "regex", "message", "event_category", "event_priority". This key should match to a string or a list (match if any value in the list matches).
+        2. "new_priority": str. The string value of any EventPriority enum, or "NO_CHANGE", to determine the updated priority of the regex_obj if it matches the given rule.
+        3. "match_all": bool. Determines if the rule will automatically match for any regex_obj. Will ignore any provided filters if given.
 
         Example rule format:
             {
@@ -557,10 +557,19 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
                 "event_category": "RAS",
                 "new_priority": "WARNING"
             }
+
+        Args:
+            regex_obj (ErrorRegex): The ErrorRegex object to have its priority updated
+            priority_override_rules (list[dict]): The list of rules which determine what the updated priority should be
+
+        Returns:
+            EventPriority: The new priority of the event. Returns the original priority if no rule matches or the matched rule specifies NO_CHANGE
         """
 
         _NO_CHANGE = "NO_CHANGE"
         _EXCLUDED_KEYS = {"new_priority", "match_all"}
+
+        current_priority = regex_obj.event_priority
 
         for rule in priority_override_rules:
             filter_fields = {key: value for key, value in rule.items() if key not in _EXCLUDED_KEYS}
@@ -588,10 +597,10 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
             if matched:  # return on encountering first fully matched rule
                 new_priority = rule.get("new_priority", _NO_CHANGE)
                 if new_priority == _NO_CHANGE:
-                    return None
+                    return current_priority
                 return EventPriority[new_priority]
 
-        return None  # if no rules are matched, return None
+        return current_priority  # if no rules are matched, keep the current priority
 
     def analyze_data(
         self,
@@ -617,8 +626,7 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
             updated_regex = []
             for regex_obj in final_error_regex:
                 new_priority = self.resolve_priority(regex_obj, args.priority_override_rules)
-                if new_priority is not None:
-                    regex_obj = regex_obj.model_copy(update={"event_priority": new_priority})
+                regex_obj = regex_obj.model_copy(update={"event_priority": new_priority})
                 updated_regex.append(regex_obj)
             final_error_regex = updated_regex
 

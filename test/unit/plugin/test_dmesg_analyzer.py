@@ -712,7 +712,7 @@ def test_custom_regex_empty_list(system_info):
 
 
 def test_resolve_priority_no_match(system_info):
-    """No rule matches → returns None (keep original priority)."""
+    """No rule matches → returns the original priority unchanged."""
     analyzer = DmesgAnalyzer(system_info=system_info)
     regex_obj = ErrorRegex(
         regex=re.compile(r"GPU reset failed"),
@@ -720,7 +720,7 @@ def test_resolve_priority_no_match(system_info):
         event_category=EventCategory.RAS,
     )
     rules = [{"event_category": "SW_DRIVER", "new_priority": "WARNING"}]
-    assert analyzer.resolve_priority(regex_obj, rules) is None
+    assert analyzer.resolve_priority(regex_obj, rules) == EventPriority.ERROR
 
 
 def test_resolve_priority_match_by_category(system_info):
@@ -755,7 +755,7 @@ def test_resolve_priority_match_by_message_list(system_info):
 
 
 def test_resolve_priority_no_change(system_info):
-    """new_priority=NO_CHANGE → returns None (keep original priority)."""
+    """new_priority=NO_CHANGE → returns the original priority unchanged."""
     analyzer = DmesgAnalyzer(system_info=system_info)
     regex_obj = ErrorRegex(
         regex=re.compile(r"GPU reset failed"),
@@ -763,7 +763,7 @@ def test_resolve_priority_no_change(system_info):
         event_category=EventCategory.RAS,
     )
     rules = [{"event_category": "RAS", "new_priority": "NO_CHANGE"}]
-    assert analyzer.resolve_priority(regex_obj, rules) is None
+    assert analyzer.resolve_priority(regex_obj, rules) == EventPriority.ERROR
 
 
 def test_resolve_priority_first_match_wins(system_info):
@@ -796,11 +796,11 @@ def test_resolve_priority_multiple_filter_fields(system_info):
     ]
     assert analyzer.resolve_priority(regex_obj, rules) == EventPriority.WARNING
 
-    # Does NOT match because message differs
+    # Does NOT match because message differs → returns original priority
     rules_mismatch = [
         {"event_category": "RAS", "message": "ACA Error", "new_priority": "WARNING"},
     ]
-    assert analyzer.resolve_priority(regex_obj, rules_mismatch) is None
+    assert analyzer.resolve_priority(regex_obj, rules_mismatch) == EventPriority.ERROR
 
 
 def test_resolve_priority_match_all_matches_any_regex(system_info):
@@ -851,12 +851,12 @@ def test_resolve_priority_match_all_false_still_filters(system_info):
         message="GPU reset failed",
         event_category=EventCategory.RAS,
     )
-    # match_all=False with a non-matching filter → should NOT match
+    # match_all=False with a non-matching filter → returns original priority
     result = analyzer.resolve_priority(
         regex_obj,
         [{"match_all": False, "event_category": "SW_DRIVER", "new_priority": "WARNING"}],
     )
-    assert result is None
+    assert result == EventPriority.ERROR
 
     # match_all=False with a matching filter → should match
     result = analyzer.resolve_priority(
