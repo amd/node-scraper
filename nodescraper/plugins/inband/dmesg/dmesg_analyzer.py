@@ -539,7 +539,7 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
         self,
         regex_obj: ErrorRegex,
         priority_override_rules: list[dict],
-    ) -> EventPriority | None:
+    ) -> Optional[EventPriority]:
         """
         Walk the priority_override_rules in order (first-match-wins).
         All keys in each rule except 'new_priority' and 'match_all' are treated
