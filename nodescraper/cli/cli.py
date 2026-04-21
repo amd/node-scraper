@@ -49,6 +49,10 @@ from nodescraper.cli.helper import (
     parse_gen_plugin_config,
     process_args,
 )
+from nodescraper.cli.host_cli_embed import (
+    apply_host_cli_args_to_parsed_args,
+    merge_plugin_connection_config_from_host_ns,
+)
 from nodescraper.cli.inputargtypes import ModelArgHandler, json_arg, log_path_arg
 from nodescraper.cli.invocation import run_plugin_queue_with_invocation
 from nodescraper.configregistry import ConfigRegistry
@@ -69,24 +73,25 @@ def _parse_plugin_configs_csv(value: str) -> list[str]:
     return [p.strip() for p in value.split(",") if p.strip()]
 
 
-def build_parser(
+def _config_registry_with_all_plugins(plugin_reg: PluginRegistry) -> ConfigRegistry:
+    """Synthetic ``AllPlugins`` config used for CLI help and :func:`build_global_argument_parser`."""
+    config_reg = ConfigRegistry()
+    config_reg.configs["AllPlugins"] = PluginConfig(
+        name="AllPlugins",
+        desc="Run all registered plugins with default arguments",
+        global_args={},
+        plugins={name: {} for name in plugin_reg.plugins},
+        result_collators={},
+    )
+    return config_reg
+
+
+def _add_cli_root_globals(
+    parser: argparse.ArgumentParser,
     plugin_reg: PluginRegistry,
     config_reg: ConfigRegistry,
-) -> tuple[argparse.ArgumentParser, dict[str, tuple[argparse.ArgumentParser, dict]]]:
-    """Build an argument parser
-
-    Args:
-        plugin_reg (PluginRegistry): registry of plugins
-
-    Returns:
-        tuple[argparse.ArgumentParser, dict[str, tuple[argparse.ArgumentParser, dict]]]: tuple containing main
-        parser and subparsers for each plugin module
-    """
-    parser = argparse.ArgumentParser(
-        description="node scraper CLI",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    )
-
+) -> None:
+    """Register top-level flags before ``subcmd`` subparsers (shared with :func:`build_global_argument_parser`)."""
     parser.add_argument(
         "--version",
         action="version",
@@ -192,6 +197,40 @@ def build_parser(
         action="store_true",
         help="Skip plugins that require sudo permissions",
     )
+
+
+def build_global_argument_parser(*, add_help: bool = True) -> argparse.ArgumentParser:
+    """Globals only (no subcommands), for host CLIs such as amd-error-scraper ``error-scraper``."""
+    plugin_reg = PluginRegistry()
+    config_reg = _config_registry_with_all_plugins(plugin_reg)
+    parser = argparse.ArgumentParser(
+        description="node scraper CLI (global options only)",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        add_help=add_help,
+    )
+    _add_cli_root_globals(parser, plugin_reg, config_reg)
+    return parser
+
+
+def build_parser(
+    plugin_reg: PluginRegistry,
+    config_reg: ConfigRegistry,
+) -> tuple[argparse.ArgumentParser, dict[str, tuple[argparse.ArgumentParser, dict]]]:
+    """Build an argument parser
+
+    Args:
+        plugin_reg (PluginRegistry): registry of plugins
+
+    Returns:
+        tuple[argparse.ArgumentParser, dict[str, tuple[argparse.ArgumentParser, dict]]]: tuple containing main
+        parser and subparsers for each plugin module
+    """
+    parser = argparse.ArgumentParser(
+        description="node scraper CLI",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+
+    _add_cli_root_globals(parser, plugin_reg, config_reg)
 
     subparsers = parser.add_subparsers(dest="subcmd", help="Subcommands")
     subparsers.default = "run-plugins"
@@ -366,14 +405,7 @@ def get_cli_top_level_subcommands() -> tuple[str, ...]:
         Tuple of ``subcmd`` subparser names; call ``cache_clear()`` if registries change in-process.
     """
     plugin_reg = PluginRegistry()
-    config_reg = ConfigRegistry()
-    config_reg.configs["AllPlugins"] = PluginConfig(
-        name="AllPlugins",
-        desc="Run all registered plugins with default arguments",
-        global_args={},
-        plugins={name: {} for name in plugin_reg.plugins},
-        result_collators={},
-    )
+    config_reg = _config_registry_with_all_plugins(plugin_reg)
     parser, _plugin_subparser_map = build_parser(plugin_reg, config_reg)
     return _top_level_subcommand_names(parser)
 
@@ -441,16 +473,7 @@ def main(
         arg_input = sys.argv[1:]
 
     plugin_reg = PluginRegistry()
-
-    config_reg = ConfigRegistry()
-    # Add synthetic "AllPlugins" config that includes every registered plugin
-    config_reg.configs["AllPlugins"] = PluginConfig(
-        name="AllPlugins",
-        desc="Run all registered plugins with default arguments",
-        global_args={},
-        plugins={name: {} for name in plugin_reg.plugins},
-        result_collators={},
-    )
+    config_reg = _config_registry_with_all_plugins(plugin_reg)
     parser, plugin_subparser_map = build_parser(plugin_reg, config_reg)
 
     try:
@@ -459,6 +482,8 @@ def main(
         )
 
         parsed_args = parser.parse_args(top_level_args)
+        apply_host_cli_args_to_parsed_args(parsed_args, host_cli_args)
+        merge_plugin_connection_config_from_host_ns(parsed_args, host_cli_args)
         system_info = get_system_info(parsed_args)
         sname = system_info.name.lower().replace("-", "_").replace(".", "_")
         timestamp = datetime.datetime.now().strftime("%Y_%m_%d-%I_%M_%S_%p")
