@@ -23,12 +23,13 @@
 # SOFTWARE.
 #
 ###############################################################################
+import json
 from pathlib import Path
 
 import pytest
 
 from nodescraper.connection.inband.inband import CommandArtifact
-from nodescraper.enums import ExecutionStatus, OSFamily
+from nodescraper.enums import EventPriority, ExecutionStatus, OSFamily
 from nodescraper.enums.systeminteraction import SystemInteractionLevel
 from nodescraper.plugins.inband.rdma.rdma_collector import RdmaCollector
 from nodescraper.plugins.inband.rdma.rdmadata import RdmaDataModel
@@ -70,9 +71,10 @@ def test_collect_success(collector, conn_mock, rdma_link_output, rdma_statistic_
     assert res.status == ExecutionStatus.OK
     assert data is not None
     assert isinstance(data, RdmaDataModel)
-    # Full statistic fixture has 8 devices (bnxt_re0..bnxt_re7) with full stats
-    assert len(data.statistic_list) == 8
-    assert data.statistic_list[0].ifname == "bnxt_re0"
+    assert len(data.statistic_list) == 12
+    assert data.statistic_list[0].ifname == "ionic_0"
+    assert data.statistic_list[0].vendor_statistics is not None
+    assert data.statistic_list[0].vendor_statistics.tx_rdma_ucast_bytes == 0
     # Full link fixture has 4 ionic links
     assert len(data.link_list) == 4
     assert data.link_list[0].ifname == "ionic_0"
@@ -154,3 +156,123 @@ def test_parse_rdma_link_text_empty(collector):
     """Test parsing empty rdma link (text) output."""
     links = collector._parse_rdma_link_text("")
     assert len(links) == 0
+
+
+def test_collect_extra_fields_warning(collector, conn_mock):
+    """Extra keys in a statistic row produce a warning event but collection succeeds."""
+    collector.system_info.os_family = OSFamily.LINUX
+    stat_data = [
+        {
+            "ifname": "ionic_0",
+            "port": 1,
+            "tx_rdma_ucast_bytes": 0,
+            "unknown_field_1": 42,
+            "unknown_field_2": 99,
+        }
+    ]
+    conn_mock.run_command.side_effect = [
+        CommandArtifact(exit_code=0, stdout="[]", stderr="", command="rdma link -j"),
+        CommandArtifact(
+            exit_code=0,
+            stdout=json.dumps(stat_data),
+            stderr="",
+            command="rdma statistic -j",
+        ),
+        CommandArtifact(exit_code=0, stdout="", stderr="", command="rdma dev"),
+        CommandArtifact(exit_code=0, stdout="", stderr="", command="rdma link"),
+    ]
+    res, data = collector.collect_data()
+    assert res.status == ExecutionStatus.OK
+    assert data is not None
+    assert len(data.statistic_list) == 1
+    assert data.statistic_list[0].vendor_statistics is not None
+    extra_events = [e for e in res.events if "Unexpected fields" in e.description]
+    assert len(extra_events) == 1
+    assert extra_events[0].priority == EventPriority.WARNING
+    assert "unknown_field_1" in extra_events[0].data["extra_fields"]
+    assert "unknown_field_2" in extra_events[0].data["extra_fields"]
+
+
+def test_collect_missing_fields_warning(collector, conn_mock):
+    """Missing vendor fields produce a warning event."""
+    collector.system_info.os_family = OSFamily.LINUX
+    stat_data = [{"ifname": "ionic_0", "port": 1, "tx_rdma_ucast_bytes": 0}]
+    conn_mock.run_command.side_effect = [
+        CommandArtifact(exit_code=0, stdout="[]", stderr="", command="rdma link -j"),
+        CommandArtifact(
+            exit_code=0,
+            stdout=json.dumps(stat_data),
+            stderr="",
+            command="rdma statistic -j",
+        ),
+        CommandArtifact(exit_code=0, stdout="", stderr="", command="rdma dev"),
+        CommandArtifact(exit_code=0, stdout="", stderr="", command="rdma link"),
+    ]
+    res, data = collector.collect_data()
+    assert res.status == ExecutionStatus.OK
+    assert data is not None
+    assert len(data.statistic_list) == 1
+    missing_events = [e for e in res.events if "Missing fields" in e.description]
+    assert len(missing_events) == 1
+    assert missing_events[0].priority == EventPriority.WARNING
+    assert "tx_rdma_ucast_pkts" in missing_events[0].data["missing_fields"]
+
+
+def test_collect_extra_and_missing_fields_warning(collector, conn_mock):
+    """Both extra and unknown vendor keys produce separate warnings (mlx)."""
+    collector.system_info.os_family = OSFamily.LINUX
+    stat_data = [
+        {
+            "ifname": "mlx5_0",
+            "port": 1,
+            "rx_write_requests": 0,
+            "brand_new_counter": 7,
+        }
+    ]
+    conn_mock.run_command.side_effect = [
+        CommandArtifact(exit_code=0, stdout="[]", stderr="", command="rdma link -j"),
+        CommandArtifact(
+            exit_code=0,
+            stdout=json.dumps(stat_data),
+            stderr="",
+            command="rdma statistic -j",
+        ),
+        CommandArtifact(exit_code=0, stdout="", stderr="", command="rdma dev"),
+        CommandArtifact(exit_code=0, stdout="", stderr="", command="rdma link"),
+    ]
+    res, data = collector.collect_data()
+    assert res.status == ExecutionStatus.OK
+    assert data is not None
+    extra_events = [e for e in res.events if "Unexpected fields" in e.description]
+    missing_events = [e for e in res.events if "Missing fields" in e.description]
+    assert len(extra_events) == 1
+    assert len(missing_events) == 1
+    assert "brand_new_counter" in extra_events[0].data["extra_fields"]
+    assert "rx_read_requests" in missing_events[0].data["missing_fields"]
+
+
+def test_collect_no_field_warnings_when_fixture_matches(
+    collector, conn_mock, rdma_statistic_output
+):
+    """Full fixture rows match vendor models: no missing/extra field warnings."""
+    collector.system_info.os_family = OSFamily.LINUX
+    conn_mock.run_command.side_effect = [
+        CommandArtifact(exit_code=0, stdout="[]", stderr="", command="rdma link -j"),
+        CommandArtifact(
+            exit_code=0,
+            stdout=rdma_statistic_output,
+            stderr="",
+            command="rdma statistic -j",
+        ),
+        CommandArtifact(exit_code=0, stdout="", stderr="", command="rdma dev"),
+        CommandArtifact(exit_code=0, stdout="", stderr="", command="rdma link"),
+    ]
+    res, data = collector.collect_data()
+    assert res.status == ExecutionStatus.OK
+    assert data is not None
+    drift = [
+        e
+        for e in res.events
+        if "Unexpected fields" in e.description or "Missing fields" in e.description
+    ]
+    assert drift == []
