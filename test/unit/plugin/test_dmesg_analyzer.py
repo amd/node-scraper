@@ -720,7 +720,7 @@ def test_resolve_priority_no_match(system_info):
         event_category=EventCategory.RAS,
     )
     rules = [{"event_category": "SW_DRIVER", "new_priority": "WARNING"}]
-    assert analyzer.resolve_priority(regex_obj, rules) == EventPriority.ERROR
+    assert analyzer._resolve_priority(regex_obj, rules) == EventPriority.ERROR
 
 
 def test_resolve_priority_match_by_category(system_info):
@@ -732,7 +732,7 @@ def test_resolve_priority_match_by_category(system_info):
         event_category=EventCategory.RAS,
     )
     rules = [{"event_category": "RAS", "new_priority": "WARNING"}]
-    result = analyzer.resolve_priority(regex_obj, rules)
+    result = analyzer._resolve_priority(regex_obj, rules)
     assert result == EventPriority.WARNING
 
 
@@ -750,7 +750,7 @@ def test_resolve_priority_match_by_message_list(system_info):
             "new_priority": "WARNING",
         }
     ]
-    result = analyzer.resolve_priority(regex_obj, rules)
+    result = analyzer._resolve_priority(regex_obj, rules)
     assert result == EventPriority.WARNING
 
 
@@ -763,7 +763,7 @@ def test_resolve_priority_no_change(system_info):
         event_category=EventCategory.RAS,
     )
     rules = [{"event_category": "RAS", "new_priority": "NO_CHANGE"}]
-    assert analyzer.resolve_priority(regex_obj, rules) == EventPriority.ERROR
+    assert analyzer._resolve_priority(regex_obj, rules) == EventPriority.ERROR
 
 
 def test_resolve_priority_first_match_wins(system_info):
@@ -778,7 +778,7 @@ def test_resolve_priority_first_match_wins(system_info):
         {"event_category": "RAS", "new_priority": "WARNING"},
         {"event_category": "RAS", "new_priority": "ERROR"},
     ]
-    result = analyzer.resolve_priority(regex_obj, rules)
+    result = analyzer._resolve_priority(regex_obj, rules)
     assert result == EventPriority.WARNING
 
 
@@ -794,13 +794,13 @@ def test_resolve_priority_multiple_filter_fields(system_info):
     rules = [
         {"event_category": "RAS", "message": "GPU reset failed", "new_priority": "WARNING"},
     ]
-    assert analyzer.resolve_priority(regex_obj, rules) == EventPriority.WARNING
+    assert analyzer._resolve_priority(regex_obj, rules) == EventPriority.WARNING
 
     # Does NOT match because message differs → returns original priority
     rules_mismatch = [
         {"event_category": "RAS", "message": "ACA Error", "new_priority": "WARNING"},
     ]
-    assert analyzer.resolve_priority(regex_obj, rules_mismatch) == EventPriority.ERROR
+    assert analyzer._resolve_priority(regex_obj, rules_mismatch) == EventPriority.ERROR
 
 
 def test_resolve_priority_match_all_matches_any_regex(system_info):
@@ -818,7 +818,7 @@ def test_resolve_priority_match_all_matches_any_regex(system_info):
             event_category=EventCategory.SW_DRIVER,
         ),
     ]:
-        result = analyzer.resolve_priority(
+        result = analyzer._resolve_priority(
             regex_obj, [{"match_all": True, "new_priority": "WARNING"}]
         )
         assert (
@@ -836,7 +836,7 @@ def test_resolve_priority_match_all_ignores_non_matching_filters(system_info):
     )
     # event_category is RAS, but filter says SW_DRIVER — would normally NOT match.
     # match_all=True should bypass this check and still apply the rule.
-    result = analyzer.resolve_priority(
+    result = analyzer._resolve_priority(
         regex_obj,
         [{"match_all": True, "event_category": "SW_DRIVER", "new_priority": "WARNING"}],
     )
@@ -852,14 +852,14 @@ def test_resolve_priority_match_all_false_still_filters(system_info):
         event_category=EventCategory.RAS,
     )
     # match_all=False with a non-matching filter → returns original priority
-    result = analyzer.resolve_priority(
+    result = analyzer._resolve_priority(
         regex_obj,
         [{"match_all": False, "event_category": "SW_DRIVER", "new_priority": "WARNING"}],
     )
     assert result == EventPriority.ERROR
 
     # match_all=False with a matching filter → should match
-    result = analyzer.resolve_priority(
+    result = analyzer._resolve_priority(
         regex_obj,
         [{"match_all": False, "event_category": "RAS", "new_priority": "WARNING"}],
     )
@@ -953,3 +953,24 @@ def test_custom_regex_with_multiline_pattern(system_info):
     assert len(res.events) >= 1
     start_events = [e for e in res.events if e.description == "Start Error Block"]
     assert len(start_events) == 1
+
+
+def test_priority_override_updates_unkown_dmesg_error(system_info):
+    """NO_CHANGE rule leaves the original event priority intact."""
+    dmesg_data = DmesgData(
+        dmesg_content=("kern  :err   : 2024-10-07T10:17:15,145363-04:00 UNKOWN DMESG ERROR")
+    )
+
+    analyzer = DmesgAnalyzer(system_info=system_info)
+    res = analyzer.analyze_data(
+        dmesg_data,
+        args=DmesgAnalyzerArgs(
+            check_unknown_dmesg_errors=True,
+            priority_override_rules=[
+                {"message": "Unknown dmesg error", "new_priority": "ERROR"},
+            ],
+        ),
+    )
+
+    assert len(res.events) == 1
+    assert res.events[0].priority == EventPriority.ERROR
