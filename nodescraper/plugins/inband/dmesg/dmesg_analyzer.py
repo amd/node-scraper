@@ -540,7 +540,7 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
         error_regexes: list[ErrorRegex],
         priority_override_rules: list[dict],
     ) -> list[EventPriority]:
-        """Updates the priorities of a list of ErrorRegex options based on given priority rules
+        """Updates the priorities of a list of ErrorRegex objects based on given priority rules
 
         Args:
             error_regexes (list[ErrorRegex]): A list of ErrorRegex objects to have their priorities updated
@@ -648,7 +648,7 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
         final_error_regex = self._convert_and_extend_error_regex(args.error_regex, self.ERROR_REGEX)
         final_error_regex = self.update_error_regex_priorities(
             final_error_regex, args.priority_override_rules
-        )  # makes no changes if no rules are provided
+        )  # updates the priorities of the ErrorRegex objects using the given rules. makes no changes if no rules are provided.
 
         if args.analysis_range_start or args.analysis_range_end:
             self.logger.info(
@@ -682,7 +682,6 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
         self.result.events += known_err_events
 
         if args.check_unknown_dmesg_errors:
-
             unknown_dmesg_error_regexes = [
                 ErrorRegex(
                     regex=re.compile(
@@ -695,7 +694,7 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
             ]
             unknown_dmesg_error_regexes = self.update_error_regex_priorities(
                 unknown_dmesg_error_regexes, args.priority_override_rules
-            )  # makes no changes if no rules are provided
+            )  # updates the priorities of the ErrorRegex objects using the given rules. makes no changes if no rules are provided.
 
             err_events = self.check_all_regexes(
                 content=dmesg_content,
