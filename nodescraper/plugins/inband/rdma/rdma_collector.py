@@ -69,7 +69,7 @@ class RdmaCollector(InBandDataCollector[RdmaDataModel, None]):
 
         if res.exit_code != 0:
             self._log_event(
-                category=EventCategory.APPLICATION,
+                category=EventCategory.NETWORK,
                 description=f"Error running rdma command: {cmd}",
                 data={
                     "command": cmd,
@@ -88,7 +88,7 @@ class RdmaCollector(InBandDataCollector[RdmaDataModel, None]):
             return json.loads(res.stdout)
         except json.JSONDecodeError as e:
             self._log_event(
-                category=EventCategory.APPLICATION,
+                category=EventCategory.NETWORK,
                 description=f"Error parsing command: {cmd} json data",
                 data={
                     "cmd": cmd,
@@ -196,7 +196,7 @@ class RdmaCollector(InBandDataCollector[RdmaDataModel, None]):
             for stat in stat_data:
                 if not isinstance(stat, dict):
                     self._log_event(
-                        category=EventCategory.APPLICATION,
+                        category=EventCategory.NETWORK,
                         description="Invalid data type for RDMA statistic",
                         data={"data_type": type(stat).__name__},
                         priority=EventPriority.WARNING,
@@ -213,7 +213,7 @@ class RdmaCollector(InBandDataCollector[RdmaDataModel, None]):
                         extra_fields = stat_fields - vendor_fields
                         if extra_fields:
                             self._log_event(
-                                category=EventCategory.APPLICATION,
+                                category=EventCategory.NETWORK,
                                 description=f"Unexpected fields in RDMA statistic for {ifname}",
                                 data={
                                     "interface": ifname,
@@ -225,7 +225,7 @@ class RdmaCollector(InBandDataCollector[RdmaDataModel, None]):
                         missing_fields = vendor_fields - stat_fields
                         if missing_fields:
                             self._log_event(
-                                category=EventCategory.APPLICATION,
+                                category=EventCategory.NETWORK,
                                 description=f"Missing fields in RDMA statistic for {ifname}",
                                 data={
                                     "interface": ifname,
@@ -238,7 +238,7 @@ class RdmaCollector(InBandDataCollector[RdmaDataModel, None]):
                             vendor_stats = vendor_cls(**stat)
                         except ValidationError as ve:
                             self._log_event(
-                                category=EventCategory.APPLICATION,
+                                category=EventCategory.NETWORK,
                                 description=f"Failed to build vendor model for {ifname}",
                                 data={"exception": get_exception_traceback(ve)},
                                 priority=EventPriority.WARNING,
@@ -254,7 +254,7 @@ class RdmaCollector(InBandDataCollector[RdmaDataModel, None]):
             return statistics
         except ValidationError as e:
             self._log_event(
-                category=EventCategory.APPLICATION,
+                category=EventCategory.NETWORK,
                 description="Failed to build RdmaStatistics model",
                 data={"exception": get_exception_traceback(e)},
                 priority=EventPriority.WARNING,
@@ -274,7 +274,7 @@ class RdmaCollector(InBandDataCollector[RdmaDataModel, None]):
             for link in link_data:
                 if not isinstance(link, dict):
                     self._log_event(
-                        category=EventCategory.APPLICATION,
+                        category=EventCategory.NETWORK,
                         description="Invalid data type for RDMA link",
                         data={"data_type": type(link).__name__},
                         priority=EventPriority.WARNING,
@@ -284,7 +284,7 @@ class RdmaCollector(InBandDataCollector[RdmaDataModel, None]):
             return links
         except ValidationError as e:
             self._log_event(
-                category=EventCategory.APPLICATION,
+                category=EventCategory.NETWORK,
                 description="Failed to build RdmaLink model",
                 data={"exception": get_exception_traceback(e)},
                 priority=EventPriority.WARNING,
