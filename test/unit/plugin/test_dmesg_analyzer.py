@@ -956,7 +956,7 @@ def test_custom_regex_with_multiline_pattern(system_info):
 
 
 def test_priority_override_updates_unkown_dmesg_error(system_info):
-    """NO_CHANGE rule leaves the original event priority intact."""
+    """Updating an 'Unknown dmesg error', which is added after the base ErrorRegex list, successfully changes its priority"""
     dmesg_data = DmesgData(
         dmesg_content=("kern  :err   : 2024-10-07T10:17:15,145363-04:00 UNKOWN DMESG ERROR")
     )
