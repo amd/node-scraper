@@ -93,8 +93,10 @@ class PluginExecutor:
                 )
 
         self.logger.info("System Name: %s", self.system_info.name)
-        self.logger.info("System SKU: %s", self.system_info.sku)
-        self.logger.info("System Platform: %s", self.system_info.platform)
+        if self.system_info.sku:
+            self.logger.info("System SKU: %s", self.system_info.sku)
+        if self.system_info.platform:
+            self.logger.info("System Platform: %s", self.system_info.platform)
         self.logger.info("System location: %s", self.system_info.location)
 
     @staticmethod
