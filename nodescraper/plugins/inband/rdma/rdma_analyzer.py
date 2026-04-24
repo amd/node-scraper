@@ -37,105 +37,11 @@ class RdmaAnalyzer(DataAnalyzer[RdmaDataModel, None]):
 
     DATA_MODEL = RdmaDataModel
 
-    # Error fields checked from rdma statistic output (bnxt_re, mlx5, ionic, etc.)
-    ERROR_FIELDS = [
-        "recoverable_errors",
-        "tx_roce_errors",
-        "tx_roce_discards",
-        "rx_roce_errors",
-        "rx_roce_discards",
-        "local_ack_timeout_err",
-        "packet_seq_err",
-        "max_retry_exceeded",
-        "rnr_nak_retry_err",
-        "implied_nak_seq_err",
-        "unrecoverable_err",
-        "bad_resp_err",
-        "local_qp_op_err",
-        "local_protection_err",
-        "mem_mgmt_op_err",
-        "req_remote_invalid_request",
-        "req_remote_access_errors",
-        "remote_op_err",
-        "duplicate_request",
-        "res_exceed_max",
-        "resp_local_length_error",
-        "res_exceeds_wqe",
-        "res_opcode_err",
-        "res_rx_invalid_rkey",
-        "res_rx_domain_err",
-        "res_rx_no_perm",
-        "res_rx_range_err",
-        "res_tx_invalid_rkey",
-        "res_tx_domain_err",
-        "res_tx_no_perm",
-        "res_tx_range_err",
-        "res_irrq_oflow",
-        "res_unsup_opcode",
-        "res_unaligned_atomic",
-        "res_rem_inv_err",
-        "res_mem_err",
-        "res_srq_err",
-        "res_cmp_err",
-        "res_invalid_dup_rkey",
-        "res_wqe_format_err",
-        "res_cq_load_err",
-        "res_srq_load_err",
-        "res_tx_pci_err",
-        "res_rx_pci_err",
-        "out_of_buffer",
-        "out_of_sequence",
-        "req_cqe_error",
-        "req_cqe_flush_error",
-        "resp_cqe_error",
-        "resp_cqe_flush_error",
-        "resp_remote_access_errors",
-        "req_rx_pkt_seq_err",
-        "req_rx_rnr_retry_err",
-        "req_rx_rmt_acc_err",
-        "req_rx_rmt_req_err",
-        "req_rx_oper_err",
-        "req_rx_impl_nak_seq_err",
-        "req_rx_cqe_err",
-        "req_rx_cqe_flush",
-        "req_rx_dup_response",
-        "req_rx_inval_pkts",
-        "req_tx_loc_acc_err",
-        "req_tx_loc_oper_err",
-        "req_tx_mem_mgmt_err",
-        "req_tx_retry_excd_err",
-        "req_tx_loc_sgl_inv_err",
-        "resp_rx_dup_request",
-        "resp_rx_outof_buf",
-        "resp_rx_outouf_seq",
-        "resp_rx_cqe_err",
-        "resp_rx_cqe_flush",
-        "resp_rx_loc_len_err",
-        "resp_rx_inval_request",
-        "resp_rx_loc_oper_err",
-        "resp_rx_outof_atomic",
-        "resp_tx_pkt_seq_err",
-        "resp_tx_rmt_inval_req_err",
-        "resp_tx_rmt_acc_err",
-        "resp_tx_rmt_oper_err",
-        "resp_tx_rnr_retry_err",
-        "resp_tx_loc_sgl_inv_err",
-        "resp_rx_s0_table_err",
-        "resp_rx_ccl_cts_outouf_seq",
-        "tx_rdma_ack_timeout",
-        "tx_rdma_ccl_cts_ack_timeout",
-        "rx_rdma_mtu_discard_pkts",
-    ]
-
-    CRITICAL_ERROR_FIELDS = [
-        "unrecoverable_err",
-        "res_tx_pci_err",
-        "res_rx_pci_err",
-        "res_mem_err",
-    ]
-
     def analyze_data(self, data: RdmaDataModel, args: Optional[None] = None) -> TaskResult:
         """Analyze RDMA statistics for non-zero error counters.
+
+        Error and critical counter names come from each vendor's statistics model
+        (ionic / bnxt / mlx prefixes).
 
         Args:
             data: RDMA data model with statistic_list (and optionally link_list).
@@ -150,32 +56,36 @@ class RdmaAnalyzer(DataAnalyzer[RdmaDataModel, None]):
             return self.result
 
         error_state = False
-        for idx, stat in enumerate(data.statistic_list):
-            errors_on_interface = []  # (error_field, value, is_critical)
-            for error_field in self.ERROR_FIELDS:
-                value = getattr(stat, error_field, None)
-                if value is not None and value > 0:
-                    is_critical = error_field in self.CRITICAL_ERROR_FIELDS
-                    errors_on_interface.append((error_field, value, is_critical))
-            if errors_on_interface:
-                error_state = True
-                interface_label = stat.ifname or "unknown"
-                error_names = [e[0] for e in errors_on_interface]
-                any_critical = any(e[2] for e in errors_on_interface)
-                priority = EventPriority.CRITICAL if any_critical else EventPriority.ERROR
-                errors_data = {field: value for field, value, _ in errors_on_interface}
-                self._log_event(
-                    category=EventCategory.IO,
-                    description=f"RDMA error detected on {interface_label}: [{', '.join(error_names)}]",
-                    data={
-                        "interface": stat.ifname,
-                        "port": stat.port,
-                        "errors": errors_data,
-                        "statistic_index": idx,
-                    },
-                    priority=priority,
-                    console_log=True,
-                )
+
+        for stat in data.statistic_list:
+            if stat.vendor_statistics is None:
+                continue
+
+            error_fields = stat.vendor_statistics.error_fields
+            critical_fields = stat.vendor_statistics.critial_error_fields
+
+            for error_field in error_fields + critical_fields:
+                error_value = getattr(stat.vendor_statistics, error_field, None)
+
+                if error_value is not None and error_value > 0:
+                    priority = (
+                        EventPriority.CRITICAL
+                        if error_field in critical_fields
+                        else EventPriority.ERROR
+                    )
+                    self._log_event(
+                        category=EventCategory.NETWORK,
+                        description=f"RDMA error detected: {error_field}",
+                        data={
+                            "interface": stat.ifname,
+                            "port": stat.port,
+                            "error_field": error_field,
+                            "error_count": error_value,
+                        },
+                        priority=priority,
+                        console_log=True,
+                    )
+                    error_state = True
 
         if error_state:
             self.result.message = "RDMA errors detected in statistics"
