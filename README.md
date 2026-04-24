@@ -336,6 +336,16 @@ You can extend the built-in error detection with custom regex patterns. Create a
             "event_category": "SW_DRIVER",
             "event_priority": 4
           }
+        ],
+        "priority_override_rules": [
+          {
+            "message": "Application Crash",
+            "new_priority": "ERROR"
+          },
+          {
+            "event_category": "SW_DRIVER",
+            "new_priority": "WARNING"
+          }
         ]
       }
     }
