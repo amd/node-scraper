@@ -34,7 +34,15 @@ from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSF
 from nodescraper.models import TaskResult
 from nodescraper.utils import get_exception_traceback
 
-from .rdmadata import RdmaDataModel, RdmaDevice, RdmaLink, RdmaLinkText, RdmaStatistics
+from .rdmadata import (
+    VENDOR_PREFIX_MAP,
+    RdmaDataModel,
+    RdmaDevice,
+    RdmaLink,
+    RdmaLinkText,
+    RdmaStatistics,
+    RdmaVendorStatistics,
+)
 
 
 class RdmaCollector(InBandDataCollector[RdmaDataModel, None]):
@@ -172,7 +180,11 @@ class RdmaCollector(InBandDataCollector[RdmaDataModel, None]):
         return links
 
     def _get_rdma_statistics(self) -> Optional[list[RdmaStatistics]]:
-        """Get RDMA statistics from 'rdma statistic -j'."""
+        """Get RDMA statistics from 'rdma statistic -j'.
+
+        Warns on unexpected or missing fields relative to the vendor-specific model
+        for the interface prefix (ionic / bnxt / mlx).
+        """
         stat_data = self._run_rdma_command(self.CMD_STATISTIC)
         if stat_data is None:
             return None
@@ -190,7 +202,56 @@ class RdmaCollector(InBandDataCollector[RdmaDataModel, None]):
                         priority=EventPriority.WARNING,
                     )
                     continue
-                statistics.append(RdmaStatistics(**stat))
+
+                ifname = stat.get("ifname", "")
+                vendor_stats: Optional[RdmaVendorStatistics] = None
+                for prefix, vendor_cls in VENDOR_PREFIX_MAP.items():
+                    if ifname.startswith(prefix):
+                        vendor_fields = set(vendor_cls.model_fields.keys())
+                        stat_fields = set(stat.keys()) - {"ifname", "port"}
+
+                        extra_fields = stat_fields - vendor_fields
+                        if extra_fields:
+                            self._log_event(
+                                category=EventCategory.NETWORK,
+                                description=f"Unexpected fields in RDMA statistic for {ifname}",
+                                data={
+                                    "interface": ifname,
+                                    "extra_fields": sorted(extra_fields),
+                                },
+                                priority=EventPriority.WARNING,
+                            )
+
+                        missing_fields = vendor_fields - stat_fields
+                        if missing_fields:
+                            self._log_event(
+                                category=EventCategory.NETWORK,
+                                description=f"Missing fields in RDMA statistic for {ifname}",
+                                data={
+                                    "interface": ifname,
+                                    "missing_fields": sorted(missing_fields),
+                                },
+                                priority=EventPriority.WARNING,
+                            )
+
+                        try:
+                            vendor_stats = vendor_cls(**stat)
+                        except ValidationError as ve:
+                            self._log_event(
+                                category=EventCategory.NETWORK,
+                                description=f"Failed to build vendor model for {ifname}",
+                                data={"exception": get_exception_traceback(ve)},
+                                priority=EventPriority.WARNING,
+                            )
+                        break
+
+                rdma_stat = RdmaStatistics(
+                    ifname=stat.get("ifname"),
+                    port=stat.get("port"),
+                    vendor_statistics=vendor_stats,
+                )
+                statistics.append(rdma_stat)
+            return statistics
         except ValidationError as e:
             self._log_event(
                 category=EventCategory.NETWORK,
@@ -198,7 +259,7 @@ class RdmaCollector(InBandDataCollector[RdmaDataModel, None]):
                 data={"exception": get_exception_traceback(e)},
                 priority=EventPriority.WARNING,
             )
-        return statistics
+            return None
 
     def _get_rdma_link(self) -> Optional[list[RdmaLink]]:
         """Get RDMA link data from 'rdma link -j'."""

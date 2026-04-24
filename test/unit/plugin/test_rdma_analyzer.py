@@ -25,15 +25,21 @@
 ###############################################################################
 import json
 from pathlib import Path
+from typing import Optional
 
 import pytest
 
 from nodescraper.enums import EventPriority, ExecutionStatus
 from nodescraper.plugins.inband.rdma.rdma_analyzer import RdmaAnalyzer
 from nodescraper.plugins.inband.rdma.rdmadata import (
+    VENDOR_PREFIX_MAP,
+    Cx7RdmaStatistics,
+    PollaraRdmaStatistics,
     RdmaDataModel,
     RdmaLink,
     RdmaStatistics,
+    RdmaVendorStatistics,
+    Thor2RdmaStatistics,
 )
 
 
@@ -48,91 +54,108 @@ def plugin_fixtures_path():
 
 
 @pytest.fixture
-def clean_rdma_model(plugin_fixtures_path):
-    """RDMA data with no errors (all counters zero)."""
+def example_stat_dicts(plugin_fixtures_path):
     path = plugin_fixtures_path / "rdma_statistic_example_data.json"
-    data = json.loads(path.read_text())
-    stats = [RdmaStatistics(**s) for s in data]
-    return RdmaDataModel(statistic_list=stats)
+    return json.loads(path.read_text())
+
+
+def _build_stats(data: list[dict]) -> list[RdmaStatistics]:
+    """Build RdmaStatistics list from raw dicts using vendor prefix map."""
+    stats = []
+    for entry in data:
+        ifname = entry.get("ifname", "")
+        vendor_stats: Optional[RdmaVendorStatistics] = None
+        for prefix, vendor_cls in VENDOR_PREFIX_MAP.items():
+            if ifname.startswith(prefix):
+                vendor_stats = vendor_cls(**entry)
+                break
+        stats.append(
+            RdmaStatistics(
+                ifname=entry.get("ifname"),
+                port=entry.get("port"),
+                vendor_statistics=vendor_stats,
+            )
+        )
+    return stats
 
 
 @pytest.fixture
-def clean_stats(plugin_fixtures_path):
-    """List of clean RdmaStatistics (no errors) for building models with links."""
-    path = plugin_fixtures_path / "rdma_statistic_example_data.json"
-    data = json.loads(path.read_text())
-    return [RdmaStatistics(**s) for s in data]
+def clean_rdma_model(example_stat_dicts):
+    return RdmaDataModel(statistic_list=_build_stats(example_stat_dicts))
+
+
+@pytest.fixture
+def clean_stats(example_stat_dicts):
+    return _build_stats(example_stat_dicts)
 
 
 def test_no_errors_detected(rdma_analyzer, clean_rdma_model):
-    """Test with nominal data that has no errors."""
     result = rdma_analyzer.analyze_data(clean_rdma_model)
     assert result.status == ExecutionStatus.OK
     assert len(result.events) == 0
 
 
-def test_single_error_detected(rdma_analyzer, clean_rdma_model):
-    """Test with data containing a single error."""
-    stats = list(clean_rdma_model.statistic_list)
-    stats[0].tx_roce_errors = 5
-    model = RdmaDataModel(statistic_list=stats)
+def test_single_error_detected(rdma_analyzer, example_stat_dicts):
+    stats_with_error = _build_stats(example_stat_dicts)
+    stats_with_error[0].vendor_statistics.req_rx_pkt_seq_err = 5
+    model = RdmaDataModel(statistic_list=stats_with_error)
     result = rdma_analyzer.analyze_data(model)
     assert result.status == ExecutionStatus.ERROR
     assert "RDMA errors detected in statistics" in result.message
     assert len(result.events) == 1
-    assert result.events[0].description == "RDMA error detected on bnxt_re0: [tx_roce_errors]"
+    assert result.events[0].description == "RDMA error detected: req_rx_pkt_seq_err"
     assert result.events[0].priority == EventPriority.ERROR
-    assert result.events[0].data["errors"] == {"tx_roce_errors": 5}
-    assert result.events[0].data["interface"] == "bnxt_re0"
+    assert result.events[0].data["error_count"] == 5
+    assert result.events[0].data["interface"] == "ionic_0"
 
 
-def test_multiple_errors_detected(rdma_analyzer, clean_rdma_model):
-    """Test with data containing multiple errors (grouped per interface)."""
-    stats = list(clean_rdma_model.statistic_list)
-    stats[0].tx_roce_errors = 10
-    stats[0].rx_roce_errors = 3
-    stats[1].packet_seq_err = 7
-    model = RdmaDataModel(statistic_list=stats)
+def test_multiple_errors_detected(rdma_analyzer, example_stat_dicts):
+    stats_with_errors = _build_stats(example_stat_dicts)
+    stats_with_errors[0].vendor_statistics.req_rx_rmt_acc_err = 10
+    stats_with_errors[0].vendor_statistics.req_tx_loc_oper_err = 3
+    stats_with_errors[8].vendor_statistics.packet_seq_err = 7
+    model = RdmaDataModel(statistic_list=stats_with_errors)
     result = rdma_analyzer.analyze_data(model)
     assert result.status == ExecutionStatus.ERROR
     assert "RDMA errors detected in statistics" in result.message
-    assert len(result.events) == 2  # one per interface
+    assert len(result.events) == 3
     for event in result.events:
         assert event.priority == EventPriority.ERROR
-    # Total 3 errors across 2 interfaces
-    assert sum(len(e.data["errors"]) for e in result.events) == 3
 
 
-def test_critical_error_detected(rdma_analyzer, clean_rdma_model):
-    """Test with data containing a critical error (grouped per interface)."""
-    stats = list(clean_rdma_model.statistic_list)
-    stats[0].unrecoverable_err = 1
-    stats[0].res_tx_pci_err = 2
+def test_critical_error_detected(rdma_analyzer):
+    stats = [
+        RdmaStatistics(
+            ifname="bnxt_re_test",
+            port=1,
+            vendor_statistics=Thor2RdmaStatistics(
+                unrecoverable_err=1,
+                res_tx_pci_err=2,
+            ),
+        )
+    ]
     model = RdmaDataModel(statistic_list=stats)
     result = rdma_analyzer.analyze_data(model)
     assert result.status == ExecutionStatus.ERROR
     assert "RDMA errors detected in statistics" in result.message
-    assert len(result.events) == 1  # one event per interface
-    assert result.events[0].priority == EventPriority.CRITICAL
-    assert "unrecoverable_err" in result.events[0].data["errors"]
-    assert "res_tx_pci_err" in result.events[0].data["errors"]
+    assert len(result.events) == 2
+    critical_events = [e for e in result.events if e.priority == EventPriority.CRITICAL]
+    assert len(critical_events) == 2
 
 
 def test_empty_statistics(rdma_analyzer):
-    """Test with empty statistics list: WARNING and message logged."""
     model = RdmaDataModel(statistic_list=[], link_list=[])
     result = rdma_analyzer.analyze_data(model)
     assert result.status == ExecutionStatus.WARNING
     assert result.message == "No RDMA devices found"
 
 
-def test_multiple_interfaces_with_errors(rdma_analyzer, clean_rdma_model):
-    """Test with errors across multiple interfaces."""
-    stats = list(clean_rdma_model.statistic_list)
-    stats[0].max_retry_exceeded = 15
-    stats[2].local_ack_timeout_err = 8
-    stats[4].out_of_buffer = 100
-    model = RdmaDataModel(statistic_list=stats)
+def test_multiple_interfaces_with_errors(rdma_analyzer, example_stat_dicts):
+    stats_multi_errors = _build_stats(example_stat_dicts)
+    stats_multi_errors[0].vendor_statistics.req_rx_pkt_seq_err = 15
+    stats_multi_errors[2].vendor_statistics.tx_rdma_ack_timeout = 8
+    stats_multi_errors[8].vendor_statistics.out_of_buffer = 100
+    model = RdmaDataModel(statistic_list=stats_multi_errors)
     result = rdma_analyzer.analyze_data(model)
     assert result.status == ExecutionStatus.ERROR
     assert len(result.events) == 3
@@ -141,44 +164,58 @@ def test_multiple_interfaces_with_errors(rdma_analyzer, clean_rdma_model):
 
 
 def test_all_error_types(rdma_analyzer):
-    """Test that all error fields are properly detected (grouped in one event)."""
-    stats = RdmaStatistics(
-        ifname="bnxt_re_test",
-        port=1,
-        recoverable_errors=1,
-        tx_roce_errors=1,
-        unrecoverable_err=1,
-    )
-    model = RdmaDataModel(statistic_list=[stats])
+    stats = [
+        RdmaStatistics(
+            ifname="ionic_test",
+            port=1,
+            vendor_statistics=PollaraRdmaStatistics(
+                req_rx_pkt_seq_err=1,
+                req_tx_loc_oper_err=1,
+            ),
+        ),
+        RdmaStatistics(
+            ifname="mlx5_test",
+            port=1,
+            vendor_statistics=Cx7RdmaStatistics(
+                packet_seq_err=1,
+            ),
+        ),
+    ]
+    model = RdmaDataModel(statistic_list=stats)
     result = rdma_analyzer.analyze_data(model)
     assert result.status == ExecutionStatus.ERROR
-    assert len(result.events) == 1  # one event per interface
-    assert "unrecoverable_err" in result.events[0].data["errors"]
-    assert result.events[0].priority == EventPriority.CRITICAL
-    assert set(result.events[0].data["errors"].keys()) == {
-        "recoverable_errors",
-        "tx_roce_errors",
-        "unrecoverable_err",
-    }
+    assert len(result.events) == 3
+    interfaces = {event.data["interface"] for event in result.events}
+    assert interfaces == {"ionic_test", "mlx5_test"}
 
 
 def test_zero_errors_are_ignored(rdma_analyzer):
-    """Test that zero-value errors are not reported."""
-    stats = RdmaStatistics(
-        ifname="bnxt_re_test",
-        port=1,
-        tx_roce_errors=0,
-        rx_roce_errors=0,
-        unrecoverable_err=0,
-    )
-    model = RdmaDataModel(statistic_list=[stats])
+    stats = [
+        RdmaStatistics(
+            ifname="ionic_test",
+            port=1,
+            vendor_statistics=PollaraRdmaStatistics(
+                req_rx_pkt_seq_err=0,
+                req_rx_rnr_retry_err=0,
+                tx_rdma_ack_timeout=0,
+            ),
+        ),
+        RdmaStatistics(
+            ifname="mlx5_test",
+            port=1,
+            vendor_statistics=Cx7RdmaStatistics(
+                packet_seq_err=0,
+                out_of_buffer=0,
+            ),
+        ),
+    ]
+    model = RdmaDataModel(statistic_list=stats)
     result = rdma_analyzer.analyze_data(model)
     assert result.status == ExecutionStatus.OK
     assert len(result.events) == 0
 
 
 def test_rdma_link_all_active(rdma_analyzer, clean_stats):
-    """Test with RDMA links that are all active and up."""
     links = [
         RdmaLink(
             ifindex=0,
@@ -207,7 +244,6 @@ def test_rdma_link_all_active(rdma_analyzer, clean_stats):
 
 
 def test_rdma_link_down_detected(rdma_analyzer, clean_stats):
-    """Test with RDMA links that are down"""
     links = [
         RdmaLink(
             ifindex=0,
@@ -230,12 +266,10 @@ def test_rdma_link_down_detected(rdma_analyzer, clean_stats):
     ]
     model = RdmaDataModel(statistic_list=clean_stats, link_list=links)
     result = rdma_analyzer.analyze_data(model)
-    # Current implementation only checks statistics, not link state
     assert result.status == ExecutionStatus.OK
 
 
 def test_rdma_link_empty_list(rdma_analyzer, clean_stats):
-    """Test with empty RDMA link list."""
     model = RdmaDataModel(statistic_list=clean_stats, link_list=[])
     result = rdma_analyzer.analyze_data(model)
     assert result.status == ExecutionStatus.OK
@@ -243,7 +277,6 @@ def test_rdma_link_empty_list(rdma_analyzer, clean_stats):
 
 
 def test_rdma_link_multiple_interfaces(rdma_analyzer, clean_stats):
-    """Test with multiple RDMA interfaces with different link states."""
     links = [
         RdmaLink(
             ifindex=0,
