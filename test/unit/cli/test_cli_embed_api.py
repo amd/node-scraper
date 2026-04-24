@@ -24,24 +24,40 @@
 #
 ###############################################################################
 
-from .cli import get_cli_top_level_subcommands
-from .cli import main as cli_entry
-from .embed import CLI_TOP_LEVEL_SUBCOMMANDS, run_cli_return_code, run_main_return_code
-from .invocation import (
-    PluginRunInvocation,
-    get_plugin_run_invocation,
-    plugin_run_invocation_scope,
-    run_plugin_queue_with_invocation,
+from __future__ import annotations
+
+import pytest
+
+from nodescraper.cli.cli import get_cli_top_level_subcommands
+from nodescraper.cli.embed import (
+    CLI_TOP_LEVEL_SUBCOMMANDS,
+    run_cli_return_code,
+    run_main_return_code,
 )
 
-__all__ = [
-    "CLI_TOP_LEVEL_SUBCOMMANDS",
-    "cli_entry",
-    "get_cli_top_level_subcommands",
-    "run_cli_return_code",
-    "run_main_return_code",
-    "PluginRunInvocation",
-    "get_plugin_run_invocation",
-    "plugin_run_invocation_scope",
-    "run_plugin_queue_with_invocation",
-]
+
+def test_get_cli_top_level_subcommands_matches_argparse_subparsers() -> None:
+    subs = get_cli_top_level_subcommands()
+    assert isinstance(subs, tuple)
+    assert "run-plugins" in subs
+    assert "summary" in subs
+    assert all(isinstance(s, str) for s in subs)
+
+
+def test_cli_top_level_subcommands_lazy_alias_matches_getter() -> None:
+    assert CLI_TOP_LEVEL_SUBCOMMANDS == get_cli_top_level_subcommands()
+
+
+def test_run_cli_return_code_and_run_main_return_code_delegate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[list[str]] = []
+
+    def fake_main(arg_input: list[str], *, host_cli_args=None) -> None:
+        calls.append(list(arg_input))
+        raise SystemExit(7)
+
+    monkeypatch.setattr("nodescraper.cli.cli.main", fake_main)
+    assert run_cli_return_code(["describe", "plugin", "X"]) == 7
+    assert run_main_return_code(["a", "b"]) == 7
+    assert calls == [["describe", "plugin", "X"], ["a", "b"]]

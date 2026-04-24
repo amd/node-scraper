@@ -95,9 +95,7 @@ def invalid_plugin_config(tmp_path):
 def test_plugin_config_with_builtin_config(run_cli_command, tmp_path):
     """Test using a built-in config name."""
     log_path = str(tmp_path / "logs_builtin")
-    result = run_cli_command(
-        ["--log-path", log_path, "--plugin-configs", "NodeStatus"], check=False
-    )
+    result = run_cli_command(["--log-path", log_path, "--plugin-configs=NodeStatus"], check=False)
 
     assert result.returncode in [0, 1, 2]
     output = result.stdout + result.stderr
@@ -139,7 +137,7 @@ def test_individual_plugin_with_config_file(
 
     log_path = str(tmp_path / f"logs_{plugin_name.lower()}")
     result = run_cli_command(
-        ["--log-path", log_path, "--plugin-configs", str(config_file)], check=False
+        ["--log-path", log_path, f"--plugin-configs={config_file}"], check=False
     )
 
     assert result.returncode in [0, 1, 2]
@@ -153,7 +151,7 @@ def test_plugin_config_with_custom_json_file(run_cli_command, sample_plugin_conf
     """Test using a custom JSON config file path."""
     log_path = str(tmp_path / "logs_custom")
     result = run_cli_command(
-        ["--log-path", log_path, "--plugin-configs", sample_plugin_config], check=False
+        ["--log-path", log_path, f"--plugin-configs={sample_plugin_config}"], check=False
     )
 
     assert result.returncode in [0, 1, 2]
@@ -168,13 +166,7 @@ def test_plugin_config_with_multiple_configs(run_cli_command, plugin_config_file
     os_config = str(plugin_config_files["OsPlugin"])
 
     result = run_cli_command(
-        [
-            "--log-path",
-            log_path,
-            "--plugin-configs",
-            bios_config,
-            os_config,
-        ],
+        ["--log-path", log_path, f"--plugin-configs={bios_config},{os_config}"],
         check=False,
     )
 
@@ -186,7 +178,7 @@ def test_plugin_config_with_multiple_configs(run_cli_command, plugin_config_file
 def test_plugin_config_with_nonexistent_file(run_cli_command, tmp_path):
     """Test that a nonexistent config file path fails gracefully."""
     nonexistent_path = str(tmp_path / "nonexistent_config.json")
-    result = run_cli_command(["--plugin-configs", nonexistent_path], check=False)
+    result = run_cli_command([f"--plugin-configs={nonexistent_path}"], check=False)
 
     assert result.returncode != 0
     output = (result.stdout + result.stderr).lower()
@@ -195,7 +187,7 @@ def test_plugin_config_with_nonexistent_file(run_cli_command, tmp_path):
 
 def test_plugin_config_with_invalid_builtin_name(run_cli_command):
     """Test that an invalid built-in config name fails gracefully."""
-    result = run_cli_command(["--plugin-configs", "NonExistentConfig"], check=False)
+    result = run_cli_command(["--plugin-configs=NonExistentConfig"], check=False)
 
     assert result.returncode != 0
     output = (result.stdout + result.stderr).lower()
@@ -204,7 +196,7 @@ def test_plugin_config_with_invalid_builtin_name(run_cli_command):
 
 def test_plugin_config_with_invalid_json(run_cli_command, invalid_plugin_config):
     """Test that an invalid JSON file fails gracefully."""
-    result = run_cli_command(["--plugin-configs", invalid_plugin_config], check=False)
+    result = run_cli_command([f"--plugin-configs={invalid_plugin_config}"], check=False)
 
     assert result.returncode != 0
     output = (result.stdout + result.stderr).lower()
@@ -212,9 +204,9 @@ def test_plugin_config_with_invalid_json(run_cli_command, invalid_plugin_config)
 
 
 def test_plugin_config_empty_list(run_cli_command, tmp_path):
-    """Test --plugin-configs with no arguments (uses default config)."""
+    """Test omitting --plugin-configs (uses default config)."""
     log_path = str(tmp_path / "logs_empty")
-    result = run_cli_command(["--log-path", log_path, "--plugin-configs"], check=False)
+    result = run_cli_command(["--log-path", log_path], check=False)
 
     assert result.returncode in [0, 1, 2]
     output = result.stdout + result.stderr
@@ -234,8 +226,7 @@ def test_plugin_config_with_system_interaction_level(
             log_path,
             "--sys-interaction-level",
             "PASSIVE",
-            "--plugin-configs",
-            config_file,
+            f"--plugin-configs={config_file}",
         ],
         check=False,
     )
@@ -254,8 +245,7 @@ def test_plugin_config_combined_with_run_plugins(run_cli_command, plugin_config_
         [
             "--log-path",
             log_path,
-            "--plugin-configs",
-            config_file,
+            f"--plugin-configs={config_file}",
             "run-plugins",
             "UptimePlugin",
         ],
@@ -272,7 +262,9 @@ def test_plugin_config_verify_log_output(run_cli_command, plugin_config_files, t
     log_path = str(tmp_path / "logs_verify")
     config_file = str(plugin_config_files["OsPlugin"])
 
-    result = run_cli_command(["--log-path", log_path, "--plugin-configs", config_file], check=False)
+    result = run_cli_command(
+        ["--log-path", log_path, f"--plugin-configs={config_file}"], check=False
+    )
 
     log_dirs = [d for d in os.listdir(tmp_path) if d.startswith("logs_verify")]
     if result.returncode in [0, 1]:
@@ -304,7 +296,7 @@ def test_dmesg_plugin_log_dmesg_data_false(run_cli_command, tmp_path):
 
     log_path = str(tmp_path / "logs_dmesg_no_log")
     result = run_cli_command(
-        ["--log-path", log_path, "--plugin-configs", str(config_file)], check=False
+        ["--log-path", log_path, f"--plugin-configs={config_file}"], check=False
     )
 
     assert result.returncode in [0, 1, 2]
@@ -331,7 +323,7 @@ def test_dmesg_plugin_log_dmesg_data_true(run_cli_command, tmp_path):
 
     log_path = str(tmp_path / "logs_dmesg_with_log")
     result = run_cli_command(
-        ["--log-path", log_path, "--plugin-configs", str(config_file)], check=False
+        ["--log-path", log_path, f"--plugin-configs={config_file}"], check=False
     )
 
     if result.returncode in [0, 1]:
@@ -388,7 +380,7 @@ kern  :err   : 2026-01-07T10:00:15,000000-06:00 CUSTOM_APP_CRASH: Application AB
 
     log_path = str(tmp_path / "logs_custom_regex")
     result = run_cli_command(
-        ["--log-path", log_path, "--plugin-configs", str(config_file)], check=False
+        ["--log-path", log_path, f"--plugin-configs={config_file}"], check=False
     )
 
     # Check that command ran successfully
@@ -448,7 +440,7 @@ kern  :err   : 2026-01-07T10:10:00,000000-06:00 oom_kill_process
 
     log_path = str(tmp_path / "logs_collapse")
     result = run_cli_command(
-        ["--log-path", log_path, "--plugin-configs", str(config_file)], check=False
+        ["--log-path", log_path, f"--plugin-configs={config_file}"], check=False
     )
 
     assert result.returncode in [0, 1, 2]
@@ -521,7 +513,7 @@ kern  :err   : 2026-01-07T10:02:05,000000-06:00 oom_kill_process
 
     log_path = str(tmp_path / "logs_custom_collapse")
     result = run_cli_command(
-        ["--log-path", log_path, "--plugin-configs", str(config_file)], check=False
+        ["--log-path", log_path, f"--plugin-configs={config_file}"], check=False
     )
 
     assert result.returncode in [0, 1, 2]
@@ -579,7 +571,7 @@ kern  :err   : 2026-01-07T10:00:30,000000-06:00 IO_PAGE_FAULT
 
     log_path_small = str(tmp_path / "logs_small_interval")
     result = run_cli_command(
-        ["--log-path", log_path_small, "--plugin-configs", str(config_file_small)], check=False
+        ["--log-path", log_path_small, f"--plugin-configs={config_file_small}"], check=False
     )
 
     assert result.returncode in [0, 1, 2]

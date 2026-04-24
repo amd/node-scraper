@@ -155,7 +155,7 @@ def test_use_generated_reference_config(run_cli_command, tmp_path):
     assert reference_config_path.exists()
 
     use_result = run_cli_command(
-        ["--log-path", use_log_path, "--plugin-configs", str(reference_config_path)],
+        ["--log-path", use_log_path, f"--plugin-configs={reference_config_path}"],
         check=False,
     )
 
@@ -209,7 +209,7 @@ def test_full_workflow_all_plugins(run_cli_command, tmp_path, all_plugin_names):
                 assert isinstance(plugin_config["analysis_args"], dict)
 
     use_result = run_cli_command(
-        ["--log-path", use_log_path, "--plugin-configs", str(reference_config_path)],
+        ["--log-path", use_log_path, f"--plugin-configs={reference_config_path}"],
         check=False,
     )
 

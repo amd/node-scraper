@@ -109,7 +109,7 @@ def test_run_plugins_empty_config_no_stdout(no_console_base, tmp_path):
         encoding="utf-8",
     )
     _assert_main_leaves_stdout_empty(
-        no_console_base + ["run-plugins", "--plugin-configs", str(cfg)],
+        no_console_base + ["run-plugins", f"--plugin-configs={cfg}"],
     )
 
 
