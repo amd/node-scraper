@@ -48,7 +48,7 @@ def test_fabrics_plugin_with_basic_config(run_cli_command, fabrics_config_file, 
 
     log_path = str(tmp_path / "logs_fabrics_basic")
     result = run_cli_command(
-        ["--log-path", log_path, "--plugin-configs", str(fabrics_config_file)], check=False
+        ["--log-path", log_path, f"--plugin-configs={fabrics_config_file}"], check=False
     )
 
     assert result.returncode in [0, 1, 2]
@@ -76,8 +76,7 @@ def test_fabrics_plugin_with_passive_interaction(run_cli_command, fabrics_config
             log_path,
             "--sys-interaction-level",
             "PASSIVE",
-            "--plugin-configs",
-            str(fabrics_config_file),
+            f"--plugin-configs={fabrics_config_file}",
         ],
         check=False,
     )
@@ -95,8 +94,7 @@ def test_fabrics_plugin_skip_sudo(run_cli_command, fabrics_config_file, tmp_path
             "--log-path",
             log_path,
             "--skip-sudo",
-            "--plugin-configs",
-            str(fabrics_config_file),
+            f"--plugin-configs={fabrics_config_file}",
         ],
         check=False,
     )

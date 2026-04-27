@@ -60,8 +60,7 @@ def test_nic_plugin_with_full_analyzer_args_config(
         [
             "--log-path",
             log_path,
-            "--plugin-configs",
-            str(nic_plugin_config_full_analyzer_args),
+            f"--plugin-configs={nic_plugin_config_full_analyzer_args}",
         ],
         check=False,
     )
@@ -82,7 +81,7 @@ def test_nic_plugin_with_minimal_config(run_cli_command, nic_plugin_config_minim
 
     log_path = str(tmp_path / "logs_nic_minimal")
     result = run_cli_command(
-        ["--log-path", log_path, "--plugin-configs", str(nic_plugin_config_minimal)],
+        ["--log-path", log_path, f"--plugin-configs={nic_plugin_config_minimal}"],
         check=False,
     )
 
@@ -122,8 +121,7 @@ def test_nic_plugin_full_config_validates_analysis_args(
         [
             "--log-path",
             log_path,
-            "--plugin-configs",
-            str(nic_plugin_config_full_analyzer_args),
+            f"--plugin-configs={nic_plugin_config_full_analyzer_args}",
         ],
         check=False,
     )

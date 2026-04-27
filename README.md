@@ -78,7 +78,7 @@ usage: cli.py [-h] [--version] [--sys-name STRING]
               [--sys-location {LOCAL,REMOTE}]
               [--sys-interaction-level {PASSIVE,INTERACTIVE,DISRUPTIVE}]
               [--sys-sku STRING] [--sys-platform STRING]
-              [--plugin-configs [STRING ...]] [--system-config STRING]
+              [--plugin-configs LIST] [--system-config STRING]
               [--connection-config STRING] [--log-path STRING]
               [--log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}]
               [--no-console-log] [--gen-reference-config] [--skip-sudo]
@@ -112,10 +112,11 @@ options:
   --sys-sku STRING      Manually specify SKU of system (default: None)
   --sys-platform STRING
                         Specify system platform (default: None)
-  --plugin-configs [STRING ...]
-                        built-in config names or paths to plugin config JSONs.
-                        Available built-in configs: NodeStatus, AllPlugins
-                        (default: None)
+  --plugin-configs LIST
+                        Comma-separated built-in names and/or plugin config
+                        JSON paths (e.g. --plugin-
+                        configs=NodeStatus,/path/c.json). Built-ins:
+                        NodeStatus, AllPlugins (default: None)
   --system-config STRING
                         Path to system config json (default: None)
   --connection-config STRING
@@ -358,7 +359,7 @@ You can extend the built-in error detection with custom regex patterns. Create a
 Save this to `dmesg_custom_config.json` and run:
 
 ```sh
-node-scraper --plugin-configs dmesg_custom_config.json run-plugins DmesgPlugin
+node-scraper --plugin-configs=dmesg_custom_config.json run-plugins DmesgPlugin
 ```
 
 #### **'compare-runs' subcommand**
@@ -549,8 +550,9 @@ Built-in configs include **NodeStatus** (a subset of plugins) and **AllPlugins**
 registered plugin with default arguments—useful for generating a reference config from the full system).
 
 **NodeStatus plus additional plugins** — built-in configs merge with plugins named after `run-plugins`.
-Use **`--plugin-configs=<name>`** (equals form): with a space
-after `--plugin-configs`. See below for examples:
+Values are comma-separated; pass as **`--plugin-configs=…`** or **`--plugin-configs` …** (same as other
+optional flags), e.g. `--plugin-configs=NodeStatus,/path/extra.json`.
+Examples:
 ```sh
 node-scraper --plugin-configs=NodeStatus run-plugins PciePlugin
 ```
@@ -561,7 +563,7 @@ node-scraper --log-path ./logs --plugin-configs=NodeStatus run-plugins PciePlugi
 
 Using a JSON file:
 ```sh
-node-scraper --plugin-configs plugin_config.json
+node-scraper --plugin-configs=plugin_config.json
 ```
 Here is an example of a comprehensive plugin config that specifies analyzer args for each plugin:
 ```json
@@ -623,7 +625,7 @@ data.
 
 **Run all registered plugins (AllPlugins config):**
 ```sh
-node-scraper --plugin-config AllPlugins
+node-scraper --plugin-configs=AllPlugins
 
 ```
 
@@ -657,7 +659,7 @@ This will generate the following config:
 ```
 This config can later be used on a different platform for comparison, using the steps at #2:
 ```sh
-node-scraper --plugin-configs reference_config.json
+node-scraper --plugin-configs=reference_config.json
 
 ```
 
