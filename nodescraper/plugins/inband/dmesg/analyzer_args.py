@@ -52,3 +52,13 @@ class DmesgAnalyzerArgs(TimeRangeAnalysisArgs):
         default=None,
         description="Custom error regex patterns; each item can be ErrorRegex or dict with category/pattern.",
     )
+    priority_override_rules: Optional[list[dict]] = Field(
+        default=None,
+        description=(
+            "Rules to override the priority of matched ErrorRegex objects. "
+            "Each rule is a dict where all keys except 'new_priority' and 'match_all' "
+            "are filter fields matched against ErrorRegex attributes. "
+            "'new_priority' must be an EventPriority name (e.g. 'WARNING', 'ERROR') "
+            "or 'NO_CHANGE' to leave the priority unchanged."
+        ),
+    )

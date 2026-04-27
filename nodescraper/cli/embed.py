@@ -24,24 +24,63 @@
 #
 ###############################################################################
 
-from .cli import get_cli_top_level_subcommands
-from .cli import main as cli_entry
-from .embed import CLI_TOP_LEVEL_SUBCOMMANDS, run_cli_return_code, run_main_return_code
-from .invocation import (
-    PluginRunInvocation,
-    get_plugin_run_invocation,
-    plugin_run_invocation_scope,
-    run_plugin_queue_with_invocation,
-)
+from __future__ import annotations
+
+import argparse
+from typing import Optional
+
+from nodescraper.cli.cli import get_cli_top_level_subcommands
+
+CLI_TOP_LEVEL_SUBCOMMANDS = get_cli_top_level_subcommands()
 
 __all__ = [
     "CLI_TOP_LEVEL_SUBCOMMANDS",
-    "cli_entry",
     "get_cli_top_level_subcommands",
     "run_cli_return_code",
     "run_main_return_code",
-    "PluginRunInvocation",
-    "get_plugin_run_invocation",
-    "plugin_run_invocation_scope",
-    "run_plugin_queue_with_invocation",
 ]
+
+
+def run_cli_return_code(
+    argv: list[str],
+    *,
+    host_cli_args: Optional[argparse.Namespace] = None,
+) -> int:
+    """Run nodescraper in-process; same behavior as :func:`run_main_return_code`.
+
+    Args:
+        argv: Tokens after the program name.
+        host_cli_args: Optional host namespace forwarded to :func:`nodescraper.cli.cli.main`.
+
+    Returns:
+        Integer exit code (``SystemExit`` is mapped, not raised).
+    """
+    return run_main_return_code(argv, host_cli_args=host_cli_args)
+
+
+def run_main_return_code(
+    arg_input: list[str],
+    *,
+    host_cli_args: Optional[argparse.Namespace] = None,
+) -> int:
+    """Run :func:`nodescraper.cli.cli.main` and map ``SystemExit`` to an exit code.
+
+    Args:
+        arg_input: Tokens after the program name.
+        host_cli_args: Optional host namespace for embedded runs.
+
+    Returns:
+        Integer exit code.
+    """
+    from nodescraper.cli.cli import main
+
+    try:
+        main(arg_input, host_cli_args=host_cli_args)
+    except SystemExit as exc:
+        code = exc.code
+        if code is None:
+            return 0
+        if isinstance(code, int):
+            return code
+        return 1
+    return 0

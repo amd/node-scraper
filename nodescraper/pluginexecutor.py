@@ -26,6 +26,7 @@
 from __future__ import annotations
 
 import copy
+import inspect
 import logging
 from collections import deque
 from typing import Optional, Type, Union
@@ -92,8 +93,10 @@ class PluginExecutor:
                 )
 
         self.logger.info("System Name: %s", self.system_info.name)
-        self.logger.info("System SKU: %s", self.system_info.sku)
-        self.logger.info("System Platform: %s", self.system_info.platform)
+        if self.system_info.sku:
+            self.logger.info("System SKU: %s", self.system_info.sku)
+        if self.system_info.platform:
+            self.logger.info("System Platform: %s", self.system_info.platform)
         self.logger.info("System location: %s", self.system_info.location)
 
     @staticmethod
@@ -160,30 +163,38 @@ class PluginExecutor:
                     connection_manager_class: Type[ConnectionManager] = plugin_class.CONNECTION_TYPE
                     if (
                         connection_manager_class.__name__
-                        not in self.plugin_registry.connection_managers
+                        in self.plugin_registry.connection_managers
                     ):
+                        mgr_impl = self.plugin_registry.connection_managers[
+                            connection_manager_class.__name__
+                        ]
+                    elif (
+                        inspect.isclass(connection_manager_class)
+                        and issubclass(connection_manager_class, ConnectionManager)
+                        and not inspect.isabstract(connection_manager_class)
+                    ):
+                        # External packages set CONNECTION_TYPE on the plugin;
+                        # use it when not listed under nodescraper.connection_managers entry points.
+                        mgr_impl = connection_manager_class
+                    else:
                         self.logger.error(
                             "Unable to find registered connection manager class for %s that is required by",
                             connection_manager_class.__name__,
                         )
                         continue
 
-                    if connection_manager_class not in self.connection_library:
+                    if mgr_impl not in self.connection_library:
                         self.logger.info(
                             "Initializing connection manager for %s with default args",
-                            connection_manager_class.__name__,
+                            mgr_impl.__name__,
                         )
-                        self.connection_library[connection_manager_class] = (
-                            connection_manager_class(
-                                system_info=self.system_info,
-                                logger=self.logger,
-                                task_result_hooks=self.connection_result_hooks,
-                            )
+                        self.connection_library[mgr_impl] = mgr_impl(
+                            system_info=self.system_info,
+                            logger=self.logger,
+                            task_result_hooks=self.connection_result_hooks,
                         )
 
-                    init_payload["connection_manager"] = self.connection_library[
-                        connection_manager_class
-                    ]
+                    init_payload["connection_manager"] = self.connection_library[mgr_impl]
 
                 try:
                     plugin_inst = plugin_class(**init_payload)

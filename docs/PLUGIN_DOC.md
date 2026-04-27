@@ -4,7 +4,7 @@
 
 | Plugin | Collection | Analyzer Args | Collection Args | DataModel | Collector | Analyzer |
 | --- | --- | --- | --- | --- | --- | --- |
-| AmdSmiPlugin | bad-pages<br>firmware --json<br>list --json<br>metric -g all<br>partition --json<br>process --json<br>ras --cper --folder={folder}<br>ras --afid --cper-file {cper_file}<br>static -g all --json<br>static -g {gpu_id} --json<br>topology<br>version --json<br>xgmi -l<br>xgmi -m | **Analyzer Args:**<br>- `check_static_data`: bool — If True, run static data checks (e.g. driver version, partition mode).<br>- `expected_gpu_processes`: Optional[int] — Expected number of GPU processes.<br>- `expected_max_power`: Optional[int] — Expected maximum power value (e.g. watts).<br>- `expected_driver_version`: Optional[str] — Expected AMD driver version string.<br>- `expected_memory_partition_mode`: Optional[str] — Expected memory partition mode (e.g. sp3, dp).<br>- `expected_compute_partition_mode`: Optional[str] — Expected compute partition mode.<br>- `expected_firmware_versions`: Optional[dict[str, str]] — Expected firmware versions keyed by amd-smi fw_id (e.g. PLDM_BUNDLE).<br>- `l0_to_recovery_count_error_threshold`: Optional[int] — L0-to-recovery count above which an error is raised.<br>- `l0_to_recovery_count_warning_threshold`: Optional[int] — L0-to-recovery count above which a warning is raised.<br>- `vendorid_ep`: Optional[str] — Expected endpoint vendor ID (e.g. for PCIe).<br>- `vendorid_ep_vf`: Optional[str] — Expected endpoint VF vendor ID.<br>- `devid_ep`: Optional[str] — Expected endpoint device ID.<br>- `devid_ep_vf`: Optional[str] — Expected endpoint VF device ID.<br>- `sku_name`: Optional[str] — Expected SKU name string for GPU.<br>- `expected_xgmi_speed`: Optional[list[float]] — Expected xGMI speed value(s) (e.g. link rate).<br>- `analysis_range_start`: Optional[datetime.datetime] — Start of time range for time-windowed analysis.<br>- `analysis_range_end`: Optional[datetime.datetime] — End of time range for time-windowed analysis. | **Collection Args:**<br>- `cper_file_path`: Optional[str] — Path to CPER folder or file for RAS AFID collection (ras --afid --cper-file). | [AmdSmiDataModel](#AmdSmiDataModel-Model) | [AmdSmiCollector](#Collector-Class-AmdSmiCollector) | [AmdSmiAnalyzer](#Data-Analyzer-Class-AmdSmiAnalyzer) |
+| AmdSmiPlugin | bad-pages<br>firmware --json<br>list --json<br>metric -g all<br>partition --json<br>process --json<br>ras --cper --folder={folder}<br>ras --afid --cper-file {cper_file}<br>static -g all --json<br>static -g {gpu_id} --json<br>topology<br>version --json<br>xgmi -l<br>xgmi -m | **Analyzer Args:**<br>- `check_static_data`: bool — If True, run static data checks (e.g. driver version, partition mode).<br>- `expected_gpu_processes`: Optional[int] — Expected number of GPU processes.<br>- `expected_max_power`: Optional[int] — Expected maximum power value (e.g. watts).<br>- `expected_driver_version`: Optional[str] — Expected AMD driver version string.<br>- `expected_memory_partition_mode`: Optional[str] — Expected memory partition mode (e.g. sp3, dp).<br>- `expected_compute_partition_mode`: Optional[str] — Expected compute partition mode.<br>- `expected_firmware_versions`: Optional[dict[str, str]] — Expected firmware versions keyed by amd-smi fw_id (e.g. PLDM_BUNDLE).<br>- `l0_to_recovery_count_error_threshold`: Optional[int] — L0-to-recovery count above which an error is raised.<br>- `l0_to_recovery_count_warning_threshold`: Optional[int] — L0-to-recovery count above which a warning is raised.<br>- `vendorid_ep`: Optional[str] — Expected endpoint vendor ID (e.g. for PCIe).<br>- `vendorid_ep_vf`: Optional[str] — Expected endpoint VF vendor ID.<br>- `devid_ep`: Optional[str] — Expected endpoint device ID.<br>- `devid_ep_vf`: Optional[str] — Expected endpoint VF device ID.<br>- `sku_name`: Optional[str] — Expected SKU name string for GPU.<br>- `expected_xgmi_speed`: Optional[list[float]] — Expected xGMI speed value(s) (e.g. link rate).<br>- `analysis_range_start`: Optional[datetime.datetime] — Start of time range for time-windowed analysis.<br>- `analysis_range_end`: Optional[datetime.datetime] — End of time range for time-windowed analysis. | **Collection Args:**<br>- `analysis_firmware_ids`: Optional[list[str]] — amd-smi fw_id values to record in analysis_ref.firmware_versions<br>- `cper_file_path`: Optional[str] — Path to CPER folder or file for RAS AFID collection (ras --afid --cper-file). | [AmdSmiDataModel](#AmdSmiDataModel-Model) | [AmdSmiCollector](#Collector-Class-AmdSmiCollector) | [AmdSmiAnalyzer](#Data-Analyzer-Class-AmdSmiAnalyzer) |
 | BiosPlugin | sh -c 'cat /sys/devices/virtual/dmi/id/bios_version'<br>wmic bios get SMBIOSBIOSVersion /Value | **Analyzer Args:**<br>- `exp_bios_version`: list[str] — Expected BIOS version(s) to match against collected value (str or list).<br>- `regex_match`: bool — If True, match exp_bios_version as regex; otherwise exact match. | - | [BiosDataModel](#BiosDataModel-Model) | [BiosCollector](#Collector-Class-BiosCollector) | [BiosAnalyzer](#Data-Analyzer-Class-BiosAnalyzer) |
 | CmdlinePlugin | cat /proc/cmdline | **Analyzer Args:**<br>- `required_cmdline`: Union[str, List] — Command-line parameters that must be present (e.g. 'pci=bfsort').<br>- `banned_cmdline`: Union[str, List] — Command-line parameters that must not be present.<br>- `os_overrides`: Dict[str, nodescraper.plugins.inband.cmdline.cmdlineconfig.OverrideConfig] — Per-OS overrides for required_cmdline and banned_cmdline (keyed by OS identifier).<br>- `platform_overrides`: Dict[str, nodescraper.plugins.inband.cmdline.cmdlineconfig.OverrideConfig] — Per-platform overrides for required_cmdline and banned_cmdline (keyed by platform). | - | [CmdlineDataModel](#CmdlineDataModel-Model) | [CmdlineCollector](#Collector-Class-CmdlineCollector) | [CmdlineAnalyzer](#Data-Analyzer-Class-CmdlineAnalyzer) |
 | DeviceEnumerationPlugin | powershell -Command "(Get-WmiObject -Class Win32_Processor &#124; Measure-Object).Count"<br>lspci -d {vendorid_ep}: &#124; grep -i 'VGA\&#124;Display\&#124;3D' &#124; wc -l<br>powershell -Command "(wmic path win32_VideoController get name &#124; findstr AMD &#124; Measure-Object).Count"<br>lscpu<br>lshw<br>lspci -d {vendorid_ep}: &#124; grep -i 'Virtual Function' &#124; wc -l<br>powershell -Command "(Get-VMHostPartitionableGpu &#124; Measure-Object).Count" | **Analyzer Args:**<br>- `cpu_count`: Optional[list[int]] — Expected CPU count(s); pass as int or list of ints. Analysis passes if actual is in list.<br>- `gpu_count`: Optional[list[int]] — Expected GPU count(s); pass as int or list of ints. Analysis passes if actual is in list.<br>- `vf_count`: Optional[list[int]] — Expected virtual function count(s); pass as int or list of ints. Analysis passes if actual is in list. | - | [DeviceEnumerationDataModel](#DeviceEnumerationDataModel-Model) | [DeviceEnumerationCollector](#Collector-Class-DeviceEnumerationCollector) | [DeviceEnumerationAnalyzer](#Data-Analyzer-Class-DeviceEnumerationAnalyzer) |
@@ -970,6 +970,8 @@ Data model for amd-smi data.
 - **xgmi_link**: `Optional[list[nodescraper.plugins.inband.amdsmi.amdsmidata.XgmiLinks]]`
 - **cper_data**: `Optional[list[nodescraper.models.datamodel.FileModel]]`
 - **cper_afids**: `dict[str, int]`
+- **analysis_firmware_ids**: `Optional[list[str]]`
+- **analysis_ref**: `Optional[nodescraper.plugins.inband.amdsmi.amdsmidata.AmdSmiAnalysisRef]`
 
 ## BiosDataModel Model
 
@@ -1690,98 +1692,6 @@ Check RDMA statistics for errors (RoCE and other RDMA error counters).
 **Bases**: ['DataAnalyzer']
 
 **Link to code**: [rdma_analyzer.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/rdma/rdma_analyzer.py)
-
-### Class Variables
-
-- **ERROR_FIELDS**: `[
-  recoverable_errors,
-  tx_roce_errors,
-  tx_roce_discards,
-  rx_roce_errors,
-  rx_roce_discards,
-  local_ack_timeout_err,
-  packet_seq_err,
-  max_retry_exceeded,
-  rnr_nak_retry_err,
-  implied_nak_seq_err,
-  unrecoverable_err,
-  bad_resp_err,
-  local_qp_op_err,
-  local_protection_err,
-  mem_mgmt_op_err,
-  req_remote_invalid_request,
-  req_remote_access_errors,
-  remote_op_err,
-  duplicate_request,
-  res_exceed_max,
-  resp_local_length_error,
-  res_exceeds_wqe,
-  res_opcode_err,
-  res_rx_invalid_rkey,
-  res_rx_domain_err,
-  res_rx_no_perm,
-  res_rx_range_err,
-  res_tx_invalid_rkey,
-  res_tx_domain_err,
-  res_tx_no_perm,
-  res_tx_range_err,
-  res_irrq_oflow,
-  res_unsup_opcode,
-  res_unaligned_atomic,
-  res_rem_inv_err,
-  res_mem_err,
-  res_srq_err,
-  res_cmp_err,
-  res_invalid_dup_rkey,
-  res_wqe_format_err,
-  res_cq_load_err,
-  res_srq_load_err,
-  res_tx_pci_err,
-  res_rx_pci_err,
-  out_of_buffer,
-  out_of_sequence,
-  req_cqe_error,
-  req_cqe_flush_error,
-  resp_cqe_error,
-  resp_cqe_flush_error,
-  resp_remote_access_errors,
-  req_rx_pkt_seq_err,
-  req_rx_rnr_retry_err,
-  req_rx_rmt_acc_err,
-  req_rx_rmt_req_err,
-  req_rx_oper_err,
-  req_rx_impl_nak_seq_err,
-  req_rx_cqe_err,
-  req_rx_cqe_flush,
-  req_rx_dup_response,
-  req_rx_inval_pkts,
-  req_tx_loc_acc_err,
-  req_tx_loc_oper_err,
-  req_tx_mem_mgmt_err,
-  req_tx_retry_excd_err,
-  req_tx_loc_sgl_inv_err,
-  resp_rx_dup_request,
-  resp_rx_outof_buf,
-  resp_rx_outouf_seq,
-  resp_rx_cqe_err,
-  resp_rx_cqe_flush,
-  resp_rx_loc_len_err,
-  resp_rx_inval_request,
-  resp_rx_loc_oper_err,
-  resp_rx_outof_atomic,
-  resp_tx_pkt_seq_err,
-  resp_tx_rmt_inval_req_err,
-  resp_tx_rmt_acc_err,
-  resp_tx_rmt_oper_err,
-  resp_tx_rnr_retry_err,
-  resp_tx_loc_sgl_inv_err,
-  resp_rx_s0_table_err,
-  resp_rx_ccl_cts_outouf_seq,
-  tx_rdma_ack_timeout,
-  tx_rdma_ccl_cts_ack_timeout,
-  rx_rdma_mtu_discard_pkts
-]`
-- **CRITICAL_ERROR_FIELDS**: `['unrecoverable_err', 'res_tx_pci_err', 'res_rx_pci_err', 'res_mem_err']`
 
 ## Data Analyzer Class RocmAnalyzer
 

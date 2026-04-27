@@ -26,6 +26,7 @@
 import abc
 import inspect
 import logging
+from enum import Enum
 from functools import wraps
 from typing import Callable, ClassVar, Generic, Optional, Type, Union
 
@@ -45,6 +46,21 @@ from nodescraper.utils import get_exception_traceback
 
 from .connectionmanager import TConnection
 from .taskresulthook import TaskResultHook
+
+
+def _supported_sku_name_set(supported: Optional[set[Union[str, Enum]]]) -> Optional[set[str]]:
+    """Map ``SUPPORTED_SKUS`` to string names for comparison with ``SystemInfo.sku``."""
+    if not supported:
+        return None
+    names: set[str] = set()
+    for item in supported:
+        if isinstance(item, Enum):
+            names.add(item.name)
+        elif isinstance(item, str):
+            names.add(item)
+        else:
+            names.add(str(item))
+    return names
 
 
 def collect_decorator(
@@ -111,8 +127,8 @@ class DataCollector(Task, abc.ABC, Generic[TConnection, TDataModel, TCollectArg]
 
     DATA_MODEL: Type[TDataModel]
 
-    # A set of supported SKUs for this data collector
-    SUPPORTED_SKUS: ClassVar[Optional[set[str]]] = None
+    # A set of supported SKUs for this data collector (strings or enum members; enum uses .name)
+    SUPPORTED_SKUS: ClassVar[Optional[set[Union[str, Enum]]]] = None
 
     # A set of supported Platforms for this data collector,
     SUPPORTED_PLATFORMS: ClassVar[Optional[set[str]]] = None
@@ -153,7 +169,12 @@ class DataCollector(Task, abc.ABC, Generic[TConnection, TDataModel, TCollectArg]
         self.system_interaction_level = system_interaction_level
         self.connection = connection
 
-        if self.SUPPORTED_SKUS and self.system_info.sku not in self.SUPPORTED_SKUS:
+        allowed_skus = _supported_sku_name_set(self.SUPPORTED_SKUS)
+        if (
+            allowed_skus is not None
+            and self.system_info.sku is not None
+            and self.system_info.sku not in allowed_skus
+        ):
             raise SystemCompatibilityError(
                 f"{self.system_info.sku} SKU is not supported for this collector"
             )
