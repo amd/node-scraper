@@ -362,6 +362,33 @@ Save this to `dmesg_custom_config.json` and run:
 node-scraper --plugin-configs=dmesg_custom_config.json run-plugins DmesgPlugin
 ```
 
+### Regex helper and `RegexSearchPlugin`
+
+A small utility of common regex patterns is available at `nodescraper.regex_patterns` to
+help build analyzer-friendly `error_regex` dicts. This is useful when composing configs for
+`RegexSearchPlugin` or other analyzers that accept `error_regex` lists.
+
+Python example (programmatic usage):
+
+```py
+from nodescraper import regex_patterns
+from nodescraper.plugins.regex_search.regex_search_analyzer import RegexSearchAnalyzer
+from nodescraper.plugins.regex_search.regex_search_data import RegexSearchData
+
+# build error_regex list from named common patterns
+rules = regex_patterns.build_error_regex_dicts(["ipv4", "email"], message_template="Found {name}")
+
+# prepare data and args
+data = RegexSearchData(content="2026-05-01T12:00:00,000+00:00 connect from 192.0.2.1")
+args = {"error_regex": rules}
+
+analyzer = RegexSearchAnalyzer(system_info=None)
+result = analyzer.analyze_data(data, args)
+print(result.events)
+```
+
+CLI note: `RegexSearchPlugin` accepts `--data` pointing to a file or directory and `--error-regex` entries for patterns when invoked from the CLI or a plugin config JSON.
+
 #### **'compare-runs' subcommand**
 The `compare-runs` subcommand compares datamodels from two run log directories (e.g. two
 `nodescraper_log_*` folders). By default, all plugins with data in both runs are compared.
