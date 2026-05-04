@@ -29,7 +29,7 @@ import os
 import tarfile
 from typing import TypeVar, Union
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, field_validator
 
 from nodescraper.utils import get_unique_filename
 
@@ -37,7 +37,7 @@ TDataModel = TypeVar("TDataModel", bound="DataModel")
 
 
 class FileModel(BaseModel):
-    file_contents: bytes = Field(exclude=True)
+    file_contents: bytes
     file_name: str
 
     @field_validator("file_contents", mode="before")
