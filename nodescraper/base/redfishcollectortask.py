@@ -77,3 +77,25 @@ class RedfishDataCollector(
         if log_artifact:
             self.result.artifacts.append(res)
         return res
+
+    def _run_redfish_get_paged(
+        self,
+        path: str,
+        max_pages: int = 200,
+        log_artifact: bool = True,
+    ) -> RedfishGetResult:
+        """
+        Run a Redfish GET and follow Members@odata.nextLink pagination, merging all pages into a single response.
+
+        Args:
+            path (str): Redfish URI path.
+            max_pages (int, optional): safety cap on the number of pages to follow. Defaults to 200.
+            log_artifact (bool, optional): whether we should log the merged result. Defaults to True.
+
+        Returns:
+            RedfishGetResult: path, success, merged data (or error), status_code.
+        """
+        res = self.connection.run_get_paged(path, max_pages=max_pages)
+        if log_artifact:
+            self.result.artifacts.append(res)
+        return res

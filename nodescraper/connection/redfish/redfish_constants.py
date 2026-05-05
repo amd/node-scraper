@@ -23,36 +23,16 @@
 # SOFTWARE.
 #
 ###############################################################################
-from .redfish_connection import (
-    RedfishConnection,
-    RedfishConnectionError,
-    RedfishGetResult,
-)
-from .redfish_constants import (
-    RF_MEMBERS,
-    RF_MEMBERS_COUNT,
-    RF_MEMBERS_NEXT_LINK,
-    RF_ODATA_ID,
-)
-from .redfish_manager import RedfishConnectionManager
-from .redfish_oem_diag import (
-    collect_oem_diagnostic_data,
-    get_oem_diagnostic_allowable_values,
-)
-from .redfish_params import RedfishConnectionParams
-from .redfish_path import RedfishPath
+"""Redfish field name constants shared across the Redfish package(s)."""
 
-__all__ = [
-    "RedfishConnection",
-    "RedfishConnectionError",
-    "RedfishGetResult",
-    "RedfishConnectionManager",
-    "RedfishConnectionParams",
-    "RedfishPath",
-    "collect_oem_diagnostic_data",
-    "get_oem_diagnostic_allowable_values",
-    "RF_MEMBERS",
-    "RF_MEMBERS_COUNT",
-    "RF_MEMBERS_NEXT_LINK",
-    "RF_ODATA_ID",
-]
+# Key holding the list of member resources in a Redfish collection.
+RF_MEMBERS = "Members"
+
+# Key for the total member count of a Redfish collection.
+RF_MEMBERS_COUNT = "Members@odata.count"
+
+# Key indicating the next page of a paginated Redfish collection.
+RF_MEMBERS_NEXT_LINK = "Members@odata.nextLink"
+
+# Key holding the resource-link in every Redfish resource.
+RF_ODATA_ID = "@odata.id"

@@ -34,6 +34,7 @@ from pydantic import BaseModel
 from requests import Response
 from requests.auth import HTTPBasicAuth
 
+from .redfish_constants import RF_MEMBERS, RF_MEMBERS_COUNT, RF_MEMBERS_NEXT_LINK
 from .redfish_path import RedfishPath
 
 DEFAULT_REDFISH_API_ROOT = "redfish/v1"
@@ -182,6 +183,53 @@ class RedfishConnection:
                 error=str(e),
                 status_code=None,
             )
+
+    def run_get_paged(
+        self,
+        path: Union[str, RedfishPath],
+        max_pages: int = 200,
+    ) -> RedfishGetResult:
+        """Run a Redfish GET and transparently follow Members@odata.nextLink pagination.
+
+        Each subsequent page's Members list is appended to the first page's Members list
+        so the caller receives a single merged response body. The Members@odata.nextLink key
+        and Members@odata.count are updated to reflect the merged result. If there is no
+        Members@odata.nextLink in the first response this behaves identically to run_get.
+        max_pages is a safety cap on the number of pages to fetch (default 200).
+        """
+        first = self.run_get(path)
+        if not first.success or first.data is None:
+            return first
+
+        # Short-circuit when there is nothing to page through.
+        if RF_MEMBERS_NEXT_LINK not in first.data:
+            return first
+
+        merged_members: list = list(first.data.get(RF_MEMBERS) or [])
+        merged_data: dict = dict(first.data)
+        pages_fetched = 1
+        next_link: Optional[str] = first.data.get(RF_MEMBERS_NEXT_LINK)
+        last_status_code = first.status_code
+
+        while next_link and pages_fetched < max_pages:
+            page_result = self.run_get(next_link)
+            last_status_code = page_result.status_code
+            if not page_result.success or page_result.data is None:
+                break
+            merged_members.extend(page_result.data.get(RF_MEMBERS) or [])
+            next_link = page_result.data.get(RF_MEMBERS_NEXT_LINK)
+            pages_fetched += 1
+
+        merged_data[RF_MEMBERS] = merged_members
+        merged_data[RF_MEMBERS_COUNT] = len(merged_members)
+        merged_data.pop(RF_MEMBERS_NEXT_LINK, None)
+
+        return RedfishGetResult(
+            path=first.path,
+            success=True,
+            data=merged_data,
+            status_code=last_status_code,
+        )
 
     def copy(self) -> "RedfishConnection":
         """Return a new connection with the same config and its own session (for concurrent use)."""

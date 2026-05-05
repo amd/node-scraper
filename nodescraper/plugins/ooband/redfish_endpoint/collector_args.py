@@ -55,6 +55,16 @@ class RedfishEndpointCollectorArgs(BaseModel):
         le=32,
         description="Max concurrent GETs (1=sequential). Use >1 for async endpoint fetches.",
     )
+    follow_next_link: bool = Field(
+        default=False,
+        description="If True, follow Members@odata.nextLink pagination for each URI and merge all pages into a single response.",
+    )
+    max_pages: int = Field(
+        default=200,
+        ge=1,
+        le=10_000,  # Some arbitrary value - may need to be revisited
+        description="When follow_next_link is True: safety cap on the number of pages to follow per URI (default 200).",
+    )
 
     @field_validator("uris", mode="before")
     @classmethod

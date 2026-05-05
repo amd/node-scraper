@@ -29,15 +29,17 @@ from typing import Any, Optional
 from urllib.parse import urlparse
 
 from nodescraper.base import RedfishDataCollector
-from nodescraper.connection.redfish import RedfishConnection, RedfishGetResult
+from nodescraper.connection.redfish import (
+    RF_MEMBERS,
+    RF_ODATA_ID,
+    RedfishConnection,
+    RedfishGetResult,
+)
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
 from nodescraper.models import TaskResult
 
 from .collector_args import RedfishEndpointCollectorArgs
 from .endpoint_data import RedfishEndpointDataModel
-
-ODATA_ID = "@odata.id"
-MEMBERS = "Members"
 
 
 def _normalize_path(odata_id: str, api_root: str) -> str:
@@ -61,17 +63,17 @@ def _extract_odata_ids(obj: Any) -> list[str]:
     """Recursively extract all @odata.id values from a Redfish JSON body."""
     out: list[str] = []
     if isinstance(obj, dict):
-        if ODATA_ID in obj and isinstance(obj[ODATA_ID], str):
-            out.append(obj[ODATA_ID])
+        if RF_ODATA_ID in obj and isinstance(obj[RF_ODATA_ID], str):
+            out.append(obj[RF_ODATA_ID])
         for k, v in obj.items():
-            if k == MEMBERS and isinstance(v, list):
+            if k == RF_MEMBERS and isinstance(v, list):
                 for item in v:
                     if (
                         isinstance(item, dict)
-                        and ODATA_ID in item
-                        and isinstance(item[ODATA_ID], str)
+                        and RF_ODATA_ID in item
+                        and isinstance(item[RF_ODATA_ID], str)
                     ):
-                        out.append(item[ODATA_ID])
+                        out.append(item[RF_ODATA_ID])
             elif isinstance(v, dict):
                 out.extend(_extract_odata_ids(v))
             elif isinstance(v, list):
@@ -134,6 +136,13 @@ def _discover_tree_enabled(args: Optional[RedfishEndpointCollectorArgs]) -> bool
 def _fetch_one(connection_copy: RedfishConnection, path: str) -> RedfishGetResult:
     """Run a single GET on a connection copy (used from worker threads)."""
     return connection_copy.run_get(path)
+
+
+def _fetch_one_paged(
+    connection_copy: RedfishConnection, path: str, max_pages: int
+) -> RedfishGetResult:
+    """Run a paged GET on a connection copy, following Members@odata.nextLink (used from worker threads)."""
+    return connection_copy.run_get_paged(path, max_pages=max_pages)
 
 
 class RedfishEndpointCollector(
@@ -199,12 +208,17 @@ class RedfishEndpointCollector(
 
         max_workers = getattr(args, "max_workers", 1) if args else 1
         max_workers = min(max_workers, len(paths))
+        follow_next_link = getattr(args, "follow_next_link", False) is True
+        max_pages = getattr(args, "max_pages", 200) if args else 200
 
         if max_workers <= 1:
             # Sequential
             responses = {}
             for path in paths:
-                res = self._run_redfish_get(path, log_artifact=True)
+                if follow_next_link:
+                    res = self._run_redfish_get_paged(path, max_pages=max_pages, log_artifact=True)
+                else:
+                    res = self._run_redfish_get(path, log_artifact=True)
                 if res.success and res.data is not None:
                     responses[res.path] = res.data
                 else:
@@ -222,7 +236,10 @@ class RedfishEndpointCollector(
                 futures = {}
                 for path in paths:
                     conn = self.connection.copy()
-                    futures[executor.submit(_fetch_one, conn, path)] = path
+                    if follow_next_link:
+                        futures[executor.submit(_fetch_one_paged, conn, path, max_pages)] = path
+                    else:
+                        futures[executor.submit(_fetch_one, conn, path)] = path
                 for future in as_completed(futures):
                     path = futures[future]
                     try:
