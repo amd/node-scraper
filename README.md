@@ -491,7 +491,12 @@ The RedfishEndpointPlugin collects Redfish URIs (GET responses) and optionally r
 }
 ```
 
+**`collection_args`**
 - **`uris`**: List of Redfish paths (e.g. `/redfish/v1/`, `/redfish/v1/Systems/1`) to GET and store.
+- **`follow_next_link`**: Optional (default `false`). When `true`, the collector follows `Members@odata.nextLink` pagination for each URI and merges all pages into a single response.
+- **`max_pages`**: Optional (default `200`). Safety cap on the number of pages to follow per URI when `follow_next_link` is enabled.
+
+**`analysis_args`**
 - **`checks`**: Optional. Map of URI to expected values or constraints for analysis. Supports exact match (e.g. `"PowerState": "On"`), `anyOf`, `min`/`max`, etc.
 
 #### **'summary' sub command**
