@@ -25,14 +25,14 @@
 ###############################################################################
 """Redfish field name constants shared across the Redfish package(s)."""
 
-# Key holding the list of member resources in a Redfish collection.
+# Resource collection property which identifies members of the collection.
 RF_MEMBERS = "Members"
 
-# Key for the total member count of a Redfish collection.
+# Resource collection property which defines the total number of resources/members.
 RF_MEMBERS_COUNT = "Members@odata.count"
 
-# Key indicating the next page of a paginated Redfish collection.
+# Resource collection property which points to the next set of partial members from the originating operation.
 RF_MEMBERS_NEXT_LINK = "Members@odata.nextLink"
 
-# Key holding the resource-link in every Redfish resource.
+# Resource identifier property (optional for registry resources, required for all other resources and resource collections).
 RF_ODATA_ID = "@odata.id"
