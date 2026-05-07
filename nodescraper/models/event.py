@@ -32,6 +32,7 @@ from typing import Any, Optional, Union
 
 from pydantic import BaseModel, Field, field_serializer, field_validator
 
+from nodescraper.constants import DEFAULT_EVENT_REPORTER
 from nodescraper.enums import EventPriority
 
 
@@ -66,7 +67,7 @@ class Event(BaseModel):
     timestamp: datetime.datetime = Field(
         default_factory=lambda: datetime.datetime.now(datetime.timezone.utc)
     )
-    reporter: str = "NODE_SCRAPER"
+    reporter: str = DEFAULT_EVENT_REPORTER
     category: str
     description: str
     data: dict = Field(default_factory=dict)

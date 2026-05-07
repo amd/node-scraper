@@ -31,6 +31,7 @@ from typing import Annotated, Any, Generic, Optional, Type, Union
 
 from pydantic import Field
 
+from nodescraper.constants import DEFAULT_EVENT_REPORTER
 from nodescraper.enums import EventPriority, ExecutionStatus, SystemInteractionLevel
 from nodescraper.generictypes import TAnalyzeArg, TCollectArg, TDataModel
 from nodescraper.interfaces.dataanalyzertask import DataAnalyzer
@@ -74,6 +75,7 @@ class DataPlugin(
         connection_args: Optional[Union[TConnectArg, dict]] = None,
         task_result_hooks: Optional[list[TaskResultHook]] = None,
         log_path: Optional[str] = None,
+        event_reporter: str = DEFAULT_EVENT_REPORTER,
         **kwargs,
     ):
         super().__init__(
@@ -83,6 +85,7 @@ class DataPlugin(
             connection_args,
             task_result_hooks,
             log_path,
+            event_reporter=event_reporter,
             **kwargs,
         )
         self._validate_class_var()
@@ -186,6 +189,7 @@ class DataPlugin(
                     logger=self.logger,
                     parent=self.__class__.__name__,
                     task_result_hooks=self.task_result_hooks,
+                    event_reporter=self.event_reporter,
                 )
 
             if (
@@ -219,6 +223,7 @@ class DataPlugin(
                     parent=self.__class__.__name__,
                     task_result_hooks=self.task_result_hooks,
                     log_path=self.log_path,
+                    event_reporter=self.event_reporter,
                 )
                 self.collection_result, self._data = collection_task.collect_data(collection_args)
 
@@ -293,6 +298,7 @@ class DataPlugin(
             max_event_priority_level=max_event_priority_level,
             parent=self.__class__.__name__,
             task_result_hooks=self.task_result_hooks,
+            event_reporter=self.event_reporter,
         )
         self.analysis_result = analyzer_task.analyze_data(self.data, analysis_args)
         return self.analysis_result

@@ -33,6 +33,7 @@ from typing import Callable, Generic, Optional, TypeVar, Union
 
 from pydantic import BaseModel
 
+from nodescraper.constants import DEFAULT_EVENT_REPORTER
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
 from nodescraper.models import SystemInfo, TaskResult
 from nodescraper.typeutils import TypeUtils
@@ -93,6 +94,7 @@ class ConnectionManager(Task, Generic[TConnection, TConnectArg]):
         parent: Optional[str] = None,
         task_result_hooks: Optional[list[TaskResultHook], None] = None,
         connection_args: Optional[Union[TConnectArg, dict]] = None,
+        event_reporter: str = DEFAULT_EVENT_REPORTER,
         **kwargs,
     ):
         super().__init__(
@@ -101,6 +103,7 @@ class ConnectionManager(Task, Generic[TConnection, TConnectArg]):
             max_event_priority_level=max_event_priority_level,
             parent="connection" if not parent else parent,
             task_result_hooks=task_result_hooks,
+            event_reporter=event_reporter,
             **kwargs,
         )
 

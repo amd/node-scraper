@@ -24,3 +24,5 @@
 #
 ###############################################################################
 DEFAULT_LOGGER = "nodescraper"
+
+DEFAULT_EVENT_REPORTER = "NODE_SCRAPER"
