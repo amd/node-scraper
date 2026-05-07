@@ -151,6 +151,7 @@ class TestDataPluginCore:
                     logger=plugin.logger,
                     parent=plugin.__class__.__name__,
                     task_result_hooks=plugin.task_result_hooks,
+                    event_reporter=plugin.event_reporter,
                 )
                 mock_collect.assert_called_once()
                 assert result.status == ExecutionStatus.OK
