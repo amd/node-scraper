@@ -97,6 +97,11 @@ def collect_decorator(
                     priority=EventPriority.CRITICAL,
                     console_log=True,
                 )
+                collector.logger.error(
+                    "Pydantic validation error in data collector %s: %s",
+                    collector.__class__.__name__,
+                    exception.errors(include_url=False),
+                )
             else:
                 collector._log_event(
                     category=EventCategory.RUNTIME,
@@ -104,6 +109,9 @@ def collect_decorator(
                     data=get_exception_traceback(exception),
                     priority=EventPriority.CRITICAL,
                     console_log=True,
+                )
+                collector.logger.exception(
+                    "Exception in data collector %s", collector.__class__.__name__
                 )
             collector.result.status = ExecutionStatus.EXECUTION_FAILURE
             result = collector.result

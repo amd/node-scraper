@@ -64,6 +64,9 @@ def connect_decorator(func: Callable[..., TaskResult]) -> Callable[..., TaskResu
                 priority=EventPriority.CRITICAL,
                 console_log=True,
             )
+            connection_manager.logger.exception(
+                "Exception connecting with %s", connection_manager.__class__.__name__
+            )
             connection_manager.result.status = ExecutionStatus.EXECUTION_FAILURE
             result = connection_manager.result
 

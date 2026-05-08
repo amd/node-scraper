@@ -235,6 +235,11 @@ class DataPlugin(
                 message=str(e),
             )
         except Exception as e:
+            self.logger.exception(
+                "Unhandled exception running collector %s for plugin %s",
+                self.COLLECTOR.__name__,
+                self.__class__.__name__,
+            )
             self.collection_result = TaskResult(
                 task=self.COLLECTOR.__name__,
                 parent=self.__class__.__name__,
