@@ -51,6 +51,7 @@ class PluginInterface(abc.ABC, Generic[TConnectionManager, TConnectArg]):
         log_path: Optional[str] = None,
         queue_callback: Optional[Callable] = None,
         event_reporter: str = DEFAULT_EVENT_REPORTER,
+        session_id: Optional[str] = None,
         **kwargs,
     ):
         """Initialize plugin
@@ -88,6 +89,7 @@ class PluginInterface(abc.ABC, Generic[TConnectionManager, TConnectArg]):
         self.queue_callback = queue_callback
 
         self.event_reporter = event_reporter
+        self.session_id = session_id
 
         self.connection_manager = connection_manager
 
@@ -99,6 +101,7 @@ class PluginInterface(abc.ABC, Generic[TConnectionManager, TConnectArg]):
                 parent=self.__class__.__name__,
                 task_result_hooks=self.task_result_hooks,
                 event_reporter=event_reporter,
+                session_id=self.session_id,
             )
 
     @classmethod

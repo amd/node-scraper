@@ -49,6 +49,7 @@ class RedfishDataCollector(
         parent: Optional[str] = None,
         task_result_hooks: Optional[list[TaskResultHook]] = None,
         event_reporter: str = DEFAULT_EVENT_REPORTER,
+        session_id: Optional[str] = None,
         **kwargs,
     ):
         super().__init__(
@@ -59,6 +60,7 @@ class RedfishDataCollector(
             parent=parent,
             task_result_hooks=task_result_hooks,
             event_reporter=event_reporter,
+            session_id=session_id,
             **kwargs,
         )
 

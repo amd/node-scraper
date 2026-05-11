@@ -154,6 +154,7 @@ class DataCollector(Task, abc.ABC, Generic[TConnection, TDataModel, TCollectArg]
         parent: Optional[str] = None,
         task_result_hooks: Optional[list[TaskResultHook]] = None,
         event_reporter: str = DEFAULT_EVENT_REPORTER,
+        session_id: Optional[str] = None,
         **kwargs,
     ):
         """data collector init function
@@ -172,6 +173,7 @@ class DataCollector(Task, abc.ABC, Generic[TConnection, TDataModel, TCollectArg]
             parent=parent,
             task_result_hooks=task_result_hooks,
             event_reporter=event_reporter,
+            session_id=session_id,
         )
 
         if isinstance(system_interaction_level, str):

@@ -31,6 +31,7 @@ import logging
 import os
 import platform
 import sys
+import uuid
 from typing import Optional
 
 import nodescraper
@@ -642,6 +643,7 @@ def main(
             timestamp=timestamp,
             sname=sname,
             host_cli_args=host_cli_args,
+            session_id=str(uuid.uuid4()),
         )
 
         log_system_info(log_path, system_info, logger)

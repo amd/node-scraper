@@ -103,6 +103,11 @@ def test_config_merge(input_configs: list[PluginConfig], output_config: PluginCo
     assert PluginExecutor.merge_configs(input_configs) == output_config
 
 
+def test_plugin_executor_rejects_invalid_session_id():
+    with pytest.raises(ValueError, match="session_id must be a valid UUID"):
+        PluginExecutor(plugin_configs=[], session_id="not-a-uuid")
+
+
 def test_plugin_queue(plugin_registry):
     executor = PluginExecutor(
         plugin_configs=[PluginConfig(global_args={"test_arg": "abc"}, plugins={"TestPluginB": {}})],

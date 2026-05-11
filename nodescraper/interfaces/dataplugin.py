@@ -76,6 +76,7 @@ class DataPlugin(
         task_result_hooks: Optional[list[TaskResultHook]] = None,
         log_path: Optional[str] = None,
         event_reporter: str = DEFAULT_EVENT_REPORTER,
+        session_id: Optional[str] = None,
         **kwargs,
     ):
         super().__init__(
@@ -86,6 +87,7 @@ class DataPlugin(
             task_result_hooks,
             log_path,
             event_reporter=event_reporter,
+            session_id=session_id,
             **kwargs,
         )
         self._validate_class_var()
@@ -190,6 +192,7 @@ class DataPlugin(
                     parent=self.__class__.__name__,
                     task_result_hooks=self.task_result_hooks,
                     event_reporter=self.event_reporter,
+                    session_id=self.session_id,
                 )
 
             if (
@@ -224,6 +227,7 @@ class DataPlugin(
                     task_result_hooks=self.task_result_hooks,
                     log_path=self.log_path,
                     event_reporter=self.event_reporter,
+                    session_id=self.session_id,
                 )
                 self.collection_result, self._data = collection_task.collect_data(collection_args)
 
@@ -304,6 +308,7 @@ class DataPlugin(
             parent=self.__class__.__name__,
             task_result_hooks=self.task_result_hooks,
             event_reporter=self.event_reporter,
+            session_id=self.session_id,
         )
         self.analysis_result = analyzer_task.analyze_data(self.data, analysis_args)
         return self.analysis_result

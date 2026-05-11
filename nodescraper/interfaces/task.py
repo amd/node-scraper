@@ -27,6 +27,7 @@ import abc
 import copy
 import datetime
 import logging
+import uuid
 from typing import Any, Optional, Union
 
 from nodescraper.constants import DEFAULT_EVENT_REPORTER, DEFAULT_LOGGER
@@ -55,6 +56,7 @@ class Task(abc.ABC):
         parent: Optional[str] = None,
         task_result_hooks: Optional[list[TaskResultHook]] = None,
         event_reporter: str = DEFAULT_EVENT_REPORTER,
+        session_id: Optional[str] = None,
         **kwargs: dict[str, Any],
     ):
         if logger is None:
@@ -67,6 +69,18 @@ class Task(abc.ABC):
         if not task_result_hooks:
             task_result_hooks = []
         self.task_result_hooks = task_result_hooks
+
+        if session_id is not None:
+            try:
+                uuid.UUID(session_id)
+                self.session_id = session_id
+            except (ValueError, AttributeError, TypeError) as e:
+                raise ValueError(
+                    f"session_id must be a valid UUID string, got: {session_id}"
+                ) from e
+        else:
+            self.session_id = None
+
         self.result: TaskResult = self._init_result()
 
     @property
@@ -116,6 +130,9 @@ class Task(abc.ABC):
 
         if self.parent:
             data["parent"] = self.parent
+
+        if self.session_id:
+            data["session_id"] = self.session_id
 
         if self.system_info.metadata:
             data["system_metadata"] = copy.copy(self.system_info.metadata)

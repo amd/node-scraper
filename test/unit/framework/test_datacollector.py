@@ -154,6 +154,17 @@ def test_supported_skus_not_enforced_when_system_sku_is_none(conn_mock):
     assert res.status == ExecutionStatus.OK
 
 
+def test_supported_skus_coerce_non_string_items(conn_mock):
+    class IntSkuCollector(DummyCollector):
+        SUPPORTED_SKUS = {42}
+
+    args = {"name": "h", "sku": "42", "platform": "X", "os_family": 1}
+    info = SystemInfo(**args)
+    col = IntSkuCollector(info, conn_mock)
+    res, data = col.collect_data()
+    assert res.status == ExecutionStatus.OK
+
+
 def test_missing_data_model():
     with pytest.raises(TypeError, match="No data model set for DummyCollector1"):
 

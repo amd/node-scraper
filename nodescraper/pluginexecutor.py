@@ -28,6 +28,7 @@ from __future__ import annotations
 import copy
 import inspect
 import logging
+import uuid
 from collections import deque
 from typing import Optional, Type, Union
 
@@ -53,6 +54,7 @@ class PluginExecutor:
         logger: Optional[logging.Logger] = None,
         plugin_registry: Optional[PluginRegistry] = None,
         log_path: Optional[str] = None,
+        session_id: Optional[str] = None,
     ):
 
         if logger is None:
@@ -64,6 +66,17 @@ class PluginExecutor:
         if system_info is None:
             system_info = SystemInfo()
         self.system_info = system_info
+
+        if session_id is not None:
+            try:
+                uuid.UUID(session_id)
+                self.session_id = session_id
+            except (ValueError, AttributeError, TypeError) as e:
+                raise ValueError(
+                    f"session_id must be a valid UUID string, got: {session_id}"
+                ) from e
+        else:
+            self.session_id = None
 
         self.plugin_config = self.merge_configs(plugin_configs)
 
@@ -90,6 +103,7 @@ class PluginExecutor:
                     logger=self.logger,
                     connection_args=connection_args,
                     task_result_hooks=self.connection_result_hooks,
+                    session_id=self.session_id,
                 )
 
         self.logger.info("System Name: %s", self.system_info.name)
@@ -157,6 +171,7 @@ class PluginExecutor:
                     "logger": self.logger,
                     "queue_callback": plugin_queue.append,
                     "log_path": self.log_path,
+                    "session_id": self.session_id,
                 }
 
                 if plugin_class.CONNECTION_TYPE:
@@ -192,6 +207,7 @@ class PluginExecutor:
                             system_info=self.system_info,
                             logger=self.logger,
                             task_result_hooks=self.connection_result_hooks,
+                            session_id=self.session_id,
                         )
 
                     init_payload["connection_manager"] = self.connection_library[mgr_impl]
