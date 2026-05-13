@@ -28,7 +28,7 @@ import logging
 import re
 import uuid
 from enum import Enum
-from typing import Any, Optional, Union
+from typing import Any, Optional, Union, cast
 
 from pydantic import BaseModel, Field, field_serializer, field_validator
 
@@ -113,15 +113,22 @@ class Event(BaseModel):
 
     @field_validator("priority", mode="before")
     @classmethod
-    def validate_priority(cls, priority: Union[str, EventPriority]) -> EventPriority:
-        """Allow priority to be set via string priority name
+    def validate_priority(cls, priority: Union[str, int, EventPriority]) -> EventPriority:
+        """Allow priority as EventPriority, enum name string, or IntEnum value (unknown int -> ERROR).
+
         Args:
-            priority (Union[str, EventPriority]): event priority string or enum
+            priority: EventPriority, name string, integer matching a level, or unknown int (maps to ERROR).
+
         Raises:
-            ValueError: if priority string is an invalid value
-        Returns:
-            EventPriority: priority enum
+            ValueError: if priority string is invalid, or if a boolean is passed.
         """
+        if type(priority) is bool:
+            raise ValueError("priority must not be a boolean")
+        if isinstance(priority, int):
+            try:
+                return cast(EventPriority, EventPriority(priority))
+            except ValueError:
+                return EventPriority.ERROR
         if isinstance(priority, str):
             try:
                 return getattr(EventPriority, priority.upper())
