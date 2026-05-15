@@ -595,7 +595,7 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
             )
         stats_dict = self._parse_ethtool_statistics(res.stdout, netdev)
 
-        vendor_stats: VendorEthtoolStatisticsModel | None = None
+        vendor_stats: Optional[VendorEthtoolStatisticsModel] = None
         for prefix, vendor_cls in VENDOR_PREFIX_MAP.items():
             if ifname.startswith(prefix):
                 vendor_fields = set(vendor_cls.model_fields.keys())
