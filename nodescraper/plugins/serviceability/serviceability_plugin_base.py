@@ -33,12 +33,7 @@ from .serviceability_data import ServiceabilityDataModel
 class ServiceabilityPluginBase(
     OOBandDataPlugin[ServiceabilityDataModel, ServiceabilityCollectorArgs, None],
 ):
-    """OOB Redfish plugin base: collection only (no analyzer).
-
-    Set ``COLLECTOR`` on a **subclass** to a concrete collector derived from
-    :class:`ServiceabilityCollectorBase` (the base ``COLLECTOR`` here is abstract
-    and cannot be instantiated). Add an ``ANALYZER`` on the subclass when needed.
-    """
+    """OOB Redfish collect-only plugin stub; subclass with a concrete COLLECTOR and optional ANALYZER."""
 
     DATA_MODEL = ServiceabilityDataModel
     COLLECTOR = ServiceabilityCollectorBase

@@ -25,20 +25,15 @@
 ###############################################################################
 from __future__ import annotations
 
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, model_validator
 
 from nodescraper.models import CollectorArgs
 
 
 class ServiceabilityCollectorArgs(CollectorArgs):
-    """Redfish collection arguments for ``ServiceabilityCollectorBase``.
-
-    All Redfish URIs must be supplied by the caller; the base collector does not
-    embed product paths. Optional sections (assembly inventory, firmware bundle)
-    are skipped when the corresponding URI or template is omitted.
-    """
+    """URIs and pagination only. Subclasses add filtering and OEM-specific options."""
 
     uri: Optional[str] = Field(
         default=None,
@@ -58,22 +53,11 @@ class ServiceabilityCollectorArgs(CollectorArgs):
     )
     rf_firmware_bundle_uri: Optional[str] = Field(
         default=None,
-        description="Redfish URI for firmware bundle inventory (e.g. ComponentDetails).",
-    )
-    rf_assembly_fields: Optional[Tuple[str, ...]] = Field(
-        default=None,
-        description="Standard Assembly JSON field names mapped into ``DeviceInfo``.",
-    )
-    rf_assembly_oem_fields: Optional[Tuple[str, ...]] = Field(
-        default=None,
-        description="OEM Assembly field names (under ``Oem``) mapped into ``DeviceInfo``.",
+        description="Redfish URI for firmware bundle inventory when subclasses extract component details.",
     )
     follow_next_link: bool = Field(
         default=True,
-        description=(
-            "When True, follow Members@odata.nextLink and merge pages (up to max_pages). "
-            "When False, only the first GET response is used."
-        ),
+        description="If True, follow Members@odata.nextLink up to max_pages; else single GET.",
     )
     max_pages: int = Field(
         default=200,
@@ -84,26 +68,8 @@ class ServiceabilityCollectorArgs(CollectorArgs):
     top: Optional[int] = Field(
         default=None,
         ge=1,
-        description=(
-            "Return only the most recent N entries using $skip when the collection "
-            "supports OData count; None collects per follow_next_link rules."
-        ),
+        description="Most recent N entries via $skip after count probe; None collects full window.",
     )
-    from_ac_cycle: int = Field(
-        default=-1,
-        description="Passed to ``filter_event_members`` implementations (e.g. A/C cycle window). -1 disables.",
-    )
-    from_date: Optional[str] = Field(
-        default=None,
-        description="Passed to ``filter_event_members`` implementations (e.g. ISO date window).",
-    )
-
-    @field_validator("from_ac_cycle")
-    @classmethod
-    def validate_from_ac_cycle(cls, v: int) -> int:
-        if v != -1 and v < 0:
-            raise ValueError("from_ac_cycle must be -1 (no filter) or a non-negative integer")
-        return v
 
     @model_validator(mode="after")
     def _require_event_log_uri(self) -> ServiceabilityCollectorArgs:
@@ -127,7 +93,7 @@ class ServiceabilityCollectorArgs(CollectorArgs):
         return self
 
     def resolved_event_log_uri(self) -> str:
-        """Effective event-log URI (``uri`` or ``rf_event_log_uri``)."""
+        """Return uri or rf_event_log_uri."""
         for candidate in (self.uri, self.rf_event_log_uri):
             if candidate and str(candidate).strip():
                 return str(candidate).strip()

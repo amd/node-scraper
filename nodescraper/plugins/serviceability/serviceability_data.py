@@ -29,21 +29,23 @@ import json
 import os
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from nodescraper.models import DataModel
 
 
 class DeviceInfo(BaseModel):
-    """Information for a single chassis device collected via Redfish."""
+    """Chassis fields from Assembly parsing; extra vendor keys belong in oem_extensions."""
 
     name: Optional[str] = None
     part_number: Optional[str] = None
     production_date: Optional[str] = None
     serial_number: Optional[str] = None
     version: Optional[str] = None
-    assembly_part_number: Optional[str] = None
-    assembly_serial_number: Optional[str] = None
+    oem_extensions: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Opaque vendor/product extensions parsed by the concrete collector.",
+    )
 
 
 class ServiceabilityResult(BaseModel):
@@ -69,7 +71,7 @@ class ServiceabilityDataModel(DataModel):
     result: Optional[ServiceabilityResult] = None
 
     def log_model(self, log_path: str) -> None:
-        """Write raw Redfish responses and decoded CPER data to the log directory."""
+        """Write redfish_responses.json and optional cper_data.json under log_path."""
         os.makedirs(log_path, exist_ok=True)
         responses_path = os.path.join(log_path, "redfish_responses.json")
         with open(responses_path, "w", encoding="utf-8") as f:

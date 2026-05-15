@@ -41,11 +41,7 @@ from .serviceability_data import DeviceInfo, ServiceabilityDataModel
 class ServiceabilityCollectorBase(
     RedfishDataCollector[ServiceabilityDataModel, ServiceabilityCollectorArgs],
 ):
-    """Redfish serviceability collection flow with product-specific hooks.
-
-    Subclasses implement event filtering, CPER detection, and CPER attachment handling.
-    Redfish URIs come only from :class:`ServiceabilityCollectorArgs`.
-    """
+    """OOB Redfish collection skeleton; subclasses implement filtering, CPER handling, and JSON parsing."""
 
     DATA_MODEL = ServiceabilityDataModel
 
@@ -59,7 +55,7 @@ class ServiceabilityCollectorBase(
         members: list[Any],
         args: ServiceabilityCollectorArgs,
     ) -> list[Any]:
-        """Return the event list to analyze (e.g. time / A/C window)."""
+        """Return the event list to retain for downstream analysis."""
 
     @abc.abstractmethod
     def is_cper_event(self, event: dict) -> bool:
@@ -68,6 +64,23 @@ class ServiceabilityCollectorBase(
     @abc.abstractmethod
     def collect_cper_data(self, rf_events: list[Any]) -> dict[str, Any]:
         """Fetch and decode diagnostic attachments for qualifying events (subclass-defined)."""
+
+    @abc.abstractmethod
+    def parse_assembly_entry(
+        self,
+        designation: str,
+        assembly_member_entry: dict[str, Any],
+        args: ServiceabilityCollectorArgs,
+    ) -> DeviceInfo:
+        """Map one Assemblies[] member dict into DeviceInfo."""
+
+    @abc.abstractmethod
+    def extract_component_details(
+        self,
+        firmware_inventory_payload: dict[str, Any],
+        args: ServiceabilityCollectorArgs,
+    ) -> Optional[str]:
+        """Derive component-details text from a firmware inventory GET payload, or None."""
 
     def _fetch_event_log(self, args: ServiceabilityCollectorArgs, uri: str):
         if args.follow_next_link:
@@ -109,16 +122,6 @@ class ServiceabilityCollectorBase(
         tpl = args.rf_assembly_uri_template
         devices = args.rf_chassis_devices
         if tpl and devices:
-            std_fields = tuple(args.rf_assembly_fields or ())
-            oem_fields = tuple(args.rf_assembly_oem_fields or ())
-            std_to_device = {
-                "Name": "name",
-                "PartNumber": "part_number",
-                "ProductionDate": "production_date",
-                "SerialNumber": "serial_number",
-                "Version": "version",
-            }
-
             for device in devices:
                 uri_asm = tpl.format(device=device)
                 assembly_res = self._run_redfish_get(uri_asm, log_artifact=True)
@@ -131,20 +134,7 @@ class ServiceabilityCollectorBase(
                     continue
 
                 entry = assemblies[0]
-                oem = entry.get("Oem", {})
-                di_kwargs: dict[str, Any] = {}
-                for fname in std_fields:
-                    key = std_to_device.get(fname)
-                    if key:
-                        di_kwargs[key] = entry.get(fname)
-
-                for of in oem_fields:
-                    if of == "AssemblyPartNumber":
-                        di_kwargs["assembly_part_number"] = oem.get(of)
-                    elif of == "AssemblySerialNumber":
-                        di_kwargs["assembly_serial_number"] = oem.get(of)
-
-                assembly_info[device] = DeviceInfo(**di_kwargs)
+                assembly_info[device] = self.parse_assembly_entry(device, entry, args)
 
         cper_data = self.collect_cper_data(filtered_members or [])
 
@@ -172,10 +162,7 @@ class ServiceabilityCollectorBase(
         if not fw_res.success or fw_res.data is None:
             return None
         responses[fw_res.path] = fw_res.data
-
-        oem = fw_res.data.get("Oem", {})
-        version_id = oem.get("AMD", oem).get("VersionID", {})
-        return version_id.get("ComponentDetails")
+        return self.extract_component_details(fw_res.data, args)
 
     def _fetch_top(self, args: ServiceabilityCollectorArgs, top: int, max_pages: int):
         event_uri = args.resolved_event_log_uri()
