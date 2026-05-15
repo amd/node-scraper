@@ -622,9 +622,11 @@ class Cx7EthtoolStatistics(BaseModel):
     ]
 
 
-VendorEthtoolStatisticsModel = (
-    PollaraEthtoolStatistics | Thor2EthtoolStatistics | Cx7EthtoolStatistics
-)
+VendorEthtoolStatisticsModel = Union[
+    PollaraEthtoolStatistics,
+    Thor2EthtoolStatistics,
+    Cx7EthtoolStatistics,
+]
 
 VendorEthtoolStatisticsCls = Union[
     type[PollaraEthtoolStatistics],
