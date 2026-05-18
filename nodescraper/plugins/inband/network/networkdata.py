@@ -29,6 +29,8 @@ from pydantic import BaseModel, Field
 
 from nodescraper.models import DataModel
 
+from .ethtool_vendor import EthtoolStatistics
+
 
 class IpAddress(BaseModel):
     """Individual IP address on an interface"""
@@ -117,4 +119,7 @@ class NetworkDataModel(DataModel):
     ethtool_info: Dict[str, EthtoolInfo] = Field(
         default_factory=dict
     )  # Interface name -> EthtoolInfo mapping
+    # RDMA-scoped ethtool -S: netdevs from `rdma link -j` with vendor-parsed counters
+    rdma_ethtool_netdevs: List[str] = Field(default_factory=list)
+    rdma_ethtool_statistics: List[EthtoolStatistics] = Field(default_factory=list)
     accessible: Optional[bool] = None  # Network accessibility check via ping
