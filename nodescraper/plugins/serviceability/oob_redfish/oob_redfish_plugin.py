@@ -25,16 +25,16 @@
 ###############################################################################
 from nodescraper.base import OOBandDataPlugin
 
-from .collector_args import ServiceabilityCollectorArgs
-from .serviceability_collector import ServiceabilityCollectorBase
-from .serviceability_data import ServiceabilityDataModel
+from .oob_redfish_collector import OobRedfishCollector
+from .oob_redfish_collector_args import OobRedfishCollectorArgs
+from .oob_redfish_data import OobRedfishDataModel
 
 
-class ServiceabilityPluginBase(
-    OOBandDataPlugin[ServiceabilityDataModel, ServiceabilityCollectorArgs, None],
+class OobRedfishPlugin(
+    OOBandDataPlugin[OobRedfishDataModel, OobRedfishCollectorArgs, None],
 ):
-    """OOB Redfish collect-only plugin stub; subclass with a concrete COLLECTOR and optional ANALYZER."""
+    """OOB Redfish serviceability plugin base."""
 
-    DATA_MODEL = ServiceabilityDataModel
-    COLLECTOR = ServiceabilityCollectorBase
-    COLLECTOR_ARGS = ServiceabilityCollectorArgs
+    DATA_MODEL = OobRedfishDataModel
+    COLLECTOR = OobRedfishCollector
+    COLLECTOR_ARGS = OobRedfishCollectorArgs
