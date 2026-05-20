@@ -354,7 +354,9 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
         CMD_NICCLI_QOS_TEMPLATE_LEGACY,
     ]
     # New (> v233): double-dash options and qos --ets --show
-    CMD_NICCLI_SUPPORT_RDMA_TEMPLATE_NEW = "niccli --dev {device_num} nvm --getoption support_rdma"
+    CMD_NICCLI_SUPPORT_RDMA_TEMPLATE_NEW = (
+        "niccli --dev {device_num} nvm --getoption support_rdma --scope 0"
+    )
     CMD_NICCLI_PERFORMANCE_PROFILE_TEMPLATE_NEW = (
         "niccli --dev {device_num} nvm --getoption performance_profile"
     )
@@ -471,6 +473,19 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
             card_ids = [c.id for c in legacy_cards]
             card_list_from_text = [c.model_dump() for c in legacy_cards]
 
+        if custom_commands is None and not device_nums and not card_ids:
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description="No Broadcom (niccli) or Pensando (nicctl) NIC hardware detected",
+                priority=EventPriority.INFO,
+            )
+            self.result.status = ExecutionStatus.NOT_RAN
+            self.result.message = (
+                "No Broadcom (niccli) or Pensando (nicctl) NIC hardware detected; "
+                "NIC collection skipped"
+            )
+            return self.result, None
+
         # Build full command list (expand placeholders)
         if custom_commands is not None:
             commands_to_run: List[str] = []
@@ -486,18 +501,19 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
         else:
             commands_to_run = []
             # niccli list already stored
-            per_device_templates = _get_niccli_per_device_templates(niccli_version)
-            for tpl in per_device_templates:
-                for d in device_nums:
-                    commands_to_run.append(tpl.format(device_num=d))
-            # nicctl global (card discovery already done via CMD_NICCTL_CARD_TEXT)
-            for c in NicCollector.CMD_NICCTL_GLOBAL:
-                commands_to_run.append(c)
-            for tpl in NicCollector.CMD_NICCTL_PER_CARD:
-                for cid in card_ids:
-                    commands_to_run.append(tpl.format(card_id=cid))
-            for cmd in NicCollector.CMD_NICCTL_LEGACY_TEXT:
-                commands_to_run.append(cmd)
+            if device_nums:
+                per_device_templates = _get_niccli_per_device_templates(niccli_version)
+                for tpl in per_device_templates:
+                    for d in device_nums:
+                        commands_to_run.append(tpl.format(device_num=d))
+            if card_ids:
+                for c in NicCollector.CMD_NICCTL_GLOBAL:
+                    commands_to_run.append(c)
+                for tpl in NicCollector.CMD_NICCTL_PER_CARD:
+                    for cid in card_ids:
+                        commands_to_run.append(tpl.format(card_id=cid))
+                for cmd in NicCollector.CMD_NICCTL_LEGACY_TEXT:
+                    commands_to_run.append(cmd)
 
         # Run each command and store (artifact-only commands are not added to results / data model).
         for cmd in commands_to_run:
