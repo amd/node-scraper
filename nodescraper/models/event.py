@@ -28,7 +28,7 @@ import logging
 import re
 import uuid
 from enum import Enum
-from typing import Any, Optional, Union
+from typing import Any, Optional, Union, cast
 
 from pydantic import BaseModel, Field, field_serializer, field_validator
 
@@ -131,11 +131,11 @@ class Event(BaseModel):
         Returns:
             Resolved :class:`EventPriority`.
         """
-        if isinstance(priority, bool):
+        if type(priority) is bool:
             raise ValueError("priority must not be a boolean")
         if isinstance(priority, int):
             try:
-                return EventPriority(priority)
+                return cast(EventPriority, EventPriority(priority))
             except ValueError:
                 return EventPriority.ERROR
         if isinstance(priority, str):

@@ -14,12 +14,19 @@ jobs:
     container: python:3.9
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Fetch all history for pre-commit to work
+
+      # python:3.9 image has no git; pre-commit requires it.
+      - name: Install git
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends git
+
       - name: Configure git for container
         run: |
-          git config --global --add safe.directory /__w/node-scraper/node-scraper
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           git config --global user.email "ci@github.com"
           git config --global user.name "CI Bot"
       - name: setup environment and run pre-commit hooks

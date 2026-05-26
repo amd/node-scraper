@@ -27,6 +27,10 @@ import pytest
 
 from nodescraper.enums import EventPriority, ExecutionStatus
 from nodescraper.plugins.inband.network.analyzer_args import NetworkAnalyzerArgs
+from nodescraper.plugins.inband.network.ethtool_vendor import (
+    EthtoolStatistics,
+    Thor2EthtoolStatistics,
+)
 from nodescraper.plugins.inband.network.network_analyzer import NetworkAnalyzer
 from nodescraper.plugins.inband.network.networkdata import (
     EthtoolInfo,
@@ -158,11 +162,53 @@ def test_multiple_interfaces_with_errors(network_analyzer):
 
 
 def test_empty_ethtool_info(network_analyzer):
-    """Test with empty ethtool_info: WARNING and message logged."""
+    """Test with empty ethtool_info and no RDMA ethtool: WARNING and message logged."""
     model = NetworkDataModel(ethtool_info={})
     result = network_analyzer.analyze_data(model)
     assert result.status == ExecutionStatus.WARNING
     assert result.message == "No network devices found"
+
+
+def test_rdma_ethtool_vendor_error_only(network_analyzer):
+    """RDMA-scoped vendor ethtool: error-tier counter raises ERROR."""
+    stat = EthtoolStatistics(
+        netdev="eth0",
+        rdma_ifname="bnxt0",
+        vendor_statistics=Thor2EthtoolStatistics(tx_pfc_frames=4),
+    )
+    model = NetworkDataModel(ethtool_info={}, rdma_ethtool_statistics=[stat])
+    result = network_analyzer.analyze_data(model)
+    assert result.status == ExecutionStatus.ERROR
+    assert "Network errors detected" in result.message
+    assert len(result.events) == 1
+    assert result.events[0].data["error_field"] == "tx_pfc_frames"
+    assert result.events[0].data["error_count"] == 4
+    assert result.events[0].priority == EventPriority.ERROR
+
+
+def test_rdma_ethtool_vendor_warning_only(network_analyzer):
+    """RDMA-scoped vendor ethtool: only warning-tier counters -> WARNING status."""
+    stat = EthtoolStatistics(
+        netdev="eth0",
+        rdma_ifname="bnxt0",
+        vendor_statistics=Thor2EthtoolStatistics(rx_pause_frames=2),
+    )
+    model = NetworkDataModel(ethtool_info={}, rdma_ethtool_statistics=[stat])
+    result = network_analyzer.analyze_data(model)
+    assert result.status == ExecutionStatus.WARNING
+    assert "warning counters" in result.message
+    assert len(result.events) == 1
+    assert result.events[0].data["error_field"] == "rx_pause_frames"
+    assert result.events[0].priority == EventPriority.WARNING
+
+
+def test_rdma_ethtool_no_vendor_model_ok(network_analyzer):
+    """RDMA ethtool row without parsed vendor statistics is ignored by vendor path."""
+    stat = EthtoolStatistics(netdev="eth0", rdma_ifname="unknown0", vendor_statistics=None)
+    model = NetworkDataModel(ethtool_info={}, rdma_ethtool_statistics=[stat])
+    result = network_analyzer.analyze_data(model)
+    assert result.status == ExecutionStatus.OK
+    assert len(result.events) == 0
 
 
 def test_regex_patterns_priority_numbers(network_analyzer):

@@ -70,16 +70,16 @@ class Task(abc.ABC):
             task_result_hooks = []
         self.task_result_hooks = task_result_hooks
 
+        if session_id is None and "session_id" in kwargs:
+            session_id = kwargs.pop("session_id")  # type: ignore[assignment]
         if session_id is not None:
             try:
-                uuid.UUID(session_id)
-                self.session_id = session_id
-            except (ValueError, AttributeError, TypeError) as e:
+                uuid.UUID(str(session_id))
+            except (ValueError, TypeError, AttributeError) as e:
                 raise ValueError(
                     f"session_id must be a valid UUID string, got: {session_id}"
                 ) from e
-        else:
-            self.session_id = None
+        self.session_id: Optional[str] = str(session_id) if session_id is not None else None
 
         self.result: TaskResult = self._init_result()
 
@@ -131,7 +131,7 @@ class Task(abc.ABC):
         if self.parent:
             data["parent"] = self.parent
 
-        if self.session_id:
+        if self.session_id is not None:
             data["session_id"] = self.session_id
 
         if self.system_info.metadata:
