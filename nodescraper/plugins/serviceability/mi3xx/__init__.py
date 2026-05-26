@@ -23,18 +23,24 @@
 # SOFTWARE.
 #
 ###############################################################################
-from nodescraper.base import OOBandDataPlugin
+from .mi3xx_analyzer import Mi3xxAnalyzer
+from .mi3xx_collector import Mi3xxCollector
+from .mi3xx_collector_args import Mi3xxCollectorArgs
+from .mi3xx_data import (
+    Mi3xxDataModel,
+    Mi3xxDeviceInfo,
+    Mi3xxResult,
+    build_mi3xx_reporting_version_fields,
+)
+from .serviceability_plugin_mi3xx import ServiceabilityPluginMI3XX
 
-from .oob_redfish_collector import OobRedfishCollector
-from .oob_redfish_collector_args import OobRedfishCollectorArgs
-from .oob_redfish_data import OobRedfishDataModel
-
-
-class OobRedfishPlugin(
-    OOBandDataPlugin[OobRedfishDataModel, OobRedfishCollectorArgs, None],
-):
-    """OOB Redfish serviceability plugin base."""
-
-    DATA_MODEL = OobRedfishDataModel
-    COLLECTOR = OobRedfishCollector
-    COLLECTOR_ARGS = OobRedfishCollectorArgs
+__all__ = [
+    "Mi3xxAnalyzer",
+    "Mi3xxCollector",
+    "Mi3xxCollectorArgs",
+    "Mi3xxDataModel",
+    "Mi3xxDeviceInfo",
+    "Mi3xxResult",
+    "ServiceabilityPluginMI3XX",
+    "build_mi3xx_reporting_version_fields",
+]

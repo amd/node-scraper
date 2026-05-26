@@ -36,8 +36,8 @@ from nodescraper.plugins.serviceability.time_utils import (
 )
 
 
-class OobRedfishCollectorArgs(CollectorArgs):
-    """Arguments for OOB Redfish serviceability collection."""
+class Mi3xxCollectorArgs(CollectorArgs):
+    """MI3xx OOB Redfish serviceability collector arguments."""
 
     uri: Optional[str] = Field(
         default=None,
@@ -99,7 +99,7 @@ class OobRedfishCollectorArgs(CollectorArgs):
         return text
 
     @model_validator(mode="after")
-    def _require_event_log_uri(self) -> OobRedfishCollectorArgs:
+    def _require_event_log_uri(self) -> Mi3xxCollectorArgs:
         if not self.resolved_event_log_uri():
             raise ValueError(
                 "Provide a non-empty rf_event_log_uri or uri for the event log collection."
@@ -107,7 +107,7 @@ class OobRedfishCollectorArgs(CollectorArgs):
         return self
 
     @model_validator(mode="after")
-    def _assembly_consistency(self) -> OobRedfishCollectorArgs:
+    def _assembly_consistency(self) -> Mi3xxCollectorArgs:
         has_tpl = bool(
             self.rf_assembly_uri_template and "{device}" in self.rf_assembly_uri_template
         )
@@ -120,7 +120,7 @@ class OobRedfishCollectorArgs(CollectorArgs):
         return self
 
     @model_validator(mode="after")
-    def _reference_time_requires_operator(self) -> OobRedfishCollectorArgs:
+    def _reference_time_requires_operator(self) -> Mi3xxCollectorArgs:
         has_ref = self.reference_time is not None
         has_op = self.time_operator is not None
         if has_ref != has_op:
@@ -128,11 +128,7 @@ class OobRedfishCollectorArgs(CollectorArgs):
         return self
 
     def resolved_event_log_uri(self) -> str:
-        """Resolve the configured event log URI.
-
-        Returns:
-            Non-empty URI from uri or rf_event_log_uri, or an empty string.
-        """
+        """Return uri or rf_event_log_uri."""
         for candidate in (self.uri, self.rf_event_log_uri):
             if candidate and str(candidate).strip():
                 return str(candidate).strip()

@@ -23,22 +23,23 @@
 # SOFTWARE.
 #
 ###############################################################################
-from .oob_redfish_collector import OobRedfishCollector
-from .oob_redfish_collector_args import OobRedfishCollectorArgs
-from .oob_redfish_data import (
-    OobRedfishDataModel,
-    OobRedfishDeviceInfo,
-    OobRedfishResult,
-    build_oob_redfish_reporting_version_fields,
-)
-from .oob_redfish_plugin import OobRedfishPlugin
+from nodescraper.base import OOBandDataPlugin
+from nodescraper.models import CollectorArgs
 
-__all__ = [
-    "OobRedfishCollector",
-    "OobRedfishCollectorArgs",
-    "OobRedfishDataModel",
-    "OobRedfishDeviceInfo",
-    "OobRedfishPlugin",
-    "OobRedfishResult",
-    "build_oob_redfish_reporting_version_fields",
-]
+from .analyzer_args import ServiceabilityAnalyzerArgs
+from .serviceability_collector import ServiceabilityCollectorBase
+from .serviceability_data import ServiceabilityDataModel
+
+
+class ServiceabilityPluginBase(
+    OOBandDataPlugin[
+        ServiceabilityDataModel,
+        CollectorArgs,
+        ServiceabilityAnalyzerArgs,
+    ],
+):
+    """OOB Redfish plugin stub; subclass with a concrete COLLECTOR and COLLECTOR_ARGS."""
+
+    DATA_MODEL = ServiceabilityDataModel
+    COLLECTOR = ServiceabilityCollectorBase
+    ANALYZER_ARGS = ServiceabilityAnalyzerArgs

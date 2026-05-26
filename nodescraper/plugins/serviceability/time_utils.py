@@ -49,11 +49,33 @@ def is_valid_iso_datetime(value: str) -> bool:
     return True
 
 
+def normalize_se_timestamp(value: str) -> str:
+    """Normalize a timestamp to the serviceability engine wire format.
+
+    Accepts ISO-8601 (``2026-05-07T12:50:42``) and SE-style strings with a space
+    separator (``2026-05-07 12:50:42.096-07:00``).
+    """
+    text = str(value).strip()
+    if not text:
+        raise ValueError("Empty datetime string")
+    if " " in text and "T" not in text:
+        return text
+    parsed = parse_iso_datetime(text)
+    micro = parsed.microsecond
+    base = parsed.strftime("%Y-%m-%d %H:%M:%S")
+    if micro:
+        base = f"{base}.{micro:06d}".rstrip("0").rstrip(".")
+    offset = parsed.strftime("%z")
+    if offset:
+        return f"{base}{offset[:3]}:{offset[3:]}"
+    return base
+
+
 def parse_iso_datetime(value: str) -> datetime:
-    """Parse an ISO-8601 date or date-time string.
+    """Parse an ISO-8601 or SE-style date-time string.
 
     Args:
-        value: Date (e.g. 2026-05-17) or date-time (e.g. 2026-05-17T13:01:00).
+        value: Date (e.g. 2026-05-17), ISO date-time, or SE format with a space separator.
 
     Returns:
         Parsed datetime.
@@ -63,11 +85,13 @@ def parse_iso_datetime(value: str) -> datetime:
         raise ValueError("Empty datetime string")
     if text.endswith("Z"):
         text = f"{text[:-1]}+00:00"
+    if " " in text and "T" not in text:
+        text = text.replace(" ", "T", 1)
     try:
         parsed = datetime.fromisoformat(text)
     except ValueError as exc:
         raise ValueError(f"Not ISO-8601 compliant: {value!r}") from exc
-    if "T" not in text and "+" not in text and text.count("-") == 2:
+    if "T" not in value and "+" not in value and value.count("-") == 2:
         return parsed.replace(hour=0, minute=0, second=0, microsecond=0)
     return parsed
 

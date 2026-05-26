@@ -24,11 +24,21 @@
 #
 ###############################################################################
 import re
-from typing import List
+from typing import List, Optional
 
 from pydantic import field_validator
 
 from nodescraper.models import DataModel
+
+# e.g. 7.13.0, 7.13.0-123, 7.13.0-123-gfx942, 7.13.0-123-gfx942;gfx950
+_ROCM_VERSION_RE = re.compile(r"^\d+(?:\.\d+){0,3}(?:-\d+)?(?:-gfx\d+(?:;gfx\d+)*)?$")
+_ROCM_BUILD_NUMBER_RE = re.compile(r"^\d+(?:\.\d+){0,3}-(\d+)")
+
+
+def _validate_rocm_version_string(rocm_version: str) -> str:
+    if not _ROCM_VERSION_RE.match(rocm_version):
+        raise ValueError(f"ROCm version has invalid format: {rocm_version}")
+    return rocm_version
 
 
 class RocmDataModel(DataModel):
@@ -58,6 +68,18 @@ class RocmDataModel(DataModel):
         Returns:
             str: The validated ROCm version string.
         """
-        if not re.match(r"^\d+(?:\.\d+){0,3}(-\d+)?$", rocm_version):
-            raise ValueError(f"ROCm version has invalid format: {rocm_version}")
-        return rocm_version
+        return _validate_rocm_version_string(rocm_version)
+
+    @field_validator("rocm_sub_versions")
+    @classmethod
+    def validate_rocm_sub_versions(cls, rocm_sub_versions: dict[str, str]) -> dict[str, str]:
+        for value in rocm_sub_versions.values():
+            _validate_rocm_version_string(value)
+        return rocm_sub_versions
+
+    @property
+    def build_number(self) -> Optional[str]:
+        """ROCm package build number from version-rocm sub-version or rocm_version."""
+        version_str = self.rocm_sub_versions.get("version-rocm") or self.rocm_version
+        match = _ROCM_BUILD_NUMBER_RE.match(version_str)
+        return match.group(1) if match else None
