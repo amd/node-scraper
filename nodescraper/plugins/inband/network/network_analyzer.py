@@ -61,17 +61,16 @@ class NetworkAnalyzer(RegexAnalyzer[NetworkDataModel, NetworkAnalyzerArgs]):
     def analyze_data(
         self, data: NetworkDataModel, args: Optional[NetworkAnalyzerArgs] = None
     ) -> TaskResult:
-        """Analyze network statistics for non-zero error counters.
-        Currently only checks ethtool -S statistics.
+        """Analyze ethtool -S statistics: regex-based (per interface) and vendor-based (RDMA-scoped).
 
         Args:
-            data: Network data model with ethtool_info containing interface statistics.
+            data: Network data model with ethtool_info and/or rdma_ethtool_statistics.
             args: Optional analyzer arguments with custom error regex support.
 
         Returns:
-            TaskResult with status OK if no errors, ERROR if any error counter > 0.
+            TaskResult with OK, WARNING (no data or vendor warning counters only), or ERROR.
         """
-        if not data.ethtool_info:
+        if not data.ethtool_info and not data.rdma_ethtool_statistics:
             self.result.message = "No network devices found"
             self.result.status = ExecutionStatus.WARNING
             return self.result
@@ -81,26 +80,23 @@ class NetworkAnalyzer(RegexAnalyzer[NetworkDataModel, NetworkAnalyzerArgs]):
 
         final_error_regex = self._convert_and_extend_error_regex(args.error_regex, self.ERROR_REGEX)
 
-        error_state = False
+        regex_error = False
         for interface_name, ethtool_info in data.ethtool_info.items():
-            errors_on_interface = []  # (error_field, value)
-            # Loop through all statistics in the ethtool statistics dict
+            errors_on_interface: list[tuple[str, int]] = []
             for stat_name, stat_value in ethtool_info.statistics.items():
-                # Check if this statistic matches any error field pattern
                 for error_regex_obj in final_error_regex:
                     if error_regex_obj.regex.match(stat_name):
-                        # Try to convert string value to int
                         try:
                             value = int(stat_value)
                         except (ValueError, TypeError):
-                            break  # Skip non-numeric values
+                            break
 
                         if value > 0:
                             errors_on_interface.append((stat_name, value))
-                        break  # Stop checking patterns once we find a match
+                        break
 
             if errors_on_interface:
-                error_state = True
+                regex_error = True
                 error_names = [e[0] for e in errors_on_interface]
                 errors_data = {field: value for field, value in errors_on_interface}
                 self._log_event(
@@ -114,9 +110,49 @@ class NetworkAnalyzer(RegexAnalyzer[NetworkDataModel, NetworkAnalyzerArgs]):
                     console_log=True,
                 )
 
-        if error_state:
+        vendor_error = False
+        vendor_warning = False
+        for stat in data.rdma_ethtool_statistics:
+            if stat.vendor_statistics is None:
+                continue
+
+            vs = stat.vendor_statistics
+            error_fields = vs.error_fields
+            warning_fields = vs.warning_fields
+
+            for field_name in error_fields + warning_fields:
+                error_value = getattr(vs, field_name, None)
+                if error_value is not None and error_value > 0:
+                    is_warning_tier = field_name in warning_fields
+                    priority = EventPriority.WARNING if is_warning_tier else EventPriority.ERROR
+                    if is_warning_tier:
+                        vendor_warning = True
+                    else:
+                        vendor_error = True
+                    desc = (
+                        f"Ethtool warning detected: {field_name}"
+                        if is_warning_tier
+                        else f"Ethtool error detected: {field_name}"
+                    )
+                    self._log_event(
+                        category=EventCategory.NETWORK,
+                        description=desc,
+                        data={
+                            "netdev": stat.netdev,
+                            "rdma_ifname": stat.rdma_ifname,
+                            "error_field": field_name,
+                            "error_count": error_value,
+                        },
+                        priority=priority,
+                        console_log=True,
+                    )
+
+        if regex_error or vendor_error:
             self.result.message = "Network errors detected in statistics"
             self.result.status = ExecutionStatus.ERROR
+        elif vendor_warning:
+            self.result.message = "Network vendor ethtool warning counters non-zero"
+            self.result.status = ExecutionStatus.WARNING
         else:
             self.result.message = "No network errors detected in statistics"
             self.result.status = ExecutionStatus.OK

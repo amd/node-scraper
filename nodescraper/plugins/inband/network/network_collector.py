@@ -23,15 +23,24 @@
 # SOFTWARE.
 #
 ###############################################################################
+import json
 import re
 from typing import Dict, List, Optional, Tuple
+
+from pydantic import ValidationError
 
 from nodescraper.base import InBandDataCollector
 from nodescraper.connection.inband import TextFileArtifact
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.models import TaskResult
+from nodescraper.utils import get_exception_traceback
 
 from .collector_args import NetworkCollectorArgs
+from .ethtool_vendor import (
+    VENDOR_PREFIX_MAP,
+    EthtoolStatistics,
+    VendorEthtoolStatisticsModel,
+)
 from .networkdata import (
     EthtoolInfo,
     IpAddress,
@@ -53,6 +62,7 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
     CMD_NEIGHBOR = "ip neighbor show"
     CMD_ETHTOOL_TEMPLATE = "ethtool {interface}"
     CMD_ETHTOOL_S_TEMPLATE = "ethtool -S {interface}"
+    CMD_RDMA_LINK_JSON = "rdma link -j"
     CMD_PING = "ping"
     CMD_WGET = "wget"
     CMD_CURL = "curl"
@@ -519,6 +529,151 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
 
         return ethtool_data
 
+    def _collect_rdma_link_json(self) -> Optional[list[dict]]:
+        """Parse JSON from `rdma link -j`. Returns None on failure, [] when no links."""
+        res = self._run_sut_cmd(self.CMD_RDMA_LINK_JSON)
+        if res.exit_code != 0:
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description="rdma link -j failed (RDMA-scoped ethtool collection skipped)",
+                data={
+                    "command": self.CMD_RDMA_LINK_JSON,
+                    "exit_code": res.exit_code,
+                    "stderr": res.stderr,
+                },
+                priority=EventPriority.WARNING,
+            )
+            return None
+        if not res.stdout.strip():
+            return []
+        try:
+            parsed = json.loads(res.stdout)
+        except json.JSONDecodeError as e:
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description="Failed to parse rdma link -j JSON",
+                data={"exception": get_exception_traceback(e)},
+                priority=EventPriority.WARNING,
+            )
+            return None
+        if not isinstance(parsed, list):
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description="Unexpected rdma link -j JSON type",
+                data={"data_type": type(parsed).__name__},
+                priority=EventPriority.WARNING,
+            )
+            return None
+        return parsed
+
+    def _collect_rdma_scoped_ethtool_statistic(
+        self, netdev: str, ifname: str
+    ) -> Optional[EthtoolStatistics]:
+        """Run `ethtool -S` for netdev and attach vendor-parsed stats (prefix from RDMA ifname)."""
+        cmd_s = f"ethtool -S {netdev}"
+        res = self._run_sut_cmd(cmd_s, sudo=True)
+        if res.exit_code != 0:
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description=f"Error executing ethtool -S for device {netdev}",
+                data={
+                    "command": cmd_s,
+                    "exit_code": res.exit_code,
+                    "stderr": res.stderr,
+                },
+                priority=EventPriority.ERROR,
+                console_log=True,
+            )
+            return None
+
+        if res.stdout:
+            self.result.artifacts.append(
+                TextFileArtifact(
+                    filename=f"rdma-ethtool-{netdev}.log",
+                    contents=res.stdout,
+                )
+            )
+        stats_dict = self._parse_ethtool_statistics(res.stdout, netdev)
+
+        vendor_stats: Optional[VendorEthtoolStatisticsModel] = None
+        for prefix, vendor_cls in VENDOR_PREFIX_MAP.items():
+            if ifname.startswith(prefix):
+                vendor_fields = set(vendor_cls.model_fields.keys())
+                stat_fields = set(stats_dict.keys()) - {"netdev"}
+
+                missing_fields = vendor_fields - stat_fields
+                if missing_fields:
+                    sorted_missing = sorted(missing_fields)
+                    self._log_event(
+                        category=EventCategory.NETWORK,
+                        description=f"Missing fields in ethtool statistic for {netdev}",
+                        data={
+                            "netdev": netdev,
+                            "ifname": ifname,
+                            "missing_fields_count": len(sorted_missing),
+                            "missing_fields": sorted_missing[:50],
+                        },
+                        priority=EventPriority.WARNING,
+                    )
+
+                filtered_stats = {k: v for k, v in stats_dict.items() if k in vendor_fields}
+                try:
+                    vendor_stats = vendor_cls.model_validate(filtered_stats)
+                except ValidationError as ve:
+                    self._log_event(
+                        category=EventCategory.NETWORK,
+                        description=f"Failed to build vendor ethtool model for {netdev}",
+                        data={"exception": get_exception_traceback(ve)},
+                        priority=EventPriority.WARNING,
+                    )
+                break
+
+        return EthtoolStatistics(
+            netdev=netdev,
+            rdma_ifname=ifname or None,
+            vendor_statistics=vendor_stats,
+        )
+
+    def _collect_rdma_scoped_ethtool(self) -> tuple[List[str], List[EthtoolStatistics]]:
+        """Collect ethtool -S for netdevs listed on RDMA links (error-scraper EthtoolCollector parity)."""
+        netdev_list: List[str] = []
+        statistics_list: List[EthtoolStatistics] = []
+
+        link_data = self._collect_rdma_link_json()
+        if link_data is None:
+            return netdev_list, statistics_list
+
+        for link in link_data:
+            if not isinstance(link, dict):
+                self._log_event(
+                    category=EventCategory.NETWORK,
+                    description="Invalid data type for RDMA link entry",
+                    data={"data_type": type(link).__name__},
+                    priority=EventPriority.WARNING,
+                )
+                continue
+
+            netdev = link.get("netdev") or ""
+            ifname = link.get("ifname") or ""
+
+            if netdev:
+                netdev_list.append(netdev)
+                stat = self._collect_rdma_scoped_ethtool_statistic(netdev, ifname)
+                if stat is not None:
+                    statistics_list.append(stat)
+
+        if netdev_list:
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description=(
+                    f"Collected RDMA-scoped ethtool -S for {len(statistics_list)}/"
+                    f"{len(netdev_list)} netdev(s) from rdma link"
+                ),
+                priority=EventPriority.INFO,
+            )
+
+        return netdev_list, statistics_list
+
     def _collect_lldp_info(self) -> None:
         """Collect LLDP information using lldpcli and lldpctl commands."""
         # Run lldpcli show neighbor
@@ -618,6 +773,8 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
         neighbors = []
         ethtool_data = {}
         network_accessible: Optional[bool] = None
+        rdma_ethtool_netdevs: List[str] = []
+        rdma_ethtool_statistics: List[EthtoolStatistics] = []
 
         # Check network connectivity if URL is provided
         if args and args.url:
@@ -661,6 +818,9 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
                 description=f"Collected ethtool info for {len(ethtool_data)} interfaces",
                 priority=EventPriority.INFO,
             )
+
+        if self.system_info.os_family == OSFamily.LINUX:
+            rdma_ethtool_netdevs, rdma_ethtool_statistics = self._collect_rdma_scoped_ethtool()
 
         # Collect routing table
         res_route = self._run_sut_cmd(self.CMD_ROUTE)
@@ -724,6 +884,8 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
             rules=rules,
             neighbors=neighbors,
             ethtool_info=ethtool_data,
+            rdma_ethtool_netdevs=rdma_ethtool_netdevs,
+            rdma_ethtool_statistics=rdma_ethtool_statistics,
             accessible=network_accessible,
         )
         self.result.status = ExecutionStatus.OK

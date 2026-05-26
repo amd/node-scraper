@@ -242,6 +242,44 @@ def test_nic_data_model_with_pensando_nic(collector):
     assert data.pensando_nic_cards[1].serial_number == "FPL253710E5"
 
 
+def test_collect_data_not_ran_when_no_nic_hardware(collector, conn_mock):
+    """Skip collection when discovery finds no Broadcom or Pensando NICs."""
+    collector.system_info.os_family = OSFamily.LINUX
+    collector._run_sut_cmd = MagicMock(
+        return_value=MagicMock(exit_code=1, stdout="", stderr="not found", command="")
+    )
+
+    result, data = collector.collect_data()
+
+    assert result.status == ExecutionStatus.NOT_RAN
+    assert data is None
+    assert "skipped" in result.message.lower()
+    assert collector._run_sut_cmd.call_count <= 4
+
+
+def test_collect_data_skips_nicctl_commands_when_no_pensando_cards(collector, conn_mock):
+    """Do not run nicctl global/legacy commands when nicctl show card finds no cards."""
+    collector.system_info.os_family = OSFamily.LINUX
+    commands_run: list[str] = []
+
+    def run_sut_cmd_side_effect(cmd, **kwargs):
+        commands_run.append(cmd)
+        if "niccli" in cmd and ("--list" in cmd or "--list_devices" in cmd or "--listdev" in cmd):
+            return MagicMock(exit_code=0, stdout=NICCLI_LISTDEV_OUTPUT, stderr="", command=cmd)
+        if cmd.strip() == "nicctl show card":
+            return MagicMock(exit_code=1, stdout="", stderr="no card", command=cmd)
+        return MagicMock(exit_code=0, stdout="", stderr="", command=cmd)
+
+    collector._run_sut_cmd = MagicMock(side_effect=run_sut_cmd_side_effect)
+
+    result, data = collector.collect_data()
+
+    assert result.status == ExecutionStatus.OK
+    assert data is not None
+    assert not any(c.startswith("nicctl show card flash") for c in commands_run)
+    assert not any(c == "nicctl --version" for c in commands_run)
+
+
 def test_collect_data_success(collector, conn_mock):
     """Test successful collection of niccli/nicctl data."""
     collector.system_info.os_family = OSFamily.LINUX
