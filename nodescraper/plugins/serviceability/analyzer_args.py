@@ -40,13 +40,13 @@ class ServiceabilityAnalyzerArgs(AnalyzerArgs):
     engine_backend: EngineBackend = Field(
         default="python",
         description=(
-            "How to invoke the SE: 'python' (serviceability_engine bindings), "
+            "How to invoke the SE: 'python' (service_hub bindings), "
             "'cli' (external analyze subcommand), or 'subprocess' (--input/--output protocol)."
         ),
     )
     engine_python_module: str = Field(
-        default="serviceability_engine",
-        description="Python package providing ServiceabilityEngine bindings (python backend).",
+        default="service_hub",
+        description="Python package providing ServiceHub bindings (python backend).",
     )
     engine_executable: Optional[str] = Field(
         default=None,
@@ -91,7 +91,7 @@ class ServiceabilityAnalyzerArgs(AnalyzerArgs):
         if self.skip_engine:
             return self
         if not self.afid_sag_path:
-            raise ValueError("afid_sag_path is required when running the serviceability engine.")
+            raise ValueError("afid_sag_path is required when running Service Hub.")
         if self.engine_backend == "python":
             return self
         has_exe = self.engine_executable is not None

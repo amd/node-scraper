@@ -40,7 +40,7 @@ from nodescraper.plugins.serviceability.serviceability_data import (
 
 
 class Mi3xxAnalyzer(DataAnalyzer[ServiceabilityDataModel, ServiceabilityAnalyzerArgs]):
-    """Build AFID events from collected data and run the serviceability engine."""
+    """Build AFID events from collected data and run Service Hub."""
 
     DATA_MODEL = ServiceabilityDataModel
 
@@ -82,7 +82,6 @@ class Mi3xxAnalyzer(DataAnalyzer[ServiceabilityDataModel, ServiceabilityAnalyzer
         data.serviceability = block
         self.result.status = ExecutionStatus.OK
         self.result.message = (
-            f"Serviceability engine: {len(block.solution)} solution(s) "
-            f"from {len(events)} event(s)"
+            f"Service Hub: {len(block.solution)} solution(s) " f"from {len(events)} event(s)"
         )
         return self.result

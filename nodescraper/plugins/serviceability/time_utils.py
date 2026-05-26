@@ -50,7 +50,7 @@ def is_valid_iso_datetime(value: str) -> bool:
 
 
 def normalize_se_timestamp(value: str) -> str:
-    """Normalize a timestamp to the serviceability engine wire format.
+    """Normalize a timestamp to the Service Hub wire format.
 
     Accepts ISO-8601 (``2026-05-07T12:50:42``) and SE-style strings with a space
     separator (``2026-05-07 12:50:42.096-07:00``).

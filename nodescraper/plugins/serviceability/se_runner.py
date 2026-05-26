@@ -23,7 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
-"""Run the AMD serviceability engine (Python API, CLI, or custom subprocess)."""
+"""Run the AMD Service Hub (Python API, CLI, or custom subprocess)."""
 from __future__ import annotations
 
 import importlib
@@ -41,7 +41,7 @@ EngineBackend = Literal["python", "cli", "subprocess"]
 
 
 class SeRunError(RuntimeError):
-    """Raised when the serviceability engine fails or returns invalid output."""
+    """Raised when Service Hub fails or returns invalid output."""
 
 
 def resolve_engine_command(
@@ -64,7 +64,7 @@ def resolve_engine_command(
 def run_se(
     *,
     engine_backend: EngineBackend = "python",
-    engine_python_module: str = "serviceability_engine",
+    engine_python_module: str = "service_hub",
     engine_executable: Optional[str] = None,
     engine_entry_point: Optional[str] = None,
     afid_events: list[AfidEvent],
@@ -114,11 +114,11 @@ def _run_se_python(
     try:
         se = importlib.import_module(engine_python_module)
         SagDocument = se.SagDocument
-        ServiceabilityEngine = se.ServiceabilityEngine
+        ServiceHub = se.ServiceHub
         EventRecord = se.EventRecord
     except (ImportError, AttributeError) as exc:
         raise SeRunError(
-            f"Cannot import {engine_python_module} bindings — install serviceability-engine "
+            f"Cannot import {engine_python_module} bindings — install service-hub "
             f"and build the Python extension (uv build)."
         ) from exc
 
@@ -133,10 +133,10 @@ def _run_se_python(
             )
             for item in wire_events
         ]
-        analysis = ServiceabilityEngine(sag).analyze(records)
+        analysis = ServiceHub(sag).analyze(records)
         report = analysis.to_dict()
     except Exception as exc:
-        raise SeRunError(f"Serviceability engine analyze() failed: {exc}") from exc
+        raise SeRunError(f"Service Hub analyze() failed: {exc}") from exc
 
     return serviceability_block_from_engine(afid_events, report)
 
@@ -176,7 +176,7 @@ def _run_se_cli(
     try:
         report = json.loads(completed.stdout or "{}")
     except json.JSONDecodeError as exc:
-        raise SeRunError(f"Invalid JSON from serviceability engine CLI: {exc}") from exc
+        raise SeRunError(f"Invalid JSON from Service Hub CLI: {exc}") from exc
 
     from .se_adapter import recommendations_from_report_dict
 
@@ -226,11 +226,11 @@ def _run_se_subprocess(
         _run_subprocess(argv, timeout_seconds=timeout_seconds)
 
         if not output_path.is_file():
-            raise SeRunError(f"Serviceability engine did not write output file: {output_path}")
+            raise SeRunError(f"Service Hub did not write output file: {output_path}")
         try:
             raw = json.loads(output_path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as exc:
-            raise SeRunError(f"Invalid JSON from serviceability engine: {exc}") from exc
+            raise SeRunError(f"Invalid JSON from Service Hub: {exc}") from exc
 
     block = ServiceabilityBlock.model_validate(raw)
     if not block.afid_events:
@@ -241,7 +241,7 @@ def _run_se_subprocess(
 def _run_subprocess(argv: list[str], *, timeout_seconds: int) -> subprocess.CompletedProcess:
     exe = Path(argv[0])
     if not exe.is_file() and not _command_on_path(argv[0]):
-        raise SeRunError(f"Serviceability engine not found or not executable: {argv[0]!r}")
+        raise SeRunError(f"Service Hub not found or not executable: {argv[0]!r}")
     try:
         completed = subprocess.run(
             argv,
@@ -251,15 +251,15 @@ def _run_subprocess(argv: list[str], *, timeout_seconds: int) -> subprocess.Comp
             check=False,
         )
     except subprocess.TimeoutExpired as exc:
-        raise SeRunError(f"Serviceability engine timed out after {timeout_seconds}s") from exc
+        raise SeRunError(f"Service Hub timed out after {timeout_seconds}s") from exc
     except OSError as exc:
-        raise SeRunError(f"Failed to start serviceability engine: {exc}") from exc
+        raise SeRunError(f"Failed to start Service Hub: {exc}") from exc
 
     if completed.returncode != 0:
         stderr = (completed.stderr or "").strip()
         stdout = (completed.stdout or "").strip()
         detail = stderr or stdout or f"exit code {completed.returncode}"
-        raise SeRunError(f"Serviceability engine failed: {detail}")
+        raise SeRunError(f"Service Hub failed: {detail}")
     return completed
 
 

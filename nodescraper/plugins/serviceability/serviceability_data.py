@@ -72,7 +72,7 @@ class ServiceabilityDataModel(DataModel):
     bmc_host: Optional[str] = None
     afid_events: List[AfidEvent] = Field(
         default_factory=list,
-        description="Serviceability engine input; built during analysis when not pre-filled.",
+        description="Service Hub input; built during analysis when not pre-filled.",
     )
     serviceability: Optional[ServiceabilityBlock] = Field(
         default=None,

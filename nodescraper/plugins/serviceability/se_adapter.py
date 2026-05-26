@@ -23,7 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
-"""Map node-scraper serviceability models to/from the AMD serviceability-engine API."""
+"""Map node-scraper serviceability models to/from the AMD Service Hub API."""
 from __future__ import annotations
 
 from collections import defaultdict
@@ -38,7 +38,7 @@ _DEFAULT_SOLUTION_TIERS = (
 
 
 def afid_events_to_engine_input(afid_events: list[AfidEvent]) -> list[dict[str, Any]]:
-    """Convert plugin AFID events to serviceability-engine wire-format dicts.
+    """Convert plugin AFID events to Service Hub wire-format dicts.
 
     The engine triages on (afid, location, count). Duplicate (afid, unit) pairs
     are merged by summing counts. Timestamp is preserved only on the plugin side.
@@ -58,7 +58,7 @@ def recommendations_from_report_dict(
     *,
     solution_tiers: tuple[str, ...] = _DEFAULT_SOLUTION_TIERS,
 ) -> list[dict[str, Any]]:
-    """Derive grouped recommendations from an :func:`serviceability_engine.api.analyze` report."""
+    """Derive grouped recommendations from an :func:`service_hub.api.analyze` report."""
     if "recommendations" in report:
         return list(report["recommendations"])
 
@@ -132,6 +132,6 @@ def _build_solution_reasoning(
     sag_pid = report.get("sag_pid") or "unknown"
     sag_revision = report.get("sag_revision") or "unknown"
     return (
-        f"Serviceability engine (SAG {sag_pid} rev {sag_revision}): "
+        f"Service Hub (SAG {sag_pid} rev {sag_revision}): "
         f"{len(solutions)} recommendation(s) from {len(afid_events)} input event(s)."
     )
