@@ -66,6 +66,13 @@ class ServiceabilityDataModel(DataModel):
     responses: dict[str, Any] = {}
     rf_events: list[Any] = []
     assembly_info: Dict[str, DeviceInfo] = {}
+    cper_raw: Dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "Base64-encoded CPER attachment bytes keyed by Redfish event Id; "
+            "populated during collection and decoded in the analyzer."
+        ),
+    )
     cper_data: Dict[str, Any] = {}
     component_details: Optional[str] = None
     log_path: Optional[str] = None

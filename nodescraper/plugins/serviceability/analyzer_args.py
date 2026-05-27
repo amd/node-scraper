@@ -54,8 +54,28 @@ class ServiceabilityAnalyzerArgs(AnalyzerArgs):
         default=False,
         description="If True, only build afid_events without running the service engine.",
     )
+    cper_decode_module: Optional[str] = Field(
+        default=None,
+        description=(
+            "Import path of the Python module that decodes CPER blobs (e.g. "
+            "vendor.package.cdump_analyzer). Required when collected events "
+            "include CPER attachments to decode before running the service engine."
+        ),
+    )
+    cper_decode_method: str = Field(
+        default="analyze_cper",
+        description=(
+            "Name of the callable on cper_decode_module. It must accept a "
+            "binary file-like CPER payload and return (return_code, decode_dict)."
+        ),
+    )
 
-    @field_validator("afid_sag_path", "engine_python_module", "engine_display_name")
+    @field_validator(
+        "afid_sag_path",
+        "engine_python_module",
+        "engine_display_name",
+        "cper_decode_module",
+    )
     @classmethod
     def _strip_optional_strings(cls, value: Optional[str]) -> Optional[str]:
         if value is None:

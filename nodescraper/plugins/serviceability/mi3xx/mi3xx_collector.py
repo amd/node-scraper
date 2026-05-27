@@ -25,6 +25,7 @@
 ###############################################################################
 from __future__ import annotations
 
+import base64
 from typing import Any, Optional
 
 from nodescraper.plugins.serviceability.serviceability_collector import (
@@ -67,12 +68,63 @@ class MI3XXCollector(ServiceabilityCollectorBase[MI3XXCollectorArgs]):
         return filtered
 
     def is_cper_event(self, event: dict) -> bool:
+        if "CPER" in event:
+            return True
+        if str(event.get("DiagnosticDataType", "")).upper() == "CPER":
+            return True
+        if event.get("AdditionalDataURI"):
+            return True
         message_id = str(event.get("MessageId", "")).lower()
         message = str(event.get("Message", "")).lower()
         return "cper" in message_id or "cper" in message or "diagnostic" in message_id
 
-    def collect_cper_data(self, rf_events: list[Any]) -> dict[str, Any]:
-        return {}
+    def collect_cper_attachments(self, rf_events: list[Any]) -> dict[str, str]:
+        """Fetch CPER binaries from BMC; decoding runs in the analyzer."""
+        parent = self.parent or self.__class__.__name__
+        attachments: dict[str, str] = {}
+        for event in rf_events:
+            if not isinstance(event, dict) or not self.is_cper_event(event):
+                continue
+            uri = event.get("AdditionalDataURI")
+            event_id = event.get("Id")
+            if not uri or not event_id:
+                continue
+
+            try:
+                resp = self.connection.get_response(uri)
+            except Exception as exc:  # noqa: BLE001
+                self.logger.warning(
+                    "(%s) Failed to fetch CPER attachment for event %s: %s",
+                    parent,
+                    event_id,
+                    exc,
+                )
+                continue
+            if not resp.ok:
+                self.logger.warning(
+                    "(%s) Failed to fetch CPER attachment for event %s: HTTP %s",
+                    parent,
+                    event_id,
+                    resp.status_code,
+                )
+                continue
+
+            size_bytes = len(resp.content)
+            attachments[str(event_id)] = base64.b64encode(resp.content).decode("ascii")
+            self.logger.info(
+                "(%s) Fetched CPER attachment for Redfish event %s (%d bytes)",
+                parent,
+                event_id,
+                size_bytes,
+            )
+
+        if attachments:
+            self.logger.info(
+                "(%s) Collected %d CPER attachment(s) for analyzer decode",
+                parent,
+                len(attachments),
+            )
+        return attachments
 
     def parse_assembly_entry(
         self,

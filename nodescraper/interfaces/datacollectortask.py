@@ -151,7 +151,6 @@ class DataCollector(Task, abc.ABC, Generic[TConnection, TDataModel, TCollectArg]
         Args:
             system_info (SystemInfo): system info object for target system for data collection
             system_interaction (SystemInteraction): enum to indicate the type of actions that can be performed when interacting with the system
-            event_reporter (str, optional): Described the reporter of the event. Defaults to DEFAULT_EVENT_REPORTER.
             logger (Optional[logging.Logger], optional): python logger object. Defaults to None.
             log_path (Optional[str], optional): file system log path. Defaults to None.
         """

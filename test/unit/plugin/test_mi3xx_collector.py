@@ -158,6 +158,39 @@ def test_mi3xx_collector_satisfies_reference_time_helper(mi3xx_collector):
     assert not mi3xx_collector.satisfies_reference_time(DUMMY_TIMESTAMP_EARLIER, args)
 
 
+def test_mi3xx_collector_fetches_cper_attachments(mi3xx_collector, redfish_conn_mock):
+    import base64
+    from unittest.mock import MagicMock
+
+    redfish_conn_mock.run_get_paged.return_value = RedfishGetResult(
+        path=EVENT_URI,
+        success=True,
+        data={
+            RF_MEMBERS: [
+                {
+                    "Id": "cper-evt-1",
+                    "Created": DUMMY_TIMESTAMP_LATER,
+                    "DiagnosticDataType": "CPER",
+                    "AdditionalDataURI": "/redfish/v1/Systems/UBB/LogServices/EventLog/Attachments/1",
+                }
+            ]
+        },
+        status_code=200,
+    )
+    response = MagicMock()
+    response.ok = True
+    response.status_code = 200
+    response.content = b"\x01\x02dummy-cper"
+    redfish_conn_mock.get_response.return_value = response
+
+    args = MI3XXCollectorArgs(rf_event_log_uri=EVENT_URI)
+    result, data = mi3xx_collector.collect_data(args=args)
+    assert result.status == ExecutionStatus.OK
+    assert data is not None
+    assert data.cper_raw["cper-evt-1"] == base64.b64encode(b"\x01\x02dummy-cper").decode("ascii")
+    assert data.cper_data == {}
+
+
 def test_mi3xx_collector_filters_events_by_reference_time(mi3xx_collector, redfish_conn_mock):
     redfish_conn_mock.run_get_paged.return_value = RedfishGetResult(
         path=EVENT_URI,

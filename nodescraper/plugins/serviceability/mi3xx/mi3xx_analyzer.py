@@ -32,6 +32,10 @@ from nodescraper.interfaces import DataAnalyzer
 from nodescraper.models import TaskResult
 from nodescraper.plugins.serviceability.afid_events import build_afid_events_from_data
 from nodescraper.plugins.serviceability.analyzer_args import ServiceabilityAnalyzerArgs
+from nodescraper.plugins.serviceability.cper_decode import (
+    CperDecodeError,
+    decode_cper_raw_attachments,
+)
 from nodescraper.plugins.serviceability.se_adapter import (
     format_serviceability_solution_lines,
 )
@@ -67,6 +71,51 @@ class MI3XXAnalyzer(DataAnalyzer[ServiceabilityDataModel, ServiceabilityAnalyzer
             self._log_serviceability_solutions(data.serviceability)
             return self.result
 
+        parent = self.parent or self.__class__.__name__
+        cper_data = data.cper_data or {}
+        if data.cper_raw and not cper_data:
+            if not args.cper_decode_module:
+                self.logger.warning(
+                    "(%s) %d CPER attachment(s) collected but cper_decode_module is "
+                    "not set in analysis_args; skipping CPER decode",
+                    parent,
+                    len(data.cper_raw),
+                )
+            else:
+                self.logger.info(
+                    "(%s) Decoding %d CPER attachment(s) via %s.%s",
+                    parent,
+                    len(data.cper_raw),
+                    args.cper_decode_module,
+                    args.cper_decode_method,
+                )
+                try:
+                    cper_data = decode_cper_raw_attachments(
+                        data.cper_raw,
+                        cper_decode_module=args.cper_decode_module,
+                        cper_decode_method=args.cper_decode_method,
+                        logger=self.logger,
+                    )
+                    data.cper_data = cper_data
+                    self.logger.info(
+                        "(%s) CPER decode finished: %d of %d attachment(s) decoded",
+                        parent,
+                        len(cper_data),
+                        len(data.cper_raw),
+                    )
+                except CperDecodeError as exc:
+                    self.logger.warning(
+                        "(%s) %s; continuing without decoded CPER",
+                        parent,
+                        exc,
+                    )
+        elif cper_data:
+            self.logger.info(
+                "(%s) Using %d pre-decoded CPER record(s) from collection",
+                parent,
+                len(cper_data),
+            )
+
         try:
             block = run_service_engine(
                 engine_python_module=args.engine_python_module,  # type: ignore[arg-type]
@@ -74,7 +123,7 @@ class MI3XXAnalyzer(DataAnalyzer[ServiceabilityDataModel, ServiceabilityAnalyzer
                 afid_events=events,
                 afid_sag_path=args.afid_sag_path,  # type: ignore[arg-type]
                 rf_events=data.rf_events,
-                cper_data=data.cper_data or None,
+                cper_data=cper_data or None,
             )
         except (SeRunError, ValueError) as exc:
             self.result.status = ExecutionStatus.ERROR
@@ -85,9 +134,14 @@ class MI3XXAnalyzer(DataAnalyzer[ServiceabilityDataModel, ServiceabilityAnalyzer
         self._log_serviceability_solutions(block)
         engine_label = args.engine_display_name or args.engine_python_module
         self.result.status = ExecutionStatus.OK
+        cper_summary = ""
+        if cper_data:
+            cper_summary = f", {len(cper_data)} decoded CPER(s)"
+        elif data.cper_raw:
+            cper_summary = f", {len(data.cper_raw)} CPER attachment(s) not decoded"
         self.result.message = (
             f"{engine_label}: {len(block.solution)} solution(s) "
-            f"from {len(data.rf_events)} Redfish event(s)"
+            f"from {len(data.rf_events)} Redfish event(s){cper_summary}"
         )
         return self.result
 

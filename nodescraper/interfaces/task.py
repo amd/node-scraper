@@ -73,8 +73,10 @@ class Task(abc.ABC):
         if session_id is not None:
             try:
                 uuid.UUID(str(session_id))
-            except (ValueError, TypeError, AttributeError):
-                raise ValueError("session_id must be a valid UUID") from None
+            except (ValueError, TypeError, AttributeError) as e:
+                raise ValueError(
+                    f"session_id must be a valid UUID string, got: {session_id}"
+                ) from e
         self.session_id: Optional[str] = str(session_id) if session_id is not None else None
 
         self.result: TaskResult = self._init_result()
@@ -166,7 +168,22 @@ class Task(abc.ABC):
         )
 
         if console_log:
-            self.logger.log(getattr(logging, priority.name, logging.INFO), description)
+            level = getattr(logging, priority.name, logging.INFO)
+            prefix = ""
+            if data:
+                et = data.get("exception_type")
+                if et:
+                    prefix = f"[{et}] "
+            self.logger.log(level, "%s%s", prefix, description)
+            if data:
+                tb = data.get("traceback")
+                if tb:
+                    tb_text = "".join(tb) if isinstance(tb, list) else str(tb)
+                    if tb_text.strip():
+                        self.logger.log(level, "Traceback:\n%s", tb_text.rstrip())
+                det = data.get("details")
+                if det and not tb:
+                    self.logger.log(level, "Details: %s", det)
 
         self.result.events.append(event)
 

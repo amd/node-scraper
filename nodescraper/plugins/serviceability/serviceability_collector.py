@@ -76,8 +76,8 @@ class ServiceabilityCollectorBase(
         """Return whether a Redfish event entry should be treated as diagnostic-backed."""
 
     @abc.abstractmethod
-    def collect_cper_data(self, rf_events: list[Any]) -> dict[str, Any]:
-        """Fetch and decode diagnostic attachments for qualifying events (subclass-defined)."""
+    def collect_cper_attachments(self, rf_events: list[Any]) -> dict[str, str]:
+        """Fetch CPER binary attachments for qualifying events (base64 by event Id)."""
 
     @abc.abstractmethod
     def parse_assembly_entry(
@@ -151,13 +151,13 @@ class ServiceabilityCollectorBase(
                 entry = assemblies[0]
                 assembly_info[device] = self.parse_assembly_entry(device, entry, svc_args)
 
-        cper_data = self.collect_cper_data(filtered_members or [])
+        cper_raw = self.collect_cper_attachments(filtered_members or [])
 
         data = ServiceabilityDataModel(
             responses=responses,
             rf_events=filtered_members or [],
             assembly_info=assembly_info,
-            cper_data=cper_data,
+            cper_raw=cper_raw,
             component_details=self._fetch_component_details(responses, svc_args),
             log_path=self._log_path,
             bmc_host=bmc_host,

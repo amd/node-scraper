@@ -62,7 +62,7 @@ class _StubServiceabilityCollector(ServiceabilityCollectorBase[MI3XXCollectorArg
     def is_cper_event(self, event: dict) -> bool:
         return False
 
-    def collect_cper_data(self, rf_events: list[Any]) -> dict[str, Any]:
+    def collect_cper_attachments(self, rf_events: list[Any]) -> dict[str, str]:
         return {}
 
     def parse_assembly_entry(
