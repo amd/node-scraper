@@ -24,24 +24,18 @@
 #
 ###############################################################################
 import re
-from typing import List, Optional
+from typing import ClassVar, List, Optional
 
-from pydantic import field_validator
+from pydantic import computed_field, field_validator
 
 from nodescraper.models import DataModel
 
-# e.g. 7.13.0, 7.13.0-123, 7.13.0-123-gfx942, 7.13.0-123-gfx942;gfx950
-_ROCM_VERSION_RE = re.compile(r"^\d+(?:\.\d+){0,3}(?:-\d+)?(?:-gfx\d+(?:;gfx\d+)*)?$")
-_ROCM_BUILD_NUMBER_RE = re.compile(r"^\d+(?:\.\d+){0,3}-(\d+)")
-
-
-def _validate_rocm_version_string(rocm_version: str) -> str:
-    if not _ROCM_VERSION_RE.match(rocm_version):
-        raise ValueError(f"ROCm version has invalid format: {rocm_version}")
-    return rocm_version
+_ROCM_VERSION_RE = re.compile(r"^(\d+(?:\.\d+){0,3})(?:-(\d+)(?:-gfx\w+(?:;gfx\w+)*)?)?$")
 
 
 class RocmDataModel(DataModel):
+    ROCM_VERSION_FILENAME: ClassVar[str] = "version-rocm"
+
     rocm_version: str
     rocm_sub_versions: dict[str, str] = {}
     rocminfo: List[str] = []
@@ -53,33 +47,28 @@ class RocmDataModel(DataModel):
     clinfo: List[str] = []
     kfd_proc: List[str] = []
 
+    @staticmethod
+    def _validate_version_string(version: str) -> str:
+        if not _ROCM_VERSION_RE.match(version):
+            raise ValueError(f"ROCm version has invalid format: {version}")
+        return version
+
     @field_validator("rocm_version")
     @classmethod
     def validate_rocm_version(cls, rocm_version: str) -> str:
-        """
-        Validate the ROCm version format.
-
-        Args:
-            rocm_version (str): The ROCm version string to validate.
-
-        Raises:
-            ValueError: If the ROCm version does not match the expected format.
-
-        Returns:
-            str: The validated ROCm version string.
-        """
-        return _validate_rocm_version_string(rocm_version)
+        return cls._validate_version_string(rocm_version)
 
     @field_validator("rocm_sub_versions")
     @classmethod
-    def validate_rocm_sub_versions(cls, rocm_sub_versions: dict[str, str]) -> dict[str, str]:
-        for value in rocm_sub_versions.values():
-            _validate_rocm_version_string(value)
-        return rocm_sub_versions
+    def validate_rocm_sub_versions(cls, sub_versions: dict[str, str]) -> dict[str, str]:
+        for version in sub_versions.values():
+            cls._validate_version_string(version)
+        return sub_versions
 
-    @property
+    @computed_field
     def build_number(self) -> Optional[str]:
-        """ROCm package build number from version-rocm sub-version or rocm_version."""
-        version_str = self.rocm_sub_versions.get("version-rocm") or self.rocm_version
-        match = _ROCM_BUILD_NUMBER_RE.match(version_str)
-        return match.group(1) if match else None
+        """Build tag from version-rocm sub-version, or rocm_version when absent."""
+        rocm_version = self.rocm_sub_versions.get(self.ROCM_VERSION_FILENAME, self.rocm_version)
+        if "-" in rocm_version:
+            return rocm_version.split("-")[1]
+        return None
