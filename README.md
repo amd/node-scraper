@@ -5,7 +5,7 @@ system debug.
 ## Table of Contents
 - [Installation](#installation)
   - [Install from PyPI](#install-from-pypi)
-  - [Install From Source](#install-from-source)
+  - [Install from Source](#install-from-source)
 - [CLI Usage](#cli-usage)
   - [Execution Methods](#execution-methods)
     - [Example: Remote Execution](#example-remote-execution)
@@ -38,7 +38,7 @@ Use a virtual environment if you prefer. After installation, confirm the CLI is 
 node-scraper --help
 ```
 
-### Install From Source
+### Install from Source
 Node Scraper requires Python 3.9+ for installation. After cloning this repository,
 call dev-setup.sh script with 'source'. This script creates an editable install of Node Scraper in
 a python virtual environment and also configures the pre-commit hooks for the project.
