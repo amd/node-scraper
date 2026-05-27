@@ -25,6 +25,8 @@
 ###############################################################################
 from typing import Optional
 
+from pydantic import ValidationError
+
 from nodescraper.base import InBandDataCollector
 from nodescraper.connection.inband import TextFileArtifact
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
@@ -41,7 +43,7 @@ class RocmCollector(InBandDataCollector[RocmDataModel, RocmCollectorArgs]):
     SUPPORTED_OS_FAMILY: set[OSFamily] = {OSFamily.LINUX}
 
     DATA_MODEL = RocmDataModel
-    CMD_ROCM_SUB_VERSIONS_TMPL = "grep . -r {rocm_path}/.info/*"
+    CMD_ROCM_SUB_VERSIONS_TMPL = "grep . -H -r -i {rocm_path}/.info/*"
     CMD_ROCMINFO_TMPL = "{rocm_path}/bin/rocminfo"
     CMD_ROCM_LATEST_TMPL = "ls -v -d {rocm_path}-[3-7]* | tail -1"
     CMD_ROCM_DIRS_TMPL = "ls -v -d {rocm_path}*"
@@ -99,7 +101,7 @@ class RocmCollector(InBandDataCollector[RocmDataModel, RocmCollectorArgs]):
                     self.result.message = f"ROCm version: {rocm_data.rocm_version}"
                     self.result.status = ExecutionStatus.OK
                     break
-                except ValueError as e:
+                except (ValueError, ValidationError) as e:
                     self._log_event(
                         category=EventCategory.OS,
                         description=f"Invalid ROCm version format: {res.stdout}",
