@@ -26,23 +26,21 @@
 from .afid_events import build_afid_events_from_data
 from .analyzer_args import ServiceabilityAnalyzerArgs
 from .mi3xx import (
-    Mi3xxAnalyzer,
-    Mi3xxCollector,
-    Mi3xxCollectorArgs,
-    Mi3xxDataModel,
-    Mi3xxDeviceInfo,
-    Mi3xxResult,
+    MI3XXAnalyzer,
+    MI3XXCollector,
+    MI3XXCollectorArgs,
+    MI3XXDataModel,
+    MI3XXDeviceInfo,
+    MI3XXResult,
     ServiceabilityPluginMI3XX,
     build_mi3xx_reporting_version_fields,
 )
-from .se_adapter import afid_events_to_engine_input, serviceability_block_from_engine
-from .se_models import (
-    AfidEvent,
-    SeInputPayload,
-    ServiceabilityBlock,
-    ServiceabilitySolution,
+from .se_adapter import (
+    format_serviceability_solution_lines,
+    serviceability_block_from_service_result,
 )
-from .se_runner import EngineBackend, SeRunError, resolve_engine_command, run_se
+from .se_models import AfidEvent, ServiceabilityBlock, ServiceabilitySolution
+from .se_runner import SeRunError, run_service_engine
 from .serviceability_collector import ServiceabilityCollectorBase
 from .serviceability_data import (
     DeviceInfo,
@@ -62,14 +60,12 @@ from .time_utils import (
 __all__ = [
     "AfidEvent",
     "DeviceInfo",
-    "EngineBackend",
-    "Mi3xxAnalyzer",
-    "Mi3xxCollector",
-    "Mi3xxCollectorArgs",
-    "Mi3xxDataModel",
-    "Mi3xxDeviceInfo",
-    "Mi3xxResult",
-    "SeInputPayload",
+    "MI3XXAnalyzer",
+    "MI3XXCollector",
+    "MI3XXCollectorArgs",
+    "MI3XXDataModel",
+    "MI3XXDeviceInfo",
+    "MI3XXResult",
     "SeRunError",
     "ServiceabilityAnalyzerArgs",
     "ServiceabilityBlock",
@@ -80,15 +76,14 @@ __all__ = [
     "ServiceabilityResult",
     "ServiceabilitySolution",
     "TimeOperator",
-    "afid_events_to_engine_input",
     "build_afid_events_from_data",
-    "serviceability_block_from_engine",
     "build_mi3xx_reporting_version_fields",
     "compare_iso_datetime",
+    "format_serviceability_solution_lines",
     "is_valid_iso_datetime",
     "normalize_se_timestamp",
     "parse_iso_datetime",
-    "resolve_engine_command",
-    "run_se",
+    "run_service_engine",
+    "serviceability_block_from_service_result",
     "satisfies_time_check",
 ]

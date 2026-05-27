@@ -38,7 +38,7 @@ from nodescraper.enums import ExecutionStatus
 from nodescraper.models import CollectorArgs
 from nodescraper.plugins.serviceability import (
     DeviceInfo,
-    Mi3xxCollectorArgs,
+    MI3XXCollectorArgs,
     ServiceabilityAnalyzerArgs,
     ServiceabilityDataModel,
     ServiceabilityPluginBase,
@@ -46,15 +46,16 @@ from nodescraper.plugins.serviceability import (
 from nodescraper.plugins.serviceability.serviceability_collector import (
     ServiceabilityCollectorBase,
 )
+from test.unit.plugin.serviceability_dummy_data import DUMMY_BMC_HOST, DUMMY_EVENT_URI
 
-EVENT_URI = "/redfish/v1/Systems/1/LogServices/SEL/Entries"
+EVENT_URI = DUMMY_EVENT_URI
 
 
-class _StubServiceabilityCollector(ServiceabilityCollectorBase[Mi3xxCollectorArgs]):
+class _StubServiceabilityCollector(ServiceabilityCollectorBase[MI3XXCollectorArgs]):
     def filter_event_members(
         self,
         members: list[Any],
-        args: Mi3xxCollectorArgs,
+        args: MI3XXCollectorArgs,
     ) -> list[Any]:
         return members
 
@@ -68,21 +69,21 @@ class _StubServiceabilityCollector(ServiceabilityCollectorBase[Mi3xxCollectorArg
         self,
         designation: str,
         assembly_member_entry: dict[str, Any],
-        args: Mi3xxCollectorArgs,
+        args: MI3XXCollectorArgs,
     ) -> DeviceInfo:
         return DeviceInfo(name=designation, serial_number=assembly_member_entry.get("SerialNumber"))
 
     def extract_component_details(
         self,
         firmware_inventory_payload: dict[str, Any],
-        args: Mi3xxCollectorArgs,
+        args: MI3XXCollectorArgs,
     ) -> Optional[str]:
         return firmware_inventory_payload.get("Details")
 
 
 @pytest.fixture
 def stub_serviceability_collector(system_info, redfish_conn_mock):
-    redfish_conn_mock.base_url = "https://bmc.example/redfish/v1"
+    redfish_conn_mock.base_url = f"https://{DUMMY_BMC_HOST}/redfish/v1"
     return _StubServiceabilityCollector(
         system_info=system_info,
         connection=redfish_conn_mock,
@@ -90,40 +91,53 @@ def stub_serviceability_collector(system_info, redfish_conn_mock):
     )
 
 
+def test_mi3xx_collector_args_default_event_log_uri():
+    args = MI3XXCollectorArgs()
+    uri = args.resolved_event_log_uri()
+    assert uri.startswith("/redfish/")
+    assert "EventLog" in uri
+
+
 def test_mi3xx_collector_args_requires_event_log_uri():
     with pytest.raises(ValidationError):
-        Mi3xxCollectorArgs()
+        MI3XXCollectorArgs(uri="", rf_event_log_uri="")
 
 
 def test_mi3xx_collector_args_uri_alias_prefers_uri_over_rf_event_log_uri():
-    args = Mi3xxCollectorArgs(uri=" /events ", rf_event_log_uri="/other")
-    assert args.resolved_event_log_uri() == "/events"
+    args = MI3XXCollectorArgs(
+        uri=" /redfish/v1/Systems/Dummy/LogServices/DummyEventLog/EntriesAlt ",
+        rf_event_log_uri="/redfish/v1/Systems/Dummy/LogServices/DummyEventLog/Entries",
+    )
+    assert (
+        args.resolved_event_log_uri()
+        == "/redfish/v1/Systems/Dummy/LogServices/DummyEventLog/EntriesAlt"
+    )
 
 
 def test_mi3xx_collector_args_assembly_requires_both_template_and_devices():
     with pytest.raises(ValidationError):
-        Mi3xxCollectorArgs(
+        MI3XXCollectorArgs(
             rf_event_log_uri=EVENT_URI,
             rf_assembly_uri_template="/redfish/v1/Chassis/{device}/Assembly",
         )
     with pytest.raises(ValidationError):
-        Mi3xxCollectorArgs(
+        MI3XXCollectorArgs(
             rf_event_log_uri=EVENT_URI,
-            rf_chassis_devices=["C1"],
+            rf_chassis_devices=["dummy-chassis"],
         )
 
 
 def test_mi3xx_collector_args_assembly_template_must_include_device_placeholder():
     with pytest.raises(ValidationError):
-        Mi3xxCollectorArgs(
+        MI3XXCollectorArgs(
             rf_event_log_uri=EVENT_URI,
-            rf_assembly_uri_template="/redfish/v1/Chassis/C1/Assembly",
-            rf_chassis_devices=["C1"],
+            rf_assembly_uri_template="/redfish/v1/Chassis/dummy-chassis/Assembly",
+            rf_chassis_devices=["dummy-chassis"],
         )
 
 
 def test_mi3xx_collector_args_assembly_optional_when_omitted():
-    args = Mi3xxCollectorArgs(rf_event_log_uri=EVENT_URI)
+    args = MI3XXCollectorArgs(rf_event_log_uri=EVENT_URI)
     assert args.rf_assembly_uri_template is None
     assert args.rf_chassis_devices is None
 
@@ -150,7 +164,7 @@ def test_stub_collector_event_log_get_fails(stub_serviceability_collector, redfi
         error="timeout",
         status_code=None,
     )
-    args = Mi3xxCollectorArgs(rf_event_log_uri=EVENT_URI)
+    args = MI3XXCollectorArgs(rf_event_log_uri=EVENT_URI)
     result, data = stub_serviceability_collector.collect_data(args=args)
     assert result.status == ExecutionStatus.ERROR
     assert EVENT_URI in result.message
@@ -165,13 +179,13 @@ def test_stub_collector_success_minimal(stub_serviceability_collector, redfish_c
         data={RF_MEMBERS: members},
         status_code=200,
     )
-    args = Mi3xxCollectorArgs(rf_event_log_uri=EVENT_URI)
+    args = MI3XXCollectorArgs(rf_event_log_uri=EVENT_URI)
     result, data = stub_serviceability_collector.collect_data(args=args)
     assert result.status == ExecutionStatus.OK
     assert data is not None
     assert data.rf_events == members
     assert EVENT_URI in data.responses
-    assert data.bmc_host == "bmc.example"
+    assert data.bmc_host == DUMMY_BMC_HOST
     assert data.log_path == "/tmp/serviceability.log"
     redfish_conn_mock.run_get_paged.assert_called_once()
 
@@ -193,7 +207,7 @@ def test_stub_collector_filter_raises_maps_to_error(
         data={RF_MEMBERS: []},
         status_code=200,
     )
-    args = Mi3xxCollectorArgs(rf_event_log_uri=EVENT_URI)
+    args = MI3XXCollectorArgs(rf_event_log_uri=EVENT_URI)
     result, data = collector.collect_data(args=args)
     assert result.status == ExecutionStatus.ERROR
     assert "Event filter failed" in result.message
@@ -204,7 +218,7 @@ def test_stub_collector_assembly_and_firmware_paths(
     stub_serviceability_collector, redfish_conn_mock
 ):
     tpl = "/redfish/v1/Chassis/{device}/Assembly"
-    asm_uri = tpl.format(device="C1")
+    asm_uri = tpl.format(device="dummy-chassis")
     fw_uri = "/redfish/v1/UpdateService/FirmwareInventory"
 
     def run_get_side_effect(path: str, *_args, **_kwargs):
@@ -219,14 +233,14 @@ def test_stub_collector_assembly_and_firmware_paths(
             return RedfishGetResult(
                 path=asm_uri,
                 success=True,
-                data={"Assemblies": [{"SerialNumber": "SN-ASM"}]},
+                data={"Assemblies": [{"SerialNumber": "dummy-asm-serial"}]},
                 status_code=200,
             )
         if path == fw_uri:
             return RedfishGetResult(
                 path=fw_uri,
                 success=True,
-                data={"Details": "fw-summary"},
+                data={"Details": "dummy-fw-summary"},
                 status_code=200,
             )
         raise AssertionError(f"unexpected Redfish GET path: {path!r}")
@@ -238,19 +252,19 @@ def test_stub_collector_assembly_and_firmware_paths(
 
     redfish_conn_mock.run_get_paged.side_effect = run_get_paged_forbidden
 
-    args = Mi3xxCollectorArgs(
+    args = MI3XXCollectorArgs(
         rf_event_log_uri=EVENT_URI,
         rf_assembly_uri_template=tpl,
-        rf_chassis_devices=["C1"],
+        rf_chassis_devices=["dummy-chassis"],
         rf_firmware_bundle_uri=fw_uri,
         follow_next_link=False,
     )
     result, data = stub_serviceability_collector.collect_data(args=args)
     assert result.status == ExecutionStatus.OK
     assert data is not None
-    assert "C1" in data.assembly_info
-    assert data.assembly_info["C1"].serial_number == "SN-ASM"
-    assert data.component_details == "fw-summary"
+    assert "dummy-chassis" in data.assembly_info
+    assert data.assembly_info["dummy-chassis"].serial_number == "dummy-asm-serial"
+    assert data.component_details == "dummy-fw-summary"
     assert asm_uri in data.responses
 
 
@@ -271,7 +285,7 @@ def test_stub_collector_top_when_count_exceeds_top_uses_skip_and_paged(
     )
     redfish_conn_mock.run_get.return_value = probe
     redfish_conn_mock.run_get_paged.return_value = window
-    args = Mi3xxCollectorArgs(rf_event_log_uri=EVENT_URI, top=10)
+    args = MI3XXCollectorArgs(rf_event_log_uri=EVENT_URI, top=10)
     result, data = stub_serviceability_collector.collect_data(args=args)
     assert result.status == ExecutionStatus.OK
     assert data is not None
@@ -300,7 +314,7 @@ def test_stub_collector_top_when_count_within_top_fetches_full_log(
     )
     redfish_conn_mock.run_get.return_value = probe
     redfish_conn_mock.run_get_paged.return_value = full
-    args = Mi3xxCollectorArgs(rf_event_log_uri=EVENT_URI, top=50)
+    args = MI3XXCollectorArgs(rf_event_log_uri=EVENT_URI, top=50)
     result, data = stub_serviceability_collector.collect_data(args=args)
     assert result.status == ExecutionStatus.OK
     assert data is not None

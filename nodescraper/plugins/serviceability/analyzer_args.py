@@ -25,62 +25,39 @@
 ###############################################################################
 from __future__ import annotations
 
-from typing import List, Literal, Optional
+from typing import Optional
 
 from pydantic import Field, field_validator, model_validator
 
 from nodescraper.models import AnalyzerArgs
 
-EngineBackend = Literal["python", "cli", "subprocess"]
-
 
 class ServiceabilityAnalyzerArgs(AnalyzerArgs):
-    """Analyzer args for serviceability plugins."""
+    """Analyzer args for MI3XX serviceability (Python engine via plugin config)."""
 
-    engine_backend: EngineBackend = Field(
-        default="python",
-        description=(
-            "How to invoke the SE: 'python' (service_hub bindings), "
-            "'cli' (external analyze subcommand), or 'subprocess' (--input/--output protocol)."
-        ),
-    )
-    engine_python_module: str = Field(
-        default="service_hub",
-        description="Python package providing ServiceHub bindings (python backend).",
-    )
-    engine_executable: Optional[str] = Field(
-        default=None,
-        description="Path to the SE binary (cli or subprocess backends).",
-    )
-    engine_entry_point: Optional[str] = Field(
+    engine_python_module: Optional[str] = Field(
         default=None,
         description=(
-            "Command for cli/subprocess backends: executable path or argv prefix on PATH. "
-            "Required when engine_backend is 'cli' or 'subprocess'."
+            "Importable Python module providing a service engine class with "
+            "get_service_info(rf_events, cper_data=...)."
         ),
+    )
+    engine_display_name: Optional[str] = Field(
+        default=None,
+        description="Optional label for analyzer status messages.",
     )
     afid_sag_path: Optional[str] = Field(
         default=None,
         description="Path to AFID_SAG.json.",
     )
-    engine_extra_args: List[str] = Field(
-        default_factory=list,
-        description="Extra CLI arguments (cli/subprocess backends).",
-    )
-    engine_timeout_seconds: int = Field(
-        default=600,
-        ge=1,
-        le=86_400,
-        description="Subprocess timeout (cli/subprocess backends).",
-    )
     skip_engine: bool = Field(
         default=False,
-        description="If True, only build afid_events without running the SE.",
+        description="If True, only build afid_events without running the service engine.",
     )
 
-    @field_validator("engine_executable", "engine_entry_point", "afid_sag_path")
+    @field_validator("afid_sag_path", "engine_python_module", "engine_display_name")
     @classmethod
-    def _strip_optional_paths(cls, value: Optional[str]) -> Optional[str]:
+    def _strip_optional_strings(cls, value: Optional[str]) -> Optional[str]:
         if value is None:
             return None
         text = str(value).strip()
@@ -91,19 +68,7 @@ class ServiceabilityAnalyzerArgs(AnalyzerArgs):
         if self.skip_engine:
             return self
         if not self.afid_sag_path:
-            raise ValueError("afid_sag_path is required when running Service Hub.")
-        if self.engine_backend == "python":
-            return self
-        has_exe = self.engine_executable is not None
-        has_entry = self.engine_entry_point is not None
-        if has_exe and has_entry:
-            raise ValueError(
-                "Provide only one of engine_executable or engine_entry_point "
-                "for cli/subprocess backends."
-            )
-        if not has_exe and not has_entry:
-            raise ValueError(
-                "engine_executable or engine_entry_point is required when "
-                "engine_backend is 'cli' or 'subprocess'."
-            )
+            raise ValueError("afid_sag_path is required when running the service engine.")
+        if not self.engine_python_module:
+            raise ValueError("engine_python_module is required when running the service engine.")
         return self

@@ -36,11 +36,11 @@ from nodescraper.plugins.serviceability.time_utils import (
 )
 
 
-class Mi3xxCollectorArgs(CollectorArgs):
-    """MI3xx OOB Redfish serviceability collector arguments."""
+class MI3XXCollectorArgs(CollectorArgs):
+    """MI3XX OOB Redfish serviceability collector arguments."""
 
     uri: Optional[str] = Field(
-        default=None,
+        default="/redfish/v1/Systems/UBB/LogServices/EventLog/Entries",
         description="Optional alias for ``rf_event_log_uri`` (non-empty string).",
     )
     rf_event_log_uri: Optional[str] = Field(
@@ -99,7 +99,7 @@ class Mi3xxCollectorArgs(CollectorArgs):
         return text
 
     @model_validator(mode="after")
-    def _require_event_log_uri(self) -> Mi3xxCollectorArgs:
+    def _require_event_log_uri(self) -> MI3XXCollectorArgs:
         if not self.resolved_event_log_uri():
             raise ValueError(
                 "Provide a non-empty rf_event_log_uri or uri for the event log collection."
@@ -107,7 +107,7 @@ class Mi3xxCollectorArgs(CollectorArgs):
         return self
 
     @model_validator(mode="after")
-    def _assembly_consistency(self) -> Mi3xxCollectorArgs:
+    def _assembly_consistency(self) -> MI3XXCollectorArgs:
         has_tpl = bool(
             self.rf_assembly_uri_template and "{device}" in self.rf_assembly_uri_template
         )
@@ -120,7 +120,7 @@ class Mi3xxCollectorArgs(CollectorArgs):
         return self
 
     @model_validator(mode="after")
-    def _reference_time_requires_operator(self) -> Mi3xxCollectorArgs:
+    def _reference_time_requires_operator(self) -> MI3XXCollectorArgs:
         has_ref = self.reference_time is not None
         has_op = self.time_operator is not None
         if has_ref != has_op:

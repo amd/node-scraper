@@ -23,24 +23,24 @@
 # SOFTWARE.
 #
 ###############################################################################
-from .mi3xx_analyzer import Mi3xxAnalyzer
-from .mi3xx_collector import Mi3xxCollector
-from .mi3xx_collector_args import Mi3xxCollectorArgs
+from .mi3xx_analyzer import MI3XXAnalyzer
+from .mi3xx_collector import MI3XXCollector
+from .mi3xx_collector_args import MI3XXCollectorArgs
 from .mi3xx_data import (
-    Mi3xxDataModel,
-    Mi3xxDeviceInfo,
-    Mi3xxResult,
+    MI3XXDataModel,
+    MI3XXDeviceInfo,
+    MI3XXResult,
     build_mi3xx_reporting_version_fields,
 )
 from .serviceability_plugin_mi3xx import ServiceabilityPluginMI3XX
 
 __all__ = [
-    "Mi3xxAnalyzer",
-    "Mi3xxCollector",
-    "Mi3xxCollectorArgs",
-    "Mi3xxDataModel",
-    "Mi3xxDeviceInfo",
-    "Mi3xxResult",
+    "MI3XXAnalyzer",
+    "MI3XXCollector",
+    "MI3XXCollectorArgs",
+    "MI3XXDataModel",
+    "MI3XXDeviceInfo",
+    "MI3XXResult",
     "ServiceabilityPluginMI3XX",
     "build_mi3xx_reporting_version_fields",
 ]

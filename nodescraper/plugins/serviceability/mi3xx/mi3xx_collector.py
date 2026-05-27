@@ -33,18 +33,18 @@ from nodescraper.plugins.serviceability.serviceability_collector import (
 from nodescraper.plugins.serviceability.serviceability_data import DeviceInfo
 from nodescraper.plugins.serviceability.time_utils import satisfies_time_check
 
-from .mi3xx_collector_args import Mi3xxCollectorArgs
+from .mi3xx_collector_args import MI3XXCollectorArgs
 
 _EVENT_TIMESTAMP_KEYS = ("Created", "EventTimestamp", "Timestamp")
 
 
-class Mi3xxCollector(ServiceabilityCollectorBase[Mi3xxCollectorArgs]):
-    """MI3xx OOB Redfish serviceability collector."""
+class MI3XXCollector(ServiceabilityCollectorBase[MI3XXCollectorArgs]):
+    """MI3XX OOB Redfish serviceability collector."""
 
     def satisfies_reference_time(
         self,
         candidate: str,
-        args: Mi3xxCollectorArgs,
+        args: MI3XXCollectorArgs,
     ) -> bool:
         """Test a timestamp against optional reference-time filter settings."""
         if args.reference_time is None or args.time_operator is None:
@@ -54,7 +54,7 @@ class Mi3xxCollector(ServiceabilityCollectorBase[Mi3xxCollectorArgs]):
     def filter_event_members(
         self,
         members: list[Any],
-        args: Mi3xxCollectorArgs,
+        args: MI3XXCollectorArgs,
     ) -> list[Any]:
         filtered: list[Any] = []
         for member in members:
@@ -78,7 +78,7 @@ class Mi3xxCollector(ServiceabilityCollectorBase[Mi3xxCollectorArgs]):
         self,
         designation: str,
         assembly_member_entry: dict[str, Any],
-        args: Mi3xxCollectorArgs,
+        args: MI3XXCollectorArgs,
     ) -> DeviceInfo:
         return DeviceInfo(
             name=assembly_member_entry.get("Name") or designation,
@@ -91,7 +91,7 @@ class Mi3xxCollector(ServiceabilityCollectorBase[Mi3xxCollectorArgs]):
     def extract_component_details(
         self,
         firmware_inventory_payload: dict[str, Any],
-        args: Mi3xxCollectorArgs,
+        args: MI3XXCollectorArgs,
     ) -> Optional[str]:
         details = firmware_inventory_payload.get("Details")
         if details is not None:

@@ -29,16 +29,21 @@ from nodescraper.plugins.serviceability.serviceability_data import (
 from nodescraper.plugins.serviceability.serviceability_plugin_base import (
     ServiceabilityPluginBase,
 )
+from nodescraper.utils import register_log_dir_name
 
-from .mi3xx_analyzer import Mi3xxAnalyzer
-from .mi3xx_collector import Mi3xxCollector
-from .mi3xx_collector_args import Mi3xxCollectorArgs
+from .mi3xx_analyzer import MI3XXAnalyzer
+from .mi3xx_collector import MI3XXCollector
+from .mi3xx_collector_args import MI3XXCollectorArgs
+
+register_log_dir_name("ServiceabilityPluginMI3XX", "serviceability_plugin_MI3XX")
+register_log_dir_name("MI3XXCollector", "MI3XX_collector")
+register_log_dir_name("MI3XXAnalyzer", "MI3XX_analyzer")
 
 
 class ServiceabilityPluginMI3XX(ServiceabilityPluginBase):
-    """MI3xx OOB Redfish serviceability plugin."""
+    """MI3XX OOB Redfish serviceability plugin."""
 
     DATA_MODEL = ServiceabilityDataModel
-    COLLECTOR = Mi3xxCollector
-    ANALYZER = Mi3xxAnalyzer
-    COLLECTOR_ARGS = Mi3xxCollectorArgs
+    COLLECTOR = MI3XXCollector
+    ANALYZER = MI3XXAnalyzer
+    COLLECTOR_ARGS = MI3XXCollectorArgs

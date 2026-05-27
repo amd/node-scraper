@@ -44,7 +44,7 @@ from nodescraper.models import (
     SystemInfo,
     TaskResult,
 )
-from nodescraper.utils import pascal_to_snake
+from nodescraper.utils import resolve_log_dir_name
 
 from .connectionmanager import TConnectArg, TConnectionManager
 from .task import SystemCompatibilityError
@@ -412,8 +412,8 @@ class DataPlugin(
             return None
         collector_dir = os.path.join(
             run_path,
-            pascal_to_snake(cls.__name__),
-            pascal_to_snake(collector_cls.__name__),
+            resolve_log_dir_name(cls.__name__),
+            resolve_log_dir_name(collector_cls.__name__),
         )
         if not os.path.isdir(collector_dir):
             return None

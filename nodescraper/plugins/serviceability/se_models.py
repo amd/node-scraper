@@ -31,7 +31,7 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class AfidEvent(BaseModel):
-    """Service Hub input: one AFID occurrence on a serviceable unit."""
+    """One AFID occurrence on a serviceable unit."""
 
     afid: int = Field(description="AMD Fault ID.")
     serviceable_unit: str = Field(
@@ -51,7 +51,7 @@ class AfidEvent(BaseModel):
 
 
 class ServiceabilitySolution(BaseModel):
-    """Service Hub output: recommended action for an AFID."""
+    """Recommended service action for an AFID."""
 
     afid: int
     serviceable_unit: List[str] = Field(
@@ -67,7 +67,7 @@ class ServiceabilityBlock(BaseModel):
 
     afid_events: List[AfidEvent] = Field(
         default_factory=list,
-        description="Input events passed to Service Hub.",
+        description="Summarized AFID events from collected data.",
     )
     solution: List[ServiceabilitySolution] = Field(
         default_factory=list,
@@ -77,9 +77,3 @@ class ServiceabilityBlock(BaseModel):
         default=None,
         description="Human-readable summary of how the engine reached its conclusions.",
     )
-
-
-class SeInputPayload(BaseModel):
-    """JSON written to the SE ``--input`` file."""
-
-    afid_events: List[AfidEvent] = Field(default_factory=list)

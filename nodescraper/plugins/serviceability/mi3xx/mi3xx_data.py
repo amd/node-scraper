@@ -34,7 +34,7 @@ from pydantic import BaseModel, Field
 from nodescraper.models import DataModel
 
 
-class Mi3xxDeviceInfo(BaseModel):
+class MI3XXDeviceInfo(BaseModel):
     """Device identity with separate board and product fields."""
 
     board_product_name: Optional[str] = Field(
@@ -78,7 +78,7 @@ class Mi3xxDeviceInfo(BaseModel):
     )
 
 
-class Mi3xxResult(BaseModel):
+class MI3XXResult(BaseModel):
     """Structured serviceability report output."""
 
     node: Optional[str] = None
@@ -136,14 +136,14 @@ def build_mi3xx_reporting_version_fields(
     }
 
 
-class Mi3xxDataModel(DataModel):
+class MI3XXDataModel(DataModel):
     """Collected OOB Redfish serviceability data model."""
 
     collected_data: Dict[str, Any] = Field(
         default_factory=dict,
         description="Arbitrary keyed payloads from the collector implementation.",
     )
-    device_info: Dict[str, Mi3xxDeviceInfo] = Field(
+    device_info: Dict[str, MI3XXDeviceInfo] = Field(
         default_factory=dict,
         description="Optional device identity keyed by implementer-defined labels.",
     )
@@ -156,7 +156,7 @@ class Mi3xxDataModel(DataModel):
         description="Optional host or service endpoint label (not necessarily a BMC).",
     )
     log_path: Optional[str] = None
-    result: Optional[Mi3xxResult] = None
+    result: Optional[MI3XXResult] = None
 
     def log_model(self, log_path: str) -> None:
         """Write artifact files and a JSON summary under the log directory.
@@ -174,7 +174,7 @@ class Mi3xxDataModel(DataModel):
             artifact_path = os.path.join(log_path, str(filename).strip())
             with open(artifact_path, "w", encoding="utf-8") as handle:
                 json.dump(payload, handle, indent=2)
-        summary_path = os.path.join(log_path, "mi3xx_data.json")
+        summary_path = os.path.join(log_path, "MI3XX_data.json")
         with open(summary_path, "w", encoding="utf-8") as handle:
             json.dump(
                 self.model_dump(

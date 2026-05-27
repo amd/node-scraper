@@ -23,247 +23,109 @@
 # SOFTWARE.
 #
 ###############################################################################
-"""Run the AMD Service Hub (Python API, CLI, or custom subprocess)."""
+"""Invoke a configured Python service engine against collected Redfish events."""
 from __future__ import annotations
 
 import importlib
-import json
-import shlex
-import subprocess
-import tempfile
+import inspect
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Any, Optional, Type
 
-from .se_adapter import afid_events_to_engine_input, serviceability_block_from_engine
-from .se_models import AfidEvent, SeInputPayload, ServiceabilityBlock
+from .se_adapter import serviceability_block_from_service_result
+from .se_models import AfidEvent, ServiceabilityBlock
 
-EngineBackend = Literal["python", "cli", "subprocess"]
+_ENGINE_METHOD = "get_service_info"
 
 
 class SeRunError(RuntimeError):
-    """Raised when Service Hub fails or returns invalid output."""
+    """Raised when the service engine fails or returns invalid output."""
 
 
-def resolve_engine_command(
+def run_service_engine(
     *,
-    engine_executable: Optional[str] = None,
-    engine_entry_point: Optional[str] = None,
-) -> list[str]:
-    """Build the argv prefix for a subprocess or CLI-backed SE invocation."""
-    has_exe = bool(engine_executable and str(engine_executable).strip())
-    has_entry = bool(engine_entry_point and str(engine_entry_point).strip())
-    if has_exe and has_entry:
-        raise ValueError("Provide only one of engine_executable or engine_entry_point.")
-    if not has_exe and not has_entry:
-        raise ValueError("Provide engine_executable or engine_entry_point.")
-    if has_exe:
-        return [str(engine_executable).strip()]
-    return shlex.split(str(engine_entry_point).strip())
-
-
-def run_se(
-    *,
-    engine_backend: EngineBackend = "python",
-    engine_python_module: str = "service_hub",
-    engine_executable: Optional[str] = None,
-    engine_entry_point: Optional[str] = None,
+    engine_python_module: str,
+    engine_display_name: Optional[str] = None,
     afid_events: list[AfidEvent],
     afid_sag_path: str,
-    extra_args: Optional[list[str]] = None,
-    timeout_seconds: int = 600,
-    work_dir: Optional[str] = None,
+    rf_events: list[Any],
+    cper_data: Optional[dict[str, Any]] = None,
 ) -> ServiceabilityBlock:
-    """Run the SE and return a :class:`ServiceabilityBlock`."""
+    """Run a Python service engine and return a :class:`ServiceabilityBlock`."""
     sag_path = Path(afid_sag_path)
     if not sag_path.is_file():
         raise SeRunError(f"AFID_SAG file not found: {afid_sag_path}")
 
-    if engine_backend == "python":
-        return _run_se_python(
-            engine_python_module=engine_python_module,
-            afid_events=afid_events,
-            afid_sag_path=str(sag_path),
-        )
-    if engine_backend == "cli":
-        return _run_se_cli(
-            engine_executable=engine_executable,
-            engine_entry_point=engine_entry_point,
-            afid_events=afid_events,
-            afid_sag_path=str(sag_path),
-            extra_args=extra_args,
-            timeout_seconds=timeout_seconds,
-            work_dir=work_dir,
-        )
-    return _run_se_subprocess(
-        engine_executable=engine_executable,
-        engine_entry_point=engine_entry_point,
-        afid_events=afid_events,
-        afid_sag_path=str(sag_path),
-        extra_args=extra_args,
-        timeout_seconds=timeout_seconds,
-        work_dir=work_dir,
-    )
-
-
-def _run_se_python(
-    *,
-    engine_python_module: str,
-    afid_events: list[AfidEvent],
-    afid_sag_path: str,
-) -> ServiceabilityBlock:
-    try:
-        se = importlib.import_module(engine_python_module)
-        SagDocument = se.SagDocument
-        ServiceHub = se.ServiceHub
-        EventRecord = se.EventRecord
-    except (ImportError, AttributeError) as exc:
+    if not rf_events:
         raise SeRunError(
-            f"Cannot import {engine_python_module} bindings — install service-hub "
-            f"and build the Python extension (uv build)."
-        ) from exc
+            "Collected Redfish events are required; re-run collection or use skip_engine."
+        )
 
-    wire_events = afid_events_to_engine_input(afid_events)
+    label = engine_display_name or engine_python_module
     try:
-        sag = SagDocument.from_file(afid_sag_path)
-        records = [
-            EventRecord(
-                afid=str(item["afid"]),
-                location=str(item["location"]),
-                count=int(item["count"]),
-            )
-            for item in wire_events
-        ]
-        analysis = ServiceHub(sag).analyze(records)
-        report = analysis.to_dict()
+        mod = importlib.import_module(engine_python_module)
+    except ImportError as exc:
+        raise SeRunError(f"Cannot import {engine_python_module}: {exc}") from exc
+
+    engine_cls = _resolve_engine_class(mod)
+
+    try:
+        instance = engine_cls(afid_sag=afid_sag_path)
+        analyze = getattr(instance, _ENGINE_METHOD)
+        result = analyze(
+            list(rf_events),
+            cper_data=dict(cper_data) if cper_data else None,
+        )
     except Exception as exc:
-        raise SeRunError(f"Service Hub analyze() failed: {exc}") from exc
+        raise SeRunError(f"{label} {_ENGINE_METHOD}() failed: {exc}") from exc
 
-    return serviceability_block_from_engine(afid_events, report)
+    if result is None:
+        return ServiceabilityBlock(
+            afid_events=list(afid_events),
+            solution=[],
+            solution_reasoning=f"{label}: no service actions after event filtering.",
+        )
 
-
-def _run_se_cli(
-    *,
-    engine_executable: Optional[str],
-    engine_entry_point: Optional[str],
-    afid_events: list[AfidEvent],
-    afid_sag_path: str,
-    extra_args: Optional[list[str]],
-    timeout_seconds: int,
-    work_dir: Optional[str],
-) -> ServiceabilityBlock:
-    """Invoke an external engine CLI ``analyze --sag … --input …`` and map stdout JSON."""
-    command = resolve_engine_command(
-        engine_executable=engine_executable,
-        engine_entry_point=engine_entry_point,
-    )
-    wire_events = afid_events_to_engine_input(afid_events)
-
-    with tempfile.TemporaryDirectory(prefix="nodescraper_se_cli_", dir=work_dir) as tmp:
-        input_path = Path(tmp) / "events.json"
-        input_path.write_text(json.dumps(wire_events, indent=2), encoding="utf-8")
-        argv = [
-            *command,
-            "analyze",
-            "--sag",
-            afid_sag_path,
-            "--input",
-            str(input_path),
-        ]
-        if extra_args:
-            argv.extend(extra_args)
-        completed = _run_subprocess(argv, timeout_seconds=timeout_seconds)
-
-    try:
-        report = json.loads(completed.stdout or "{}")
-    except json.JSONDecodeError as exc:
-        raise SeRunError(f"Invalid JSON from Service Hub CLI: {exc}") from exc
-
-    from .se_adapter import recommendations_from_report_dict
-
-    return serviceability_block_from_engine(
+    return serviceability_block_from_service_result(
         afid_events,
-        report,
-        recommendations=recommendations_from_report_dict(report),
+        result,
+        engine_label=label,
+        rf_event_count=len(rf_events),
     )
 
 
-def _run_se_subprocess(
-    *,
-    engine_executable: Optional[str],
-    engine_entry_point: Optional[str],
-    afid_events: list[AfidEvent],
-    afid_sag_path: str,
-    extra_args: Optional[list[str]],
-    timeout_seconds: int,
-    work_dir: Optional[str],
-) -> ServiceabilityBlock:
-    """Custom subprocess protocol: ``--input`` / ``--output`` / ``--afid-sag``."""
-    command = resolve_engine_command(
-        engine_executable=engine_executable,
-        engine_entry_point=engine_entry_point,
-    )
-    payload = SeInputPayload(afid_events=afid_events)
+def _is_engine_class(obj: Any) -> bool:
+    return inspect.isclass(obj) and callable(getattr(obj, _ENGINE_METHOD, None))
 
-    with tempfile.TemporaryDirectory(prefix="nodescraper_se_", dir=work_dir) as tmp:
-        tmp_path = Path(tmp)
-        input_path = tmp_path / "se_input.json"
-        output_path = tmp_path / "se_output.json"
-        input_path.write_text(
-            json.dumps(payload.model_dump(mode="json"), indent=2),
-            encoding="utf-8",
+
+def _resolve_engine_class(mod: Any) -> Type[Any]:
+    """Find the engine class in ``mod`` that implements ``get_service_info``."""
+    package = mod.__name__
+    candidates: list[Type[Any]] = []
+    seen: set[int] = set()
+
+    def add_candidate(obj: Any) -> None:
+        if not _is_engine_class(obj):
+            return
+        key = id(obj)
+        if key in seen:
+            return
+        seen.add(key)
+        candidates.append(obj)
+
+    for name in getattr(mod, "__all__", []) or []:
+        add_candidate(getattr(mod, name, None))
+
+    for _, obj in inspect.getmembers(mod, inspect.isclass):
+        obj_module = getattr(obj, "__module__", "")
+        if obj_module == package or obj_module.startswith(f"{package}."):
+            add_candidate(obj)
+
+    if len(candidates) == 1:
+        return candidates[0]
+    if not candidates:
+        raise SeRunError(
+            f"No class with {_ENGINE_METHOD}() found in {package}; "
+            "check engine_python_module in analysis_args."
         )
-        argv = [
-            *command,
-            "--input",
-            str(input_path),
-            "--output",
-            str(output_path),
-            "--afid-sag",
-            str(Path(afid_sag_path).resolve()),
-        ]
-        if extra_args:
-            argv.extend(extra_args)
-        _run_subprocess(argv, timeout_seconds=timeout_seconds)
-
-        if not output_path.is_file():
-            raise SeRunError(f"Service Hub did not write output file: {output_path}")
-        try:
-            raw = json.loads(output_path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as exc:
-            raise SeRunError(f"Invalid JSON from Service Hub: {exc}") from exc
-
-    block = ServiceabilityBlock.model_validate(raw)
-    if not block.afid_events:
-        block.afid_events = list(afid_events)
-    return block
-
-
-def _run_subprocess(argv: list[str], *, timeout_seconds: int) -> subprocess.CompletedProcess:
-    exe = Path(argv[0])
-    if not exe.is_file() and not _command_on_path(argv[0]):
-        raise SeRunError(f"Service Hub not found or not executable: {argv[0]!r}")
-    try:
-        completed = subprocess.run(
-            argv,
-            capture_output=True,
-            text=True,
-            timeout=timeout_seconds,
-            check=False,
-        )
-    except subprocess.TimeoutExpired as exc:
-        raise SeRunError(f"Service Hub timed out after {timeout_seconds}s") from exc
-    except OSError as exc:
-        raise SeRunError(f"Failed to start Service Hub: {exc}") from exc
-
-    if completed.returncode != 0:
-        stderr = (completed.stderr or "").strip()
-        stdout = (completed.stdout or "").strip()
-        detail = stderr or stdout or f"exit code {completed.returncode}"
-        raise SeRunError(f"Service Hub failed: {detail}")
-    return completed
-
-
-def _command_on_path(name: str) -> bool:
-    from shutil import which
-
-    return which(name) is not None
+    names = ", ".join(cls.__name__ for cls in candidates)
+    raise SeRunError(f"Multiple classes with {_ENGINE_METHOD}() in {package}: {names}.")
