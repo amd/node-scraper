@@ -28,7 +28,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from common.shared_utils import MockConnectionManager
+from framework.common.shared_utils import MockConnectionManager
 
 from nodescraper.enums import EventPriority, ExecutionStatus, SystemInteractionLevel
 from nodescraper.interfaces.dataanalyzertask import DataAnalyzer
@@ -154,6 +154,7 @@ class TestDataPluginCore:
                     parent=plugin.__class__.__name__,
                     task_result_hooks=plugin.task_result_hooks,
                     event_reporter=plugin.event_reporter,
+                    session_id=plugin.session_id,
                 )
                 mock_collect.assert_called_once()
                 assert result.status == ExecutionStatus.OK

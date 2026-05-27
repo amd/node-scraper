@@ -24,7 +24,7 @@
 #
 ###############################################################################
 import pytest
-from common.shared_utils import DummyDataModel, MockConnectionManager
+from framework.common.shared_utils import DummyDataModel, MockConnectionManager
 from pydantic import BaseModel
 
 from nodescraper.enums import ExecutionStatus
