@@ -38,7 +38,11 @@ class DeviceEnumerationCollector(InBandDataCollector[DeviceEnumerationDataModel,
 
     DATA_MODEL = DeviceEnumerationDataModel
 
-    CMD_GPU_COUNT_LINUX = "lspci -d {vendorid_ep}: | grep -i 'VGA\\|Display\\|3D' | wc -l"
+    CMD_GPU_COUNT_LINUX = (
+        "lspci -d {vendorid_ep}: | grep -iE "
+        "'VGA|Display|3D|Processing accelerators|Co-processor|Accelerator' | "
+        "grep -vi 'Virtual Function' | wc -l"
+    )
     CMD_VF_COUNT_LINUX = "lspci -d {vendorid_ep}: | grep -i 'Virtual Function' | wc -l"
     CMD_LSCPU_LINUX = "lscpu"
     CMD_LSHW_LINUX = "lshw"
