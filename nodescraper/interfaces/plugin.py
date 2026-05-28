@@ -28,7 +28,7 @@ import inspect
 import logging
 from typing import Callable, Generic, Optional, Type, Union
 
-from nodescraper.constants import DEFAULT_LOGGER
+from nodescraper.constants import DEFAULT_EVENT_REPORTER, DEFAULT_LOGGER
 from nodescraper.models import PluginResult, SystemInfo
 from nodescraper.taskresulthooks.filesystemloghook import FileSystemLogHook
 
@@ -50,6 +50,8 @@ class PluginInterface(abc.ABC, Generic[TConnectionManager, TConnectArg]):
         task_result_hooks: Optional[list[TaskResultHook]] = None,
         log_path: Optional[str] = None,
         queue_callback: Optional[Callable] = None,
+        event_reporter: str = DEFAULT_EVENT_REPORTER,
+        session_id: Optional[str] = None,
         **kwargs,
     ):
         """Initialize plugin
@@ -86,6 +88,9 @@ class PluginInterface(abc.ABC, Generic[TConnectionManager, TConnectArg]):
 
         self.queue_callback = queue_callback
 
+        self.event_reporter = event_reporter
+        self.session_id = session_id
+
         self.connection_manager = connection_manager
 
         if connection_args and self.CONNECTION_TYPE and not self.connection_manager:
@@ -95,6 +100,8 @@ class PluginInterface(abc.ABC, Generic[TConnectionManager, TConnectArg]):
                 connection_args=connection_args,
                 parent=self.__class__.__name__,
                 task_result_hooks=self.task_result_hooks,
+                event_reporter=event_reporter,
+                session_id=self.session_id,
             )
 
     @classmethod

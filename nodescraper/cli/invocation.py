@@ -71,6 +71,7 @@ class PluginRunInvocation:
     timestamp: str
     sname: str
     host_cli_args: Optional[argparse.Namespace] = None
+    session_id: Optional[str] = None
 
 
 def run_plugin_queue_with_invocation(
@@ -84,6 +85,7 @@ def run_plugin_queue_with_invocation(
     timestamp: str,
     sname: str,
     host_cli_args: Optional[argparse.Namespace] = None,
+    session_id: Optional[str] = None,
 ) -> list[PluginResult]:
     """Constructs the plugin executor, binds invocation context, and runs the plugin queue."""
     inv = PluginRunInvocation(
@@ -96,6 +98,7 @@ def run_plugin_queue_with_invocation(
         timestamp=timestamp,
         sname=sname,
         host_cli_args=host_cli_args,
+        session_id=session_id,
     )
     plugin_executor = PluginExecutor(
         logger=logger,
@@ -104,6 +107,7 @@ def run_plugin_queue_with_invocation(
         system_info=system_info,
         log_path=log_path,
         plugin_registry=plugin_reg,
+        session_id=session_id,
     )
     with plugin_run_invocation_scope(inv):
         return plugin_executor.run_queue()

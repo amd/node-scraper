@@ -28,6 +28,7 @@ from typing import Generic, Optional, Union
 
 from nodescraper.connection.inband import InBandConnection
 from nodescraper.connection.inband.inband import BaseFileArtifact, CommandArtifact
+from nodescraper.constants import DEFAULT_EVENT_REPORTER
 from nodescraper.enums import EventPriority, OSFamily, SystemInteractionLevel
 from nodescraper.generictypes import TCollectArg, TDataModel
 from nodescraper.interfaces import DataCollector, TaskResultHook
@@ -52,6 +53,8 @@ class InBandDataCollector(
         max_event_priority_level: Union[EventPriority, str] = EventPriority.CRITICAL,
         parent: Optional[str] = None,
         task_result_hooks: Optional[list[TaskResultHook]] = None,
+        event_reporter: str = DEFAULT_EVENT_REPORTER,
+        session_id: Optional[str] = None,
         **kwargs,
     ):
         super().__init__(
@@ -62,6 +65,8 @@ class InBandDataCollector(
             connection=connection,
             parent=parent,
             task_result_hooks=task_result_hooks,
+            event_reporter=event_reporter,
+            session_id=session_id,
         )
         if self.system_info.os_family not in self.SUPPORTED_OS_FAMILY:
             raise SystemCompatibilityError(

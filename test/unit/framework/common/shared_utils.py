@@ -26,6 +26,7 @@
 from typing import Optional
 from unittest.mock import MagicMock
 
+from nodescraper.constants import DEFAULT_EVENT_REPORTER
 from nodescraper.enums import ExecutionStatus
 from nodescraper.interfaces import ConnectionManager, PluginInterface
 from nodescraper.models import AnalyzerArgs, PluginResult, TaskResult
@@ -43,6 +44,9 @@ class MockConnectionManager(ConnectionManager):
         parent=None,
         task_result_hooks=None,
         connection_args=None,
+        event_reporter: str = DEFAULT_EVENT_REPORTER,
+        session_id: Optional[str] = None,
+        **kwargs,
     ):
         super().__init__(
             system_info=system_info,
@@ -50,6 +54,9 @@ class MockConnectionManager(ConnectionManager):
             parent=parent,
             task_result_hooks=task_result_hooks,
             connection_args=connection_args,
+            event_reporter=event_reporter,
+            session_id=session_id,
+            **kwargs,
         )
         # Use the class variable if available, otherwise create a new MagicMock
         self.connection = (
