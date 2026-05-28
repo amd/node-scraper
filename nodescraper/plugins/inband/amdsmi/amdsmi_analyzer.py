@@ -50,6 +50,59 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
 
     DATA_MODEL = AmdSmiDataModel
 
+    def check_expected_power_management(
+        self,
+        amdsmi_metric_data: list[AmdSmiMetric],
+        expected_power_management: str,
+    ) -> None:
+        """Check amd-smi metric ``power_management`` matches the expected value per GPU.
+
+        Args:
+            amdsmi_metric_data: Per-GPU metric data from ``amd-smi metric``.
+            expected_power_management: Expected value (e.g. ``DISABLED``).
+        """
+        expected = expected_power_management.strip().upper()
+        mismatches: dict[int, str] = {}
+        missing: list[int] = []
+
+        for metric in amdsmi_metric_data:
+            gpu = metric.gpu
+            actual_raw = metric.power.power_management
+            if actual_raw is None:
+                missing.append(gpu)
+                continue
+            actual_str = str(actual_raw).strip()
+            if actual_str.upper() in {"N/A", "NA", ""}:
+                missing.append(gpu)
+                continue
+            if actual_str.upper() != expected:
+                mismatches[gpu] = actual_str
+
+        if missing:
+            self._log_event(
+                category=EventCategory.PLATFORM,
+                description="GPU power_management value not available",
+                priority=EventPriority.WARNING,
+                data={
+                    "gpus": missing,
+                    "expected_power_management": expected_power_management,
+                },
+                console_log=True,
+            )
+
+        if mismatches:
+            self._log_event(
+                category=EventCategory.PLATFORM,
+                description="GPU power_management mismatch",
+                priority=EventPriority.ERROR,
+                data={
+                    "gpus": list(mismatches.keys()),
+                    "power_management_values": mismatches,
+                    "expected_power_management": expected_power_management,
+                },
+                console_log=True,
+            )
+
     def check_expected_max_power(
         self,
         amdsmi_static_data: list[AmdSmiStatic],
@@ -63,7 +116,9 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
         """
         incorrect_max_power_gpus: dict[int, Union[int, str, float]] = {}
         for gpu in amdsmi_static_data:
-            if gpu.limit is None or gpu.limit.max_power is None:
+            limit = gpu.limit
+            max_power_vu = limit.resolved_max_power() if limit is not None else None
+            if max_power_vu is None or max_power_vu.value is None:
                 self._log_event(
                     category=EventCategory.PLATFORM,
                     description=f"GPU: {gpu.gpu} has no max power limit set",
@@ -71,7 +126,7 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                     data={"gpu": gpu.gpu},
                 )
                 continue
-            max_power_value = gpu.limit.max_power.value
+            max_power_value = max_power_vu.value
             try:
                 max_power_float = float(max_power_value)
             except ValueError:
@@ -733,6 +788,8 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
             args = AmdSmiAnalyzerArgs()
 
         if data.metric is not None and len(data.metric) > 0:
+            if args.expected_power_management:
+                self.check_expected_power_management(data.metric, args.expected_power_management)
             if args.l0_to_recovery_count_error_threshold is not None:
                 self.check_amdsmi_metric_pcie(
                     data.metric,

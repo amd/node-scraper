@@ -60,6 +60,7 @@ from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     StaticClockData,
     StaticDriver,
     StaticFrequencyLevels,
+    StaticLimit,
     StaticNuma,
     StaticPolicy,
     StaticRas,
@@ -519,11 +520,17 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
             return None
 
         try:
+            amdgpu_ver = version_data.get("amdgpu_version") or version_data.get("amdgpu")
+            hsmp_ver = version_data.get("amd_hsmp_driver_version") or version_data.get(
+                "amd_hsmp_version"
+            )
             return AmdSmiVersion(
                 tool="amdsmi",
                 version=version_data.get("amdsmi_library_version", ""),
                 amdsmi_library_version=version_data.get("amdsmi_library_version", ""),
                 rocm_version=version_data.get("rocm_version", ""),
+                amdgpu_version=str(amdgpu_ver) if amdgpu_ver not in (None, "") else None,
+                amd_hsmp_driver_version=str(hsmp_ver) if hsmp_ver not in (None, "") else None,
             )
         except ValidationError as err:
             self._log_event(
@@ -902,12 +909,16 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
             )
 
             # Driver
+            os_kernel = driver.get("os_kernel_version") if driver else None
             driver_model = StaticDriver(
                 name=self._normalize(
                     driver.get("driver_name") if driver else None, default="unknown"
                 ),
                 version=self._normalize(
                     driver.get("driver_version") if driver else None, default="unknown"
+                ),
+                os_kernel_version=(
+                    None if os_kernel in (None, "", "N/A") else str(os_kernel).strip()
                 ),
             )
 
@@ -964,6 +975,8 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
             # Cache info
             cache_info_model = self._parse_cache_info(cache)
 
+            limit_model = self._parse_limit(item.get("limit"))
+
             # Clock
             clock_dict_model = self._parse_clock_dict(clock)
 
@@ -974,7 +987,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
                         asic=asic_model,
                         bus=bus_model,
                         vbios=vbios_model,
-                        limit=None,
+                        limit=limit_model,
                         driver=driver_model,
                         board=board_model,
                         ras=ras_model,
@@ -998,6 +1011,35 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
                 )
 
         return out
+
+    def _parse_limit(self, data: Optional[object]) -> Optional[StaticLimit]:
+        """Parse static power/limit block (legacy flat or ROCm 7+ ``ppt0``/``ppt1``)."""
+        if data is None or not isinstance(data, dict) or not data:
+            return None
+        try:
+            return StaticLimit.model_validate(data)
+        except ValidationError as err:
+            self._log_event(
+                category=EventCategory.APPLICATION,
+                description="Failed to build StaticLimit; skipping limit data",
+                data={"errors": err.errors(include_url=False)},
+                priority=EventPriority.WARNING,
+            )
+            return None
+
+    def _parse_current_level(self, data: dict) -> Optional[int]:
+        """Extract current DPM level index from static clock JSON."""
+        cur_raw = data.get("current")
+        if cur_raw is None:
+            cur_raw = data.get("current level")
+        if isinstance(cur_raw, (int, float)):
+            return int(cur_raw)
+        if isinstance(cur_raw, str) and cur_raw.strip() and cur_raw.upper() != "N/A":
+            try:
+                return int(cur_raw.strip())
+            except ValueError:
+                return None
+        return None
 
     def _parse_soc_pstate(self, data: dict) -> Optional[StaticSocPstate]:
         """Parse SOC P-state data
@@ -1241,6 +1283,22 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
         if not isinstance(data, dict):
             return None
 
+        current = self._parse_current_level(data)
+        freq_levels_raw = data.get("frequency_levels")
+        if isinstance(freq_levels_raw, dict) and freq_levels_raw:
+            try:
+                levels = StaticFrequencyLevels.model_validate(freq_levels_raw)
+                return StaticClockData.model_validate(
+                    {"frequency_levels": levels, "current level": current}
+                )
+            except ValidationError as err:
+                self._log_event(
+                    category=EventCategory.APPLICATION,
+                    description="Failed to parse static clock frequency_levels",
+                    data={"errors": err.errors(include_url=False)},
+                    priority=EventPriority.WARNING,
+                )
+
         freqs_raw = data.get("frequency")
         if not isinstance(freqs_raw, list) or not freqs_raw:
             return None
@@ -1272,18 +1330,6 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
         level1: Optional[str] = _fmt(freqs_mhz[1]) if len(freqs_mhz) > 1 else None
         level2: Optional[str] = _fmt(freqs_mhz[2]) if len(freqs_mhz) > 2 else None
 
-        cur_raw = data.get("current")
-        current: Optional[int]
-        if isinstance(cur_raw, (int, float)):
-            current = int(cur_raw)
-        elif isinstance(cur_raw, str) and cur_raw.strip() and cur_raw.upper() != "N/A":
-            try:
-                current = int(cur_raw.strip())
-            except Exception:
-                current = None
-        else:
-            current = None
-
         try:
             levels = StaticFrequencyLevels.model_validate(
                 {"Level 0": level0, "Level 1": level1, "Level 2": level2}
@@ -1310,9 +1356,19 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
 
         clock_dict: dict[str, Union[StaticClockData, None]] = {}
 
-        clock_data = self._parse_clock(data)
-        if clock_data:
-            clock_dict["clk"] = clock_data
+        for key, val in data.items():
+            if val is None or (isinstance(val, str) and val.strip().upper() in {"N/A", "NA", ""}):
+                clock_dict[str(key)] = None
+                continue
+            if isinstance(val, dict):
+                parsed = self._parse_clock(val)
+                if parsed is not None:
+                    clock_dict[str(key)] = parsed
+
+        if not clock_dict and (data.get("frequency") or data.get("frequency_levels")):
+            parsed = self._parse_clock(data)
+            if parsed is not None:
+                clock_dict["clk"] = parsed
 
         return clock_dict if clock_dict else None
 
