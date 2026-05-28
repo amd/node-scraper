@@ -25,11 +25,16 @@
 ###############################################################################
 from .analyzerargs import AnalyzerArgs
 from .collectorargs import CollectorArgs
-from .datamodel import DataModel
+from .datamodel import DataModel, FileModel, TDataModel
 from .datapluginresult import DataPluginResult
 from .event import Event
 from .pluginconfig import PluginConfig
 from .pluginresult import PluginResult
+from .priority_override import (
+    NO_CHANGE,
+    PriorityOverrideRule,
+    apply_priority_override_rules,
+)
 from .systeminfo import SystemInfo
 from .taskresult import TaskResult
 from .timerangeargs import TimeRangeAnalysisArgs
@@ -38,11 +43,16 @@ __all__ = [
     "AnalyzerArgs",
     "CollectorArgs",
     "DataModel",
+    "FileModel",
+    "TDataModel",
     "TaskResult",
     "Event",
     "SystemInfo",
     "PluginResult",
     "DataPluginResult",
     "PluginConfig",
+    "NO_CHANGE",
+    "PriorityOverrideRule",
+    "apply_priority_override_rules",
     "TimeRangeAnalysisArgs",
 ]

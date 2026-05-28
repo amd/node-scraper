@@ -39,12 +39,7 @@ def apply_host_cli_args_to_parsed_args(
     parsed_args: argparse.Namespace,
     host_ns: Optional[argparse.Namespace],
 ) -> None:
-    """Copy host profile fields from an embedding host onto parsed top-level args.
-
-    Used when ``main(..., host_cli_args=...)`` is invoked (e.g. from the
-    error-scraper wrapper) so ``--connection-config`` profile data loaded by the
-    host is visible to :func:`get_system_info` and the rest of the CLI.
-    """
+    """Copy host profile fields from an embedding host onto parsed top-level args."""
     if host_ns is None:
         return
     for attr in (

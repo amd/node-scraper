@@ -53,18 +53,20 @@ class AutoNameStrEnum(Enum):
         return name
 
 
-def get_exception_traceback(exception: Exception) -> dict:
+def get_exception_traceback(exception: BaseException) -> dict:
     """get traceback and exception type from an exception
 
     Args:
-        exception (Exception): exception
+        exception (BaseException): exception
 
     Returns:
-        dict: exception details dict
+        dict: exception details dict (traceback is full format_exception lines, not frames only)
     """
     return {
         "exception_type": type(exception).__name__,
-        "traceback": traceback.format_tb(exception.__traceback__),
+        "traceback": traceback.format_exception(
+            type(exception), exception, exception.__traceback__
+        ),
     }
 
 
