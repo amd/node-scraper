@@ -23,10 +23,12 @@
 # SOFTWARE.
 #
 ###############################################################################
+import json
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from common.shared_utils import MockConnectionManager
+from framework.common.shared_utils import MockConnectionManager
 
 from nodescraper.enums import EventPriority, ExecutionStatus, SystemInteractionLevel
 from nodescraper.interfaces.dataanalyzertask import DataAnalyzer
@@ -151,6 +153,8 @@ class TestDataPluginCore:
                     logger=plugin.logger,
                     parent=plugin.__class__.__name__,
                     task_result_hooks=plugin.task_result_hooks,
+                    event_reporter=plugin.event_reporter,
+                    session_id=plugin.session_id,
                 )
                 mock_collect.assert_called_once()
                 assert result.status == ExecutionStatus.OK
@@ -403,3 +407,139 @@ class TestDataPluginCore:
 
         assert result.status == ExecutionStatus.NOT_RAN
         assert "No data available" in result.message
+
+
+class ContentModel(StandardDataModel):
+    def get_compare_content(self) -> str:
+        return self.value
+
+
+class ErrMatchAnalyzer(DataAnalyzer):
+    DATA_MODEL = ContentModel
+
+    def analyze_data(self, data, args=None):
+        return TaskResult(status=ExecutionStatus.OK)
+
+    @staticmethod
+    def get_error_matches(content: str) -> list[str]:
+        return ["z", "a"] if content else []
+
+
+class ContentCollector(DataCollector):
+    DATA_MODEL = ContentModel
+
+    def collect_data(self, args=None):
+        return TaskResult(status=ExecutionStatus.OK), ContentModel(value="x")
+
+
+class ExtractPlugin(DataPlugin):
+    DATA_MODEL = ContentModel
+    CONNECTION_TYPE = MockConnectionManager
+    COLLECTOR = ContentCollector
+    ANALYZER = ErrMatchAnalyzer
+
+
+class LogImportModel(ContentModel):
+    @classmethod
+    def import_model(cls, model_input):
+        if isinstance(model_input, str) and model_input.endswith(".log"):
+            return cls(value=Path(model_input).read_text(encoding="utf-8"))
+        return super().import_model(model_input)
+
+
+class LogImportPlugin(DataPlugin):
+    DATA_MODEL = LogImportModel
+    CONNECTION_TYPE = MockConnectionManager
+    COLLECTOR = ContentCollector
+    ANALYZER = ErrMatchAnalyzer
+
+
+class TestDataPluginRunPaths:
+    def test_find_datamodel_path_requires_directory(self) -> None:
+        assert CoreDataPlugin.find_datamodel_path_in_run("/no/such/run") is None
+
+    def test_find_datamodel_path_success(self, tmp_path: Path) -> None:
+        collector_dir = tmp_path / "extract_plugin" / "content_collector"
+        collector_dir.mkdir(parents=True)
+        (collector_dir / "result.json").write_text(
+            json.dumps({"parent": "ExtractPlugin"}), encoding="utf-8"
+        )
+        (collector_dir / "contentmodel.json").write_text(
+            json.dumps({"value": "from_run"}), encoding="utf-8"
+        )
+
+        found = ExtractPlugin.find_datamodel_path_in_run(str(tmp_path))
+        assert found is not None
+        assert found.endswith("contentmodel.json")
+
+    def test_find_datamodel_path_wrong_parent(self, tmp_path: Path) -> None:
+        collector_dir = tmp_path / "extract_plugin" / "content_collector"
+        collector_dir.mkdir(parents=True)
+        (collector_dir / "result.json").write_text(
+            json.dumps({"parent": "OtherPlugin"}), encoding="utf-8"
+        )
+        (collector_dir / "contentmodel.json").write_text("{}", encoding="utf-8")
+
+        assert ExtractPlugin.find_datamodel_path_in_run(str(tmp_path)) is None
+
+    def test_find_datamodel_path_invalid_result_json(self, tmp_path: Path) -> None:
+        collector_dir = tmp_path / "extract_plugin" / "content_collector"
+        collector_dir.mkdir(parents=True)
+        (collector_dir / "result.json").write_text("{not json", encoding="utf-8")
+        (collector_dir / "contentmodel.json").write_text("{}", encoding="utf-8")
+
+        assert ExtractPlugin.find_datamodel_path_in_run(str(tmp_path)) is None
+
+    def test_load_datamodel_from_path_json(self, tmp_path: Path) -> None:
+        p = tmp_path / "dm.json"
+        p.write_text(json.dumps({"value": "file"}), encoding="utf-8")
+        m = ExtractPlugin.load_datamodel_from_path(str(p))
+        assert isinstance(m, ContentModel)
+        assert m.value == "file"
+
+    def test_load_datamodel_from_path_missing(self) -> None:
+        assert ExtractPlugin.load_datamodel_from_path("/nonexistent/x.json") is None
+
+    def test_load_datamodel_from_path_log_with_custom_import(self, tmp_path: Path) -> None:
+        log = tmp_path / "capture.log"
+        log.write_text("from_log", encoding="utf-8")
+        m = LogImportPlugin.load_datamodel_from_path(str(log))
+        assert isinstance(m, LogImportModel)
+        assert m.value == "from_log"
+
+    def test_load_datamodel_from_path_log_without_override_returns_none(
+        self, tmp_path: Path
+    ) -> None:
+        log = tmp_path / "plain.log"
+        log.write_text("{}", encoding="utf-8")
+        assert ExtractPlugin.load_datamodel_from_path(str(log)) is None
+
+    def test_get_extracted_errors_sorted(self) -> None:
+        dm = ContentModel(value="has text")
+        out = ExtractPlugin.get_extracted_errors(dm)
+        assert out == ["a", "z"]
+
+    def test_get_extracted_errors_without_hooks(self) -> None:
+        assert CoreDataPlugin.get_extracted_errors(StandardDataModel()) is None
+
+    def test_load_run_data_from_run_dir(self, tmp_path: Path) -> None:
+        collector_dir = tmp_path / "extract_plugin" / "content_collector"
+        collector_dir.mkdir(parents=True)
+        (collector_dir / "result.json").write_text(
+            json.dumps({"parent": "ExtractPlugin"}), encoding="utf-8"
+        )
+        (collector_dir / "contentmodel.json").write_text(
+            json.dumps({"value": "run"}), encoding="utf-8"
+        )
+
+        loaded = ExtractPlugin.load_run_data(str(tmp_path))
+        assert loaded is not None
+        assert loaded["value"] == "run"
+        assert loaded["extracted_errors"] == ["a", "z"]
+
+    def test_load_run_data_direct_file(self, tmp_path: Path) -> None:
+        p = tmp_path / "direct.json"
+        p.write_text(json.dumps({"value": "direct"}), encoding="utf-8")
+        loaded = ExtractPlugin.load_run_data(str(p))
+        assert loaded is not None
+        assert loaded["value"] == "direct"
