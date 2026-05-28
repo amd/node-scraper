@@ -32,6 +32,7 @@ import pytest
 from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     AmdSmiDataModel,
     AmdSmiMetric,
+    MetricClockData,
     MetricPcie,
     MetricPower,
     StaticClockData,
@@ -407,12 +408,35 @@ def test_metric_pcie_lc_perf_alias():
     """Metric PCIe accepts legacy lc_perf_other_end_recovery JSON key."""
     pcie = _pcie_dict(lc_perf_other_end_recovery=2)
     assert pcie.lc_perf_other_end_recovery_count == 2
+    assert pcie.lc_perf_other_end_recovery == 2
 
 
 def test_metric_pcie_lc_perf_count_key():
     """Metric PCIe accepts renamed lc_perf_other_end_recovery_count key."""
     pcie = _pcie_dict(lc_perf_other_end_recovery_count=3)
     assert pcie.lc_perf_other_end_recovery_count == 3
+    assert pcie.lc_perf_other_end_recovery == 3
+
+
+def test_metric_legacy_mi300_shape():
+    """Legacy metric JSON without MI355-only clock/board fields still validates."""
+    pcie_legacy = {
+        k: v for k, v in DUMMY_METRIC_PCIE.items() if k != "lc_perf_other_end_recovery_count"
+    }
+    pcie_legacy["lc_perf_other_end_recovery"] = 1
+    metric = AmdSmiMetric.model_validate(
+        dummy_metric_dict(
+            pcie=pcie_legacy,
+            gpuboard=None,
+            baseboard=None,
+        )
+    )
+    assert metric.gpuboard is None
+    assert metric.baseboard is None
+    assert isinstance(metric.clock["GFX_0"], MetricClockData)
+    assert metric.clock["GFX_0"].clk is not None
+    assert metric.pcie.lc_perf_other_end_recovery_count == 1
+    assert metric.pcie.lc_perf_other_end_recovery == 1
 
 
 def test_metric_power_ubb_coercion():
@@ -444,3 +468,47 @@ def test_metric_gpuboard_baseboard_optional():
     )
     assert metric.gpuboard == DUMMY_METRIC_GPUBOARD
     assert metric.baseboard == DUMMY_METRIC_BASEBOARD
+
+
+def test_metric_gpuboard_gpu_board_alias():
+    """amd-smi may emit gpu_board / base_board instead of gpuboard / baseboard."""
+    metric = AmdSmiMetric.model_validate(
+        dummy_metric_dict(
+            **{
+                "gpu_board": DUMMY_METRIC_GPUBOARD,
+                "base_board": DUMMY_METRIC_BASEBOARD,
+            }
+        )
+    )
+    assert metric.gpuboard == DUMMY_METRIC_GPUBOARD
+    assert metric.baseboard == DUMMY_METRIC_BASEBOARD
+
+
+def test_metric_clock_per_aid_na_maps():
+    """MI355 metric clock may expose per-AID/MID maps instead of MetricClockData leaves."""
+    metric = AmdSmiMetric.model_validate(
+        dummy_metric_dict(
+            clock={
+                "GFX_0": {
+                    "clk": {"value": 132, "unit": "MHz"},
+                    "min_clk": {"value": 500, "unit": "MHz"},
+                    "max_clk": {"value": 2100, "unit": "MHz"},
+                    "clk_locked": 0,
+                    "deep_sleep": 0,
+                },
+                "uclk_aid": {"AID_0": "N/A", "AID_1": "N/A"},
+                "socclks_mid": {"MID_0": "N/A", "MID_1": "N/A"},
+            },
+            pcie={
+                **DUMMY_METRIC_PCIE,
+                "current_bandwidth_sent": "N/A",
+                "current_bandwidth_received": "N/A",
+                "max_packet_size": "N/A",
+                "lc_perf_other_end_recovery_count": 0,
+            },
+        )
+    )
+    assert isinstance(metric.clock["uclk_aid"], dict)
+    assert metric.clock["uclk_aid"]["AID_0"] == "N/A"
+    assert isinstance(metric.clock["GFX_0"], MetricClockData)
+    assert metric.pcie.lc_perf_other_end_recovery_count == 0

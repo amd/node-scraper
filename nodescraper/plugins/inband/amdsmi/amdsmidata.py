@@ -584,14 +584,41 @@ class MetricPower(BaseModel):
 
 
 class MetricClockData(BaseModel):
-    clk: Optional[ValueUnit]
-    min_clk: Optional[ValueUnit]
-    max_clk: Optional[ValueUnit]
-    clk_locked: Optional[Union[int, str, dict]]
-    deep_sleep: Optional[Union[int, str, dict]]
+    model_config = ConfigDict(extra="ignore")
+
+    clk: Optional[ValueUnit] = None
+    min_clk: Optional[ValueUnit] = None
+    max_clk: Optional[ValueUnit] = None
+    clk_locked: Optional[Union[int, str, dict]] = None
+    deep_sleep: Optional[Union[int, str, dict]] = None
     na_validator = field_validator(
         "clk", "min_clk", "max_clk", "clk_locked", "deep_sleep", mode="before"
     )(na_to_none)
+
+
+_METRIC_CLOCK_LEAF_KEYS = frozenset({"clk", "min_clk", "max_clk", "clk_locked", "deep_sleep"})
+
+
+def _looks_like_metric_clock_leaf(value: object) -> bool:
+    """True when *value* matches legacy amd-smi per-clock metric JSON."""
+    return isinstance(value, dict) and bool(_METRIC_CLOCK_LEAF_KEYS & value.keys())
+
+
+def _normalize_metric_clock_map(clock: Any) -> Any:
+    """Coerce standard clock leaves to ``MetricClockData``; keep nested maps as dicts."""
+    if not isinstance(clock, dict):
+        return clock
+    normalized: dict[str, Any] = {}
+    for key, val in clock.items():
+        if val is None or (isinstance(val, str) and _value_unit_is_na(val)):
+            normalized[key] = None
+        elif isinstance(val, MetricClockData):
+            normalized[key] = val
+        elif _looks_like_metric_clock_leaf(val):
+            normalized[key] = MetricClockData.model_validate(val)
+        else:
+            normalized[key] = val
+    return normalized
 
 
 class MetricTemperature(BaseModel):
@@ -602,23 +629,38 @@ class MetricTemperature(BaseModel):
 
 
 class MetricPcie(BaseModel):
-    width: Optional[int]
-    speed: Optional[ValueUnit]
-    bandwidth: Optional[ValueUnit]
-    replay_count: Optional[int]
-    l0_to_recovery_count: Optional[int]
-    replay_roll_over_count: Optional[int]
-    nak_sent_count: Optional[int]
-    nak_received_count: Optional[int]
-    current_bandwidth_sent: Optional[int]
-    current_bandwidth_received: Optional[int]
-    max_packet_size: Optional[int]
-    lc_perf_other_end_recovery_count: Optional[int] = Field(
-        default=None,
-        validation_alias=AliasChoices(
-            "lc_perf_other_end_recovery_count", "lc_perf_other_end_recovery"
-        ),
-    )
+    width: Optional[int] = None
+    speed: Optional[ValueUnit] = None
+    bandwidth: Optional[ValueUnit] = None
+    replay_count: Optional[int] = None
+    l0_to_recovery_count: Optional[int] = None
+    replay_roll_over_count: Optional[int] = None
+    nak_sent_count: Optional[int] = None
+    nak_received_count: Optional[int] = None
+    current_bandwidth_sent: Optional[int] = None
+    current_bandwidth_received: Optional[int] = None
+    max_packet_size: Optional[int] = None
+    lc_perf_other_end_recovery_count: Optional[int] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_recovery_count_key(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        out = dict(data)
+        count = out.get("lc_perf_other_end_recovery_count")
+        legacy = out.get("lc_perf_other_end_recovery")
+        if count is None and legacy is not None:
+            out["lc_perf_other_end_recovery_count"] = legacy
+        elif legacy is None and count is not None:
+            out["lc_perf_other_end_recovery"] = count
+        return out
+
+    @property
+    def lc_perf_other_end_recovery(self) -> Optional[int]:
+        """Legacy amd-smi JSON / attribute name (alias for ``lc_perf_other_end_recovery_count``)."""
+        return self.lc_perf_other_end_recovery_count
+
     na_validator = field_validator(
         "width",
         "speed",
@@ -835,12 +877,12 @@ class EccData(BaseModel):
 
 
 class AmdSmiMetric(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
     gpu: int
     usage: Union[MetricUsage, str]
     power: MetricPower
-    clock: dict[str, Union[MetricClockData, dict]]
+    clock: dict[str, Union[MetricClockData, dict[str, Any]]]
     temperature: MetricTemperature
     pcie: MetricPcie
     ecc: MetricEccTotals
@@ -852,11 +894,22 @@ class AmdSmiMetric(BaseModel):
     energy: Optional[MetricEnergy]
     mem_usage: MetricMemUsage
     throttle: MetricThrottle
-    gpuboard: Optional[Union[dict[str, Any], str]] = None
-    baseboard: Optional[Union[dict[str, Any], str]] = None
+    gpuboard: Optional[Union[dict[str, Any], str]] = Field(
+        default=None,
+        validation_alias=AliasChoices("gpuboard", "gpu_board"),
+    )
+    baseboard: Optional[Union[dict[str, Any], str]] = Field(
+        default=None,
+        validation_alias=AliasChoices("baseboard", "base_board"),
+    )
 
     na_validator = field_validator("xgmi_err", "perf_level", mode="before")(na_to_none)
     _board_dict_na = field_validator("gpuboard", "baseboard", mode="before")(na_to_none_dict)
+
+    @field_validator("clock", mode="before")
+    @classmethod
+    def _normalize_clock(cls, clock: Any) -> Any:
+        return _normalize_metric_clock_map(clock)
 
     @field_validator("ecc_blocks", mode="before")
     @classmethod

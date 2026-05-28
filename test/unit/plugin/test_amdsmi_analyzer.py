@@ -961,6 +961,30 @@ def test_check_expected_power_management_missing(mock_analyzer):
     assert "not available" in analyzer.result.events[0].description
 
 
+def test_analyze_data_expected_power_management(mock_analyzer):
+    """analyze_data accepts expected_power_management from plugin config."""
+    analyzer = mock_analyzer
+    data = AmdSmiDataModel(
+        metric=[
+            _minimal_amdsmi_metric(0, power_management="DISABLED"),
+            _minimal_amdsmi_metric(1, power_management="DISABLED"),
+        ]
+    )
+    args = AmdSmiAnalyzerArgs(expected_power_management="DISABLED")
+    result = analyzer.analyze_data(data, args)
+    assert not any("power_management mismatch" in e.description for e in result.events)
+
+
+def test_amdsmi_analyzer_args_rejects_unknown_fields():
+    """Plugin config must only use declared AmdSmiAnalyzerArgs fields."""
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        AmdSmiAnalyzerArgs.model_validate(
+            {"expected_power_management": "DISABLED", "not_a_field": 1}
+        )
+
+
 def test_check_amdsmi_metric_pcie_width_fail(mock_analyzer):
     """PCIe width not x16 generates error."""
     analyzer = mock_analyzer
