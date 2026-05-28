@@ -334,15 +334,28 @@ class StaticVbios(BaseModel):
 class StaticPowerLimit(AmdSmiBaseModel):
     """Per-PPT power limits (ROCm 7+ static --limit JSON)."""
 
+    model_config = ConfigDict(
+        populate_by_name=True,
+        extra="ignore",
+    )
+
     max_power_limit: Optional[ValueUnit] = None
     min_power_limit: Optional[ValueUnit] = None
     socket_power_limit: Optional[ValueUnit] = None
     na_validator = field_validator(
         "max_power_limit", "min_power_limit", "socket_power_limit", mode="before"
     )(na_to_none)
+    _ppt_vu = field_validator(
+        "max_power_limit", "min_power_limit", "socket_power_limit", mode="before"
+    )(coerce_value_unit_input)
 
 
 class StaticLimit(AmdSmiBaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+        extra="ignore",
+    )
+
     max_power: Optional[ValueUnit] = None
     min_power: Optional[ValueUnit] = None
     socket_power: Optional[ValueUnit] = None
@@ -372,6 +385,18 @@ class StaticLimit(AmdSmiBaseModel):
         "ptl_format",
         mode="before",
     )(na_to_none)
+    _limit_value_unit = field_validator(
+        "max_power",
+        "min_power",
+        "socket_power",
+        "slowdown_edge_temperature",
+        "slowdown_hotspot_temperature",
+        "slowdown_vram_temperature",
+        "shutdown_edge_temperature",
+        "shutdown_hotspot_temperature",
+        "shutdown_vram_temperature",
+        mode="before",
+    )(coerce_value_unit_input)
 
     def resolved_max_power(self) -> Optional[ValueUnit]:
         """Return max power cap from legacy flat fields or ``ppt0`` (ROCm 7+)."""
@@ -381,10 +406,44 @@ class StaticLimit(AmdSmiBaseModel):
             return self.ppt0.max_power_limit
         return None
 
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_limit_input(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            return normalize_static_limit_dict(data)
+        return data
+
+
+def _normalize_static_ppt_block(val: object) -> object:
+    """Drop N/A-only ``ppt0``/``ppt1`` blocks; pass through already-parsed models."""
+    if val is None:
+        return None
+    if isinstance(val, str) and val.strip().upper() in {"N/A", "NA", ""}:
+        return None
+    if not isinstance(val, dict):
+        return val
+    out: dict[str, Any] = {}
+    for key, raw in val.items():
+        if isinstance(raw, str) and raw.strip().upper() in {"N/A", "NA", ""}:
+            continue
+        if raw is not None:
+            out[key] = raw
+    return out or None
+
+
+def normalize_static_limit_dict(data: dict[str, Any]) -> dict[str, Any]:
+    """Normalize static ``limit`` JSON for ``StaticLimit`` (ROCm 7.13 + legacy)."""
+    out = dict(data)
+    for ppt_key in ("ppt0", "ppt1"):
+        out[ppt_key] = _normalize_static_ppt_block(out.get(ppt_key))
+    return out
+
 
 class StaticDriver(BaseModel):
-    name: str
-    version: str
+    model_config = ConfigDict(populate_by_name=True)
+
+    name: str = Field(validation_alias=AliasChoices("name", "driver_name"))
+    version: str = Field(validation_alias=AliasChoices("version", "driver_version"))
     os_kernel_version: Optional[str] = None
 
 
@@ -497,13 +556,13 @@ class AmdSmiStatic(BaseModel):
     gpu: int
     asic: StaticAsic
     bus: StaticBus
-    vbios: Optional[StaticVbios]
-    limit: Optional[StaticLimit]
+    vbios: Optional[StaticVbios] = None
+    limit: Optional[StaticLimit] = None
     driver: StaticDriver
     board: StaticBoard
     ras: StaticRas
-    soc_pstate: Optional[StaticSocPstate]
-    xgmi_plpd: Optional[StaticXgmiPlpd]
+    soc_pstate: Optional[StaticSocPstate] = None
+    xgmi_plpd: Optional[StaticXgmiPlpd] = None
     process_isolation: str
     numa: StaticNuma
     vram: StaticVram
@@ -633,9 +692,9 @@ def normalize_amdsmi_metric_dict(item: dict[str, Any]) -> dict[str, Any]:
         pcie_out = dict(pcie)
         count = pcie_out.get("lc_perf_other_end_recovery_count")
         legacy = pcie_out.get("lc_perf_other_end_recovery")
-        if count is None and legacy is not None:
+        if legacy is not None:
             pcie_out["lc_perf_other_end_recovery_count"] = legacy
-        elif legacy is None and count is not None:
+        elif count is not None:
             pcie_out["lc_perf_other_end_recovery"] = count
         out["pcie"] = pcie_out
     clock = out.get("clock")
@@ -673,9 +732,9 @@ class MetricPcie(BaseModel):
         out = dict(data)
         count = out.get("lc_perf_other_end_recovery_count")
         legacy = out.get("lc_perf_other_end_recovery")
-        if count is None and legacy is not None:
+        if legacy is not None:
             out["lc_perf_other_end_recovery_count"] = legacy
-        elif legacy is None and count is not None:
+        elif count is not None:
             out["lc_perf_other_end_recovery"] = count
         return out
 
@@ -929,7 +988,7 @@ class AmdSmiMetric(BaseModel):
     na_validator = field_validator("xgmi_err", "perf_level", mode="before")(na_to_none)
     _board_dict_na = field_validator("gpuboard", "baseboard", mode="before")(na_to_none_dict)
 
-    @field_validator("clock", mode="before")
+    @field_validator("clock", mode="plain")
     @classmethod
     def _normalize_clock(cls, clock: Any) -> Any:
         return _normalize_metric_clock_map(clock)

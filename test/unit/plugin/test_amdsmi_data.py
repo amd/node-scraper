@@ -72,8 +72,8 @@ DUMMY_STATIC_BOARD: dict[str, str] = {
 }
 
 DUMMY_STATIC_DRIVER: dict[str, Optional[str]] = {
-    "name": "amdgpu",
-    "version": "6.12.12",
+    "driver_name": "amdgpu",
+    "driver_version": "6.12.12",
     "os_kernel_version": "6.8.0-dummy",
 }
 

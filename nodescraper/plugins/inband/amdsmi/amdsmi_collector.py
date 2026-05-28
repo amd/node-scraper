@@ -73,6 +73,7 @@ from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     XgmiLinks,
     XgmiMetrics,
     normalize_amdsmi_metric_dict,
+    normalize_static_limit_dict,
 )
 from nodescraper.plugins.inband.amdsmi.collector_args import AmdSmiCollectorArgs
 from nodescraper.utils import get_exception_traceback
@@ -916,10 +917,12 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
             os_kernel = driver.get("os_kernel_version") if driver else None
             driver_model = StaticDriver(
                 name=self._normalize(
-                    driver.get("driver_name") if driver else None, default="unknown"
+                    (driver.get("driver_name") or driver.get("name")) if driver else None,
+                    default="unknown",
                 ),
                 version=self._normalize(
-                    driver.get("driver_version") if driver else None, default="unknown"
+                    (driver.get("driver_version") or driver.get("version")) if driver else None,
+                    default="unknown",
                 ),
                 os_kernel_version=(
                     None if os_kernel in (None, "", "N/A") else str(os_kernel).strip()
@@ -1021,7 +1024,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
         if data is None or not isinstance(data, dict) or not data:
             return None
         try:
-            return StaticLimit.model_validate(data)
+            return StaticLimit.model_validate(normalize_static_limit_dict(data))
         except ValidationError as err:
             self._log_event(
                 category=EventCategory.APPLICATION,
