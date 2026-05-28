@@ -24,7 +24,7 @@
 #
 ###############################################################################
 import pytest
-from common.shared_utils import DummyDataModel, MockConnectionManager
+from framework.common.shared_utils import DummyDataModel, MockConnectionManager
 from pydantic import BaseModel
 
 from nodescraper.enums import ExecutionStatus
@@ -101,6 +101,11 @@ def plugin_registry():
 )
 def test_config_merge(input_configs: list[PluginConfig], output_config: PluginConfig):
     assert PluginExecutor.merge_configs(input_configs) == output_config
+
+
+def test_plugin_executor_rejects_invalid_session_id():
+    with pytest.raises(ValueError, match="session_id must be a valid UUID"):
+        PluginExecutor(plugin_configs=[], session_id="not-a-uuid")
 
 
 def test_plugin_queue(plugin_registry):

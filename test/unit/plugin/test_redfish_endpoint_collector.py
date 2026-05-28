@@ -237,6 +237,116 @@ def test_fetch_one_calls_run_get():
     assert out.path == "/redfish/v1"
 
 
+def test_fetch_one_paged_calls_run_get_paged():
+    conn = MagicMock()
+    conn.run_get_paged.return_value = RedfishGetResult(
+        path="/redfish/v1/Systems",
+        success=True,
+        data={"Members": []},
+        status_code=200,
+    )
+    out = ec._fetch_one_paged(conn, "/redfish/v1/Systems", max_pages=42)
+    conn.run_get_paged.assert_called_once_with("/redfish/v1/Systems", max_pages=42)
+    assert out.success is True
+
+
+def test_run_redfish_get_paged_appends_artifact_when_enabled(
+    redfish_endpoint_collector, redfish_conn_mock
+):
+    redfish_conn_mock.run_get_paged.return_value = RedfishGetResult(
+        path="/redfish/v1/Systems",
+        success=True,
+        data={"Members": []},
+        status_code=200,
+    )
+    redfish_endpoint_collector.result.artifacts.clear()
+    res = redfish_endpoint_collector._run_redfish_get_paged(
+        "/redfish/v1/Systems", max_pages=5, log_artifact=True
+    )
+    redfish_conn_mock.run_get_paged.assert_called_once_with("/redfish/v1/Systems", max_pages=5)
+    assert res.success is True
+    assert len(redfish_endpoint_collector.result.artifacts) == 1
+
+
+def test_run_redfish_get_paged_skips_artifact_when_disabled(
+    redfish_endpoint_collector, redfish_conn_mock
+):
+    redfish_conn_mock.run_get_paged.return_value = RedfishGetResult(
+        path="/x",
+        success=True,
+        data={"Members": []},
+        status_code=200,
+    )
+    redfish_endpoint_collector.result.artifacts.clear()
+    redfish_endpoint_collector._run_redfish_get_paged("/x", log_artifact=False)
+    assert len(redfish_endpoint_collector.result.artifacts) == 0
+
+
+def test_collect_follow_next_link_sequential_uses_run_get_paged(
+    redfish_endpoint_collector, redfish_conn_mock
+):
+    redfish_conn_mock.run_get_paged.return_value = RedfishGetResult(
+        path="/redfish/v1/Systems",
+        success=True,
+        data={"Members": [{"@odata.id": "/redfish/v1/Systems/1"}], "Members@odata.count": 1},
+        status_code=200,
+    )
+    result, data = redfish_endpoint_collector.collect_data(
+        args=RedfishEndpointCollectorArgs(
+            uris=["/redfish/v1/Systems"],
+            follow_next_link=True,
+            max_pages=50,
+        )
+    )
+    assert result.status == ExecutionStatus.OK
+    assert data is not None
+    assert data.responses["/redfish/v1/Systems"]["Members@odata.count"] == 1
+    redfish_conn_mock.run_get_paged.assert_called_once_with("/redfish/v1/Systems", max_pages=50)
+    redfish_conn_mock.run_get.assert_not_called()
+
+
+def test_collect_follow_next_link_concurrent_uses_connection_copy(
+    redfish_endpoint_collector, redfish_conn_mock
+):
+    copy_a = MagicMock()
+    copy_b = MagicMock()
+    copies = [copy_a, copy_b]
+
+    def next_copy():
+        return copies.pop(0) if copies else MagicMock()
+
+    redfish_conn_mock.copy.side_effect = next_copy
+
+    copy_a.run_get_paged.return_value = RedfishGetResult(
+        path="/a",
+        success=True,
+        data={"Members": []},
+        status_code=200,
+    )
+    copy_b.run_get_paged.return_value = RedfishGetResult(
+        path="/b",
+        success=True,
+        data={"Members": []},
+        status_code=200,
+    )
+
+    result, data = redfish_endpoint_collector.collect_data(
+        args=RedfishEndpointCollectorArgs(
+            uris=["/a", "/b"],
+            max_workers=2,
+            follow_next_link=True,
+            max_pages=10,
+        )
+    )
+    assert result.status == ExecutionStatus.OK
+    assert data is not None
+    assert len(data.responses) == 2
+    copy_a.run_get_paged.assert_called_once_with("/a", max_pages=10)
+    copy_b.run_get_paged.assert_called_once_with("/b", max_pages=10)
+    assert redfish_conn_mock.copy.call_count == 2
+    assert len(result.artifacts) == 2
+
+
 def test_discover_tree_single_root():
     conn = MagicMock()
     conn.run_get.return_value = RedfishGetResult(

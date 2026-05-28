@@ -38,6 +38,7 @@ from requests.status_codes import codes
 from nodescraper.enums import TaskState
 
 from .redfish_connection import RedfishConnection, RedfishConnectionError
+from .redfish_constants import RF_ODATA_ID
 from .redfish_path import RedfishPath
 
 _module_logger = logging.getLogger(__name__)
@@ -64,9 +65,6 @@ def _log_collect_diag_response(
         snippet,
     )
 
-
-# Redfish JSON key for resource link
-RF_ODATA_ID = "@odata.id"
 
 # @Redfish.AllowableValues: Redfish annotation for the list of allowable values for a string
 REDFISH_ANNOTATION_ALLOWABLE_VALUES = "Redfish.AllowableValues"

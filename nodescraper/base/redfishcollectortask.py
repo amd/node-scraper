@@ -27,6 +27,7 @@ import logging
 from typing import Generic, Optional, Union
 
 from nodescraper.connection.redfish import RedfishConnection, RedfishGetResult
+from nodescraper.constants import DEFAULT_EVENT_REPORTER
 from nodescraper.enums import EventPriority
 from nodescraper.generictypes import TCollectArg, TDataModel
 from nodescraper.interfaces import DataCollector, TaskResultHook
@@ -47,6 +48,8 @@ class RedfishDataCollector(
         max_event_priority_level: Union[EventPriority, str] = EventPriority.CRITICAL,
         parent: Optional[str] = None,
         task_result_hooks: Optional[list[TaskResultHook]] = None,
+        event_reporter: str = DEFAULT_EVENT_REPORTER,
+        session_id: Optional[str] = None,
         **kwargs,
     ):
         super().__init__(
@@ -56,6 +59,8 @@ class RedfishDataCollector(
             max_event_priority_level=max_event_priority_level,
             parent=parent,
             task_result_hooks=task_result_hooks,
+            event_reporter=event_reporter,
+            session_id=session_id,
             **kwargs,
         )
 
@@ -74,6 +79,28 @@ class RedfishDataCollector(
             RedfishGetResult: path, success, data (or error), status_code.
         """
         res = self.connection.run_get(path)
+        if log_artifact:
+            self.result.artifacts.append(res)
+        return res
+
+    def _run_redfish_get_paged(
+        self,
+        path: str,
+        max_pages: int = 200,
+        log_artifact: bool = True,
+    ) -> RedfishGetResult:
+        """
+        Run a Redfish GET and follow Members@odata.nextLink pagination, merging all pages into a single response.
+
+        Args:
+            path (str): Redfish URI path.
+            max_pages (int, optional): safety cap on the number of pages to follow. Defaults to 200.
+            log_artifact (bool, optional): whether we should log the merged result. Defaults to True.
+
+        Returns:
+            RedfishGetResult: path, success, merged data (or error), status_code.
+        """
+        res = self.connection.run_get_paged(path, max_pages=max_pages)
         if log_artifact:
             self.result.artifacts.append(res)
         return res

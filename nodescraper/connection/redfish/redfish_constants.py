@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# Copyright (c) 2025 Advanced Micro Devices, Inc.
+# Copyright (c) 2026 Advanced Micro Devices, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,36 +23,16 @@
 # SOFTWARE.
 #
 ###############################################################################
-from .analyzerargs import AnalyzerArgs
-from .collectorargs import CollectorArgs
-from .datamodel import DataModel, FileModel, TDataModel
-from .datapluginresult import DataPluginResult
-from .event import Event
-from .pluginconfig import PluginConfig
-from .pluginresult import PluginResult
-from .priority_override import (
-    NO_CHANGE,
-    PriorityOverrideRule,
-    apply_priority_override_rules,
-)
-from .systeminfo import SystemInfo
-from .taskresult import TaskResult
-from .timerangeargs import TimeRangeAnalysisArgs
+"""Redfish field name constants shared across the Redfish package(s)."""
 
-__all__ = [
-    "AnalyzerArgs",
-    "CollectorArgs",
-    "DataModel",
-    "FileModel",
-    "TDataModel",
-    "TaskResult",
-    "Event",
-    "SystemInfo",
-    "PluginResult",
-    "DataPluginResult",
-    "PluginConfig",
-    "NO_CHANGE",
-    "PriorityOverrideRule",
-    "apply_priority_override_rules",
-    "TimeRangeAnalysisArgs",
-]
+# Resource collection property which identifies members of the collection.
+RF_MEMBERS = "Members"
+
+# Resource collection property which defines the total number of resources/members.
+RF_MEMBERS_COUNT = "Members@odata.count"
+
+# Resource collection property which points to the next set of partial members from the originating operation.
+RF_MEMBERS_NEXT_LINK = "Members@odata.nextLink"
+
+# Resource identifier property (optional for registry resources, required for all other resources and resource collections).
+RF_ODATA_ID = "@odata.id"

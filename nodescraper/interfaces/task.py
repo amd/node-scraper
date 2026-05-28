@@ -27,9 +27,10 @@ import abc
 import copy
 import datetime
 import logging
+import uuid
 from typing import Any, Optional, Union
 
-from nodescraper.constants import DEFAULT_LOGGER
+from nodescraper.constants import DEFAULT_EVENT_REPORTER, DEFAULT_LOGGER
 from nodescraper.enums import EventCategory, EventPriority
 from nodescraper.models import Event, SystemInfo, TaskResult
 
@@ -54,17 +55,32 @@ class Task(abc.ABC):
         max_event_priority_level: Union[EventPriority, str] = EventPriority.CRITICAL,
         parent: Optional[str] = None,
         task_result_hooks: Optional[list[TaskResultHook]] = None,
+        event_reporter: str = DEFAULT_EVENT_REPORTER,
+        session_id: Optional[str] = None,
         **kwargs: dict[str, Any],
     ):
         if logger is None:
             logger = logging.getLogger(DEFAULT_LOGGER)
         self.system_info = system_info
         self.logger = logger
+        self.event_reporter = event_reporter
         self.max_event_priority_level = max_event_priority_level
         self.parent = parent
         if not task_result_hooks:
             task_result_hooks = []
         self.task_result_hooks = task_result_hooks
+
+        if session_id is None and "session_id" in kwargs:
+            session_id = kwargs.pop("session_id")  # type: ignore[assignment]
+        if session_id is not None:
+            try:
+                uuid.UUID(str(session_id))
+            except (ValueError, TypeError, AttributeError) as e:
+                raise ValueError(
+                    f"session_id must be a valid UUID string, got: {session_id}"
+                ) from e
+        self.session_id: Optional[str] = str(session_id) if session_id is not None else None
+
         self.result: TaskResult = self._init_result()
 
     @property
@@ -115,6 +131,9 @@ class Task(abc.ABC):
         if self.parent:
             data["parent"] = self.parent
 
+        if self.session_id is not None:
+            data["session_id"] = self.session_id
+
         if self.system_info.metadata:
             data["system_metadata"] = copy.copy(self.system_info.metadata)
 
@@ -122,6 +141,7 @@ class Task(abc.ABC):
             priority = self.max_event_priority_level
 
         event = Event(
+            reporter=self.event_reporter,
             category=category,
             description=description,
             priority=priority,
@@ -151,7 +171,22 @@ class Task(abc.ABC):
         )
 
         if console_log:
-            self.logger.log(getattr(logging, priority.name, logging.INFO), description)
+            level = getattr(logging, priority.name, logging.INFO)
+            prefix = ""
+            if data:
+                et = data.get("exception_type")
+                if et:
+                    prefix = f"[{et}] "
+            self.logger.log(level, "%s%s", prefix, description)
+            if data:
+                tb = data.get("traceback")
+                if tb:
+                    tb_text = "".join(tb) if isinstance(tb, list) else str(tb)
+                    if tb_text.strip():
+                        self.logger.log(level, "Traceback:\n%s", tb_text.rstrip())
+                det = data.get("details")
+                if det and not tb:
+                    self.logger.log(level, "Details: %s", det)
 
         self.result.events.append(event)
 

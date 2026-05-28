@@ -648,3 +648,44 @@ def test_network_accessibility_failure(collector, conn_mock):
         result, accessible = collector.check_network_accessibility()
         assert result.status == ExecutionStatus.ERRORS_DETECTED
         assert accessible is False
+
+
+def test_collect_data_includes_rdma_ethtool(collector, conn_mock):
+    """RDMA-scoped ethtool -S is stored on NetworkDataModel when rdma link succeeds."""
+    import json
+
+    collector.system_info.os_family = OSFamily.LINUX
+
+    rdma_link = [{"netdev": "eth0", "ifname": "bnxt0"}]
+    ethtool_s_bnxt = "NIC statistics:\n    tx_pfc_frames: 0\n    rx_pause_frames: 0\n"
+
+    def run_sut_cmd_side_effect(cmd, **kwargs):
+        if "addr show" in cmd:
+            return MagicMock(exit_code=0, stdout=IP_ADDR_OUTPUT, command=cmd)
+        elif "route show" in cmd:
+            return MagicMock(exit_code=0, stdout=IP_ROUTE_OUTPUT, command=cmd)
+        elif "rule show" in cmd:
+            return MagicMock(exit_code=0, stdout=IP_RULE_OUTPUT, command=cmd)
+        elif "neighbor show" in cmd:
+            return MagicMock(exit_code=0, stdout=IP_NEIGHBOR_OUTPUT, command=cmd)
+        elif "rdma link -j" in cmd:
+            return MagicMock(exit_code=0, stdout=json.dumps(rdma_link), command=cmd)
+        elif "ethtool -S" in cmd and "eth0" in cmd:
+            return MagicMock(exit_code=0, stdout=ethtool_s_bnxt, command=cmd)
+        elif "ethtool" in cmd:
+            return MagicMock(exit_code=1, stdout="", command=cmd)
+        elif "lldpcli" in cmd or "lldpctl" in cmd:
+            return MagicMock(exit_code=1, stdout="", command=cmd)
+        return MagicMock(exit_code=1, stdout="", command=cmd)
+
+    collector._run_sut_cmd = MagicMock(side_effect=run_sut_cmd_side_effect)
+
+    result, data = collector.collect_data()
+
+    assert result.status == ExecutionStatus.OK
+    assert data is not None
+    assert "eth0" in data.rdma_ethtool_netdevs
+    assert len(data.rdma_ethtool_statistics) == 1
+    assert data.rdma_ethtool_statistics[0].netdev == "eth0"
+    assert data.rdma_ethtool_statistics[0].rdma_ifname == "bnxt0"
+    assert data.rdma_ethtool_statistics[0].vendor_statistics is not None

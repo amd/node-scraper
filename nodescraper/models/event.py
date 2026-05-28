@@ -28,10 +28,11 @@ import logging
 import re
 import uuid
 from enum import Enum
-from typing import Any, Optional, Union
+from typing import Any, Optional, Union, cast
 
 from pydantic import BaseModel, Field, field_serializer, field_validator
 
+from nodescraper.constants import DEFAULT_EVENT_REPORTER
 from nodescraper.enums import EventPriority
 
 
@@ -66,7 +67,7 @@ class Event(BaseModel):
     timestamp: datetime.datetime = Field(
         default_factory=lambda: datetime.datetime.now(datetime.timezone.utc)
     )
-    reporter: str = "NODE_SCRAPER"
+    reporter: str = DEFAULT_EVENT_REPORTER
     category: str
     description: str
     data: dict = Field(default_factory=dict)
@@ -113,15 +114,30 @@ class Event(BaseModel):
 
     @field_validator("priority", mode="before")
     @classmethod
-    def validate_priority(cls, priority: Union[str, EventPriority]) -> EventPriority:
-        """Allow priority to be set via string priority name
+    def validate_priority(cls, priority: Union[str, int, EventPriority]) -> EventPriority:
+        """Allow priority via :class:`EventPriority`, name string, or integer value.
+
+        Integer values use :class:`~enum.IntEnum` construction (same numeric scale as
+        ``EventPriority``). Values outside the enum (e.g. foreign severity codes) map
+        to :attr:`EventPriority.ERROR`. Booleans are rejected (``bool`` is a subclass
+        of ``int`` in Python).
+
         Args:
-            priority (Union[str, EventPriority]): event priority string or enum
+            priority: Enum, member name, or integer severity.
+
         Raises:
-            ValueError: if priority string is an invalid value
+            ValueError: if *priority* is a boolean or an invalid string name.
+
         Returns:
-            EventPriority: priority enum
+            Resolved :class:`EventPriority`.
         """
+        if type(priority) is bool:
+            raise ValueError("priority must not be a boolean")
+        if isinstance(priority, int):
+            try:
+                return cast(EventPriority, EventPriority(priority))
+            except ValueError:
+                return EventPriority.ERROR
         if isinstance(priority, str):
             try:
                 return getattr(EventPriority, priority.upper())
@@ -131,7 +147,10 @@ class Event(BaseModel):
                 ) from e
         if isinstance(priority, EventPriority):
             return priority
-        raise ValueError("priority must be an EventPriority or its name as a string")
+        raise ValueError(
+            "priority must be an EventPriority, its name as a string, or an int "
+            "(unknown ints map to ERROR)"
+        )
 
     @field_serializer("priority")
     def serialize_priority(self, priority: EventPriority, _info) -> str:

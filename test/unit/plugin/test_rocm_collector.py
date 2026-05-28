@@ -32,6 +32,48 @@ from nodescraper.enums.executionstatus import ExecutionStatus
 from nodescraper.enums.systeminteraction import SystemInteractionLevel
 from nodescraper.plugins.inband.rocm.rocm_collector import RocmCollector
 
+ROCM_SUB_VERSIONS_GREP_CMD = "grep . -H -r -i /opt/rocm/.info/*"
+# gfx942 (CDNA3 / MI300) and gfx950 (CDNA4 / MI350) — released ROCm 7.13 LLVM targets
+ROCM_7_13_GFX_VERSION = "7.13.0-123-gfx942;gfx950"
+
+ROCM_6_4_SUB_VERSIONS_STDOUT = (
+    "/opt/rocm/.info/version:6.4.0-47\n"
+    "/opt/rocm/.info/version-hip-libraries:6.4.0-47\n"
+    "/opt/rocm/.info/version-hiprt:6.4.0-47\n"
+    "/opt/rocm/.info/version-hiprt-devel:6.4.0-47\n"
+    "/opt/rocm/.info/version-hip-sdk:6.4.0-47\n"
+    "/opt/rocm/.info/version-lrt:6.4.0-47\n"
+    "/opt/rocm/.info/version-ml-libraries:6.4.0-47\n"
+    "/opt/rocm/.info/version-ml-sdk:6.4.0-47\n"
+    "/opt/rocm/.info/version-oclrt:6.4.0-47\n"
+    "/opt/rocm/.info/version-ocl-sdk:6.4.0-47\n"
+    "/opt/rocm/.info/version-openmp-sdk:6.4.0-47\n"
+    "/opt/rocm/.info/version-rocm:6.4.0-47\n"
+    "/opt/rocm/.info/version-rocm-developer-tools:6.4.0-47\n"
+    "/opt/rocm/.info/version-utils:6.4.0-47\n"
+)
+
+ROCM_6_4_EXPECTED_SUB_VERSIONS = {
+    "version": "6.4.0-47",
+    "version-hip-libraries": "6.4.0-47",
+    "version-hiprt": "6.4.0-47",
+    "version-hiprt-devel": "6.4.0-47",
+    "version-hip-sdk": "6.4.0-47",
+    "version-lrt": "6.4.0-47",
+    "version-ml-libraries": "6.4.0-47",
+    "version-ml-sdk": "6.4.0-47",
+    "version-oclrt": "6.4.0-47",
+    "version-ocl-sdk": "6.4.0-47",
+    "version-openmp-sdk": "6.4.0-47",
+    "version-rocm": "6.4.0-47",
+    "version-rocm-developer-tools": "6.4.0-47",
+    "version-utils": "6.4.0-47",
+}
+
+
+def _optional_collection_failures(count: int = 8):
+    return [MagicMock(exit_code=1, stdout="") for _ in range(count)]
+
 
 @pytest.fixture
 def collector(system_info, conn_mock):
@@ -64,7 +106,7 @@ def test_collect_rocm_version_fallback(collector):
     """Test fallback to version file when version-rocm fails"""
     collector._run_sut_cmd = MagicMock(
         side_effect=[
-            # Sub-versions (grep . -r /opt/rocm/.info/*)
+            # Sub-versions (grep . -H -r -i /opt/rocm/.info/*)
             MagicMock(exit_code=0, stdout=""),
             # First path: version-rocm (fails)
             MagicMock(exit_code=1, stdout="", command="grep . /opt/rocm/.info/version-rocm"),
@@ -113,7 +155,7 @@ def test_collect_all_rocm_data(collector):
     # Mock all command outputs in sequence (order must match collector's call order)
     collector._run_sut_cmd = MagicMock(
         side_effect=[
-            # Sub-versions (grep . -r /opt/rocm/.info/*)
+            # Sub-versions (grep . -H -r -i /opt/rocm/.info/*)
             MagicMock(exit_code=0, stdout="/opt/rocm/.info/version-rocm:6.2.0-66"),
             # ROCm version (grep . /opt/rocm/.info/version-rocm)
             MagicMock(exit_code=0, stdout="6.2.0-66"),
@@ -159,6 +201,7 @@ def test_collect_all_rocm_data(collector):
 
     # Verify ROCm version
     assert data.rocm_version == "6.2.0-66"
+    assert data.build_number == "66"
 
     # Verify ROCm latest path
     assert data.rocm_latest_versioned_path == "/opt/rocm-1.1.0"
@@ -206,7 +249,7 @@ def test_collect_with_clinfo_failure(collector):
     """Test that clinfo failure is handled gracefully and captured in artifact"""
     collector._run_sut_cmd = MagicMock(
         side_effect=[
-            # Sub-versions (grep . -r /opt/rocm/.info/*)
+            # Sub-versions (grep . -H -r -i /opt/rocm/.info/*)
             MagicMock(exit_code=0, stdout="/opt/rocm/.info/version-rocm:6.2.0-66"),
             # ROCm version (grep . /opt/rocm/.info/version-rocm)
             MagicMock(exit_code=0, stdout="6.2.0-66"),
@@ -249,7 +292,7 @@ def test_collect_minimal_data(collector):
     """Test collection when only version is available"""
     collector._run_sut_cmd = MagicMock(
         side_effect=[
-            # Sub-versions (grep . -r /opt/rocm/.info/*)
+            # Sub-versions (grep . -H -r -i /opt/rocm/.info/*)
             MagicMock(exit_code=0, stdout=""),
             # ROCm version (grep . /opt/rocm/.info/version-rocm)
             MagicMock(exit_code=0, stdout="6.2.0-66"),
@@ -282,13 +325,28 @@ def test_collect_minimal_data(collector):
     assert data.kfd_proc == []
 
 
+def test_sub_versions_grep_uses_h_flag(collector):
+    """Sub-version discovery must use grep -H so single-match output includes the filename."""
+    collector._run_sut_cmd = MagicMock(
+        side_effect=[
+            MagicMock(exit_code=1, stdout=""),
+            MagicMock(exit_code=1, stdout=""),
+            MagicMock(exit_code=1, stdout=""),
+        ]
+    )
+
+    collector.collect_data()
+
+    assert collector._run_sut_cmd.call_args_list[0].args[0] == ROCM_SUB_VERSIONS_GREP_CMD
+
+
 def test_invalid_rocm_version_format(collector):
     """Test that invalid ROCm version format is handled gracefully"""
     collector._run_sut_cmd = MagicMock(
-        return_value=MagicMock(
-            exit_code=0,
-            stdout="invalid_version_format",
-        )
+        side_effect=[
+            MagicMock(exit_code=0, stdout=""),
+            MagicMock(exit_code=0, stdout="invalid_version_format"),
+        ]
     )
 
     result, data = collector.collect_data()
@@ -296,57 +354,36 @@ def test_invalid_rocm_version_format(collector):
     assert result.status == ExecutionStatus.ERROR
     assert data is None
     assert len(result.events) >= 1
+    assert any(
+        event.category == EventCategory.OS.value
+        and "Invalid ROCm version format" in event.description
+        for event in result.events
+    )
+
+
+def test_collect_invalid_sub_version_format(collector):
+    """Invalid sub-version values fail model validation during collection."""
+    collector._run_sut_cmd = MagicMock(
+        side_effect=[
+            MagicMock(exit_code=0, stdout="/opt/rocm/.info/version-rocm:not-a-version\n"),
+            MagicMock(exit_code=0, stdout="6.2.0-66"),
+        ]
+    )
+
+    result, data = collector.collect_data()
+
+    assert result.status == ExecutionStatus.ERROR
+    assert data is None
+    assert any("Invalid ROCm version format" in event.description for event in result.events)
 
 
 def test_collect_rocm_sub_versions(collector):
-    """Test collection of ROCm version and multiple sub-versions."""
-    sub_versions_stdout = (
-        "/opt/rocm/.info/version:6.4.0-47\n"
-        "/opt/rocm/.info/version-hip-libraries:6.4.0-47\n"
-        "/opt/rocm/.info/version-hiprt:6.4.0-47\n"
-        "/opt/rocm/.info/version-hiprt-devel:6.4.0-47\n"
-        "/opt/rocm/.info/version-hip-sdk:6.4.0-47\n"
-        "/opt/rocm/.info/version-lrt:6.4.0-47\n"
-        "/opt/rocm/.info/version-ml-libraries:6.4.0-47\n"
-        "/opt/rocm/.info/version-ml-sdk:6.4.0-47\n"
-        "/opt/rocm/.info/version-oclrt:6.4.0-47\n"
-        "/opt/rocm/.info/version-ocl-sdk:6.4.0-47\n"
-        "/opt/rocm/.info/version-openmp-sdk:6.4.0-47\n"
-        "/opt/rocm/.info/version-rocm:6.4.0-47\n"
-        "/opt/rocm/.info/version-rocm-developer-tools:6.4.0-47\n"
-        "/opt/rocm/.info/version-utils:6.4.0-47\n"
-    )
-    expected_sub_versions = {
-        "version": "6.4.0-47",
-        "version-hip-libraries": "6.4.0-47",
-        "version-hiprt": "6.4.0-47",
-        "version-hiprt-devel": "6.4.0-47",
-        "version-hip-sdk": "6.4.0-47",
-        "version-lrt": "6.4.0-47",
-        "version-ml-libraries": "6.4.0-47",
-        "version-ml-sdk": "6.4.0-47",
-        "version-oclrt": "6.4.0-47",
-        "version-ocl-sdk": "6.4.0-47",
-        "version-openmp-sdk": "6.4.0-47",
-        "version-rocm": "6.4.0-47",
-        "version-rocm-developer-tools": "6.4.0-47",
-        "version-utils": "6.4.0-47",
-    }
+    """Test collection of ROCm version and multiple sub-versions (error-scraper test_run_new_version)."""
     collector._run_sut_cmd = MagicMock(
         side_effect=[
-            # First: grep . -r /opt/rocm/.info/* (sub-versions)
-            MagicMock(exit_code=0, stdout=sub_versions_stdout),
-            # Second: grep . /opt/rocm/.info/version-rocm (main version)
+            MagicMock(exit_code=0, stdout=ROCM_6_4_SUB_VERSIONS_STDOUT),
             MagicMock(exit_code=0, stdout="6.4.0-47"),
-            # Optional data (all fail for minimal test)
-            MagicMock(exit_code=1, stdout=""),  # latest path
-            MagicMock(exit_code=1, stdout=""),  # all paths
-            MagicMock(exit_code=1, stdout=""),  # rocminfo
-            MagicMock(exit_code=1, stdout=""),  # ld.so.conf
-            MagicMock(exit_code=1, stdout=""),  # rocm_libs
-            MagicMock(exit_code=1, stdout=""),  # env_vars
-            MagicMock(exit_code=1, stdout=""),  # clinfo
-            MagicMock(exit_code=1, stdout=""),  # kfd_proc
+            *_optional_collection_failures(),
         ]
     )
 
@@ -355,6 +392,51 @@ def test_collect_rocm_sub_versions(collector):
     assert result.status == ExecutionStatus.OK
     assert data is not None
     assert data.rocm_version == "6.4.0-47"
-    assert data.rocm_sub_versions == expected_sub_versions
+    assert data.rocm_sub_versions == ROCM_6_4_EXPECTED_SUB_VERSIONS
+    assert data.build_number == "47"
     assert any(event.category == "ROCM_VERSION_READ" for event in result.events)
     assert "ROCm version: 6.4.0-47" in result.message
+
+
+def test_collect_rocm_version_with_gfx_suffix(collector):
+    """ROCm 7.13+ version strings may include build and gfx target suffixes."""
+    gfx_version = ROCM_7_13_GFX_VERSION
+    collector._run_sut_cmd = MagicMock(
+        side_effect=[
+            MagicMock(
+                exit_code=0,
+                stdout=f"/opt/rocm/.info/version-rocm:{gfx_version}\n",
+            ),
+            MagicMock(exit_code=0, stdout=gfx_version),
+            *_optional_collection_failures(),
+        ]
+    )
+
+    result, data = collector.collect_data()
+
+    assert result.status == ExecutionStatus.OK
+    assert data is not None
+    assert data.rocm_version == gfx_version
+    assert data.rocm_sub_versions["version-rocm"] == gfx_version
+    assert data.build_number == "123"
+
+
+def test_collect_sub_versions_skips_lines_without_filename(collector):
+    """Lines without a filename prefix are ignored (grep without -H can produce these)."""
+    collector._run_sut_cmd = MagicMock(
+        side_effect=[
+            MagicMock(
+                exit_code=0,
+                stdout="6.4.0-47\n/opt/rocm/.info/version-rocm:6.4.0-47\n",
+            ),
+            MagicMock(exit_code=0, stdout="6.4.0-47"),
+            *_optional_collection_failures(),
+        ]
+    )
+
+    result, data = collector.collect_data()
+
+    assert result.status == ExecutionStatus.OK
+    assert data is not None
+    assert data.rocm_sub_versions == {"version-rocm": "6.4.0-47"}
+    assert data.build_number == "47"

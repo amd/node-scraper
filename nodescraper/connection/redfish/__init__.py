@@ -28,6 +28,12 @@ from .redfish_connection import (
     RedfishConnectionError,
     RedfishGetResult,
 )
+from .redfish_constants import (
+    RF_MEMBERS,
+    RF_MEMBERS_COUNT,
+    RF_MEMBERS_NEXT_LINK,
+    RF_ODATA_ID,
+)
 from .redfish_manager import RedfishConnectionManager
 from .redfish_oem_diag import (
     collect_oem_diagnostic_data,
@@ -45,4 +51,8 @@ __all__ = [
     "RedfishPath",
     "collect_oem_diagnostic_data",
     "get_oem_diagnostic_allowable_values",
+    "RF_MEMBERS",
+    "RF_MEMBERS_COUNT",
+    "RF_MEMBERS_NEXT_LINK",
+    "RF_ODATA_ID",
 ]

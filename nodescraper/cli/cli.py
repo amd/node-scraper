@@ -31,6 +31,7 @@ import logging
 import os
 import platform
 import sys
+import uuid
 from typing import Optional
 
 import nodescraper
@@ -200,7 +201,7 @@ def _add_cli_root_globals(
 
 
 def build_global_argument_parser(*, add_help: bool = True) -> argparse.ArgumentParser:
-    """Globals only (no subcommands), for host CLIs such as amd-error-scraper ``error-scraper``."""
+    """Globals only (no subcommands), for host CLIs."""
     plugin_reg = PluginRegistry()
     config_reg = _config_registry_with_all_plugins(plugin_reg)
     parser = argparse.ArgumentParser(
@@ -642,6 +643,7 @@ def main(
             timestamp=timestamp,
             sname=sname,
             host_cli_args=host_cli_args,
+            session_id=str(uuid.uuid4()),
         )
 
         log_system_info(log_path, system_info, logger)

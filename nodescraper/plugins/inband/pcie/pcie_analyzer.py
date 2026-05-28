@@ -53,6 +53,9 @@ from .pcie_data import (
 
 T_CAP = TypeVar("T_CAP", bound=PcieCapStructure)
 
+_AMD_PCIE_BRIDGE_DEVICE_IDS = frozenset({0x1500, 0x1501})
+_PCI_BASE_CLASS_BRIDGE = 0x06
+
 
 class PcieAnalyzerInputModel(BaseModel):
     """
@@ -870,6 +873,20 @@ class PcieAnalyzer(DataAnalyzer):
                 new_cfg_space_dict[bdf] = pcie_data
         return new_cfg_space_dict
 
+    @staticmethod
+    def _is_amd_gpu_pcie_endpoint(cfg_space: PcieCfgSpace, vendorid_ep: int) -> bool:
+        """True if this config space is an AMD GPU/accelerator endpoint, not a bridge."""
+        t0 = cfg_space.type_0_configuration
+        if t0.vendor_id.val != vendorid_ep:
+            return False
+        device_id = t0.device_id.val
+        if device_id in _AMD_PCIE_BRIDGE_DEVICE_IDS:
+            return False
+        base_class = t0.class_code.val
+        if base_class == _PCI_BASE_CLASS_BRIDGE:
+            return False
+        return True
+
     def check_gpu_count(
         self,
         pcie_data: PcieDataModel,
@@ -888,10 +905,15 @@ class PcieAnalyzer(DataAnalyzer):
             return
 
         gpu_count_from_pcie = 0
+        bridge_count = 0
         for cfg_space in pcie_data.pcie_cfg_space.values():
-            vendor_id = cfg_space.type_0_configuration.vendor_id.val
-            if vendor_id == self.system_info.vendorid_ep:
+            t0 = cfg_space.type_0_configuration
+            if t0.vendor_id.val != self.system_info.vendorid_ep:
+                continue
+            if self._is_amd_gpu_pcie_endpoint(cfg_space, self.system_info.vendorid_ep):
                 gpu_count_from_pcie += 1
+            else:
+                bridge_count += 1
 
         if gpu_count_from_pcie != expected_gpu_count:
             self._log_event(
@@ -900,6 +922,7 @@ class PcieAnalyzer(DataAnalyzer):
                 priority=EventPriority.ERROR,
                 data={
                     "gpu_count_from_pcie": gpu_count_from_pcie,
+                    "amd_pcie_bridge_count_excluded": bridge_count,
                     "expected_gpu_count": expected_gpu_count,
                 },
             )
@@ -910,6 +933,7 @@ class PcieAnalyzer(DataAnalyzer):
                 priority=EventPriority.INFO,
                 data={
                     "gpu_count": gpu_count_from_pcie,
+                    "amd_pcie_bridge_count_excluded": bridge_count,
                 },
             )
 
