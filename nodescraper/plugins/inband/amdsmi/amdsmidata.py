@@ -621,6 +621,29 @@ def _normalize_metric_clock_map(clock: Any) -> Any:
     return normalized
 
 
+def normalize_amdsmi_metric_dict(item: dict[str, Any]) -> dict[str, Any]:
+    """Normalize raw ``amd-smi metric`` JSON before ``AmdSmiMetric`` validation (ROCm 7.13 + legacy)."""
+    out = dict(item)
+    if "gpu_board" in out and "gpuboard" not in out:
+        out["gpuboard"] = out.pop("gpu_board")
+    if "base_board" in out and "baseboard" not in out:
+        out["baseboard"] = out.pop("base_board")
+    pcie = out.get("pcie")
+    if isinstance(pcie, dict):
+        pcie_out = dict(pcie)
+        count = pcie_out.get("lc_perf_other_end_recovery_count")
+        legacy = pcie_out.get("lc_perf_other_end_recovery")
+        if count is None and legacy is not None:
+            pcie_out["lc_perf_other_end_recovery_count"] = legacy
+        elif legacy is None and count is not None:
+            pcie_out["lc_perf_other_end_recovery"] = count
+        out["pcie"] = pcie_out
+    clock = out.get("clock")
+    if isinstance(clock, dict):
+        out["clock"] = _normalize_metric_clock_map(clock)
+    return out
+
+
 class MetricTemperature(BaseModel):
     edge: Optional[ValueUnit]
     hotspot: Optional[ValueUnit]

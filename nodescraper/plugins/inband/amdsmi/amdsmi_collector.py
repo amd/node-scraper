@@ -72,6 +72,7 @@ from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     ValueUnit,
     XgmiLinks,
     XgmiMetrics,
+    normalize_amdsmi_metric_dict,
 )
 from nodescraper.plugins.inband.amdsmi.collector_args import AmdSmiCollectorArgs
 from nodescraper.utils import get_exception_traceback
@@ -409,7 +410,10 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
         if isinstance(ret, dict) and "gpu_data" in ret:
             ret = ret["gpu_data"]
         data = ret if isinstance(ret, list) else [ret]
-        built = self._build_amdsmi_sub_data(AmdSmiMetric, data)
+        normalized = [
+            normalize_amdsmi_metric_dict(item) if isinstance(item, dict) else item for item in data
+        ]
+        built = self._build_amdsmi_sub_data(AmdSmiMetric, normalized)
         return built if isinstance(built, list) else ([built] if built else [])
 
     def get_xgmi_data(
