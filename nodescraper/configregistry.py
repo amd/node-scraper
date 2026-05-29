@@ -110,6 +110,8 @@ class ConfigRegistry:
         Returns:
             Optional[dict[str, Any]]: Plugin config dict, or None if ``loaded`` is unsupported.
         """
+        if isinstance(loaded, dict):
+            return loaded
         if inspect.isclass(loaded) and hasattr(loaded, "plugin_config"):
             config_data = loaded.plugin_config()
         elif callable(loaded):

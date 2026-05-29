@@ -61,7 +61,7 @@ def test_load_plugin_configs_from_entry_point_class() -> None:
 def test_load_plugin_configs_from_entry_point_callable() -> None:
     entry_point = SimpleNamespace(
         name="CallableRecipe",
-        load=_example_plugin_recipe_factory,
+        load=lambda: _example_plugin_recipe_factory,
     )
     with mock.patch(
         "nodescraper.configregistry.ConfigRegistry._entry_points_for_group",
