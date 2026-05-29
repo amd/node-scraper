@@ -168,7 +168,7 @@ class TypeUtils:
             type_map[name] = TypeData(
                 type_classes=cls.process_type(field.annotation),
                 required=field.is_required(),
-                default=field.default,
+                default=field.default_factory() if callable(field.default_factory) else field.default,
             )
 
         return type_map

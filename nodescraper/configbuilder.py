@@ -109,6 +109,14 @@ class ConfigBuilder:
             return_dict = {}
             for key, val in value.items():
                 return_dict[key] = cls._process_value(val)
+            return return_dict
+
+        if isinstance(value, list):
+            return_list = []
+            for item in value:
+                return_list.append(cls._process_value(item))
+            return return_list
+
 
         elif not isinstance(
             value,
