@@ -23,14 +23,18 @@
 # SOFTWARE.
 #
 ###############################################################################
+import importlib.metadata
+import inspect
 import json
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import ValidationError
 
 from nodescraper.models import PluginConfig
+
+PLUGIN_CONFIG_ENTRY_POINT_GROUP = "nodescraper.plugin_configs"
 
 
 class ConfigRegistry:
@@ -38,15 +42,30 @@ class ConfigRegistry:
 
     INTERNAL_SEARCH_PATH = os.path.join(os.path.dirname(__file__), "configs")
 
-    def __init__(self, config_path: Optional[str] = None) -> None:
-        self.configs = {}
-        self.load_configs(config_path)
-
-    def load_configs(self, config_path: Optional[str] = None):
-        """load plugin config json files into pydantic models
+    def __init__(
+        self,
+        config_path: Optional[str] = None,
+        load_entry_point_configs: bool = True,
+    ) -> None:
+        """Initialize the config registry.
 
         Args:
-            config_path (Optional[str], optional): Path in which to search for config files. Defaults to None.
+            config_path (Optional[str], optional): Path in which to search for JSON config files.
+                Defaults to None.
+            load_entry_point_configs (bool, optional): Whether to load ``nodescraper.plugin_configs``
+                entry points. Defaults to True.
+        """
+        self.configs: dict[str, PluginConfig] = {}
+        self.load_configs(config_path)
+        if load_entry_point_configs:
+            self.configs.update(self.load_plugin_configs_from_entry_points())
+
+    def load_configs(self, config_path: Optional[str] = None):
+        """Load plugin config JSON files into pydantic models.
+
+        Args:
+            config_path (Optional[str], optional): Path in which to search for config files.
+                Defaults to None.
         """
         if not config_path:
             config_path = self.INTERNAL_SEARCH_PATH
@@ -64,3 +83,67 @@ class ConfigRegistry:
                         self.configs[config_file.name] = config_model
                 except (ValidationError, json.JSONDecodeError):
                     pass
+
+    @staticmethod
+    def _entry_points_for_group(group: str):
+        """Return setuptools entry points for the given group name.
+
+        Args:
+            group (str): Entry point group to query.
+
+        Returns:
+            Iterable: Entry points registered under ``group``.
+        """
+        try:
+            return importlib.metadata.entry_points(group=group)  # type: ignore[call-arg]
+        except TypeError:
+            all_eps = importlib.metadata.entry_points()  # type: ignore[assignment]
+            return all_eps.get(group, [])  # type: ignore[assignment, attr-defined, arg-type]
+
+    @staticmethod
+    def _resolve_entry_point_config(loaded: Any) -> Optional[dict[str, Any]]:
+        """Resolve a loaded entry point object into a plugin config dict.
+
+        Args:
+            loaded (Any): Object returned by an entry point ``load()`` call.
+
+        Returns:
+            Optional[dict[str, Any]]: Plugin config dict, or None if ``loaded`` is unsupported.
+        """
+        if inspect.isclass(loaded) and hasattr(loaded, "plugin_config"):
+            config_data = loaded.plugin_config()
+        elif callable(loaded):
+            config_data = loaded()
+        else:
+            return None
+
+        if not isinstance(config_data, dict):
+            return None
+        return config_data
+
+    @classmethod
+    def load_plugin_configs_from_entry_points(cls) -> dict[str, PluginConfig]:
+        """Load plugin configs registered under ``nodescraper.plugin_configs`` entry points.
+
+        Returns:
+            dict[str, PluginConfig]: Map of config name to loaded :class:`~nodescraper.models.PluginConfig`.
+        """
+        configs: dict[str, PluginConfig] = {}
+
+        for entry_point in cls._entry_points_for_group(PLUGIN_CONFIG_ENTRY_POINT_GROUP):
+            try:
+                loaded = entry_point.load()  # type: ignore[attr-defined]
+                config_data = cls._resolve_entry_point_config(loaded)
+                if config_data is None:
+                    continue
+
+                config_model = PluginConfig(**config_data)
+                entry_point_name = getattr(entry_point, "name", None)
+                if entry_point_name:
+                    configs[entry_point_name] = config_model
+                if config_model.name and config_model.name not in configs:
+                    configs[config_model.name] = config_model
+            except Exception:
+                pass
+
+        return configs

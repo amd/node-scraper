@@ -64,7 +64,7 @@ from nodescraper.connection.redfish import (
 from nodescraper.connection.redfish.redfish_params import RedfishConnectionParams
 from nodescraper.constants import DEFAULT_LOGGER
 from nodescraper.enums import ExecutionStatus, SystemInteractionLevel, SystemLocation
-from nodescraper.models import PluginConfig, SystemInfo
+from nodescraper.models import SystemInfo
 from nodescraper.pluginexecutor import PluginExecutor
 from nodescraper.pluginregistry import PluginRegistry
 
@@ -75,16 +75,16 @@ def _parse_plugin_configs_csv(value: str) -> list[str]:
 
 
 def _config_registry_with_all_plugins(plugin_reg: PluginRegistry) -> ConfigRegistry:
-    """Synthetic ``AllPlugins`` config used for CLI help and :func:`build_global_argument_parser`."""
-    config_reg = ConfigRegistry()
-    config_reg.configs["AllPlugins"] = PluginConfig(
-        name="AllPlugins",
-        desc="Run all registered plugins with default arguments",
-        global_args={},
-        plugins={name: {} for name in plugin_reg.plugins},
-        result_collators={},
-    )
-    return config_reg
+    """Build the config registry from bundled JSON and plugin-config entry points.
+
+    Args:
+        plugin_reg (PluginRegistry): Plugin registry (unused; retained for call-site compatibility).
+
+    Returns:
+        ConfigRegistry: Registry containing bundled and entry-point plugin configs.
+    """
+    del plugin_reg
+    return ConfigRegistry()
 
 
 def _add_cli_root_globals(
