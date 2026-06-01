@@ -211,8 +211,8 @@ def parse_describe(
     if not parsed_args.name:
         out: list[str] = []
         if parsed_args.type == "config":
-            out.append("Available built-in configs:")
-            for name in config_reg.configs:
+            out.append("Available configs:")
+            for name in sorted(config_reg.configs):
                 out.append(f"  {name}")
         elif parsed_args.type == "plugin":
             out.append("Available plugins:")
