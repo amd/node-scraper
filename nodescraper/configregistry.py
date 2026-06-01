@@ -26,17 +26,19 @@
 import importlib.metadata
 import inspect
 import json
-import logging
 import os
 from pathlib import Path
 from typing import Any, Optional
 
 from pydantic import ValidationError
 
-from nodescraper.constants import DEFAULT_LOGGER
 from nodescraper.models import PluginConfig
 
 PLUGIN_CONFIG_ENTRY_POINT_GROUP = "nodescraper.plugin_configs"
+
+
+class PluginConfigEntryPointError(RuntimeError):
+    """Raised when a ``nodescraper.plugin_configs`` entry point cannot be loaded."""
 
 
 class ConfigRegistry:
@@ -133,37 +135,47 @@ class ConfigRegistry:
 
         Returns:
             dict[str, PluginConfig]: Map of config name to loaded :class:`~nodescraper.models.PluginConfig`.
+
+        Raises:
+            PluginConfigEntryPointError: If an entry point target is missing, invalid, or unsupported.
         """
         configs: dict[str, PluginConfig] = {}
-        logger = logging.getLogger(DEFAULT_LOGGER)
 
         for entry_point in cls._entry_points_for_group(PLUGIN_CONFIG_ENTRY_POINT_GROUP):
-            entry_point_name = getattr(entry_point, "name", "<unknown>")
+            entry_point_name = getattr(entry_point, "name", None)
+            entry_point_label = entry_point_name or "<unknown>"
             try:
                 loaded = entry_point.load()  # type: ignore[attr-defined]
                 config_data = cls._resolve_entry_point_config(loaded)
                 if config_data is None:
-                    logger.warning(
-                        "Skipping plugin config entry point %r: unsupported target %r",
-                        entry_point_name,
-                        loaded,
+                    raise PluginConfigEntryPointError(
+                        f"Failed to load plugin config entry point {entry_point_label!r}: "
+                        f"unsupported target {loaded!r}"
                     )
-                    continue
 
                 config_model = (
                     config_data
                     if isinstance(config_data, PluginConfig)
                     else PluginConfig(**config_data)
                 )
-                if entry_point_name:
-                    configs[entry_point_name] = config_model
-                if config_model.name and config_model.name not in configs:
-                    configs[config_model.name] = config_model
+                config_key = entry_point_name or config_model.name
+                if config_key:
+                    configs[config_key] = config_model
+            except ModuleNotFoundError as exc:
+                raise PluginConfigEntryPointError(
+                    f"Failed to load plugin config entry point {entry_point_label!r}: "
+                    f"module not found ({exc}). Check the entry point target in pyproject.toml."
+                ) from exc
+            except ValidationError as exc:
+                raise PluginConfigEntryPointError(
+                    f"Failed to load plugin config entry point {entry_point_label!r}: "
+                    "invalid plugin config"
+                ) from exc
+            except PluginConfigEntryPointError:
+                raise
             except Exception as exc:
-                logger.warning(
-                    "Failed to load plugin config entry point %r: %s",
-                    entry_point_name,
-                    exc,
-                )
+                raise PluginConfigEntryPointError(
+                    f"Failed to load plugin config entry point {entry_point_label!r}: {exc}"
+                ) from exc
 
         return configs

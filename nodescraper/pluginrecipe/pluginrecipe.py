@@ -165,12 +165,6 @@ class AnalyzerOnlyPluginRecipe(PluginRecipe):
         return plugins_with_analyzer(names)
 
 
-def _coerce_plugin_config(config: PluginConfig | dict[str, Any]) -> PluginConfig:
-    if isinstance(config, PluginConfig):
-        return config
-    return PluginConfig.model_validate(config)
-
-
 def merge_plugin_configs(*configs: PluginConfig | dict[str, Any]) -> PluginConfig:
     """Merge plugin configs, combining their ``plugins`` entries.
 
@@ -180,15 +174,4 @@ def merge_plugin_configs(*configs: PluginConfig | dict[str, Any]) -> PluginConfi
     Returns:
         PluginConfig: Combined config with merged ``plugins`` entries.
     """
-    normalized = [_coerce_plugin_config(config) for config in configs]
-    merged_plugins: dict[str, dict[str, Any]] = {}
-    for config in normalized:
-        merged_plugins.update(config.plugins)
-    first = normalized[0] if normalized else PluginConfig()
-    return PluginConfig(
-        name=first.name,
-        desc=first.desc,
-        global_args=first.global_args,
-        plugins=merged_plugins,
-        result_collators=first.result_collators,
-    )
+    return PluginConfig.merge(*configs)
