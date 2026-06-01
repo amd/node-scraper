@@ -42,6 +42,7 @@ def fixtures_dir():
 def plugin_config_files(fixtures_dir):
     """Return dict mapping plugin names to their config file paths."""
     return {
+        "AmdSmiPlugin": fixtures_dir / "amdsmi_plugin_config.json",
         "BiosPlugin": fixtures_dir / "bios_plugin_config.json",
         "CmdlinePlugin": fixtures_dir / "cmdline_plugin_config.json",
         "DimmPlugin": fixtures_dir / "dimm_plugin_config.json",

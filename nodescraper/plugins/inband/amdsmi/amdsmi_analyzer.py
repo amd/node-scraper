@@ -25,7 +25,7 @@
 ###############################################################################
 import io
 from collections import defaultdict
-from typing import Any, Optional, Union
+from typing import Any, Mapping, Optional, Union
 
 from nodescraper.enums import EventCategory, EventPriority
 from nodescraper.interfaces import DataAnalyzer
@@ -45,10 +45,128 @@ from .analyzer_args import AmdSmiAnalyzerArgs
 from .cper import CperAnalysisTaskMixin
 
 
+def _gpu_mismatch_description(
+    check_name: str,
+    expected: object,
+    actual_by_gpu: Mapping[int, object],
+    *,
+    unit: str = "",
+) -> tuple[str, str]:
+    """Return (event description, console details) for per-GPU expected vs actual."""
+    gpu_ids = sorted(actual_by_gpu.keys())
+    exp = f"{expected}{unit}" if unit else str(expected)
+    per_gpu_short = ", ".join(f"GPU {gpu}={actual_by_gpu[gpu]}{unit}" for gpu in gpu_ids)
+    description = f"{check_name} mismatch (expected {exp}): {per_gpu_short}"
+    details = "; ".join(
+        f"GPU {gpu}: expected {exp}, actual {actual_by_gpu[gpu]}{unit}" for gpu in gpu_ids
+    )
+    return description, details
+
+
+def _gpu_unavailable_description(
+    check_name: str,
+    gpu_ids: list[int],
+    *,
+    expected: Optional[object] = None,
+) -> tuple[str, str]:
+    """Return (event description, console details) when a metric is missing per GPU."""
+    gpus = sorted(gpu_ids)
+    gpu_text = ", ".join(f"GPU {g}" for g in gpus)
+    if expected is not None:
+        description = f"{check_name} not available on {gpu_text} (expected {expected})"
+    else:
+        description = f"{check_name} not available on {gpu_text}"
+    return description, description
+
+
+def _static_mismatch_description(payload: dict[str, Any]) -> tuple[str, str]:
+    """Build description/details from ``check_static_data`` per-GPU payload."""
+    per_gpu = payload.get("per_gpu") or []
+    if not per_gpu:
+        return "amd-smi static data mismatch", "amd-smi static data mismatch"
+    parts: list[str] = []
+    for entry in per_gpu:
+        gpu = entry["gpu"]
+        for mm in entry.get("mismatches") or []:
+            parts.append(
+                f"GPU {gpu} {mm['field']}: expected {mm['expected']!s}, actual {mm['actual']!s}"
+            )
+    details = "; ".join(parts)
+    summary = payload.get("summary") or {}
+    gpus_affected = summary.get("gpus_affected", len(per_gpu))
+    description = f"amd-smi static data mismatch on {gpus_affected} GPU(s): {details}"
+    return description, details
+
+
 class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None]):
     """Check AMD SMI Application data for PCIe, ECC errors, and CPER data."""
 
     DATA_MODEL = AmdSmiDataModel
+
+    def check_expected_power_management(
+        self,
+        amdsmi_metric_data: list[AmdSmiMetric],
+        expected_power_management: str,
+    ) -> None:
+        """Check amd-smi metric ``power_management`` matches the expected value per GPU.
+
+        Args:
+            amdsmi_metric_data: Per-GPU metric data from ``amd-smi metric``.
+            expected_power_management: Expected value (e.g. ``DISABLED``).
+        """
+        expected = expected_power_management.strip().upper()
+        mismatches: dict[int, str] = {}
+        missing: list[int] = []
+
+        for metric in amdsmi_metric_data:
+            gpu = metric.gpu
+            actual_raw = metric.power.power_management
+            if actual_raw is None:
+                missing.append(gpu)
+                continue
+            actual_str = str(actual_raw).strip()
+            if actual_str.upper() in {"N/A", "NA", ""}:
+                missing.append(gpu)
+                continue
+            if actual_str.upper() != expected:
+                mismatches[gpu] = actual_str
+
+        if missing:
+            desc, details = _gpu_unavailable_description(
+                "GPU power_management",
+                missing,
+                expected=expected_power_management,
+            )
+            self._log_event(
+                category=EventCategory.PLATFORM,
+                description=desc,
+                priority=EventPriority.WARNING,
+                data={
+                    "gpus": missing,
+                    "expected_power_management": expected_power_management,
+                    "details": details,
+                },
+                console_log=True,
+            )
+
+        if mismatches:
+            desc, details = _gpu_mismatch_description(
+                "GPU power_management",
+                expected_power_management,
+                mismatches,
+            )
+            self._log_event(
+                category=EventCategory.PLATFORM,
+                description=desc,
+                priority=EventPriority.ERROR,
+                data={
+                    "gpus": list(mismatches.keys()),
+                    "power_management_values": mismatches,
+                    "expected_power_management": expected_power_management,
+                    "details": details,
+                },
+                console_log=True,
+            )
 
     def check_expected_max_power(
         self,
@@ -63,15 +181,25 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
         """
         incorrect_max_power_gpus: dict[int, Union[int, str, float]] = {}
         for gpu in amdsmi_static_data:
-            if gpu.limit is None or gpu.limit.max_power is None:
+            limit = gpu.limit
+            max_power_vu = limit.resolved_max_power() if limit is not None else None
+            if max_power_vu is None or max_power_vu.value is None:
                 self._log_event(
                     category=EventCategory.PLATFORM,
-                    description=f"GPU: {gpu.gpu} has no max power limit set",
+                    description=f"GPU {gpu.gpu}: max power limit not set (expected {expected_max_power} W)",
                     priority=EventPriority.WARNING,
-                    data={"gpu": gpu.gpu},
+                    data={
+                        "gpu": gpu.gpu,
+                        "expected_max_power": expected_max_power,
+                        "details": (
+                            f"GPU {gpu.gpu}: max power limit not set "
+                            f"(expected {expected_max_power} W)"
+                        ),
+                    },
+                    console_log=True,
                 )
                 continue
-            max_power_value = gpu.limit.max_power.value
+            max_power_value = max_power_vu.value
             try:
                 max_power_float = float(max_power_value)
             except ValueError:
@@ -88,15 +216,23 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
             if max_power_float != expected_max_power:
                 incorrect_max_power_gpus[gpu.gpu] = max_power_float
         if incorrect_max_power_gpus:
+            desc, details = _gpu_mismatch_description(
+                "GPU max power",
+                expected_max_power,
+                incorrect_max_power_gpus,
+                unit=" W",
+            )
             self._log_event(
                 category=EventCategory.PLATFORM,
-                description="Max power mismatch",
+                description=desc,
                 priority=EventPriority.ERROR,
                 data={
                     "gpus": list(incorrect_max_power_gpus.keys()),
                     "max_power_values": incorrect_max_power_gpus,
                     "expected_max_power": expected_max_power,
+                    "details": details,
                 },
+                console_log=True,
             )
 
     def check_expected_driver_version(
@@ -122,15 +258,23 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                 bad_driver_gpus.append(gpu.gpu)
 
         if bad_driver_gpus:
+            bad_versions = {g: versions_by_gpu[g] for g in bad_driver_gpus}
+            desc, details = _gpu_mismatch_description(
+                "GPU driver version",
+                expected_driver_version,
+                bad_versions,
+            )
             self._log_event(
                 category=EventCategory.PLATFORM,
-                description="Driver Version Mismatch",
+                description=desc,
                 priority=EventPriority.ERROR,
                 data={
                     "gpus": bad_driver_gpus,
-                    "driver_version": {g: versions_by_gpu[g] for g in bad_driver_gpus},
+                    "driver_version": bad_versions,
                     "expected_driver_version": expected_driver_version,
+                    "details": details,
                 },
+                console_log=True,
             )
 
     def check_amdsmi_metric_pcie(
@@ -283,11 +427,17 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
 
             for priority, count, desc in ecc_checks:
                 if count is not None and count > 0:
+                    details = f"GPU {gpu}: {desc} count={count}"
                     self._log_event(
                         category=EventCategory.RAS,
-                        description="GPU ECC error count detected",
+                        description=details,
                         priority=priority,
-                        data={"gpu": gpu, "error_count": count, "error_type": desc},
+                        data={
+                            "gpu": gpu,
+                            "error_count": count,
+                            "error_type": desc,
+                            "details": details,
+                        },
                         console_log=True,
                     )
 
@@ -381,12 +531,19 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                 gpu_exceeds_num_processes[process.gpu] = process_count
 
         if gpu_exceeds_num_processes:
+            desc, details = _gpu_mismatch_description(
+                "GPU process count",
+                max_num_processes,
+                gpu_exceeds_num_processes,
+            )
             self._log_event(
                 category=EventCategory.PLATFORM,
-                description="Number of processes exceeds max processes",
+                description=desc,
                 priority=EventPriority.ERROR,
                 data={
                     "gpu_exceeds_num_processes": gpu_exceeds_num_processes,
+                    "expected_max_processes": max_num_processes,
+                    "details": details,
                 },
                 console_log=True,
             )
@@ -494,11 +651,14 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
 
         if mismatches:
             payload = self._format_static_mismatch_payload(mismatches)
+            desc, details = _static_mismatch_description(payload)
+            payload["details"] = details
             self._log_event(
                 category=EventCategory.PLATFORM,
-                description="amd-smi static data mismatch",
+                description=desc,
                 priority=EventPriority.ERROR,
                 data=payload,
+                console_log=True,
             )
 
     def _format_static_mismatch_payload(
@@ -573,15 +733,27 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                     )
 
         if mismatches or missing:
+            detail_parts: list[str] = []
+            for item in mismatches:
+                detail_parts.append(
+                    f"GPU {item['gpu']} {item['fw_id']}: "
+                    f"expected {item['expected']!s}, actual {item['actual']!s}"
+                )
+            for item in missing:
+                detail_parts.append(f"GPU {item['gpu']} {item['fw_id']}: missing")
+            details = "; ".join(detail_parts)
+            description = f"GPU firmware version mismatch: {details}"
             self._log_event(
                 category=EventCategory.FW,
-                description="Firmware version mismatch",
+                description=description,
                 priority=EventPriority.ERROR,
                 data={
                     "expected_firmware_versions": expected_firmware_versions,
                     "mismatches": mismatches,
                     "missing": missing,
+                    "details": details,
                 },
+                console_log=True,
             )
 
     def check_expected_memory_partition_mode(
@@ -630,15 +802,41 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                 )
 
         if bad_memory_partition_mode_gpus:
+            mismatch_by_gpu: dict[int, str] = {}
+            for entry in bad_memory_partition_mode_gpus:
+                gpu_id = int(entry["gpu_id"])  # type: ignore[arg-type]
+                if "memory_partition_mode" in entry:
+                    mismatch_by_gpu[gpu_id] = (
+                        f"memory={entry['memory_partition_mode']!s} "
+                        f"(expected {expected_memory_partition_mode!s})"
+                    )
+                if "compute_partition_mode" in entry:
+                    compute_detail = (
+                        f"compute={entry['compute_partition_mode']!s} "
+                        f"(expected {expected_compute_partition_mode!s})"
+                    )
+                    mismatch_by_gpu[gpu_id] = (
+                        f"{mismatch_by_gpu[gpu_id]}; {compute_detail}"
+                        if gpu_id in mismatch_by_gpu
+                        else compute_detail
+                    )
+            desc, details = _gpu_mismatch_description(
+                "GPU partition mode",
+                f"memory={expected_memory_partition_mode!s}, "
+                f"compute={expected_compute_partition_mode!s}",
+                mismatch_by_gpu,
+            )
             self._log_event(
                 category=EventCategory.PLATFORM,
-                description="Partition Mode Mismatch",
+                description=desc,
                 priority=EventPriority.ERROR,
                 data={
                     "actual_partition_data": bad_memory_partition_mode_gpus,
                     "expected_memory_partition_mode": expected_memory_partition_mode,
                     "expected_compute_partition_mode": expected_compute_partition_mode,
+                    "details": details,
                 },
+                console_log=True,
             )
 
     def check_expected_xgmi_link_speed(
@@ -674,45 +872,65 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
             link_metric = xgmi_data.link_metrics
             try:
                 if link_metric.bit_rate is None or link_metric.bit_rate.value is None:
+                    details = (
+                        f"GPU {xgmi_data.gpu}: XGMI link speed not available "
+                        f"(expected {expected_xgmi_speed} GT/s)"
+                    )
                     self._log_event(
                         category=EventCategory.IO,
-                        description="XGMI link speed is not available",
+                        description=details,
                         priority=EventPriority.ERROR,
                         data={
                             "gpu": xgmi_data.gpu,
+                            "expected_xgmi_speed": expected_xgmi_speed,
                             "xgmi_bit_rate": (
                                 link_metric.bit_rate.unit if link_metric.bit_rate else "N/A"
                             ),
+                            "details": details,
                         },
+                        console_log=True,
                     )
                     continue
 
                 xgmi_float = float(link_metric.bit_rate.value)
             except (ValueError, TypeError):
+                details = (
+                    f"GPU {xgmi_data.gpu}: XGMI link speed is not a valid number "
+                    f"(expected {expected_xgmi_speed} GT/s)"
+                )
                 self._log_event(
                     category=EventCategory.IO,
-                    description="XGMI link speed is not a valid number",
+                    description=details,
                     priority=EventPriority.ERROR,
                     data={
                         "gpu": xgmi_data.gpu,
+                        "expected_xgmi_speed": expected_xgmi_speed,
                         "xgmi_bit_rate": (
                             link_metric.bit_rate.value if link_metric.bit_rate else "N/A"
                         ),
+                        "details": details,
                     },
+                    console_log=True,
                 )
                 continue
 
             expected_floats = [float(e) for e in expected_xgmi_speed]
             if xgmi_float not in expected_floats:
+                details = (
+                    f"GPU {xgmi_data.gpu}: XGMI link speed {xgmi_float} GT/s "
+                    f"not in expected {expected_xgmi_speed} GT/s"
+                )
                 self._log_event(
                     category=EventCategory.IO,
-                    description="XGMI link speed is not as expected",
+                    description=details,
                     priority=EventPriority.ERROR,
                     data={
                         "expected_xgmi_speed": expected_xgmi_speed,
                         "xgmi_bit_rate": xgmi_float,
                         "gpu": xgmi_data.gpu,
+                        "details": details,
                     },
+                    console_log=True,
                 )
 
     def analyze_data(
@@ -733,6 +951,8 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
             args = AmdSmiAnalyzerArgs()
 
         if data.metric is not None and len(data.metric) > 0:
+            if args.expected_power_management:
+                self.check_expected_power_management(data.metric, args.expected_power_management)
             if args.l0_to_recovery_count_error_threshold is not None:
                 self.check_amdsmi_metric_pcie(
                     data.metric,
