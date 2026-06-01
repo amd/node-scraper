@@ -5,6 +5,8 @@
 # Copyright (c) 2025 Advanced Micro Devices, Inc.
 #
 ###############################################################################
+from nodescraper.models import PluginConfig
+
 from .all_plugins import AllPlugins
 from .discovery import (
     load_plugin_class,
@@ -35,6 +37,7 @@ __all__ = [
     "AnalyzerOnlyPluginRecipe",
     "CollectorOnlyPluginRecipe",
     "NodeStatus",
+    "PluginConfig",
     "PluginRecipe",
     "PluginRunFlags",
     "load_plugin_class",

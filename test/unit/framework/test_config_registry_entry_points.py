@@ -13,18 +13,21 @@ from unittest import mock
 
 from nodescraper.configregistry import PLUGIN_CONFIG_ENTRY_POINT_GROUP, ConfigRegistry
 from nodescraper.models import PluginConfig
+from nodescraper.pluginrecipe.pluginrecipe import PluginRecipe
 
 
-class _ExamplePluginRecipe:
+class _ExamplePluginRecipe(PluginRecipe):
     @classmethod
-    def plugin_config(cls) -> dict:
-        return {
-            "name": "ExamplePluginRecipe",
-            "desc": "Example entry-point recipe",
-            "global_args": {},
-            "plugins": {"ExamplePlugin": {}},
-            "result_collators": {},
-        }
+    def plugin_names(cls) -> tuple[str, ...]:
+        return ("ExamplePlugin",)
+
+    @classmethod
+    def plugin_config(cls) -> PluginConfig:
+        return PluginConfig(
+            name="ExamplePluginRecipe",
+            desc="Example entry-point recipe",
+            plugins={"ExamplePlugin": {}},
+        )
 
 
 def _example_plugin_recipe_factory() -> dict:

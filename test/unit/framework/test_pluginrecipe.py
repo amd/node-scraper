@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+from nodescraper.models import PluginConfig
 from nodescraper.pluginrecipe.all_plugins import AllPlugins
 from nodescraper.pluginrecipe.node_status import NodeStatus
 from nodescraper.pluginrecipe.pluginrecipe import (
@@ -73,27 +74,27 @@ def test_all_plugins_recipe_matches_registry() -> None:
 
 def test_node_status_plugin_config_shape() -> None:
     config = NodeStatus.plugin_config()
-    assert config["name"] == "NodeStatus"
-    assert config["desc"] == "Check configuration and status of the node."
-    assert isinstance(config["plugins"], dict)
-    assert config["plugins"]["DmesgPlugin"] == COLLECT_AND_ANALYZE.as_config()
+    assert config.name == "NodeStatus"
+    assert config.desc == "Check configuration and status of the node."
+    assert isinstance(config.plugins, dict)
+    assert config.plugins["DmesgPlugin"] == COLLECT_AND_ANALYZE.as_config()
 
 
 def test_all_plugins_plugin_config_shape() -> None:
     config = AllPlugins.plugin_config()
-    assert config["name"] == "AllPlugins"
-    assert config["desc"] == "Run all registered plugins with default arguments."
-    assert len(config["plugins"]) == len(PluginRegistry().plugins)
+    assert config.name == "AllPlugins"
+    assert config.desc == "Run all registered plugins with default arguments."
+    assert len(config.plugins) == len(PluginRegistry().plugins)
 
 
 def test_collector_only_recipe_sets_analysis_false() -> None:
     config = _CollectOnlyRecipe.plugin_config()
-    assert config["plugins"]["DmesgPlugin"] == COLLECT_ONLY.as_config()
+    assert config.plugins["DmesgPlugin"] == COLLECT_ONLY.as_config()
 
 
 def test_analyzer_only_recipe_sets_collection_false() -> None:
     config = _AnalyzeOnlyRecipe.plugin_config()
-    assert config["plugins"]["DmesgPlugin"] == ANALYZE_ONLY.as_config()
+    assert config.plugins["DmesgPlugin"] == ANALYZE_ONLY.as_config()
 
 
 @patch("nodescraper.pluginrecipe.discovery.load_plugin_class")
@@ -114,20 +115,16 @@ def test_filter_plugin_names_by_task_type(mock_load_plugin_class) -> None:
 
 def test_merge_plugin_configs_preserves_plugin_flags() -> None:
     merged = merge_plugin_configs(
-        {
-            "name": "A",
-            "desc": "a",
-            "global_args": {},
-            "plugins": {"FooPlugin": COLLECT_ONLY.as_config()},
-            "result_collators": {},
-        },
-        {
-            "name": "B",
-            "desc": "b",
-            "global_args": {},
-            "plugins": {"BarPlugin": ANALYZE_ONLY.as_config()},
-            "result_collators": {},
-        },
+        PluginConfig(
+            name="A",
+            desc="a",
+            plugins={"FooPlugin": COLLECT_ONLY.as_config()},
+        ),
+        PluginConfig(
+            name="B",
+            desc="b",
+            plugins={"BarPlugin": ANALYZE_ONLY.as_config()},
+        ),
     )
-    assert merged["plugins"]["FooPlugin"] == COLLECT_ONLY.as_config()
-    assert merged["plugins"]["BarPlugin"] == ANALYZE_ONLY.as_config()
+    assert merged.plugins["FooPlugin"] == COLLECT_ONLY.as_config()
+    assert merged.plugins["BarPlugin"] == ANALYZE_ONLY.as_config()

@@ -103,15 +103,17 @@ class ConfigRegistry:
             return all_eps.get(group, [])  # type: ignore[assignment, attr-defined, arg-type]
 
     @staticmethod
-    def _resolve_entry_point_config(loaded: Any) -> Optional[dict[str, Any]]:
-        """Resolve a loaded entry point object into a plugin config dict.
+    def _resolve_entry_point_config(loaded: Any) -> PluginConfig | dict[str, Any] | None:
+        """Resolve a loaded entry point object into a plugin config.
 
         Args:
             loaded (Any): Object returned by an entry point ``load()`` call.
 
         Returns:
-            Optional[dict[str, Any]]: Plugin config dict, or None if ``loaded`` is unsupported.
+            Optional[PluginConfig | dict[str, Any]]: Plugin config, or None if ``loaded`` is unsupported.
         """
+        if isinstance(loaded, PluginConfig):
+            return loaded
         if isinstance(loaded, dict):
             return loaded
         if inspect.isclass(loaded) and hasattr(loaded, "plugin_config"):
@@ -121,9 +123,9 @@ class ConfigRegistry:
         else:
             return None
 
-        if not isinstance(config_data, dict):
-            return None
-        return config_data
+        if isinstance(config_data, (PluginConfig, dict)):
+            return config_data
+        return None
 
     @classmethod
     def load_plugin_configs_from_entry_points(cls) -> dict[str, PluginConfig]:
@@ -148,7 +150,11 @@ class ConfigRegistry:
                     )
                     continue
 
-                config_model = PluginConfig(**config_data)
+                config_model = (
+                    config_data
+                    if isinstance(config_data, PluginConfig)
+                    else PluginConfig(**config_data)
+                )
                 if entry_point_name:
                     configs[entry_point_name] = config_model
                 if config_model.name and config_model.name not in configs:

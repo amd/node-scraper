@@ -11,6 +11,8 @@ import abc
 from dataclasses import dataclass
 from typing import Any, Iterable
 
+from nodescraper.models import PluginConfig
+
 
 @dataclass(frozen=True)
 class PluginRunFlags:
@@ -107,22 +109,20 @@ class PluginRecipe(abc.ABC):
         return entry
 
     @classmethod
-    def plugin_config(cls) -> dict[str, Any]:
-        """Build a node-scraper plugin config dict at runtime.
+    def plugin_config(cls) -> PluginConfig:
+        """Build a node-scraper plugin config at runtime.
 
         Returns:
-            dict[str, Any]: Plugin config payload with ``name``, ``desc``, ``global_args``,
-            ``plugins``, and ``result_collators`` keys.
+            PluginConfig: Plugin config with ``name``, ``desc``, ``global_args``,
+            ``plugins``, and ``result_collators`` fields.
         """
-        return {
-            "name": cls.name(),
-            "desc": cls.description(),
-            "global_args": {},
-            "plugins": {
+        return PluginConfig(
+            name=cls.name(),
+            desc=cls.description(),
+            plugins={
                 plugin_name: cls.plugin_entry(plugin_name) for plugin_name in cls.plugin_names()
             },
-            "result_collators": {},
-        }
+        )
 
 
 class CollectorOnlyPluginRecipe(PluginRecipe):
@@ -165,23 +165,30 @@ class AnalyzerOnlyPluginRecipe(PluginRecipe):
         return plugins_with_analyzer(names)
 
 
-def merge_plugin_configs(*configs: dict[str, Any]) -> dict[str, Any]:
-    """Merge plugin config dicts, combining their ``plugins`` entries.
+def _coerce_plugin_config(config: PluginConfig | dict[str, Any]) -> PluginConfig:
+    if isinstance(config, PluginConfig):
+        return config
+    return PluginConfig.model_validate(config)
+
+
+def merge_plugin_configs(*configs: PluginConfig | dict[str, Any]) -> PluginConfig:
+    """Merge plugin configs, combining their ``plugins`` entries.
 
     Args:
-        *configs: Plugin config dicts to merge.
+        *configs: Plugin configs to merge.
 
     Returns:
-        dict[str, Any]: Combined config with merged ``plugins`` entries.
+        PluginConfig: Combined config with merged ``plugins`` entries.
     """
-    merged_plugins: dict[str, dict] = {}
-    for config in configs:
-        merged_plugins.update(config.get("plugins", {}))
-    first = configs[0] if configs else {}
-    return {
-        "name": first.get("name", ""),
-        "desc": first.get("desc", ""),
-        "global_args": first.get("global_args", {}),
-        "plugins": merged_plugins,
-        "result_collators": first.get("result_collators", {}),
-    }
+    normalized = [_coerce_plugin_config(config) for config in configs]
+    merged_plugins: dict[str, dict[str, Any]] = {}
+    for config in normalized:
+        merged_plugins.update(config.plugins)
+    first = normalized[0] if normalized else PluginConfig()
+    return PluginConfig(
+        name=first.name,
+        desc=first.desc,
+        global_args=first.global_args,
+        plugins=merged_plugins,
+        result_collators=first.result_collators,
+    )

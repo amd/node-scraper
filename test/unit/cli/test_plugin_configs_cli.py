@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from nodescraper.cli.cli import build_parser
 from nodescraper.configregistry import ConfigRegistry
-from nodescraper.models import PluginConfig
 from nodescraper.pluginrecipe.all_plugins import AllPlugins
 from nodescraper.pluginrecipe.node_status import NodeStatus
 from nodescraper.pluginregistry import PluginRegistry
@@ -20,7 +19,7 @@ def _parser():
     plugin_reg = PluginRegistry()
     config_reg = ConfigRegistry(load_entry_point_configs=False)
     for recipe in (NodeStatus, AllPlugins):
-        config_reg.configs[recipe.name()] = PluginConfig(**recipe.plugin_config())
+        config_reg.configs[recipe.name()] = recipe.plugin_config()
     return build_parser(plugin_reg, config_reg)[0]
 
 
