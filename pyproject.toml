@@ -38,7 +38,7 @@ documentation = "https://github.com/amd/node-scraper"
 repository = "https://github.com/amd/node-scraper"
 
 [build-system]
-requires = ["setuptools==70.3.0", "setuptools-scm==8.1.0"]
+requires = ["setuptools==78.1.1", "setuptools-scm==8.1.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
