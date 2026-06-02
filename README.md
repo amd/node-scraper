@@ -116,7 +116,7 @@ options:
                         Comma-separated built-in names and/or plugin config
                         JSON paths (e.g. --plugin-
                         configs=NodeStatus,/path/c.json). Built-ins:
-                        NodeStatus, AllPlugins (default: None)
+                        AllPlugins, NodeStatus (default: None)
   --system-config STRING
                         Path to system config json (default: None)
   --connection-config STRING
