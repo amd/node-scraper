@@ -29,7 +29,11 @@ from typing import Optional
 import pytest
 
 from nodescraper.enums import EventPriority
-from nodescraper.plugins.inband.amdsmi.amdsmi_analyzer import AmdSmiAnalyzer
+from nodescraper.plugins.inband.amdsmi.amdsmi_analyzer import (
+    AmdSmiAnalyzer,
+    _gpu_mismatch_description,
+    _gpu_unavailable_description,
+)
 from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     AmdSmiDataModel,
     AmdSmiMetric,
@@ -267,7 +271,7 @@ def test_check_expected_max_power_mismatch(mock_analyzer):
     assert len(analyzer.result.events) == 1
     assert analyzer.result.events[0].category == "PLATFORM"
     assert analyzer.result.events[0].priority == EventPriority.ERROR
-    assert "Max power mismatch" in analyzer.result.events[0].description
+    assert "GPU max power mismatch" in analyzer.result.events[0].description
 
 
 def test_check_expected_max_power_missing(mock_analyzer):
@@ -283,7 +287,31 @@ def test_check_expected_max_power_missing(mock_analyzer):
 
     assert len(analyzer.result.events) == 1
     assert analyzer.result.events[0].priority == EventPriority.WARNING
-    assert "has no max power limit set" in analyzer.result.events[0].description
+    assert "max power limit not set" in analyzer.result.events[0].description
+
+
+def test_check_expected_max_power_ppt0(mock_analyzer):
+    """Test check_expected_max_power uses ppt0.max_power_limit on ROCm 7+ static JSON."""
+    from nodescraper.plugins.inband.amdsmi.amdsmidata import StaticPowerLimit
+
+    analyzer = mock_analyzer
+    gpu = create_static_gpu(0, max_power=550.0)
+    gpu.limit = StaticLimit(
+        ppt0=StaticPowerLimit(
+            max_power_limit=ValueUnit(value=750, unit="W"),
+            min_power_limit=ValueUnit(value=0, unit="W"),
+            socket_power_limit=ValueUnit(value=600, unit="W"),
+        )
+    )
+    gpu.limit.max_power = None
+
+    analyzer.check_expected_max_power([gpu], 750)
+    assert len(analyzer.result.events) == 0
+
+    analyzer.result = analyzer._init_result()
+    analyzer.check_expected_max_power([gpu], 550)
+    assert len(analyzer.result.events) == 1
+    assert "GPU max power mismatch" in analyzer.result.events[0].description
 
 
 def test_check_expected_driver_version_success(mock_analyzer):
@@ -314,7 +342,7 @@ def test_check_expected_driver_version_mismatch(mock_analyzer):
     assert len(analyzer.result.events) == 1
     assert analyzer.result.events[0].category == "PLATFORM"
     assert analyzer.result.events[0].priority == EventPriority.ERROR
-    assert "Driver Version Mismatch" in analyzer.result.events[0].description
+    assert "GPU driver version mismatch" in analyzer.result.events[0].description
 
 
 def test_expected_gpu_processes_success(mock_analyzer):
@@ -378,7 +406,10 @@ def test_expected_gpu_processes_exceeds(mock_analyzer):
 
     assert len(analyzer.result.events) == 1
     assert analyzer.result.events[0].priority == EventPriority.ERROR
-    assert "Number of processes exceeds max processes" in analyzer.result.events[0].description
+    assert (
+        "GPU process count mismatch (expected 5): GPU 0=10" in analyzer.result.events[0].description
+    )
+    assert analyzer.result.events[0].data["details"] == "GPU 0: expected 5, actual 10"
 
 
 def test_expected_gpu_processes_no_data(mock_analyzer):
@@ -650,7 +681,7 @@ def test_check_expected_xgmi_link_speed_mismatch(mock_analyzer):
     assert len(analyzer.result.events) == 1
     assert analyzer.result.events[0].category == "IO"
     assert analyzer.result.events[0].priority == EventPriority.ERROR
-    assert "XGMI link speed is not as expected" in analyzer.result.events[0].description
+    assert "not in expected" in analyzer.result.events[0].description
 
 
 def test_check_expected_xgmi_link_speed_multiple_valid_speeds(mock_analyzer):
@@ -717,7 +748,7 @@ def test_check_expected_xgmi_link_speed_missing_bit_rate(mock_analyzer):
 
     assert len(analyzer.result.events) == 1
     assert analyzer.result.events[0].priority == EventPriority.ERROR
-    assert "XGMI link speed is not available" in analyzer.result.events[0].description
+    assert "XGMI link speed not available" in analyzer.result.events[0].description
 
 
 def test_analyze_data_full_workflow(mock_analyzer):
@@ -816,7 +847,7 @@ _PCIE_KEYS = [
     "current_bandwidth_sent",
     "current_bandwidth_received",
     "max_packet_size",
-    "lc_perf_other_end_recovery",
+    "lc_perf_other_end_recovery_count",
 ]
 _ECC_TOTALS_KEYS = [
     "total_correctable_count",
@@ -850,6 +881,7 @@ def _minimal_amdsmi_metric(
     pcie: Optional[MetricPcie] = None,
     ecc: Optional[MetricEccTotals] = None,
     ecc_blocks: Optional[dict] = None,
+    power_management: Optional[str] = None,
 ) -> AmdSmiMetric:
     """Build minimal AmdSmiMetric for PCIe/ECC tests with all required fields present."""
     pcie_dict = pcie.model_dump() if pcie is not None else {k: None for k in _PCIE_KEYS}
@@ -873,7 +905,7 @@ def _minimal_amdsmi_metric(
                 "soc_voltage": None,
                 "mem_voltage": None,
                 "throttle_status": None,
-                "power_management": None,
+                "power_management": power_management,
             },
             "clock": {},
             "temperature": {"edge": None, "hotspot": None, "mem": None},
@@ -899,6 +931,85 @@ def _minimal_amdsmi_metric(
             "throttle": {},
         }
     )
+
+
+def test_gpu_mismatch_description_helpers():
+    """Per-GPU mismatch helpers include GPU id, expected, and actual in output."""
+    desc, details = _gpu_mismatch_description(
+        "GPU power_management", "DISABLED", {0: "ENABLED", 3: "ENABLED"}
+    )
+    assert "GPU 0=ENABLED" in desc
+    assert "GPU 3=ENABLED" in desc
+    assert "expected DISABLED" in desc
+    assert "GPU 0: expected DISABLED, actual ENABLED" in details
+    assert "GPU 3: expected DISABLED, actual ENABLED" in details
+
+    desc_missing, _ = _gpu_unavailable_description(
+        "GPU power_management", [1, 2], expected="DISABLED"
+    )
+    assert "GPU 1" in desc_missing
+    assert "GPU 2" in desc_missing
+    assert "expected DISABLED" in desc_missing
+
+
+def test_check_expected_power_management_success(mock_analyzer):
+    """All GPUs with DISABLED power_management pass."""
+    analyzer = mock_analyzer
+    metrics = [
+        _minimal_amdsmi_metric(0, power_management="DISABLED"),
+        _minimal_amdsmi_metric(1, power_management="disabled"),
+    ]
+    analyzer.check_expected_power_management(metrics, "DISABLED")
+    assert len(analyzer.result.events) == 0
+
+
+def test_check_expected_power_management_mismatch(mock_analyzer):
+    """ENABLED power_management fails when DISABLED is expected."""
+    analyzer = mock_analyzer
+    metrics = [
+        _minimal_amdsmi_metric(0, power_management="DISABLED"),
+        _minimal_amdsmi_metric(1, power_management="ENABLED"),
+    ]
+    analyzer.check_expected_power_management(metrics, "DISABLED")
+    assert len(analyzer.result.events) == 1
+    assert analyzer.result.events[0].priority == EventPriority.ERROR
+    assert "power_management mismatch" in analyzer.result.events[0].description
+    assert "GPU 1=ENABLED" in analyzer.result.events[0].description
+    assert analyzer.result.events[0].data["details"] == ("GPU 1: expected DISABLED, actual ENABLED")
+
+
+def test_check_expected_power_management_missing(mock_analyzer):
+    """Missing power_management logs warning."""
+    analyzer = mock_analyzer
+    metrics = [_minimal_amdsmi_metric(0, power_management=None)]
+    analyzer.check_expected_power_management(metrics, "DISABLED")
+    assert len(analyzer.result.events) == 1
+    assert analyzer.result.events[0].priority == EventPriority.WARNING
+    assert "not available" in analyzer.result.events[0].description
+
+
+def test_analyze_data_expected_power_management(mock_analyzer):
+    """analyze_data accepts expected_power_management from plugin config."""
+    analyzer = mock_analyzer
+    data = AmdSmiDataModel(
+        metric=[
+            _minimal_amdsmi_metric(0, power_management="DISABLED"),
+            _minimal_amdsmi_metric(1, power_management="DISABLED"),
+        ]
+    )
+    args = AmdSmiAnalyzerArgs(expected_power_management="DISABLED")
+    result = analyzer.analyze_data(data, args)
+    assert not any("power_management mismatch" in e.description for e in result.events)
+
+
+def test_amdsmi_analyzer_args_rejects_unknown_fields():
+    """Plugin config must only use declared AmdSmiAnalyzerArgs fields."""
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        AmdSmiAnalyzerArgs.model_validate(
+            {"expected_power_management": "DISABLED", "not_a_field": 1}
+        )
 
 
 def test_check_amdsmi_metric_pcie_width_fail(mock_analyzer):
@@ -1014,9 +1125,16 @@ def test_check_amdsmi_metric_ecc_totals(mock_analyzer):
     ]
     analyzer.check_amdsmi_metric_ecc_totals(metrics)
     assert len(analyzer.result.events) == 5
-    # Analyzer uses generic description "GPU ECC error count detected"; type is in data["error_type"]
+    expected_descriptions = {
+        "GPU 0: Total correctable ECC errors count=1",
+        "GPU 1: Total uncorrectable ECC errors count=1",
+        "GPU 2: Total deferred ECC errors count=1",
+        "GPU 3: Cache correctable ECC errors count=1",
+        "GPU 4: Cache uncorrectable ECC errors count=1",
+    }
+    assert {e.description for e in analyzer.result.events} == expected_descriptions
     for e in analyzer.result.events:
-        assert e.description == "GPU ECC error count detected"
+        assert e.description == e.data["details"]
         assert "error_type" in e.data and "error_count" in e.data
     error_types = [e.data["error_type"] for e in analyzer.result.events]
     assert "Total correctable ECC errors" in error_types

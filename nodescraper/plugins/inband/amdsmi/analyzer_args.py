@@ -43,6 +43,13 @@ class AmdSmiAnalyzerArgs(AnalyzerArgs):
     expected_max_power: Optional[int] = Field(
         default=None, description="Expected maximum power value (e.g. watts)."
     )
+    expected_power_management: Optional[str] = Field(
+        default=None,
+        description=(
+            "Expected amd-smi metric power_management value per GPU "
+            "(e.g. DISABLED for active/full power, ENABLED for power-managed idle)."
+        ),
+    )
     expected_driver_version: Optional[str] = Field(
         default=None, description="Expected AMD driver version string."
     )

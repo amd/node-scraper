@@ -23,7 +23,9 @@
 # SOFTWARE.
 #
 ###############################################################################
-from typing import Optional
+from __future__ import annotations
+
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
@@ -36,3 +38,31 @@ class PluginConfig(BaseModel):
     result_collators: dict[str, dict] = Field(default_factory=dict)
     name: Optional[str] = None
     desc: Optional[str] = None
+
+    @classmethod
+    def coerce(cls, config: PluginConfig | dict[str, Any]) -> PluginConfig:
+        """Return a ``PluginConfig`` instance from a model or mapping."""
+        if isinstance(config, cls):
+            return config
+        return cls.model_validate(config)
+
+    @classmethod
+    def merge(cls, *configs: PluginConfig | dict[str, Any]) -> PluginConfig:
+        """Merge recipe plugin configs.
+
+        Plugin entries from later configs overwrite earlier ones with the same name.
+        ``name``, ``desc``, ``global_args``, and ``result_collators`` come from the first
+        config.
+        """
+        normalized = [cls.coerce(config) for config in configs]
+        merged_plugins: dict[str, dict[str, Any]] = {}
+        for config in normalized:
+            merged_plugins.update(config.plugins)
+        first = normalized[0] if normalized else cls()
+        return cls(
+            name=first.name,
+            desc=first.desc,
+            global_args=first.global_args,
+            plugins=merged_plugins,
+            result_collators=first.result_collators,
+        )

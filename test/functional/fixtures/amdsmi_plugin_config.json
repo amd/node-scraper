@@ -1,0 +1,14 @@
+{
+  "global_args": {},
+  "plugins": {
+    "AmdSmiPlugin": {
+      "analysis_args": {
+        "expected_power_management": "DISABLED",
+        "expected_xgmi_speed": [32.0]
+      }
+    }
+  },
+  "result_collators": {},
+  "name": "AmdSmiPlugin config",
+  "desc": "Functional test config for AmdSmiPlugin ROCm 7.13 checks"
+}

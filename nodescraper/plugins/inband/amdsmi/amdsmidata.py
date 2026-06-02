@@ -43,6 +43,43 @@ from nodescraper.utils import find_annotation_in_container
 _NUM_UNIT_RE = re.compile(r"^\s*([-+]?\d+(?:\.\d+)?)(?:\s*([A-Za-z%/][A-Za-z0-9%/._-]*))?\s*$")
 
 
+def _value_unit_is_na(x: Any) -> bool:
+    return x is None or (isinstance(x, str) and x.strip().upper() in {"N/A", "NA", ""})
+
+
+def _coerce_value_unit_raw(v: Any) -> Any:
+    """Normalize raw amd-smi input into ``ValueUnit``-compatible data for validation."""
+    if _value_unit_is_na(v):
+        return None
+
+    if isinstance(v, dict):
+        val = v.get("value")
+        unit = v.get("unit", "")
+        if _value_unit_is_na(val):
+            return None
+        if isinstance(val, str):
+            m = _NUM_UNIT_RE.match(val.strip())
+            if m and not unit:
+                num, u = m.groups()
+                unit = u or unit or ""
+                val = float(num) if "." in num else int(num)
+        return {"value": val, "unit": unit}
+
+    if isinstance(v, (int, float)):
+        return {"value": v, "unit": ""}
+
+    if isinstance(v, str):
+        s = v.strip()
+        m = _NUM_UNIT_RE.match(s)
+        if m:
+            num, unit = m.groups()
+            val = float(num) if "." in num else int(num)
+            return {"value": val, "unit": unit or ""}
+        return {"value": s, "unit": ""}
+
+    return v
+
+
 def na_to_none(values: Union[int, str]):
     if values == "N/A":
         return None
@@ -124,45 +161,26 @@ class ValueUnit(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def _coerce(cls, v):
-        # treat N/A as None
-        def na(x) -> bool:
-            return x is None or (isinstance(x, str) and x.strip().upper() in {"N/A", "NA", ""})
-
-        if na(v):
-            return None
-
-        if isinstance(v, dict):
-            val = v.get("value")
-            unit = v.get("unit", "")
-            if na(val):
-                return None
-            if isinstance(val, str):
-                m = _NUM_UNIT_RE.match(val.strip())
-                if m and not unit:
-                    num, u = m.groups()
-                    unit = u or unit or ""
-                    val = float(num) if "." in num else int(num)
-            return {"value": val, "unit": unit}
-
-        # numbers
-        if isinstance(v, (int, float)):
-            return {"value": v, "unit": ""}
-
-        if isinstance(v, str):
-            s = v.strip()
-            m = _NUM_UNIT_RE.match(s)
-            if m:
-                num, unit = m.groups()
-                val = float(num) if "." in num else int(num)
-                return {"value": val, "unit": unit or ""}
-            return {"value": s, "unit": ""}
-
-        return v
+        return _coerce_value_unit_raw(v)
 
     @field_validator("unit")
     @classmethod
     def _clean_unit(cls, u):
         return "" if u is None else str(u).strip()
+
+
+def coerce_value_unit_input(v: Any) -> Any:
+    """Normalize raw amd-smi values into ``ValueUnit``-compatible input.
+
+    Use as a ``mode='before'`` field validator on ``ValueUnit`` / ``Optional[ValueUnit]`` fields.
+    Accepts ``ValueUnit``, dict, number, or strings such as ``"138 MHz"`` / ``"N/A"``.
+    Returns ``None`` when the value is not present or is N/A.
+    """
+    if v is None:
+        return None
+    if isinstance(v, ValueUnit):
+        return v
+    return _coerce_value_unit_raw(v)
 
 
 # Process
@@ -313,7 +331,31 @@ class StaticVbios(BaseModel):
     version: str
 
 
+class StaticPowerLimit(AmdSmiBaseModel):
+    """Per-PPT power limits (ROCm 7+ static --limit JSON)."""
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        extra="ignore",
+    )
+
+    max_power_limit: Optional[ValueUnit] = None
+    min_power_limit: Optional[ValueUnit] = None
+    socket_power_limit: Optional[ValueUnit] = None
+    na_validator = field_validator(
+        "max_power_limit", "min_power_limit", "socket_power_limit", mode="before"
+    )(na_to_none)
+    _ppt_vu = field_validator(
+        "max_power_limit", "min_power_limit", "socket_power_limit", mode="before"
+    )(coerce_value_unit_input)
+
+
 class StaticLimit(AmdSmiBaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+        extra="ignore",
+    )
+
     max_power: Optional[ValueUnit] = None
     min_power: Optional[ValueUnit] = None
     socket_power: Optional[ValueUnit] = None
@@ -323,6 +365,10 @@ class StaticLimit(AmdSmiBaseModel):
     shutdown_edge_temperature: Optional[ValueUnit] = None
     shutdown_hotspot_temperature: Optional[ValueUnit] = None
     shutdown_vram_temperature: Optional[ValueUnit] = None
+    ppt0: Optional[StaticPowerLimit] = None
+    ppt1: Optional[StaticPowerLimit] = None
+    ptl_state: Optional[str] = None
+    ptl_format: Optional[str] = None
     na_validator = field_validator(
         "max_power",
         "min_power",
@@ -333,13 +379,72 @@ class StaticLimit(AmdSmiBaseModel):
         "shutdown_edge_temperature",
         "shutdown_hotspot_temperature",
         "shutdown_vram_temperature",
+        "ppt0",
+        "ppt1",
+        "ptl_state",
+        "ptl_format",
         mode="before",
     )(na_to_none)
+    _limit_value_unit = field_validator(
+        "max_power",
+        "min_power",
+        "socket_power",
+        "slowdown_edge_temperature",
+        "slowdown_hotspot_temperature",
+        "slowdown_vram_temperature",
+        "shutdown_edge_temperature",
+        "shutdown_hotspot_temperature",
+        "shutdown_vram_temperature",
+        mode="before",
+    )(coerce_value_unit_input)
+
+    def resolved_max_power(self) -> Optional[ValueUnit]:
+        """Return max power cap from legacy flat fields or ``ppt0`` (ROCm 7+)."""
+        if self.max_power is not None:
+            return self.max_power
+        if self.ppt0 is not None and self.ppt0.max_power_limit is not None:
+            return self.ppt0.max_power_limit
+        return None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_limit_input(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            return normalize_static_limit_dict(data)
+        return data
+
+
+def _normalize_static_ppt_block(val: object) -> object:
+    """Drop N/A-only ``ppt0``/``ppt1`` blocks; pass through already-parsed models."""
+    if val is None:
+        return None
+    if isinstance(val, str) and val.strip().upper() in {"N/A", "NA", ""}:
+        return None
+    if not isinstance(val, dict):
+        return val
+    out: dict[str, Any] = {}
+    for key, raw in val.items():
+        if isinstance(raw, str) and raw.strip().upper() in {"N/A", "NA", ""}:
+            continue
+        if raw is not None:
+            out[key] = raw
+    return out or None
+
+
+def normalize_static_limit_dict(data: dict[str, Any]) -> dict[str, Any]:
+    """Normalize static ``limit`` JSON for ``StaticLimit`` (ROCm 7.13 + legacy)."""
+    out = dict(data)
+    for ppt_key in ("ppt0", "ppt1"):
+        out[ppt_key] = _normalize_static_ppt_block(out.get(ppt_key))
+    return out
 
 
 class StaticDriver(BaseModel):
-    name: str
-    version: str
+    model_config = ConfigDict(populate_by_name=True)
+
+    name: str = Field(validation_alias=AliasChoices("name", "driver_name"))
+    version: str = Field(validation_alias=AliasChoices("version", "driver_version"))
+    os_kernel_version: Optional[str] = None
 
 
 class StaticBoard(BaseModel):
@@ -418,14 +523,21 @@ class StaticCacheInfoItem(AmdSmiBaseModel):
     na_validator = field_validator("cache_size", mode="before")(na_to_none)
 
 
-class StaticFrequencyLevels(BaseModel):
+class StaticFrequencyLevels(AmdSmiBaseModel):
+    """Static clock frequency levels; each level is normalized to ``ValueUnit``."""
+
     model_config = ConfigDict(
         populate_by_name=True,
+        extra="forbid",
     )
 
-    Level_0: str = Field(..., alias="Level 0")
-    Level_1: Optional[str] = Field(default=None, alias="Level 1")
-    Level_2: Optional[str] = Field(default=None, alias="Level 2")
+    Level_0: ValueUnit = Field(..., alias="Level 0")
+    Level_1: Optional[ValueUnit] = Field(default=None, alias="Level 1")
+    Level_2: Optional[ValueUnit] = Field(default=None, alias="Level 2")
+
+    _level_value_unit = field_validator("Level_0", "Level_1", "Level_2", mode="before")(
+        coerce_value_unit_input
+    )
 
 
 class StaticClockData(BaseModel):
@@ -444,13 +556,13 @@ class AmdSmiStatic(BaseModel):
     gpu: int
     asic: StaticAsic
     bus: StaticBus
-    vbios: Optional[StaticVbios]
-    limit: Optional[StaticLimit]
+    vbios: Optional[StaticVbios] = None
+    limit: Optional[StaticLimit] = None
     driver: StaticDriver
     board: StaticBoard
     ras: StaticRas
-    soc_pstate: Optional[StaticSocPstate]
-    xgmi_plpd: Optional[StaticXgmiPlpd]
+    soc_pstate: Optional[StaticSocPstate] = None
+    xgmi_plpd: Optional[StaticXgmiPlpd] = None
     process_isolation: str
     numa: StaticNuma
     vram: StaticVram
@@ -514,6 +626,7 @@ class MetricPower(BaseModel):
     gfx_voltage: Optional[ValueUnit]
     soc_voltage: Optional[ValueUnit]
     mem_voltage: Optional[ValueUnit]
+    ubb_power: Optional[ValueUnit] = None
     throttle_status: Optional[str]
     power_management: Optional[str]
     na_validator = field_validator(
@@ -521,21 +634,73 @@ class MetricPower(BaseModel):
         "gfx_voltage",
         "soc_voltage",
         "mem_voltage",
+        "ubb_power",
         "throttle_status",
         "power_management",
         mode="before",
     )(na_to_none)
+    _ubb_power_vu = field_validator("ubb_power", mode="before")(coerce_value_unit_input)
 
 
 class MetricClockData(BaseModel):
-    clk: Optional[ValueUnit]
-    min_clk: Optional[ValueUnit]
-    max_clk: Optional[ValueUnit]
-    clk_locked: Optional[Union[int, str, dict]]
-    deep_sleep: Optional[Union[int, str, dict]]
+    model_config = ConfigDict(extra="ignore")
+
+    clk: Optional[ValueUnit] = None
+    min_clk: Optional[ValueUnit] = None
+    max_clk: Optional[ValueUnit] = None
+    clk_locked: Optional[Union[int, str, dict]] = None
+    deep_sleep: Optional[Union[int, str, dict]] = None
     na_validator = field_validator(
         "clk", "min_clk", "max_clk", "clk_locked", "deep_sleep", mode="before"
     )(na_to_none)
+
+
+_METRIC_CLOCK_LEAF_KEYS = frozenset({"clk", "min_clk", "max_clk", "clk_locked", "deep_sleep"})
+
+
+def _looks_like_metric_clock_leaf(value: object) -> bool:
+    """True when *value* matches legacy amd-smi per-clock metric JSON."""
+    return isinstance(value, dict) and bool(_METRIC_CLOCK_LEAF_KEYS & value.keys())
+
+
+def _normalize_metric_clock_map(clock: Any) -> Any:
+    """Coerce standard clock leaves to ``MetricClockData``; keep nested maps as dicts."""
+    if not isinstance(clock, dict):
+        return clock
+    normalized: dict[str, Any] = {}
+    for key, val in clock.items():
+        if val is None or (isinstance(val, str) and _value_unit_is_na(val)):
+            normalized[key] = None
+        elif isinstance(val, MetricClockData):
+            normalized[key] = val
+        elif _looks_like_metric_clock_leaf(val):
+            normalized[key] = MetricClockData.model_validate(val)
+        else:
+            normalized[key] = val
+    return normalized
+
+
+def normalize_amdsmi_metric_dict(item: dict[str, Any]) -> dict[str, Any]:
+    """Normalize raw ``amd-smi metric`` JSON before ``AmdSmiMetric`` validation (ROCm 7.13 + legacy)."""
+    out = dict(item)
+    if "gpu_board" in out and "gpuboard" not in out:
+        out["gpuboard"] = out.pop("gpu_board")
+    if "base_board" in out and "baseboard" not in out:
+        out["baseboard"] = out.pop("base_board")
+    pcie = out.get("pcie")
+    if isinstance(pcie, dict):
+        pcie_out = dict(pcie)
+        count = pcie_out.get("lc_perf_other_end_recovery_count")
+        legacy = pcie_out.get("lc_perf_other_end_recovery")
+        if legacy is not None:
+            pcie_out["lc_perf_other_end_recovery_count"] = legacy
+        elif count is not None:
+            pcie_out["lc_perf_other_end_recovery"] = count
+        out["pcie"] = pcie_out
+    clock = out.get("clock")
+    if isinstance(clock, dict):
+        out["clock"] = _normalize_metric_clock_map(clock)
+    return out
 
 
 class MetricTemperature(BaseModel):
@@ -546,18 +711,38 @@ class MetricTemperature(BaseModel):
 
 
 class MetricPcie(BaseModel):
-    width: Optional[int]
-    speed: Optional[ValueUnit]
-    bandwidth: Optional[ValueUnit]
-    replay_count: Optional[int]
-    l0_to_recovery_count: Optional[int]
-    replay_roll_over_count: Optional[int]
-    nak_sent_count: Optional[int]
-    nak_received_count: Optional[int]
-    current_bandwidth_sent: Optional[int]
-    current_bandwidth_received: Optional[int]
-    max_packet_size: Optional[int]
-    lc_perf_other_end_recovery: Optional[int]
+    width: Optional[int] = None
+    speed: Optional[ValueUnit] = None
+    bandwidth: Optional[ValueUnit] = None
+    replay_count: Optional[int] = None
+    l0_to_recovery_count: Optional[int] = None
+    replay_roll_over_count: Optional[int] = None
+    nak_sent_count: Optional[int] = None
+    nak_received_count: Optional[int] = None
+    current_bandwidth_sent: Optional[int] = None
+    current_bandwidth_received: Optional[int] = None
+    max_packet_size: Optional[int] = None
+    lc_perf_other_end_recovery_count: Optional[int] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_recovery_count_key(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        out = dict(data)
+        count = out.get("lc_perf_other_end_recovery_count")
+        legacy = out.get("lc_perf_other_end_recovery")
+        if legacy is not None:
+            out["lc_perf_other_end_recovery_count"] = legacy
+        elif count is not None:
+            out["lc_perf_other_end_recovery"] = count
+        return out
+
+    @property
+    def lc_perf_other_end_recovery(self) -> Optional[int]:
+        """Legacy amd-smi JSON / attribute name (alias for ``lc_perf_other_end_recovery_count``)."""
+        return self.lc_perf_other_end_recovery_count
+
     na_validator = field_validator(
         "width",
         "speed",
@@ -570,7 +755,7 @@ class MetricPcie(BaseModel):
         "current_bandwidth_sent",
         "current_bandwidth_received",
         "max_packet_size",
-        "lc_perf_other_end_recovery",
+        "lc_perf_other_end_recovery_count",
         mode="before",
     )(na_to_none)
 
@@ -774,10 +959,12 @@ class EccData(BaseModel):
 
 
 class AmdSmiMetric(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
     gpu: int
-    usage: MetricUsage
+    usage: Union[MetricUsage, str]
     power: MetricPower
-    clock: dict[str, MetricClockData]
+    clock: dict[str, Union[MetricClockData, dict[str, Any]]]
     temperature: MetricTemperature
     pcie: MetricPcie
     ecc: MetricEccTotals
@@ -789,8 +976,22 @@ class AmdSmiMetric(BaseModel):
     energy: Optional[MetricEnergy]
     mem_usage: MetricMemUsage
     throttle: MetricThrottle
+    gpuboard: Optional[Union[dict[str, Any], str]] = Field(
+        default=None,
+        validation_alias=AliasChoices("gpuboard", "gpu_board"),
+    )
+    baseboard: Optional[Union[dict[str, Any], str]] = Field(
+        default=None,
+        validation_alias=AliasChoices("baseboard", "base_board"),
+    )
 
     na_validator = field_validator("xgmi_err", "perf_level", mode="before")(na_to_none)
+    _board_dict_na = field_validator("gpuboard", "baseboard", mode="before")(na_to_none_dict)
+
+    @field_validator("clock", mode="plain")
+    @classmethod
+    def _normalize_clock(cls, clock: Any) -> Any:
+        return _normalize_metric_clock_map(clock)
 
     @field_validator("ecc_blocks", mode="before")
     @classmethod
@@ -1050,10 +1251,13 @@ class AmdSmiDataModel(DataModel):
         """First available max power limit (W) from static data, lowest GPU index first."""
         for gpu in self._sorted_static_gpus():
             lim = gpu.limit
-            if lim is None or lim.max_power is None or lim.max_power.value is None:
+            if lim is None:
+                continue
+            max_power = lim.resolved_max_power()
+            if max_power is None or max_power.value is None:
                 continue
             try:
-                return int(float(lim.max_power.value))
+                return int(float(max_power.value))
             except (TypeError, ValueError):
                 continue
         return None
