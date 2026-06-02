@@ -2,7 +2,7 @@
 name = "amd-node-scraper"
 dynamic = ["version"]
 description = "A framework for automated error detection and data collection"
-authors = []
+authors = [{ name = "AMD" }]
 readme = "README.md"
 requires-python = ">=3.9"
 
