@@ -2009,6 +2009,7 @@ class PcieDataModel(DataModel):
     - lspci_verbose: Verbose collection of PCIe data
     - lspci_verbose_tree: Tree view of PCIe data
     - lspci_path: Path view of PCIe data for the GPUs
+    - lspci_path_domain: Path view of PCIe data for the GPUs (with domain prefix)
     - lspci_hex: Hex view of PCIe data for the GPUs
 
     """
