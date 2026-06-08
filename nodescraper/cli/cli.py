@@ -64,7 +64,7 @@ from nodescraper.connection.redfish import (
 from nodescraper.connection.redfish.redfish_params import RedfishConnectionParams
 from nodescraper.constants import DEFAULT_LOGGER
 from nodescraper.enums import ExecutionStatus, SystemInteractionLevel, SystemLocation
-from nodescraper.models import PluginConfig, SystemInfo
+from nodescraper.models import SystemInfo
 from nodescraper.pluginexecutor import PluginExecutor
 from nodescraper.pluginregistry import PluginRegistry
 
@@ -74,17 +74,16 @@ def _parse_plugin_configs_csv(value: str) -> list[str]:
     return [p.strip() for p in value.split(",") if p.strip()]
 
 
-def _config_registry_with_all_plugins(plugin_reg: PluginRegistry) -> ConfigRegistry:
-    """Synthetic ``AllPlugins`` config used for CLI help and :func:`build_global_argument_parser`."""
-    config_reg = ConfigRegistry()
-    config_reg.configs["AllPlugins"] = PluginConfig(
-        name="AllPlugins",
-        desc="Run all registered plugins with default arguments",
-        global_args={},
-        plugins={name: {} for name in plugin_reg.plugins},
-        result_collators={},
-    )
-    return config_reg
+def _default_config_registry(_plugin_reg: PluginRegistry) -> ConfigRegistry:
+    """Build the config registry from bundled JSON and plugin-config entry points.
+
+    Args:
+        _plugin_reg (PluginRegistry): Unused; retained for call-site compatibility.
+
+    Returns:
+        ConfigRegistry: Registry containing bundled and entry-point plugin configs.
+    """
+    return ConfigRegistry()
 
 
 def _add_cli_root_globals(
@@ -203,7 +202,7 @@ def _add_cli_root_globals(
 def build_global_argument_parser(*, add_help: bool = True) -> argparse.ArgumentParser:
     """Globals only (no subcommands), for host CLIs."""
     plugin_reg = PluginRegistry()
-    config_reg = _config_registry_with_all_plugins(plugin_reg)
+    config_reg = _default_config_registry(plugin_reg)
     parser = argparse.ArgumentParser(
         description="node scraper CLI (global options only)",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -406,7 +405,7 @@ def get_cli_top_level_subcommands() -> tuple[str, ...]:
         Tuple of ``subcmd`` subparser names; call ``cache_clear()`` if registries change in-process.
     """
     plugin_reg = PluginRegistry()
-    config_reg = _config_registry_with_all_plugins(plugin_reg)
+    config_reg = _default_config_registry(plugin_reg)
     parser, _plugin_subparser_map = build_parser(plugin_reg, config_reg)
     return _top_level_subcommand_names(parser)
 
@@ -474,7 +473,7 @@ def main(
         arg_input = sys.argv[1:]
 
     plugin_reg = PluginRegistry()
-    config_reg = _config_registry_with_all_plugins(plugin_reg)
+    config_reg = _default_config_registry(plugin_reg)
     parser, plugin_subparser_map = build_parser(plugin_reg, config_reg)
 
     try:
