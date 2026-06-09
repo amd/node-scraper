@@ -23,18 +23,19 @@
 # SOFTWARE.
 #
 ###############################################################################
-from typing import Optional, Union
+from typing import Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from nodescraper.models import CollectorArgs
 
 
 class CommandSpec(BaseModel):
-    """One shell command and optional per-command overrides."""
+    """One named shell command and optional per-command overrides."""
 
     model_config = {"extra": "forbid"}
 
+    name: str = Field(description="Stable name for this command, used by analysis checks.")
     command: str = Field(description="Shell command to run on the target system.")
     sudo: Optional[bool] = Field(
         default=None,
@@ -45,15 +46,31 @@ class CommandSpec(BaseModel):
         ge=1,
         description="Command timeout in seconds. When omitted, uses collection_args.timeout.",
     )
+    include_stdout: Optional[bool] = Field(
+        default=None,
+        description="Store stdout in the data model. When omitted, uses collection_args.include_stdout.",
+    )
+
+    @field_validator("name", "command", mode="before")
+    @classmethod
+    def _strip_required_text(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip()
+        return value
+
+    @model_validator(mode="after")
+    def _validate_required_fields(self) -> "CommandSpec":
+        if not self.name:
+            raise ValueError("name must not be empty")
+        if not self.command:
+            raise ValueError("command must not be empty")
+        return self
 
 
 class GenericCollectionCollectorArgs(CollectorArgs):
     commands: list[CommandSpec] = Field(
         default_factory=list,
-        description=(
-            "Commands to run. Each entry may be a plain string or an object with "
-            "'command' and optional 'sudo' / 'timeout' overrides."
-        ),
+        description="Named commands to run. Each entry must include 'name' and 'command'.",
     )
     sudo: bool = Field(
         default=False,
@@ -64,20 +81,29 @@ class GenericCollectionCollectorArgs(CollectorArgs):
         ge=1,
         description="Default per-command timeout in seconds.",
     )
+    include_stdout: bool = Field(
+        default=True,
+        description="Default setting for storing stdout in the data model for analysis.",
+    )
 
     @field_validator("commands", mode="before")
     @classmethod
-    def _normalize_commands(
-        cls, value: Optional[list[Union[str, dict, CommandSpec]]]
-    ) -> list[Union[str, dict, CommandSpec]]:
+    def _reject_plain_string_commands(cls, value: Optional[list[object]]) -> object:
         if not value:
             return []
-        normalized: list[Union[str, dict, CommandSpec]] = []
         for item in value:
             if isinstance(item, str):
-                command = item.strip()
-                if command:
-                    normalized.append({"command": command})
-            else:
-                normalized.append(item)
-        return normalized
+                raise ValueError("Each command must be an object with 'name' and 'command' fields")
+        return value
+
+    @model_validator(mode="after")
+    def _validate_unique_command_names(self) -> "GenericCollectionCollectorArgs":
+        seen: set[str] = set()
+        duplicates: set[str] = set()
+        for cmd in self.commands:
+            if cmd.name in seen:
+                duplicates.add(cmd.name)
+            seen.add(cmd.name)
+        if duplicates:
+            raise ValueError(f"Duplicate command name(s): {sorted(duplicates)}")
+        return self

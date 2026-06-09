@@ -59,6 +59,11 @@ class GenericCollectionCollector(
 
             sudo = cmd_spec.sudo if cmd_spec.sudo is not None else args.sudo
             timeout = cmd_spec.timeout if cmd_spec.timeout is not None else args.timeout
+            include_stdout = (
+                cmd_spec.include_stdout
+                if cmd_spec.include_stdout is not None
+                else args.include_stdout
+            )
             res = self._run_sut_cmd(
                 command,
                 sudo=sudo,
@@ -66,10 +71,12 @@ class GenericCollectionCollector(
             )
             success = res.exit_code == 0
             cmd_result = CommandCollectionResult(
+                name=cmd_spec.name,
                 command=command,
                 success=success,
                 exit_code=res.exit_code,
                 sudo=sudo,
+                stdout=res.stdout if include_stdout else None,
                 stderr=res.stderr or None,
             )
             results.append(cmd_result)
@@ -78,7 +85,12 @@ class GenericCollectionCollector(
                 self._log_event(
                     category=EventCategory.RUNTIME,
                     description=f"Command succeeded: {command!r}",
-                    data={"command": command, "exit_code": res.exit_code, "sudo": sudo},
+                    data={
+                        "name": cmd_spec.name,
+                        "command": command,
+                        "exit_code": res.exit_code,
+                        "sudo": sudo,
+                    },
                     priority=EventPriority.INFO,
                 )
             else:
@@ -86,6 +98,7 @@ class GenericCollectionCollector(
                     category=EventCategory.RUNTIME,
                     description=f"Command failed: {command!r}",
                     data={
+                        "name": cmd_spec.name,
                         "command": command,
                         "exit_code": res.exit_code,
                         "sudo": sudo,

@@ -25,18 +25,28 @@
 ###############################################################################
 from nodescraper.base import InBandDataPlugin
 
+from .analyzer_args import GenericAnalyzerArgs
 from .collector_args import GenericCollectionCollectorArgs
+from .generic_analyzer import GenericAnalyzer
 from .generic_collection_collector import GenericCollectionCollector
 from .generic_collection_data import GenericCollectionDataModel
 
 
 class GenericCollectionPlugin(
-    InBandDataPlugin[GenericCollectionDataModel, GenericCollectionCollectorArgs, None]
+    InBandDataPlugin[
+        GenericCollectionDataModel,
+        GenericCollectionCollectorArgs,
+        GenericAnalyzerArgs,
+    ]
 ):
-    """Run arbitrary shell commands configured via collection_args."""
+    """Run arbitrary shell commands configured via collection_args and validate via analysis_args."""
 
     DATA_MODEL = GenericCollectionDataModel
 
     COLLECTOR = GenericCollectionCollector
 
     COLLECTOR_ARGS = GenericCollectionCollectorArgs
+
+    ANALYZER = GenericAnalyzer
+
+    ANALYZER_ARGS = GenericAnalyzerArgs

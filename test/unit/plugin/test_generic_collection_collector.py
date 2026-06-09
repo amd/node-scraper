@@ -26,6 +26,7 @@
 from unittest.mock import MagicMock
 
 import pytest
+from pydantic import ValidationError
 
 from nodescraper.connection.inband.inband import CommandArtifact
 from nodescraper.enums.executionstatus import ExecutionStatus
@@ -62,15 +63,34 @@ def test_collect_all_commands_success(collector):
             CommandArtifact(exit_code=0, stdout="ok\n", stderr="", command="echo ok"),
         ]
     )
-    args = GenericCollectionCollectorArgs(commands=["uname -s", "echo ok"])
+    args = GenericCollectionCollectorArgs(
+        commands=[
+            CommandSpec(name="kernel_os", command="uname -s"),
+            CommandSpec(name="echo_ok", command="echo ok"),
+        ]
+    )
 
     result, data = collector.collect_data(args)
 
     assert result.status == ExecutionStatus.OK
     assert data == GenericCollectionDataModel(
         results=[
-            CommandCollectionResult(command="uname -s", success=True, exit_code=0, sudo=False),
-            CommandCollectionResult(command="echo ok", success=True, exit_code=0, sudo=False),
+            CommandCollectionResult(
+                name="kernel_os",
+                command="uname -s",
+                success=True,
+                exit_code=0,
+                sudo=False,
+                stdout="linux\n",
+            ),
+            CommandCollectionResult(
+                name="echo_ok",
+                command="echo ok",
+                success=True,
+                exit_code=0,
+                sudo=False,
+                stdout="ok\n",
+            ),
         ]
     )
     assert collector._run_sut_cmd.call_count == 2
@@ -83,7 +103,12 @@ def test_collect_reports_partial_failure(collector):
             CommandArtifact(exit_code=1, stdout="", stderr="failed", command="false"),
         ]
     )
-    args = GenericCollectionCollectorArgs(commands=["uname -s", "false"])
+    args = GenericCollectionCollectorArgs(
+        commands=[
+            CommandSpec(name="kernel_os", command="uname -s"),
+            CommandSpec(name="false_cmd", command="false"),
+        ]
+    )
 
     result, data = collector.collect_data(args)
 
@@ -105,7 +130,11 @@ def test_collect_passes_global_sudo_and_timeout(collector):
     collector._run_sut_cmd = MagicMock(
         return_value=CommandArtifact(exit_code=0, stdout="", stderr="", command="id")
     )
-    args = GenericCollectionCollectorArgs(commands=["id"], sudo=True, timeout=60)
+    args = GenericCollectionCollectorArgs(
+        commands=[CommandSpec(name="user_id", command="id")],
+        sudo=True,
+        timeout=60,
+    )
 
     collector.collect_data(args)
 
@@ -121,8 +150,8 @@ def test_collect_per_command_sudo_overrides(collector):
     )
     args = GenericCollectionCollectorArgs(
         commands=[
-            "id",
-            CommandSpec(command="cat /var/log/messages", sudo=True),
+            CommandSpec(name="user_id", command="id"),
+            CommandSpec(name="messages", command="cat /var/log/messages", sudo=True),
         ],
         sudo=False,
         timeout=300,
@@ -142,7 +171,7 @@ def test_collect_per_command_timeout_override(collector):
         return_value=CommandArtifact(exit_code=0, stdout="", stderr="", command="sleep 1")
     )
     args = GenericCollectionCollectorArgs(
-        commands=[CommandSpec(command="sleep 1", timeout=10)],
+        commands=[CommandSpec(name="sleep_one", command="sleep 1", timeout=10)],
         timeout=300,
     )
 
@@ -151,7 +180,52 @@ def test_collect_per_command_timeout_override(collector):
     collector._run_sut_cmd.assert_called_once_with("sleep 1", sudo=False, timeout=10)
 
 
+def test_collect_stores_stdout_when_disabled(collector):
+    collector._run_sut_cmd = MagicMock(
+        return_value=CommandArtifact(
+            exit_code=0, stdout="secret\n", stderr="", command="echo secret"
+        )
+    )
+    args = GenericCollectionCollectorArgs(
+        commands=[CommandSpec(name="secret", command="echo secret", include_stdout=False)],
+        include_stdout=True,
+    )
+
+    _, data = collector.collect_data(args)
+
+    assert data.results[0].stdout is None
+
+
+def test_collector_args_reject_plain_string_commands():
+    with pytest.raises(ValidationError, match="name' and 'command'"):
+        GenericCollectionCollectorArgs(commands=["uname -s"])
+
+
+def test_collector_args_require_name():
+    with pytest.raises(ValidationError):
+        GenericCollectionCollectorArgs(commands=[CommandSpec(name="", command="uname -s")])
+
+
+def test_collector_args_require_unique_names():
+    with pytest.raises(ValidationError, match="Duplicate command name"):
+        GenericCollectionCollectorArgs(
+            commands=[
+                CommandSpec(name="dup", command="uname -s"),
+                CommandSpec(name="dup", command="uname -m"),
+            ]
+        )
+
+
 def test_generic_collection_plugin_wiring():
     assert GenericCollectionPlugin.DATA_MODEL is GenericCollectionDataModel
     assert GenericCollectionPlugin.get_collector_classes() == (GenericCollectionCollector,)
     assert GenericCollectionPlugin.COLLECTOR_ARGS is GenericCollectionCollectorArgs
+    from nodescraper.plugins.inband.generic_collection.analyzer_args import (
+        GenericAnalyzerArgs,
+    )
+    from nodescraper.plugins.inband.generic_collection.generic_analyzer import (
+        GenericAnalyzer,
+    )
+
+    assert GenericCollectionPlugin.ANALYZER is GenericAnalyzer
+    assert GenericCollectionPlugin.ANALYZER_ARGS is GenericAnalyzerArgs

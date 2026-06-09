@@ -30,17 +30,13 @@ from pathlib import Path
 
 import pytest
 
-
-@pytest.fixture
-def fixtures_dir():
-    """Return path to fixtures directory."""
-    return Path(__file__).parent / "fixtures"
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 @pytest.fixture
-def generic_collection_config_file(fixtures_dir):
-    """Return path to GenericCollectionPlugin config file."""
-    return fixtures_dir / "generic_collection_plugin_config.json"
+def generic_collection_config_file():
+    """Return path to GenericCollectionPlugin config at repo root."""
+    return REPO_ROOT / "generic_collection_plugin_config.json"
 
 
 def test_generic_collection_plugin_with_config_file(
@@ -69,10 +65,10 @@ def test_generic_collection_plugin_with_config_file(
     assert "Generic collection" in output or "genericcollection" in output.lower()
 
 
-def test_generic_collection_plugin_csv_status_ok(
+def test_generic_collection_plugin_demo_config_runs_end_to_end(
     run_cli_command, generic_collection_config_file, tmp_path
 ):
-    """Configured commands should collect successfully on the local system."""
+    """Repo-root demo config runs collection and analysis with expected partial failures."""
     log_path = str(tmp_path / "logs_generic_collection_csv")
     result = run_cli_command(
         [
@@ -87,6 +83,11 @@ def test_generic_collection_plugin_csv_status_ok(
 
     output = result.stdout + result.stderr
     assert "GenericCollectionPlugin" in output
+    assert "14/14 commands succeeded" not in output
+    assert "14/14 checks passed" not in output
+    assert "/14 commands succeeded" in output
+    assert "/14 checks passed" in output
+    assert "Check failed: kernel_os" in output
 
     csv_files = list(Path(log_path).glob("**/nodescraper.csv"))
     if not csv_files:
@@ -100,8 +101,30 @@ def test_generic_collection_plugin_csv_status_ok(
         ]
 
     assert len(rows) >= 1, "GenericCollectionPlugin should appear in CSV results"
-    assert rows[0].get("status") == "OK", rows[0].get("message")
-    assert "6/6 commands succeeded" in (rows[0].get("message") or "")
+    assert rows[0].get("status") == "ERROR", rows[0].get("message")
+
+
+def test_generic_collection_plugin_runs_analyzer(
+    run_cli_command, generic_collection_config_file, tmp_path
+):
+    """Analysis checks from the repo-root config should run after collection."""
+    log_path = str(tmp_path / "logs_generic_collection_analysis")
+    result = run_cli_command(
+        [
+            "--log-path",
+            log_path,
+            f"--plugin-configs={generic_collection_config_file}",
+            "run-plugins",
+            "GenericCollectionPlugin",
+        ],
+        check=False,
+    )
+
+    output = result.stdout + result.stderr
+    assert "Running data analyzer: GenericAnalyzer" in output
+    assert "Generic analysis:" in output
+    assert "14/14 checks passed" not in output
+    assert "Check failed: kernel_os" in output
 
 
 def test_generic_collection_plugin_without_commands_not_ran(run_cli_command, tmp_path):

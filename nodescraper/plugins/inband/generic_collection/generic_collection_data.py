@@ -34,9 +34,11 @@ class CommandCollectionResult(DataModel):
     """Outcome of running one configured shell command."""
 
     command: str
+    name: str
     success: bool
     exit_code: int
     sudo: bool = False
+    stdout: Optional[str] = None
     stderr: Optional[str] = None
 
 

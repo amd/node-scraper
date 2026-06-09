@@ -25,6 +25,7 @@
 ###############################################################################
 import json
 from pathlib import Path
+from typing import Optional
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -34,7 +35,7 @@ from nodescraper.enums import EventPriority, ExecutionStatus, SystemInteractionL
 from nodescraper.interfaces.dataanalyzertask import DataAnalyzer
 from nodescraper.interfaces.datacollectortask import DataCollector
 from nodescraper.interfaces.dataplugin import DataPlugin
-from nodescraper.models import DataModel, TaskResult
+from nodescraper.models import CollectorArgs, DataModel, TaskResult
 
 
 class StandardDataModel(DataModel):
@@ -260,6 +261,28 @@ class TestDataPluginCore:
 
             assert mock_collect.call_count == expected_calls[0]
             assert mock_analyze.call_count == expected_calls[1]
+
+    def test_run_reports_collection_and_analysis_errors(self, plugin_with_conn):
+        plugin_with_conn.data = StandardDataModel()
+
+        with (
+            patch.object(CoreDataPlugin, "collect") as mock_collect,
+            patch.object(CoreDataPlugin, "analyze") as mock_analyze,
+        ):
+            mock_collect.return_value = TaskResult(
+                status=ExecutionStatus.ERROR,
+                message="Generic collection: 2/3 commands succeeded",
+            )
+            mock_analyze.return_value = TaskResult(
+                status=ExecutionStatus.ERROR,
+                message="Generic analysis: 1/3 checks passed",
+            )
+
+            result = plugin_with_conn.run(collection=True, analysis=True)
+
+            assert result.status == ExecutionStatus.ERROR
+            assert "Collection error: Generic collection: 2/3 commands succeeded" in result.message
+            assert "Analysis error: Generic analysis: 1/3 checks passed" in result.message
 
     def test_run_with_parameters(self, plugin_with_conn):
         collection_args = {"param": "value"}
@@ -543,3 +566,107 @@ class TestDataPluginRunPaths:
         loaded = ExtractPlugin.load_run_data(str(p))
         assert loaded is not None
         assert loaded["value"] == "direct"
+
+
+class MultiPartDataModel(DataModel):
+    alpha: Optional[str] = None
+    beta: Optional[str] = None
+
+
+class AlphaCollector(DataCollector):
+    DATA_MODEL = MultiPartDataModel
+
+    def collect_data(self, args=None):
+        return TaskResult(status=ExecutionStatus.OK, task="AlphaCollector"), MultiPartDataModel(
+            alpha="alpha-value"
+        )
+
+
+class BetaCollector(DataCollector):
+    DATA_MODEL = MultiPartDataModel
+
+    def collect_data(self, args=None):
+        return TaskResult(status=ExecutionStatus.OK, task="BetaCollector"), MultiPartDataModel(
+            beta="beta-value"
+        )
+
+
+class AlphaCollectorArgs(CollectorArgs):
+    alpha_path: str = "/alpha"
+
+
+class BetaCollectorArgs(CollectorArgs):
+    beta_path: str = "/beta"
+
+
+class MultiCollectorPlugin(DataPlugin):
+    DATA_MODEL = MultiPartDataModel
+    CONNECTION_TYPE = MockConnectionManager
+    COLLECTOR = (AlphaCollector, BetaCollector)
+    ANALYZER = StandardAnalyzer
+
+
+class TestMultiCollectorDataPlugin:
+    def test_get_collector_classes_accepts_collector_tuple(self):
+        assert MultiCollectorPlugin.get_collector_classes() == (AlphaCollector, BetaCollector)
+
+    def test_get_collector_classes_accepts_single_collector(self):
+        assert CoreDataPlugin.get_collector_classes() == (BaseDataCollector,)
+
+    def test_collector_args_class_accepts_args_map(self):
+        class MappedArgsPlugin(DataPlugin):
+            DATA_MODEL = MultiPartDataModel
+            CONNECTION_TYPE = MockConnectionManager
+            COLLECTOR = (AlphaCollector, BetaCollector)
+            COLLECTOR_ARGS = {
+                "AlphaCollector": AlphaCollectorArgs,
+                "BetaCollector": BetaCollectorArgs,
+            }
+            ANALYZER = StandardAnalyzer
+
+        assert MappedArgsPlugin._collector_args_class(AlphaCollector) is AlphaCollectorArgs
+        assert MappedArgsPlugin._collector_args_class(BetaCollector) is BetaCollectorArgs
+
+    def test_collect_runs_all_collectors_and_merges_data(self, plugin_with_conn):
+        multi_plugin = MultiCollectorPlugin(
+            system_info=plugin_with_conn.system_info,
+            logger=plugin_with_conn.logger,
+            connection_manager=plugin_with_conn.connection_manager,
+        )
+
+        with (
+            patch.object(AlphaCollector, "collect_data") as alpha_collect,
+            patch.object(BetaCollector, "collect_data") as beta_collect,
+        ):
+            alpha_collect.return_value = (
+                TaskResult(status=ExecutionStatus.OK, task="AlphaCollector"),
+                MultiPartDataModel(alpha="alpha-value"),
+            )
+            beta_collect.return_value = (
+                TaskResult(status=ExecutionStatus.OK, task="BetaCollector"),
+                MultiPartDataModel(beta="beta-value"),
+            )
+
+            result = multi_plugin.collect()
+
+            alpha_collect.assert_called_once()
+            beta_collect.assert_called_once()
+            assert result.status == ExecutionStatus.OK
+            assert multi_plugin.data.alpha == "alpha-value"
+            assert multi_plugin.data.beta == "beta-value"
+            assert "AlphaCollector" in result.task
+            assert "BetaCollector" in result.task
+
+    def test_find_datamodel_path_in_run_checks_all_collectors(self, tmp_path: Path) -> None:
+        beta_dir = tmp_path / "multi_collector_plugin" / "beta_collector"
+        beta_dir.mkdir(parents=True)
+        (beta_dir / "result.json").write_text(
+            json.dumps({"parent": "MultiCollectorPlugin"}), encoding="utf-8"
+        )
+        (beta_dir / "multipartdatamodel.json").write_text(
+            json.dumps({"alpha": "a", "beta": "b"}), encoding="utf-8"
+        )
+
+        found = MultiCollectorPlugin.find_datamodel_path_in_run(str(tmp_path))
+        assert found is not None
+        assert found.endswith("multipartdatamodel.json")
