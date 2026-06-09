@@ -295,31 +295,51 @@ class PluginExecutor:
 
         run_args = {}
         for key in global_args:
-            if key in ["collection_args", "analysis_args"] and isinstance(plugin_inst, DataPlugin):
+            if key in ("collection_args", "analysis_args"):
                 continue
-            else:
-                run_args[key] = global_args[key]
+            run_args[key] = global_args[key]
 
-        if (
-            "collection_args" in global_args
-            and hasattr(plugin_class, "COLLECTOR_ARGS")
-            and plugin_class.COLLECTOR_ARGS is not None
-        ):
-
-            plugin_fields = set(plugin_class.COLLECTOR_ARGS.model_fields.keys())
-            filtered = {
-                k: v for k, v in global_args["collection_args"].items() if k in plugin_fields
-            }
-            if filtered:
-                run_args["collection_args"] = filtered
+        if "collection_args" in global_args and hasattr(plugin_class, "COLLECTOR_ARGS"):
+            collector_args = plugin_class.COLLECTOR_ARGS
+            if (
+                isinstance(plugin_inst, DataPlugin)
+                and plugin_class.get_collector_classes()
+                and isinstance(collector_args, dict)
+            ):
+                per_collector_args: dict[str, dict] = {}
+                for collector_cls in plugin_class.get_collector_classes():
+                    args_cls = plugin_class._collector_args_class(collector_cls)
+                    if args_cls is None:
+                        continue
+                    plugin_fields = set(args_cls.model_fields.keys())
+                    filtered = {
+                        k: v
+                        for k, v in global_args["collection_args"].items()
+                        if k in plugin_fields
+                    }
+                    if filtered:
+                        per_collector_args[collector_cls.__name__] = filtered
+                if per_collector_args:
+                    run_args["collection_args"] = per_collector_args
+            elif collector_args is not None and not isinstance(collector_args, dict):
+                args_cls = (
+                    collector_args if isinstance(collector_args, type) else type(collector_args)
+                )
+                plugin_fields = set(args_cls.model_fields.keys())
+                filtered = {
+                    k: v for k, v in global_args["collection_args"].items() if k in plugin_fields
+                }
+                if filtered:
+                    run_args["collection_args"] = filtered
 
         if (
             "analysis_args" in global_args
             and hasattr(plugin_class, "ANALYZER_ARGS")
             and plugin_class.ANALYZER_ARGS is not None
         ):
-
-            plugin_fields = set(plugin_class.ANALYZER_ARGS.model_fields.keys())
+            analyzer_args = plugin_class.ANALYZER_ARGS
+            args_cls = analyzer_args if isinstance(analyzer_args, type) else type(analyzer_args)
+            plugin_fields = set(args_cls.model_fields.keys())
             filtered = {k: v for k, v in global_args["analysis_args"].items() if k in plugin_fields}
             if filtered:
                 run_args["analysis_args"] = filtered
