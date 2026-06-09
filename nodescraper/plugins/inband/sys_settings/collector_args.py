@@ -23,10 +23,12 @@
 # SOFTWARE.
 #
 ###############################################################################
-from pydantic import BaseModel, Field
+from pydantic import Field
+
+from nodescraper.models import CollectorArgs
 
 
-class SysSettingsCollectorArgs(BaseModel):
+class SysSettingsCollectorArgs(CollectorArgs):
     """Collection args for SysSettingsCollector.
 
     paths: sysfs paths to read (cat). If a path contains '*', collect with ls -l instead (e.g. class/net/*/device).
