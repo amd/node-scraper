@@ -74,6 +74,8 @@ def test_collect_rotations_good_path(monkeypatch, system_info, conn_mock):
     def run_map(cmd, **kwargs):
         if cmd.startswith("ls -1 /var/log/syslog"):
             return DummyRes(command=cmd, stdout=ls_out, exit_code=0)
+        if cmd.startswith("ls -1 /var/log/messages"):
+            return DummyRes(command=cmd, stdout="", exit_code=0)
 
         if cmd.startswith("cat "):
             if "/var/log/syslog.1" in cmd:
@@ -102,7 +104,7 @@ def test_collect_rotations_good_path(monkeypatch, system_info, conn_mock):
 
 def test_collect_rotations_no_files(monkeypatch, system_info, conn_mock):
     def run_map(cmd, **kwargs):
-        if cmd.startswith("ls -1 /var/log/syslog"):
+        if cmd.startswith("ls -1 /var/log/syslog") or cmd.startswith("ls -1 /var/log/messages"):
             return DummyRes(command=cmd, stdout="", exit_code=0)
         return DummyRes(command=cmd, stdout="", exit_code=1)
 
@@ -113,7 +115,7 @@ def test_collect_rotations_no_files(monkeypatch, system_info, conn_mock):
     assert c.result.artifacts == []
 
     assert any(
-        e["description"].startswith("No /var/log/syslog files found")
+        e["description"].startswith("No /var/log/syslog or /var/log/messages files found")
         and getattr(e["priority"], "name", str(e["priority"])) == "WARNING"
         for e in c._events
     )
@@ -125,6 +127,8 @@ def test_collect_rotations_gz_failure(monkeypatch, system_info, conn_mock):
     def run_map(cmd, **kwargs):
         if cmd.startswith("ls -1 /var/log/syslog"):
             return DummyRes(command=cmd, stdout=ls_out, exit_code=0)
+        if cmd.startswith("ls -1 /var/log/messages"):
+            return DummyRes(command=cmd, stdout="", exit_code=0)
         if "gzip -dc" in cmd and "/var/log/syslog.2.gz" in cmd:
             return DummyRes(command=cmd, stdout="", exit_code=1, stderr="gzip: not found")
         return DummyRes(command=cmd, stdout="", exit_code=1)
@@ -149,6 +153,8 @@ def test_collect_data_integration(monkeypatch, system_info, conn_mock):
     def run_map(cmd, **kwargs):
         if cmd.startswith("ls -1 /var/log/syslog"):
             return DummyRes(command=cmd, stdout=ls_out, exit_code=0)
+        if cmd.startswith("ls -1 /var/log/messages"):
+            return DummyRes(command=cmd, stdout="", exit_code=0)
         if cmd.startswith("cat ") and "/var/log/syslog" in cmd:
             return DummyRes(command=cmd, stdout="syslog file content\n", exit_code=0)
         return DummyRes(command=cmd, stdout="", exit_code=1)
@@ -159,3 +165,40 @@ def test_collect_data_integration(monkeypatch, system_info, conn_mock):
     assert isinstance(data, SyslogData)
     assert data.syslog_logs[0].filename == "rotated_syslog.log"
     assert c.result.message == "Syslog data collected"
+
+
+def test_collect_rotations_messages_good_path(monkeypatch, system_info, conn_mock):
+    ls_out = (
+        "\n".join(
+            [
+                "/var/log/messages",
+                "/var/log/messages.1",
+                "/var/log/messages.2.gz",
+            ]
+        )
+        + "\n"
+    )
+
+    def run_map(cmd, **kwargs):
+        if cmd.startswith("ls -1 /var/log/syslog"):
+            return DummyRes(command=cmd, stdout="", exit_code=0)
+        if cmd.startswith("ls -1 /var/log/messages"):
+            return DummyRes(command=cmd, stdout=ls_out, exit_code=0)
+
+        if cmd.startswith("cat "):
+            if "/var/log/messages.1" in cmd:
+                return DummyRes(command=cmd, stdout="messages.1 content\n", exit_code=0)
+            if "/var/log/messages" in cmd:
+                return DummyRes(command=cmd, stdout="messages content\n", exit_code=0)
+
+        if "gzip -dc" in cmd and "/var/log/messages.2.gz" in cmd:
+            return DummyRes(command=cmd, stdout="messages gz content\n", exit_code=0)
+
+        return DummyRes(command=cmd, stdout="", exit_code=1, stderr="unexpected")
+
+    c = get_collector(monkeypatch, run_map, system_info, conn_mock)
+
+    n = c._collect_syslog_rotations()
+    assert n[0].filename == "rotated_messages.log"
+    assert n[1].filename == "rotated_messages.1.log"
+    assert n[2].filename == "rotated_messages.2.gz.log"
