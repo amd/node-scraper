@@ -23,10 +23,12 @@
 # SOFTWARE.
 #
 ###############################################################################
-from pydantic import BaseModel, Field, field_validator
+from pydantic import Field, field_validator
+
+from nodescraper.models import CollectorArgs
 
 
-class RedfishEndpointCollectorArgs(BaseModel):
+class RedfishEndpointCollectorArgs(CollectorArgs):
     """Collection args: uris to GET (or discover from tree), optional concurrency and tree discovery."""
 
     uris: list[str] = Field(
