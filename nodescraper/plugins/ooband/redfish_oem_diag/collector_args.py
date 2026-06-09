@@ -27,12 +27,14 @@ from __future__ import annotations
 
 from typing import Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import Field, model_validator
+
+from nodescraper.models import CollectorArgs
 
 DEFAULT_TASK_TIMEOUT_S = 1800
 
 
-class RedfishOemDiagCollectorArgs(BaseModel):
+class RedfishOemDiagCollectorArgs(CollectorArgs):
     """Collector/analyzer args for Redfish OEM diagnostic log collection."""
 
     log_service_path: str = Field(
