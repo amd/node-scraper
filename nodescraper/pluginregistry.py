@@ -28,7 +28,7 @@ import importlib.metadata
 import inspect
 import pkgutil
 import types
-from typing import Optional
+from typing import Iterable, Optional
 
 import nodescraper.connection as internal_connections
 import nodescraper.plugins as internal_plugins
@@ -135,6 +135,7 @@ class PluginRegistry:
         managers: dict[str, type] = {}
 
         try:
+            eps: Iterable
             try:
                 eps = importlib.metadata.entry_points(  # type: ignore[call-arg]
                     group="nodescraper.connection_managers"
@@ -177,6 +178,7 @@ class PluginRegistry:
         plugins = {}
 
         try:
+            eps: Iterable
             # Python 3.10+ supports group parameter
             try:
                 eps = importlib.metadata.entry_points(group="nodescraper.plugins")  # type: ignore[call-arg]

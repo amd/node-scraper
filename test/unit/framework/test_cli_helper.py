@@ -140,6 +140,8 @@ def test_config_builder(plugin_registry):
         "TestPluginA": {
             "test_bool_arg": True,
             "test_str_arg": "test",
+            "test_list_arg": [1],
+            "test_dict_arg": {},
             "test_model_arg": {"model_attr": 123},
         },
         "ExamplePlugin": {},
