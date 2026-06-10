@@ -117,7 +117,6 @@ class ConfigBuilder:
                 return_list.append(cls._process_value(item))
             return return_list
 
-
         elif not isinstance(
             value,
             (
