@@ -201,7 +201,16 @@ class DataPlugin(
             ):
                 self.connection_manager.connect()
 
-            if self.connection_manager.result.status != ExecutionStatus.OK:
+            # Proceed with collection as long as a usable connection was
+            # established.  A non-fatal connection warning (e.g. the SUT OS
+            # could not be determined, as happens with switch CLIs that do not
+            # support ``uname``) must not block collection: each collector
+            # enforces its own ``SUPPORTED_OS_FAMILY`` and will be skipped via
+            # ``SystemCompatibilityError`` if the OS is unsupported.
+            if (
+                self.connection_manager.connection is None
+                or self.connection_manager.result.status >= ExecutionStatus.ERROR
+            ):
                 self.collection_result = TaskResult(
                     task=self.COLLECTOR.__name__,
                     parent=self.__class__.__name__,
