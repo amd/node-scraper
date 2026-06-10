@@ -25,6 +25,7 @@
 ###############################################################################
 from nodescraper.base import InBandDataPlugin, OOBSSHDataPlugin
 from nodescraper.connection.inband.inbandmanager import InBandConnectionManager
+from nodescraper.connection.redfish import RedfishConnectionManager
 from nodescraper.pluginregistry import PluginRegistry
 from nodescraper.plugins.generic_collection import (
     GenericAnalyzer,
@@ -67,6 +68,6 @@ def test_generic_collection_plugin_uses_inband_base():
 def test_oob_generic_collection_plugin_uses_oob_ssh_base():
     assert issubclass(OobGenericCollectionPlugin, OOBSSHDataPlugin)
     assert issubclass(OobGenericCollectionPlugin, GenericCollectionPluginMixin)
-    assert OobGenericCollectionPlugin.CONNECTION_TYPE is InBandConnectionManager
+    assert OobGenericCollectionPlugin.CONNECTION_TYPE is RedfishConnectionManager
     assert GenericCollectionPlugin.COLLECTOR is OobGenericCollectionPlugin.COLLECTOR
     assert GenericCollectionPlugin.ANALYZER is OobGenericCollectionPlugin.ANALYZER

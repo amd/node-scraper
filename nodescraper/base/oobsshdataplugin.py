@@ -23,21 +23,64 @@
 # SOFTWARE.
 #
 ###############################################################################
-from typing import Generic
+from __future__ import annotations
 
-from nodescraper.connection.inband import InBandConnectionManager, SSHConnectionParams
+from logging import Logger
+from typing import Generic, Optional, Union
+
+from nodescraper.connection.inband.inbandmanager import InBandConnectionManager
+from nodescraper.connection.redfish import (
+    RedfishConnectionManager,
+    RedfishConnectionParams,
+    redfish_params_to_ssh,
+)
+from nodescraper.enums import EventPriority
 from nodescraper.generictypes import TAnalyzeArg, TCollectArg, TDataModel
 from nodescraper.interfaces import DataPlugin
+from nodescraper.interfaces.taskresulthook import TaskResultHook
+from nodescraper.models import SystemInfo
+
+
+class _OobSshConnectionManager(InBandConnectionManager):
+    """Internal SSH transport for OOB plugins; uses Redfish BMC credentials."""
+
+    def __init__(
+        self,
+        system_info: SystemInfo,
+        logger: Optional[Logger] = None,
+        max_event_priority_level: Union[EventPriority, str] = EventPriority.CRITICAL,
+        parent: Optional[str] = None,
+        task_result_hooks: Optional[list[TaskResultHook]] = None,
+        connection_args: Optional[Union[RedfishConnectionParams, dict]] = None,
+        **kwargs,
+    ):
+        if connection_args is not None:
+            connection_args = redfish_params_to_ssh(connection_args)
+        super().__init__(
+            system_info=system_info,
+            logger=logger,
+            max_event_priority_level=max_event_priority_level,
+            parent=parent,
+            task_result_hooks=task_result_hooks,
+            connection_args=connection_args,
+            **kwargs,
+        )
 
 
 class OOBSSHDataPlugin(
-    DataPlugin[InBandConnectionManager, SSHConnectionParams, TDataModel, TCollectArg, TAnalyzeArg],
+    DataPlugin[
+        RedfishConnectionManager,
+        RedfishConnectionParams,
+        TDataModel,
+        TCollectArg,
+        TAnalyzeArg,
+    ],
     Generic[TDataModel, TCollectArg, TAnalyzeArg],
 ):
-    """Base class for out-of-band (OOB) plugins that use BMC SSH.
+    """Base class for out-of-band (OOB) plugins that run shell commands on the BMC.
 
-    Mirrors OOBandDataPlugin but wires InBandConnectionManager so collectors can
-    inherit from InBandDataCollector and use _run_sut_cmd() unchanged.
+    Configure the BMC using ``RedfishConnectionManager`` in the connection config.
+    Commands are executed over SSH (port 22) using the same host/username/password.
     """
 
-    CONNECTION_TYPE = InBandConnectionManager
+    CONNECTION_TYPE = RedfishConnectionManager
