@@ -34,6 +34,7 @@ from typing import Optional, Type, Union
 
 from pydantic import BaseModel
 
+from nodescraper.base.oobsshdataplugin import OOBSSHDataPlugin, _OobSshConnectionManager
 from nodescraper.constants import DEFAULT_LOGGER
 from nodescraper.interfaces import ConnectionManager, DataPlugin, PluginInterface
 from nodescraper.models import PluginConfig, SystemInfo
@@ -81,6 +82,9 @@ class PluginExecutor:
         self.plugin_config = self.merge_configs(plugin_configs)
 
         self.connection_library: dict[type[ConnectionManager], ConnectionManager] = {}
+        self.connection_configs: dict[str, Union[dict, BaseModel]] = (
+            dict(connections) if connections else {}
+        )
 
         self.log_path = log_path
 
@@ -175,40 +179,56 @@ class PluginExecutor:
                 }
 
                 if plugin_class.CONNECTION_TYPE:
-                    connection_manager_class: Type[ConnectionManager] = plugin_class.CONNECTION_TYPE
-                    if (
-                        connection_manager_class.__name__
-                        in self.plugin_registry.connection_managers
-                    ):
-                        mgr_impl = self.plugin_registry.connection_managers[
-                            connection_manager_class.__name__
-                        ]
-                    elif (
-                        inspect.isclass(connection_manager_class)
-                        and issubclass(connection_manager_class, ConnectionManager)
-                        and not inspect.isabstract(connection_manager_class)
-                    ):
-                        # External packages set CONNECTION_TYPE on the plugin;
-                        # use it when not listed under nodescraper.connection_managers entry points.
-                        mgr_impl = connection_manager_class
+                    if issubclass(plugin_class, OOBSSHDataPlugin):
+                        mgr_impl = _OobSshConnectionManager
+                        connection_args = self.connection_configs.get("RedfishConnectionManager")
+                        if connection_args is None:
+                            self.logger.error(
+                                "%s requires RedfishConnectionManager in the connection config",
+                                plugin_name,
+                            )
+                            continue
                     else:
-                        self.logger.error(
-                            "Unable to find registered connection manager class for %s that is required by",
-                            connection_manager_class.__name__,
+                        connection_manager_class: Type[ConnectionManager] = (
+                            plugin_class.CONNECTION_TYPE
                         )
-                        continue
+                        if (
+                            connection_manager_class.__name__
+                            in self.plugin_registry.connection_managers
+                        ):
+                            mgr_impl = self.plugin_registry.connection_managers[
+                                connection_manager_class.__name__
+                            ]
+                        elif (
+                            inspect.isclass(connection_manager_class)
+                            and issubclass(connection_manager_class, ConnectionManager)
+                            and not inspect.isabstract(connection_manager_class)
+                        ):
+                            # External packages set CONNECTION_TYPE on the plugin;
+                            # use it when not listed under nodescraper.connection_managers entry points.
+                            mgr_impl = connection_manager_class
+                        else:
+                            self.logger.error(
+                                "Unable to find registered connection manager class for %s that is required by",
+                                connection_manager_class.__name__,
+                            )
+                            continue
+                        connection_args = None
 
                     if mgr_impl not in self.connection_library:
                         self.logger.info(
-                            "Initializing connection manager for %s with default args",
+                            "Initializing connection manager for %s",
                             mgr_impl.__name__,
                         )
-                        self.connection_library[mgr_impl] = mgr_impl(
-                            system_info=self.system_info,
-                            logger=self.logger,
-                            task_result_hooks=self.connection_result_hooks,
-                            session_id=self.session_id,
-                        )
+                        init_kwargs = {
+                            "system_info": self.system_info,
+                            "logger": self.logger,
+                            "task_result_hooks": self.connection_result_hooks,
+                            "session_id": self.session_id,
+                        }
+                        if connection_args is not None:
+                            init_kwargs["connection_args"] = connection_args
+                        self.connection_library[mgr_impl] = mgr_impl(**init_kwargs)
 
                     init_payload["connection_manager"] = self.connection_library[mgr_impl]
 

@@ -524,19 +524,19 @@ class DataPlugin(
             ExecutionStatus.EXECUTION_FAILURE,
             ExecutionStatus.WARNING,
         ]:
-            if self.analysis_result.status > self.collection_result.status:
-                message = (
-                    f"Analysis warning: {self.analysis_result.message}"
-                    if self.analysis_result.status == ExecutionStatus.WARNING
-                    else f"Analysis error: {self.analysis_result.message}"
-                )
-            else:
-
-                message = (
-                    f"Collection warning: {self.collection_result.message}"
-                    if self.collection_result.status == ExecutionStatus.WARNING
-                    else f"Collection error: {self.collection_result.message}"
-                )
+            failure_parts: list[str] = []
+            for label, task_result in (
+                ("Collection", self.collection_result),
+                ("Analysis", self.analysis_result),
+            ):
+                if task_result.status == ExecutionStatus.WARNING:
+                    failure_parts.append(f"{label} warning: {task_result.message}")
+                elif task_result.status in (
+                    ExecutionStatus.ERROR,
+                    ExecutionStatus.EXECUTION_FAILURE,
+                ):
+                    failure_parts.append(f"{label} error: {task_result.message}")
+            message = "; ".join(failure_parts)
         else:
             message = "Plugin tasks completed successfully"
 
