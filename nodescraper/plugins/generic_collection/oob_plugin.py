@@ -31,7 +31,7 @@ from .generic_collection_data import GenericCollectionDataModel
 from .generic_collection_plugin_mixin import GenericCollectionPluginMixin
 
 
-class OOBGenericCollectionPlugin(
+class OobGenericCollectionPlugin(
     GenericCollectionPluginMixin,
     OOBSSHDataPlugin[
         GenericCollectionDataModel,

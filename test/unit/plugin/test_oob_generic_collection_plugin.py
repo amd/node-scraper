@@ -34,23 +34,23 @@ from nodescraper.plugins.generic_collection import (
     GenericCollectionDataModel,
     GenericCollectionPlugin,
     GenericCollectionPluginMixin,
-    OOBGenericCollectionPlugin,
+    OobGenericCollectionPlugin,
 )
 
 
 def test_generic_collection_plugins_are_valid():
     assert GenericCollectionPlugin.is_valid()
-    assert OOBGenericCollectionPlugin.is_valid()
+    assert OobGenericCollectionPlugin.is_valid()
 
 
 def test_generic_collection_plugins_register():
     registry = PluginRegistry()
     assert "GenericCollectionPlugin" in registry.plugins
-    assert "OOBGenericCollectionPlugin" in registry.plugins
+    assert "OobGenericCollectionPlugin" in registry.plugins
 
 
 def test_generic_collection_plugin_mixin_wiring():
-    for plugin_cls in (GenericCollectionPlugin, OOBGenericCollectionPlugin):
+    for plugin_cls in (GenericCollectionPlugin, OobGenericCollectionPlugin):
         assert plugin_cls.DATA_MODEL is GenericCollectionDataModel
         assert plugin_cls.get_collector_classes() == (GenericCollectionCollector,)
         assert plugin_cls.COLLECTOR_ARGS is GenericCollectionCollectorArgs
@@ -65,8 +65,8 @@ def test_generic_collection_plugin_uses_inband_base():
 
 
 def test_oob_generic_collection_plugin_uses_oob_ssh_base():
-    assert issubclass(OOBGenericCollectionPlugin, OOBSSHDataPlugin)
-    assert issubclass(OOBGenericCollectionPlugin, GenericCollectionPluginMixin)
-    assert OOBGenericCollectionPlugin.CONNECTION_TYPE is InBandConnectionManager
-    assert GenericCollectionPlugin.COLLECTOR is OOBGenericCollectionPlugin.COLLECTOR
-    assert GenericCollectionPlugin.ANALYZER is OOBGenericCollectionPlugin.ANALYZER
+    assert issubclass(OobGenericCollectionPlugin, OOBSSHDataPlugin)
+    assert issubclass(OobGenericCollectionPlugin, GenericCollectionPluginMixin)
+    assert OobGenericCollectionPlugin.CONNECTION_TYPE is InBandConnectionManager
+    assert GenericCollectionPlugin.COLLECTOR is OobGenericCollectionPlugin.COLLECTOR
+    assert GenericCollectionPlugin.ANALYZER is OobGenericCollectionPlugin.ANALYZER

@@ -7,7 +7,7 @@ from .generic_collection_collector import GenericCollectionCollector
 from .generic_collection_data import CommandCollectionResult, GenericCollectionDataModel
 from .generic_collection_plugin_mixin import GenericCollectionPluginMixin
 from .inband_plugin import GenericCollectionPlugin
-from .oob_plugin import OOBGenericCollectionPlugin
+from .oob_plugin import OobGenericCollectionPlugin
 
 __all__ = [
     "CommandCheck",
@@ -20,5 +20,5 @@ __all__ = [
     "GenericCollectionDataModel",
     "GenericCollectionPlugin",
     "GenericCollectionPluginMixin",
-    "OOBGenericCollectionPlugin",
+    "OobGenericCollectionPlugin",
 ]
