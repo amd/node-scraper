@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# Copyright (c) 2025 Advanced Micro Devices, Inc.
+# Copyright (c) 2026 Advanced Micro Devices, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,18 +23,21 @@
 # SOFTWARE.
 #
 ###############################################################################
-from .inbandcollectortask import InBandDataCollector
-from .inbanddataplugin import InBandDataPlugin
-from .oobanddataplugin import OOBandDataPlugin
-from .oobsshdataplugin import OOBSSHDataPlugin
-from .redfishcollectortask import RedfishDataCollector
-from .regexanalyzer import RegexAnalyzer
+from typing import Generic
 
-__all__ = [
-    "InBandDataCollector",
-    "InBandDataPlugin",
-    "OOBandDataPlugin",
-    "OOBSSHDataPlugin",
-    "RedfishDataCollector",
-    "RegexAnalyzer",
-]
+from nodescraper.connection.inband import InBandConnectionManager, SSHConnectionParams
+from nodescraper.generictypes import TAnalyzeArg, TCollectArg, TDataModel
+from nodescraper.interfaces import DataPlugin
+
+
+class OOBSSHDataPlugin(
+    DataPlugin[InBandConnectionManager, SSHConnectionParams, TDataModel, TCollectArg, TAnalyzeArg],
+    Generic[TDataModel, TCollectArg, TAnalyzeArg],
+):
+    """Base class for out-of-band (OOB) plugins that use BMC SSH.
+
+    Mirrors OOBandDataPlugin but wires InBandConnectionManager so collectors can
+    inherit from InBandDataCollector and use _run_sut_cmd() unchanged.
+    """
+
+    CONNECTION_TYPE = InBandConnectionManager

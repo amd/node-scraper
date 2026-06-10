@@ -66,11 +66,13 @@ class PcieCollector(InBandDataCollector[PcieDataModel, None]):
     - `lspci -vvv` : Verbose collection of PCIe data
     - `lspci -vvvt`: Verbose tree view of PCIe data
     - `lspci -PP`: Path view of PCIe data for the GPUs
+    - `lspci -PP -D`: Path view of PCIe data for the GPUs (with domain prefix)
     - If system interaction level is set to STANDARD or higher, the following commands will be run with sudo:
         - `lspci -xxxx`: Hex view of PCIe data for the GPUs
     - otherwise the following commands will be run without sudo:
         - `lspci -x`: Hex view of PCIe data for the GPUs
-    - `lspci -d <vendor_id>:<dev_id>` : Count the number of GPUs in the system with this command
+    - `lspci -d <vendor_id>:` : Detect AMD GPU device IDs in the system
+    - `lspci -PP -D -d <vendor_id>:<dev_id>` : Upstream BDF path for GPUs (with domain prefix)
     - If system interaction level is set to STANDARD or higher, the following commands will be run with sudo:
         - The sudo lspci -xxxx command is used to collect the PCIe configuration space for the GPUs in the system
     - otherwise the following commands will be run without sudo:
@@ -85,10 +87,12 @@ class PcieCollector(InBandDataCollector[PcieDataModel, None]):
     CMD_LSPCI_VERBOSE = "lspci -vvv"
     CMD_LSPCI_VERBOSE_TREE = "lspci -vvvt"
     CMD_LSPCI_PATH = "lspci -PP"
+    CMD_LSPCI_PATH_DOMAIN = "lspci -PP -D"
     CMD_LSPCI_HEX_SUDO = "lspci -xxxx"
     CMD_LSPCI_HEX = "lspci -x"
     CMD_LSPCI_AMD_DEVICES = "lspci -d {vendor_id}: -nn"
     CMD_LSPCI_PATH_DEVICE = "lspci -PP -d {vendor_id}:{dev_id}"
+    CMD_LSPCI_PATH_DEVICE_DOMAIN = "lspci -PP -D -d {vendor_id}:{dev_id}"
 
     def _detect_amd_device_ids(self) -> dict[str, list[str]]:
         """Detect AMD GPU device IDs from the system using lspci.
@@ -149,6 +153,10 @@ class PcieCollector(InBandDataCollector[PcieDataModel, None]):
         """Show lspci with -PP."""
         return self._run_os_cmd(self.CMD_LSPCI_PATH, sudo=sudo)
 
+    def show_lspci_path_domain(self, sudo=True) -> Optional[str]:
+        """Show lspci with -PP -D (path view with domain prefix)."""
+        return self._run_os_cmd(self.CMD_LSPCI_PATH_DOMAIN, sudo=sudo)
+
     def show_lspci_hex(self, bdf: Optional[str] = None, sudo=True) -> Optional[str]:
         """Show lspci with -xxxx."""
         if sudo:
@@ -208,7 +216,10 @@ class PcieCollector(InBandDataCollector[PcieDataModel, None]):
         """
         split_bdf_pos = 0
 
-        bus_path_all_gpus = self._run_os_cmd(f"lspci -PP -d {vendor_id}:{dev_id}", sudo=sudo)
+        bus_path_all_gpus = self._run_os_cmd(
+            self.CMD_LSPCI_PATH_DEVICE_DOMAIN.format(vendor_id=vendor_id, dev_id=dev_id),
+            sudo=sudo,
+        )
         if bus_path_all_gpus is None or bus_path_all_gpus == "":
             self._log_event(
                 category=EventCategory.IO,
@@ -220,6 +231,16 @@ class PcieCollector(InBandDataCollector[PcieDataModel, None]):
         upstream_bdfs: Dict[str, List[str]] = {}
         for bus_path in bus_path_all_gpus.splitlines():
             bus_path_list = (bus_path.split(" ")[split_bdf_pos]).split("/")
+            # With -D, only the first path component carries the domain prefix (e.g. 0001:00:01.1).
+            # Propagate it to all downstream bare BDFs so config space reads hit the correct domain.
+            domain = "0000"
+            for component in bus_path_list:
+                if component.count(":") == 2:
+                    domain = component.split(":")[0]
+                    break
+            bus_path_list = [
+                f"{domain}:{bdf}" if bdf.count(":") == 1 else bdf for bdf in bus_path_list
+            ]
             if upstream_steps_limit is not None and len(bus_path_list) < upstream_steps_limit + 1:
                 # We don't have enough upstream devices to collect
                 self._log_event(
@@ -547,6 +568,7 @@ class PcieCollector(InBandDataCollector[PcieDataModel, None]):
     def _log_pcie_artifacts(
         self,
         lspci_pp: Optional[str],
+        lspci_pp_d: Optional[str],
         lspci_hex: Optional[str],
         lspci_verbose_tree: Optional[str],
         lspci_verbose: Optional[str],
@@ -557,6 +579,7 @@ class PcieCollector(InBandDataCollector[PcieDataModel, None]):
             "lspci_verbose_tree.txt": lspci_verbose_tree,
             "lspci_verbose.txt": lspci_verbose,
             "lspci_pp.txt": lspci_pp,
+            "lspci_pp_d.txt": lspci_pp_d,
         }
         for name, data in name_log_map.items():
             if data is not None:
@@ -626,8 +649,10 @@ class PcieCollector(InBandDataCollector[PcieDataModel, None]):
             lspci_verbose = self.show_lspci_verbose(sudo=use_sudo)
             lspci_verbose_tree = self.show_lspci_verbose_tree(sudo=use_sudo)
             lspci_path = self.show_lspci_path(sudo=use_sudo)
+            lspci_path_domain = self.show_lspci_path_domain(sudo=use_sudo)
             self._log_pcie_artifacts(
                 lspci_pp=lspci_path,
+                lspci_pp_d=lspci_path_domain,
                 lspci_hex=lspci_hex,
                 lspci_verbose_tree=lspci_verbose_tree,
                 lspci_verbose=lspci_verbose,
