@@ -146,7 +146,7 @@ class PluginRegistry:
 
             for entry_point in eps:
                 try:
-                    loaded = entry_point.load()  # type: ignore[attr-defined]
+                    loaded = entry_point.load()  # type: ignore[attr-defined, union-attr]
                     if not (
                         inspect.isclass(loaded)
                         and issubclass(loaded, ConnectionManager)
@@ -189,7 +189,7 @@ class PluginRegistry:
 
             for entry_point in eps:
                 try:
-                    plugin_class = entry_point.load()  # type: ignore[attr-defined]
+                    plugin_class = entry_point.load()  # type: ignore[attr-defined, union-attr]
 
                     if (
                         inspect.isclass(plugin_class)
