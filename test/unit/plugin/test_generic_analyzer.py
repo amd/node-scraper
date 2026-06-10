@@ -27,15 +27,11 @@ import pytest
 from pydantic import ValidationError
 
 from nodescraper.enums.executionstatus import ExecutionStatus
-from nodescraper.plugins.inband.generic_collection.analyzer_args import (
+from nodescraper.plugins.generic_collection import (
     CommandCheck,
-    GenericAnalyzerArgs,
-)
-from nodescraper.plugins.inband.generic_collection.generic_analyzer import (
-    GenericAnalyzer,
-)
-from nodescraper.plugins.inband.generic_collection.generic_collection_data import (
     CommandCollectionResult,
+    GenericAnalyzer,
+    GenericAnalyzerArgs,
     GenericCollectionDataModel,
 )
 

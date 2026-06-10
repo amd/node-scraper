@@ -23,7 +23,13 @@
 # SOFTWARE.
 #
 ###############################################################################
-from nodescraper.base import InBandDataPlugin
+"""Shared plugin wiring for in-band and OOB generic command collection plugins."""
+
+from typing import Optional, Type
+
+from nodescraper.interfaces.dataanalyzertask import DataAnalyzer
+from nodescraper.interfaces.dataplugin import CollectorArgsClasses, CollectorClasses
+from nodescraper.models import AnalyzerArgs
 
 from .analyzer_args import GenericAnalyzerArgs
 from .collector_args import GenericCollectionCollectorArgs
@@ -32,21 +38,15 @@ from .generic_collection_collector import GenericCollectionCollector
 from .generic_collection_data import GenericCollectionDataModel
 
 
-class GenericCollectionPlugin(
-    InBandDataPlugin[
-        GenericCollectionDataModel,
-        GenericCollectionCollectorArgs,
-        GenericAnalyzerArgs,
-    ]
-):
-    """Run arbitrary shell commands configured via collection_args and validate via analysis_args."""
+class GenericCollectionPluginMixin:
+    """Collector, analyzer, and args shared by GenericCollectionPlugin variants."""
 
-    DATA_MODEL = GenericCollectionDataModel
+    DATA_MODEL: Type[GenericCollectionDataModel] = GenericCollectionDataModel
 
-    COLLECTOR = GenericCollectionCollector
+    COLLECTOR: Optional[CollectorClasses] = GenericCollectionCollector
 
-    COLLECTOR_ARGS = GenericCollectionCollectorArgs
+    COLLECTOR_ARGS: Optional[CollectorArgsClasses] = GenericCollectionCollectorArgs
 
-    ANALYZER = GenericAnalyzer
+    ANALYZER: Optional[Type[DataAnalyzer]] = GenericAnalyzer
 
-    ANALYZER_ARGS = GenericAnalyzerArgs
+    ANALYZER_ARGS: Optional[Type[AnalyzerArgs]] = GenericAnalyzerArgs

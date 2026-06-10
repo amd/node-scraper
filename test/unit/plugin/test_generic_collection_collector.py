@@ -31,18 +31,12 @@ from pydantic import ValidationError
 from nodescraper.connection.inband.inband import CommandArtifact
 from nodescraper.enums.executionstatus import ExecutionStatus
 from nodescraper.enums.systeminteraction import SystemInteractionLevel
-from nodescraper.plugins.inband.generic_collection.collector_args import (
-    CommandSpec,
-    GenericCollectionCollectorArgs,
-)
-from nodescraper.plugins.inband.generic_collection.generic_collection_collector import (
-    GenericCollectionCollector,
-)
-from nodescraper.plugins.inband.generic_collection.generic_collection_data import (
+from nodescraper.plugins.generic_collection import (
     CommandCollectionResult,
+    CommandSpec,
+    GenericCollectionCollector,
+    GenericCollectionCollectorArgs,
     GenericCollectionDataModel,
-)
-from nodescraper.plugins.inband.generic_collection.generic_collection_plugin import (
     GenericCollectionPlugin,
 )
 
@@ -217,15 +211,13 @@ def test_collector_args_require_unique_names():
 
 
 def test_generic_collection_plugin_wiring():
+    from nodescraper.plugins.generic_collection import (
+        GenericAnalyzer,
+        GenericAnalyzerArgs,
+    )
+
     assert GenericCollectionPlugin.DATA_MODEL is GenericCollectionDataModel
     assert GenericCollectionPlugin.get_collector_classes() == (GenericCollectionCollector,)
     assert GenericCollectionPlugin.COLLECTOR_ARGS is GenericCollectionCollectorArgs
-    from nodescraper.plugins.inband.generic_collection.analyzer_args import (
-        GenericAnalyzerArgs,
-    )
-    from nodescraper.plugins.inband.generic_collection.generic_analyzer import (
-        GenericAnalyzer,
-    )
-
     assert GenericCollectionPlugin.ANALYZER is GenericAnalyzer
     assert GenericCollectionPlugin.ANALYZER_ARGS is GenericAnalyzerArgs

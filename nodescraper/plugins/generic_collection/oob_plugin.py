@@ -23,3 +23,20 @@
 # SOFTWARE.
 #
 ###############################################################################
+from nodescraper.base import OOBSSHDataPlugin
+
+from .analyzer_args import GenericAnalyzerArgs
+from .collector_args import GenericCollectionCollectorArgs
+from .generic_collection_data import GenericCollectionDataModel
+from .generic_collection_plugin_mixin import GenericCollectionPluginMixin
+
+
+class OOBGenericCollectionPlugin(
+    GenericCollectionPluginMixin,
+    OOBSSHDataPlugin[
+        GenericCollectionDataModel,
+        GenericCollectionCollectorArgs,
+        GenericAnalyzerArgs,
+    ],
+):
+    """Run arbitrary shell commands on the BMC via OOB SSH and validate results."""

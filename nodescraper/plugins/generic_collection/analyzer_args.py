@@ -25,7 +25,7 @@
 ###############################################################################
 from typing import Literal, Optional, Union
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import Field, model_validator
 
 from nodescraper.models import AnalyzerArgs
 
@@ -34,10 +34,8 @@ MatchMode = Literal["full", "any_line", "all_lines"]
 ValueType = Literal["int", "float", "str"]
 
 
-class CommandCheck(BaseModel):
+class CommandCheck(AnalyzerArgs):
     """Validation rule for one collected command result, matched by collector command name."""
-
-    model_config = {"extra": "forbid"}
 
     name: str = Field(
         description="Name of the collected command to validate (must match collection_args.commands[].name).",
@@ -101,13 +99,6 @@ class CommandCheck(BaseModel):
         default=None,
         description="Optional regex with a capture group used before expected_value comparison.",
     )
-
-    @field_validator("name", mode="before")
-    @classmethod
-    def _strip_name(cls, value: object) -> object:
-        if isinstance(value, str):
-            return value.strip()
-        return value
 
     @model_validator(mode="after")
     def _validate_name(self) -> "CommandCheck":

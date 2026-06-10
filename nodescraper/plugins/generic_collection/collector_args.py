@@ -25,15 +25,13 @@
 ###############################################################################
 from typing import Optional
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 
 from nodescraper.models import CollectorArgs
 
 
-class CommandSpec(BaseModel):
+class CommandSpec(CollectorArgs):
     """One named shell command and optional per-command overrides."""
-
-    model_config = {"extra": "forbid"}
 
     name: str = Field(description="Stable name for this command, used by analysis checks.")
     command: str = Field(description="Shell command to run on the target system.")

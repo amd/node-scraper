@@ -123,7 +123,7 @@ def _parse_value(raw: str, value_type: str, capture_regex: Optional[str]) -> Uni
 
 
 class GenericAnalyzer(DataAnalyzer[GenericCollectionDataModel, GenericAnalyzerArgs]):
-    """Validate GenericCollectionPlugin command results against analysis_args checks."""
+    """Validate generic collection command results against analysis_args checks."""
 
     DATA_MODEL = GenericCollectionDataModel
 
