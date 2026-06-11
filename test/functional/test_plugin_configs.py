@@ -41,7 +41,6 @@ def fixtures_dir():
 @pytest.fixture
 def plugin_config_files(fixtures_dir):
     """Return dict mapping plugin names to their config file paths."""
-    repo_root = Path(__file__).resolve().parent.parent.parent
     return {
         "AmdSmiPlugin": fixtures_dir / "amdsmi_plugin_config.json",
         "BiosPlugin": fixtures_dir / "bios_plugin_config.json",
@@ -49,7 +48,7 @@ def plugin_config_files(fixtures_dir):
         "DimmPlugin": fixtures_dir / "dimm_plugin_config.json",
         "DkmsPlugin": fixtures_dir / "dkms_plugin_config.json",
         "DmesgPlugin": fixtures_dir / "dmesg_plugin_config.json",
-        "GenericCollectionPlugin": repo_root / "generic_collection_plugin_config.json",
+        "GenericCollectionPlugin": fixtures_dir / "generic_collection_plugin_config.json",
         "JournalPlugin": fixtures_dir / "journal_plugin_config.json",
         "KernelPlugin": fixtures_dir / "kernel_plugin_config.json",
         "KernelModulePlugin": fixtures_dir / "kernel_module_plugin_config.json",
