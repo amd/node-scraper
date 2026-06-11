@@ -39,11 +39,11 @@ class BmcArchiveCollector(InBandDataCollector[BmcArchiveDataModel, BmcArchiveCol
     """Archive BMC directories over SSH using tar czf - <path>."""
 
     DATA_MODEL = BmcArchiveDataModel
-    SUPPORTED_OS_FAMILY = {OSFamily.LINUX}
+    SUPPORTED_OS_FAMILY = {OSFamily.LINUX, OSFamily.UNKNOWN}
 
     REMOTE_ARCHIVE_TEMPLATE = "/tmp/node_scraper_{name}.tar.gz"
     # None until first probe in a run; collect_data resets so each collection re-probes.
-    _tar_ignore_failed_read_supported: bool | None = None
+    _tar_ignore_failed_read_supported: Optional[bool] = None
 
     def _remote_archive_path(self, name: str) -> str:
         safe_name = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in name)
