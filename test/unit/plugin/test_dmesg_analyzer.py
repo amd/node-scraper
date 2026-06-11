@@ -711,6 +711,53 @@ def test_custom_regex_empty_list(system_info):
     assert res.events[0].description == "Out of memory error"
 
 
+def test_mce_ce_uc_and_ras_corrected_warning_priorities(system_info):
+    dmesg_content = (
+        # MCE corrected (|CE| inside MCn_STATUS[...])
+        "kern  :err   : 2038-01-19T00:00:00,000000+00:00 "
+        "[Hardware Error]: Machine Check: CPU0 MC0_STATUS[0xcafe|CE|Misc]: 0x0\n"
+        # MCE uncorrected (|UC|)
+        "kern  :err   : 2038-01-19T00:00:01,000000+00:00 "
+        "[Hardware Error]: Machine Check: CPU1 MC1_STATUS[0xfeed|UC|AddrV]: 0x0\n"
+        # RAS Corrected (single-line)
+        "kern  :err   : 2038-01-19T00:00:02,000000+00:00 "
+        "trace [Hardware Error]: Corrected error, DRAM threshold\n"
+        # RAS Correctable
+        "kern  :err   : 2038-01-19T00:00:03,000000+00:00 "
+        "amdgpu 0000:de:ad.0: amdgpu: socket: 0 7 correctable hardware errors detected in total in gfx block\n"
+        # RAS Corrected PCIe (multiline block)
+        "[Hardware Error]: event severity: corrected, generic\n"
+        "[Hardware Error]: Error 2, type: corrected, details\n"
+        "[Hardware Error]: section_type: PCIe error, device 1111:11:11.1\n"
+    )
+
+    analyzer = DmesgAnalyzer(system_info=system_info)
+    res = analyzer.analyze_data(
+        DmesgData(dmesg_content=dmesg_content),
+        args=DmesgAnalyzerArgs(check_unknown_dmesg_errors=False),
+    )
+
+    by_desc = {e.description: e for e in res.events}
+
+    assert "MCE Corrected Error" in by_desc
+    assert by_desc["MCE Corrected Error"].priority == EventPriority.WARNING
+
+    assert "MCE Uncorrected Error" in by_desc
+    assert by_desc["MCE Uncorrected Error"].priority == EventPriority.ERROR
+
+    assert "RAS Corrected Error" in by_desc
+    assert by_desc["RAS Corrected Error"].priority == EventPriority.WARNING
+
+    assert "RAS Correctable Error" in by_desc
+    assert by_desc["RAS Correctable Error"].priority == EventPriority.WARNING
+
+    assert "RAS Corrected PCIe Error" in by_desc
+    assert by_desc["RAS Corrected PCIe Error"].priority == EventPriority.WARNING
+
+    # UC is ERROR → overall analysis status remains ERROR
+    assert res.status == ExecutionStatus.ERROR
+
+
 def test_resolve_priority_no_match(system_info):
     """No rule matches → returns the original priority unchanged."""
     analyzer = DmesgAnalyzer(system_info=system_info)
@@ -870,11 +917,10 @@ def test_priority_override_rules_in_analyze_data(system_info):
     """priority_override_rules passed via DmesgAnalyzerArgs overrides matched regex priorities."""
     dmesg_data = DmesgData(
         dmesg_content=(
-            # RAS event — default ERROR, should become WARNING
-            "kern  :err   : 2024-10-07T10:17:15,145363-04:00 "
-            "amdgpu 0000:0c:00.0: amdgpu: socket: 4 1 correctable hardware errors detected in total in gfx block\n"
+            "kern  :err   : 2038-01-19T00:00:00,000000+00:00 "
+            "amdgpu 0000:de:ad.0: amdgpu: socket: 0 9 correctable hardware errors detected in total in gfx block\n"
             # SW_DRIVER event — default ERROR, should stay ERROR (no matching rule)
-            "kern  :err   : 2024-10-07T10:17:15,145363-04:00 IO_PAGE_FAULT\n"
+            "kern  :err   : 2038-01-19T00:00:01,000000+00:00 IO_PAGE_FAULT\n"
         )
     )
 
@@ -905,8 +951,8 @@ def test_priority_override_no_change_keeps_original(system_info):
     """NO_CHANGE rule leaves the original event priority intact."""
     dmesg_data = DmesgData(
         dmesg_content=(
-            "kern  :err   : 2024-10-07T10:17:15,145363-04:00 "
-            "amdgpu 0000:0c:00.0: amdgpu: socket: 4 1 correctable hardware errors detected in total in gfx block\n"
+            "kern  :err   : 2038-01-19T00:00:00,000000+00:00 "
+            "amdgpu 0000:de:ad.0: amdgpu: socket: 0 9 correctable hardware errors detected in total in gfx block\n"
         )
     )
 
@@ -922,7 +968,7 @@ def test_priority_override_no_change_keeps_original(system_info):
     )
 
     assert len(res.events) == 1
-    assert res.events[0].priority == EventPriority.ERROR
+    assert res.events[0].priority == EventPriority.WARNING
 
 
 def test_custom_regex_with_multiline_pattern(system_info):
