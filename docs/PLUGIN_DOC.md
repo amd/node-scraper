@@ -28,7 +28,7 @@
 | StoragePlugin | sh -c 'df -lH -B1 &#124; grep -v 'boot''<br>wmic LogicalDisk Where DriveType="3" Get DeviceId,Size,FreeSpace | - | **Collection Args:**<br>- `skip_sudo`: bool — If True, do not use sudo when running df and related storage commands. | [StorageDataModel](#StorageDataModel-Model) | [StorageCollector](#Collector-Class-StorageCollector) | [StorageAnalyzer](#Data-Analyzer-Class-StorageAnalyzer) |
 | SysSettingsPlugin | cat /sys/{}<br>ls -1 /sys/{}<br>ls -l /sys/{} | **Analyzer Args:**<br>- `checks`: Optional[list[nodescraper.plugins.inband.sys_settings.analyzer_args.SysfsCheck]] — List of sysfs checks (path, expected values or pattern, display name). | **Collection Args:**<br>- `paths`: list[str] — Sysfs paths to read (cat). Paths with '*' are collected with ls -l (e.g. class/net/*/device).<br>- `directory_paths`: list[str] — Sysfs paths to list (ls -1); used for checks that match entry names by regex. | [SysSettingsDataModel](#SysSettingsDataModel-Model) | [SysSettingsCollector](#Collector-Class-SysSettingsCollector) | [SysSettingsAnalyzer](#Data-Analyzer-Class-SysSettingsAnalyzer) |
 | SysctlPlugin | sysctl -n | **Analyzer Args:**<br>- `exp_vm_swappiness`: Optional[int] — Expected vm.swappiness value.<br>- `exp_vm_numa_balancing`: Optional[int] — Expected vm.numa_balancing value.<br>- `exp_vm_oom_kill_allocating_task`: Optional[int] — Expected vm.oom_kill_allocating_task value.<br>- `exp_vm_compaction_proactiveness`: Optional[int] — Expected vm.compaction_proactiveness value.<br>- `exp_vm_compact_unevictable_allowed`: Optional[int] — Expected vm.compact_unevictable_allowed value.<br>- `exp_vm_extfrag_threshold`: Optional[int] — Expected vm.extfrag_threshold value.<br>- `exp_vm_zone_reclaim_mode`: Optional[int] — Expected vm.zone_reclaim_mode value.<br>- `exp_vm_dirty_background_ratio`: Optional[int] — Expected vm.dirty_background_ratio value.<br>- `exp_vm_dirty_ratio`: Optional[int] — Expected vm.dirty_ratio value.<br>- `exp_vm_dirty_writeback_centisecs`: Optional[int] — Expected vm.dirty_writeback_centisecs value.<br>- `exp_kernel_numa_balancing`: Optional[int] — Expected kernel.numa_balancing value. | - | [SysctlDataModel](#SysctlDataModel-Model) | [SysctlCollector](#Collector-Class-SysctlCollector) | [SysctlAnalyzer](#Data-Analyzer-Class-SysctlAnalyzer) |
-| SyslogPlugin | ls -1 /var/log/syslog* 2>/dev/null &#124; grep -E '^/var/log/syslog(\.[0-9]+(\.gz)?)?$' &#124;&#124; true | - | - | [SyslogData](#SyslogData-Model) | [SyslogCollector](#Collector-Class-SyslogCollector) | - |
+| SyslogPlugin | ls -1 /var/log/syslog* 2>/dev/null &#124; grep -E '^/var/log/syslog(\.[0-9]+(\.gz)?)?$' &#124;&#124; true<br>ls -1 /var/log/messages* 2>/dev/null &#124; grep -E '^/var/log/messages(\.[0-9]+(\.gz)?)?$' &#124;&#124; true | - | - | [SyslogData](#SyslogData-Model) | [SyslogCollector](#Collector-Class-SyslogCollector) | - |
 | UptimePlugin | uptime | - | - | [UptimeDataModel](#UptimeDataModel-Model) | [UptimeCollector](#Collector-Class-UptimeCollector) | - |
 
 # Collectors
@@ -913,6 +913,7 @@ Read syslog log
 
 - **SUPPORTED_OS_FAMILY**: `{<OSFamily.LINUX: 3>}`
 - **CMD**: `ls -1 /var/log/syslog* 2>/dev/null | grep -E '^/var/log/syslog(\.[0-9]+(\.gz)?)?$' || true`
+- **CMD_MESSAGES**: `ls -1 /var/log/messages* 2>/dev/null | grep -E '^/var/log/messages(\.[0-9]+(\.gz)?)?$' || true`
 
 ### Provides Data
 
@@ -921,6 +922,7 @@ SyslogData
 ### Commands
 
 - ls -1 /var/log/syslog* 2>/dev/null | grep -E '^/var/log/syslog(\.[0-9]+(\.gz)?)?$' || true
+- ls -1 /var/log/messages* 2>/dev/null | grep -E '^/var/log/messages(\.[0-9]+(\.gz)?)?$' || true
 
 ## Collector Class UptimeCollector
 
