@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# Copyright (c) 2025 Advanced Micro Devices, Inc.
+# Copyright (c) 2026 Advanced Micro Devices, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,21 +23,6 @@
 # SOFTWARE.
 #
 ###############################################################################
+from .oob_ssh_connection_manager import OobSshConnectionManager
 
-from nodescraper.configbuilder import ConfigBuilder
-
-
-def test_config_builder(plugin_registry):
-    config_builder = ConfigBuilder(plugin_registry)
-
-    config = config_builder.gen_config(["TestPluginA"])
-
-    assert config.plugins == {
-        "TestPluginA": {
-            "test_bool_arg": True,
-            "test_str_arg": "test",
-            "test_list_arg": [1],
-            "test_dict_arg": {},
-            "test_model_arg": {"model_attr": 123},
-        }
-    }
+__all__ = ["OobSshConnectionManager"]

@@ -30,13 +30,13 @@ from pathlib import Path
 
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+_FIXTURES = Path(__file__).resolve().parent / "fixtures"
 
 
 @pytest.fixture
 def generic_collection_config_file():
-    """Return path to GenericCollectionPlugin config at repo root."""
-    return REPO_ROOT / "generic_collection_plugin_config.json"
+    """Return path to GenericCollectionPlugin demo config (functional fixtures)."""
+    return _FIXTURES / "generic_collection_plugin_config.json"
 
 
 def test_generic_collection_plugin_with_config_file(
@@ -68,7 +68,7 @@ def test_generic_collection_plugin_with_config_file(
 def test_generic_collection_plugin_demo_config_runs_end_to_end(
     run_cli_command, generic_collection_config_file, tmp_path
 ):
-    """Repo-root demo config runs collection and analysis with expected partial failures."""
+    """Demo fixture config runs collection and analysis with expected partial failures."""
     log_path = str(tmp_path / "logs_generic_collection_csv")
     result = run_cli_command(
         [
@@ -107,7 +107,7 @@ def test_generic_collection_plugin_demo_config_runs_end_to_end(
 def test_generic_collection_plugin_runs_analyzer(
     run_cli_command, generic_collection_config_file, tmp_path
 ):
-    """Analysis checks from the repo-root config should run after collection."""
+    """Analysis checks from the demo fixture config should run after collection."""
     log_path = str(tmp_path / "logs_generic_collection_analysis")
     result = run_cli_command(
         [

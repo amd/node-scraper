@@ -26,7 +26,7 @@
 from typing import Optional
 
 from nodescraper.base import InBandDataCollector
-from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
+from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.models import TaskResult
 
 from .collector_args import GenericCollectionCollectorArgs
@@ -39,6 +39,7 @@ class GenericCollectionCollector(
     """Run user-configured shell commands and report per-command success."""
 
     DATA_MODEL = GenericCollectionDataModel
+    SUPPORTED_OS_FAMILY: set[OSFamily] = {OSFamily.WINDOWS, OSFamily.LINUX, OSFamily.UNKNOWN}
 
     def collect_data(
         self, args: Optional[GenericCollectionCollectorArgs] = None
