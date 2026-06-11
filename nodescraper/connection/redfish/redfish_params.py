@@ -23,10 +23,14 @@
 # SOFTWARE.
 #
 ###############################################################################
+from __future__ import annotations
+
 from typing import Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 from pydantic.networks import IPvAnyAddress
+
+from nodescraper.connection.inband.sshparams import SSHConnectionParams
 
 from .redfish_connection import DEFAULT_REDFISH_API_ROOT
 
@@ -50,4 +54,29 @@ class RedfishConnectionParams(BaseModel):
     api_root: str = Field(
         default=DEFAULT_REDFISH_API_ROOT,
         description="Redfish API path (e.g. 'redfish/v1'). Override for a different API version.",
+    )
+
+
+def redfish_params_to_ssh(
+    params: Union[RedfishConnectionParams, dict],
+    *,
+    ssh_port: Optional[int] = None,
+    key_filename: Optional[str] = None,
+) -> SSHConnectionParams:
+    """Map Redfish BMC credentials to SSH connection params for shell access."""
+    if isinstance(params, dict):
+        data = dict(params)
+        ssh_port = data.pop("ssh_port", ssh_port if ssh_port is not None else 22)
+        key_filename = data.pop("key_filename", key_filename)
+        params = RedfishConnectionParams.model_validate(data)
+    else:
+        if ssh_port is None:
+            ssh_port = 22
+
+    return SSHConnectionParams(
+        hostname=str(params.host),
+        username=params.username,
+        password=params.password,
+        port=ssh_port,
+        key_filename=key_filename,
     )

@@ -23,32 +23,26 @@
 # SOFTWARE.
 #
 ###############################################################################
-from __future__ import annotations
+from typing import Optional
 
-from typing import Generic
+from pydantic import Field
 
-from nodescraper.connection.redfish import (
-    RedfishConnectionManager,
-    RedfishConnectionParams,
-)
-from nodescraper.generictypes import TAnalyzeArg, TCollectArg, TDataModel
-from nodescraper.interfaces import DataPlugin
+from nodescraper.models import DataModel
 
 
-class OOBSSHDataPlugin(
-    DataPlugin[
-        RedfishConnectionManager,
-        RedfishConnectionParams,
-        TDataModel,
-        TCollectArg,
-        TAnalyzeArg,
-    ],
-    Generic[TDataModel, TCollectArg, TAnalyzeArg],
-):
-    """Base class for out-of-band (OOB) plugins that run shell commands on the BMC.
+class CommandCollectionResult(DataModel):
+    """Outcome of running one configured shell command."""
 
-    Configure the BMC using ``RedfishConnectionManager`` in the connection config.
-    Commands are executed over SSH (port 22) using the same host/username/password.
-    """
+    command: str
+    name: str
+    success: bool
+    exit_code: int
+    sudo: bool = False
+    stdout: Optional[str] = None
+    stderr: Optional[str] = None
 
-    CONNECTION_TYPE = RedfishConnectionManager
+
+class GenericCollectionDataModel(DataModel):
+    """Results for each command configured in collection_args."""
+
+    results: list[CommandCollectionResult] = Field(default_factory=list)

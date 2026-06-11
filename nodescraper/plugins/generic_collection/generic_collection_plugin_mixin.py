@@ -23,32 +23,30 @@
 # SOFTWARE.
 #
 ###############################################################################
-from __future__ import annotations
+"""Shared plugin wiring for in-band and OOB generic command collection plugins."""
 
-from typing import Generic
+from typing import Optional, Type
 
-from nodescraper.connection.redfish import (
-    RedfishConnectionManager,
-    RedfishConnectionParams,
-)
-from nodescraper.generictypes import TAnalyzeArg, TCollectArg, TDataModel
-from nodescraper.interfaces import DataPlugin
+from nodescraper.interfaces.dataanalyzertask import DataAnalyzer
+from nodescraper.interfaces.dataplugin import CollectorArgsClasses, CollectorClasses
+from nodescraper.models import AnalyzerArgs
+
+from .analyzer_args import GenericAnalyzerArgs
+from .collector_args import GenericCollectionCollectorArgs
+from .generic_analyzer import GenericAnalyzer
+from .generic_collection_collector import GenericCollectionCollector
+from .generic_collection_data import GenericCollectionDataModel
 
 
-class OOBSSHDataPlugin(
-    DataPlugin[
-        RedfishConnectionManager,
-        RedfishConnectionParams,
-        TDataModel,
-        TCollectArg,
-        TAnalyzeArg,
-    ],
-    Generic[TDataModel, TCollectArg, TAnalyzeArg],
-):
-    """Base class for out-of-band (OOB) plugins that run shell commands on the BMC.
+class GenericCollectionPluginMixin:
+    """Collector, analyzer, and args shared by GenericCollectionPlugin variants."""
 
-    Configure the BMC using ``RedfishConnectionManager`` in the connection config.
-    Commands are executed over SSH (port 22) using the same host/username/password.
-    """
+    DATA_MODEL: Type[GenericCollectionDataModel] = GenericCollectionDataModel
 
-    CONNECTION_TYPE = RedfishConnectionManager
+    COLLECTOR: Optional[CollectorClasses] = GenericCollectionCollector
+
+    COLLECTOR_ARGS: Optional[CollectorArgsClasses] = GenericCollectionCollectorArgs
+
+    ANALYZER: Optional[Type[DataAnalyzer]] = GenericAnalyzer
+
+    ANALYZER_ARGS: Optional[Type[AnalyzerArgs]] = GenericAnalyzerArgs

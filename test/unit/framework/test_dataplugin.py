@@ -262,6 +262,40 @@ class TestDataPluginCore:
             assert mock_collect.call_count == expected_calls[0]
             assert mock_analyze.call_count == expected_calls[1]
 
+    def test_run_reports_collection_and_analysis_errors(self, plugin_with_conn):
+        plugin_with_conn.data = StandardDataModel()
+
+        collection_error = TaskResult(
+            status=ExecutionStatus.ERROR,
+            message="Generic collection: 2/3 commands succeeded",
+        )
+        analysis_error = TaskResult(
+            status=ExecutionStatus.ERROR,
+            message="Generic analysis: 1/3 checks passed",
+        )
+
+        with (
+            patch.object(CoreDataPlugin, "collect") as mock_collect,
+            patch.object(CoreDataPlugin, "analyze") as mock_analyze,
+        ):
+
+            def collect_side_effect(*args, **kwargs):
+                plugin_with_conn.collection_result = collection_error
+                return collection_error
+
+            def analyze_side_effect(*args, **kwargs):
+                plugin_with_conn.analysis_result = analysis_error
+                return analysis_error
+
+            mock_collect.side_effect = collect_side_effect
+            mock_analyze.side_effect = analyze_side_effect
+
+            result = plugin_with_conn.run(collection=True, analysis=True)
+
+            assert result.status == ExecutionStatus.ERROR
+            assert "Collection error: Generic collection: 2/3 commands succeeded" in result.message
+            assert "Analysis error: Generic analysis: 1/3 checks passed" in result.message
+
     def test_run_with_parameters(self, plugin_with_conn):
         collection_args = {"param": "value"}
         analysis_args = {"threshold": 0.5}

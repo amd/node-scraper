@@ -23,32 +23,20 @@
 # SOFTWARE.
 #
 ###############################################################################
-from __future__ import annotations
+from nodescraper.base import OOBSSHDataPlugin
 
-from typing import Generic
-
-from nodescraper.connection.redfish import (
-    RedfishConnectionManager,
-    RedfishConnectionParams,
-)
-from nodescraper.generictypes import TAnalyzeArg, TCollectArg, TDataModel
-from nodescraper.interfaces import DataPlugin
+from .analyzer_args import GenericAnalyzerArgs
+from .collector_args import GenericCollectionCollectorArgs
+from .generic_collection_data import GenericCollectionDataModel
+from .generic_collection_plugin_mixin import GenericCollectionPluginMixin
 
 
-class OOBSSHDataPlugin(
-    DataPlugin[
-        RedfishConnectionManager,
-        RedfishConnectionParams,
-        TDataModel,
-        TCollectArg,
-        TAnalyzeArg,
+class OobGenericCollectionPlugin(
+    GenericCollectionPluginMixin,
+    OOBSSHDataPlugin[
+        GenericCollectionDataModel,
+        GenericCollectionCollectorArgs,
+        GenericAnalyzerArgs,
     ],
-    Generic[TDataModel, TCollectArg, TAnalyzeArg],
 ):
-    """Base class for out-of-band (OOB) plugins that run shell commands on the BMC.
-
-    Configure the BMC using ``RedfishConnectionManager`` in the connection config.
-    Commands are executed over SSH (port 22) using the same host/username/password.
-    """
-
-    CONNECTION_TYPE = RedfishConnectionManager
+    """Run arbitrary shell commands on the BMC via OOB SSH and validate results."""

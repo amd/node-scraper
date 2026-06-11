@@ -23,32 +23,27 @@
 # SOFTWARE.
 #
 ###############################################################################
-from __future__ import annotations
+"""Generic command collection plugins (in-band and OOB SSH)."""
 
-from typing import Generic
+from .analyzer_args import CommandCheck, GenericAnalyzerArgs
+from .collector_args import CommandSpec, GenericCollectionCollectorArgs
+from .generic_analyzer import GenericAnalyzer
+from .generic_collection_collector import GenericCollectionCollector
+from .generic_collection_data import CommandCollectionResult, GenericCollectionDataModel
+from .generic_collection_plugin_mixin import GenericCollectionPluginMixin
+from .inband_plugin import GenericCollectionPlugin
+from .oob_plugin import OobGenericCollectionPlugin
 
-from nodescraper.connection.redfish import (
-    RedfishConnectionManager,
-    RedfishConnectionParams,
-)
-from nodescraper.generictypes import TAnalyzeArg, TCollectArg, TDataModel
-from nodescraper.interfaces import DataPlugin
-
-
-class OOBSSHDataPlugin(
-    DataPlugin[
-        RedfishConnectionManager,
-        RedfishConnectionParams,
-        TDataModel,
-        TCollectArg,
-        TAnalyzeArg,
-    ],
-    Generic[TDataModel, TCollectArg, TAnalyzeArg],
-):
-    """Base class for out-of-band (OOB) plugins that run shell commands on the BMC.
-
-    Configure the BMC using ``RedfishConnectionManager`` in the connection config.
-    Commands are executed over SSH (port 22) using the same host/username/password.
-    """
-
-    CONNECTION_TYPE = RedfishConnectionManager
+__all__ = [
+    "CommandCheck",
+    "CommandCollectionResult",
+    "CommandSpec",
+    "GenericAnalyzer",
+    "GenericAnalyzerArgs",
+    "GenericCollectionCollector",
+    "GenericCollectionCollectorArgs",
+    "GenericCollectionDataModel",
+    "GenericCollectionPlugin",
+    "GenericCollectionPluginMixin",
+    "OobGenericCollectionPlugin",
+]
