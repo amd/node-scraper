@@ -34,7 +34,15 @@ class CommandSpec(CollectorArgs):
     """One named shell command and optional per-command overrides."""
 
     name: str = Field(description="Stable name for this command, used by analysis checks.")
-    command: str = Field(description="Shell command to run on the target system.")
+    command: str = Field(
+        description=(
+            "Shell command to run on the target (non-interactive SSH exec). "
+            "Intended for small, text-oriented output. Avoid commands that stream large or "
+            "binary data to stdout (e.g. ``tar czf - <path>``): stdout is read fully into "
+            "memory and decoded as UTF-8 when captured. For BMC directory archives over SSH, "
+            "use ``OobBmcArchivePlugin`` instead."
+        ),
+    )
     sudo: Optional[bool] = Field(
         default=None,
         description="Run with sudo. When omitted, uses collection_args.sudo.",
@@ -46,7 +54,11 @@ class CommandSpec(CollectorArgs):
     )
     include_stdout: Optional[bool] = Field(
         default=None,
-        description="Store stdout in the data model. When omitted, uses collection_args.include_stdout.",
+        description=(
+            "Store stdout in the data model. When omitted, uses collection_args.include_stdout. "
+            "When false, stdout is omitted from stored results (the SSH layer may still read it "
+            "for that command)."
+        ),
     )
 
     @field_validator("name", "command", mode="before")
@@ -66,9 +78,22 @@ class CommandSpec(CollectorArgs):
 
 
 class GenericCollectionCollectorArgs(CollectorArgs):
+    """Arguments for :class:`GenericCollectionCollector` / ``GenericCollectionPlugin``.
+
+    Commands are run over SSH; **stdout and stderr are read fully into memory** on the
+    controller and decoded as UTF-8 (with replacement) when stdout is captured. This plugin
+    is meant for **short, text-oriented diagnostics** (logs, version strings, small file
+    snippets). It is **not** appropriate for large or binary streams—for example
+    ``tar czf - <path>``, which writes a tarball to stdout: you risk huge memory use, timeouts,
+    and corrupt binary data. For archiving BMC paths over SSH, use **``OobBmcArchivePlugin``**.
+    """
+
     commands: list[CommandSpec] = Field(
         default_factory=list,
-        description="Named commands to run. Each entry must include 'name' and 'command'.",
+        description=(
+            "Named commands to run. Each entry must include 'name' and 'command'. "
+            "Prefer small textual stdout; see class docstring for streaming/binary limitations."
+        ),
     )
     sudo: bool = Field(
         default=False,
@@ -81,7 +106,11 @@ class GenericCollectionCollectorArgs(CollectorArgs):
     )
     include_stdout: bool = Field(
         default=True,
-        description="Default setting for storing stdout in the data model for analysis.",
+        description=(
+            "Default: include each command's stdout in collected results for analysis. "
+            "When false, stdout is omitted from stored results (not a substitute for avoiding "
+            "large/binary streams; see class docstring)."
+        ),
     )
 
     @field_validator("commands", mode="before")
