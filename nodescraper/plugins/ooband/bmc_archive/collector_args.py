@@ -97,7 +97,9 @@ class BmcArchiveCollectorArgs(CollectorArgs):
     )
     ignore_failed_read: bool = Field(
         default=True,
-        description="Default tar --ignore-failed-read setting for paths that do not override it.",
+        description=(
+            "When true, pass GNU tar's --ignore-failed-read when the remote tar supports it."
+        ),
     )
 
     @model_validator(mode="after")

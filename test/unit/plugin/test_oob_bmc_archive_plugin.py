@@ -27,9 +27,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from nodescraper.base import OOBSSHDataPlugin
 from nodescraper.connection.inband.inband import BinaryFileArtifact, CommandArtifact
+from nodescraper.connection.redfish import RedfishConnectionManager
 from nodescraper.enums import ExecutionStatus, OSFamily, SystemLocation
-from nodescraper.models import SystemInfo
+from nodescraper.models import SystemInfo, TaskResult
 from nodescraper.pluginregistry import PluginRegistry
 from nodescraper.plugins.ooband.bmc_archive import (
     BmcArchiveCollector,
@@ -53,6 +55,10 @@ def collector(monkeypatch):
         ),
         connection=MagicMock(),
     )
+    # InBandDataCollector.__init__ is stubbed, so Task/DataCollector init never runs.
+    collector.parent = None
+    collector.task_result_hooks = []
+    collector.result = TaskResult(task=BmcArchiveCollector.__name__, parent=None)
     collector.result.status = ExecutionStatus.OK
     collector.result.message = ""
     collector.logger = MagicMock()
@@ -63,6 +69,11 @@ def test_oob_bmc_archive_plugin_registers():
     assert OobBmcArchivePlugin.is_valid()
     assert OobBmcArchivePlugin.ANALYZER is None
     assert "OobBmcArchivePlugin" in PluginRegistry().plugins
+
+
+def test_oob_bmc_archive_plugin_uses_redfish_connection_manager_like_oob_generic_collection():
+    assert issubclass(OobBmcArchivePlugin, OOBSSHDataPlugin)
+    assert OobBmcArchivePlugin.CONNECTION_TYPE is RedfishConnectionManager
 
 
 def test_plugin_log_directory_name_uses_oob_prefix():
@@ -83,9 +94,60 @@ def test_tar_command_uses_streaming_tar_and_redirect(collector):
     )
 
 
+def test_collect_path_omits_ignore_failed_read_when_tar_lacks_option(collector, monkeypatch):
+    """If ``--ignore-failed-read`` is not supported, fall back to plain tar."""
+    exists_result = CommandArtifact(
+        command="test -e '/data/example_a'", stdout="", stderr="", exit_code=0
+    )
+    probe_unsupported = CommandArtifact(
+        command="tar cf - --ignore-failed-read /dev/null",
+        stdout="",
+        stderr="tar: unrecognized option '--ignore-failed-read'\n",
+        exit_code=1,
+    )
+    tar_plain = CommandArtifact(
+        command="tar czf - '/data/example_a' > '/tmp/node_scraper_archive_alpha.tar.gz'",
+        stdout="",
+        stderr="",
+        exit_code=0,
+    )
+    read_result = BinaryFileArtifact(filename="archive_alpha.tar.gz", contents=b"x")
+    rm_result = CommandArtifact(command="rm -f", stdout="", stderr="", exit_code=0)
+
+    collector._run_sut_cmd = MagicMock(
+        side_effect=[exists_result, probe_unsupported, tar_plain, rm_result]
+    )
+    collector._read_sut_file = MagicMock(return_value=read_result)
+    collector._log_event = MagicMock()
+
+    path_spec = PathSpec(name="archive_alpha", path="/data/example_a")
+    result, archive = collector._collect_path(
+        path_spec,
+        default_sudo=False,
+        default_timeout=600,
+        default_skip_if_missing=False,
+        default_ignore_failed_read=True,
+    )
+
+    assert result.success is True
+    assert archive is not None
+    collector._run_sut_cmd.assert_any_call(
+        "tar czf - '/data/example_a' > '/tmp/node_scraper_archive_alpha.tar.gz'",
+        sudo=False,
+        timeout=600,
+        log_artifact=True,
+    )
+
+
 def test_collect_path_reads_archive_after_tar(collector, monkeypatch):
     exists_result = CommandArtifact(
         command="test -e '/data/example_a'", stdout="", stderr="", exit_code=0
+    )
+    probe_result = CommandArtifact(
+        command="tar cf - --ignore-failed-read /dev/null",
+        stdout="",
+        stderr="",
+        exit_code=0,
     )
     tar_result = CommandArtifact(
         command="tar czf - --ignore-failed-read '/data/example_a' > '/tmp/node_scraper_archive_alpha.tar.gz'",
@@ -102,7 +164,9 @@ def test_collect_path_reads_archive_after_tar(collector, monkeypatch):
         exit_code=0,
     )
 
-    collector._run_sut_cmd = MagicMock(side_effect=[exists_result, tar_result, rm_result])
+    collector._run_sut_cmd = MagicMock(
+        side_effect=[exists_result, probe_result, tar_result, rm_result]
+    )
     collector._read_sut_file = MagicMock(return_value=read_result)
     collector._log_event = MagicMock()
 
@@ -169,6 +233,9 @@ def test_collect_data_not_ran_without_paths(collector):
 
 def test_collect_data_reports_partial_failures(collector, monkeypatch):
     exists_ok = CommandArtifact(command="test -e", stdout="", stderr="", exit_code=0)
+    probe_ok = CommandArtifact(
+        command="tar cf - --ignore-failed-read /dev/null", stdout="", stderr="", exit_code=0
+    )
     ok_tar = CommandArtifact(command="tar", stdout="", stderr="", exit_code=0)
     fail_tar = CommandArtifact(command="tar", stdout="", stderr="missing", exit_code=2)
     no_archive = CommandArtifact(command="test -s", stdout="", stderr="", exit_code=1)
@@ -176,7 +243,16 @@ def test_collect_data_reports_partial_failures(collector, monkeypatch):
     archive = BinaryFileArtifact(filename="archive_alpha.tar.gz", contents=b"data")
 
     collector._run_sut_cmd = MagicMock(
-        side_effect=[exists_ok, ok_tar, rm, exists_ok, fail_tar, no_archive, rm]
+        side_effect=[
+            exists_ok,
+            probe_ok,
+            ok_tar,
+            rm,
+            exists_ok,
+            fail_tar,
+            no_archive,
+            rm,
+        ]
     )
     collector._read_sut_file = MagicMock(return_value=archive)
     collector._log_event = MagicMock()

@@ -42,10 +42,42 @@ class BmcArchiveCollector(InBandDataCollector[BmcArchiveDataModel, BmcArchiveCol
     SUPPORTED_OS_FAMILY = {OSFamily.LINUX}
 
     REMOTE_ARCHIVE_TEMPLATE = "/tmp/node_scraper_{name}.tar.gz"
+    # None until first probe in a run; collect_data resets so each collection re-probes.
+    _tar_ignore_failed_read_supported: bool | None = None
 
     def _remote_archive_path(self, name: str) -> str:
         safe_name = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in name)
         return self.REMOTE_ARCHIVE_TEMPLATE.format(name=safe_name)
+
+    def _remote_tar_supports_ignore_failed_read(self, *, sudo: bool, timeout: int) -> bool:
+        """Return True only if remote tar accepts GNU's --ignore-failed-read."""
+        cached = getattr(self, "_tar_ignore_failed_read_supported", None)
+        if cached is not None:
+            return cached
+        probe = self._run_sut_cmd(
+            "tar cf - --ignore-failed-read /dev/null",
+            sudo=sudo,
+            timeout=min(timeout, 60),
+            log_artifact=False,
+        )
+        stderr = (probe.stderr or "").lower()
+        if probe.exit_code == 0:
+            self._tar_ignore_failed_read_supported = True
+            return True
+        if any(
+            phrase in stderr
+            for phrase in (
+                "unrecognized option",
+                "invalid option",
+                "unknown option",
+                "illegal option",
+            )
+        ):
+            self._tar_ignore_failed_read_supported = False
+            return False
+        # Unrecognized failure: omit the flag so archiving still runs.
+        self._tar_ignore_failed_read_supported = False
+        return False
 
     def _tar_command(
         self,
@@ -186,11 +218,16 @@ class BmcArchiveCollector(InBandDataCollector[BmcArchiveDataModel, BmcArchiveCol
             result.exit_code = 2
             return result, None
 
+        use_ignore_failed_read = (
+            ignore_failed_read
+            and self._remote_tar_supports_ignore_failed_read(sudo=sudo, timeout=timeout)
+        )
+
         tar_res = self._run_sut_cmd(
             self._tar_command(
                 path_spec.path,
                 remote_archive,
-                ignore_failed_read=ignore_failed_read,
+                ignore_failed_read=use_ignore_failed_read,
             ),
             sudo=sudo,
             timeout=timeout,
@@ -272,6 +309,8 @@ class BmcArchiveCollector(InBandDataCollector[BmcArchiveDataModel, BmcArchiveCol
             self.result.message = "No paths configured in collection_args.paths"
             self.result.status = ExecutionStatus.NOT_RAN
             return self.result, None
+
+        self._tar_ignore_failed_read_supported = None
 
         results: list[ArchiveCollectionResult] = []
         archives: list[BinaryFileArtifact] = []
