@@ -247,6 +247,7 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
             ),
             message="RAS Correctable Error",
             event_category=EventCategory.RAS,
+            event_priority=EventPriority.WARNING,
         ),
         ErrorRegex(
             regex=re.compile(
@@ -270,6 +271,7 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
             ),
             message="RAS Corrected PCIe Error",
             event_category=EventCategory.RAS,
+            event_priority=EventPriority.WARNING,
         ),
         ErrorRegex(
             regex=re.compile(r"(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(.*GPU reset begin.*)"),
@@ -334,8 +336,18 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
             event_category=EventCategory.RAS,
         ),
         ErrorRegex(
-            regex=re.compile(r"\[Hardware Error\]:.+MC\d+_STATUS.*(?:\n.*){0,5}"),
-            message="MCE Error",
+            regex=re.compile(
+                r"\[Hardware Error\]:.+MC\d+_STATUS\[[^\]]*\|CE\|[^\]]*\].*(?:\n.*){0,5}"
+            ),
+            message="MCE Corrected Error",
+            event_category=EventCategory.RAS,
+            event_priority=EventPriority.WARNING,
+        ),
+        ErrorRegex(
+            regex=re.compile(
+                r"\[Hardware Error\]:.+MC\d+_STATUS\[[^\]]*\|UC\|[^\]]*\].*(?:\n.*){0,5}"
+            ),
+            message="MCE Uncorrected Error",
             event_category=EventCategory.RAS,
         ),
         ErrorRegex(
@@ -351,6 +363,7 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
             ),
             message="RAS Corrected Error",
             event_category=EventCategory.RAS,
+            event_priority=EventPriority.WARNING,
         ),
         ErrorRegex(
             regex=re.compile(r"x86/cpu: SGX disabled by BIOS"),
