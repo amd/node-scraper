@@ -25,46 +25,14 @@
 ###############################################################################
 from __future__ import annotations
 
-from logging import Logger
-from typing import Generic, Optional, Union
+from typing import Generic
 
-from nodescraper.connection.inband.inbandmanager import InBandConnectionManager
 from nodescraper.connection.redfish import (
     RedfishConnectionManager,
     RedfishConnectionParams,
-    redfish_params_to_ssh,
 )
-from nodescraper.enums import EventPriority
 from nodescraper.generictypes import TAnalyzeArg, TCollectArg, TDataModel
 from nodescraper.interfaces import DataPlugin
-from nodescraper.interfaces.taskresulthook import TaskResultHook
-from nodescraper.models import SystemInfo
-
-
-class _OobSshConnectionManager(InBandConnectionManager):
-    """Internal SSH transport for OOB plugins; uses Redfish BMC credentials."""
-
-    def __init__(
-        self,
-        system_info: SystemInfo,
-        logger: Optional[Logger] = None,
-        max_event_priority_level: Union[EventPriority, str] = EventPriority.CRITICAL,
-        parent: Optional[str] = None,
-        task_result_hooks: Optional[list[TaskResultHook]] = None,
-        connection_args: Optional[Union[RedfishConnectionParams, dict]] = None,
-        **kwargs,
-    ):
-        if connection_args is not None:
-            connection_args = redfish_params_to_ssh(connection_args)
-        super().__init__(
-            system_info=system_info,
-            logger=logger,
-            max_event_priority_level=max_event_priority_level,
-            parent=parent,
-            task_result_hooks=task_result_hooks,
-            connection_args=connection_args,
-            **kwargs,
-        )
 
 
 class OOBSSHDataPlugin(

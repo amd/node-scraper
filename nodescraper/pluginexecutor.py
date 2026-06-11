@@ -34,7 +34,8 @@ from typing import Optional, Type, Union
 
 from pydantic import BaseModel
 
-from nodescraper.base.oobsshdataplugin import OOBSSHDataPlugin, _OobSshConnectionManager
+from nodescraper.base.oobsshdataplugin import OOBSSHDataPlugin
+from nodescraper.connection.oob_ssh import OobSshConnectionManager
 from nodescraper.constants import DEFAULT_LOGGER
 from nodescraper.interfaces import ConnectionManager, DataPlugin, PluginInterface
 from nodescraper.models import PluginConfig, SystemInfo
@@ -180,7 +181,7 @@ class PluginExecutor:
 
                 if plugin_class.CONNECTION_TYPE:
                     if issubclass(plugin_class, OOBSSHDataPlugin):
-                        mgr_impl = _OobSshConnectionManager
+                        mgr_impl = OobSshConnectionManager
                         connection_args = self.connection_configs.get("RedfishConnectionManager")
                         if connection_args is None:
                             self.logger.error(
