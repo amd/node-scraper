@@ -57,13 +57,14 @@ class TypeUtils:
         Returns:
             dict: map of generic type parameters to their actual types
         """
-        if class_type.__orig_bases__ and len(class_type.__orig_bases__) > 0:
-            gen_base = class_type.__orig_bases__[0]
+        generic_map: dict = {}
+        for gen_base in getattr(class_type, "__orig_bases__", ()) or ():
             class_org = get_origin(gen_base)
+            if class_org is None:
+                continue
             args = get_args(gen_base)
             generic_map = dict(zip(class_org.__parameters__, args))
-        else:
-            generic_map = {}
+            break
 
         return generic_map
 
@@ -168,7 +169,9 @@ class TypeUtils:
             type_map[name] = TypeData(
                 type_classes=cls.process_type(field.annotation),
                 required=field.is_required(),
-                default=field.default,
+                default=(
+                    field.default_factory() if callable(field.default_factory) else field.default
+                ),
             )
 
         return type_map

@@ -29,7 +29,9 @@ dev = [
     "pre-commit",
     "pytest",
     "pytest-cov",
-    "mypy"
+    "mypy",
+    "types-paramiko",
+    "types-setuptools",
 ]
 
 [project.urls]

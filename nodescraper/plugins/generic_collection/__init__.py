@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# Copyright (c) 2025 Advanced Micro Devices, Inc.
+# Copyright (c) 2026 Advanced Micro Devices, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,18 +23,27 @@
 # SOFTWARE.
 #
 ###############################################################################
-from .inbandcollectortask import InBandDataCollector
-from .inbanddataplugin import InBandDataPlugin
-from .oobanddataplugin import OOBandDataPlugin
-from .oobsshdataplugin import OOBSSHDataPlugin
-from .redfishcollectortask import RedfishDataCollector
-from .regexanalyzer import RegexAnalyzer
+"""Generic command collection plugins (in-band and OOB SSH)."""
+
+from .analyzer_args import CommandCheck, GenericAnalyzerArgs
+from .collector_args import CommandSpec, GenericCollectionCollectorArgs
+from .generic_analyzer import GenericAnalyzer
+from .generic_collection_collector import GenericCollectionCollector
+from .generic_collection_data import CommandCollectionResult, GenericCollectionDataModel
+from .generic_collection_plugin_mixin import GenericCollectionPluginMixin
+from .inband_plugin import GenericCollectionPlugin
+from .oob_plugin import OobGenericCollectionPlugin
 
 __all__ = [
-    "InBandDataCollector",
-    "InBandDataPlugin",
-    "OOBandDataPlugin",
-    "OOBSSHDataPlugin",
-    "RedfishDataCollector",
-    "RegexAnalyzer",
+    "CommandCheck",
+    "CommandCollectionResult",
+    "CommandSpec",
+    "GenericAnalyzer",
+    "GenericAnalyzerArgs",
+    "GenericCollectionCollector",
+    "GenericCollectionCollectorArgs",
+    "GenericCollectionDataModel",
+    "GenericCollectionPlugin",
+    "GenericCollectionPluginMixin",
+    "OobGenericCollectionPlugin",
 ]

@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# Copyright (c) 2025 Advanced Micro Devices, Inc.
+# Copyright (c) 2026 Advanced Micro Devices, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,18 +23,30 @@
 # SOFTWARE.
 #
 ###############################################################################
-from .inbandcollectortask import InBandDataCollector
-from .inbanddataplugin import InBandDataPlugin
-from .oobanddataplugin import OOBandDataPlugin
-from .oobsshdataplugin import OOBSSHDataPlugin
-from .redfishcollectortask import RedfishDataCollector
-from .regexanalyzer import RegexAnalyzer
+"""Shared plugin wiring for in-band and OOB generic command collection plugins."""
 
-__all__ = [
-    "InBandDataCollector",
-    "InBandDataPlugin",
-    "OOBandDataPlugin",
-    "OOBSSHDataPlugin",
-    "RedfishDataCollector",
-    "RegexAnalyzer",
-]
+from typing import Optional, Type
+
+from nodescraper.interfaces.dataanalyzertask import DataAnalyzer
+from nodescraper.interfaces.dataplugin import CollectorArgsClasses, CollectorClasses
+from nodescraper.models import AnalyzerArgs
+
+from .analyzer_args import GenericAnalyzerArgs
+from .collector_args import GenericCollectionCollectorArgs
+from .generic_analyzer import GenericAnalyzer
+from .generic_collection_collector import GenericCollectionCollector
+from .generic_collection_data import GenericCollectionDataModel
+
+
+class GenericCollectionPluginMixin:
+    """Collector, analyzer, and args shared by GenericCollectionPlugin variants."""
+
+    DATA_MODEL: Type[GenericCollectionDataModel] = GenericCollectionDataModel
+
+    COLLECTOR: Optional[CollectorClasses] = GenericCollectionCollector
+
+    COLLECTOR_ARGS: Optional[CollectorArgsClasses] = GenericCollectionCollectorArgs
+
+    ANALYZER: Optional[Type[DataAnalyzer]] = GenericAnalyzer
+
+    ANALYZER_ARGS: Optional[Type[AnalyzerArgs]] = GenericAnalyzerArgs

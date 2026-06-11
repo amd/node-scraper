@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# Copyright (c) 2025 Advanced Micro Devices, Inc.
+# Copyright (c) 2026 Advanced Micro Devices, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,18 +23,18 @@
 # SOFTWARE.
 #
 ###############################################################################
-from .inbandcollectortask import InBandDataCollector
-from .inbanddataplugin import InBandDataPlugin
-from .oobanddataplugin import OOBandDataPlugin
-from .oobsshdataplugin import OOBSSHDataPlugin
-from .redfishcollectortask import RedfishDataCollector
-from .regexanalyzer import RegexAnalyzer
+"""OOB BMC archive collection over SSH."""
+
+from .bmc_archive_collector import BmcArchiveCollector
+from .bmc_archive_data import ArchiveCollectionResult, BmcArchiveDataModel
+from .bmc_archive_plugin import OobBmcArchivePlugin
+from .collector_args import BmcArchiveCollectorArgs, PathSpec
 
 __all__ = [
-    "InBandDataCollector",
-    "InBandDataPlugin",
-    "OOBandDataPlugin",
-    "OOBSSHDataPlugin",
-    "RedfishDataCollector",
-    "RegexAnalyzer",
+    "ArchiveCollectionResult",
+    "BmcArchiveCollector",
+    "BmcArchiveCollectorArgs",
+    "BmcArchiveDataModel",
+    "OobBmcArchivePlugin",
+    "PathSpec",
 ]

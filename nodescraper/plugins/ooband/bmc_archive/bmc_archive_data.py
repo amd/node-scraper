@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# Copyright (c) 2025 Advanced Micro Devices, Inc.
+# Copyright (c) 2026 Advanced Micro Devices, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,18 +23,43 @@
 # SOFTWARE.
 #
 ###############################################################################
-from .inbandcollectortask import InBandDataCollector
-from .inbanddataplugin import InBandDataPlugin
-from .oobanddataplugin import OOBandDataPlugin
-from .oobsshdataplugin import OOBSSHDataPlugin
-from .redfishcollectortask import RedfishDataCollector
-from .regexanalyzer import RegexAnalyzer
+import os
+from typing import Optional
 
-__all__ = [
-    "InBandDataCollector",
-    "InBandDataPlugin",
-    "OOBandDataPlugin",
-    "OOBSSHDataPlugin",
-    "RedfishDataCollector",
-    "RegexAnalyzer",
-]
+from pydantic import Field
+
+from nodescraper.connection.inband.inband import BinaryFileArtifact
+from nodescraper.models import DataModel
+
+
+class ArchiveCollectionResult(DataModel):
+    """Result of archiving one BMC path."""
+
+    name: str
+    path: str
+    success: bool = False
+    skipped: bool = False
+    exit_code: int = 0
+    stderr: str = ""
+    size_bytes: int = 0
+    archive_filename: Optional[str] = None
+
+
+class BmcArchiveDataModel(DataModel):
+    """Collected BMC directory archives."""
+
+    results: list[ArchiveCollectionResult] = Field(default_factory=list)
+    archives: list[BinaryFileArtifact] = Field(default_factory=list)
+
+    def log_model(self, log_path: str) -> None:
+        for archive in self.archives:
+            archive.log_model(log_path)
+
+        log_name = os.path.join(log_path, "oob_bmc_archive_results.json")
+        with open(log_name, "w", encoding="utf-8") as log_file:
+            log_file.write(
+                self.model_dump_json(
+                    indent=2,
+                    exclude={"archives"},
+                )
+            )

@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# Copyright (c) 2025 Advanced Micro Devices, Inc.
+# Copyright (c) 2026 Advanced Micro Devices, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,18 +23,22 @@
 # SOFTWARE.
 #
 ###############################################################################
-from .inbandcollectortask import InBandDataCollector
-from .inbanddataplugin import InBandDataPlugin
-from .oobanddataplugin import OOBandDataPlugin
-from .oobsshdataplugin import OOBSSHDataPlugin
-from .redfishcollectortask import RedfishDataCollector
-from .regexanalyzer import RegexAnalyzer
+from nodescraper.base import OOBSSHDataPlugin
 
-__all__ = [
-    "InBandDataCollector",
-    "InBandDataPlugin",
-    "OOBandDataPlugin",
-    "OOBSSHDataPlugin",
-    "RedfishDataCollector",
-    "RegexAnalyzer",
-]
+from .bmc_archive_collector import BmcArchiveCollector
+from .bmc_archive_data import BmcArchiveDataModel
+from .collector_args import BmcArchiveCollectorArgs
+
+
+class OobBmcArchivePlugin(
+    OOBSSHDataPlugin[
+        BmcArchiveDataModel,
+        BmcArchiveCollectorArgs,
+        None,
+    ]
+):
+    """Archive remote directories over BMC SSH using tar czf - <path>."""
+
+    DATA_MODEL = BmcArchiveDataModel
+    COLLECTOR = BmcArchiveCollector
+    COLLECTOR_ARGS = BmcArchiveCollectorArgs

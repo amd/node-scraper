@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# Copyright (c) 2025 Advanced Micro Devices, Inc.
+# Copyright (c) 2026 Advanced Micro Devices, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,18 +23,32 @@
 # SOFTWARE.
 #
 ###############################################################################
-from .inbandcollectortask import InBandDataCollector
-from .inbanddataplugin import InBandDataPlugin
-from .oobanddataplugin import OOBandDataPlugin
-from .oobsshdataplugin import OOBSSHDataPlugin
-from .redfishcollectortask import RedfishDataCollector
-from .regexanalyzer import RegexAnalyzer
+from __future__ import annotations
 
-__all__ = [
-    "InBandDataCollector",
-    "InBandDataPlugin",
-    "OOBandDataPlugin",
-    "OOBSSHDataPlugin",
-    "RedfishDataCollector",
-    "RegexAnalyzer",
-]
+from typing import Generic
+
+from nodescraper.connection.redfish import (
+    RedfishConnectionManager,
+    RedfishConnectionParams,
+)
+from nodescraper.generictypes import TAnalyzeArg, TCollectArg, TDataModel
+from nodescraper.interfaces import DataPlugin
+
+
+class OOBSSHDataPlugin(
+    DataPlugin[
+        RedfishConnectionManager,
+        RedfishConnectionParams,
+        TDataModel,
+        TCollectArg,
+        TAnalyzeArg,
+    ],
+    Generic[TDataModel, TCollectArg, TAnalyzeArg],
+):
+    """Base class for out-of-band (OOB) plugins that run shell commands on the BMC.
+
+    Configure the BMC using ``RedfishConnectionManager`` in the connection config.
+    Commands are executed over SSH (port 22) using the same host/username/password.
+    """
+
+    CONNECTION_TYPE = RedfishConnectionManager

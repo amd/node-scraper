@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# Copyright (c) 2025 Advanced Micro Devices, Inc.
+# Copyright (c) 2026 Advanced Micro Devices, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,18 +23,20 @@
 # SOFTWARE.
 #
 ###############################################################################
-from .inbandcollectortask import InBandDataCollector
-from .inbanddataplugin import InBandDataPlugin
-from .oobanddataplugin import OOBandDataPlugin
-from .oobsshdataplugin import OOBSSHDataPlugin
-from .redfishcollectortask import RedfishDataCollector
-from .regexanalyzer import RegexAnalyzer
+from nodescraper.base import InBandDataPlugin
 
-__all__ = [
-    "InBandDataCollector",
-    "InBandDataPlugin",
-    "OOBandDataPlugin",
-    "OOBSSHDataPlugin",
-    "RedfishDataCollector",
-    "RegexAnalyzer",
-]
+from .analyzer_args import GenericAnalyzerArgs
+from .collector_args import GenericCollectionCollectorArgs
+from .generic_collection_data import GenericCollectionDataModel
+from .generic_collection_plugin_mixin import GenericCollectionPluginMixin
+
+
+class GenericCollectionPlugin(
+    GenericCollectionPluginMixin,
+    InBandDataPlugin[
+        GenericCollectionDataModel,
+        GenericCollectionCollectorArgs,
+        GenericAnalyzerArgs,
+    ],
+):
+    """Run arbitrary shell commands on the host via in-band SSH and validate results."""
