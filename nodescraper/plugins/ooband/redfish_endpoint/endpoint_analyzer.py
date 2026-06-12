@@ -89,6 +89,12 @@ class RedfishEndpointAnalyzer(DataAnalyzer[RedfishEndpointDataModel, RedfishEndp
 
     DATA_MODEL = RedfishEndpointDataModel
 
+    DOCUMENTATION_ANALYSIS_ITEMS: tuple[str, ...] = (
+        "For each entry in analysis_args.checks, reads JSON paths in collected responses and "
+        "compares values to constraints (eq, min/max, anyOf, regex, etc.).",
+        'URI key "*" runs checks against every collected response body.',
+    )
+
     def analyze_data(
         self,
         data: RedfishEndpointDataModel,
