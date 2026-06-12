@@ -41,9 +41,6 @@ class RegexSearchPlugin(InBandDataPlugin[RegexSearchData, CollectorArgs, RegexSe
     ANALYZER = RegexSearchAnalyzer
     ANALYZER_ARGS = RegexSearchAnalyzerArgs
 
-    DOCUMENTATION_COLLECTION_ITEMS: tuple[str, ...] = (
-        "No COLLECTOR: data is the text loaded from --data (file or directory) or equivalent input.",
-    )
     DOCUMENTATION_ANALYSIS_ITEMS: tuple[str, ...] = (
         "Runs RegexSearchAnalyzer: user-defined patterns via analysis_args.error_regex (same shape as Dmesg).",
         "Emits regex match events with optional per-file source in the description when scanning directories.",
