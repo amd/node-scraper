@@ -504,7 +504,8 @@ def escape_table_cell(s: str) -> str:
     """
     if not s:
         return s
-    return s.replace("|", "&#124;").replace("\n", " ").replace("\r", " ")
+    # Avoid @ in cells (e.g. OData property names) being turned into mail/mention links in Outlook/HTML viewers.
+    return s.replace("|", "&#124;").replace("@", "&#64;").replace("\n", " ").replace("\r", " ")
 
 
 def md_header(text: str, level: int = 2) -> str:
@@ -847,7 +848,11 @@ def main():
             f"packages ({', '.join(DEFAULT_PACKAGES)}). Repeatable."
         ),
     )
-    ap.add_argument("--output", default="PLUGIN_DOC.md", help="Output Markdown file")
+    ap.add_argument(
+        "--output",
+        default="docs/PLUGIN_DOC.md",
+        help="Output Markdown file (default: docs/PLUGIN_DOC.md under repo root)",
+    )
     ap.add_argument(
         "--update-readme-help",
         action="store_true",
