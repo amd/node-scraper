@@ -60,6 +60,10 @@ class ServiceabilitySolution(BaseModel):
     service_action_num: int = Field(
         description="Service action number from AFID_SAG.json.",
     )
+    service_action_title: Optional[str] = Field(
+        default=None,
+        description=("Short service action label from the hub."),
+    )
 
 
 class ServiceabilityBlock(BaseModel):
@@ -71,9 +75,17 @@ class ServiceabilityBlock(BaseModel):
     )
     solution: List[ServiceabilitySolution] = Field(
         default_factory=list,
-        description="Engine output: recommended service actions.",
+        description="Hub output: recommended service actions.",
     )
     solution_reasoning: Optional[str] = Field(
         default=None,
-        description="Human-readable summary of how the engine reached its conclusions.",
+        description="Human-readable summary of recommendations (counts and hub label).",
+    )
+    hub_version: Optional[str] = Field(
+        default=None,
+        description="Service hub package/build version string when the hub returned it.",
+    )
+    afid_sag_file_version: Optional[str] = Field(
+        default=None,
+        description="AFID_SAG.json identity/revision string when the hub returned metadata.",
     )

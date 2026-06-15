@@ -40,7 +40,7 @@ from .se_adapter import (
     serviceability_block_from_service_result,
 )
 from .se_models import AfidEvent, ServiceabilityBlock, ServiceabilitySolution
-from .se_runner import SeRunError, run_service_engine
+from .se_runner import SeRunError, run_service_hub
 from .serviceability_collector import ServiceabilityCollectorBase
 from .serviceability_data import (
     DeviceInfo,
@@ -83,7 +83,7 @@ __all__ = [
     "is_valid_iso_datetime",
     "normalize_se_timestamp",
     "parse_iso_datetime",
-    "run_service_engine",
+    "run_service_hub",
     "serviceability_block_from_service_result",
     "satisfies_time_check",
 ]

@@ -23,25 +23,71 @@
 # SOFTWARE.
 #
 ###############################################################################
-"""Invoke a configured Python service engine against collected Redfish events."""
+"""Invoke a configured Python service hub against collected Redfish events."""
 from __future__ import annotations
 
 import importlib
 import inspect
 from pathlib import Path
-from typing import Any, Optional, Type
+from typing import Any, Callable, Optional, Type
 
 from .se_adapter import serviceability_block_from_service_result
 from .se_models import AfidEvent, ServiceabilityBlock
 
-_ENGINE_METHOD = "get_service_info"
+
+def _signature_accepts_var_keyword(sig: inspect.Signature) -> bool:
+    return any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
+
+
+def _instantiate_hub(
+    hub_cls: Type[Any],
+    config_path: str,
+    init_path_kwarg: str,
+    hub_options: Optional[dict[str, Any]],
+) -> Any:
+    """Construct the hub with ``config_path`` under ``init_path_kwarg``, plus matching options."""
+    init_sig = inspect.signature(hub_cls.__init__)
+    kwargs: dict[str, Any] = {init_path_kwarg: config_path}
+    if not hub_options:
+        return hub_cls(**kwargs)
+    if _signature_accepts_var_keyword(init_sig):
+        merged = dict(hub_options)
+        merged[init_path_kwarg] = config_path
+        return hub_cls(**merged)
+    for key, val in hub_options.items():
+        if key in init_sig.parameters:
+            kwargs[key] = val
+    kwargs[init_path_kwarg] = config_path
+    return hub_cls(**kwargs)
+
+
+def _call_hub_analyze(
+    analyze: Callable[..., Any],
+    rf_events: list[Any],
+    cper_data: Optional[dict[str, Any]],
+    hub_options: Optional[dict[str, Any]],
+) -> Any:
+    """Invoke the hub analyze callable with ``cper_data`` and per-parameter ``hub_options``."""
+    sig = inspect.signature(analyze)
+    params = sig.parameters
+    eo = dict(hub_options or {})
+
+    if _signature_accepts_var_keyword(sig):
+        if "cper_data" in params:
+            eo["cper_data"] = dict(cper_data) if cper_data else None
+        return analyze(list(rf_events), **eo)
+
+    kw = {k: v for k, v in eo.items() if k in params}
+    if "cper_data" in params:
+        kw["cper_data"] = dict(cper_data) if cper_data else None
+    return analyze(list(rf_events), **kw)
 
 
 class SeRunError(RuntimeError):
-    """Raised when the service engine fails or returns invalid output."""
+    """Raised when the service hub fails or returns invalid output."""
 
 
-def run_service_engine(
+def run_service_hub(
     *,
     engine_python_module: str,
     engine_display_name: Optional[str] = None,
@@ -49,11 +95,21 @@ def run_service_engine(
     afid_sag_path: str,
     rf_events: list[Any],
     cper_data: Optional[dict[str, Any]] = None,
+    hub_options: Optional[dict[str, Any]] = None,
+    engine_analyze_method: str = "get_service_info",
+    engine_init_path_kwarg: str = "afid_sag",
 ) -> ServiceabilityBlock:
-    """Run a Python service engine and return a :class:`ServiceabilityBlock`."""
+    """Run the configured Python service hub and return a :class:`ServiceabilityBlock`.
+
+    The runner imports ``engine_python_module``, picks the unique class that implements
+    ``engine_analyze_method``, constructs it with the config file path passed as
+    ``engine_init_path_kwarg``, then calls the analyze method with ``rf_events`` and any
+    ``hub_options`` keys that match the method signature (plus ``cper_data`` when
+    supported). Result mapping is handled by :func:`serviceability_block_from_service_result`.
+    """
     sag_path = Path(afid_sag_path)
     if not sag_path.is_file():
-        raise SeRunError(f"AFID_SAG file not found: {afid_sag_path}")
+        raise SeRunError(f"Hub config file not found: {afid_sag_path}")
 
     if not rf_events:
         raise SeRunError(
@@ -66,17 +122,24 @@ def run_service_engine(
     except ImportError as exc:
         raise SeRunError(f"Cannot import {engine_python_module}: {exc}") from exc
 
-    engine_cls = _resolve_engine_class(mod)
+    hub_cls = _resolve_hub_class(mod, engine_analyze_method)
 
     try:
-        instance = engine_cls(afid_sag=afid_sag_path)
-        analyze = getattr(instance, _ENGINE_METHOD)
-        result = analyze(
-            list(rf_events),
-            cper_data=dict(cper_data) if cper_data else None,
+        instance = _instantiate_hub(
+            hub_cls,
+            afid_sag_path,
+            engine_init_path_kwarg,
+            hub_options,
+        )
+        analyze = getattr(instance, engine_analyze_method)
+        result = _call_hub_analyze(
+            analyze,
+            rf_events,
+            cper_data,
+            hub_options,
         )
     except Exception as exc:
-        raise SeRunError(f"{label} {_ENGINE_METHOD}() failed: {exc}") from exc
+        raise SeRunError(f"{label} {engine_analyze_method}() failed: {exc}") from exc
 
     if result is None:
         return ServiceabilityBlock(
@@ -93,18 +156,18 @@ def run_service_engine(
     )
 
 
-def _is_engine_class(obj: Any) -> bool:
-    return inspect.isclass(obj) and callable(getattr(obj, _ENGINE_METHOD, None))
+def _is_hub_class(obj: Any, analyze_method: str = "get_service_info") -> bool:
+    return inspect.isclass(obj) and callable(getattr(obj, analyze_method, None))
 
 
-def _resolve_engine_class(mod: Any) -> Type[Any]:
-    """Find the engine class in ``mod`` that implements ``get_service_info``."""
+def _resolve_hub_class(mod: Any, analyze_method: str = "get_service_info") -> Type[Any]:
+    """Find the hub class in ``mod`` that implements ``analyze_method``."""
     package = mod.__name__
     candidates: list[Type[Any]] = []
     seen: set[int] = set()
 
     def add_candidate(obj: Any) -> None:
-        if not _is_engine_class(obj):
+        if not _is_hub_class(obj, analyze_method):
             return
         key = id(obj)
         if key in seen:
@@ -124,8 +187,8 @@ def _resolve_engine_class(mod: Any) -> Type[Any]:
         return candidates[0]
     if not candidates:
         raise SeRunError(
-            f"No class with {_ENGINE_METHOD}() found in {package}; "
-            "check engine_python_module in analysis_args."
+            f"No class with {analyze_method}() found in {package}; "
+            "check engine_python_module and engine_analyze_method in analysis_args."
         )
     names = ", ".join(cls.__name__ for cls in candidates)
-    raise SeRunError(f"Multiple classes with {_ENGINE_METHOD}() in {package}: {names}.")
+    raise SeRunError(f"Multiple classes with {analyze_method}() in {package}: {names}.")

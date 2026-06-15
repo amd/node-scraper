@@ -40,14 +40,14 @@ from nodescraper.plugins.serviceability.se_adapter import (
     format_serviceability_solution_lines,
 )
 from nodescraper.plugins.serviceability.se_models import ServiceabilityBlock
-from nodescraper.plugins.serviceability.se_runner import SeRunError, run_service_engine
+from nodescraper.plugins.serviceability.se_runner import SeRunError, run_service_hub
 from nodescraper.plugins.serviceability.serviceability_data import (
     ServiceabilityDataModel,
 )
 
 
 class MI3XXAnalyzer(DataAnalyzer[ServiceabilityDataModel, ServiceabilityAnalyzerArgs]):
-    """Build AFID events from collected data and run the configured service engine."""
+    """Build AFID events from collected data and run the configured service hub."""
 
     DATA_MODEL = ServiceabilityDataModel
 
@@ -67,7 +67,7 @@ class MI3XXAnalyzer(DataAnalyzer[ServiceabilityDataModel, ServiceabilityAnalyzer
         if args.skip_engine:
             data.serviceability = ServiceabilityBlock(afid_events=events)
             self.result.status = ExecutionStatus.OK
-            self.result.message = f"Built {len(events)} AFID event(s); engine skipped"
+            self.result.message = f"Built {len(events)} AFID event(s); hub skipped"
             self._log_serviceability_solutions(data.serviceability)
             return self.result
 
@@ -117,13 +117,16 @@ class MI3XXAnalyzer(DataAnalyzer[ServiceabilityDataModel, ServiceabilityAnalyzer
             )
 
         try:
-            block = run_service_engine(
+            block = run_service_hub(
                 engine_python_module=args.engine_python_module,  # type: ignore[arg-type]
                 engine_display_name=args.engine_display_name,
                 afid_events=events,
                 afid_sag_path=args.afid_sag_path,  # type: ignore[arg-type]
                 rf_events=data.rf_events,
                 cper_data=cper_data or None,
+                hub_options=args.resolved_hub_options(),
+                engine_analyze_method=args.engine_analyze_method,
+                engine_init_path_kwarg=args.engine_init_path_kwarg,
             )
         except (SeRunError, ValueError) as exc:
             self.result.status = ExecutionStatus.ERROR
@@ -139,9 +142,15 @@ class MI3XXAnalyzer(DataAnalyzer[ServiceabilityDataModel, ServiceabilityAnalyzer
             cper_summary = f", {len(cper_data)} decoded CPER(s)"
         elif data.cper_raw:
             cper_summary = f", {len(data.cper_raw)} CPER attachment(s) not decoded"
+        ver_bits: list[str] = []
+        if block.hub_version:
+            ver_bits.append(f"hub {block.hub_version}")
+        if block.afid_sag_file_version:
+            ver_bits.append(f"AFID_SAG {block.afid_sag_file_version}")
+        ver_suffix = f" [{'; '.join(ver_bits)}]" if ver_bits else ""
         self.result.message = (
             f"{engine_label}: {len(block.solution)} solution(s) "
-            f"from {len(data.rf_events)} Redfish event(s){cper_summary}"
+            f"from {len(data.rf_events)} Redfish event(s){cper_summary}{ver_suffix}"
         )
         return self.result
 
