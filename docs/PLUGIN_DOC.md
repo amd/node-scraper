@@ -1,6 +1,6 @@
 # Plugin Documentation
 
-# Plugin Table
+# IB Plugins
 
 | Plugin | Collection | Analyzer Args | Collection Args | DataModel | Collector | Analyzer |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -24,12 +24,21 @@
 | PciePlugin | lspci -d {vendor_id}: -nn<br>lspci -x<br>lspci -xxxx<br>lspci -PP<br>lspci -PP -d {vendor_id}:{dev_id}<br>lspci -PP -D -d {vendor_id}:{dev_id}<br>lspci -PP -D<br>lspci -vvv<br>lspci -vvvt | **Analyzer Args:**<br>- `exp_speed`: int — Expected PCIe link speed (generation 1–5).<br>- `exp_width`: int — Expected PCIe link width in lanes (1–16).<br>- `exp_sriov_count`: int — Expected SR-IOV virtual function count.<br>- `exp_gpu_count_override`: Optional[int] — Override expected GPU count for validation.<br>- `exp_max_payload_size`: Union[Dict[int, int], int, NoneType] — Expected max payload size: int for all devices, or dict keyed by device ID.<br>- `exp_max_rd_req_size`: Union[Dict[int, int], int, NoneType] — Expected max read request size: int for all devices, or dict keyed by device ID.<br>- `exp_ten_bit_tag_req_en`: Union[Dict[int, int], int, NoneType] — Expected 10-bit tag request enable: int for all devices, or dict keyed by device ID. | - | [PcieDataModel](#PcieDataModel-Model) | [PcieCollector](#Collector-Class-PcieCollector) | [PcieAnalyzer](#Data-Analyzer-Class-PcieAnalyzer) |
 | ProcessPlugin | top -b -n 1<br>rocm-smi --showpids<br>top -b -n 1 -o %CPU  | **Analyzer Args:**<br>- `max_kfd_processes`: int — Maximum allowed number of KFD (Kernel Fusion Driver) processes; 0 disables the check.<br>- `max_cpu_usage`: float — Maximum allowed CPU usage (percent) for process checks. | **Collection Args:**<br>- `top_n_process`: int — Number of top processes by CPU usage to collect (e.g. for top -b -n 1 -o %%CPU). | [ProcessDataModel](#ProcessDataModel-Model) | [ProcessCollector](#Collector-Class-ProcessCollector) | [ProcessAnalyzer](#Data-Analyzer-Class-ProcessAnalyzer) |
 | RdmaPlugin | rdma link -j<br>rdma dev<br>rdma link<br>rdma statistic -j | - | - | [RdmaDataModel](#RdmaDataModel-Model) | [RdmaCollector](#Collector-Class-RdmaCollector) | [RdmaAnalyzer](#Data-Analyzer-Class-RdmaAnalyzer) |
+| RegexSearchPlugin | - | Runs RegexSearchAnalyzer: user-defined patterns via analysis_args.error_regex (same shape as Dmesg).<br>Emits regex match events with optional per-file source in the description when scanning directories.<br>**Analyzer Args:**<br>- `error_regex`: Optional[list[dict[str, Any]]] — Regex patterns to search for; each dict may include regex (str), message, event_category, event_priority (same as Dmesg analyzer error_regex).<br>- `interval_to_collapse_event`: int — Seconds within which repeated events are collapsed into one.<br>- `num_timestamps`: int — Number of timestamps to include per event in output. | - | [RegexSearchData](#RegexSearchData-Model) | - | [RegexSearchAnalyzer](#Data-Analyzer-Class-RegexSearchAnalyzer) |
 | RocmPlugin | {rocm_path}/opencl/bin/*/clinfo<br>env &#124; grep -Ei 'rocm&#124;hsa&#124;hip&#124;mpi&#124;openmp&#124;ucx&#124;miopen'<br>ls /sys/class/kfd/kfd/proc/<br>grep -i -E 'rocm' /etc/ld.so.conf.d/*<br>{rocm_path}/bin/rocminfo<br>ls -v -d {rocm_path}*<br>ls -v -d {rocm_path}-[3-7]* &#124; tail -1<br>ldconfig -p &#124; grep -i -E 'rocm'<br>grep . -H -r -i {rocm_path}/.info/* | **Analyzer Args:**<br>- `exp_rocm`: Union[str, list] — Expected ROCm version string(s) to match (e.g. from rocminfo).<br>- `exp_rocm_latest`: str — Expected 'latest' ROCm path or version string for versioned installs.<br>- `exp_rocm_sub_versions`: dict[str, Union[str, list]] — Map sub-version name (e.g. version_rocm) to expected string or list of allowed strings. | **Collection Args:**<br>- `rocm_path`: str — Base path to ROCm installation (e.g. /opt/rocm). Used for rocminfo, clinfo, and version discovery. | [RocmDataModel](#RocmDataModel-Model) | [RocmCollector](#Collector-Class-RocmCollector) | [RocmAnalyzer](#Data-Analyzer-Class-RocmAnalyzer) |
 | StoragePlugin | sh -c 'df -lH -B1 &#124; grep -v 'boot''<br>wmic LogicalDisk Where DriveType="3" Get DeviceId,Size,FreeSpace | - | **Collection Args:**<br>- `skip_sudo`: bool — If True, do not use sudo when running df and related storage commands. | [StorageDataModel](#StorageDataModel-Model) | [StorageCollector](#Collector-Class-StorageCollector) | [StorageAnalyzer](#Data-Analyzer-Class-StorageAnalyzer) |
 | SysSettingsPlugin | cat /sys/{}<br>ls -1 /sys/{}<br>ls -l /sys/{} | **Analyzer Args:**<br>- `checks`: Optional[list[nodescraper.plugins.inband.sys_settings.analyzer_args.SysfsCheck]] — List of sysfs checks (path, expected values or pattern, display name). | **Collection Args:**<br>- `paths`: list[str] — Sysfs paths to read (cat). Paths with '*' are collected with ls -l (e.g. class/net/*/device).<br>- `directory_paths`: list[str] — Sysfs paths to list (ls -1); used for checks that match entry names by regex. | [SysSettingsDataModel](#SysSettingsDataModel-Model) | [SysSettingsCollector](#Collector-Class-SysSettingsCollector) | [SysSettingsAnalyzer](#Data-Analyzer-Class-SysSettingsAnalyzer) |
 | SysctlPlugin | sysctl -n | **Analyzer Args:**<br>- `exp_vm_swappiness`: Optional[int] — Expected vm.swappiness value.<br>- `exp_vm_numa_balancing`: Optional[int] — Expected vm.numa_balancing value.<br>- `exp_vm_oom_kill_allocating_task`: Optional[int] — Expected vm.oom_kill_allocating_task value.<br>- `exp_vm_compaction_proactiveness`: Optional[int] — Expected vm.compaction_proactiveness value.<br>- `exp_vm_compact_unevictable_allowed`: Optional[int] — Expected vm.compact_unevictable_allowed value.<br>- `exp_vm_extfrag_threshold`: Optional[int] — Expected vm.extfrag_threshold value.<br>- `exp_vm_zone_reclaim_mode`: Optional[int] — Expected vm.zone_reclaim_mode value.<br>- `exp_vm_dirty_background_ratio`: Optional[int] — Expected vm.dirty_background_ratio value.<br>- `exp_vm_dirty_ratio`: Optional[int] — Expected vm.dirty_ratio value.<br>- `exp_vm_dirty_writeback_centisecs`: Optional[int] — Expected vm.dirty_writeback_centisecs value.<br>- `exp_kernel_numa_balancing`: Optional[int] — Expected kernel.numa_balancing value. | - | [SysctlDataModel](#SysctlDataModel-Model) | [SysctlCollector](#Collector-Class-SysctlCollector) | [SysctlAnalyzer](#Data-Analyzer-Class-SysctlAnalyzer) |
 | SyslogPlugin | ls -1 /var/log/syslog* 2>/dev/null &#124; grep -E '^/var/log/syslog(\.[0-9]+(\.gz)?)?$' &#124;&#124; true<br>ls -1 /var/log/messages* 2>/dev/null &#124; grep -E '^/var/log/messages(\.[0-9]+(\.gz)?)?$' &#124;&#124; true | - | - | [SyslogData](#SyslogData-Model) | [SyslogCollector](#Collector-Class-SyslogCollector) | - |
 | UptimePlugin | uptime | - | - | [UptimeDataModel](#UptimeDataModel-Model) | [UptimeCollector](#Collector-Class-UptimeCollector) | - |
+
+# OOB plugins
+
+| Plugin | Collection | Analyzer Args | Collection Args | DataModel | Collector | Analyzer |
+| --- | --- | --- | --- | --- | --- | --- |
+| OobBmcArchivePlugin | SSH (BMC) shell: tar+gzip archives for each path in collection_args (see PathSpec entries).<br>Uses sudo on the BMC when collection_args paths require elevated access. | - | **Collection Args:**<br>- `paths`: list[nodescraper.plugins.ooband.bmc_archive.collector_args.PathSpec] — Named BMC paths to archive with tar czf -. Configure in plugin config under plugins.OobBmcArchivePlugin.collection_ar...<br>- `sudo`: bool — Default sudo setting for paths that do not specify sudo.<br>- `timeout`: int — Default per-path tar timeout in seconds.<br>- `skip_if_missing`: bool — Skip paths that do not exist on the BMC instead of failing collection.<br>- `ignore_failed_read`: bool — When true, pass GNU tar's --ignore-failed-read when the remote tar supports it. | [BmcArchiveDataModel](#BmcArchiveDataModel-Model) | [BmcArchiveCollector](#Collector-Class-BmcArchiveCollector) | - |
+| RedfishEndpointPlugin | Redfish GET: explicit paths from collection_args.uris (parallel when max_workers>1).<br>Optional paged GET following the Members collection OData nextLink field when follow_next_link is true.<br>Redfish GET tree: when discover_tree is true, walks from api_root using OData resource id links and Members navigation (depth and endpoint caps from collection_args). | For each entry in analysis_args.checks, reads JSON paths in collected responses and compares values to constraints (eq, min/max, anyOf, regex, etc.).<br>URI key "*" runs checks against every collected response body.<br>**Analyzer Args:**<br>- `checks`: dict[str, dict[str, Union[int, float, str, bool, dict[str, Any]]]] — Map: URI or '*' -> { property_path: constraint }. URI keys must match a key in the collected responses (exact match).... | **Collection Args:**<br>- `uris`: list[str] — Redfish URIs to GET. Ignored when discover_tree is True.<br>- `discover_tree`: bool — If True, discover endpoints from the BMC Redfish tree (service root and links) instead of using uris.<br>- `tree_max_depth`: int — When discover_tree is True: max traversal depth (1=service root only, 2=root + collections, 3=+ members).<br>- `tree_max_endpoints`: int — When discover_tree is True: max endpoints to discover (0=no limit).<br>- `max_workers`: int — Max concurrent GETs (1=sequential). Use >1 for async endpoint fetches.<br>- `follow_next_link`: bool — If True, follow Redfish Members collection OData nextLink pagination for each URI and merge all pages into a single response.<br>- `max_pages`: int — When follow_next_link is True: safety cap on the number of pages to follow per URI (default 200). | [RedfishEndpointDataModel](#RedfishEndpointDataModel-Model) | [RedfishEndpointCollector](#Collector-Class-RedfishEndpointCollector) | [RedfishEndpointAnalyzer](#Data-Analyzer-Class-RedfishEndpointAnalyzer) |
+| RedfishOemDiagPlugin | Redfish LogService.CollectDiagnosticData for each entry in collection_args.oem_diagnostic_types (collection_args.log_service_path selects the LogService).<br>Optional binary archives under the plugin log path when log_path is set. | Summarizes success/failure per OEM diagnostic type from collected results.<br>When analysis_args.require_all_success is true, fails the run if any type failed collection.<br>**Analyzer Args:**<br>- `require_all_success`: bool — If True, analysis fails when any OEM type collection failed. | **Collection Args:**<br>- `log_service_path`: str — Redfish path to the LogService (e.g. DiagLogs).<br>- `oem_diagnostic_types_allowable`: Optional[list[str]] — Allowable OEM diagnostic types for this architecture/BMC. When set, used for validation and as default for oem_diagno...<br>- `oem_diagnostic_types`: list[str] — OEM diagnostic types to collect. When empty and oem_diagnostic_types_allowable is set, defaults to that list.<br>- `task_timeout_s`: int — Max seconds to wait for each BMC task. | [RedfishOemDiagDataModel](#RedfishOemDiagDataModel-Model) | [RedfishOemDiagCollector](#Collector-Class-RedfishOemDiagCollector) | [RedfishOemDiagAnalyzer](#Data-Analyzer-Class-RedfishOemDiagAnalyzer) |
 
 # Collectors
 
@@ -947,6 +956,70 @@ UptimeDataModel
 
 - uptime
 
+## Collector Class BmcArchiveCollector
+
+### Description
+
+Archive BMC directories over SSH using tar czf - <path>.
+
+**Bases**: ['InBandDataCollector']
+
+**Link to code**: [bmc_archive_collector.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/ooband/bmc_archive/bmc_archive_collector.py)
+
+### Class Variables
+
+- **SUPPORTED_OS_FAMILY**: `{<OSFamily.LINUX: 3>, <OSFamily.UNKNOWN: 2>}`
+- **REMOTE_ARCHIVE_TEMPLATE**: `/tmp/node_scraper_{name}.tar.gz`
+- **_tar_ignore_failed_read_supported**: `None`
+
+### Provides Data
+
+BmcArchiveDataModel
+
+### Documented collection
+
+- SSH (BMC) shell: tar+gzip archives for each path in collection_args (see PathSpec entries).
+- Uses sudo on the BMC when collection_args paths require elevated access.
+
+## Collector Class RedfishEndpointCollector
+
+### Description
+
+Collects Redfish endpoint responses for URIs specified in config.
+
+**Bases**: ['RedfishDataCollector']
+
+**Link to code**: [endpoint_collector.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/ooband/redfish_endpoint/endpoint_collector.py)
+
+### Provides Data
+
+RedfishEndpointDataModel
+
+### Documented collection
+
+- Redfish GET: explicit paths from collection_args.uris (parallel when max_workers>1).
+- Optional paged GET following Members@odata.nextLink when follow_next_link is true.
+- Redfish GET tree: when discover_tree is true, walks from api_root using @odata.id / Members links (depth and endpoint caps from collection_args).
+
+## Collector Class RedfishOemDiagCollector
+
+### Description
+
+Collects Redfish OEM diagnostic logs (e.g. JournalControl, AllLogs) via LogService.CollectDiagnosticData.
+
+**Bases**: ['RedfishDataCollector']
+
+**Link to code**: [oem_diag_collector.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/ooband/redfish_oem_diag/oem_diag_collector.py)
+
+### Provides Data
+
+RedfishOemDiagDataModel
+
+### Documented collection
+
+- Redfish LogService.CollectDiagnosticData for each entry in collection_args.oem_diagnostic_types (collection_args.log_service_path selects the LogService).
+- Optional binary archives under the plugin log path when log_path is set.
+
 # Data Models
 
 ## AmdSmiDataModel Model
@@ -1286,6 +1359,22 @@ Data model for RDMA (Remote Direct Memory Access) statistics and link informatio
 - **dev_list**: `list[nodescraper.plugins.inband.rdma.rdmadata.RdmaDevice]`
 - **link_list_text**: `list[nodescraper.plugins.inband.rdma.rdmadata.RdmaLinkText]`
 
+## RegexSearchData Model
+
+### Description
+
+Loaded file or directory contents passed to the analyzer (via --data).
+
+**Link to code**: [regex_search_data.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/regex_search/regex_search_data.py)
+
+**Bases**: ['DataModel']
+
+### Model annotations and fields
+
+- **content**: `str`
+- **data_root**: `str`
+- **files**: `dict[str, str]`
+
 ## RocmDataModel Model
 
 **Link to code**: [rocmdata.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/rocm/rocmdata.py)
@@ -1377,6 +1466,49 @@ Data model for in band syslog logs
 
 - **current_time**: `str`
 - **uptime**: `str`
+
+## BmcArchiveDataModel Model
+
+### Description
+
+Collected BMC directory archives.
+
+**Link to code**: [bmc_archive_data.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/ooband/bmc_archive/bmc_archive_data.py)
+
+**Bases**: ['DataModel']
+
+### Model annotations and fields
+
+- **results**: `list[nodescraper.plugins.ooband.bmc_archive.bmc_archive_data.ArchiveCollectionResult]`
+- **archives**: `list[nodescraper.connection.inband.inband.BinaryFileArtifact]`
+
+## RedfishEndpointDataModel Model
+
+### Description
+
+Collected Redfish endpoint responses: URI -> JSON body.
+
+**Link to code**: [endpoint_data.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/ooband/redfish_endpoint/endpoint_data.py)
+
+**Bases**: ['DataModel']
+
+### Model annotations and fields
+
+- **responses**: `dict[str, dict]`
+
+## RedfishOemDiagDataModel Model
+
+### Description
+
+Collected Redfish OEM diagnostic log results: OEM type -> result (success, error, metadata).
+
+**Link to code**: [oem_diag_data.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/ooband/redfish_oem_diag/oem_diag_data.py)
+
+**Bases**: ['DataModel']
+
+### Model annotations and fields
+
+- **results**: `dict[str, nodescraper.plugins.ooband.redfish_oem_diag.oem_diag_data.OemDiagTypeResult]`
 
 # Data Analyzers
 
@@ -1709,6 +1841,20 @@ Check RDMA statistics for errors (RoCE and other RDMA error counters).
 
 **Link to code**: [rdma_analyzer.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/rdma/rdma_analyzer.py)
 
+## Data Analyzer Class RegexSearchAnalyzer
+
+### Description
+
+Run user-provided regexes against text loaded from --data (file or directory).
+
+**Bases**: ['RegexAnalyzer']
+
+**Link to code**: [regex_search_analyzer.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/regex_search/regex_search_analyzer.py)
+
+### Class Variables
+
+- **ERROR_REGEX**: `[]`
+
 ## Data Analyzer Class RocmAnalyzer
 
 ### Description
@@ -1752,6 +1898,36 @@ Check sysctl matches expected sysctl details
 **Bases**: ['DataAnalyzer']
 
 **Link to code**: [sysctl_analyzer.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/sysctl/sysctl_analyzer.py)
+
+## Data Analyzer Class RedfishEndpointAnalyzer
+
+### Description
+
+Checks Redfish endpoint responses against configured thresholds and key/value rules.
+
+**Bases**: ['DataAnalyzer']
+
+**Link to code**: [endpoint_analyzer.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/ooband/redfish_endpoint/endpoint_analyzer.py)
+
+### Documented analysis
+
+- For each entry in analysis_args.checks, reads JSON paths in collected responses and compares values to constraints (eq, min/max, anyOf, regex, etc.).
+- URI key "*" runs checks against every collected response body.
+
+## Data Analyzer Class RedfishOemDiagAnalyzer
+
+### Description
+
+Analyzes Redfish OEM diagnostic log collection results.
+
+**Bases**: ['DataAnalyzer']
+
+**Link to code**: [oem_diag_analyzer.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/ooband/redfish_oem_diag/oem_diag_analyzer.py)
+
+### Documented analysis
+
+- Summarizes success/failure per OEM diagnostic type from collected results.
+- When analysis_args.require_all_success is true, fails the run if any type failed collection.
 
 # Analyzer Args
 
@@ -2021,3 +2197,31 @@ Sysfs settings for analysis via a list of checks (path, expected values, name).
 - **exp_vm_dirty_ratio**: `Optional[int]` — Expected vm.dirty_ratio value.
 - **exp_vm_dirty_writeback_centisecs**: `Optional[int]` — Expected vm.dirty_writeback_centisecs value.
 - **exp_kernel_numa_balancing**: `Optional[int]` — Expected kernel.numa_balancing value.
+
+## Analyzer Args Class RedfishEndpointAnalyzerArgs
+
+### Description
+
+Analyzer args for config-driven Redfish checks.
+
+**Bases**: ['AnalyzerArgs']
+
+**Link to code**: [analyzer_args.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/ooband/redfish_endpoint/analyzer_args.py)
+
+### Annotations / fields
+
+- **checks**: `dict[str, dict[str, Union[int, float, str, bool, dict[str, Any]]]]` — Map: URI or '*' -> { property_path: constraint }. URI keys must match a key in the collected responses (exact match). Use '*' as the key to apply the inner constraints to every collected response body. Property paths use '/' for nesting and indices, e.g. 'Status/Health', 'PowerControl/0/PowerConsumedWatts'. Constraints: 'eq' — value must equal the given literal (int, float, str, bool). 'min' — value must be numeric and >= the given number. 'max' — value must be numeric and <= the given number. 'anyOf' — value must be in the given list (OR; any match passes). Example: { "/redfish/v1/Systems/1": { "Status/Health": { "anyOf": ["OK", "Warning"] }, "PowerState": "On" }, "*": { "Status/Health": { "anyOf": ["OK"] } } }.
+
+## Analyzer Args Class RedfishOemDiagAnalyzerArgs
+
+### Description
+
+Analyzer args for Redfish OEM diagnostic log results.
+
+**Bases**: ['AnalyzerArgs']
+
+**Link to code**: [analyzer_args.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/ooband/redfish_oem_diag/analyzer_args.py)
+
+### Annotations / fields
+
+- **require_all_success**: `bool` — If True, analysis fails when any OEM type collection failed.
