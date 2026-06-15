@@ -127,7 +127,10 @@ def test_get_plugin_configs():
 def test_config_builder(plugin_registry):
 
     config = build_config(
-        config_reg=ConfigRegistry(config_path=os.path.join(os.path.dirname(__file__), "fixtures")),
+        config_reg=ConfigRegistry(
+            config_path=os.path.join(os.path.dirname(__file__), "fixtures"),
+            load_entry_point_configs=False,
+        ),
         plugin_reg=plugin_registry,
         logger=logging.getLogger(),
         plugins=["TestPluginA"],
@@ -137,6 +140,8 @@ def test_config_builder(plugin_registry):
         "TestPluginA": {
             "test_bool_arg": True,
             "test_str_arg": "test",
+            "test_list_arg": [1],
+            "test_dict_arg": {},
             "test_model_arg": {"model_attr": 123},
         },
         "ExamplePlugin": {},

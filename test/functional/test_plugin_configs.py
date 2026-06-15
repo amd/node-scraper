@@ -42,11 +42,13 @@ def fixtures_dir():
 def plugin_config_files(fixtures_dir):
     """Return dict mapping plugin names to their config file paths."""
     return {
+        "AmdSmiPlugin": fixtures_dir / "amdsmi_plugin_config.json",
         "BiosPlugin": fixtures_dir / "bios_plugin_config.json",
         "CmdlinePlugin": fixtures_dir / "cmdline_plugin_config.json",
         "DimmPlugin": fixtures_dir / "dimm_plugin_config.json",
         "DkmsPlugin": fixtures_dir / "dkms_plugin_config.json",
         "DmesgPlugin": fixtures_dir / "dmesg_plugin_config.json",
+        "GenericCollectionPlugin": fixtures_dir / "generic_collection_plugin_config.json",
         "JournalPlugin": fixtures_dir / "journal_plugin_config.json",
         "KernelPlugin": fixtures_dir / "kernel_plugin_config.json",
         "KernelModulePlugin": fixtures_dir / "kernel_module_plugin_config.json",
@@ -110,6 +112,7 @@ def test_plugin_config_with_builtin_config(run_cli_command, tmp_path):
         "DimmPlugin",
         "DkmsPlugin",
         "DmesgPlugin",
+        "GenericCollectionPlugin",
         "JournalPlugin",
         "KernelPlugin",
         "KernelModulePlugin",

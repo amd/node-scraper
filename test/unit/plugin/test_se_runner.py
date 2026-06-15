@@ -29,23 +29,7 @@ from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
-
-from nodescraper.enums import ExecutionStatus
-from nodescraper.plugins.serviceability import (
-    AfidEvent,
-    MI3XXAnalyzer,
-    SeRunError,
-    ServiceabilityAnalyzerArgs,
-    ServiceabilityBlock,
-    ServiceabilityDataModel,
-    build_afid_events_from_data,
-    format_serviceability_solution_lines,
-    normalize_se_timestamp,
-    run_service_engine,
-    serviceability_block_from_service_result,
-)
-from nodescraper.plugins.serviceability.se_models import ServiceabilitySolution
-from test.unit.plugin.serviceability_dummy_data import (
+from serviceability_dummy_data import (
     DUMMY_AFID_A,
     DUMMY_AFID_B,
     DUMMY_AFID_C,
@@ -62,6 +46,22 @@ from test.unit.plugin.serviceability_dummy_data import (
     DUMMY_UNIT_B,
     DUMMY_UNIT_C,
 )
+
+from nodescraper.enums import ExecutionStatus
+from nodescraper.plugins.serviceability import (
+    AfidEvent,
+    MI3XXAnalyzer,
+    SeRunError,
+    ServiceabilityAnalyzerArgs,
+    ServiceabilityBlock,
+    ServiceabilityDataModel,
+    build_afid_events_from_data,
+    format_serviceability_solution_lines,
+    normalize_se_timestamp,
+    run_service_engine,
+    serviceability_block_from_service_result,
+)
+from nodescraper.plugins.serviceability.se_models import ServiceabilitySolution
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 AFID_SAG = FIXTURES / "afid_sag_sample.json"
@@ -173,7 +173,7 @@ def test_run_service_engine_with_mock_module():
         {"Afid": DUMMY_AFID_C, "serviceable_unit": DUMMY_UNIT_C, "Created": DUMMY_TIMESTAMP},
     ]
     block = run_service_engine(
-        engine_python_module="test.unit.plugin.fixtures.mock_python_engine",
+        engine_python_module="mock_python_engine",
         afid_events=EXAMPLE_EVENTS[:2],
         afid_sag_path=str(AFID_SAG),
         rf_events=rf_events,
@@ -186,7 +186,7 @@ def test_run_service_engine_with_mock_module():
 def test_run_service_engine_missing_sag_raises():
     with pytest.raises(SeRunError, match="AFID_SAG"):
         run_service_engine(
-            engine_python_module="test.unit.plugin.fixtures.mock_python_engine",
+            engine_python_module="mock_python_engine",
             afid_events=EXAMPLE_EVENTS,
             afid_sag_path="/nonexistent/dummy_afid_sag.json",
             rf_events=[{"Afid": DUMMY_AFID_A}],
@@ -235,7 +235,7 @@ def test_mi3xx_analyzer_runs_python_engine(system_info):
     )
     analyzer = MI3XXAnalyzer(system_info=system_info)
     args = ServiceabilityAnalyzerArgs(
-        engine_python_module="test.unit.plugin.fixtures.mock_python_engine",
+        engine_python_module="mock_python_engine",
         afid_sag_path=str(AFID_SAG),
     )
     result = analyzer.analyze_data(data, args=args)

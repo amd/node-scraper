@@ -25,6 +25,13 @@
 ###############################################################################
 import pytest
 from pydantic import ValidationError
+from serviceability_dummy_data import (
+    DUMMY_BMC_HOST,
+    DUMMY_EVENT_URI,
+    DUMMY_EVENT_URI_ALT,
+    DUMMY_TIMESTAMP_EARLIER,
+    DUMMY_TIMESTAMP_LATER,
+)
 
 from nodescraper.connection.redfish import RF_MEMBERS, RedfishGetResult
 from nodescraper.enums import ExecutionStatus
@@ -43,13 +50,6 @@ from nodescraper.plugins.serviceability import (
     is_valid_iso_datetime,
     satisfies_time_check,
 )
-from test.unit.plugin.serviceability_dummy_data import (
-    DUMMY_BMC_HOST,
-    DUMMY_EVENT_URI,
-    DUMMY_EVENT_URI_ALT,
-    DUMMY_TIMESTAMP_EARLIER,
-    DUMMY_TIMESTAMP_LATER,
-)
 
 EVENT_URI = DUMMY_EVENT_URI
 
@@ -67,6 +67,7 @@ def mi3xx_collector(system_info, redfish_conn_mock):
 def test_mi3xx_collector_args_default_event_log_uri():
     args = MI3XXCollectorArgs()
     uri = args.resolved_event_log_uri()
+    assert uri == MI3XXCollectorArgs.default_event_log_uri()
     assert uri.startswith("/redfish/")
     assert "EventLog" in uri
 
@@ -76,8 +77,17 @@ def test_mi3xx_collector_args_requires_event_log_uri():
         MI3XXCollectorArgs(uri="", rf_event_log_uri="")
 
 
-def test_mi3xx_collector_args_uri_alias():
-    args = MI3XXCollectorArgs(uri=f" {DUMMY_EVENT_URI_ALT} ", rf_event_log_uri=DUMMY_EVENT_URI)
+def test_mi3xx_collector_args_uri_alias_prefers_uri_when_both_set():
+    args = MI3XXCollectorArgs(
+        uri=f" {DUMMY_EVENT_URI_ALT} ",
+        rf_event_log_uri=DUMMY_EVENT_URI,
+    )
+    assert args.resolved_event_log_uri() == DUMMY_EVENT_URI_ALT
+
+
+def test_mi3xx_collector_args_strips_rf_event_log_uri():
+    args = MI3XXCollectorArgs(rf_event_log_uri=f"  {DUMMY_EVENT_URI_ALT}  ")
+    assert args.rf_event_log_uri == DUMMY_EVENT_URI_ALT
     assert args.resolved_event_log_uri() == DUMMY_EVENT_URI_ALT
 
 

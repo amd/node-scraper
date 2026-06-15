@@ -28,6 +28,7 @@ from typing import Any, Optional
 
 import pytest
 from pydantic import ValidationError
+from serviceability_dummy_data import DUMMY_BMC_HOST, DUMMY_EVENT_URI
 
 from nodescraper.connection.redfish import (
     RF_MEMBERS,
@@ -46,7 +47,6 @@ from nodescraper.plugins.serviceability import (
 from nodescraper.plugins.serviceability.serviceability_collector import (
     ServiceabilityCollectorBase,
 )
-from test.unit.plugin.serviceability_dummy_data import DUMMY_BMC_HOST, DUMMY_EVENT_URI
 
 EVENT_URI = DUMMY_EVENT_URI
 
@@ -94,6 +94,7 @@ def stub_serviceability_collector(system_info, redfish_conn_mock):
 def test_mi3xx_collector_args_default_event_log_uri():
     args = MI3XXCollectorArgs()
     uri = args.resolved_event_log_uri()
+    assert uri == MI3XXCollectorArgs.default_event_log_uri()
     assert uri.startswith("/redfish/")
     assert "EventLog" in uri
 

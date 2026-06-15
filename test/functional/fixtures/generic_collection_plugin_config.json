@@ -1,0 +1,150 @@
+{
+  "global_args": {},
+  "plugins": {
+    "GenericCollectionPlugin": {
+      "collection_args": {
+        "sudo": false,
+        "include_stdout": true,
+        "commands": [
+          {
+            "name": "kernel_os",
+            "command": "uname -s"
+          },
+          {
+            "name": "messages",
+            "command": "cat /var/log/messages",
+            "sudo": true
+          },
+          {
+            "name": "uid",
+            "command": "id -u",
+            "sudo": false
+          },
+          {
+            "name": "count_eq",
+            "command": "echo 8"
+          },
+          {
+            "name": "count_ne",
+            "command": "echo 7"
+          },
+          {
+            "name": "count_gt",
+            "command": "echo 10"
+          },
+          {
+            "name": "count_gte",
+            "command": "echo 5"
+          },
+          {
+            "name": "count_lt",
+            "command": "echo 3"
+          },
+          {
+            "name": "count_lte",
+            "command": "echo 10"
+          },
+          {
+            "name": "count_capture",
+            "command": "printf 'count: 42\\n'"
+          },
+          {
+            "name": "exact_match",
+            "command": "echo exact-value"
+          },
+          {
+            "name": "expected_in_check",
+            "command": "echo beta"
+          },
+          {
+            "name": "line_count",
+            "command": "printf 'one\\ntwo\\n'"
+          },
+          {
+            "name": "optional_fail",
+            "command": "false"
+          }
+        ]
+      },
+      "analysis_args": {
+        "checks": [
+          {
+            "name": "kernel_os",
+            "must_contain": "TEST"
+          },
+          {
+            "name": "messages",
+            "must_not_contain": "error"
+          },
+          {
+            "name": "uid",
+            "expected_regex": "^\\d+$"
+          },
+          {
+            "name": "count_eq",
+            "value_type": "int",
+            "compare_op": "==",
+            "expected_value": 8
+          },
+          {
+            "name": "count_ne",
+            "value_type": "int",
+            "compare_op": "!=",
+            "expected_value": 0
+          },
+          {
+            "name": "count_gt",
+            "value_type": "int",
+            "compare_op": ">",
+            "expected_value": 5
+          },
+          {
+            "name": "count_gte",
+            "value_type": "int",
+            "compare_op": ">=",
+            "expected_value": 5
+          },
+          {
+            "name": "count_lt",
+            "value_type": "int",
+            "compare_op": "<",
+            "expected_value": 10
+          },
+          {
+            "name": "count_lte",
+            "value_type": "int",
+            "compare_op": "<=",
+            "expected_value": 10
+          },
+          {
+            "name": "count_capture",
+            "value_type": "int",
+            "compare_op": "==",
+            "expected_value": 42,
+            "capture_regex": "count:\\s+(\\d+)"
+          },
+          {
+            "name": "exact_match",
+            "expected": "exact-value"
+          },
+          {
+            "name": "expected_in_check",
+            "expected_in": ["alpha", "beta", "gamma"]
+          },
+          {
+            "name": "line_count",
+            "exact_lines": 2
+          },
+          {
+            "name": "optional_fail",
+            "allow_failure": true,
+            "expected_exit_code": 1
+          }
+        ]
+      }
+    }
+  },
+  "result_collators": {},
+  "name": "GenericCollectionPlugin config",
+  "desc": "Demo config: per-command sudo, text checks, all compare_op values, and optional allow_failure"
+}

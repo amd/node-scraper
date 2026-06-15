@@ -25,12 +25,19 @@
 ###############################################################################
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Literal
 
 TimeOperator = Literal[">", ">=", "<", "<=", "=="]
 
 _TIME_OPERATORS: set[str] = {">", ">=", "<", "<=", "=="}
+
+
+def _as_utc_for_compare(value: datetime) -> datetime:
+    """Normalize naive datetimes to UTC for comparisons against offset-aware values."""
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
 
 
 def is_valid_iso_datetime(value: str) -> bool:
@@ -109,8 +116,8 @@ def compare_iso_datetime(left: str, right: str, operator: TimeOperator) -> bool:
     """
     if operator not in _TIME_OPERATORS:
         raise ValueError(f"Unsupported time operator: {operator!r}")
-    left_dt = parse_iso_datetime(left)
-    right_dt = parse_iso_datetime(right)
+    left_dt = _as_utc_for_compare(parse_iso_datetime(left))
+    right_dt = _as_utc_for_compare(parse_iso_datetime(right))
     if operator == ">":
         return left_dt > right_dt
     if operator == ">=":

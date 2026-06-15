@@ -40,11 +40,14 @@ class MI3XXCollectorArgs(CollectorArgs):
     """MI3XX OOB Redfish serviceability collector arguments."""
 
     uri: Optional[str] = Field(
-        default="/redfish/v1/Systems/UBB/LogServices/EventLog/Entries",
-        description="Optional alias for ``rf_event_log_uri`` (non-empty string).",
-    )
-    rf_event_log_uri: Optional[str] = Field(
         default=None,
+        description=(
+            "Optional alias for ``rf_event_log_uri``. When both ``uri`` and ``rf_event_log_uri`` "
+            "are explicitly set to non-empty values, ``uri`` wins."
+        ),
+    )
+    rf_event_log_uri: str = Field(
+        default="/redfish/v1/Systems/UBB/LogServices/EventLog/Entries",
         description="Redfish URI for the event log ``Entries`` collection.",
     )
     rf_chassis_devices: Optional[List[str]] = Field(
@@ -85,6 +88,14 @@ class MI3XXCollectorArgs(CollectorArgs):
         default=None,
         description="Comparison operator applied when reference_time is set.",
     )
+
+    @field_validator("rf_event_log_uri")
+    @classmethod
+    def _strip_rf_event_log_uri(cls, value: object) -> str:
+        text = str(value).strip()
+        if not text:
+            raise ValueError("rf_event_log_uri must be a non-empty Redfish URI")
+        return text
 
     @field_validator("reference_time")
     @classmethod
@@ -127,9 +138,35 @@ class MI3XXCollectorArgs(CollectorArgs):
             raise ValueError("Provide both reference_time and time_operator, or omit both.")
         return self
 
+    @classmethod
+    def default_event_log_uri(cls) -> str:
+        """Return the built-in default for ``rf_event_log_uri`` (reads the field default; no duplicate constant)."""
+        raw = cls.model_fields["rf_event_log_uri"].default
+        if not isinstance(raw, str):
+            raise TypeError("rf_event_log_uri field default must be a str")
+        return raw
+
     def resolved_event_log_uri(self) -> str:
-        """Return uri or rf_event_log_uri."""
-        for candidate in (self.uri, self.rf_event_log_uri):
-            if candidate and str(candidate).strip():
-                return str(candidate).strip()
+        """Resolve the event log ``Entries`` URI from ``uri`` and ``rf_event_log_uri``."""
+        uri_set = "uri" in self.model_fields_set
+        rf_set = "rf_event_log_uri" in self.model_fields_set
+
+        def _strip(value: Optional[str]) -> str:
+            if value is None:
+                return ""
+            return str(value).strip()
+
+        uri_s = _strip(self.uri)
+        rf_s = _strip(self.rf_event_log_uri)
+
+        if uri_set and rf_set and uri_s and rf_s:
+            return uri_s
+        if rf_set:
+            return rf_s
+        if uri_set and uri_s:
+            return uri_s
+        if uri_set and not uri_s and not rf_set:
+            return rf_s
+        if not uri_set and not rf_set:
+            return rf_s
         return ""

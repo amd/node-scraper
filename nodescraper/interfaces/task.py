@@ -30,7 +30,7 @@ import logging
 import uuid
 from typing import Any, Optional, Union
 
-from nodescraper.constants import DEFAULT_LOGGER
+from nodescraper.constants import DEFAULT_EVENT_REPORTER, DEFAULT_LOGGER
 from nodescraper.enums import EventCategory, EventPriority
 from nodescraper.models import Event, SystemInfo, TaskResult
 
@@ -55,6 +55,7 @@ class Task(abc.ABC):
         max_event_priority_level: Union[EventPriority, str] = EventPriority.CRITICAL,
         parent: Optional[str] = None,
         task_result_hooks: Optional[list[TaskResultHook]] = None,
+        event_reporter: str = DEFAULT_EVENT_REPORTER,
         session_id: Optional[str] = None,
         **kwargs: dict[str, Any],
     ):
@@ -62,6 +63,7 @@ class Task(abc.ABC):
             logger = logging.getLogger(DEFAULT_LOGGER)
         self.system_info = system_info
         self.logger = logger
+        self.event_reporter = event_reporter
         self.max_event_priority_level = max_event_priority_level
         self.parent = parent
         if not task_result_hooks:
@@ -139,6 +141,7 @@ class Task(abc.ABC):
             priority = self.max_event_priority_level
 
         event = Event(
+            reporter=self.event_reporter,
             category=category,
             description=description,
             priority=priority,

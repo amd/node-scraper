@@ -32,6 +32,7 @@ from typing import Callable, ClassVar, Generic, Optional, Type, Union
 
 from pydantic import BaseModel, ValidationError
 
+from nodescraper.constants import DEFAULT_EVENT_REPORTER
 from nodescraper.enums import (
     EventCategory,
     EventPriority,
@@ -96,6 +97,11 @@ def collect_decorator(
                     priority=EventPriority.CRITICAL,
                     console_log=True,
                 )
+                collector.logger.error(
+                    "Pydantic validation error in data collector %s: %s",
+                    collector.__class__.__name__,
+                    exception.errors(include_url=False),
+                )
             else:
                 collector._log_event(
                     category=EventCategory.RUNTIME,
@@ -103,6 +109,9 @@ def collect_decorator(
                     data=get_exception_traceback(exception),
                     priority=EventPriority.CRITICAL,
                     console_log=True,
+                )
+                collector.logger.exception(
+                    "Exception in data collector %s", collector.__class__.__name__
                 )
             collector.result.status = ExecutionStatus.EXECUTION_FAILURE
             result = collector.result
@@ -144,6 +153,8 @@ class DataCollector(Task, abc.ABC, Generic[TConnection, TDataModel, TCollectArg]
         max_event_priority_level: Union[EventPriority, str] = EventPriority.CRITICAL,
         parent: Optional[str] = None,
         task_result_hooks: Optional[list[TaskResultHook]] = None,
+        event_reporter: str = DEFAULT_EVENT_REPORTER,
+        session_id: Optional[str] = None,
         **kwargs,
     ):
         """data collector init function
@@ -151,6 +162,7 @@ class DataCollector(Task, abc.ABC, Generic[TConnection, TDataModel, TCollectArg]
         Args:
             system_info (SystemInfo): system info object for target system for data collection
             system_interaction (SystemInteraction): enum to indicate the type of actions that can be performed when interacting with the system
+            event_reporter (str, optional): Reporter string stored on emitted events. Defaults to DEFAULT_EVENT_REPORTER.
             logger (Optional[logging.Logger], optional): python logger object. Defaults to None.
             log_path (Optional[str], optional): file system log path. Defaults to None.
         """
@@ -160,6 +172,8 @@ class DataCollector(Task, abc.ABC, Generic[TConnection, TDataModel, TCollectArg]
             max_event_priority_level=max_event_priority_level,
             parent=parent,
             task_result_hooks=task_result_hooks,
+            event_reporter=event_reporter,
+            session_id=session_id,
         )
 
         if isinstance(system_interaction_level, str):

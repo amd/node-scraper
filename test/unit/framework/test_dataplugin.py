@@ -23,16 +23,19 @@
 # SOFTWARE.
 #
 ###############################################################################
+import json
+from pathlib import Path
+from typing import Optional
 from unittest.mock import MagicMock, patch
 
 import pytest
-from common.shared_utils import MockConnectionManager
+from framework.common.shared_utils import MockConnectionManager
 
 from nodescraper.enums import EventPriority, ExecutionStatus, SystemInteractionLevel
 from nodescraper.interfaces.dataanalyzertask import DataAnalyzer
 from nodescraper.interfaces.datacollectortask import DataCollector
 from nodescraper.interfaces.dataplugin import DataPlugin
-from nodescraper.models import DataModel, TaskResult
+from nodescraper.models import CollectorArgs, DataModel, TaskResult
 
 
 class StandardDataModel(DataModel):
@@ -151,6 +154,8 @@ class TestDataPluginCore:
                     logger=plugin.logger,
                     parent=plugin.__class__.__name__,
                     task_result_hooks=plugin.task_result_hooks,
+                    event_reporter=plugin.event_reporter,
+                    session_id=plugin.session_id,
                 )
                 mock_collect.assert_called_once()
                 assert result.status == ExecutionStatus.OK
@@ -256,6 +261,40 @@ class TestDataPluginCore:
 
             assert mock_collect.call_count == expected_calls[0]
             assert mock_analyze.call_count == expected_calls[1]
+
+    def test_run_reports_collection_and_analysis_errors(self, plugin_with_conn):
+        plugin_with_conn.data = StandardDataModel()
+
+        collection_error = TaskResult(
+            status=ExecutionStatus.ERROR,
+            message="Generic collection: 2/3 commands succeeded",
+        )
+        analysis_error = TaskResult(
+            status=ExecutionStatus.ERROR,
+            message="Generic analysis: 1/3 checks passed",
+        )
+
+        with (
+            patch.object(CoreDataPlugin, "collect") as mock_collect,
+            patch.object(CoreDataPlugin, "analyze") as mock_analyze,
+        ):
+
+            def collect_side_effect(*args, **kwargs):
+                plugin_with_conn.collection_result = collection_error
+                return collection_error
+
+            def analyze_side_effect(*args, **kwargs):
+                plugin_with_conn.analysis_result = analysis_error
+                return analysis_error
+
+            mock_collect.side_effect = collect_side_effect
+            mock_analyze.side_effect = analyze_side_effect
+
+            result = plugin_with_conn.run(collection=True, analysis=True)
+
+            assert result.status == ExecutionStatus.ERROR
+            assert "Collection error: Generic collection: 2/3 commands succeeded" in result.message
+            assert "Analysis error: Generic analysis: 1/3 checks passed" in result.message
 
     def test_run_with_parameters(self, plugin_with_conn):
         collection_args = {"param": "value"}
@@ -403,3 +442,243 @@ class TestDataPluginCore:
 
         assert result.status == ExecutionStatus.NOT_RAN
         assert "No data available" in result.message
+
+
+class ContentModel(StandardDataModel):
+    def get_compare_content(self) -> str:
+        return self.value
+
+
+class ErrMatchAnalyzer(DataAnalyzer):
+    DATA_MODEL = ContentModel
+
+    def analyze_data(self, data, args=None):
+        return TaskResult(status=ExecutionStatus.OK)
+
+    @staticmethod
+    def get_error_matches(content: str) -> list[str]:
+        return ["z", "a"] if content else []
+
+
+class ContentCollector(DataCollector):
+    DATA_MODEL = ContentModel
+
+    def collect_data(self, args=None):
+        return TaskResult(status=ExecutionStatus.OK), ContentModel(value="x")
+
+
+class ExtractPlugin(DataPlugin):
+    DATA_MODEL = ContentModel
+    CONNECTION_TYPE = MockConnectionManager
+    COLLECTOR = ContentCollector
+    ANALYZER = ErrMatchAnalyzer
+
+
+class LogImportModel(ContentModel):
+    @classmethod
+    def import_model(cls, model_input):
+        if isinstance(model_input, str) and model_input.endswith(".log"):
+            return cls(value=Path(model_input).read_text(encoding="utf-8"))
+        return super().import_model(model_input)
+
+
+class LogImportPlugin(DataPlugin):
+    DATA_MODEL = LogImportModel
+    CONNECTION_TYPE = MockConnectionManager
+    COLLECTOR = ContentCollector
+    ANALYZER = ErrMatchAnalyzer
+
+
+class TestDataPluginRunPaths:
+    def test_find_datamodel_path_requires_directory(self) -> None:
+        assert CoreDataPlugin.find_datamodel_path_in_run("/no/such/run") is None
+
+    def test_find_datamodel_path_success(self, tmp_path: Path) -> None:
+        collector_dir = tmp_path / "extract_plugin" / "content_collector"
+        collector_dir.mkdir(parents=True)
+        (collector_dir / "result.json").write_text(
+            json.dumps({"parent": "ExtractPlugin"}), encoding="utf-8"
+        )
+        (collector_dir / "contentmodel.json").write_text(
+            json.dumps({"value": "from_run"}), encoding="utf-8"
+        )
+
+        found = ExtractPlugin.find_datamodel_path_in_run(str(tmp_path))
+        assert found is not None
+        assert found.endswith("contentmodel.json")
+
+    def test_find_datamodel_path_wrong_parent(self, tmp_path: Path) -> None:
+        collector_dir = tmp_path / "extract_plugin" / "content_collector"
+        collector_dir.mkdir(parents=True)
+        (collector_dir / "result.json").write_text(
+            json.dumps({"parent": "OtherPlugin"}), encoding="utf-8"
+        )
+        (collector_dir / "contentmodel.json").write_text("{}", encoding="utf-8")
+
+        assert ExtractPlugin.find_datamodel_path_in_run(str(tmp_path)) is None
+
+    def test_find_datamodel_path_invalid_result_json(self, tmp_path: Path) -> None:
+        collector_dir = tmp_path / "extract_plugin" / "content_collector"
+        collector_dir.mkdir(parents=True)
+        (collector_dir / "result.json").write_text("{not json", encoding="utf-8")
+        (collector_dir / "contentmodel.json").write_text("{}", encoding="utf-8")
+
+        assert ExtractPlugin.find_datamodel_path_in_run(str(tmp_path)) is None
+
+    def test_load_datamodel_from_path_json(self, tmp_path: Path) -> None:
+        p = tmp_path / "dm.json"
+        p.write_text(json.dumps({"value": "file"}), encoding="utf-8")
+        m = ExtractPlugin.load_datamodel_from_path(str(p))
+        assert isinstance(m, ContentModel)
+        assert m.value == "file"
+
+    def test_load_datamodel_from_path_missing(self) -> None:
+        assert ExtractPlugin.load_datamodel_from_path("/nonexistent/x.json") is None
+
+    def test_load_datamodel_from_path_log_with_custom_import(self, tmp_path: Path) -> None:
+        log = tmp_path / "capture.log"
+        log.write_text("from_log", encoding="utf-8")
+        m = LogImportPlugin.load_datamodel_from_path(str(log))
+        assert isinstance(m, LogImportModel)
+        assert m.value == "from_log"
+
+    def test_load_datamodel_from_path_log_without_override_returns_none(
+        self, tmp_path: Path
+    ) -> None:
+        log = tmp_path / "plain.log"
+        log.write_text("{}", encoding="utf-8")
+        assert ExtractPlugin.load_datamodel_from_path(str(log)) is None
+
+    def test_get_extracted_errors_sorted(self) -> None:
+        dm = ContentModel(value="has text")
+        out = ExtractPlugin.get_extracted_errors(dm)
+        assert out == ["a", "z"]
+
+    def test_get_extracted_errors_without_hooks(self) -> None:
+        assert CoreDataPlugin.get_extracted_errors(StandardDataModel()) is None
+
+    def test_load_run_data_from_run_dir(self, tmp_path: Path) -> None:
+        collector_dir = tmp_path / "extract_plugin" / "content_collector"
+        collector_dir.mkdir(parents=True)
+        (collector_dir / "result.json").write_text(
+            json.dumps({"parent": "ExtractPlugin"}), encoding="utf-8"
+        )
+        (collector_dir / "contentmodel.json").write_text(
+            json.dumps({"value": "run"}), encoding="utf-8"
+        )
+
+        loaded = ExtractPlugin.load_run_data(str(tmp_path))
+        assert loaded is not None
+        assert loaded["value"] == "run"
+        assert loaded["extracted_errors"] == ["a", "z"]
+
+    def test_load_run_data_direct_file(self, tmp_path: Path) -> None:
+        p = tmp_path / "direct.json"
+        p.write_text(json.dumps({"value": "direct"}), encoding="utf-8")
+        loaded = ExtractPlugin.load_run_data(str(p))
+        assert loaded is not None
+        assert loaded["value"] == "direct"
+
+
+class MultiPartDataModel(DataModel):
+    alpha: Optional[str] = None
+    beta: Optional[str] = None
+
+
+class AlphaCollector(DataCollector):
+    DATA_MODEL = MultiPartDataModel
+
+    def collect_data(self, args=None):
+        return TaskResult(status=ExecutionStatus.OK, task="AlphaCollector"), MultiPartDataModel(
+            alpha="alpha-value"
+        )
+
+
+class BetaCollector(DataCollector):
+    DATA_MODEL = MultiPartDataModel
+
+    def collect_data(self, args=None):
+        return TaskResult(status=ExecutionStatus.OK, task="BetaCollector"), MultiPartDataModel(
+            beta="beta-value"
+        )
+
+
+class AlphaCollectorArgs(CollectorArgs):
+    alpha_path: str = "/alpha"
+
+
+class BetaCollectorArgs(CollectorArgs):
+    beta_path: str = "/beta"
+
+
+class MultiCollectorPlugin(DataPlugin):
+    DATA_MODEL = MultiPartDataModel
+    CONNECTION_TYPE = MockConnectionManager
+    COLLECTOR = (AlphaCollector, BetaCollector)
+    ANALYZER = StandardAnalyzer
+
+
+class TestMultiCollectorDataPlugin:
+    def test_get_collector_classes_accepts_collector_tuple(self):
+        assert MultiCollectorPlugin.get_collector_classes() == (AlphaCollector, BetaCollector)
+
+    def test_get_collector_classes_accepts_single_collector(self):
+        assert CoreDataPlugin.get_collector_classes() == (BaseDataCollector,)
+
+    def test_collector_args_class_accepts_args_map(self):
+        class MappedArgsPlugin(DataPlugin):
+            DATA_MODEL = MultiPartDataModel
+            CONNECTION_TYPE = MockConnectionManager
+            COLLECTOR = (AlphaCollector, BetaCollector)
+            COLLECTOR_ARGS = {
+                "AlphaCollector": AlphaCollectorArgs,
+                "BetaCollector": BetaCollectorArgs,
+            }
+            ANALYZER = StandardAnalyzer
+
+        assert MappedArgsPlugin._collector_args_class(AlphaCollector) is AlphaCollectorArgs
+        assert MappedArgsPlugin._collector_args_class(BetaCollector) is BetaCollectorArgs
+
+    def test_collect_runs_all_collectors_and_merges_data(self, plugin_with_conn):
+        multi_plugin = MultiCollectorPlugin(
+            system_info=plugin_with_conn.system_info,
+            logger=plugin_with_conn.logger,
+            connection_manager=plugin_with_conn.connection_manager,
+        )
+
+        with (
+            patch.object(AlphaCollector, "collect_data") as alpha_collect,
+            patch.object(BetaCollector, "collect_data") as beta_collect,
+        ):
+            alpha_collect.return_value = (
+                TaskResult(status=ExecutionStatus.OK, task="AlphaCollector"),
+                MultiPartDataModel(alpha="alpha-value"),
+            )
+            beta_collect.return_value = (
+                TaskResult(status=ExecutionStatus.OK, task="BetaCollector"),
+                MultiPartDataModel(beta="beta-value"),
+            )
+
+            result = multi_plugin.collect()
+
+            alpha_collect.assert_called_once()
+            beta_collect.assert_called_once()
+            assert result.status == ExecutionStatus.OK
+            assert multi_plugin.data.alpha == "alpha-value"
+            assert multi_plugin.data.beta == "beta-value"
+            assert "AlphaCollector" in result.task
+            assert "BetaCollector" in result.task
+
+    def test_find_datamodel_path_in_run_checks_all_collectors(self, tmp_path: Path) -> None:
+        beta_dir = tmp_path / "multi_collector_plugin" / "beta_collector"
+        beta_dir.mkdir(parents=True)
+        (beta_dir / "result.json").write_text(
+            json.dumps({"parent": "MultiCollectorPlugin"}), encoding="utf-8"
+        )
+        (beta_dir / "multipartdatamodel.json").write_text(
+            json.dumps({"alpha": "a", "beta": "b"}), encoding="utf-8"
+        )
+
+        found = MultiCollectorPlugin.find_datamodel_path_in_run(str(tmp_path))
+        assert found is not None
+        assert found.endswith("multipartdatamodel.json")

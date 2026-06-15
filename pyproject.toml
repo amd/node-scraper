@@ -2,7 +2,7 @@
 name = "amd-node-scraper"
 dynamic = ["version"]
 description = "A framework for automated error detection and data collection"
-authors = []
+authors = [{ name = "AMD" }]
 readme = "README.md"
 requires-python = ">=3.9"
 
@@ -29,7 +29,9 @@ dev = [
     "pre-commit",
     "pytest",
     "pytest-cov",
-    "mypy"
+    "mypy",
+    "types-paramiko",
+    "types-setuptools",
 ]
 
 [project.urls]
@@ -38,7 +40,7 @@ documentation = "https://github.com/amd/node-scraper"
 repository = "https://github.com/amd/node-scraper"
 
 [build-system]
-requires = ["setuptools==70.3.0", "setuptools-scm==8.1.0"]
+requires = ["setuptools==78.1.1", "setuptools-scm==8.1.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
@@ -50,6 +52,10 @@ include-package-data = true
 [project.scripts]
 node-scraper = "nodescraper.cli:cli_entry"
 
+[project.entry-points."nodescraper.plugin_configs"]
+NodeStatus = "nodescraper.pluginrecipe.node_status:NodeStatus"
+AllPlugins = "nodescraper.pluginrecipe.all_plugins:AllPlugins"
+
 [tool.black]
 line-length = 100
 target_version = ['py39']
@@ -60,6 +66,10 @@ profile = "black"
 [tool.ruff.lint]
 select = ["F", "B", "T20", "N", "W", "I", "E"]
 ignore = ["E501", "N806"]
+
+[tool.mypy]
+python_version = "3.9"
+mypy_path = ["test/unit"]
 
 [tool.setuptools_scm]
 version_scheme = "post-release"

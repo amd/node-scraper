@@ -28,11 +28,14 @@ from __future__ import annotations
 import copy
 import inspect
 import logging
+import uuid
 from collections import deque
 from typing import Optional, Type, Union
 
 from pydantic import BaseModel
 
+from nodescraper.base.oobsshdataplugin import OOBSSHDataPlugin
+from nodescraper.connection.oob_ssh import OobSshConnectionManager
 from nodescraper.constants import DEFAULT_LOGGER
 from nodescraper.interfaces import ConnectionManager, DataPlugin, PluginInterface
 from nodescraper.models import PluginConfig, SystemInfo
@@ -53,6 +56,7 @@ class PluginExecutor:
         logger: Optional[logging.Logger] = None,
         plugin_registry: Optional[PluginRegistry] = None,
         log_path: Optional[str] = None,
+        session_id: Optional[str] = None,
     ):
 
         if logger is None:
@@ -65,9 +69,23 @@ class PluginExecutor:
             system_info = SystemInfo()
         self.system_info = system_info
 
+        if session_id is not None:
+            try:
+                uuid.UUID(session_id)
+                self.session_id = session_id
+            except (ValueError, AttributeError, TypeError) as e:
+                raise ValueError(
+                    f"session_id must be a valid UUID string, got: {session_id}"
+                ) from e
+        else:
+            self.session_id = None
+
         self.plugin_config = self.merge_configs(plugin_configs)
 
         self.connection_library: dict[type[ConnectionManager], ConnectionManager] = {}
+        self.connection_configs: dict[str, Union[dict, BaseModel]] = (
+            dict(connections) if connections else {}
+        )
 
         self.log_path = log_path
 
@@ -90,6 +108,7 @@ class PluginExecutor:
                     logger=self.logger,
                     connection_args=connection_args,
                     task_result_hooks=self.connection_result_hooks,
+                    session_id=self.session_id,
                 )
 
         self.logger.info("System Name: %s", self.system_info.name)
@@ -157,42 +176,60 @@ class PluginExecutor:
                     "logger": self.logger,
                     "queue_callback": plugin_queue.append,
                     "log_path": self.log_path,
+                    "session_id": self.session_id,
                 }
 
                 if plugin_class.CONNECTION_TYPE:
-                    connection_manager_class: Type[ConnectionManager] = plugin_class.CONNECTION_TYPE
-                    if (
-                        connection_manager_class.__name__
-                        in self.plugin_registry.connection_managers
-                    ):
-                        mgr_impl = self.plugin_registry.connection_managers[
-                            connection_manager_class.__name__
-                        ]
-                    elif (
-                        inspect.isclass(connection_manager_class)
-                        and issubclass(connection_manager_class, ConnectionManager)
-                        and not inspect.isabstract(connection_manager_class)
-                    ):
-                        # External packages set CONNECTION_TYPE on the plugin;
-                        # use it when not listed under nodescraper.connection_managers entry points.
-                        mgr_impl = connection_manager_class
+                    if issubclass(plugin_class, OOBSSHDataPlugin):
+                        mgr_impl = OobSshConnectionManager
+                        connection_args = self.connection_configs.get("RedfishConnectionManager")
+                        if connection_args is None:
+                            self.logger.error(
+                                "%s requires RedfishConnectionManager in the connection config",
+                                plugin_name,
+                            )
+                            continue
                     else:
-                        self.logger.error(
-                            "Unable to find registered connection manager class for %s that is required by",
-                            connection_manager_class.__name__,
+                        connection_manager_class: Type[ConnectionManager] = (
+                            plugin_class.CONNECTION_TYPE
                         )
-                        continue
+                        if (
+                            connection_manager_class.__name__
+                            in self.plugin_registry.connection_managers
+                        ):
+                            mgr_impl = self.plugin_registry.connection_managers[
+                                connection_manager_class.__name__
+                            ]
+                        elif (
+                            inspect.isclass(connection_manager_class)
+                            and issubclass(connection_manager_class, ConnectionManager)
+                            and not inspect.isabstract(connection_manager_class)
+                        ):
+                            # External packages set CONNECTION_TYPE on the plugin;
+                            # use it when not listed under nodescraper.connection_managers entry points.
+                            mgr_impl = connection_manager_class
+                        else:
+                            self.logger.error(
+                                "Unable to find registered connection manager class for %s that is required by",
+                                connection_manager_class.__name__,
+                            )
+                            continue
+                        connection_args = None
 
                     if mgr_impl not in self.connection_library:
                         self.logger.info(
-                            "Initializing connection manager for %s with default args",
+                            "Initializing connection manager for %s",
                             mgr_impl.__name__,
                         )
-                        self.connection_library[mgr_impl] = mgr_impl(
-                            system_info=self.system_info,
-                            logger=self.logger,
-                            task_result_hooks=self.connection_result_hooks,
-                        )
+                        init_kwargs = {
+                            "system_info": self.system_info,
+                            "logger": self.logger,
+                            "task_result_hooks": self.connection_result_hooks,
+                            "session_id": self.session_id,
+                        }
+                        if connection_args is not None:
+                            init_kwargs["connection_args"] = connection_args
+                        self.connection_library[mgr_impl] = mgr_impl(**init_kwargs)
 
                     init_payload["connection_manager"] = self.connection_library[mgr_impl]
 
@@ -279,31 +316,51 @@ class PluginExecutor:
 
         run_args = {}
         for key in global_args:
-            if key in ["collection_args", "analysis_args"] and isinstance(plugin_inst, DataPlugin):
+            if key in ("collection_args", "analysis_args"):
                 continue
-            else:
-                run_args[key] = global_args[key]
+            run_args[key] = global_args[key]
 
-        if (
-            "collection_args" in global_args
-            and hasattr(plugin_class, "COLLECTOR_ARGS")
-            and plugin_class.COLLECTOR_ARGS is not None
-        ):
-
-            plugin_fields = set(plugin_class.COLLECTOR_ARGS.model_fields.keys())
-            filtered = {
-                k: v for k, v in global_args["collection_args"].items() if k in plugin_fields
-            }
-            if filtered:
-                run_args["collection_args"] = filtered
+        if "collection_args" in global_args and hasattr(plugin_class, "COLLECTOR_ARGS"):
+            collector_args = plugin_class.COLLECTOR_ARGS
+            if (
+                isinstance(plugin_inst, DataPlugin)
+                and plugin_class.get_collector_classes()
+                and isinstance(collector_args, dict)
+            ):
+                per_collector_args: dict[str, dict] = {}
+                for collector_cls in plugin_class.get_collector_classes():
+                    args_cls = plugin_class._collector_args_class(collector_cls)
+                    if args_cls is None:
+                        continue
+                    plugin_fields = set(args_cls.model_fields.keys())
+                    filtered = {
+                        k: v
+                        for k, v in global_args["collection_args"].items()
+                        if k in plugin_fields
+                    }
+                    if filtered:
+                        per_collector_args[collector_cls.__name__] = filtered
+                if per_collector_args:
+                    run_args["collection_args"] = per_collector_args
+            elif collector_args is not None and not isinstance(collector_args, dict):
+                args_cls = (
+                    collector_args if isinstance(collector_args, type) else type(collector_args)
+                )
+                plugin_fields = set(args_cls.model_fields.keys())
+                filtered = {
+                    k: v for k, v in global_args["collection_args"].items() if k in plugin_fields
+                }
+                if filtered:
+                    run_args["collection_args"] = filtered
 
         if (
             "analysis_args" in global_args
             and hasattr(plugin_class, "ANALYZER_ARGS")
             and plugin_class.ANALYZER_ARGS is not None
         ):
-
-            plugin_fields = set(plugin_class.ANALYZER_ARGS.model_fields.keys())
+            analyzer_args = plugin_class.ANALYZER_ARGS
+            args_cls = analyzer_args if isinstance(analyzer_args, type) else type(analyzer_args)
+            plugin_fields = set(args_cls.model_fields.keys())
             filtered = {k: v for k, v in global_args["analysis_args"].items() if k in plugin_fields}
             if filtered:
                 run_args["analysis_args"] = filtered

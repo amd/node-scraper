@@ -66,7 +66,11 @@ def test_collect_linux(system_info, device_enumeration_collector):
                 exit_code=0,
                 stdout="8",
                 stderr="",
-                command="lspci -d 1002: | grep -i 'VGA\\|Display\\|3D' | wc -l",
+                command=(
+                    "lspci -d 1002: | grep -iE "
+                    "'VGA|Display|3D|Processing accelerators|Co-processor|Accelerator' | "
+                    "grep -vi 'Virtual Function' | wc -l"
+                ),
             ),
             MagicMock(
                 exit_code=0,
@@ -142,7 +146,11 @@ def test_collect_error(system_info, device_enumeration_collector):
                 exit_code=1,
                 stdout="some output",
                 stderr="command failed",
-                command="lspci -d 1002: | grep -i 'VGA\\|Display\\|3D' | wc -l",
+                command=(
+                    "lspci -d 1002: | grep -iE "
+                    "'VGA|Display|3D|Processing accelerators|Co-processor|Accelerator' | "
+                    "grep -vi 'Virtual Function' | wc -l"
+                ),
             ),
             MagicMock(
                 exit_code=1,

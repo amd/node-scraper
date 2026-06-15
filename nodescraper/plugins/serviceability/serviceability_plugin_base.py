@@ -42,4 +42,5 @@ class ServiceabilityPluginBase(
 
     DATA_MODEL = ServiceabilityDataModel
     COLLECTOR = ServiceabilityCollectorBase
+    COLLECTOR_ARGS = CollectorArgs
     ANALYZER_ARGS = ServiceabilityAnalyzerArgs

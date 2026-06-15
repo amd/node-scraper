@@ -33,6 +33,7 @@ from typing import Callable, Generic, Optional, TypeVar, Union
 
 from pydantic import BaseModel
 
+from nodescraper.constants import DEFAULT_EVENT_REPORTER
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
 from nodescraper.models import SystemInfo, TaskResult
 from nodescraper.typeutils import TypeUtils
@@ -62,6 +63,9 @@ def connect_decorator(func: Callable[..., TaskResult]) -> Callable[..., TaskResu
                 data=get_exception_traceback(exception),
                 priority=EventPriority.CRITICAL,
                 console_log=True,
+            )
+            connection_manager.logger.exception(
+                "Exception connecting with %s", connection_manager.__class__.__name__
             )
             connection_manager.result.status = ExecutionStatus.EXECUTION_FAILURE
             result = connection_manager.result
@@ -93,6 +97,8 @@ class ConnectionManager(Task, Generic[TConnection, TConnectArg]):
         parent: Optional[str] = None,
         task_result_hooks: Optional[list[TaskResultHook], None] = None,
         connection_args: Optional[Union[TConnectArg, dict]] = None,
+        event_reporter: str = DEFAULT_EVENT_REPORTER,
+        session_id: Optional[str] = None,
         **kwargs,
     ):
         super().__init__(
@@ -101,6 +107,8 @@ class ConnectionManager(Task, Generic[TConnection, TConnectArg]):
             max_event_priority_level=max_event_priority_level,
             parent="connection" if not parent else parent,
             task_result_hooks=task_result_hooks,
+            event_reporter=event_reporter,
+            session_id=session_id,
             **kwargs,
         )
 
@@ -118,7 +126,7 @@ class ConnectionManager(Task, Generic[TConnection, TConnectArg]):
     def __init_subclass__(cls, **kwargs) -> None:
         super().__init_subclass__(**kwargs)
 
-        if hasattr(cls, "connect"):
+        if "connect" in cls.__dict__:
             cls.connect = connect_decorator(cls.connect)
 
     def __enter__(self):

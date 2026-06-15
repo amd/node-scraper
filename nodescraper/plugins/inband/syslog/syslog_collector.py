@@ -42,16 +42,28 @@ class SyslogCollector(InBandDataCollector[SyslogData, None]):
     DATA_MODEL = SyslogData
 
     CMD = r"ls -1 /var/log/syslog* 2>/dev/null | grep -E '^/var/log/syslog(\.[0-9]+(\.gz)?)?$' || true"
+    CMD_MESSAGES = r"ls -1 /var/log/messages* 2>/dev/null | grep -E '^/var/log/messages(\.[0-9]+(\.gz)?)?$' || true"
+
+    def _list_log_paths(self, list_cmd: str) -> list[str]:
+        list_res = self._run_sut_cmd(list_cmd, sudo=True)
+        return [p.strip() for p in (list_res.stdout or "").splitlines() if p.strip()]
+
+    @staticmethod
+    def _log_stem(path: str) -> str:
+        if path.startswith("/var/log/messages"):
+            return "messages"
+        return "syslog"
 
     def _collect_syslog_rotations(self) -> list[TextFileArtifact]:
         ret = []
-        list_res = self._run_sut_cmd(self.CMD, sudo=True)
-        paths = [p.strip() for p in (list_res.stdout or "").splitlines() if p.strip()]
+        paths: list[str] = []
+        for list_cmd in (self.CMD, self.CMD_MESSAGES):
+            paths.extend(self._list_log_paths(list_cmd))
         if not paths:
             self._log_event(
                 category=EventCategory.OS,
-                description="No /var/log/syslog files found (including rotations).",
-                data={"list_exit_code": list_res.exit_code},
+                description="No /var/log/syslog or /var/log/messages files found (including rotations).",
+                data={},
                 priority=EventPriority.WARNING,
             )
             return []
@@ -60,11 +72,12 @@ class SyslogCollector(InBandDataCollector[SyslogData, None]):
         collected = []
         for p in paths:
             qp = shell_quote(p)
+            stem = self._log_stem(p)
             if p.endswith(".gz"):
                 cmd = f"gzip -dc {qp} 2>/dev/null || zcat {qp} 2>/dev/null"
                 res = self._run_sut_cmd(cmd, sudo=True, log_artifact=False)
                 if res.exit_code == 0 and res.stdout is not None:
-                    fname = nice_rotated_name(p, "syslog")
+                    fname = nice_rotated_name(p, stem)
                     self.logger.info("Collected syslog log: %s", fname)
                     collected.append(TextFileArtifact(filename=fname, contents=res.stdout))
                     collected_logs.append(fname)
@@ -74,7 +87,7 @@ class SyslogCollector(InBandDataCollector[SyslogData, None]):
                 cmd = f"cat {qp}"
                 res = self._run_sut_cmd(cmd, sudo=True, log_artifact=False)
                 if res.exit_code == 0 and res.stdout is not None:
-                    fname = nice_rotated_name(p, "syslog")
+                    fname = nice_rotated_name(p, stem)
                     self.logger.info("Collected syslog log: %s", fname)
                     collected_logs.append(fname)
                     collected.append(TextFileArtifact(filename=fname, contents=res.stdout))
