@@ -489,10 +489,20 @@ class PcieCollector(InBandDataCollector[PcieDataModel, None]):
         for cap_id, cap_addr in cap_data.items():
             if cap_id == 0:
                 continue
-            if cap_addr >= 0x100:
-                cap_enum: Enum = ExtendedCapabilityEnum(cap_id)
-            else:
-                cap_enum = CapabilityEnum(cap_id)
+            cap_type = ExtendedCapabilityEnum if cap_addr >= 0x100 else CapabilityEnum
+            try:
+                cap_enum: Enum = cap_type(cap_id)
+            except ValueError:
+                # Unknown / not-yet-modeled capability id. Skip it instead of
+                # aborting the whole collection so one new cap id can't take
+                # down the entire PCIe plugin.
+                self.logger.warning(
+                    "Skipping unknown %s id 0x%X at offset 0x%X",
+                    cap_type.__name__,
+                    cap_id,
+                    cap_addr,
+                )
+                continue
             cap_cls = self.get_cap_struct(cap_enum)
             if cap_cls is None:
                 continue
