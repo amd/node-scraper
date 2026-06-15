@@ -41,6 +41,11 @@ class GenericCollectionCollector(
     DATA_MODEL = GenericCollectionDataModel
     SUPPORTED_OS_FAMILY: set[OSFamily] = {OSFamily.WINDOWS, OSFamily.LINUX, OSFamily.UNKNOWN}
 
+    DOCUMENTATION_COLLECTION_ITEMS: tuple[str, ...] = (
+        "Runs each command from collection_args.commands on the target (in-band host or BMC over OOB SSH).",
+        "Commands are user-configured; there are no fixed CMD_* class fields.",
+    )
+
     def collect_data(
         self, args: Optional[GenericCollectionCollectorArgs] = None
     ) -> tuple[TaskResult, Optional[GenericCollectionDataModel]]:

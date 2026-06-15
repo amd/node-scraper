@@ -41,6 +41,11 @@ class BmcArchiveCollector(InBandDataCollector[BmcArchiveDataModel, BmcArchiveCol
     DATA_MODEL = BmcArchiveDataModel
     SUPPORTED_OS_FAMILY = {OSFamily.LINUX, OSFamily.UNKNOWN}
 
+    DOCUMENTATION_COLLECTION_ITEMS: tuple[str, ...] = (
+        "SSH (BMC) shell: tar+gzip archives for each path in collection_args (see PathSpec entries).",
+        "Uses sudo on the BMC when collection_args paths require elevated access.",
+    )
+
     REMOTE_ARCHIVE_TEMPLATE = "/tmp/node_scraper_{name}.tar.gz"
     # None until first probe in a run; collect_data resets so each collection re-probes.
     _tar_ignore_failed_read_supported: Optional[bool] = None
