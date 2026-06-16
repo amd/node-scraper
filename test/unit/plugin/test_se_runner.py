@@ -99,7 +99,7 @@ def test_resolved_hub_options_explicit_fields_override_options_bag():
     args = ServiceabilityAnalyzerArgs(
         engine_python_module="dummy.test.module",
         afid_sag_path=str(AFID_SAG),
-        engine_options={"from_ac_cycle": 9, "extra": 1},
+        hub_options={"from_ac_cycle": 9, "extra": 1},
         from_ac_cycle=3,
         from_date="2025-01-01",
         designation_serials={"U": "S"},
@@ -256,7 +256,7 @@ def test_run_service_hub_custom_analyze_method_and_path_kwarg():
             afid_sag_path=str(AFID_SAG),
             rf_events=[{"Afid": 1}],
             cper_data={"k": 1},
-            engine_options={"debug": True},
+            hub_options={"debug": True},
             engine_analyze_method="analyze_events",
             engine_init_path_kwarg="rulebook_path",
         )
@@ -268,7 +268,7 @@ def test_run_service_hub_custom_analyze_method_and_path_kwarg():
     assert analyze_log[0][1] == {"k": 1}
 
 
-def test_run_service_hub_accepts_engine_options():
+def test_run_service_hub_accepts_hub_options():
     rf_events = [
         {"Afid": DUMMY_AFID_A, "serviceable_unit": DUMMY_UNIT_A, "Created": DUMMY_TIMESTAMP},
     ]
@@ -277,12 +277,12 @@ def test_run_service_hub_accepts_engine_options():
         afid_events=EXAMPLE_EVENTS[:1],
         afid_sag_path=str(AFID_SAG),
         rf_events=rf_events,
-        engine_options={"reporting_level": "verbose"},
+        hub_options={"reporting_level": "verbose"},
     )
     assert len(block.solution) == 1
 
 
-def test_run_service_hub_forwards_instinct_shaped_engine_options():
+def test_run_service_hub_forwards_full_hub_options_kwargs():
     from instinct_shaped_engine import clear_last_call, get_last_call
 
     clear_last_call()
@@ -295,7 +295,7 @@ def test_run_service_hub_forwards_instinct_shaped_engine_options():
         afid_sag_path=str(AFID_SAG),
         rf_events=rf_events,
         cper_data={"decoded": True},
-        engine_options={
+        hub_options={
             "from_ac_cycle": 2,
             "from_date": "2024-06-01",
             "designation_serials": {"GPU0": "SN1"},
@@ -310,7 +310,7 @@ def test_run_service_hub_forwards_instinct_shaped_engine_options():
     assert got["suppress_service_actions"] == ["42"]
 
 
-def test_run_service_hub_collected_cper_overrides_engine_options_cper_data():
+def test_run_service_hub_collected_cper_overrides_hub_options_cper_data():
     from instinct_shaped_engine import clear_last_call, get_last_call
 
     clear_last_call()
@@ -323,13 +323,13 @@ def test_run_service_hub_collected_cper_overrides_engine_options_cper_data():
         afid_sag_path=str(AFID_SAG),
         rf_events=rf_events,
         cper_data={"from_collector": 1},
-        engine_options={"cper_data": {"from_options": 2}, "from_ac_cycle": 0},
+        hub_options={"cper_data": {"from_options": 2}, "from_ac_cycle": 0},
     )
     assert get_last_call()["cper_data"] == {"from_collector": 1}
 
 
 def test_run_service_hub_missing_sag_raises():
-    with pytest.raises(SeRunError, match="Engine config file not found"):
+    with pytest.raises(SeRunError, match="Hub config file not found"):
         run_service_hub(
             engine_python_module="mock_python_engine",
             afid_events=EXAMPLE_EVENTS,
@@ -382,7 +382,7 @@ def test_mi3xx_analyzer_runs_python_engine(system_info):
     args = ServiceabilityAnalyzerArgs(
         engine_python_module="mock_python_engine",
         afid_sag_path=str(AFID_SAG),
-        engine_options={"include_raw_events": False},
+        hub_options={"include_raw_events": False},
     )
     result = analyzer.analyze_data(data, args=args)
     assert result.status == ExecutionStatus.OK

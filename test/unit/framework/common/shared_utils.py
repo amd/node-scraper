@@ -23,7 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
-from typing import Any, Optional
+from typing import Any, Dict, List, Optional
 from unittest.mock import MagicMock
 
 from nodescraper.constants import DEFAULT_EVENT_REPORTER
@@ -87,12 +87,27 @@ class DummyDataModel(DataModel):
     some_version: str = "0"
 
 
+# Module-level defaults so ``run`` signatures stay stable for ConfigBuilder tests.
+_TEST_PLUGIN_A_LIST_DEFAULT: List[Any] = [1]
+_TEST_PLUGIN_A_DICT_DEFAULT: Dict[str, Any] = {}
+_TEST_PLUGIN_A_MODEL_DEFAULT = TestModelArg()
+
+
 class TestPluginA(PluginInterface[MockConnectionManager, None]):
 
     CONNECTION_TYPE = MockConnectionManager
     ANALYZER_ARGS = TestModelArg
 
-    def run(self, **kwargs: Any) -> PluginResult:
+    def run(
+        self,
+        test_bool_arg: bool = True,
+        test_str_arg: str = "test",
+        test_list_arg: List[Any] = _TEST_PLUGIN_A_LIST_DEFAULT,
+        test_dict_arg: Dict[str, Any] = _TEST_PLUGIN_A_DICT_DEFAULT,
+        test_model_arg: TestModelArg = _TEST_PLUGIN_A_MODEL_DEFAULT,
+        **kwargs: Any,
+    ) -> PluginResult:
+        _ = kwargs
         return PluginResult(
             source="testA",
             status=ExecutionStatus.ERROR,
