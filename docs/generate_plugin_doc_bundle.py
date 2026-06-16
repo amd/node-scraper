@@ -42,10 +42,13 @@ from typing import Any, Iterable, List, Optional, Type
 
 LINK_BASE_DEFAULT = "https://github.com/amd/node-scraper/blob/HEAD/"
 REL_ROOT_DEFAULT = "nodescraper/plugins/inband"
-# Default packages scanned for plugin tables (IB: full inband tree; OOB: ooband).
-PACKAGE_IB_INBAND = "nodescraper.plugins.inband"
-PACKAGE_OOB = "nodescraper.plugins.ooband"
-DEFAULT_PACKAGES = (PACKAGE_IB_INBAND, PACKAGE_OOB)
+# Import and document every concrete plugin under nodescraper.plugins (inband, ooband,
+# generic_collection, regex_search, serviceability, …).
+PACKAGE_PLUGINS_ROOT = "nodescraper.plugins"
+# ``plugins_for_package_prefix`` matches on ``cls.__module__``; keep the trailing dot so
+# ``nodescraper.plugins`` itself does not match every module starting with that string.
+PLUGIN_MODULE_PREFIX = f"{PACKAGE_PLUGINS_ROOT}."
+DEFAULT_PACKAGES = (PACKAGE_PLUGINS_ROOT,)
 
 
 def get_attr(obj: Any, name: str, default: Any = None) -> Any:
@@ -184,7 +187,7 @@ def find_inband_plugin_base():
 
 
 def find_oob_plugin_bases() -> tuple[type, ...]:
-    """Return OOB plugin base classes under ``nodescraper.plugins.ooband`` (Redfish + BMC SSH)."""
+    """Return OOB plugin base classes (Redfish + BMC SSH) used to discover OOB plugins."""
     base_mod = importlib.import_module("nodescraper.base")
     oob = get_attr(base_mod, "OOBandDataPlugin")
     oob_ssh = get_attr(base_mod, "OOBSSHDataPlugin")
@@ -882,7 +885,7 @@ def main():
                 root = dotted_from_path(root_path)
             normalized_extra.append(root)
 
-    # Always import core plugin trees so IB/OOB tables are complete; append optional extras.
+    # Always import the full nodescraper.plugins tree; append optional extras.
     to_import: List[str] = []
     seen_pkg: set[str] = set()
     for pkg in list(DEFAULT_PACKAGES) + normalized_extra:
@@ -897,11 +900,11 @@ def main():
     oob_bases = find_oob_plugin_bases()
 
     ib_plugins = sorted(
-        plugins_for_package_prefix((inband_base,), PACKAGE_IB_INBAND),
+        plugins_for_package_prefix((inband_base,), PLUGIN_MODULE_PREFIX),
         key=lambda c: f"{c.__module__}.{c.__name__}".lower(),
     )
     oob_plugins = sorted(
-        plugins_for_package_prefix(oob_bases, PACKAGE_OOB),
+        plugins_for_package_prefix(oob_bases, PLUGIN_MODULE_PREFIX),
         key=lambda c: f"{c.__module__}.{c.__name__}".lower(),
     )
     plugins = sorted(
