@@ -36,8 +36,8 @@ from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSF
 from nodescraper.models import TaskResult
 from nodescraper.utils import get_exception_details, get_exception_traceback
 
-from .collector_args import SwitchAristaCollectorArgs
-from .switcharistadata import (
+from .collector_args import ScaleOutAristaCollectorArgs
+from .scaleoutaristadata import (
     AristaBinsCounters,
     AristaCountersErrors,
     AristaDroppedPacketCounters,
@@ -55,7 +55,7 @@ from .switcharistadata import (
     AristaSystemEnv,
     AristaVersion,
     PortData,
-    SwitchAristaDataModel,
+    ScaleOutAristaDataModel,
 )
 
 # Placeholder embedded in every Arista command that supports a per-port
@@ -107,33 +107,18 @@ def _normalize_port_spec(ports: Any) -> Optional[List[str]]:
     return specs or None
 
 
-class SwitchAristaCollector(InBandDataCollector[SwitchAristaDataModel, SwitchAristaCollectorArgs]):
-    """Collector for Arista switch data.
+class ScaleOutAristaCollector(
+    InBandDataCollector[ScaleOutAristaDataModel, ScaleOutAristaCollectorArgs]
+):
+    """Collect Arista switch data.
 
-    This collector runs Arista EOS commands to collect and parse switch data.
-
-    Summary of Commands run:
-    - ``show version | json | no-more``: Get version / system information
-    - ``show lldp neighbors | json | no-more``: Get LLDP neighbor information
-    - ``show system environment cooling | json | no-more``: Get system environment info
-    - ``show interfaces phy | json | no-more``: Get PHY-level status for all interfaces
-    - ``show interfaces ethernet <id> status | json | no-more``: Get port status per interface
-    - ``show interfaces counters errors | json | no-more``: Get error counters
-    - ``show interfaces counters | json | no-more``: Get packet counters
-    - ``show interfaces counters bins | json | no-more``: Get bins counters
-    - ``show interfaces counters ip | json | no-more``: Get IP counters
-    - ``show interfaces counters rates | json | no-more``: Get rates counters
-    - ``show priority-flow-control counters | json | no-more``: Get PFC counters
-    - ``show interfaces counters queue | no-more``: Get dropped packet counters (text)
-    - ``show interfaces counters queue drop-precedence | no-more``: Get drop precedence counters (text)
-    - ``show interfaces counters queue detail | no-more``: Get per-queue counters (text)
-    - ``show interfaces flow-control | json | no-more``: Get pause frame counters
-    - ``show qos interfaces ecn counters queue | json | no-more``: Get ECN counters
+    Runs Arista EOS ``show`` commands (JSON and text) and parses their
+    output into a :class:`ScaleOutAristaDataModel`.
     """
 
     SUPPORTED_OS_FAMILY: set[OSFamily] = {OSFamily.LINUX, OSFamily.UNKNOWN}
 
-    DATA_MODEL = SwitchAristaDataModel
+    DATA_MODEL = ScaleOutAristaDataModel
 
     # Arista-style port specs set from the ``ports`` arg of
     # :meth:`collect_data`.  When non-None each element triggers one command
@@ -173,12 +158,14 @@ class SwitchAristaCollector(InBandDataCollector[SwitchAristaDataModel, SwitchAri
         return list(self._port_specs) if self._port_specs else [None]
 
     def _substitute_port_placeholder(self, command: str, spec: Optional[str]) -> str:
-        """Replace ``ethernet_x`` with ``ethernet <spec>`` (or remove it).
+        """Replace the ``ethernet_x`` placeholder with ``ethernet <spec>``.
 
-        When ``spec`` is provided the placeholder is replaced with
-        ``ethernet <spec>``.  When ``spec`` is ``None`` the placeholder (and
-        any adjacent whitespace) is stripped so the command runs against all
-        ports as before.
+        Args:
+            command: Command containing the placeholder.
+            spec: Port spec to insert, or ``None`` to strip the placeholder.
+
+        Returns:
+            The rendered command string.
         """
         if ETHERNET_PLACEHOLDER not in command:
             return command
@@ -192,11 +179,14 @@ class SwitchAristaCollector(InBandDataCollector[SwitchAristaDataModel, SwitchAri
     def _merge_json(
         accumulated: dict | Optional[list], new: dict | Optional[list]
     ) -> dict | Optional[list]:
-        """Merge two JSON results from the same command run with different specs.
+        """Merge two JSON results (dicts recursively, lists concatenated).
 
-        Dicts are merged recursively (later entries win on plain-value
-        conflicts); lists are concatenated.  Mismatched types fall back to the
-        newer value.
+        Args:
+            accumulated: Previously merged result.
+            new: New result to merge in.
+
+        Returns:
+            The merged JSON value.
         """
         if accumulated is None:
             return new
@@ -206,7 +196,7 @@ class SwitchAristaCollector(InBandDataCollector[SwitchAristaDataModel, SwitchAri
             merged = dict(accumulated)
             for key, value in new.items():
                 if key in merged and isinstance(merged[key], (dict, list)):
-                    merged[key] = SwitchAristaCollector._merge_json(merged[key], value)
+                    merged[key] = ScaleOutAristaCollector._merge_json(merged[key], value)
                 else:
                     merged[key] = value
             return merged
@@ -215,17 +205,13 @@ class SwitchAristaCollector(InBandDataCollector[SwitchAristaDataModel, SwitchAri
         return new
 
     def _run_arista_json(self, command: str) -> dict | Optional[list]:
-        """Run an Arista EOS command that returns JSON and parse the output.
-
-        When a multi-spec port filter is active and ``command`` contains the
-        ``ethernet_x`` placeholder, the command is run once per spec and the
-        per-call JSON results are merged.  Otherwise it runs once.
+        """Run an Arista EOS command returning JSON, merging per-spec results.
 
         Args:
-            command: The EOS command to execute (``| json`` is appended automatically).
+            command: The EOS command (``| json`` is appended automatically).
 
         Returns:
-            Parsed JSON (dict or list), or ``None`` on failure of every call.
+            Parsed JSON (dict or list), or ``None`` if every call failed.
         """
         specs = self._iter_port_specs() if ETHERNET_PLACEHOLDER in command else [None]
         accumulated: dict | Optional[list] = None
@@ -263,14 +249,10 @@ class SwitchAristaCollector(InBandDataCollector[SwitchAristaDataModel, SwitchAri
         return accumulated
 
     def _run_arista_text(self, command: str) -> Optional[str]:
-        """Run an Arista EOS command that returns plain text.
-
-        When a multi-spec port filter is active and ``command`` contains the
-        ``ethernet_x`` placeholder, the command is run once per spec and the
-        per-call outputs are concatenated.  Otherwise it runs once.
+        """Run an Arista EOS command returning text, concatenating per-spec output.
 
         Args:
-            command: The EOS command to execute (``| no-more`` is appended automatically).
+            command: The EOS command (``| no-more`` is appended automatically).
 
         Returns:
             The combined stdout text, or ``None`` if every call failed.
@@ -331,25 +313,25 @@ class SwitchAristaCollector(InBandDataCollector[SwitchAristaDataModel, SwitchAri
 
     @staticmethod
     def _port_id_from_name(port_name: str) -> Optional[str]:
-        """Extract the port identifier from an Ethernet port name.
+        """Extract the numeric identifier from an Ethernet port name.
 
-        Examples::
-
-            "Ethernet1/1"  -> "1/1"
-            "Ethernet33"   -> "33"
+        Args:
+            port_name: Full port name (e.g. ``"Ethernet1/1"``).
 
         Returns:
-            The numeric portion after ``Ethernet``, or ``None`` if the
-            name does not match the expected pattern.
+            The portion after ``Ethernet`` (e.g. ``"1/1"``), or ``None``.
         """
         match = re.match(r"Ethernet(\S+)", port_name)
         return match.group(1) if match else None
 
     def get_port_status(self, port_names: list[str]) -> Optional[Dict[str, AristaPortStatus]]:
-        """Collect port status for each port via ``show interfaces ethernet <id> status | json``.
+        """Collect per-port status via ``show interfaces ethernet <id> status``.
 
         Args:
-            port_names: List of port names (e.g. ``["Ethernet1/1", "Ethernet33"]``).
+            port_names: Port names to query (e.g. ``["Ethernet1/1"]``).
+
+        Returns:
+            Mapping of port name to :class:`AristaPortStatus`, or ``None``.
         """
         result: Dict[str, AristaPortStatus] = {}
         for port_name in port_names:
@@ -393,20 +375,8 @@ class SwitchAristaCollector(InBandDataCollector[SwitchAristaDataModel, SwitchAri
     def get_phy_status(self) -> Optional[Dict[str, AristaPhyStatus]]:
         """Collect PHY status via ``show interfaces phy | json``.
 
-        The JSON output has the structure::
-
-            {
-                "interfacePhyStatuses": {
-                    "Ethernet1/1": {
-                        "text": "Ethernet1/1    linkUp    10    - U..     U...L -",
-                        "clause": "clause45"
-                    },
-                    ...
-                }
-            }
-
-        Each ``text`` value is a fixed-width row whose flag characters are
-        defined by the key at the top of the non-JSON output.
+        Returns:
+            Mapping of port name to :class:`AristaPhyStatus`, or ``None``.
         """
         data = self._run_arista_json("show interfaces ethernet_x phy")
         if not isinstance(data, dict):
@@ -425,16 +395,13 @@ class SwitchAristaCollector(InBandDataCollector[SwitchAristaDataModel, SwitchAri
     def parse_phy_status(
         interfaces: Dict[str, dict],
     ) -> Optional[Dict[str, AristaPhyStatus]]:
-        """Parse the JSON output of ``show interfaces phy`` into a dict of models.
+        """Parse the JSON output of ``show interfaces phy`` into models.
 
         Args:
-            interfaces: The ``interfacePhyStatuses`` dict from the JSON output.
-                Each value must contain a ``text`` key with the fixed-width row
-                and optionally a ``clause`` key.
+            interfaces: The ``interfacePhyStatuses`` dict from the output.
 
         Returns:
-            A mapping of port name -> ``AristaPhyStatus``, or ``None`` if nothing
-            could be parsed.
+            Mapping of port name to :class:`AristaPhyStatus`, or ``None``.
         """
         # Pattern to match the fixed-width text row embedded in each entry.
         #   Port           PHY state      StateChanges ResetCount PMA/PMD PCS   XAUI
@@ -707,13 +674,10 @@ class SwitchAristaCollector(InBandDataCollector[SwitchAristaDataModel, SwitchAri
         return result or None
 
     def get_pfc_counters(self) -> Optional[Dict[str, AristaPfcCounters]]:
-        """Collect PFC counters via ``show priority-flow-control counters | json | no-more``.
+        """Collect PFC counters via ``show priority-flow-control counters``.
 
-        Note: this command's per-port form requires the literal word
-        ``interfaces`` between ``priority-flow-control`` and ``ethernet``
-        (e.g. ``show priority-flow-control interfaces ethernet 1/1 counters``).
-        When no port filter is set the command runs as
-        ``show priority-flow-control counters`` with no ``interfaces`` token.
+        Returns:
+            Mapping of port name to :class:`AristaPfcCounters`, or ``None``.
         """
         if self._port_specs:
             command = "show priority-flow-control interfaces ethernet_x counters"
@@ -746,13 +710,11 @@ class SwitchAristaCollector(InBandDataCollector[SwitchAristaDataModel, SwitchAri
     def get_dropped_packet_counters(
         self,
     ) -> Optional[Dict[str, AristaDroppedPacketCounters]]:
-        """Collect dropped packet counters via ``show interfaces counters queue | no-more``.
+        """Collect dropped packet counters via ``show interfaces counters queue``.
 
-        This command returns text output with columns:
-        ``Port  InDropPkts  OutUcDropPkts  OutMcDropPkts``
-
-        Port names are abbreviated (e.g. ``Et1/1``) and are expanded to
-        full names (e.g. ``Ethernet1/1``).
+        Returns:
+            Mapping of port name to :class:`AristaDroppedPacketCounters`,
+            or ``None``.
         """
         text = self._run_arista_text("show interfaces ethernet_x counters queue")
         if text is None:
@@ -787,12 +749,11 @@ class SwitchAristaCollector(InBandDataCollector[SwitchAristaDataModel, SwitchAri
     def get_drop_precedence_counters(
         self,
     ) -> Optional[Dict[str, AristaDropPrecedenceCounters]]:
-        """Collect drop precedence counters via ``show interfaces counters queue drop-precedence | no-more``.
+        """Collect drop precedence counters via ``... queue drop-precedence``.
 
-        This command returns text output with columns:
-        ``Intf  0  1  2``
-
-        Port names use the full ``Ethernet`` prefix.
+        Returns:
+            Mapping of port name to :class:`AristaDropPrecedenceCounters`,
+            or ``None``.
         """
         text = self._run_arista_text("show interfaces ethernet_x counters queue drop-precedence")
         if text is None:
@@ -824,16 +785,11 @@ class SwitchAristaCollector(InBandDataCollector[SwitchAristaDataModel, SwitchAri
     def get_per_queue_counters(
         self,
     ) -> Optional[Dict[str, List[AristaPerQueueCounters]]]:
-        """Collect per-queue counters via ``show interfaces counters queue detail | no-more``.
-
-        This command returns repeated text tables per port with columns:
-        ``Port  TxQ  Counter/pkts  Counter/bytes  Drop/pkts  Drop/bytes``
-
-        Port names are abbreviated (e.g. ``Et1/1``) and are expanded to
-        full names (e.g. ``Ethernet1/1``).
+        """Collect per-queue counters via ``show interfaces counters queue detail``.
 
         Returns:
-            A dict mapping port name to a list of per-queue counter entries.
+            Mapping of port name to a list of :class:`AristaPerQueueCounters`,
+            or ``None``.
         """
         text = self._run_arista_text("show interfaces ethernet_x counters queue detail")
         if text is None:
@@ -950,25 +906,20 @@ class SwitchAristaCollector(InBandDataCollector[SwitchAristaDataModel, SwitchAri
 
     @staticmethod
     def _command_to_filename(command: str) -> str:
-        """Convert a command string to a log filename.
+        """Convert a command string to a ``.log`` filename.
 
-        Spaces and hyphens are replaced with underscores and a ``.log``
-        extension is appended.
+        Args:
+            command: The command string.
 
-        Example::
-
-            "show running-config" -> "show_running_config.log"
+        Returns:
+            Filename with spaces/hyphens replaced by underscores.
         """
         return command.replace(" ", "_").replace("-", "_") + ".log"
 
     def collect_artifact_commands(self) -> None:
         """Run diagnostic commands and store their output as file artifacts.
 
-        Each command in :attr:`ARTIFACT_COMMANDS` is executed via
-        ``_run_sut_cmd`` with ``| no-more`` appended.  Successful
-        output is saved as a file artifact using ``_log_file_artifact``.
-        Failures are logged but do **not** cause the overall collection
-        to fail.
+        Failures are logged but do **not** cause the overall collection to fail.
         """
         for command in self.ARTIFACT_COMMANDS:
             specs = self._iter_port_specs() if ETHERNET_PLACEHOLDER in command else [None]
@@ -1024,26 +975,16 @@ class SwitchAristaCollector(InBandDataCollector[SwitchAristaDataModel, SwitchAri
     # ------------------------------------------------------------------
 
     def collect_data(
-        self, args: Optional[SwitchAristaCollectorArgs] = None
-    ) -> tuple[TaskResult, Optional[SwitchAristaDataModel]]:
-        """Collect Arista switch data.
+        self, args: Optional[ScaleOutAristaCollectorArgs] = None
+    ) -> tuple[TaskResult, Optional[ScaleOutAristaDataModel]]:
+        """Run all Arista collectors and assemble the switch data model.
 
         Args:
-            args: Optional :class:`SwitchAristaCollectorArgs`.  When present, an
-                optional ``ports`` attribute restricts collection to the given
-                port(s).  Accepted forms:
-
-                  * ``None`` (default) -> all ports; the ``ethernet_x``
-                    placeholder in each command is stripped and the command
-                    runs once.
-                  * A list of strings -> one command call per element.
-                    For example ["1/1-3/1", "17/1-17/1"] issues each command
-                    twice (once with "ethernet 1/1-3/1" and once with
-                    "ethernet 17/1-17/1"); JSON outputs are merged and text
-                    outputs are concatenated
+            args: Optional :class:`ScaleOutAristaCollectorArgs`; its ``ports``
+                attribute restricts collection, defaulting to all ports.
 
         Returns:
-            tuple[TaskResult, SwitchAristaDataModel | None]: The result and collected data model.
+            Tuple of ``(TaskResult, ScaleOutAristaDataModel | None)``.
         """
         ports = args.collection_ports if args else None
         try:
@@ -1051,7 +992,7 @@ class SwitchAristaCollector(InBandDataCollector[SwitchAristaDataModel, SwitchAri
         except (TypeError, ValueError) as exc:
             self._log_event(
                 category=EventCategory.APPLICATION,
-                description=f"Invalid 'ports' arg for SwitchAristaCollector: {exc}",
+                description=f"Invalid 'ports' arg for ScaleOutAristaCollector: {exc}",
                 priority=EventPriority.ERROR,
                 console_log=True,
             )
@@ -1068,7 +1009,7 @@ class SwitchAristaCollector(InBandDataCollector[SwitchAristaDataModel, SwitchAri
         if version is None:
             self._log_event(
                 category=EventCategory.APPLICATION,
-                description=("SwitchAristaCollector pre-flight check failed"),
+                description=("ScaleOutAristaCollector pre-flight check failed"),
                 priority=EventPriority.ERROR,
                 console_log=True,
             )
@@ -1167,7 +1108,7 @@ class SwitchAristaCollector(InBandDataCollector[SwitchAristaDataModel, SwitchAri
                 )
 
         try:
-            arista_data = SwitchAristaDataModel(
+            arista_data = ScaleOutAristaDataModel(
                 version=version,
                 lldp_neighbors=lldp_neighbors,
                 system_env=system_env,
@@ -1177,7 +1118,7 @@ class SwitchAristaCollector(InBandDataCollector[SwitchAristaDataModel, SwitchAri
         except (ValidationError, TypeError) as e:
             self._log_event(
                 category=EventCategory.APPLICATION,
-                description="Failed to build SwitchAristaDataModel",
+                description="Failed to build ScaleOutAristaDataModel",
                 data=get_exception_details(e),
                 priority=EventPriority.ERROR,
             )

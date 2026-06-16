@@ -30,7 +30,7 @@ from pydantic import Field
 from nodescraper.models import CollectorArgs
 
 
-class SwitchAristaCollectorArgs(CollectorArgs):
+class ScaleOutAristaCollectorArgs(CollectorArgs):
     """Arguments for the Arista switch collector."""
 
     collection_ports: Optional[List[str]] = Field(

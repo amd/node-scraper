@@ -401,7 +401,7 @@ class PortData(BaseModel):
     # mmu_queue_status, collect to file
 
 
-class SwitchAristaDataModel(DataModel):
+class ScaleOutAristaDataModel(DataModel):
     """Collected output of Arista commands."""
 
     version: Optional[AristaVersion] = None

@@ -35,8 +35,8 @@ from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSF
 from nodescraper.models import TaskResult
 from nodescraper.utils import get_exception_details, get_exception_traceback
 
-from .collector_args import SwitchDellCollectorArgs
-from .switchdelldata import (
+from .collector_args import ScaleOutDellCollectorArgs
+from .scaleoutdelldata import (
     DellArpEntry,
     DellFecStatus,
     DellInterfaceCounters,
@@ -47,7 +47,7 @@ from .switchdelldata import (
     DellPortData,
     DellQueueCounter,
     DellRouteEntry,
-    SwitchDellDataModel,
+    ScaleOutDellDataModel,
 )
 
 # Substrings used to recognize a Dell SONiC switch from ``show version`` output.
@@ -55,33 +55,20 @@ from .switchdelldata import (
 DELL_VERSION_MARKERS: tuple[str, ...] = ("dell", "sonic")
 
 
-class SwitchDellCollector(InBandDataCollector[SwitchDellDataModel, SwitchDellCollectorArgs]):
-    """Collector for Dell SONiC switch data.
+class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutDellCollectorArgs]):
+    """Collect Dell SONiC switch data.
 
-    Runs Dell SONiC CLI commands and parses their text output into the
-    :class:`SwitchDellDataModel`.
-
-    Summary of commands run:
-    - ``show version``: pre-flight vendor check (also stored as artifact)
-    - ``show interface status``: per-port admin/oper status
-    - ``show interface counters``: per-port RX/TX summary counters
-    - ``show interface counters Eth <port>``: per-port detailed counters
-    - ``show interface fec status``: per-port FEC status
-    - ``show ip arp``: ARP table
-    - ``show ip route``: IP route table
-    - ``show qos interface Ethernet all priority-flow-control statistics``:
-      per-port PFC RX/TX counters
-    - ``show qos interface Ethernet all queue all
-      priority-flow-control watchdog-statistics``: per-queue PFC watchdog stats
-    - ``show queue counters``: per-port per-queue counters
+    Runs Dell SONiC CLI ``show`` commands over SSH and parses their text
+    output into a :class:`ScaleOutDellDataModel`.
     """
 
     SUPPORTED_OS_FAMILY: set[OSFamily] = {OSFamily.LINUX, OSFamily.UNKNOWN}
 
-    DATA_MODEL = SwitchDellDataModel
+    DATA_MODEL = ScaleOutDellDataModel
 
     # Commands whose output is saved as file artifacts (not parsed into the data model).
     ARTIFACT_COMMANDS: list[str] = [
+        "show clock",
         "show version",
         "show platform syseeprom",
         "show platform firmware detail",
@@ -89,6 +76,21 @@ class SwitchDellCollector(InBandDataCollector[SwitchDellDataModel, SwitchDellCol
         "show interface transceiver",
         "show interface transceiver summary",
         "show ip interfaces",
+        "show qos map dscp-tc",
+        "show qos map tc-queue",
+        "show qos map tc-pg",
+        "show qos map tc-dscp",
+        "show qos map tc-dot1p",
+        "show qos map pfc-priority-queue",
+        "show qos map pfc-priority-pg",
+        "show qos map dot1p-tc",
+        "show qos scheduler-policy",
+        "show qos wred-policy",
+        "show qos interface Eth all",
+        "show qos interface Eth all queue all",
+        "show priority-flow-control watchdog",
+        "show buffer profile",
+        "show buffer pool",
         "show interface transceiver dom",
         "show lldp table",
         "show lldp neighbor",
@@ -120,21 +122,24 @@ class SwitchDellCollector(InBandDataCollector[SwitchDellDataModel, SwitchDellCol
 
     @staticmethod
     def _wrap_sonic_cli(command: str) -> str:
-        """Wrap a command so it runs inside the Dell SONiC CLI shell.
+        """Wrap a command to run inside the Dell SONiC CLI shell.
 
-        This is needed because the SSH transport runs each command in a fresh
-        non-interactive bash session, which doesn't drop into ``sonic-cli`` on
-        its own.  The command is sent as ``sonic-cli -c "<command>"``.
+        Args:
+            command: The CLI command to wrap.
+
+        Returns:
+            The command as ``sonic-cli -c "<command>"``.
         """
         return f'sonic-cli -c "{command}"'
 
     def _run_dell_command(self, command: str) -> Optional[str]:
-        """Run a Dell SONiC CLI command and return its stdout, or ``None`` on error.
+        """Run a Dell SONiC CLI command via ``sonic-cli -c`` with paging suppressed.
 
-        The command is wrapped with ``sonic-cli -c`` so it executes inside
-        the SONiC CLI shell, with ``| no-more`` appended to suppress paging.
-        ``show version`` is the one exception: ``| no-more`` is not appended
-        so the bare command can be used during pre-flight checks.
+        Args:
+            command: The CLI command to run.
+
+        Returns:
+            The command stdout, or ``None`` on error.
         """
         inner = command if command.strip() == "show version" else f"{command} | no-more"
         full_cmd = self._wrap_sonic_cli(inner)
@@ -159,11 +164,10 @@ class SwitchDellCollector(InBandDataCollector[SwitchDellDataModel, SwitchDellCol
     # ------------------------------------------------------------------
 
     def get_interface_status(self) -> Optional[Dict[str, DellInterfaceStatus]]:
-        """Parse ``show interface status``.
+        """Parse ``show interface status`` into per-port status models.
 
-        Output columns::
-
-            Name  Description  Oper  Reason  AutoNeg  Speed  MTU  Alternate Name
+        Returns:
+            Mapping of port name to :class:`DellInterfaceStatus`, or ``None``.
         """
         text = self._run_dell_command("show interface status")
         if text is None:
@@ -205,12 +209,10 @@ class SwitchDellCollector(InBandDataCollector[SwitchDellDataModel, SwitchDellCol
         return result or None
 
     def get_interface_counters(self) -> Optional[Dict[str, DellInterfaceCounters]]:
-        """Parse ``show interface counters``.
+        """Parse ``show interface counters`` into per-port counter models.
 
-        Columns::
-
-            Interface  State  RX_OK  RX_ERR  RX_DRP  RX_OVERSIZE
-                              TX_OK  TX_ERR  TX_DRP  TX_OVERSIZE
+        Returns:
+            Mapping of port name to :class:`DellInterfaceCounters`, or ``None``.
         """
         text = self._run_dell_command("show interface counters")
         if text is None:
@@ -263,12 +265,13 @@ class SwitchDellCollector(InBandDataCollector[SwitchDellDataModel, SwitchDellCol
         self,
         port_names: List[str],
     ) -> Optional[Dict[str, DellInterfaceDetailCounters]]:
-        """Parse ``show interface counters <port>`` for each port.
+        """Parse ``show interface counters <port>`` for each given port.
 
-        On this Dell SONiC build the per-port output is a plain list of
-        ``<label>  <value>`` rows with no ``Interface Name:`` header, so
-        the port name is taken from the loop rather than parsed from the
-        output.
+        Args:
+            port_names: Ports to query.
+
+        Returns:
+            Mapping of port name to :class:`DellInterfaceDetailCounters`, or ``None``.
         """
         if not port_names:
             return None
@@ -285,11 +288,13 @@ class SwitchDellCollector(InBandDataCollector[SwitchDellDataModel, SwitchDellCol
 
     @classmethod
     def _parse_detail_counters_block(cls, text: str) -> Optional[DellInterfaceDetailCounters]:
-        """Parse a single port's ``show interface counters <port>`` output.
+        """Parse one port's ``<label>  <value>`` detail-counter rows.
 
-        Output is a sequence of ``<label>  <value>`` rows where the label
-        and value are separated by two-or-more spaces.  Trailing
-        whitespace on each row is ignored.
+        Args:
+            text: Raw command output for a single port.
+
+        Returns:
+            A :class:`DellInterfaceDetailCounters`, or ``None`` if empty.
         """
         kwargs: Dict[str, str] = {}
         line_pattern = re.compile(r"^(?P<label>.+?)\s{2,}(?P<value>\S+)\s*$")
@@ -312,11 +317,10 @@ class SwitchDellCollector(InBandDataCollector[SwitchDellDataModel, SwitchDellCol
             return None
 
     def get_fec_status(self) -> Optional[Dict[str, DellFecStatus]]:
-        """Parse ``show interface fec status``.
+        """Parse ``show interface fec status`` into per-port FEC models.
 
-        Columns are ``Interface  Type  Oper  Admin  If-State`` where ``Type``
-        can be empty or contain spaces, but ``Oper``/``Admin``/``If-State``
-        are always the last three whitespace-separated tokens.
+        Returns:
+            Mapping of port name to :class:`DellFecStatus`, or ``None``.
         """
         text = self._run_dell_command("show interface fec status")
         if text is None:
@@ -351,11 +355,10 @@ class SwitchDellCollector(InBandDataCollector[SwitchDellDataModel, SwitchDellCol
         return result or None
 
     def get_ip_arp(self) -> Optional[List[DellArpEntry]]:
-        """Parse ``show ip arp``.
+        """Parse ``show ip arp`` into ARP table entries.
 
-        Columns::
-
-            Address  Hardware address  Interface  Egress Interface  Type  Action
+        Returns:
+            List of :class:`DellArpEntry`, or ``None``.
         """
         text = self._run_dell_command("show ip arp")
         if text is None:
@@ -394,11 +397,10 @@ class SwitchDellCollector(InBandDataCollector[SwitchDellDataModel, SwitchDellCol
         return result or None
 
     def get_ip_route(self) -> Optional[List[DellRouteEntry]]:
-        """Parse ``show ip route``.
+        """Parse ``show ip route`` into route table entries.
 
-        Lines start with a code prefix (e.g. ``K>*``, ``C>*``) followed by a
-        destination prefix, gateway, interface, ``dist/metric`` and an
-        update-age field.
+        Returns:
+            List of :class:`DellRouteEntry`, or ``None``.
         """
         text = self._run_dell_command("show ip route")
         if text is None:
@@ -439,14 +441,10 @@ class SwitchDellCollector(InBandDataCollector[SwitchDellDataModel, SwitchDellCol
     def get_pfc_statistics(
         self,
     ) -> tuple[Optional[Dict[str, DellPfcStatistics]], Optional[Dict[str, DellPfcStatistics]]]:
-        """Parse ``show qos interface Ethernet all priority-flow-control statistics``.
-
-        The output contains two tables - ``Flow Control frames received`` and
-        ``Flow Control frames transmitted`` - each with columns
-        ``Interface  PFC0 .. PFC7``.
+        """Parse PFC RX/TX statistics from ``priority-flow-control statistics``.
 
         Returns:
-            ``(rx_by_port, tx_by_port)``.
+            Tuple of ``(rx_by_port, tx_by_port)`` dicts, each value or ``None``.
         """
         cmd = "show qos interface Ethall priority-flow-control statistics"
         text = self._run_dell_command(cmd)
@@ -488,14 +486,11 @@ class SwitchDellCollector(InBandDataCollector[SwitchDellDataModel, SwitchDellCol
     def get_pfc_watchdog_statistics(
         self,
     ) -> Optional[Dict[str, List[DellPfcWatchdogQueueStats]]]:
-        """Parse ``show qos interface Ethall queue all
-        priority-flow-control watchdog-statistics``.
+        """Parse per-queue PFC watchdog statistics for each port.
 
-        Columns::
-
-            Interface  Queue  Status  StormsDetected  StormsRestored
-                       TransmittedOK  TransmittedDrop  ReceivedOK  ReceivedDrop
-                       TxLastOK  TxLastDrop  RxLastOK  RxLastDrop
+        Returns:
+            Mapping of port name to a list of
+            :class:`DellPfcWatchdogQueueStats`, or ``None``.
         """
         cmd = "show qos interface Ethall queue all priority-flow-control watchdog-statistics"
 
@@ -549,15 +544,11 @@ class SwitchDellCollector(InBandDataCollector[SwitchDellDataModel, SwitchDellCol
         return result or None
 
     def get_queue_counters(self) -> Optional[Dict[str, List[DellQueueCounter]]]:
-        """Parse ``show queue counters``.
+        """Parse ``show queue counters`` (``Eth*`` rows only) per port.
 
-        Columns::
-
-            Port  TxQ  Counter/pkts  Counter/bytes
-                  Rate/PPS  Rate/BPS  Rate/bPS  Drop/pkts  Drop/bytes
-
-        Port names include ``CPU`` and ``Eth*`` rows; only ``Eth*`` rows are
-        kept in the per-port map.
+        Returns:
+            Mapping of port name to a list of :class:`DellQueueCounter`,
+            or ``None``.
         """
         text = self._run_dell_command("show queue counters")
         if text is None:
@@ -651,21 +642,17 @@ class SwitchDellCollector(InBandDataCollector[SwitchDellDataModel, SwitchDellCol
     # ------------------------------------------------------------------
 
     def collect_data(
-        self, args: Optional[SwitchDellCollectorArgs] = None
-    ) -> tuple[TaskResult, Optional[SwitchDellDataModel]]:
-        """Collect Dell SONiC switch data.
+        self, args: Optional[ScaleOutDellCollectorArgs] = None
+    ) -> tuple[TaskResult, Optional[ScaleOutDellDataModel]]:
+        """Run all Dell collectors and assemble the switch data model.
 
         Args:
-            args: Optional :class:`SwitchDellCollectorArgs`.  When present, an
-                optional ``ports`` attribute restricts per-port
-                ``show interface counters Eth <port>`` collection to the given
-                port names (e.g. ``["Eth1/1/1", "Eth1/1/2"]`` or
-                ``["1/1/1", "1/1/2"]`` -- entries missing the ``Eth`` prefix are
-                normalized).  When omitted, every port discovered via
-                ``show interface status`` is queried.
+            args: Optional :class:`ScaleOutDellCollectorArgs`; its ``ports``
+                attribute restricts per-port detail collection, defaulting to
+                every port from ``show interface status``.
 
         Returns:
-            tuple[TaskResult, SwitchDellDataModel | None]
+            Tuple of ``(TaskResult, ScaleOutDellDataModel | None)``.
         """
         # Pre-flight: ensure the device responds and identifies as Dell SONiC.
         # ``_run_dell_command`` wraps every command in ``sonic-cli -c "..."``,
@@ -675,7 +662,7 @@ class SwitchDellCollector(InBandDataCollector[SwitchDellDataModel, SwitchDellCol
         if version_text is None:
             self._log_event(
                 category=EventCategory.APPLICATION,
-                description="SwitchDellCollector pre-flight check failed",
+                description="ScaleOutDellCollector pre-flight check failed",
                 priority=EventPriority.ERROR,
                 console_log=True,
             )
@@ -711,7 +698,7 @@ class SwitchDellCollector(InBandDataCollector[SwitchDellDataModel, SwitchDellCol
                 ):
                     self._log_event(
                         category=EventCategory.APPLICATION,
-                        description="Invalid 'ports' arg for SwitchDellCollector",
+                        description="Invalid 'ports' arg for ScaleOutDellCollector",
                         data={"ports": ports_arg},
                         priority=EventPriority.ERROR,
                         console_log=True,
@@ -761,7 +748,7 @@ class SwitchDellCollector(InBandDataCollector[SwitchDellDataModel, SwitchDellCol
                 )
 
         try:
-            dell_data = SwitchDellDataModel(
+            dell_data = ScaleOutDellDataModel(
                 ip_arp=ip_arp,
                 ip_route=ip_route,
                 port_list=sorted(all_port_names) if all_port_names else None,
@@ -770,7 +757,7 @@ class SwitchDellCollector(InBandDataCollector[SwitchDellDataModel, SwitchDellCol
         except (ValidationError, TypeError) as e:
             self._log_event(
                 category=EventCategory.APPLICATION,
-                description="Failed to build SwitchDellDataModel",
+                description="Failed to build ScaleOutDellDataModel",
                 data=get_exception_details(e),
                 priority=EventPriority.ERROR,
             )

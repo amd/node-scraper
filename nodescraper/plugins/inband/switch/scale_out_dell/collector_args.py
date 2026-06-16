@@ -27,18 +27,18 @@ from typing import List, Optional
 
 from pydantic import Field
 
-from nodescraper.models import AnalyzerArgs
+from nodescraper.models import CollectorArgs
 
 
-class SwitchDellAnalyzerArgs(AnalyzerArgs):
-    """Arguments for the Dell SONiC switch analyzer."""
+class ScaleOutDellCollectorArgs(CollectorArgs):
+    """Arguments for the Dell SONiC switch collector."""
 
-    analysis_ports: Optional[List[str]] = Field(
+    collection_ports: Optional[List[str]] = Field(
         default=None,
         description=(
-            "Restrict per-port analysis to the given ports. Filter tokens are "
-            "slash-separated decimal segments (e.g. ['1/1', '1/31', '1/1/1']) "
-            "When omitted, every port present in the data is analyzed."
-            "Independent of any collection-time filter."
+            "Restrict the detail port status collection to the "
+            "given port names (e.g. ['1/1/1', '1/1/2'] )"
+            "When omitted, every port discovered "
+            "via 'show interface status' is queried."
         ),
     )

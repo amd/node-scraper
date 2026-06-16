@@ -90,9 +90,6 @@ class DellInterfaceStatus(BaseModel):
 class DellFecStatus(BaseModel):
     """Per-port FEC status from ``show interface fec status``"""
 
-    """Comment out check for now as output can spill into next column and is hard to parse reliably."""
-    """Re-add when dell fixes, ticket opened"""
-
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
     type: Optional[str] = None
@@ -100,6 +97,7 @@ class DellFecStatus(BaseModel):
     admin: Optional[str] = None
     if_state: Optional[str] = None
 
+    # ticket opened with Dell to fix output formatting before re-enabling
     # error_fields: ClassVar[dict[str, str]] = {
     #     "oper": "rs",
     #     "if_state": "oper-up",
@@ -284,7 +282,7 @@ class DellPortData(BaseModel):
     queue_counters: Optional[List[DellQueueCounter]] = None
 
 
-class SwitchDellDataModel(DataModel):
+class ScaleOutDellDataModel(DataModel):
     """Collected output of Dell SONiC switch commands"""
 
     ip_arp: Optional[List[DellArpEntry]] = None

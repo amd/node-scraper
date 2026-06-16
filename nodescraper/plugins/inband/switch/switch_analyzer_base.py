@@ -53,7 +53,8 @@ TSwitchData = TypeVar("TSwitchData", bound=DataModel)
 
 
 def _unwrap_optional(annotation: Any) -> Any:
-    """Strip a single ``None`` arm from ``Optional[X]`` / ``X | None``."""
+    """Strip a single ``None`` arm from ``Optional[X]`` / ``X | None``"""
+
     args = get_args(annotation)
     if not args:
         return annotation
@@ -67,20 +68,8 @@ def _unwrap_optional(annotation: Any) -> Any:
 def _classify_port_submodel_fields(
     port_cls: Type[BaseModel],
 ) -> tuple[tuple[tuple[str, Type[BaseModel]], ...], tuple[tuple[str, Type[BaseModel]], ...]]:
-    """Inspect a per-port pydantic model and split its sub-model fields.
+    """Inspect a per-port pydantic model and split its sub-model fields"""
 
-    Returns ``(scalar_attrs, list_attrs)`` where each element is a
-    ``(name, model_cls)`` pair:
-
-    * ``scalar_attrs`` -- fields whose annotation resolves to a
-      :class:`pydantic.BaseModel` subclass (with an optional ``| None``).
-      ``model_cls`` is that sub-model class.
-    * ``list_attrs`` -- fields whose annotation resolves to a ``list``/``List``
-      of a :class:`BaseModel` subclass (with an optional ``| None``).
-      ``model_cls`` is the list element class.
-
-    Other fields are ignored. Result is cached per class.
-    """
     scalars: list[tuple[str, Type[BaseModel]]] = []
     lists: list[tuple[str, Type[BaseModel]]] = []
 
@@ -103,26 +92,16 @@ def _classify_port_submodel_fields(
 
 
 def _model_is_analyzed(model_cls: Type[BaseModel]) -> bool:
-    """Return True if ``model_cls`` declares any error/warning fields.
+    """Return True if ``model_cls`` declares any error/warning fields"""
 
-    A sub-model is "analyzed" when it exposes a non-empty ``error_fields`` or
-    ``warning_fields`` ClassVar -- i.e. the analyzer would flag mismatches on
-    it if data were present. Such sub-models being absent is itself worth a
-    warning.
-    """
     return bool(
         getattr(model_cls, "error_fields", None) or getattr(model_cls, "warning_fields", None)
     )
 
 
 def _values_match(actual: Any, expected: Any) -> bool:
-    """Compare an actual model value to an expected value.
+    """Compare an actual model value to an expected value."""
 
-    Booleans are compared strictly. The sentinel ``"NOT_NULL"`` matches any
-    non-empty value. All other values are compared by their string
-    representation so that ints/strings with the same numeric or textual
-    content (e.g. 0 and "0") are considered equal.
-    """
     if isinstance(expected, str) and expected == "NOT_NULL":
         if actual is None:
             return False
@@ -135,32 +114,11 @@ def _values_match(actual: Any, expected: Any) -> bool:
 class SwitchAnalyzerBase(Generic[TSwitchData]):
     """Shared scaffolding for vendor-specific switch analyzers.
 
-    This is a **mixin**, not a :class:`DataAnalyzer` subclass.  Concrete
-    vendor analyzers must inherit from both this mixin and
-    :class:`DataAnalyzer` (in that order) so that the ``analyze_decorator``
-    wrapping applied by :meth:`DataAnalyzer.__init_subclass__` happens
-    exactly once -- on the leaf class -- rather than once on the mixin and
-    again on each leaf.
-
-    Subclasses declare:
-
-    * :attr:`VENDOR_NAME` -- short human label (e.g. ``"Arista"``).
-    * :attr:`DATA_MODEL` -- the concrete :class:`DataModel` subclass analyzed.
-    * :attr:`PORT_NAME_RE` -- regex whose first capture group yields the
-      canonical port key. Used to normalize both filter tokens and live port
-      names so they can be compared.
-    * :attr:`PORT_FORMAT_HINT` -- short string included in error messages for
-      invalid ``ports`` filter entries.
-    Per-port sub-models are discovered automatically by introspecting the
-    vendor's per-port pydantic model (the value type of
-    ``DATA_MODEL.port``). Any field annotated as ``BaseModel | None`` is
-    treated as a scalar sub-model, and any field annotated as
-    ``list[BaseModel] | None`` is treated as a list of sub-models. Fields
-    without ``error_fields`` / ``warning_fields`` ClassVars are still walked
-    but produce no findings, so adding new sub-model fields is automatic.
-
-    Subclasses override :meth:`_walk_system` for vendor-specific top-level
-    (non-port) checks.
+    A mixin that walks the vendor data model and flags sub-models whose
+    ``error_fields`` / ``warning_fields`` values mismatch.
+    Subclasses set :attr:`VENDOR_NAME`, :attr:`DATA_MODEL`,
+    :attr:`PORT_NAME_RE`, :attr:`PORT_FORMAT_HINT` and may override
+    :meth:`_walk_system` for non-port checks.
     """
 
     VENDOR_NAME: ClassVar[str]
@@ -189,26 +147,8 @@ class SwitchAnalyzerBase(Generic[TSwitchData]):
         data: TSwitchData,
         args: Optional[BaseModel] = None,
     ) -> TaskResult:
-        """Analyze a single vendor's switch data model.
+        """Analyze a single vendor's switch data model"""
 
-        Walks the vendor data model and inspects every sub-model that exposes
-        ``error_fields`` and/or ``warning_fields`` ClassVars.  Each entry in
-        those dicts maps a field name to its expected value; a mismatch
-        triggers an event whose priority depends on which dict the field came
-        from.
-
-        The overall result status is left unset so that it is derived from the
-        emitted event priorities (errors -> ERROR, warnings -> WARNING,
-        otherwise OK).
-
-        Args:
-            data: The collected vendor :class:`DataModel`.
-            args: Optional analyzer args. When present, an optional ``ports``
-                attribute restricts per-port analysis to the given ports. This
-                is independent of any ``ports`` filter applied at collection
-                time -- use it to analyze a subset of an already-collected
-                dataset.
-        """
         ports = getattr(args, "analysis_ports", None) if args is not None else None
 
         try:
@@ -244,10 +184,8 @@ class SwitchAnalyzerBase(Generic[TSwitchData]):
     # ------------------------------------------------------------------
 
     def _walk_system(self, switch_data: TSwitchData) -> list[dict[str, Any]]:
-        """Return findings for vendor-specific top-level (non-port) sections.
+        """Return findings for vendor-specific top-level (non-port) sections"""
 
-        Default implementation does nothing. Override per vendor.
-        """
         return []
 
     # ------------------------------------------------------------------
@@ -255,7 +193,8 @@ class SwitchAnalyzerBase(Generic[TSwitchData]):
     # ------------------------------------------------------------------
 
     def _normalize_port(self, name: str) -> Optional[str]:
-        """Return ``name`` as a canonical port key, else ``None``."""
+        """Return ``name`` as a canonical port key, else ``None``"""
+
         match = self.PORT_NAME_RE.match(name.strip())
         if not match:
             return None
@@ -269,7 +208,8 @@ class SwitchAnalyzerBase(Generic[TSwitchData]):
         return groups[0]
 
     def _parse_ports_kwarg(self, ports: Any) -> Optional[set[str]]:
-        """Parse the ``ports`` filter into a set of canonical port keys."""
+        """Parse the ``ports`` filter into a set of canonical port keys"""
+
         if ports is None:
             return None
 
@@ -292,7 +232,8 @@ class SwitchAnalyzerBase(Generic[TSwitchData]):
         switch_data: TSwitchData,
         allowed_ports: Optional[set[str]],
     ) -> bool:
-        """Execute system- and per-port-level checks. Returns True on any mismatch."""
+        """Execute system- and per-port-level checks"""
+
         findings: list[dict[str, Any]] = list(self._walk_system(switch_data))
 
         analyzed_ports: list[str] = []
@@ -328,7 +269,8 @@ class SwitchAnalyzerBase(Generic[TSwitchData]):
         return bool(findings)
 
     def _emit_grouped_findings(self, findings: list[dict[str, Any]]) -> None:
-        """Emit at most one event per (location, priority) group."""
+        """Emit at most one event per (location, priority) group"""
+
         # Preserve discovery order of locations and priorities.
         grouped: dict[tuple[str, EventPriority], list[dict[str, Any]]] = {}
         for finding in findings:
@@ -362,12 +304,8 @@ class SwitchAnalyzerBase(Generic[TSwitchData]):
 
     @staticmethod
     def _format_mismatch(item: dict[str, Any]) -> str:
-        """Render a single finding for the event description.
+        """Render a single finding for the event description"""
 
-        Qualifies the field with the section it came from so the message reads
-        e.g. ``pfc_rx_statistics.pfc3=100939190`` or
-        ``detail_counters (not collected)``.
-        """
         section = item["context"].get("section")
         prefix = f"{section}." if section else ""
         if item.get("missing"):
@@ -377,10 +315,10 @@ class SwitchAnalyzerBase(Generic[TSwitchData]):
     def _check_port(self, port_name: str, port_data: BaseModel) -> list[dict[str, Any]]:
         """Check every sub-model of a single port for errors/warnings.
 
-        Sub-models that are "analyzed" (declare ``error_fields`` /
-        ``warning_fields``) but were not collected for this port produce a
-        warning so missing data is not silently ignored.
+        Analyzed sub-models that were not collected produce a missing-data
+        warning.
         """
+
         findings: list[dict[str, Any]] = []
 
         scalar_attrs, list_attrs = _classify_port_submodel_fields(type(port_data))
@@ -419,7 +357,8 @@ class SwitchAnalyzerBase(Generic[TSwitchData]):
     def _missing_submodel_finding(
         self, port_name: str, attr: str, model_cls: Type[BaseModel]
     ) -> dict[str, Any]:
-        """Build a warning finding for an analyzed sub-model that is absent."""
+        """Build a warning finding for an analyzed sub-model that is absent"""
+
         return {
             "priority": EventPriority.WARNING,
             "field": attr,
@@ -430,7 +369,8 @@ class SwitchAnalyzerBase(Generic[TSwitchData]):
         }
 
     def _check_model(self, model: BaseModel, context: Mapping[str, Any]) -> list[dict[str, Any]]:
-        """Check a single pydantic model against its error/warning field dicts."""
+        """Check a single pydantic model against its error/warning field dicts"""
+
         findings: list[dict[str, Any]] = []
 
         for fields, priority in (
@@ -450,7 +390,8 @@ class SwitchAnalyzerBase(Generic[TSwitchData]):
         priority: EventPriority,
         context: Mapping[str, Any],
     ) -> list[dict[str, Any]]:
-        """Compare each named field on ``model`` to its expected value."""
+        """Compare each named field on ``model`` to its expected value"""
+
         findings: list[dict[str, Any]] = []
 
         # Support either a dict[name -> expected] or a plain iterable of names

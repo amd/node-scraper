@@ -23,6 +23,22 @@
 # SOFTWARE.
 #
 ###############################################################################
-from .switch_dell_plugin import SwitchDellPlugin
+from typing import List, Optional
 
-__all__ = ["SwitchDellPlugin"]
+from pydantic import Field
+
+from nodescraper.models import AnalyzerArgs
+
+
+class ScaleOutAristaAnalyzerArgs(AnalyzerArgs):
+    """Arguments for the Arista switch analyzer."""
+
+    analysis_ports: Optional[List[str]] = Field(
+        default=None,
+        description=(
+            "Restrict per-port analysis to the given ports. Ports specified in"
+            "the form 'M/S' (e.g. ['1/1', '2/1', '17/1']) "
+            "When omitted, every port present in the data is "
+            "analyzed, Independent of any collection-time port filter."
+        ),
+    )

@@ -30,33 +30,23 @@ from typing import Any, ClassVar
 from nodescraper.interfaces import DataAnalyzer
 
 from ..switch_analyzer_base import SwitchAnalyzerBase
-from .analyzer_args import SwitchDellAnalyzerArgs
-from .switchdelldata import SwitchDellDataModel
+from .analyzer_args import ScaleOutDellAnalyzerArgs
+from .scaleoutdelldata import ScaleOutDellDataModel
 
 
-class SwitchDellAnalyzer(
-    SwitchAnalyzerBase[SwitchDellDataModel],
-    DataAnalyzer[SwitchDellDataModel, SwitchDellAnalyzerArgs],
+class ScaleOutDellAnalyzer(
+    SwitchAnalyzerBase[ScaleOutDellDataModel],
+    DataAnalyzer[ScaleOutDellDataModel, ScaleOutDellAnalyzerArgs],
 ):
     """Check Dell SONiC switch data for errors and warnings.
 
-    Walks every model present in the collected :class:`SwitchDellDataModel` and
-    checks each ``error_fields`` / ``warning_fields`` ClassVar.
-
-    Port selection can happen in two places:
-
-    * On :class:`SwitchDellCollector` via its ``ports`` arg -- limits what the
-      switch is asked to return.
-    * On this analyzer via its own ``ports`` arg -- useful when you want to
-      collect everything but only flag issues on a subset of ports.
-
-    Both can be set independently. Filter tokens are slash-separated decimal
-    segments (e.g. ``["1/1", "1/31", "1/1/1"]``) optionally prefixed with
-    ``Ethernet`` or ``Eth``.
+    Walks every model in the collected :class:`ScaleOutDellDataModel` and checks
+    each ``error_fields`` / ``warning_fields`` ClassVar against an optional
+    ``ports`` filter.
     """
 
     VENDOR_NAME: ClassVar[str] = "Dell"
-    DATA_MODEL = SwitchDellDataModel
+    DATA_MODEL = ScaleOutDellDataModel
 
     # Dell SONiC port identifier. Accept any ``Eth``-prefixed or bare token
     # consisting of one or more slash-separated decimal segments and
@@ -64,7 +54,7 @@ class SwitchDellAnalyzer(
     PORT_NAME_RE: ClassVar[re.Pattern] = re.compile(r"^(?:Eth)?(\d+(?:/\d+)*)$", re.IGNORECASE)
     PORT_FORMAT_HINT: ClassVar[str] = "expected slash-separated decimals (e.g. 'M/S', 'A/B/C')"
 
-    def _walk_system(self, switch_data: SwitchDellDataModel) -> list[dict[str, Any]]:
+    def _walk_system(self, switch_data: ScaleOutDellDataModel) -> list[dict[str, Any]]:
         findings: list[dict[str, Any]] = []
 
         for idx, arp_entry in enumerate(switch_data.ip_arp or []):

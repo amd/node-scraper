@@ -23,6 +23,26 @@
 # SOFTWARE.
 #
 ###############################################################################
-from .switch_arista_plugin import SwitchAristaPlugin
+from nodescraper.base import InBandDataPlugin
 
-__all__ = ["SwitchAristaPlugin"]
+from .analyzer_args import ScaleOutDellAnalyzerArgs
+from .collector_args import ScaleOutDellCollectorArgs
+from .scale_out_dell_analyzer import ScaleOutDellAnalyzer
+from .scale_out_dell_collector import ScaleOutDellCollector
+from .scaleoutdelldata import ScaleOutDellDataModel
+
+
+class ScaleOutDellPlugin(
+    InBandDataPlugin[ScaleOutDellDataModel, ScaleOutDellCollectorArgs, ScaleOutDellAnalyzerArgs]
+):
+    """Plugin for collection and analysis of Dell SONiC switch data"""
+
+    DATA_MODEL = ScaleOutDellDataModel
+
+    COLLECTOR = ScaleOutDellCollector
+
+    COLLECTOR_ARGS = ScaleOutDellCollectorArgs
+
+    ANALYZER = ScaleOutDellAnalyzer
+
+    ANALYZER_ARGS = ScaleOutDellAnalyzerArgs

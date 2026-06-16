@@ -23,26 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
-from nodescraper.base import InBandDataPlugin
+from .scale_out_arista import ScaleOutAristaPlugin
+from .scale_out_dell import ScaleOutDellPlugin
 
-from .analyzer_args import SwitchAristaAnalyzerArgs
-from .collector_args import SwitchAristaCollectorArgs
-from .switch_arista_analyzer import SwitchAristaAnalyzer
-from .switch_arista_collector import SwitchAristaCollector
-from .switcharistadata import SwitchAristaDataModel
-
-
-class SwitchAristaPlugin(
-    InBandDataPlugin[SwitchAristaDataModel, SwitchAristaCollectorArgs, SwitchAristaAnalyzerArgs]
-):
-    """Plugin for collection and analysis of Arista switch data"""
-
-    DATA_MODEL = SwitchAristaDataModel
-
-    COLLECTOR = SwitchAristaCollector
-
-    COLLECTOR_ARGS = SwitchAristaCollectorArgs
-
-    ANALYZER = SwitchAristaAnalyzer
-
-    ANALYZER_ARGS = SwitchAristaAnalyzerArgs
+__all__ = ["ScaleOutAristaPlugin", "ScaleOutDellPlugin"]

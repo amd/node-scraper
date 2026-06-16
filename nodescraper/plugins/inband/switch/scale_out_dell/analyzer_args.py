@@ -23,7 +23,22 @@
 # SOFTWARE.
 #
 ###############################################################################
-from .arista import SwitchAristaPlugin
-from .dell import SwitchDellPlugin
+from typing import List, Optional
 
-__all__ = ["SwitchAristaPlugin", "SwitchDellPlugin"]
+from pydantic import Field
+
+from nodescraper.models import AnalyzerArgs
+
+
+class ScaleOutDellAnalyzerArgs(AnalyzerArgs):
+    """Arguments for the Dell SONiC switch analyzer."""
+
+    analysis_ports: Optional[List[str]] = Field(
+        default=None,
+        description=(
+            "Restrict per-port analysis to the given ports. Filter tokens are "
+            "slash-separated decimal segments (e.g. ['1/1', '1/31', '1/1/1']) "
+            "When omitted, every port present in the data is analyzed."
+            "Independent of any collection-time filter."
+        ),
+    )

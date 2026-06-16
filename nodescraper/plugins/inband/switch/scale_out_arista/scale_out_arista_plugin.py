@@ -23,22 +23,28 @@
 # SOFTWARE.
 #
 ###############################################################################
-from typing import List, Optional
+from nodescraper.base import InBandDataPlugin
 
-from pydantic import Field
+from .analyzer_args import ScaleOutAristaAnalyzerArgs
+from .collector_args import ScaleOutAristaCollectorArgs
+from .scale_out_arista_analyzer import ScaleOutAristaAnalyzer
+from .scale_out_arista_collector import ScaleOutAristaCollector
+from .scaleoutaristadata import ScaleOutAristaDataModel
 
-from nodescraper.models import AnalyzerArgs
 
+class ScaleOutAristaPlugin(
+    InBandDataPlugin[
+        ScaleOutAristaDataModel, ScaleOutAristaCollectorArgs, ScaleOutAristaAnalyzerArgs
+    ]
+):
+    """Plugin for collection and analysis of Arista switch data"""
 
-class SwitchAristaAnalyzerArgs(AnalyzerArgs):
-    """Arguments for the Arista switch analyzer."""
+    DATA_MODEL = ScaleOutAristaDataModel
 
-    analysis_ports: Optional[List[str]] = Field(
-        default=None,
-        description=(
-            "Restrict per-port analysis to the given ports. Ports specified in"
-            "the form 'M/S' (e.g. ['1/1', '2/1', '17/1']) "
-            "When omitted, every port present in the data is "
-            "analyzed, Independent of any collection-time port filter."
-        ),
-    )
+    COLLECTOR = ScaleOutAristaCollector
+
+    COLLECTOR_ARGS = ScaleOutAristaCollectorArgs
+
+    ANALYZER = ScaleOutAristaAnalyzer
+
+    ANALYZER_ARGS = ScaleOutAristaAnalyzerArgs

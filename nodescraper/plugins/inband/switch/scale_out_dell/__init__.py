@@ -23,22 +23,6 @@
 # SOFTWARE.
 #
 ###############################################################################
-from typing import List, Optional
+from .scale_out_dell_plugin import ScaleOutDellPlugin
 
-from pydantic import Field
-
-from nodescraper.models import CollectorArgs
-
-
-class SwitchDellCollectorArgs(CollectorArgs):
-    """Arguments for the Dell SONiC switch collector."""
-
-    collection_ports: Optional[List[str]] = Field(
-        default=None,
-        description=(
-            "Restrict the detail port status collection to the "
-            "given port names (e.g. ['1/1/1', '1/1/2'] )"
-            "When omitted, every port discovered "
-            "via 'show interface status' is queried."
-        ),
-    )
+__all__ = ["ScaleOutDellPlugin"]
