@@ -23,7 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
-"""Unit tests for amd-smi pydantic models (ROCm 7.13 / legacy JSON shapes)."""
+"""Unit tests for amd-smi pydantic models (legacy JSON, ROCm 7.2+ / AMD-SMI 26.2+)."""
 
 from typing import Any, Optional
 
@@ -339,6 +339,36 @@ def test_static_frequency_levels_optional_levels():
     assert levels.Level_0.value == 500
     assert levels.Level_1 is not None and levels.Level_1.value == 900
     assert levels.Level_2 is not None and levels.Level_2.value == 1300
+
+
+def test_static_frequency_levels_accepts_level_three_plus():
+    """ROCm 7.2+ / AMD-SMI 26.2+ may expose additional DPM levels (e.g. Level 3)."""
+    levels = StaticFrequencyLevels.model_validate(
+        {
+            "Level 0": "400 MHz",
+            "Level 1": "800 MHz",
+            "Level 2": "1000 MHz",
+            "Level 3": "1143 MHz",
+        }
+    )
+    assert levels.Level_3 is not None
+    assert levels.Level_3.value == 1143
+    assert levels.Level_3.unit == "MHz"
+
+
+def test_static_frequency_levels_legacy_amd_smi_three_levels_only():
+    """Legacy static JSON: only Level 0–2 (no Level 3+ keys) — must still parse."""
+    levels = StaticFrequencyLevels.model_validate(
+        {
+            "Level 0": {"value": 500, "unit": "MHz"},
+            "Level 1": "900 MHz",
+            "Level 2": "1300 MHz",
+        }
+    )
+    assert levels.Level_0.value == 500
+    assert levels.Level_2 is not None and levels.Level_2.value == 1300
+    assert levels.Level_3 is None
+    assert levels.Level_15 is None
 
 
 def test_static_limit_legacy_max_power():

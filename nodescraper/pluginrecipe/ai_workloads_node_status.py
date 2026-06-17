@@ -2,19 +2,15 @@
 #
 # MIT License
 #
-# Copyright (c) 2026 Advanced Micro Devices, Inc.
+# Copyright (c) 2025 Advanced Micro Devices, Inc.
 #
 ###############################################################################
-"""Plugin recipe for GPU / AI workload nodes (benchmarks, training, LLM serving)."""
-
 from __future__ import annotations
 
 from .discovery import plugin_names_matching
 from .pluginrecipe import PluginRecipe
 
-# NodeStatus baseline (OS, boot, dmesg, ROCm path, memory, storage, uptime) plus
-# GPU/ML-focused collectors commonly needed when accelerators are under sustained load.
-_AI_WORKLOADS_NODE_PLUGINS = (
+_AI_WORKLOADS_NODE_STATUS_PLUGINS = (
     "AmdSmiPlugin",
     "BiosPlugin",
     "CmdlinePlugin",
@@ -37,13 +33,13 @@ _AI_WORKLOADS_NODE_PLUGINS = (
 
 
 class AIWorkloadsNodeStatus(PluginRecipe):
-    """In-band profile for GPU/ML nodes: OS health, AMDGPU/ROCm, PCIe, dmesg (RAS/throttle), processes, packages, GPU enumeration, and sysctl signals relevant to sustained AI workloads."""
+    """Node status plus GPU and ML workload plugins (AMD SMI, PCIe, modules, packages, sysctl, etc.)."""
 
     @classmethod
     def plugin_names(cls) -> tuple[str, ...]:
-        """Return the AI workloads plugin set resolved at runtime.
+        """Return the AI workloads node-status plugin set resolved at runtime.
 
         Returns:
             tuple[str, ...]: Sorted plugin names registered in the plugin registry.
         """
-        return plugin_names_matching(_AI_WORKLOADS_NODE_PLUGINS)
+        return plugin_names_matching(_AI_WORKLOADS_NODE_STATUS_PLUGINS)
