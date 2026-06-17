@@ -114,10 +114,11 @@ class RocmCollector(InBandDataCollector[RocmDataModel, RocmCollectorArgs]):
                     return self.result, None
         else:
             self._log_event(
-                category=EventCategory.OS,
+                category=EventCategory.APPLICATION,
                 description=f"Unable to read ROCm version from {version_paths}",
                 data={"raw_output": res.stdout},
-                priority=EventPriority.ERROR,
+                priority=EventPriority.WARNING,
+                console_log=True,
             )
 
         # Collect additional ROCm data if version was found
@@ -217,17 +218,18 @@ class RocmCollector(InBandDataCollector[RocmDataModel, RocmCollectorArgs]):
 
         if not rocm_data:
             self._log_event(
-                category=EventCategory.OS,
-                description="Error checking ROCm version",
+                category=EventCategory.APPLICATION,
+                description="ROCm is not installed",
                 data={
                     "command": res.command,
                     "exit_code": res.exit_code,
                     "stderr": res.stderr,
+                    "version_paths": version_paths,
                 },
-                priority=EventPriority.ERROR,
+                priority=EventPriority.WARNING,
                 console_log=True,
             )
-            self.result.message = "ROCm version not found"
-            self.result.status = ExecutionStatus.ERROR
+            self.result.message = "ROCm is not installed"
+            self.result.status = ExecutionStatus.NOT_RAN
 
         return self.result, rocm_data

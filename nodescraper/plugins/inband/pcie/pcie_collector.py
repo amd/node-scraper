@@ -715,7 +715,14 @@ class PcieCollector(InBandDataCollector[PcieDataModel, None]):
             Tuple[TaskResult, Optional[PcieDataModel]]: tuple containing the result of the task and the PCIe data if available
         """
         pcie_data = self._get_pcie_data(upstream_steps_to_collect)
-        if pcie_data:
+        if pcie_data is None:
+            return self.result, None
+
+        vf_cfg = pcie_data.vf_pcie_cfg_space or {}
+        if not pcie_data.pcie_cfg_space and not vf_cfg:
+            self.result.message = "PCIe config space not available"
+            self.result.status = ExecutionStatus.NOT_RAN
+        else:
             self._log_event(
                 category=EventCategory.IO,
                 description="PCIe Data read from GPUs",

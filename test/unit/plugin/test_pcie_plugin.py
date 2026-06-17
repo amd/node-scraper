@@ -29,6 +29,8 @@ from pathlib import Path
 
 import pytest
 
+from nodescraper.enums.eventcategory import EventCategory
+from nodescraper.enums.executionstatus import ExecutionStatus
 from nodescraper.models import PluginConfig
 from nodescraper.plugins.inband.pcie.analyzer_args import PcieAnalyzerArgs
 from nodescraper.plugins.inband.pcie.pcie_analyzer import PcieAnalyzer
@@ -138,3 +140,26 @@ def test_pcie_plugin_skip_sudo_config(pcie_config_file):
     config = _load_plugin_config(pcie_config_file)
 
     assert config.plugins["PciePlugin"]["analysis_args"]["exp_gpu_count_override"] == 4
+
+
+def test_pcie_analyzer_not_ran_when_no_pcie_config_space(system_info):
+    """No AMD GPU PCIe config collected (e.g. VM/WSL) — analysis should be NOT_RAN, not OK with warnings."""
+    analyzer = PcieAnalyzer(system_info=system_info)
+    data = PcieDataModel(pcie_cfg_space={}, vf_pcie_cfg_space={})
+    result = analyzer.analyze_data(data, PcieAnalyzerArgs())
+
+    assert result.status == ExecutionStatus.NOT_RAN
+    assert "PCIe config space not available" in result.message
+    assert any(
+        e.category == EventCategory.APPLICATION.value
+        and "PCIe GPU config space" in (e.description or "")
+        for e in result.events
+    )
+
+
+def test_pcie_analyzer_not_ran_when_vf_pcie_cfg_space_none(system_info):
+    analyzer = PcieAnalyzer(system_info=system_info)
+    data = PcieDataModel(pcie_cfg_space={})
+    result = analyzer.analyze_data(data, PcieAnalyzerArgs())
+
+    assert result.status == ExecutionStatus.NOT_RAN

@@ -27,8 +27,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from nodescraper.enums.executionstatus import ExecutionStatus
 from nodescraper.enums.systeminteraction import SystemInteractionLevel
 from nodescraper.plugins.inband.pcie.pcie_collector import PcieCollector
+from nodescraper.plugins.inband.pcie.pcie_data import PcieDataModel
 
 
 @pytest.fixture
@@ -109,3 +111,15 @@ def test_log_pcie_artifacts_includes_lspci_pp_d(collector):
         artifact for artifact in collector.result.artifacts if artifact.filename == "lspci_pp_d.txt"
     )
     assert lspci_pp_d.contents == "0001:00:01.1/0001:00:02.0/0001:00:03.0"
+
+
+def test_collect_data_not_ran_when_no_gpu_pcie_config(collector):
+    collector._get_pcie_data = MagicMock(
+        return_value=PcieDataModel(pcie_cfg_space={}, vf_pcie_cfg_space={})
+    )
+
+    result, data = collector.collect_data()
+
+    assert result.status == ExecutionStatus.NOT_RAN
+    assert "PCIe config space not available" in result.message
+    assert data == PcieDataModel(pcie_cfg_space={}, vf_pcie_cfg_space={})

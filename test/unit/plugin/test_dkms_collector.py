@@ -27,6 +27,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from nodescraper.enums.eventcategory import EventCategory
 from nodescraper.enums.executionstatus import ExecutionStatus
 from nodescraper.enums.systeminteraction import SystemInteractionLevel
 from nodescraper.interfaces.task import SystemCompatibilityError
@@ -70,6 +71,36 @@ def test_run_linux(collector):
         version="dkms-2.8.7",
     )
     assert data == expected_data
+
+
+def test_run_linux_dkms_not_installed(collector):
+    collector.system_info.os_family = OSFamily.LINUX
+
+    collector._run_sut_cmd = MagicMock()
+    collector._run_sut_cmd.side_effect = [
+        MagicMock(
+            exit_code=127,
+            stdout="",
+            stderr="dkms: command not found",
+            command=DkmsCollector.CMD_STATUS,
+        ),
+        MagicMock(
+            exit_code=127,
+            stdout="",
+            stderr="dkms: command not found",
+            command=DkmsCollector.CMD_VERSION,
+        ),
+    ]
+
+    result, data = collector.collect_data()
+
+    assert result.status == ExecutionStatus.NOT_RAN
+    assert data is None
+    assert result.message == "DKMS is not installed"
+    assert any(
+        e.category == EventCategory.APPLICATION.value and e.description == "DKMS is not installed"
+        for e in result.events
+    )
 
 
 def test_run_windows(conn_mock, system_info):

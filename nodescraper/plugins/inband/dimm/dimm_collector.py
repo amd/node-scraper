@@ -115,10 +115,17 @@ class DimmCollector(InBandDataCollector[DimmDataModel, DimmCollectorArgs]):
                 total_gb = topology.pop("total")
                 size = topology.pop("size")
                 if total_gb == 0:
-                    dimm_str = "0 GB"
-                else:
-                    dimm_entries = [f"{v} x {k}" for k, v in topology.items()]
-                    dimm_str = f"{total_gb}{size} @ {' '.join(dimm_entries)}"
+                    self._log_event(
+                        category=EventCategory.IO,
+                        description="No DIMM modules reported",
+                        priority=EventPriority.INFO,
+                        console_log=True,
+                    )
+                    self.result.message = "No DIMM modules reported"
+                    self.result.status = ExecutionStatus.NOT_RAN
+                    return self.result, None
+                dimm_entries = [f"{v} x {k}" for k, v in topology.items()]
+                dimm_str = f"{total_gb}{size} @ {' '.join(dimm_entries)}"
         if res.exit_code != 0:
             self._log_event(
                 category=EventCategory.OS,
@@ -128,7 +135,7 @@ class DimmCollector(InBandDataCollector[DimmDataModel, DimmCollectorArgs]):
                     "exit_code": res.exit_code,
                     "stderr": res.stderr,
                 },
-                priority=EventPriority.ERROR,
+                priority=EventPriority.WARNING,
                 console_log=True,
             )
 
@@ -146,9 +153,10 @@ class DimmCollector(InBandDataCollector[DimmDataModel, DimmCollectorArgs]):
             self._log_event(
                 category=EventCategory.IO,
                 description="DIMM info not found",
-                priority=EventPriority.CRITICAL,
+                priority=EventPriority.WARNING,
+                console_log=True,
             )
             self.result.message = "DIMM info not found"
-            self.result.status = ExecutionStatus.ERROR
+            self.result.status = ExecutionStatus.NOT_RAN
 
         return self.result, dimm_data

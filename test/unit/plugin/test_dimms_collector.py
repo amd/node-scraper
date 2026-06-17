@@ -106,7 +106,31 @@ def test_run_linux_error(collector, system_info):
 
     result, data = collector.collect_data()
 
-    assert result.status == ExecutionStatus.ERROR
+    assert result.status == ExecutionStatus.NOT_RAN
     assert data is None
     assert result.events[1].category == EventCategory.OS.value
     assert result.events[1].description == "Error checking dimms"
+
+
+def test_run_linux_no_dimms_reported(collector, system_info):
+    """SMBIOS reports no populated memory modules (exit 0, no sizes)."""
+    system_info.os_family = OSFamily.LINUX
+
+    collector._run_sut_cmd = MagicMock(
+        side_effect=[
+            MagicMock(
+                exit_code=0,
+                stdout="Full dmidecode output...",
+            ),
+            MagicMock(
+                exit_code=0,
+                stdout="",
+            ),
+        ]
+    )
+
+    result, data = collector.collect_data()
+
+    assert result.status == ExecutionStatus.NOT_RAN
+    assert data is None
+    assert result.message == "No DIMM modules reported"

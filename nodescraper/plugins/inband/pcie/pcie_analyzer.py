@@ -27,7 +27,7 @@ from typing import Dict, List, Optional, Set, Type, TypeVar
 
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
-from nodescraper.enums import EventCategory, EventPriority
+from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
 from nodescraper.interfaces import DataAnalyzer
 from nodescraper.models import TaskResult
 from nodescraper.utils import get_exception_traceback
@@ -1006,13 +1006,16 @@ class PcieAnalyzer(DataAnalyzer):
 
         pcie_data: PcieDataModel = data
 
-        if pcie_data.pcie_cfg_space == {} and pcie_data.vf_pcie_cfg_space == {}:
-            # If both of the PCIe Configuration spaces are
+        vf_cfg = pcie_data.vf_pcie_cfg_space or {}
+        if not pcie_data.pcie_cfg_space and not vf_cfg:
             self._log_event(
-                category=EventCategory.IO,
-                description="No PCIe config space found",
+                category=EventCategory.APPLICATION,
+                description="No PCIe GPU config space collected (not available on this system)",
                 priority=EventPriority.WARNING,
+                console_log=True,
             )
+            self.result.message = "PCIe config space not available"
+            self.result.status = ExecutionStatus.NOT_RAN
             return self.result
 
         # Check every link in the PCIe configuration space for the expected capability structure,

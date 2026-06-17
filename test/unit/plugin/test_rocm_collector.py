@@ -144,10 +144,10 @@ def test_collect_rocm_version_not_found(collector):
 
     result, data = collector.collect_data()
 
-    assert result.status == ExecutionStatus.ERROR
+    assert result.status == ExecutionStatus.NOT_RAN
     assert data is None
-    assert "ROCm version not found" in result.message
-    assert any(event.category == EventCategory.OS.value for event in result.events)
+    assert "ROCm is not installed" in result.message
+    assert any(event.category == EventCategory.APPLICATION.value for event in result.events)
 
 
 def test_collect_all_rocm_data(collector):

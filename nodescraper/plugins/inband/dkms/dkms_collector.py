@@ -26,7 +26,7 @@
 from typing import Optional
 
 from nodescraper.base import InBandDataCollector
-from nodescraper.enums import EventPriority, ExecutionStatus, OSFamily
+from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.models import TaskResult
 
 from .dkmsdata import DkmsDataModel
@@ -71,6 +71,24 @@ class DkmsCollector(InBandDataCollector[DkmsDataModel, None]):
                 data=dkms_data.model_dump(),
                 priority=EventPriority.INFO,
             )
-        self.result.message = f"DKMS: {dkms_data.model_dump()}" if dkms else "DKMS info not found"
-        self.result.status = ExecutionStatus.OK if dkms else ExecutionStatus.ERROR
-        return self.result, dkms_data if dkms else None
+            self.result.message = f"DKMS: {dkms_data.model_dump()}"
+            self.result.status = ExecutionStatus.OK
+            return self.result, dkms_data
+
+        self._log_event(
+            category=EventCategory.APPLICATION,
+            description="DKMS is not installed",
+            data={
+                "status_command": self.CMD_STATUS,
+                "status_exit_code": dkms_status.exit_code,
+                "status_stderr": dkms_status.stderr,
+                "version_command": self.CMD_VERSION,
+                "version_exit_code": dkms_version.exit_code,
+                "version_stderr": dkms_version.stderr,
+            },
+            priority=EventPriority.WARNING,
+            console_log=True,
+        )
+        self.result.message = "DKMS is not installed"
+        self.result.status = ExecutionStatus.NOT_RAN
+        return self.result, None
