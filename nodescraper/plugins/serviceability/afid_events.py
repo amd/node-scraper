@@ -100,10 +100,33 @@ def _extract_afid(payload: dict[str, Any]) -> Optional[int]:
     oem = payload.get("Oem")
     if isinstance(oem, dict):
         for vendor_payload in oem.values():
-            if isinstance(vendor_payload, dict):
+            found = _extract_afid_from_oem_fragment(vendor_payload)
+            if found is not None:
+                return found
+    return None
+
+
+def _extract_afid_from_oem_fragment(vendor_payload: Any) -> Optional[int]:
+    """Resolve AFID from one ``Oem`` property value (dict or list of dicts, e.g. ``AMDFieldIdentifiers``)."""
+    if isinstance(vendor_payload, dict):
+        for key in _AFID_KEYS:
+            if key in vendor_payload and vendor_payload[key] is not None:
+                return int(vendor_payload[key])
+    elif isinstance(vendor_payload, list):
+        for item in vendor_payload:
+            if isinstance(item, dict):
                 for key in _AFID_KEYS:
-                    if key in vendor_payload and vendor_payload[key] is not None:
-                        return int(vendor_payload[key])
+                    if key in item and item[key] is not None:
+                        return int(item[key])
+    return None
+
+
+def _origin_dict_to_unit(value: Any) -> Optional[str]:
+    if not isinstance(value, dict):
+        return None
+    odata_id = value.get("@odata.id") or value.get("odata.id")
+    if odata_id:
+        return _unit_from_odata_id(str(odata_id))
     return None
 
 
@@ -119,6 +142,18 @@ def _extract_serviceable_unit(payload: dict[str, Any]) -> Optional[str]:
         text = str(value).strip()
         if text:
             return _unit_from_odata_id(text) if "/" in text else text
+
+    links = payload.get("Links") or payload.get("links")
+    if isinstance(links, dict):
+        ooc = (
+            links.get("OriginOfCondition")
+            or links.get("originOfCondition")
+            or links.get("OriginofCondition")
+        )
+        unit = _origin_dict_to_unit(ooc)
+        if unit:
+            return unit
+
     oem = payload.get("Oem")
     if isinstance(oem, dict):
         for vendor_payload in oem.values():
@@ -128,6 +163,15 @@ def _extract_serviceable_unit(payload: dict[str, Any]) -> Optional[str]:
                 )
                 if unit is not None and str(unit).strip():
                     return str(unit).strip()
+            elif isinstance(vendor_payload, list):
+                for item in vendor_payload:
+                    if not isinstance(item, dict):
+                        continue
+                    su = item.get("ServiceableUnits") or item.get("serviceable_units")
+                    if isinstance(su, list) and su:
+                        u = _origin_dict_to_unit(su[0])
+                        if u:
+                            return u
     return None
 
 
