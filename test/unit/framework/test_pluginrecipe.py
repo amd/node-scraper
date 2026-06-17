@@ -11,7 +11,10 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from nodescraper.models import PluginConfig
-from nodescraper.pluginrecipe.ai_workloads_node_status import AIWorkloadsNodeStatus
+from nodescraper.pluginrecipe.ai_workloads_node_status import (
+    AIWorkloadsNodeStatus,
+    AIWorkloadsNodeStatusExtended,
+)
 from nodescraper.pluginrecipe.all_plugins import AllPlugins
 from nodescraper.pluginrecipe.node_status import NodeStatus
 from nodescraper.pluginrecipe.pluginrecipe import (
@@ -23,6 +26,14 @@ from nodescraper.pluginrecipe.pluginrecipe import (
     merge_plugin_configs,
 )
 from nodescraper.pluginregistry import PluginRegistry
+from nodescraper.plugins.inband.amdsmi.analyzer_args import AmdSmiAnalyzerArgs
+from nodescraper.plugins.inband.kernel_module.analyzer_args import (
+    KernelModuleAnalyzerArgs,
+)
+from nodescraper.plugins.inband.memory.analyzer_args import MemoryAnalyzerArgs
+from nodescraper.plugins.inband.package.analyzer_args import PackageAnalyzerArgs
+from nodescraper.plugins.inband.pcie.analyzer_args import PcieAnalyzerArgs
+from nodescraper.plugins.inband.storage.analyzer_args import StorageAnalyzerArgs
 
 
 class _CollectorOnlyPlugin:
@@ -75,6 +86,25 @@ def test_ai_workloads_node_status_recipe_matches_registered_plugins() -> None:
     assert set(AIWorkloadsNodeStatus.plugin_names()) == expected & available
 
 
+def test_ai_workloads_node_status_extended_superset_and_optional_plugins() -> None:
+    """Extended recipe adds NIC/network/NVMe/RDMA when those plugins are registered."""
+    available = set(PluginRegistry().plugins)
+    base = set(AIWorkloadsNodeStatus.plugin_names())
+    ext = set(AIWorkloadsNodeStatusExtended.plugin_names())
+    assert ext == base | ({"NicPlugin", "NetworkPlugin", "NvmePlugin", "RdmaPlugin"} & available)
+    for name in ("NicPlugin", "NetworkPlugin", "NvmePlugin", "RdmaPlugin"):
+        if name in available:
+            assert name in ext
+
+
+def test_ai_workloads_node_status_extended_plugin_config() -> None:
+    cfg = AIWorkloadsNodeStatusExtended.plugin_config()
+    assert cfg.name == "AIWorkloadsNodeStatusExtended"
+    assert (
+        cfg.plugins["AmdSmiPlugin"] == AIWorkloadsNodeStatus.plugin_config().plugins["AmdSmiPlugin"]
+    )
+
+
 def test_ai_workloads_node_status_plugin_config_shape() -> None:
     config = AIWorkloadsNodeStatus.plugin_config()
     assert config.name == "AIWorkloadsNodeStatus"
@@ -83,6 +113,30 @@ def test_ai_workloads_node_status_plugin_config_shape() -> None:
     assert isinstance(config.plugins, dict)
     assert "AmdSmiPlugin" in config.plugins
     assert "DmesgPlugin" in config.plugins
+
+    amdsmi = config.plugins["AmdSmiPlugin"]
+    AmdSmiAnalyzerArgs.model_validate(amdsmi.get("analysis_args") or {})
+
+    pcie = config.plugins["PciePlugin"]
+    PcieAnalyzerArgs.model_validate(pcie.get("analysis_args") or {})
+
+    pkg = config.plugins["PackagePlugin"]
+    PackageAnalyzerArgs.model_validate(pkg.get("collection_args") or {})
+    PackageAnalyzerArgs.model_validate(pkg.get("analysis_args") or {})
+
+    kmod = config.plugins["KernelModulePlugin"]
+    KernelModuleAnalyzerArgs.model_validate(kmod.get("analysis_args") or {})
+
+    mem = config.plugins["MemoryPlugin"]
+    MemoryAnalyzerArgs.model_validate(mem.get("analysis_args") or {})
+
+    sto = config.plugins["StoragePlugin"]
+    StorageAnalyzerArgs.model_validate(sto.get("analysis_args") or {})
+
+    assert amdsmi["analysis_args"]["check_static_data"] is True
+    assert pkg["collection_args"]["enable_rocm_regex"] is True
+    assert pkg["analysis_args"]["regex_match"] is True
+    assert kmod["analysis_args"]["regex_filter"] == [r"amdgpu"]
 
 
 def test_node_status_recipe_matches_registered_plugins() -> None:

@@ -553,6 +553,11 @@ Below is an example that skips sudo requiring plugins and disables analysis.
 A plugin config can be used to compare the system data against the config specifications.
 Built-in configs include **NodeStatus** (a subset of plugins) and **AllPlugins** (runs every
 registered plugin with default arguments—useful for generating a reference config from the full system).
+**AIWorkloadsNodeStatus** adds GPU/ML-oriented plugins and baseline ``analysis_args`` (AmdSmi, PCIe,
+packages, kernel modules, memory, storage). **AIWorkloadsNodeStatusExtended** is the same set plus
+**NicPlugin**, **NetworkPlugin**, **NvmePlugin**, and **RdmaPlugin** when registered—use it for
+distributed-training or NVMe-scratch nodes; merge a JSON config to set NIC/network ``analysis_args``
+for your fleet (e.g. ``NicAnalyzerArgs.expected_values``, ``NetworkAnalyzerArgs.error_regex``).
 
 **NodeStatus plus additional plugins** — built-in configs merge with plugins named after `run-plugins`.
 Values are comma-separated; pass as **`--plugin-configs=…`** or **`--plugin-configs` …** (same as other
