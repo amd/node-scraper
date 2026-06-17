@@ -11,6 +11,7 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from nodescraper.models import PluginConfig
+from nodescraper.pluginrecipe.ai_workloads_node_status import AIWorkloadsNodeStatus
 from nodescraper.pluginrecipe.all_plugins import AllPlugins
 from nodescraper.pluginrecipe.node_status import NodeStatus
 from nodescraper.pluginrecipe.pluginrecipe import (
@@ -47,6 +48,41 @@ class _AnalyzeOnlyRecipe(AnalyzerOnlyPluginRecipe):
     @classmethod
     def plugin_names(cls) -> tuple[str, ...]:
         return ("DmesgPlugin",)
+
+
+def test_ai_workloads_node_status_recipe_matches_registered_plugins() -> None:
+    available = set(PluginRegistry().plugins)
+    expected = {
+        "AmdSmiPlugin",
+        "BiosPlugin",
+        "CmdlinePlugin",
+        "DeviceEnumerationPlugin",
+        "DimmPlugin",
+        "DkmsPlugin",
+        "DmesgPlugin",
+        "KernelModulePlugin",
+        "KernelPlugin",
+        "MemoryPlugin",
+        "OsPlugin",
+        "PackagePlugin",
+        "PciePlugin",
+        "ProcessPlugin",
+        "RocmPlugin",
+        "StoragePlugin",
+        "SysctlPlugin",
+        "UptimePlugin",
+    }
+    assert set(AIWorkloadsNodeStatus.plugin_names()) == expected & available
+
+
+def test_ai_workloads_node_status_plugin_config_shape() -> None:
+    config = AIWorkloadsNodeStatus.plugin_config()
+    assert config.name == "AIWorkloadsNodeStatus"
+    desc = config.desc or ""
+    assert "GPU" in desc or "ML" in desc
+    assert isinstance(config.plugins, dict)
+    assert "AmdSmiPlugin" in config.plugins
+    assert "DmesgPlugin" in config.plugins
 
 
 def test_node_status_recipe_matches_registered_plugins() -> None:

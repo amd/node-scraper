@@ -68,6 +68,7 @@ node-scraper = "nodescraper.cli:cli_entry"
 [project.entry-points."nodescraper.plugin_configs"]
 NodeStatus = "nodescraper.pluginrecipe.node_status:NodeStatus"
 AllPlugins = "nodescraper.pluginrecipe.all_plugins:AllPlugins"
+AIWorkloadsNodeStatus = "nodescraper.pluginrecipe.ai_workloads_node_status:AIWorkloadsNodeStatus"
 
 [tool.black]
 line-length = 100

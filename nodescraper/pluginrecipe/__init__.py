@@ -7,6 +7,7 @@
 ###############################################################################
 from nodescraper.models import PluginConfig
 
+from .ai_workloads_node_status import AIWorkloadsNodeStatus  # noqa: F401
 from .all_plugins import AllPlugins
 from .discovery import (
     load_plugin_class,
@@ -33,6 +34,7 @@ __all__ = [
     "ANALYZE_ONLY",
     "COLLECT_AND_ANALYZE",
     "COLLECT_ONLY",
+    "AIWorkloadsNodeStatus",
     "AllPlugins",
     "AnalyzerOnlyPluginRecipe",
     "CollectorOnlyPluginRecipe",
