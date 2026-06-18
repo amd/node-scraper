@@ -44,7 +44,7 @@ class PluginConfigEntryPointError(RuntimeError):
 
 
 class ConfigRegistry:
-    """Class to load json plugin configs into models"""
+    """Load JSON plugin configs and entry points, then add any missing built-in recipe keys."""
 
     INTERNAL_SEARCH_PATH = os.path.join(os.path.dirname(__file__), "configs")
 
@@ -65,6 +65,7 @@ class ConfigRegistry:
         self.load_configs(config_path)
         if load_entry_point_configs:
             self.configs.update(self.load_plugin_configs_from_entry_points())
+            self._merge_builtin_plugin_config_recipes()
 
     def load_configs(self, config_path: Optional[str] = None):
         """Load plugin config JSON files into pydantic models.
@@ -181,3 +182,26 @@ class ConfigRegistry:
                 ) from exc
 
         return configs
+
+    def _merge_builtin_plugin_config_recipes(self) -> None:
+        """Back-fill ``self.configs`` for built-in recipe class names missing after entry points.
+
+        Returns:
+            None: Updates ``self.configs`` in place; does not overwrite existing keys.
+        """
+        from nodescraper.pluginrecipe.ai_workloads_node_status import (
+            AIWorkloadsNodeStatus,
+            AIWorkloadsNodeStatusExtended,
+        )
+        from nodescraper.pluginrecipe.all_plugins import AllPlugins
+        from nodescraper.pluginrecipe.node_status import NodeStatus
+
+        for recipe_cls in (
+            NodeStatus,
+            AllPlugins,
+            AIWorkloadsNodeStatus,
+            AIWorkloadsNodeStatusExtended,
+        ):
+            key = recipe_cls.name()
+            if key not in self.configs:
+                self.configs[key] = recipe_cls.plugin_config()

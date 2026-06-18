@@ -161,3 +161,17 @@ def test_load_plugin_configs_raises_on_invalid_config() -> None:
             ConfigRegistry.load_plugin_configs_from_entry_points()
 
     assert isinstance(exc_info.value.__cause__, ValidationError)
+
+
+def test_config_registry_merges_missing_builtin_recipe_keys() -> None:
+    """Built-in recipes register when setuptools metadata has no plugin_configs."""
+    with mock.patch.object(
+        ConfigRegistry,
+        "load_plugin_configs_from_entry_points",
+        return_value={},
+    ):
+        reg = ConfigRegistry(config_path="/nonexistent")
+
+    assert "AIWorkloadsNodeStatusExtended" in reg.configs
+    assert "AIWorkloadsNodeStatus" in reg.configs
+    assert reg.configs["AIWorkloadsNodeStatusExtended"].name == "AIWorkloadsNodeStatusExtended"

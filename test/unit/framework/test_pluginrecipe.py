@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# Copyright (C) 2026 Advanced Micro Devices, Inc.
+# Copyright (c) 2026 Advanced Micro Devices, Inc.
 #
 ###############################################################################
 
