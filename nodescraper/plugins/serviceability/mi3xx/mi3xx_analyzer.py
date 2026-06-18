@@ -25,7 +25,9 @@
 ###############################################################################
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, ClassVar, Optional
+
+from pydantic import BaseModel, Field
 
 from nodescraper.enums import ExecutionStatus
 from nodescraper.interfaces import DataAnalyzer
@@ -44,6 +46,14 @@ from nodescraper.plugins.serviceability.se_runner import SeRunError, run_service
 from nodescraper.plugins.serviceability.serviceability_data import (
     ServiceabilityDataModel,
 )
+
+
+class AfidSagMetadataArtifact(BaseModel):
+    """Hub AFID_SAG metadata snapshot; written to ``afid_sag_metadata.json``."""
+
+    ARTIFACT_LOG_BASENAME: ClassVar[str] = "afid_sag_metadata"
+
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class MI3XXAnalyzer(DataAnalyzer[ServiceabilityDataModel, ServiceabilityAnalyzerArgs]):
@@ -134,6 +144,7 @@ class MI3XXAnalyzer(DataAnalyzer[ServiceabilityDataModel, ServiceabilityAnalyzer
             return self.result
 
         data.serviceability = block
+        self._append_afid_sag_metadata_artifact(block)
         self._log_serviceability_solutions(block)
         engine_label = args.engine_display_name or args.engine_python_module
         self.result.status = ExecutionStatus.OK
@@ -153,6 +164,13 @@ class MI3XXAnalyzer(DataAnalyzer[ServiceabilityDataModel, ServiceabilityAnalyzer
             f"from {len(data.rf_events)} Redfish event(s){cper_summary}{ver_suffix}"
         )
         return self.result
+
+    def _append_afid_sag_metadata_artifact(self, block: ServiceabilityBlock) -> None:
+        if block.afid_sag_metadata is None:
+            return
+        self.result.artifacts.append(
+            AfidSagMetadataArtifact(metadata=dict(block.afid_sag_metadata))
+        )
 
     def _log_serviceability_solutions(self, block: ServiceabilityBlock) -> None:
         parent = self.parent or self.__class__.__name__

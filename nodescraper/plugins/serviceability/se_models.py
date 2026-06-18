@@ -25,7 +25,7 @@
 ###############################################################################
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -88,4 +88,15 @@ class ServiceabilityBlock(BaseModel):
     afid_sag_file_version: Optional[str] = Field(
         default=None,
         description="AFID_SAG.json identity/revision string when the hub returned metadata.",
+    )
+    afid_sag_metadata: Optional[dict[str, Any]] = Field(
+        default=None,
+        description="Hub-reported AFID_SAG metadata dict when the engine exposes afid_sag_metadata.",
+    )
+    short_service_info: Optional[str] = Field(
+        default=None,
+        description=(
+            "Brief hub summary derived from short_service_info (human-readable lines; "
+            "per-unit dict payloads are collapsed, identical messages merged with unit lists)."
+        ),
     )
