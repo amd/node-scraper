@@ -32,7 +32,7 @@ import os
 import platform
 import sys
 import uuid
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import Optional
 
 import nodescraper
@@ -65,8 +65,8 @@ from nodescraper.connection.redfish import (
 from nodescraper.connection.redfish.redfish_params import RedfishConnectionParams
 from nodescraper.constants import DEFAULT_LOGGER
 from nodescraper.enums import ExecutionStatus, SystemInteractionLevel, SystemLocation
-from nodescraper.interfaces import TaskResultHook
 from nodescraper.models import SystemInfo
+from nodescraper.models.pluginresult import PluginResult
 from nodescraper.pluginexecutor import PluginExecutor
 from nodescraper.pluginregistry import PluginRegistry
 
@@ -463,7 +463,7 @@ def main(
     arg_input: Optional[list[str]] = None,
     *,
     host_cli_args: Optional[argparse.Namespace] = None,
-    embed_default_task_result_hooks: Optional[Sequence[TaskResultHook]] = None,
+    plugin_run_result_hooks: Optional[Sequence[Callable[[PluginResult], None]]] = None,
 ):
     """Main entry point for the CLI
 
@@ -471,8 +471,8 @@ def main(
         arg_input (Optional[list[str]], optional): list of args to parse. Defaults to None.
         host_cli_args: Optional namespace from an embedding host (e.g. detect-errors) for code that
             calls get_plugin_run_invocation during the plugin queue.
-        embed_default_task_result_hooks: Optional hooks prepended for embedded runs (see
-            :func:`nodescraper.cli.embed.run_cli_return_code`).
+        plugin_run_result_hooks: Optional callbacks invoked with each plugin's :class:`PluginResult`
+            after ``run()`` completes (used by embedded hosts such as error-scraper).
     """
     if arg_input is None:
         arg_input = sys.argv[1:]
@@ -647,8 +647,8 @@ def main(
             timestamp=timestamp,
             sname=sname,
             host_cli_args=host_cli_args,
-            embed_default_task_result_hooks=embed_default_task_result_hooks,
             session_id=str(uuid.uuid4()),
+            plugin_run_result_hooks=plugin_run_result_hooks,
         )
 
         log_system_info(log_path, system_info, logger)

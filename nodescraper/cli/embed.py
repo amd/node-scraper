@@ -27,11 +27,11 @@
 from __future__ import annotations
 
 import argparse
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import Optional
 
 from nodescraper.cli.cli import get_cli_top_level_subcommands
-from nodescraper.interfaces import TaskResultHook
+from nodescraper.models.pluginresult import PluginResult
 
 CLI_TOP_LEVEL_SUBCOMMANDS = get_cli_top_level_subcommands()
 
@@ -47,15 +47,15 @@ def run_cli_return_code(
     argv: list[str],
     *,
     host_cli_args: Optional[argparse.Namespace] = None,
-    embed_default_task_result_hooks: Optional[Sequence[TaskResultHook]] = None,
+    plugin_run_result_hooks: Optional[Sequence[Callable[[PluginResult], None]]] = None,
 ) -> int:
     """Run nodescraper in-process; same behavior as :func:`run_main_return_code`.
 
     Args:
         argv: Tokens after the program name.
         host_cli_args: Optional host namespace forwarded to :func:`nodescraper.cli.cli.main`.
-        embed_default_task_result_hooks: Optional hooks prepended to every plugin run and connection
-            manager for this embed (e.g. host event logging). Merged in :class:`PluginExecutor`.
+        plugin_run_result_hooks: Optional callbacks invoked with each
+            :class:`~nodescraper.models.pluginresult.PluginResult` after a plugin finishes (embed hosts).
 
     Returns:
         Integer exit code (``SystemExit`` is mapped, not raised).
@@ -63,7 +63,7 @@ def run_cli_return_code(
     return run_main_return_code(
         argv,
         host_cli_args=host_cli_args,
-        embed_default_task_result_hooks=embed_default_task_result_hooks,
+        plugin_run_result_hooks=plugin_run_result_hooks,
     )
 
 
@@ -71,14 +71,14 @@ def run_main_return_code(
     arg_input: list[str],
     *,
     host_cli_args: Optional[argparse.Namespace] = None,
-    embed_default_task_result_hooks: Optional[Sequence[TaskResultHook]] = None,
+    plugin_run_result_hooks: Optional[Sequence[Callable[[PluginResult], None]]] = None,
 ) -> int:
     """Run :func:`nodescraper.cli.cli.main` and map ``SystemExit`` to an exit code.
 
     Args:
         arg_input: Tokens after the program name.
         host_cli_args: Optional host namespace for embedded runs.
-        embed_default_task_result_hooks: Optional default task-result hooks for this embed.
+        plugin_run_result_hooks: Optional per-plugin result callbacks for embedded runs.
 
     Returns:
         Integer exit code.
@@ -89,7 +89,7 @@ def run_main_return_code(
         main(
             arg_input,
             host_cli_args=host_cli_args,
-            embed_default_task_result_hooks=embed_default_task_result_hooks,
+            plugin_run_result_hooks=plugin_run_result_hooks,
         )
     except SystemExit as exc:
         code = exc.code
