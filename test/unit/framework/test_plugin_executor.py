@@ -200,4 +200,4 @@ def test_plugin_run_result_hooks_called_after_each_plugin(plugin_registry):
         plugin_run_result_hooks=[hook],
     )
     executor.run_queue()
-    assert seen == ["TestPluginB"]
+    assert seen == ["testB"]
