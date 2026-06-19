@@ -28,11 +28,13 @@ from __future__ import annotations
 
 import argparse
 import logging
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
-from typing import Iterator, Optional
+from typing import Optional
 
+from nodescraper.interfaces.taskresulthook import TaskResultHook
 from nodescraper.models import PluginConfig, SystemInfo
 from nodescraper.models.pluginresult import PluginResult
 from nodescraper.pluginexecutor import PluginExecutor
@@ -72,6 +74,7 @@ class PluginRunInvocation:
     sname: str
     host_cli_args: Optional[argparse.Namespace] = None
     session_id: Optional[str] = None
+    embed_default_task_result_hooks: tuple[TaskResultHook, ...] = ()
 
 
 def run_plugin_queue_with_invocation(
@@ -86,8 +89,12 @@ def run_plugin_queue_with_invocation(
     sname: str,
     host_cli_args: Optional[argparse.Namespace] = None,
     session_id: Optional[str] = None,
+    embed_default_task_result_hooks: Optional[Sequence[TaskResultHook]] = None,
 ) -> list[PluginResult]:
     """Constructs the plugin executor, binds invocation context, and runs the plugin queue."""
+    embed_hooks_tuple: tuple[TaskResultHook, ...] = (
+        tuple(embed_default_task_result_hooks) if embed_default_task_result_hooks else ()
+    )
     inv = PluginRunInvocation(
         plugin_reg=plugin_reg,
         parsed_args=parsed_args,
@@ -99,6 +106,7 @@ def run_plugin_queue_with_invocation(
         sname=sname,
         host_cli_args=host_cli_args,
         session_id=session_id,
+        embed_default_task_result_hooks=embed_hooks_tuple,
     )
     plugin_executor = PluginExecutor(
         logger=logger,
@@ -108,6 +116,7 @@ def run_plugin_queue_with_invocation(
         log_path=log_path,
         plugin_registry=plugin_reg,
         session_id=session_id,
+        embed_default_task_result_hooks=embed_hooks_tuple,
     )
     with plugin_run_invocation_scope(inv):
         return plugin_executor.run_queue()

@@ -24,16 +24,17 @@
 #
 ###############################################################################
 import pytest
-from framework.common.shared_utils import DummyDataModel, MockConnectionManager
 from pydantic import BaseModel
 
+from framework.common.shared_utils import DummyDataModel, MockConnectionManager
 from nodescraper.enums import ExecutionStatus
 from nodescraper.enums.eventpriority import EventPriority
 from nodescraper.enums.systeminteraction import SystemInteractionLevel
-from nodescraper.interfaces import PluginInterface
-from nodescraper.models import PluginConfig, PluginResult
+from nodescraper.interfaces import PluginInterface, TaskResultHook
+from nodescraper.models import PluginConfig, PluginResult, TaskResult
 from nodescraper.pluginexecutor import PluginExecutor
 from nodescraper.pluginregistry import PluginRegistry
+from nodescraper.taskresulthooks import FileSystemLogHook
 
 
 class DummyArgs(BaseModel):
@@ -186,3 +187,33 @@ def test_connection_manager_from_plugin_when_not_in_registry():
     assert len(results) == 1
     assert results[0].source == "testB"
     assert results[0].status == ExecutionStatus.OK
+
+
+class _CaptureEmbedHook(TaskResultHook):
+    def process_result(self, task_result: TaskResult, **kwargs) -> None:
+        pass
+
+
+def test_embed_default_task_result_hooks_order_before_filesystem_log(plugin_registry, tmp_path):
+    embed = _CaptureEmbedHook()
+    executor = PluginExecutor(
+        plugin_configs=[PluginConfig(plugins={"TestPluginB": {}})],
+        plugin_registry=plugin_registry,
+        log_path=str(tmp_path),
+        embed_default_task_result_hooks=[embed],
+    )
+    assert executor.connection_result_hooks[0] is embed
+    assert isinstance(executor.connection_result_hooks[1], FileSystemLogHook)
+
+
+def test_embed_default_task_result_hooks_reach_connection_manager(plugin_registry, tmp_path):
+    embed = _CaptureEmbedHook()
+    executor = PluginExecutor(
+        plugin_configs=[PluginConfig(plugins={"TestPluginB": {}})],
+        plugin_registry=plugin_registry,
+        log_path=str(tmp_path),
+        embed_default_task_result_hooks=[embed],
+    )
+    executor.run_queue()
+    cm = next(iter(executor.connection_library.values()))
+    assert cm.task_result_hooks[0] is embed

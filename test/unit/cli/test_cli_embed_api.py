@@ -53,7 +53,12 @@ def test_run_cli_return_code_and_run_main_return_code_delegate(
 ) -> None:
     calls: list[list[str]] = []
 
-    def fake_main(arg_input: list[str], *, host_cli_args=None) -> None:
+    def fake_main(
+        arg_input: list[str],
+        *,
+        host_cli_args=None,
+        embed_default_task_result_hooks=None,
+    ) -> None:
         calls.append(list(arg_input))
         raise SystemExit(7)
 

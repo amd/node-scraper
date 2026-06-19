@@ -27,9 +27,11 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Sequence
 from typing import Optional
 
 from nodescraper.cli.cli import get_cli_top_level_subcommands
+from nodescraper.interfaces import TaskResultHook
 
 CLI_TOP_LEVEL_SUBCOMMANDS = get_cli_top_level_subcommands()
 
@@ -45,29 +47,38 @@ def run_cli_return_code(
     argv: list[str],
     *,
     host_cli_args: Optional[argparse.Namespace] = None,
+    embed_default_task_result_hooks: Optional[Sequence[TaskResultHook]] = None,
 ) -> int:
     """Run nodescraper in-process; same behavior as :func:`run_main_return_code`.
 
     Args:
         argv: Tokens after the program name.
         host_cli_args: Optional host namespace forwarded to :func:`nodescraper.cli.cli.main`.
+        embed_default_task_result_hooks: Optional hooks prepended to every plugin run and connection
+            manager for this embed (e.g. host event logging). Merged in :class:`PluginExecutor`.
 
     Returns:
         Integer exit code (``SystemExit`` is mapped, not raised).
     """
-    return run_main_return_code(argv, host_cli_args=host_cli_args)
+    return run_main_return_code(
+        argv,
+        host_cli_args=host_cli_args,
+        embed_default_task_result_hooks=embed_default_task_result_hooks,
+    )
 
 
 def run_main_return_code(
     arg_input: list[str],
     *,
     host_cli_args: Optional[argparse.Namespace] = None,
+    embed_default_task_result_hooks: Optional[Sequence[TaskResultHook]] = None,
 ) -> int:
     """Run :func:`nodescraper.cli.cli.main` and map ``SystemExit`` to an exit code.
 
     Args:
         arg_input: Tokens after the program name.
         host_cli_args: Optional host namespace for embedded runs.
+        embed_default_task_result_hooks: Optional default task-result hooks for this embed.
 
     Returns:
         Integer exit code.
@@ -75,7 +86,11 @@ def run_main_return_code(
     from nodescraper.cli.cli import main
 
     try:
-        main(arg_input, host_cli_args=host_cli_args)
+        main(
+            arg_input,
+            host_cli_args=host_cli_args,
+            embed_default_task_result_hooks=embed_default_task_result_hooks,
+        )
     except SystemExit as exc:
         code = exc.code
         if code is None:

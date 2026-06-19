@@ -30,6 +30,7 @@ import inspect
 import logging
 import uuid
 from collections import deque
+from collections.abc import Sequence
 from typing import Optional, Type, Union
 
 from pydantic import BaseModel
@@ -38,6 +39,7 @@ from nodescraper.base.oobsshdataplugin import OOBSSHDataPlugin
 from nodescraper.connection.oob_ssh import OobSshConnectionManager
 from nodescraper.constants import DEFAULT_LOGGER
 from nodescraper.interfaces import ConnectionManager, DataPlugin, PluginInterface
+from nodescraper.interfaces.taskresulthook import TaskResultHook
 from nodescraper.models import PluginConfig, SystemInfo
 from nodescraper.models.pluginresult import PluginResult
 from nodescraper.pluginregistry import PluginRegistry
@@ -57,6 +59,7 @@ class PluginExecutor:
         plugin_registry: Optional[PluginRegistry] = None,
         log_path: Optional[str] = None,
         session_id: Optional[str] = None,
+        embed_default_task_result_hooks: Optional[Sequence[TaskResultHook]] = None,
     ):
 
         if logger is None:
@@ -89,7 +92,12 @@ class PluginExecutor:
 
         self.log_path = log_path
 
-        self.connection_result_hooks = []
+        self.embed_default_task_result_hooks: list[TaskResultHook] = (
+            list(embed_default_task_result_hooks) if embed_default_task_result_hooks else []
+        )
+
+        self.connection_result_hooks: list[TaskResultHook] = []
+        self.connection_result_hooks.extend(self.embed_default_task_result_hooks)
         if log_path:
             self.connection_result_hooks.append(FileSystemLogHook(log_base_path=log_path))
 
@@ -178,6 +186,8 @@ class PluginExecutor:
                     "log_path": self.log_path,
                     "session_id": self.session_id,
                 }
+                if self.embed_default_task_result_hooks:
+                    init_payload["task_result_hooks"] = list(self.embed_default_task_result_hooks)
 
                 if plugin_class.CONNECTION_TYPE:
                     if issubclass(plugin_class, OOBSSHDataPlugin):
