@@ -50,6 +50,7 @@ from nodescraper.plugins.serviceability import (
     is_valid_iso_datetime,
     satisfies_time_check,
 )
+from nodescraper.plugins.serviceability.mi3xx.mi3xx_cper_utils import RF_CPER_AFID_MIN
 
 EVENT_URI = DUMMY_EVENT_URI
 
@@ -199,6 +200,85 @@ def test_mi3xx_collector_fetches_cper_attachments(mi3xx_collector, redfish_conn_
     assert data is not None
     assert data.cper_raw["cper-evt-1"] == base64.b64encode(b"\x01\x02dummy-cper").decode("ascii")
     assert data.cper_data == {}
+
+
+def test_mi3xx_collector_skips_cper_when_aca_serial_and_low_afids(
+    mi3xx_collector, redfish_conn_mock
+):
+    redfish_conn_mock.get_response.reset_mock()
+    redfish_conn_mock.run_get_paged.return_value = RedfishGetResult(
+        path=EVENT_URI,
+        success=True,
+        data={
+            RF_MEMBERS: [
+                {
+                    "Id": "cper-evt-skip",
+                    "Created": DUMMY_TIMESTAMP_LATER,
+                    "DiagnosticDataType": "CPER",
+                    "AdditionalDataURI": "/redfish/v1/Systems/UBB/LogServices/EventLog/Attachments/1",
+                    "Oem": {
+                        "AMDFieldIdentifiers": [{"AFID": 22}],
+                        "ErrDataArr": [
+                            {
+                                "DecodedData": {"error_type": "On-die ECC"},
+                                "MetaData": {"SerialNumber": "692545012569"},
+                            }
+                        ],
+                    },
+                }
+            ]
+        },
+        status_code=200,
+    )
+    args = MI3XXCollectorArgs(rf_event_log_uri=EVENT_URI)
+    result, data = mi3xx_collector.collect_data(args=args)
+    assert result.status == ExecutionStatus.OK
+    assert data is not None
+    assert data.cper_raw == {}
+    redfish_conn_mock.get_response.assert_not_called()
+
+
+def test_mi3xx_collector_fetches_cper_when_rf_afid(mi3xx_collector, redfish_conn_mock):
+    import base64
+    from unittest.mock import MagicMock
+
+    redfish_conn_mock.get_response.reset_mock()
+    redfish_conn_mock.run_get_paged.return_value = RedfishGetResult(
+        path=EVENT_URI,
+        success=True,
+        data={
+            RF_MEMBERS: [
+                {
+                    "Id": "cper-evt-rf",
+                    "Created": DUMMY_TIMESTAMP_LATER,
+                    "DiagnosticDataType": "CPER",
+                    "AdditionalDataURI": "/redfish/v1/Systems/UBB/LogServices/EventLog/Attachments/2",
+                    "Oem": {
+                        "AMDFieldIdentifiers": [{"AFID": RF_CPER_AFID_MIN}],
+                        "ErrDataArr": [
+                            {
+                                "DecodedData": {"error_type": "x"},
+                                "MetaData": {"SerialNumber": "692545012569"},
+                            }
+                        ],
+                    },
+                }
+            ]
+        },
+        status_code=200,
+    )
+    response = MagicMock()
+    response.ok = True
+    response.status_code = 200
+    response.content = b"\xaa\xbb"
+    redfish_conn_mock.get_response.return_value = response
+
+    args = MI3XXCollectorArgs(rf_event_log_uri=EVENT_URI)
+    result, data = mi3xx_collector.collect_data(args=args)
+    assert result.status == ExecutionStatus.OK
+    assert data is not None
+    assert data.cper_raw["cper-evt-rf"] == base64.b64encode(b"\xaa\xbb").decode("ascii")
+    redfish_conn_mock.get_response.assert_called_once()
 
 
 def test_mi3xx_collector_filters_events_by_reference_time(mi3xx_collector, redfish_conn_mock):

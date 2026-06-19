@@ -47,6 +47,8 @@ from nodescraper.plugins.serviceability.serviceability_data import (
     ServiceabilityDataModel,
 )
 
+from .mi3xx_cper_utils import RF_CPER_AFID_MIN, should_skip_cper_fetch_or_decode
+
 
 class AfidSagMetadataArtifact(BaseModel):
     """Hub AFID_SAG metadata snapshot; written to ``afid_sag_metadata.json``."""
@@ -83,25 +85,35 @@ class MI3XXAnalyzer(DataAnalyzer[ServiceabilityDataModel, ServiceabilityAnalyzer
 
         parent = self.parent or self.__class__.__name__
         cper_data = data.cper_data or {}
-        if data.cper_raw and not cper_data:
+        cper_raw_to_decode = self._cper_raw_needing_decode(data)
+        skipped_cper = len(data.cper_raw or {}) - len(cper_raw_to_decode)
+        if skipped_cper:
+            self.logger.info(
+                "(%s) Skipping CPER decode for %d CPER attachment(s); Redfish log "
+                "already has usable ACA fields (AFID<%s or no serial on decode)",
+                parent,
+                skipped_cper,
+                RF_CPER_AFID_MIN,
+            )
+        if cper_raw_to_decode and not cper_data:
             if not args.cper_decode_module:
                 self.logger.warning(
                     "(%s) %d CPER attachment(s) collected but cper_decode_module is "
                     "not set in analysis_args; skipping CPER decode",
                     parent,
-                    len(data.cper_raw),
+                    len(cper_raw_to_decode),
                 )
             else:
                 self.logger.info(
                     "(%s) Decoding %d CPER attachment(s) via %s.%s",
                     parent,
-                    len(data.cper_raw),
+                    len(cper_raw_to_decode),
                     args.cper_decode_module,
                     args.cper_decode_method,
                 )
                 try:
                     cper_data = decode_cper_raw_attachments(
-                        data.cper_raw,
+                        cper_raw_to_decode,
                         cper_decode_module=args.cper_decode_module,
                         cper_decode_method=args.cper_decode_method,
                         logger=self.logger,
@@ -111,7 +123,7 @@ class MI3XXAnalyzer(DataAnalyzer[ServiceabilityDataModel, ServiceabilityAnalyzer
                         "(%s) CPER decode finished: %d of %d attachment(s) decoded",
                         parent,
                         len(cper_data),
-                        len(data.cper_raw),
+                        len(cper_raw_to_decode),
                     )
                 except CperDecodeError as exc:
                     self.logger.warning(
@@ -151,8 +163,10 @@ class MI3XXAnalyzer(DataAnalyzer[ServiceabilityDataModel, ServiceabilityAnalyzer
         cper_summary = ""
         if cper_data:
             cper_summary = f", {len(cper_data)} decoded CPER(s)"
+        elif cper_raw_to_decode:
+            cper_summary = f", {len(cper_raw_to_decode)} CPER attachment(s) not decoded"
         elif data.cper_raw:
-            cper_summary = f", {len(data.cper_raw)} CPER attachment(s) not decoded"
+            cper_summary = f", {len(data.cper_raw)} CPER attachment(s) omitted (ACA on log entry)"
         ver_bits: list[str] = []
         if block.hub_version:
             ver_bits.append(f"hub {block.hub_version}")
@@ -164,6 +178,27 @@ class MI3XXAnalyzer(DataAnalyzer[ServiceabilityDataModel, ServiceabilityAnalyzer
             f"from {len(data.rf_events)} Redfish event(s){cper_summary}{ver_suffix}"
         )
         return self.result
+
+    @staticmethod
+    def _cper_raw_needing_decode(data: ServiceabilityDataModel) -> dict[str, str]:
+        """Subset of ``cper_raw`` that still needs configured CPER decode (not already on the log)."""
+        raw = data.cper_raw or {}
+        if not raw:
+            return {}
+        by_id: dict[str, dict[str, Any]] = {}
+        for member in data.rf_events:
+            if not isinstance(member, dict):
+                continue
+            eid = member.get("Id")
+            if eid is not None:
+                by_id[str(eid)] = member
+        out: dict[str, str] = {}
+        for event_id, blob in raw.items():
+            ev = by_id.get(str(event_id))
+            if ev is not None and should_skip_cper_fetch_or_decode(ev):
+                continue
+            out[str(event_id)] = blob
+        return out
 
     def _append_afid_sag_metadata_artifact(self, block: ServiceabilityBlock) -> None:
         if block.afid_sag_metadata is None:
