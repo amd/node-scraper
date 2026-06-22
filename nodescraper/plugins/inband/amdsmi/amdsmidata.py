@@ -523,6 +523,9 @@ class StaticCacheInfoItem(AmdSmiBaseModel):
     na_validator = field_validator("cache_size", mode="before")(na_to_none)
 
 
+_STATIC_CLOCK_FREQ_LEVEL_VALIDATOR_FIELDS = tuple(f"Level_{i}" for i in range(16))
+
+
 class StaticFrequencyLevels(AmdSmiBaseModel):
     """Static clock frequency levels; each level is normalized to ``ValueUnit``."""
 
@@ -534,8 +537,21 @@ class StaticFrequencyLevels(AmdSmiBaseModel):
     Level_0: ValueUnit = Field(..., alias="Level 0")
     Level_1: Optional[ValueUnit] = Field(default=None, alias="Level 1")
     Level_2: Optional[ValueUnit] = Field(default=None, alias="Level 2")
+    Level_3: Optional[ValueUnit] = Field(default=None, alias="Level 3")
+    Level_4: Optional[ValueUnit] = Field(default=None, alias="Level 4")
+    Level_5: Optional[ValueUnit] = Field(default=None, alias="Level 5")
+    Level_6: Optional[ValueUnit] = Field(default=None, alias="Level 6")
+    Level_7: Optional[ValueUnit] = Field(default=None, alias="Level 7")
+    Level_8: Optional[ValueUnit] = Field(default=None, alias="Level 8")
+    Level_9: Optional[ValueUnit] = Field(default=None, alias="Level 9")
+    Level_10: Optional[ValueUnit] = Field(default=None, alias="Level 10")
+    Level_11: Optional[ValueUnit] = Field(default=None, alias="Level 11")
+    Level_12: Optional[ValueUnit] = Field(default=None, alias="Level 12")
+    Level_13: Optional[ValueUnit] = Field(default=None, alias="Level 13")
+    Level_14: Optional[ValueUnit] = Field(default=None, alias="Level 14")
+    Level_15: Optional[ValueUnit] = Field(default=None, alias="Level 15")
 
-    _level_value_unit = field_validator("Level_0", "Level_1", "Level_2", mode="before")(
+    _level_value_unit = field_validator(*_STATIC_CLOCK_FREQ_LEVEL_VALIDATOR_FIELDS, mode="before")(
         coerce_value_unit_input
     )
 
