@@ -26,7 +26,7 @@
 
 import json
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from pydantic import ValidationError
 
@@ -167,8 +167,8 @@ class ScaleOutAristaCollector(
 
     @staticmethod
     def _merge_json(
-        accumulated: dict | Optional[list], new: dict | Optional[list]
-    ) -> dict | Optional[list]:
+        accumulated: Optional[Union[dict, list]], new: Optional[Union[dict, list]]
+    ) -> Optional[Union[dict, list]]:
         """Merge two JSON results (dicts recursively, lists concatenated).
 
         Args:
@@ -194,7 +194,7 @@ class ScaleOutAristaCollector(
             return accumulated + new
         return new
 
-    def _run_arista_json(self, command: str) -> dict | Optional[list]:
+    def _run_arista_json(self, command: str) -> Optional[Union[dict, list]]:
         """Run an Arista EOS command returning JSON, merging per-spec results.
 
         Args:
@@ -204,7 +204,7 @@ class ScaleOutAristaCollector(
             Parsed JSON (dict or list), or ``None`` if every call failed.
         """
         specs = self._iter_port_specs() if ETHERNET_PLACEHOLDER in command else [None]
-        accumulated: dict | Optional[list] = None
+        accumulated: Optional[Union[dict, list]] = None
         for spec in specs:
             rendered = self._substitute_port_placeholder(command, spec)
             cmd_ret: CommandArtifact = self._run_sut_cmd(f"{rendered} | json | no-more")
