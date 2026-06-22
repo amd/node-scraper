@@ -581,10 +581,15 @@ class StaticFrequencyLevels(AmdSmiBaseModel):
 class StaticClockData(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
+        extra="ignore",
     )
     frequency_levels: StaticFrequencyLevels
-
-    current_level: Optional[int] = Field(..., alias="current level")
+    current_level: Optional[int] = Field(
+        default=None,
+        validation_alias=AliasChoices("current level", "current_level", "current"),
+        serialization_alias="current level",
+    )
+    current_frequency: Optional[str] = None
     na_validator = field_validator("current_level", mode="before")(na_to_none)
 
 

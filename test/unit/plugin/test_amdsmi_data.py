@@ -450,6 +450,25 @@ def test_static_clock_frequency_levels_json():
     assert clock.frequency_levels.Level_1.value == 900
 
 
+def test_static_clock_mi300_amd_smi_26_json_shape():
+    """ROCm 7.2 / AMD-SMI 26.x clock domains use current_level, current_frequency, and Level N strings."""
+    raw = {
+        "current_level": 0,
+        "current_frequency": "132MHz",
+        "frequency_levels": {
+            "Level 0": "132 MHz",
+            "Level 1": "500 MHz",
+            "Level 2": "2100 MHz",
+        },
+    }
+    clock = StaticClockData.model_validate(raw)
+    assert clock.current_level == 0
+    assert clock.current_frequency == "132MHz"
+    assert clock.frequency_levels.Level_0.value == 132
+    assert clock.frequency_levels.Level_2 is not None
+    assert clock.frequency_levels.Level_2.value == 2100
+
+
 def test_amdsmi_data_model_dummy_metric_round_trip():
     """Full dummy metric payload validates and preserves key ROCm 7.13 fields."""
     metric = AmdSmiMetric.model_validate(dummy_metric_dict())
