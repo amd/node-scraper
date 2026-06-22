@@ -371,6 +371,35 @@ def test_static_frequency_levels_legacy_amd_smi_three_levels_only():
     assert levels.Level_15 is None
 
 
+def test_static_frequency_levels_accepts_amd_smi_key_spelling_variants():
+    """ROCm / AMD-SMI JSON may use LEVEL_N / Level0 style keys instead of ``Level N``."""
+    levels = StaticFrequencyLevels.model_validate(
+        {
+            "LEVEL_0": "400 MHz",
+            "level_1": "800 MHz",
+            "Level2": "1000 MHz",
+            "Level 3": "1143 MHz",
+        }
+    )
+    assert levels.Level_0.value == 400
+    assert levels.Level_1 is not None and levels.Level_1.value == 800
+    assert levels.Level_2 is not None and levels.Level_2.value == 1000
+    assert levels.Level_3 is not None and levels.Level_3.value == 1143
+
+
+def test_static_frequency_levels_drops_unknown_keys_and_high_indices():
+    """Non-level keys are ignored; DPM indices above 15 are dropped (model stores 0–15 only)."""
+    levels = StaticFrequencyLevels.model_validate(
+        {
+            "Level 0": "100 MHz",
+            "num_states": 99,
+            "Level 16": "9999 MHz",
+        }
+    )
+    assert levels.Level_0.value == 100
+    assert levels.Level_1 is None
+
+
 def test_static_limit_legacy_max_power():
     """Legacy flat max_power field still resolves."""
     limit = StaticLimit.model_validate(DUMMY_LIMIT_LEGACY)

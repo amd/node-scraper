@@ -525,6 +525,8 @@ class StaticCacheInfoItem(AmdSmiBaseModel):
 
 _STATIC_CLOCK_FREQ_LEVEL_VALIDATOR_FIELDS = tuple(f"Level_{i}" for i in range(16))
 
+_STATIC_FREQ_LEVEL_JSON_KEY_RE = re.compile(r"^level[\s_]*(\d+)\s*$", re.IGNORECASE)
+
 
 class StaticFrequencyLevels(AmdSmiBaseModel):
     """Static clock frequency levels; each level is normalized to ``ValueUnit``."""
@@ -533,6 +535,26 @@ class StaticFrequencyLevels(AmdSmiBaseModel):
         populate_by_name=True,
         extra="forbid",
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_level_entries(cls, data: Any) -> Any:
+        """Map amd-smi DPM key spellings to canonical ``Level {n}``, drop non-level keys, ignore index > 15."""
+        if not isinstance(data, dict):
+            return data
+        out: dict[str, Any] = {}
+        for raw_key, val in data.items():
+            n: Optional[int] = None
+            if isinstance(raw_key, int):
+                n = int(raw_key)
+            elif isinstance(raw_key, str):
+                m = _STATIC_FREQ_LEVEL_JSON_KEY_RE.match(raw_key.strip())
+                if m:
+                    n = int(m.group(1))
+            if n is None or n < 0 or n > 15:
+                continue
+            out[f"Level {n}"] = val
+        return out
 
     Level_0: ValueUnit = Field(..., alias="Level 0")
     Level_1: Optional[ValueUnit] = Field(default=None, alias="Level 1")
