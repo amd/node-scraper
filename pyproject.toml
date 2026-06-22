@@ -42,6 +42,7 @@ dev = [
     "pytest-cov",
     "mypy",
     "types-paramiko",
+    "types-requests",
     "types-setuptools",
 ]
 
@@ -83,6 +84,7 @@ ignore = ["E501", "N806"]
 [tool.mypy]
 python_version = "3.9"
 mypy_path = ["test/unit"]
+explicit_package_bases = true
 
 [tool.setuptools_scm]
 version_scheme = "post-release"

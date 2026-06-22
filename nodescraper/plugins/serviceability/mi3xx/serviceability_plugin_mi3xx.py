@@ -23,6 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
+from nodescraper.plugins.serviceability.analyzer_args import ServiceabilityAnalyzerArgs
 from nodescraper.plugins.serviceability.serviceability_data import (
     ServiceabilityDataModel,
 )
@@ -41,9 +42,10 @@ register_log_dir_name("MI3XXAnalyzer", "MI3XX_analyzer")
 
 
 class ServiceabilityPluginMI3XX(ServiceabilityPluginBase):
-    """MI3XX OOB Redfish serviceability plugin."""
+    """MI3XX OOB Redfish serviceability: BMC event log, CPER attachments, and service hub analysis."""
 
     DATA_MODEL = ServiceabilityDataModel
     COLLECTOR = MI3XXCollector
     ANALYZER = MI3XXAnalyzer
     COLLECTOR_ARGS = MI3XXCollectorArgs
+    ANALYZER_ARGS = ServiceabilityAnalyzerArgs

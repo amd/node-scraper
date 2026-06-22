@@ -28,5 +28,5 @@ repos:
     rev: v1.15.0
     hooks:
       - id: mypy
-        args: [--install-types, --non-interactive, --allow-redefinition]
+        args: [--install-types, --non-interactive, --explicit-package-bases, --allow-redefinition]
         language: system
