@@ -48,9 +48,6 @@ class ScaleOutDellAnalyzer(
     VENDOR_NAME: ClassVar[str] = "Dell"
     DATA_MODEL = ScaleOutDellDataModel
 
-    # Dell SONiC port identifier. Accept any ``Eth``-prefixed or bare token
-    # consisting of one or more slash-separated decimal segments and
-    # normalize to the slash-joined form.
     PORT_NAME_RE: ClassVar[re.Pattern] = re.compile(r"^(?:Eth)?(\d+(?:/\d+)*)$", re.IGNORECASE)
     PORT_FORMAT_HINT: ClassVar[str] = "expected slash-separated decimals (e.g. 'M/S', 'A/B/C')"
 

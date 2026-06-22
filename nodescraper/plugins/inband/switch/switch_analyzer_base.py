@@ -289,11 +289,11 @@ class SwitchAnalyzerBase(Generic[TSwitchData]):
                     "location": location,
                     "mismatches": [
                         {
+                            **({"missing": True} if item.get("missing") else {}),
                             **dict(item["context"]),
                             "field": item["field"],
                             "actual": item["actual"],
                             "expected": item.get("expected"),
-                            **({"missing": True} if item.get("missing") else {}),
                         }
                         for item in items
                     ],

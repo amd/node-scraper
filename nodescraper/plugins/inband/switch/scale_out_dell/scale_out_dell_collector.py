@@ -50,10 +50,6 @@ from .scaleoutdelldata import (
     ScaleOutDellDataModel,
 )
 
-# Substrings used to recognize a Dell SONiC switch from ``show version`` output.
-# Matched case-insensitively.
-DELL_VERSION_MARKERS: tuple[str, ...] = ("dell", "sonic")
-
 
 class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutDellCollectorArgs]):
     """Collect Dell SONiC switch data.
@@ -118,7 +114,7 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
     @staticmethod
     def _is_dell_output(text: str) -> bool:
         lowered = text.lower()
-        return all(marker in lowered for marker in DELL_VERSION_MARKERS)
+        return all(marker in lowered for marker in ("dell", "sonic"))
 
     @staticmethod
     def _wrap_sonic_cli(command: str) -> str:
@@ -636,6 +632,44 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
                     console_log=True,
                 )
 
+    def _preflight_check(self) -> bool:
+        """Verify the device is a reachable Dell SONiC switch.
+
+        Ensures the device responds and identifies as Dell SONiC.
+        ``_run_dell_command`` wraps every command in ``sonic-cli -c "..."``,
+        so there is no separate "enter the shell" step -- each SSH exec is
+        self-contained.
+
+        On failure this sets ``self.result.status`` to
+        :attr:`ExecutionStatus.EXECUTION_FAILURE` and returns ``False``.
+
+        Returns:
+            ``True`` if the pre-flight check passed, ``False`` otherwise.
+        """
+        version_text = self._run_dell_command("show version")
+        if version_text is None:
+            self._log_event(
+                category=EventCategory.APPLICATION,
+                description="ScaleOutDellCollector pre-flight check failed",
+                priority=EventPriority.ERROR,
+                console_log=True,
+            )
+            self.result.status = ExecutionStatus.EXECUTION_FAILURE
+            return False
+
+        if not self._is_dell_output(version_text):
+            self._log_event(
+                category=EventCategory.APPLICATION,
+                description="Not a Dell SONiC switch",
+                data={"raw_output": version_text},
+                priority=EventPriority.ERROR,
+                console_log=True,
+            )
+            self.result.status = ExecutionStatus.EXECUTION_FAILURE
+            return False
+
+        return True
+
     # ------------------------------------------------------------------
     # main entry point
     # ------------------------------------------------------------------
@@ -653,30 +687,8 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
         Returns:
             Tuple of ``(TaskResult, ScaleOutDellDataModel | None)``.
         """
-        # Pre-flight: ensure the device responds and identifies as Dell SONiC.
-        # ``_run_dell_command`` wraps every command in ``sonic-cli -c "..."``,
-        # so there is no separate "enter the shell" step -- each SSH exec is
-        # self-contained.
-        version_text = self._run_dell_command("show version")
-        if version_text is None:
-            self._log_event(
-                category=EventCategory.APPLICATION,
-                description="ScaleOutDellCollector pre-flight check failed",
-                priority=EventPriority.ERROR,
-                console_log=True,
-            )
-            self.result.status = ExecutionStatus.EXECUTION_FAILURE
-            return self.result, None
 
-        if not self._is_dell_output(version_text):
-            self._log_event(
-                category=EventCategory.APPLICATION,
-                description="Not a Dell SONiC switch",
-                data={"raw_output": version_text},
-                priority=EventPriority.ERROR,
-                console_log=True,
-            )
-            self.result.status = ExecutionStatus.EXECUTION_FAILURE
+        if not self._preflight_check():
             return self.result, None
 
         try:

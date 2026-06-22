@@ -348,11 +348,6 @@ class AristaPauseFrameCounters(BaseModel):
     }
 
 
-# class AristaPfcWatchdogCounters(BaseModel):
-#     """Contains the PFC watchdog counters for an Arista switch port."""
-# add this when example is available, this command not supported on certain switches
-
-
 class AristaEcnCounters(BaseModel):
     """Contains the ECN counters for an Arista switch port."""
 
@@ -396,9 +391,7 @@ class PortData(BaseModel):
     per_queue_counters: Optional[List[AristaPerQueueCounters]] = None
     pause_frame_counters: Optional[AristaPauseFrameCounters] = None
     pfc_counters: Optional[AristaPfcCounters] = None
-    # pfc_watchdog_counters: AristaPfcWatchdogCounters | None = None
     ecn_counters: Optional[List[AristaEcnCounters]] = None
-    # mmu_queue_status, collect to file
 
 
 class ScaleOutAristaDataModel(DataModel):

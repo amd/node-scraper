@@ -37,7 +37,7 @@ class ScaleOutDellCollectorArgs(CollectorArgs):
         default=None,
         description=(
             "Restrict the detail port status collection to the "
-            "given port names (e.g. ['1/1/1', '1/1/2'] )"
+            "given port names (e.g. ['1/1', '1/1/2'] )"
             "When omitted, every port discovered "
             "via 'show interface status' is queried."
         ),

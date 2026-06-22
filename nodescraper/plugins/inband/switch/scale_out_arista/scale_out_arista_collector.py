@@ -63,11 +63,6 @@ from .scaleoutaristadata import (
 # (when a port filter is active) or stripped entirely (when no filter is set).
 ETHERNET_PLACEHOLDER = "ethernet_x"
 
-# Matches a single port-spec token like ``1/1``, ``1/1-8`` or ``1/1-8/1``.
-_PORT_SPEC_TOKEN_RE = re.compile(
-    r"^(\d+(?:/\d+)?)(?:-(\d+(?:/\d+)?))?$",
-)
-
 
 def _normalize_port_spec(ports: Any) -> Optional[List[str]]:
     """Convert a user-supplied port filter into a list of Arista spec strings.
@@ -96,7 +91,9 @@ def _normalize_port_spec(ports: Any) -> Optional[List[str]]:
             tok = tok.strip()
             if not tok:
                 continue
-            match = _PORT_SPEC_TOKEN_RE.match(tok)
+            # Matches a single port-spec token like ``1/1``, ``1/1-8`` or
+            # ``1/1-8/1``.
+            match = re.match(r"^(\d+(?:/\d+)?)(?:-(\d+(?:/\d+)?))?$", tok)
             if not match:
                 raise ValueError(f"Invalid port spec token: {tok!r}")
             start, end = match.group(1), match.group(2)
@@ -120,11 +117,6 @@ class ScaleOutAristaCollector(
 
     DATA_MODEL = ScaleOutAristaDataModel
 
-    # Arista-style port specs set from the ``ports`` arg of
-    # :meth:`collect_data`.  When non-None each element triggers one command
-    # invocation per ``ethernet_x`` placeholder; the per-call results are
-    # merged together.  When None the placeholder is stripped and the command
-    # runs once for all ports.
     _port_specs: Optional[List[str]] = None
 
     # Commands whose output is saved as file artifacts (not parsed into a data model).
@@ -171,8 +163,6 @@ class ScaleOutAristaCollector(
             return command
         replacement = f"ethernet {spec}" if spec else ""
         result = command.replace(ETHERNET_PLACEHOLDER, replacement)
-        # Collapse any double spaces left behind when the placeholder was
-        # stripped, and trim trailing whitespace before any pipes.
         return re.sub(r"\s{2,}", " ", result).strip()
 
     @staticmethod
@@ -970,6 +960,48 @@ class ScaleOutAristaCollector(
                         console_log=True,
                     )
 
+    def _preflight_check(self) -> Optional[AristaVersion]:
+        """Verify the switch is a reachable Arista EOS device.
+
+        Verifies the switch responds to the basic ``show version`` command
+        before running the rest of the collector, and that the reported
+        ``mfgName`` identifies the device as an Arista switch.  If either
+        check fails, the device is unreachable, not an Arista EOS switch, or
+        otherwise incompatible -- treat like an unsupported OS and bail out
+        early.
+
+        On failure this sets ``self.result.status`` to
+        :attr:`ExecutionStatus.EXECUTION_FAILURE` and returns ``None``.
+
+        Returns:
+            The collected :class:`AristaVersion` on success, or ``None`` if the
+            pre-flight check failed.
+        """
+        version = self.get_version()
+        if version is None:
+            self._log_event(
+                category=EventCategory.APPLICATION,
+                description=("ScaleOutAristaCollector pre-flight check failed"),
+                priority=EventPriority.ERROR,
+                console_log=True,
+            )
+            self.result.status = ExecutionStatus.EXECUTION_FAILURE
+            return None
+
+        mfg_name = version.mfg_name or ""
+        if "arista" not in mfg_name.lower():
+            self._log_event(
+                category=EventCategory.APPLICATION,
+                description=("Not Arista switch"),
+                data={"mfg_name": mfg_name},
+                priority=EventPriority.ERROR,
+                console_log=True,
+            )
+            self.result.status = ExecutionStatus.EXECUTION_FAILURE
+            return None
+
+        return version
+
     # ------------------------------------------------------------------
     # main entry point
     # ------------------------------------------------------------------
@@ -999,33 +1031,8 @@ class ScaleOutAristaCollector(
             self.result.status = ExecutionStatus.EXECUTION_FAILURE
             return self.result, None
 
-        # Pre-flight check: verify the switch responds to the basic `show version`
-        # command before running the rest of the collector, and that the
-        # reported ``mfgName`` identifies the device as an Arista switch.  If
-        # either check fails, the device is unreachable, not an Arista EOS
-        # switch, or otherwise incompatible -- treat like an unsupported OS
-        # and bail out early.
-        version = self.get_version()
+        version = self._preflight_check()
         if version is None:
-            self._log_event(
-                category=EventCategory.APPLICATION,
-                description=("ScaleOutAristaCollector pre-flight check failed"),
-                priority=EventPriority.ERROR,
-                console_log=True,
-            )
-            self.result.status = ExecutionStatus.EXECUTION_FAILURE
-            return self.result, None
-
-        mfg_name = version.mfg_name or ""
-        if "arista" not in mfg_name.lower():
-            self._log_event(
-                category=EventCategory.APPLICATION,
-                description=("Not Arista switch"),
-                data={"mfg_name": mfg_name},
-                priority=EventPriority.ERROR,
-                console_log=True,
-            )
-            self.result.status = ExecutionStatus.EXECUTION_FAILURE
             return self.result, None
 
         try:

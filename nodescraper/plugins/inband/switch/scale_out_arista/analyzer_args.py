@@ -37,7 +37,7 @@ class ScaleOutAristaAnalyzerArgs(AnalyzerArgs):
         default=None,
         description=(
             "Restrict per-port analysis to the given ports. Ports specified in"
-            "the form 'M/S' (e.g. ['1/1', '2/1', '17/1']) "
+            "the form 'S/P' (e.g. ['1/1', '2/1', '17/1']) "
             "When omitted, every port present in the data is "
             "analyzed, Independent of any collection-time port filter."
         ),

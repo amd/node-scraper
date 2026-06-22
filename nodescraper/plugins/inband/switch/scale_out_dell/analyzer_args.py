@@ -36,8 +36,8 @@ class ScaleOutDellAnalyzerArgs(AnalyzerArgs):
     analysis_ports: Optional[List[str]] = Field(
         default=None,
         description=(
-            "Restrict per-port analysis to the given ports. Filter tokens are "
-            "slash-separated decimal segments (e.g. ['1/1', '1/31', '1/1/1']) "
+            "Restrict per-port analysis to the given ports. Ports are "
+            "S/P/[SP] where subport is optional (e.g. ['1/1', '1/31', '1/1/1']) "
             "When omitted, every port present in the data is analyzed."
             "Independent of any collection-time filter."
         ),
