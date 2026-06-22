@@ -24,9 +24,9 @@
 #
 ###############################################################################
 import pytest
+from framework.common.shared_utils import DummyDataModel, MockConnectionManager
 from pydantic import BaseModel
 
-from framework.common.shared_utils import DummyDataModel, MockConnectionManager
 from nodescraper.enums import ExecutionStatus
 from nodescraper.enums.eventpriority import EventPriority
 from nodescraper.enums.systeminteraction import SystemInteractionLevel
