@@ -1038,8 +1038,6 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
         """Extract current DPM level index from static clock JSON."""
         cur_raw = data.get("current")
         if cur_raw is None:
-            cur_raw = data.get("current_level")
-        if cur_raw is None:
             cur_raw = data.get("current level")
         if isinstance(cur_raw, (int, float)):
             return int(cur_raw)
@@ -1292,10 +1290,14 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
         if not isinstance(data, dict):
             return None
 
+        current = self._parse_current_level(data)
         freq_levels_raw = data.get("frequency_levels")
         if isinstance(freq_levels_raw, dict) and freq_levels_raw:
             try:
-                return StaticClockData.model_validate(data)
+                levels = StaticFrequencyLevels.model_validate(freq_levels_raw)
+                return StaticClockData.model_validate(
+                    {"frequency_levels": levels, "current level": current}
+                )
             except ValidationError as err:
                 self._log_event(
                     category=EventCategory.APPLICATION,
@@ -1304,7 +1306,6 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
                     priority=EventPriority.WARNING,
                 )
 
-        current = self._parse_current_level(data)
         freqs_raw = data.get("frequency")
         if not isinstance(freqs_raw, list) or not freqs_raw:
             return None
@@ -1341,7 +1342,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
                 {"Level 0": level0, "Level 1": level1, "Level 2": level2}
             )
 
-            # current_level accepts legacy "current level" / "current" keys via StaticClockData
+            # Use the alias "current level" as defined in the model
             return StaticClockData.model_validate(
                 {"frequency_levels": levels, "current level": current}
             )
