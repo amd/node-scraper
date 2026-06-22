@@ -623,8 +623,7 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
                         console_log=True,
                     )
                     continue
-                if cmd_ret.stdout:
-                    self._log_file_artifact(self._command_to_filename(command), cmd_ret.stdout)
+                self._log_file_artifact(self._command_to_filename(command), cmd_ret.stdout or "")
             except Exception as e:
                 self._log_event(
                     category=EventCategory.APPLICATION,

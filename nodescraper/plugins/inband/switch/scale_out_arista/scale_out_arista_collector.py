@@ -42,7 +42,7 @@ from .scaleoutaristadata import (
     AristaCountersErrors,
     AristaDroppedPacketCounters,
     AristaDropPrecedenceCounters,
-    AristaEncCounters,
+    AristaEcnCounters,
     AristaIpCounters,
     AristaNeighbors,
     AristaPacketCounters,
@@ -854,9 +854,9 @@ class ScaleOutAristaCollector(
                 )
         return result or None
 
-    def get_enc_counters(
+    def get_ecn_counters(
         self,
-    ) -> Optional[Dict[str, List[AristaEncCounters]]]:
+    ) -> Optional[Dict[str, List[AristaEcnCounters]]]:
         """Collect ECN counters via ``show qos interfaces ecn counters queue | json | no-more``.
 
         Returns:
@@ -873,18 +873,18 @@ class ScaleOutAristaCollector(
                 priority=EventPriority.WARNING,
             )
             return None
-        result: Dict[str, List[AristaEncCounters]] = {}
+        result: Dict[str, List[AristaEcnCounters]] = {}
         for port_name, port_data in interfaces.items():
             if not isinstance(port_data, dict):
                 continue
             queue_counters = port_data.get("queueCounters", {})
             if not isinstance(queue_counters, dict):
                 continue
-            entries: List[AristaEncCounters] = []
+            entries: List[AristaEcnCounters] = []
             for queue_id, marked_packets in queue_counters.items():
                 try:
                     entries.append(
-                        AristaEncCounters(
+                        AristaEcnCounters(
                             txq=queue_id,
                             marked_packets=str(marked_packets),
                         )
@@ -892,7 +892,7 @@ class ScaleOutAristaCollector(
                 except (ValidationError, TypeError) as e:
                     self._log_event(
                         category=EventCategory.APPLICATION,
-                        description=f"Failed to build AristaEncCounters for {port_name} queue {queue_id}",
+                        description=f"Failed to build AristaEcnCounters for {port_name} queue {queue_id}",
                         data=get_exception_details(e),
                         priority=EventPriority.WARNING,
                     )
@@ -1045,7 +1045,7 @@ class ScaleOutAristaCollector(
             drop_precedence_counters = self.get_drop_precedence_counters()
             per_queue_counters = self.get_per_queue_counters()
             pause_frame_counters = self.get_pause_frame_counters()
-            enc_counters = self.get_enc_counters()
+            ecn_counters = self.get_ecn_counters()
 
             self.collect_artifact_commands()
         except Exception as e:
@@ -1075,7 +1075,7 @@ class ScaleOutAristaCollector(
             drop_precedence_counters,
             per_queue_counters,
             pause_frame_counters,
-            enc_counters,
+            ecn_counters,
         ):
             if d:
                 all_port_names.update(d.keys())
@@ -1104,7 +1104,7 @@ class ScaleOutAristaCollector(
                     pause_frame_counters=(
                         pause_frame_counters.get(name) if pause_frame_counters else None
                     ),
-                    enc_counters=enc_counters.get(name) if enc_counters else None,
+                    ecn_counters=ecn_counters.get(name) if ecn_counters else None,
                 )
 
         try:

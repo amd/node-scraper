@@ -289,11 +289,11 @@ class SwitchAnalyzerBase(Generic[TSwitchData]):
                     "location": location,
                     "mismatches": [
                         {
+                            **dict(item["context"]),
                             "field": item["field"],
                             "actual": item["actual"],
-                            "model": item["model"],
-                            "missing": item.get("missing", False),
-                            **dict(item["context"]),
+                            "expected": item.get("expected"),
+                            **({"missing": True} if item.get("missing") else {}),
                         }
                         for item in items
                     ],
@@ -416,6 +416,7 @@ class SwitchAnalyzerBase(Generic[TSwitchData]):
                     "priority": priority,
                     "field": field_name,
                     "actual": actual,
+                    "expected": expected,
                     "model": type(model).__name__,
                     "context": dict(context),
                 }

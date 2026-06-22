@@ -353,8 +353,8 @@ class AristaPauseFrameCounters(BaseModel):
 # add this when example is available, this command not supported on certain switches
 
 
-class AristaEncCounters(BaseModel):
-    """Contains the ENC counters for an Arista switch port."""
+class AristaEcnCounters(BaseModel):
+    """Contains the ECN counters for an Arista switch port."""
 
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
@@ -397,7 +397,7 @@ class PortData(BaseModel):
     pause_frame_counters: Optional[AristaPauseFrameCounters] = None
     pfc_counters: Optional[AristaPfcCounters] = None
     # pfc_watchdog_counters: AristaPfcWatchdogCounters | None = None
-    enc_counters: Optional[List[AristaEncCounters]] = None
+    ecn_counters: Optional[List[AristaEcnCounters]] = None
     # mmu_queue_status, collect to file
 
 
