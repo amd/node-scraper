@@ -35,27 +35,27 @@ from nodescraper.models import AnalyzerArgs
 class ServiceabilityAnalyzerArgs(AnalyzerArgs):
     """Analyzer args for serviceability plugins that run a configurable Python hub."""
 
-    engine_python_module: Optional[str] = Field(
+    hub_python_module: Optional[str] = Field(
         default=None,
-        description="Import path for the hub module (class implements engine_analyze_method); hub_options forwards kwargs.",
+        description="Import path for the hub module (class implements hub_analyze_method); hub_options forwards kwargs.",
     )
-    engine_display_name: Optional[str] = Field(
+    hub_display_name: Optional[str] = Field(
         default=None,
         description="Optional label for analyzer status messages.",
     )
     afid_sag_path: Optional[str] = Field(
         default=None,
-        description="Path to hub config (e.g. AFID_SAG.json); passed as engine_init_path_kwarg.",
+        description="Path to hub config (e.g. AFID_SAG.json); passed as hub_init_path_kwarg.",
     )
-    engine_init_path_kwarg: str = Field(
+    hub_init_path_kwarg: str = Field(
         default="afid_sag",
         description="Hub __init__ keyword that receives afid_sag_path.",
     )
-    engine_analyze_method: str = Field(
+    hub_analyze_method: str = Field(
         default="get_service_info",
         description="Hub method called with rf_events first (default get_service_info).",
     )
-    skip_engine: bool = Field(
+    skip_hub: bool = Field(
         default=False,
         description="If True, only build afid_events without running the service hub.",
     )
@@ -101,7 +101,7 @@ class ServiceabilityAnalyzerArgs(AnalyzerArgs):
             merged["suppress_service_actions"] = self.suppress_service_actions
         return merged
 
-    @field_validator("engine_analyze_method", "engine_init_path_kwarg")
+    @field_validator("hub_analyze_method", "hub_init_path_kwarg")
     @classmethod
     def _strip_non_empty_hub_hooks(cls, value: str) -> str:
         text = str(value).strip()
@@ -128,8 +128,8 @@ class ServiceabilityAnalyzerArgs(AnalyzerArgs):
 
     @field_validator(
         "afid_sag_path",
-        "engine_python_module",
-        "engine_display_name",
+        "hub_python_module",
+        "hub_display_name",
         "cper_decode_module",
     )
     @classmethod
@@ -141,10 +141,10 @@ class ServiceabilityAnalyzerArgs(AnalyzerArgs):
 
     @model_validator(mode="after")
     def _require_hub_config_when_running(self) -> ServiceabilityAnalyzerArgs:
-        if self.skip_engine:
+        if self.skip_hub:
             return self
         if not self.afid_sag_path:
             raise ValueError("afid_sag_path is required when running the service hub.")
-        if not self.engine_python_module:
-            raise ValueError("engine_python_module is required when running the service hub.")
+        if not self.hub_python_module:
+            raise ValueError("hub_python_module is required when running the service hub.")
         return self

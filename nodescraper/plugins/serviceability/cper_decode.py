@@ -80,8 +80,8 @@ def decode_cper_raw_attachments(
     """Decode base64 CPER blobs keyed by Redfish event Id.
 
     The decode callable must accept a binary file-like object and return
-    ``(return_code, decode_dict)``. Results are passed to the service engine as
-    ``cper_data``; the engine does not perform CPER decoding itself.
+    ``(return_code, decode_dict)``. Results are passed to the service hub as
+    ``cper_data``; the hub does not perform CPER decoding itself.
 
     Returns ``{event_id: {"return_code": int, "decode": dict}}``.
     """

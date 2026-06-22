@@ -76,7 +76,7 @@ class MI3XXAnalyzer(DataAnalyzer[ServiceabilityDataModel, ServiceabilityAnalyzer
         events = data.afid_events or build_afid_events_from_data(data)
         data.afid_events = events
 
-        if args.skip_engine:
+        if args.skip_hub:
             data.serviceability = ServiceabilityBlock(afid_events=events)
             self.result.status = ExecutionStatus.OK
             self.result.message = f"Built {len(events)} AFID event(s); hub skipped"
@@ -140,15 +140,15 @@ class MI3XXAnalyzer(DataAnalyzer[ServiceabilityDataModel, ServiceabilityAnalyzer
 
         try:
             block = run_service_hub(
-                engine_python_module=args.engine_python_module,  # type: ignore[arg-type]
-                engine_display_name=args.engine_display_name,
+                hub_python_module=args.hub_python_module,  # type: ignore[arg-type]
+                hub_display_name=args.hub_display_name,
                 afid_events=events,
                 afid_sag_path=args.afid_sag_path,  # type: ignore[arg-type]
                 rf_events=data.rf_events,
                 cper_data=cper_data or None,
                 hub_options=args.resolved_hub_options(),
-                engine_analyze_method=args.engine_analyze_method,
-                engine_init_path_kwarg=args.engine_init_path_kwarg,
+                hub_analyze_method=args.hub_analyze_method,
+                hub_init_path_kwarg=args.hub_init_path_kwarg,
             )
         except (SeRunError, ValueError) as exc:
             self.result.status = ExecutionStatus.ERROR
@@ -158,7 +158,7 @@ class MI3XXAnalyzer(DataAnalyzer[ServiceabilityDataModel, ServiceabilityAnalyzer
         data.serviceability = block
         self._append_afid_sag_metadata_artifact(block)
         self._log_serviceability_solutions(block)
-        engine_label = args.engine_display_name or args.engine_python_module
+        hub_label = args.hub_display_name or args.hub_python_module
         self.result.status = ExecutionStatus.OK
         cper_summary = ""
         if cper_data:
@@ -174,7 +174,7 @@ class MI3XXAnalyzer(DataAnalyzer[ServiceabilityDataModel, ServiceabilityAnalyzer
             ver_bits.append(f"AFID_SAG {block.afid_sag_file_version}")
         ver_suffix = f" [{'; '.join(ver_bits)}]" if ver_bits else ""
         self.result.message = (
-            f"{engine_label}: {len(block.solution)} solution(s) "
+            f"{hub_label}: {len(block.solution)} solution(s) "
             f"from {len(data.rf_events)} Redfish event(s){cper_summary}{ver_suffix}"
         )
         return self.result

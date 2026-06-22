@@ -27,10 +27,17 @@ import pytest
 from pydantic import ValidationError
 from serviceability_dummy_data import (
     DUMMY_BMC_HOST,
+    DUMMY_CPER_BYTES_BASIC,
+    DUMMY_CPER_BYTES_RF,
+    DUMMY_CPER_EVENT_ID_BASIC,
+    DUMMY_CPER_EVENT_ID_RF,
     DUMMY_EVENT_URI,
     DUMMY_EVENT_URI_ALT,
     DUMMY_TIMESTAMP_EARLIER,
     DUMMY_TIMESTAMP_LATER,
+    dummy_cper_basic_member,
+    dummy_cper_rf_member,
+    dummy_cper_skip_member,
 )
 
 from nodescraper.connection.redfish import RF_MEMBERS, RedfishGetResult
@@ -50,7 +57,6 @@ from nodescraper.plugins.serviceability import (
     is_valid_iso_datetime,
     satisfies_time_check,
 )
-from nodescraper.plugins.serviceability.mi3xx.mi3xx_cper_utils import RF_CPER_AFID_MIN
 
 EVENT_URI = DUMMY_EVENT_URI
 
@@ -176,29 +182,22 @@ def test_mi3xx_collector_fetches_cper_attachments(mi3xx_collector, redfish_conn_
     redfish_conn_mock.run_get_paged.return_value = RedfishGetResult(
         path=EVENT_URI,
         success=True,
-        data={
-            RF_MEMBERS: [
-                {
-                    "Id": "cper-evt-1",
-                    "Created": DUMMY_TIMESTAMP_LATER,
-                    "DiagnosticDataType": "CPER",
-                    "AdditionalDataURI": "/redfish/v1/Systems/UBB/LogServices/EventLog/Attachments/1",
-                }
-            ]
-        },
+        data={RF_MEMBERS: [dummy_cper_basic_member()]},
         status_code=200,
     )
     response = MagicMock()
     response.ok = True
     response.status_code = 200
-    response.content = b"\x01\x02dummy-cper"
+    response.content = DUMMY_CPER_BYTES_BASIC
     redfish_conn_mock.get_response.return_value = response
 
     args = MI3XXCollectorArgs(rf_event_log_uri=EVENT_URI)
     result, data = mi3xx_collector.collect_data(args=args)
     assert result.status == ExecutionStatus.OK
     assert data is not None
-    assert data.cper_raw["cper-evt-1"] == base64.b64encode(b"\x01\x02dummy-cper").decode("ascii")
+    assert data.cper_raw[DUMMY_CPER_EVENT_ID_BASIC] == base64.b64encode(
+        DUMMY_CPER_BYTES_BASIC
+    ).decode("ascii")
     assert data.cper_data == {}
 
 
@@ -209,25 +208,7 @@ def test_mi3xx_collector_skips_cper_when_aca_serial_and_low_afids(
     redfish_conn_mock.run_get_paged.return_value = RedfishGetResult(
         path=EVENT_URI,
         success=True,
-        data={
-            RF_MEMBERS: [
-                {
-                    "Id": "cper-evt-skip",
-                    "Created": DUMMY_TIMESTAMP_LATER,
-                    "DiagnosticDataType": "CPER",
-                    "AdditionalDataURI": "/redfish/v1/Systems/UBB/LogServices/EventLog/Attachments/1",
-                    "Oem": {
-                        "AMDFieldIdentifiers": [{"AFID": 22}],
-                        "ErrDataArr": [
-                            {
-                                "DecodedData": {"error_type": "On-die ECC"},
-                                "MetaData": {"SerialNumber": "692545012569"},
-                            }
-                        ],
-                    },
-                }
-            ]
-        },
+        data={RF_MEMBERS: [dummy_cper_skip_member()]},
         status_code=200,
     )
     args = MI3XXCollectorArgs(rf_event_log_uri=EVENT_URI)
@@ -246,38 +227,22 @@ def test_mi3xx_collector_fetches_cper_when_rf_afid(mi3xx_collector, redfish_conn
     redfish_conn_mock.run_get_paged.return_value = RedfishGetResult(
         path=EVENT_URI,
         success=True,
-        data={
-            RF_MEMBERS: [
-                {
-                    "Id": "cper-evt-rf",
-                    "Created": DUMMY_TIMESTAMP_LATER,
-                    "DiagnosticDataType": "CPER",
-                    "AdditionalDataURI": "/redfish/v1/Systems/UBB/LogServices/EventLog/Attachments/2",
-                    "Oem": {
-                        "AMDFieldIdentifiers": [{"AFID": RF_CPER_AFID_MIN}],
-                        "ErrDataArr": [
-                            {
-                                "DecodedData": {"error_type": "x"},
-                                "MetaData": {"SerialNumber": "692545012569"},
-                            }
-                        ],
-                    },
-                }
-            ]
-        },
+        data={RF_MEMBERS: [dummy_cper_rf_member()]},
         status_code=200,
     )
     response = MagicMock()
     response.ok = True
     response.status_code = 200
-    response.content = b"\xaa\xbb"
+    response.content = DUMMY_CPER_BYTES_RF
     redfish_conn_mock.get_response.return_value = response
 
     args = MI3XXCollectorArgs(rf_event_log_uri=EVENT_URI)
     result, data = mi3xx_collector.collect_data(args=args)
     assert result.status == ExecutionStatus.OK
     assert data is not None
-    assert data.cper_raw["cper-evt-rf"] == base64.b64encode(b"\xaa\xbb").decode("ascii")
+    assert data.cper_raw[DUMMY_CPER_EVENT_ID_RF] == base64.b64encode(DUMMY_CPER_BYTES_RF).decode(
+        "ascii"
+    )
     redfish_conn_mock.get_response.assert_called_once()
 
 
@@ -319,11 +284,11 @@ def test_mi3xx_result_reporting_versions():
         plugin_name="dummy_plugin",
         plugin_version="0.0-dummy",
         node_scraper_version="0.0-dummy",
-        dummy_engine_version="0.0-dummy",
+        dummy_hub_version="0.0-dummy",
     )
     result = MI3XXResult(node="dummy-node", **version_fields)
     assert result.plugin_name == "dummy_plugin"
-    assert result.reporter_extensions["dummy_engine_version"] == "0.0-dummy"
+    assert result.reporter_extensions["dummy_hub_version"] == "0.0-dummy"
 
 
 def test_mi3xx_data_model_log_model(tmp_path):

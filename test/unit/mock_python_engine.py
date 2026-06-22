@@ -1,4 +1,4 @@
-"""Mock Python service engine for unit tests."""
+"""Mock Python service hub for unit tests."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from typing import Any, Optional
 
 from serviceability_dummy_data import (
-    DUMMY_ENGINE_VERSION,
+    DUMMY_HUB_VERSION,
     DUMMY_SAG_PID,
     DUMMY_SAG_REVISION,
     DUMMY_SERVICE_ACTION_NUM,
@@ -39,5 +39,5 @@ class MockServiceEngine:
         return SimpleNamespace(
             service_info=service_info,
             afid_sag_metadata={"sag_pid": DUMMY_SAG_PID, "sag_revision": DUMMY_SAG_REVISION},
-            engine_version_info={"version": DUMMY_ENGINE_VERSION},
+            engine_version_info={"version": DUMMY_HUB_VERSION},
         )

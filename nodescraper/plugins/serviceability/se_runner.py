@@ -89,21 +89,21 @@ class SeRunError(RuntimeError):
 
 def run_service_hub(
     *,
-    engine_python_module: str,
-    engine_display_name: Optional[str] = None,
+    hub_python_module: str,
+    hub_display_name: Optional[str] = None,
     afid_events: list[AfidEvent],
     afid_sag_path: str,
     rf_events: list[Any],
     cper_data: Optional[dict[str, Any]] = None,
     hub_options: Optional[dict[str, Any]] = None,
-    engine_analyze_method: str = "get_service_info",
-    engine_init_path_kwarg: str = "afid_sag",
+    hub_analyze_method: str = "get_service_info",
+    hub_init_path_kwarg: str = "afid_sag",
 ) -> ServiceabilityBlock:
     """Run the configured Python service hub and return a :class:`ServiceabilityBlock`.
 
-    The runner imports ``engine_python_module``, picks the unique class that implements
-    ``engine_analyze_method``, constructs it with the config file path passed as
-    ``engine_init_path_kwarg``, then calls the analyze method with ``rf_events`` and any
+    The runner imports ``hub_python_module``, picks the unique class that implements
+    ``hub_analyze_method``, constructs it with the config file path passed as
+    ``hub_init_path_kwarg``, then calls the analyze method with ``rf_events`` and any
     ``hub_options`` keys that match the method signature (plus ``cper_data`` when
     supported). Result mapping is handled by :func:`serviceability_block_from_service_result`.
     """
@@ -113,25 +113,25 @@ def run_service_hub(
 
     if not rf_events:
         raise SeRunError(
-            "Collected Redfish events are required; re-run collection or use skip_engine."
+            "Collected Redfish events are required; re-run collection or use skip_hub."
         )
 
-    label = engine_display_name or engine_python_module
+    label = hub_display_name or hub_python_module
     try:
-        mod = importlib.import_module(engine_python_module)
+        mod = importlib.import_module(hub_python_module)
     except ImportError as exc:
-        raise SeRunError(f"Cannot import {engine_python_module}: {exc}") from exc
+        raise SeRunError(f"Cannot import {hub_python_module}: {exc}") from exc
 
-    hub_cls = _resolve_hub_class(mod, engine_analyze_method)
+    hub_cls = _resolve_hub_class(mod, hub_analyze_method)
 
     try:
         instance = _instantiate_hub(
             hub_cls,
             afid_sag_path,
-            engine_init_path_kwarg,
+            hub_init_path_kwarg,
             hub_options,
         )
-        analyze = getattr(instance, engine_analyze_method)
+        analyze = getattr(instance, hub_analyze_method)
         result = _call_hub_analyze(
             analyze,
             rf_events,
@@ -139,7 +139,7 @@ def run_service_hub(
             hub_options,
         )
     except Exception as exc:
-        raise SeRunError(f"{label} {engine_analyze_method}() failed: {exc}") from exc
+        raise SeRunError(f"{label} {hub_analyze_method}() failed: {exc}") from exc
 
     if result is None:
         return ServiceabilityBlock(
@@ -151,7 +151,7 @@ def run_service_hub(
     return serviceability_block_from_service_result(
         afid_events,
         result,
-        engine_label=label,
+        hub_label=label,
         rf_event_count=len(rf_events),
     )
 
@@ -188,7 +188,7 @@ def _resolve_hub_class(mod: Any, analyze_method: str = "get_service_info") -> Ty
     if not candidates:
         raise SeRunError(
             f"No class with {analyze_method}() found in {package}; "
-            "check engine_python_module and engine_analyze_method in analysis_args."
+            "check hub_python_module and hub_analyze_method in analysis_args."
         )
     names = ", ".join(cls.__name__ for cls in candidates)
     raise SeRunError(f"Multiple classes with {analyze_method}() in {package}: {names}.")

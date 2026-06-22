@@ -24,41 +24,37 @@
 #
 ###############################################################################
 import pytest
+from serviceability_dummy_data import (
+    DUMMY_AFID_B,
+    DUMMY_AFID_BELOW_RF,
+    DUMMY_RF_CPER_AFID,
+    dummy_aca_err_row,
+)
 
 from nodescraper.plugins.serviceability.mi3xx.mi3xx_cper_utils import (
-    RF_CPER_AFID_MIN,
     event_aca_includes_serial,
     event_afids_from_oem,
     event_has_aca_decode,
     should_skip_cper_fetch_or_decode,
 )
 
-_DUMMY_META_SERIAL = "DUMMY-GPU-SERIAL-0001"
-_DUMMY_DECODED_FIELD = "dummy_error_type"
-
-
-def _oem_err_row(*, serial: bool = True, decoded: bool = True):
-    meta = {"SerialNumber": _DUMMY_META_SERIAL} if serial else {"GpuFw": "dummy-fw"}
-    dec = {"error_type": _DUMMY_DECODED_FIELD} if decoded else {}
-    return {"DecodedData": dec, "MetaData": meta}
-
 
 def test_skip_when_afids_below_threshold_and_aca_has_serial():
     event = {
         "Oem": {
-            "AMDFieldIdentifiers": [{"AFID": 22}],
-            "ErrDataArr": [_oem_err_row()],
+            "AMDFieldIdentifiers": [{"AFID": DUMMY_AFID_BELOW_RF}],
+            "ErrDataArr": [dummy_aca_err_row()],
         }
     }
-    assert event_afids_from_oem(event) == [22]
+    assert event_afids_from_oem(event) == [DUMMY_AFID_BELOW_RF]
     assert should_skip_cper_fetch_or_decode(event) is True
 
 
 def test_no_skip_when_rf_range_afid_even_with_aca_serial():
     event = {
         "Oem": {
-            "AMDFieldIdentifiers": [{"AFID": RF_CPER_AFID_MIN}],
-            "ErrDataArr": [_oem_err_row()],
+            "AMDFieldIdentifiers": [{"AFID": DUMMY_RF_CPER_AFID}],
+            "ErrDataArr": [dummy_aca_err_row()],
         }
     }
     assert should_skip_cper_fetch_or_decode(event) is False
@@ -67,8 +63,8 @@ def test_no_skip_when_rf_range_afid_even_with_aca_serial():
 def test_skip_when_aca_decode_without_serial():
     event = {
         "Oem": {
-            "AMDFieldIdentifiers": [{"AFID": RF_CPER_AFID_MIN}],
-            "ErrDataArr": [_oem_err_row(serial=False)],
+            "AMDFieldIdentifiers": [{"AFID": DUMMY_RF_CPER_AFID}],
+            "ErrDataArr": [dummy_aca_err_row(serial=False)],
         }
     }
     assert event_has_aca_decode(event) is True
@@ -79,7 +75,7 @@ def test_skip_when_aca_decode_without_serial():
 def test_no_skip_when_no_err_data_decoded():
     event = {
         "Oem": {
-            "AMDFieldIdentifiers": [{"AFID": 22}],
+            "AMDFieldIdentifiers": [{"AFID": DUMMY_AFID_BELOW_RF}],
         }
     }
     assert should_skip_cper_fetch_or_decode(event) is False
@@ -88,7 +84,7 @@ def test_no_skip_when_no_err_data_decoded():
 def test_no_skip_when_aca_serial_but_no_afid_list():
     event = {
         "Oem": {
-            "ErrDataArr": [_oem_err_row()],
+            "ErrDataArr": [dummy_aca_err_row()],
         }
     }
     assert event_afids_from_oem(event) == []
@@ -98,11 +94,11 @@ def test_no_skip_when_aca_serial_but_no_afid_list():
 @pytest.mark.parametrize(
     "afids,expect_skip",
     [
-        ([22, 28], True),
-        ([22, RF_CPER_AFID_MIN], False),
+        ([DUMMY_AFID_BELOW_RF, DUMMY_AFID_B], True),
+        ([DUMMY_AFID_BELOW_RF, DUMMY_RF_CPER_AFID], False),
     ],
 )
 def test_skip_requires_all_afids_below_rf_threshold(afids, expect_skip):
     identifiers = [{"AFID": a} for a in afids]
-    event = {"Oem": {"AMDFieldIdentifiers": identifiers, "ErrDataArr": [_oem_err_row()]}}
+    event = {"Oem": {"AMDFieldIdentifiers": identifiers, "ErrDataArr": [dummy_aca_err_row()]}}
     assert should_skip_cper_fetch_or_decode(event) is expect_skip

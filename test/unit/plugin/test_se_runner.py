@@ -36,7 +36,7 @@ from serviceability_dummy_data import (
     DUMMY_AFID_C,
     DUMMY_DESIGNATION_A,
     DUMMY_DESIGNATION_B,
-    DUMMY_ENGINE_VERSION,
+    DUMMY_HUB_VERSION,
     DUMMY_OEM_VENDOR,
     DUMMY_RF_EVENT_COUNT,
     DUMMY_SAG_PID,
@@ -86,18 +86,18 @@ def test_normalize_se_timestamp_preserves_format_value():
 def test_analyzer_args_require_hub_config():
     with pytest.raises(ValidationError):
         ServiceabilityAnalyzerArgs()
-    with pytest.raises(ValidationError, match="engine_python_module"):
+    with pytest.raises(ValidationError, match="hub_python_module"):
         ServiceabilityAnalyzerArgs(afid_sag_path=str(AFID_SAG))
     args = ServiceabilityAnalyzerArgs(
-        engine_python_module="dummy.test.module",
+        hub_python_module="dummy.test.module",
         afid_sag_path=str(AFID_SAG),
     )
-    assert args.engine_python_module == "dummy.test.module"
+    assert args.hub_python_module == "dummy.test.module"
 
 
 def test_resolved_hub_options_explicit_fields_override_options_bag():
     args = ServiceabilityAnalyzerArgs(
-        engine_python_module="dummy.test.module",
+        hub_python_module="dummy.test.module",
         afid_sag_path=str(AFID_SAG),
         hub_options={"from_ac_cycle": 9, "extra": 1},
         from_ac_cycle=3,
@@ -158,12 +158,12 @@ def test_serviceability_block_from_service_result():
             },
         },
         afid_sag_metadata={"sag_pid": DUMMY_SAG_PID, "sag_revision": DUMMY_SAG_REVISION},
-        engine_version_info={"version": DUMMY_ENGINE_VERSION},
+        engine_version_info={"version": DUMMY_HUB_VERSION},
     )
     block = serviceability_block_from_service_result(
         EXAMPLE_EVENTS[:1],
         result,
-        engine_label="Dummy test engine",
+        hub_label="Dummy test hub",
         rf_event_count=DUMMY_RF_EVENT_COUNT,
     )
     assert len(block.solution) == 1
@@ -171,12 +171,12 @@ def test_serviceability_block_from_service_result():
     assert block.solution[0].service_action_num == DUMMY_SERVICE_ACTION_NUM
     assert block.solution[0].service_action_title == "Dummy service action"
     assert set(block.solution[0].serviceable_unit) == {DUMMY_DESIGNATION_A, DUMMY_DESIGNATION_B}
-    assert block.hub_version == DUMMY_ENGINE_VERSION
+    assert block.hub_version == DUMMY_HUB_VERSION
     assert block.afid_sag_file_version is not None
     assert DUMMY_SAG_PID in block.afid_sag_file_version
     assert DUMMY_SAG_REVISION in block.afid_sag_file_version
     assert f"{DUMMY_RF_EVENT_COUNT} Redfish event(s)" in block.solution_reasoning
-    assert "Dummy test engine" in block.solution_reasoning
+    assert "Dummy test hub" in block.solution_reasoning
 
 
 def test_serviceability_block_from_service_result_isa_version_info():
@@ -188,7 +188,7 @@ def test_serviceability_block_from_service_result_isa_version_info():
     block = serviceability_block_from_service_result(
         EXAMPLE_EVENTS[:1],
         result,
-        engine_label="ISA",
+        hub_label="ISA",
         rf_event_count=1,
     )
     assert block.hub_version == "1.2.3"
@@ -220,7 +220,7 @@ def test_run_service_hub_with_mock_module():
         {"Afid": DUMMY_AFID_C, "serviceable_unit": DUMMY_UNIT_C, "Created": DUMMY_TIMESTAMP},
     ]
     block = run_service_hub(
-        engine_python_module="mock_python_engine",
+        hub_python_module="mock_python_engine",
         afid_events=EXAMPLE_EVENTS[:2],
         afid_sag_path=str(AFID_SAG),
         rf_events=rf_events,
@@ -251,14 +251,14 @@ def test_run_service_hub_custom_analyze_method_and_path_kwarg():
     sys.modules["alt_service_engine"] = mod
     try:
         run_service_hub(
-            engine_python_module="alt_service_engine",
+            hub_python_module="alt_service_engine",
             afid_events=EXAMPLE_EVENTS[:1],
             afid_sag_path=str(AFID_SAG),
             rf_events=[{"Afid": 1}],
             cper_data={"k": 1},
             hub_options={"debug": True},
-            engine_analyze_method="analyze_events",
-            engine_init_path_kwarg="rulebook_path",
+            hub_analyze_method="analyze_events",
+            hub_init_path_kwarg="rulebook_path",
         )
     finally:
         del sys.modules["alt_service_engine"]
@@ -273,7 +273,7 @@ def test_run_service_hub_accepts_hub_options():
         {"Afid": DUMMY_AFID_A, "serviceable_unit": DUMMY_UNIT_A, "Created": DUMMY_TIMESTAMP},
     ]
     block = run_service_hub(
-        engine_python_module="mock_python_engine",
+        hub_python_module="mock_python_engine",
         afid_events=EXAMPLE_EVENTS[:1],
         afid_sag_path=str(AFID_SAG),
         rf_events=rf_events,
@@ -290,7 +290,7 @@ def test_run_service_hub_forwards_full_hub_options_kwargs():
         {"Afid": DUMMY_AFID_A, "serviceable_unit": DUMMY_UNIT_A, "Created": DUMMY_TIMESTAMP},
     ]
     run_service_hub(
-        engine_python_module="instinct_shaped_engine",
+        hub_python_module="instinct_shaped_engine",
         afid_events=EXAMPLE_EVENTS[:1],
         afid_sag_path=str(AFID_SAG),
         rf_events=rf_events,
@@ -318,7 +318,7 @@ def test_run_service_hub_collected_cper_overrides_hub_options_cper_data():
         {"Afid": DUMMY_AFID_A, "serviceable_unit": DUMMY_UNIT_A, "Created": DUMMY_TIMESTAMP},
     ]
     run_service_hub(
-        engine_python_module="instinct_shaped_engine",
+        hub_python_module="instinct_shaped_engine",
         afid_events=EXAMPLE_EVENTS[:1],
         afid_sag_path=str(AFID_SAG),
         rf_events=rf_events,
@@ -331,7 +331,7 @@ def test_run_service_hub_collected_cper_overrides_hub_options_cper_data():
 def test_run_service_hub_missing_sag_raises():
     with pytest.raises(SeRunError, match="Hub config file not found"):
         run_service_hub(
-            engine_python_module="mock_python_engine",
+            hub_python_module="mock_python_engine",
             afid_events=EXAMPLE_EVENTS,
             afid_sag_path="/nonexistent/dummy_afid_sag.json",
             rf_events=[{"Afid": DUMMY_AFID_A}],
@@ -363,7 +363,7 @@ def test_build_afid_events_from_rf_members():
     assert events[1].afid == DUMMY_AFID_B
 
 
-def test_mi3xx_analyzer_runs_python_engine(system_info):
+def test_mi3xx_analyzer_runs_python_hub(system_info):
     data = ServiceabilityDataModel(
         rf_events=[
             {
@@ -380,7 +380,7 @@ def test_mi3xx_analyzer_runs_python_engine(system_info):
     )
     analyzer = MI3XXAnalyzer(system_info=system_info)
     args = ServiceabilityAnalyzerArgs(
-        engine_python_module="mock_python_engine",
+        hub_python_module="mock_python_engine",
         afid_sag_path=str(AFID_SAG),
         hub_options={"include_raw_events": False},
     )

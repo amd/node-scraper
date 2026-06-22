@@ -91,7 +91,7 @@ class ServiceabilityBlock(BaseModel):
     )
     afid_sag_metadata: Optional[dict[str, Any]] = Field(
         default=None,
-        description="Hub-reported AFID_SAG metadata dict when the engine exposes afid_sag_metadata.",
+        description="Hub-reported AFID_SAG metadata dict when the hub exposes afid_sag_metadata.",
     )
     short_service_info: Optional[str] = Field(
         default=None,

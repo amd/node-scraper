@@ -269,7 +269,7 @@ def serviceability_block_from_service_result(
     afid_events: list[AfidEvent],
     result: Any,
     *,
-    engine_label: str = "Service hub",
+    hub_label: str = "Service hub",
     rf_event_count: int = 0,
 ) -> ServiceabilityBlock:
     """Build a ``ServiceabilityBlock`` from a hub result with ``service_info``."""
@@ -326,7 +326,9 @@ def serviceability_block_from_service_result(
     )
     hub_version = _hub_version_display(version_info)
     afid_sag_file_version = _afid_sag_file_version_display(metadata)
-    reasoning = f"{engine_label}: {len(solutions)} recommendation(s) from {rf_event_count} Redfish event(s)."
+    reasoning = (
+        f"{hub_label}: {len(solutions)} recommendation(s) from {rf_event_count} Redfish event(s)."
+    )
     meta_out: Optional[dict[str, Any]] = dict(metadata) if isinstance(raw_metadata, dict) else None
     short_service_info = _format_short_service_info_for_block(
         getattr(result, "short_service_info", None)
