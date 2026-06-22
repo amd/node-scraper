@@ -1,12 +1,23 @@
 [project]
 name = "amd-node-scraper"
 dynamic = ["version"]
-description = "A framework for automated error detection and data collection"
+description = "Automated data collection and analysis for system debug."
 authors = [{ name = "AMD" }]
 readme = "README.md"
 requires-python = ">=3.9"
+license = { text = "MIT" }
 
-keywords = []
+keywords = [
+    "amd",
+    "debug",
+    "diagnostics",
+    "dmesg",
+    "redfish",
+    "scraping",
+    "systems",
+    "oob",
+    "in-band",
+]
 
 classifiers = ["Topic :: Software Development"]
 
@@ -36,8 +47,10 @@ dev = [
 
 [project.urls]
 homepage = "https://github.com/amd/node-scraper"
-documentation = "https://github.com/amd/node-scraper"
+documentation = "https://github.com/amd/node-scraper/blob/main/docs/PLUGIN_DOC.md"
 repository = "https://github.com/amd/node-scraper"
+changelog = "https://github.com/amd/node-scraper/releases"
+issues = "https://github.com/amd/node-scraper/issues"
 
 [build-system]
 requires = ["setuptools==78.1.1", "setuptools-scm==8.1.0"]

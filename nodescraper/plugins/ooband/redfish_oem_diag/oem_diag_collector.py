@@ -43,6 +43,12 @@ class RedfishOemDiagCollector(
 
     DATA_MODEL = RedfishOemDiagDataModel
 
+    DOCUMENTATION_COLLECTION_ITEMS: tuple[str, ...] = (
+        "Redfish LogService.CollectDiagnosticData for each entry in collection_args.oem_diagnostic_types "
+        "(collection_args.log_service_path selects the LogService).",
+        "Optional binary archives under the plugin log path when log_path is set.",
+    )
+
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         self.log_path = kwargs.pop("log_path", None)
         super().__init__(*args, **kwargs)

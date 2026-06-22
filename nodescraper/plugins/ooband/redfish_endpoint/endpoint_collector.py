@@ -152,6 +152,13 @@ class RedfishEndpointCollector(
 
     DATA_MODEL = RedfishEndpointDataModel
 
+    DOCUMENTATION_COLLECTION_ITEMS: tuple[str, ...] = (
+        "Redfish GET: explicit paths from collection_args.uris (parallel when max_workers>1).",
+        "Optional paged GET following the Members collection OData nextLink field when follow_next_link is true.",
+        "Redfish GET tree: when discover_tree is true, walks from api_root using OData resource id links and "
+        "Members navigation (depth and endpoint caps from collection_args).",
+    )
+
     def collect_data(
         self, args: Optional[RedfishEndpointCollectorArgs] = None
     ) -> tuple[TaskResult, Optional[RedfishEndpointDataModel]]:
