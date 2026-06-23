@@ -33,13 +33,29 @@ from serviceability_dummy_data import (
 
 from nodescraper.plugins.serviceability.mi3xx.mi3xx_cper_utils import (
     CPER_METHOD_AFID_MAX,
+    REDFISH_METHOD_AFID_MAX,
+    REDFISH_METHOD_AFID_MIN,
     event_aca_includes_serial,
     event_afids_from_oem,
     event_has_aca_decode,
+    get_amd_oem_dict,
     is_cper_method_afid,
     is_redfish_method_afid,
     should_skip_cper_fetch_or_decode,
 )
+
+
+def test_get_amd_oem_dict_layouts():
+    flat = {"Oem": {"AMDFieldIdentifiers": [{"AFID": 1}]}}
+    assert get_amd_oem_dict(flat) == {"AMDFieldIdentifiers": [{"AFID": 1}]}
+
+    nested = {"Oem": {"AMD": {"ErrDataArr": []}}}
+    assert get_amd_oem_dict(nested) == {"ErrDataArr": []}
+
+    assert get_amd_oem_dict({}) == {}
+    assert get_amd_oem_dict({"Oem": None}) == {}
+    assert get_amd_oem_dict({"Oem": "bad"}) == {}
+    assert get_amd_oem_dict({"Oem": {"AMD": "bad"}}) == {}
 
 
 def test_skip_when_afids_below_threshold_and_aca_has_serial():
@@ -78,6 +94,9 @@ def test_afid_method_ranges():
     assert is_cper_method_afid(CPER_METHOD_AFID_MAX)
     assert not is_cper_method_afid(CPER_METHOD_AFID_MAX + 1)
     assert is_redfish_method_afid(DUMMY_RF_CPER_AFID)
+    assert is_redfish_method_afid(REDFISH_METHOD_AFID_MAX)
+    assert not is_redfish_method_afid(REDFISH_METHOD_AFID_MIN - 1)
+    assert not is_redfish_method_afid(REDFISH_METHOD_AFID_MAX + 1)
     assert not is_redfish_method_afid(DUMMY_AFID_BELOW_RF)
 
 
