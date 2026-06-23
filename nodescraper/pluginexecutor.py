@@ -30,6 +30,7 @@ import inspect
 import logging
 import uuid
 from collections import deque
+from collections.abc import Callable, Sequence
 from typing import Optional, Type, Union
 
 from pydantic import BaseModel
@@ -38,6 +39,7 @@ from nodescraper.base.oobsshdataplugin import OOBSSHDataPlugin
 from nodescraper.connection.oob_ssh import OobSshConnectionManager
 from nodescraper.constants import DEFAULT_LOGGER
 from nodescraper.interfaces import ConnectionManager, DataPlugin, PluginInterface
+from nodescraper.interfaces.taskresulthook import TaskResultHook
 from nodescraper.models import PluginConfig, SystemInfo
 from nodescraper.models.pluginresult import PluginResult
 from nodescraper.pluginregistry import PluginRegistry
@@ -57,6 +59,7 @@ class PluginExecutor:
         plugin_registry: Optional[PluginRegistry] = None,
         log_path: Optional[str] = None,
         session_id: Optional[str] = None,
+        plugin_run_result_hooks: Optional[Sequence[Callable[[PluginResult], None]]] = None,
     ):
 
         if logger is None:
@@ -89,7 +92,11 @@ class PluginExecutor:
 
         self.log_path = log_path
 
-        self.connection_result_hooks = []
+        self.plugin_run_result_hooks: list[Callable[[PluginResult], None]] = (
+            list(plugin_run_result_hooks) if plugin_run_result_hooks else []
+        )
+
+        self.connection_result_hooks: list[TaskResultHook] = []
         if log_path:
             self.connection_result_hooks.append(FileSystemLogHook(log_base_path=log_path))
 
@@ -263,7 +270,10 @@ class PluginExecutor:
                         continue
 
                     self.logger.info("-" * 50)
-                    plugin_results.append(plugin_inst.run(**run_payload))
+                    plugin_result = plugin_inst.run(**run_payload)
+                    plugin_results.append(plugin_result)
+                    for hook in self.plugin_run_result_hooks:
+                        hook(plugin_result)
                 except Exception as e:
                     self.logger.exception(
                         "Unexpected exception when running plugin %s: %s", plugin_name, e

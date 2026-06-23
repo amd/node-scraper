@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+from collections.abc import Callable, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
@@ -72,6 +73,7 @@ class PluginRunInvocation:
     sname: str
     host_cli_args: Optional[argparse.Namespace] = None
     session_id: Optional[str] = None
+    plugin_run_result_hooks: tuple[Callable[[PluginResult], None], ...] = ()
 
 
 def run_plugin_queue_with_invocation(
@@ -86,8 +88,12 @@ def run_plugin_queue_with_invocation(
     sname: str,
     host_cli_args: Optional[argparse.Namespace] = None,
     session_id: Optional[str] = None,
+    plugin_run_result_hooks: Optional[Sequence[Callable[[PluginResult], None]]] = None,
 ) -> list[PluginResult]:
     """Constructs the plugin executor, binds invocation context, and runs the plugin queue."""
+    hooks_tuple: tuple[Callable[[PluginResult], None], ...] = (
+        tuple(plugin_run_result_hooks) if plugin_run_result_hooks else ()
+    )
     inv = PluginRunInvocation(
         plugin_reg=plugin_reg,
         parsed_args=parsed_args,
@@ -99,6 +105,7 @@ def run_plugin_queue_with_invocation(
         sname=sname,
         host_cli_args=host_cli_args,
         session_id=session_id,
+        plugin_run_result_hooks=hooks_tuple,
     )
     plugin_executor = PluginExecutor(
         logger=logger,
@@ -108,6 +115,7 @@ def run_plugin_queue_with_invocation(
         log_path=log_path,
         plugin_registry=plugin_reg,
         session_id=session_id,
+        plugin_run_result_hooks=hooks_tuple,
     )
     with plugin_run_invocation_scope(inv):
         return plugin_executor.run_queue()
