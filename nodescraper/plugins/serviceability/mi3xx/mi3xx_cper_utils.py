@@ -27,29 +27,42 @@ from __future__ import annotations
 
 from typing import Any
 
-# Redfish CPER (RF) style AFIDs start at this value; lower values are in-band /
-# OEM-field AFIDs already reflected on the log entry.
-RF_CPER_AFID_MIN = 10000
+# CPER-method AFIDs <= 34; Redfish-method AFIDs >= 10000.
+CPER_METHOD_AFID_MAX = 34
+REDFISH_METHOD_AFID_MIN = 10000
 
 _SERIAL_KEYS = ("SerialNumber", "serial_number", "UbbSerial", "ubb_serial")
 
 
-def event_afids_from_oem(event: dict[str, Any]) -> list[int]:
-    """AFIDs from ``Oem.AMDFieldIdentifiers`` (or similar list-of-dicts)."""
+def _oem_dict(event: dict[str, Any]) -> dict[str, Any]:
     oem = event.get("Oem")
-    if not isinstance(oem, dict):
-        return []
-    raw = oem.get("AMDFieldIdentifiers")
-    if not isinstance(raw, list):
-        return []
+    return oem if isinstance(oem, dict) else {}
+
+
+def _oem_list_field(oem: dict[str, Any], key: str) -> list[Any]:
+    """Return a list field from ``Oem`` or nested ``Oem.AMD`` (BMC layout varies)."""
+    raw = oem.get(key)
+    if isinstance(raw, list):
+        return raw
+    amd = oem.get("AMD")
+    if isinstance(amd, dict):
+        nested = amd.get(key)
+        if isinstance(nested, list):
+            return nested
+    return []
+
+
+def event_afids_from_oem(event: dict[str, Any]) -> list[int]:
+    """AFIDs from ``Oem.AMDFieldIdentifiers`` or ``Oem.AMD.AMDFieldIdentifiers``."""
+    raw = _oem_list_field(_oem_dict(event), "AMDFieldIdentifiers")
     out: list[int] = []
     for item in raw:
         if not isinstance(item, dict):
             continue
         for key in ("AFID", "Afid", "afid"):
-            if key in item and item[key] is not None:
+            if (v := item.get(key)) is not None:
                 try:
-                    out.append(int(item[key]))
+                    out.append(int(v))
                 except (TypeError, ValueError):
                     pass
                 break
@@ -57,12 +70,8 @@ def event_afids_from_oem(event: dict[str, Any]) -> list[int]:
 
 
 def _err_data_arr_entries(event: dict[str, Any]) -> list[dict[str, Any]]:
-    oem = event.get("Oem")
-    if not isinstance(oem, dict):
-        return []
-    arr = oem.get("ErrDataArr")
-    if not isinstance(arr, list):
-        return []
+    """``ErrDataArr`` rows from ``Oem.ErrDataArr`` or ``Oem.AMD.ErrDataArr``."""
+    arr = _oem_list_field(_oem_dict(event), "ErrDataArr")
     return [e for e in arr if isinstance(e, dict)]
 
 
@@ -86,15 +95,21 @@ def _nonempty_serial_in_mapping(obj: Any) -> bool:
 
 
 def event_aca_includes_serial(event: dict[str, Any]) -> bool:
-    """Serial (or UBB serial) present on any ``ErrDataArr`` row (typically ``MetaData``)."""
+    """Serial (or UBB serial) present on any ``ErrDataArr`` row ``MetaData``."""
     for entry in _err_data_arr_entries(event):
-        meta = entry.get("MetaData")
-        if _nonempty_serial_in_mapping(meta):
-            return True
-        decoded = entry.get("DecodedData")
-        if _nonempty_serial_in_mapping(decoded):
+        if _nonempty_serial_in_mapping(entry.get("MetaData")):
             return True
     return False
+
+
+def is_cper_method_afid(afid: int) -> bool:
+    """True for CPER-method AFIDs (<= ``CPER_METHOD_AFID_MAX``), including on RF log entries."""
+    return afid <= CPER_METHOD_AFID_MAX
+
+
+def is_redfish_method_afid(afid: int) -> bool:
+    """True for Redfish-method AFIDs in the 10k range."""
+    return afid >= REDFISH_METHOD_AFID_MIN
 
 
 def should_skip_cper_fetch_or_decode(event: dict[str, Any]) -> bool:
@@ -102,8 +117,8 @@ def should_skip_cper_fetch_or_decode(event: dict[str, Any]) -> bool:
 
     Skip when:
 
-    * Every OEM-listed AFID is below ``RF_CPER_AFID_MIN`` (non-RF CPER range),
-      ACA ``DecodedData`` is present, and a serial is present on the entry; or
+    * Every OEM-listed AFID is CPER-method (<= ``CPER_METHOD_AFID_MAX``; may match
+      in-band CPER AFIDs), ACA ``DecodedData`` is present, and serial is on the entry; or
     * ACA ``DecodedData`` is present but no serial — the CPER blob does not add
       actionable identity beyond what is already missing from the log.
     """
@@ -114,4 +129,4 @@ def should_skip_cper_fetch_or_decode(event: dict[str, Any]) -> bool:
     afids = event_afids_from_oem(event)
     if not afids:
         return False
-    return all(afid < RF_CPER_AFID_MIN for afid in afids)
+    return all(is_cper_method_afid(afid) for afid in afids)

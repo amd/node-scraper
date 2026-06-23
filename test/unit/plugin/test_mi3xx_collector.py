@@ -175,6 +175,24 @@ def test_mi3xx_collector_satisfies_reference_time_helper(mi3xx_collector):
     assert not mi3xx_collector.satisfies_reference_time(DUMMY_TIMESTAMP_EARLIER, args)
 
 
+def test_mi3xx_collector_is_cper_event_requires_cper_block_type_and_uri(mi3xx_collector):
+    assert mi3xx_collector.is_cper_event(dummy_cper_basic_member())
+    assert not mi3xx_collector.is_cper_event(
+        {
+            "Id": "non-cper",
+            "AdditionalDataURI": DUMMY_EVENT_URI,
+            "MessageId": "ResourceEvent.1.2.1.ResourceErrorsDetectedOEM",
+        }
+    )
+    assert not mi3xx_collector.is_cper_event(
+        {
+            "Id": "partial-cper",
+            "CPER": {"NotificationType": "dummy"},
+            "DiagnosticDataType": "CPER",
+        }
+    )
+
+
 def test_mi3xx_collector_fetches_cper_attachments(mi3xx_collector, redfish_conn_mock):
     import base64
     from unittest.mock import MagicMock

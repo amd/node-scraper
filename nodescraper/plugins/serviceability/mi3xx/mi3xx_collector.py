@@ -35,13 +35,14 @@ from nodescraper.plugins.serviceability.serviceability_data import DeviceInfo
 from nodescraper.plugins.serviceability.time_utils import satisfies_time_check
 
 from .mi3xx_collector_args import MI3XXCollectorArgs
-from .mi3xx_cper_utils import RF_CPER_AFID_MIN, should_skip_cper_fetch_or_decode
+from .mi3xx_cper_utils import CPER_METHOD_AFID_MAX, should_skip_cper_fetch_or_decode
 
 _EVENT_TIMESTAMP_KEYS = ("Created", "EventTimestamp", "Timestamp")
 
 
 class MI3XXCollector(ServiceabilityCollectorBase[MI3XXCollectorArgs]):
-    """MI3XX OOB Redfish serviceability collector."""
+    """Collect MI3XX BMC Redfish data: event log members (with pagination), firmware inventory,
+    CPER attachment bytes for qualifying events, and optional assembly/chassis metadata."""
 
     def satisfies_reference_time(
         self,
@@ -69,15 +70,12 @@ class MI3XXCollector(ServiceabilityCollectorBase[MI3XXCollectorArgs]):
         return filtered
 
     def is_cper_event(self, event: dict) -> bool:
-        if "CPER" in event:
-            return True
-        if str(event.get("DiagnosticDataType", "")).upper() == "CPER":
-            return True
-        if event.get("AdditionalDataURI"):
-            return True
-        message_id = str(event.get("MessageId", "")).lower()
-        message = str(event.get("Message", "")).lower()
-        return "cper" in message_id or "cper" in message or "diagnostic" in message_id
+        """True when the log entry is a Redfish CPER attachment event."""
+        return (
+            "CPER" in event
+            and str(event.get("DiagnosticDataType", "")).upper() == "CPER"
+            and bool(event.get("AdditionalDataURI"))
+        )
 
     def collect_cper_attachments(self, rf_events: list[Any]) -> dict[str, str]:
         """Fetch CPER binaries from BMC; decoding runs in the analyzer."""
@@ -94,10 +92,10 @@ class MI3XXCollector(ServiceabilityCollectorBase[MI3XXCollectorArgs]):
             if should_skip_cper_fetch_or_decode(event):
                 self.logger.info(
                     "(%s) Skipping CPER attachment fetch for Redfish event %s "
-                    "(ACA decode already on log entry; AFID<%s check or no serial)",
+                    "(ACA decode already on log entry; CPER-method AFID<=%s or no serial)",
                     parent,
                     event_id,
-                    RF_CPER_AFID_MIN,
+                    CPER_METHOD_AFID_MAX,
                 )
                 continue
 

@@ -82,6 +82,7 @@ def dummy_cper_rf_member() -> dict[str, Any]:
     return {
         "Id": DUMMY_CPER_EVENT_ID_RF,
         "Created": DUMMY_TIMESTAMP_LATER,
+        "CPER": {"NotificationType": "dummy-notification-type"},
         "DiagnosticDataType": "CPER",
         "AdditionalDataURI": DUMMY_CPER_ATTACHMENT_URI_2,
         "Oem": {
@@ -96,6 +97,7 @@ def dummy_cper_skip_member() -> dict[str, Any]:
     return {
         "Id": DUMMY_CPER_EVENT_ID_SKIP,
         "Created": DUMMY_TIMESTAMP_LATER,
+        "CPER": {"NotificationType": "dummy-notification-type"},
         "DiagnosticDataType": "CPER",
         "AdditionalDataURI": DUMMY_CPER_ATTACHMENT_URI_1,
         "Oem": {
@@ -115,6 +117,7 @@ def dummy_cper_basic_member() -> dict[str, Any]:
     return {
         "Id": DUMMY_CPER_EVENT_ID_BASIC,
         "Created": DUMMY_TIMESTAMP_LATER,
+        "CPER": {"NotificationType": "dummy-notification-type"},
         "DiagnosticDataType": "CPER",
         "AdditionalDataURI": DUMMY_CPER_ATTACHMENT_URI_1,
     }

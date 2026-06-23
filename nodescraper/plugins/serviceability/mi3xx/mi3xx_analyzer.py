@@ -47,7 +47,7 @@ from nodescraper.plugins.serviceability.serviceability_data import (
     ServiceabilityDataModel,
 )
 
-from .mi3xx_cper_utils import RF_CPER_AFID_MIN, should_skip_cper_fetch_or_decode
+from .mi3xx_cper_utils import CPER_METHOD_AFID_MAX, should_skip_cper_fetch_or_decode
 
 
 class AfidSagMetadataArtifact(BaseModel):
@@ -90,10 +90,10 @@ class MI3XXAnalyzer(DataAnalyzer[ServiceabilityDataModel, ServiceabilityAnalyzer
         if skipped_cper:
             self.logger.info(
                 "(%s) Skipping CPER decode for %d CPER attachment(s); Redfish log "
-                "already has usable ACA fields (AFID<%s or no serial on decode)",
+                "already has usable ACA fields (CPER-method AFID<=%s or no serial on decode)",
                 parent,
                 skipped_cper,
-                RF_CPER_AFID_MIN,
+                CPER_METHOD_AFID_MAX,
             )
         if cper_raw_to_decode and not cper_data:
             if not args.cper_decode_module:
