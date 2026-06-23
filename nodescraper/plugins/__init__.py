@@ -23,3 +23,8 @@
 # SOFTWARE.
 #
 ###############################################################################
+from .platforms.mobile_apu.amd_mobile_apu_plugin import AmdMobileApuPlugin
+
+__all__ = [
+    "AmdMobileApuPlugin",
+]
