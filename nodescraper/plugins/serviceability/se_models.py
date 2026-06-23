@@ -87,7 +87,7 @@ class ServiceabilityBlock(BaseModel):
     )
     afid_sag_file_version: Optional[str] = Field(
         default=None,
-        description="AFID_SAG.json identity/revision string when the hub returned metadata.",
+        description="AFID_SAG.json pid/revision/variant string when the hub returned metadata.",
     )
     afid_sag_metadata: Optional[dict[str, Any]] = Field(
         default=None,

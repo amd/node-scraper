@@ -41,6 +41,7 @@ from serviceability_dummy_data import (
     DUMMY_RF_EVENT_COUNT,
     DUMMY_SAG_PID,
     DUMMY_SAG_REVISION,
+    DUMMY_SAG_VARIANT,
     DUMMY_SERVICE_ACTION_NUM,
     DUMMY_TIMESTAMP,
     DUMMY_UNIT_A,
@@ -126,12 +127,17 @@ def test_format_serviceability_solution_lines():
         ],
         solution_reasoning="Dummy test reasoning.",
         hub_version="1.0.0-test",
-        afid_sag_file_version="PID sag-1, revision rev-a",
+        afid_sag_file_version=(
+            f"PID {DUMMY_SAG_PID}, revision {DUMMY_SAG_REVISION}, variant {DUMMY_SAG_VARIANT}"
+        ),
     )
     lines = format_serviceability_solution_lines(block)
     assert lines[0] == "Dummy test reasoning."
     assert lines[1] == "Hub version: 1.0.0-test"
-    assert lines[2] == "AFID_SAG file: PID sag-1, revision rev-a"
+    assert (
+        lines[2]
+        == f"AFID_SAG file: PID {DUMMY_SAG_PID}, revision {DUMMY_SAG_REVISION}, variant {DUMMY_SAG_VARIANT}"
+    )
     assert f"AFID {DUMMY_AFID_A}" in lines[3]
     assert DUMMY_DESIGNATION_A in lines[3]
     assert "service action 99 (RMA)" in lines[3]
@@ -157,7 +163,11 @@ def test_serviceability_block_from_service_result():
                 }
             },
         },
-        afid_sag_metadata={"sag_pid": DUMMY_SAG_PID, "sag_revision": DUMMY_SAG_REVISION},
+        afid_sag_metadata={
+            "sag_pid": DUMMY_SAG_PID,
+            "revision": DUMMY_SAG_REVISION,
+            "sag_variant": DUMMY_SAG_VARIANT,
+        },
         engine_version_info={"version": DUMMY_HUB_VERSION},
     )
     block = serviceability_block_from_service_result(
@@ -172,9 +182,9 @@ def test_serviceability_block_from_service_result():
     assert block.solution[0].service_action_title == "Dummy service action"
     assert set(block.solution[0].serviceable_unit) == {DUMMY_DESIGNATION_A, DUMMY_DESIGNATION_B}
     assert block.hub_version == DUMMY_HUB_VERSION
-    assert block.afid_sag_file_version is not None
-    assert DUMMY_SAG_PID in block.afid_sag_file_version
-    assert DUMMY_SAG_REVISION in block.afid_sag_file_version
+    assert block.afid_sag_file_version == (
+        f"PID {DUMMY_SAG_PID}, revision {DUMMY_SAG_REVISION}, variant {DUMMY_SAG_VARIANT}"
+    )
     assert f"{DUMMY_RF_EVENT_COUNT} Redfish event(s)" in block.solution_reasoning
     assert "Dummy test hub" in block.solution_reasoning
 
@@ -182,7 +192,11 @@ def test_serviceability_block_from_service_result():
 def test_serviceability_block_from_service_result_isa_version_info():
     result = SimpleNamespace(
         service_info={},
-        afid_sag_metadata={"sag_pid": DUMMY_SAG_PID, "sag_revision": DUMMY_SAG_REVISION},
+        afid_sag_metadata={
+            "sag_pid": DUMMY_SAG_PID,
+            "revision": DUMMY_SAG_REVISION,
+            "sag_variant": DUMMY_SAG_VARIANT,
+        },
         isa_version_info={"VERSION": "1.2.3"},
     )
     block = serviceability_block_from_service_result(
@@ -192,8 +206,9 @@ def test_serviceability_block_from_service_result_isa_version_info():
         rf_event_count=1,
     )
     assert block.hub_version == "1.2.3"
-    assert block.afid_sag_file_version is not None
-    assert DUMMY_SAG_PID in block.afid_sag_file_version
+    assert block.afid_sag_file_version == (
+        f"PID {DUMMY_SAG_PID}, revision {DUMMY_SAG_REVISION}, variant {DUMMY_SAG_VARIANT}"
+    )
 
 
 def test_resolve_hub_class_finds_package_export():

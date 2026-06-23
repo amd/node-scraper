@@ -77,25 +77,19 @@ def _hub_version_display(version_info: Any) -> Optional[str]:
 
 
 def _afid_sag_file_version_display(metadata: Any) -> Optional[str]:
-    """Build a short AFID_SAG file identity string from hub ``afid_sag_metadata``."""
+    """Build AFID_SAG file identity string (pid, revision, variant) from hub metadata."""
     if not isinstance(metadata, dict) or not metadata:
         return None
     pid = metadata.get("sag_pid") or metadata.get("pid")
-    rev = metadata.get("sag_revision") or metadata.get("revision")
-    extra = (
-        metadata.get("sag_version")
-        or metadata.get("file_version")
-        or metadata.get("schema_version")
-    )
+    rev = metadata.get("revision")
+    variant = metadata.get("sag_variant") or metadata.get("variant")
     parts: list[str] = []
     if pid and str(pid).strip():
         parts.append(f"PID {str(pid).strip()}")
     if rev and str(rev).strip():
         parts.append(f"revision {str(rev).strip()}")
-    if extra and str(extra).strip():
-        ex = str(extra).strip()
-        if ex not in (str(pid or "").strip(), str(rev or "").strip()):
-            parts.append(f"version {ex}")
+    if variant and str(variant).strip():
+        parts.append(f"variant {str(variant).strip()}")
     if not parts:
         return None
     return ", ".join(parts)

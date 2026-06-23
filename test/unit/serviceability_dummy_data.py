@@ -53,6 +53,7 @@ DUMMY_TIMESTAMP_LATER = "2000-01-02T12:00:00+00:00"
 DUMMY_RF_EVENT_COUNT = 2
 DUMMY_SAG_PID = "dummy-sag-pid"
 DUMMY_SAG_REVISION = "dummy-rev-0"
+DUMMY_SAG_VARIANT = "dummy-variant-0"
 DUMMY_HUB_VERSION = "0.0.0-dummy"
 DUMMY_BMC_HOST = "dummy-bmc.example"
 DUMMY_OEM_VENDOR = "DummyVendor"

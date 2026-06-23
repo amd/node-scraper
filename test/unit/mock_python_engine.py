@@ -9,6 +9,7 @@ from serviceability_dummy_data import (
     DUMMY_HUB_VERSION,
     DUMMY_SAG_PID,
     DUMMY_SAG_REVISION,
+    DUMMY_SAG_VARIANT,
     DUMMY_SERVICE_ACTION_NUM,
     DUMMY_SERVICE_ACTION_TITLE,
     DUMMY_UNIT_A,
@@ -38,6 +39,10 @@ class MockServiceEngine:
             }
         return SimpleNamespace(
             service_info=service_info,
-            afid_sag_metadata={"sag_pid": DUMMY_SAG_PID, "sag_revision": DUMMY_SAG_REVISION},
+            afid_sag_metadata={
+                "sag_pid": DUMMY_SAG_PID,
+                "revision": DUMMY_SAG_REVISION,
+                "sag_variant": DUMMY_SAG_VARIANT,
+            },
             engine_version_info={"version": DUMMY_HUB_VERSION},
         )
