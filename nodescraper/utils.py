@@ -189,18 +189,35 @@ def get_unique_filename(directory, filename) -> str:
         count += 1
 
 
+_LOG_DIR_NAME_OVERRIDES: dict[str, str] = {}
+
+
+def register_log_dir_name(class_name: str, log_dir_name: str) -> None:
+    """Register a filesystem log directory name for a task or plugin class."""
+    _LOG_DIR_NAME_OVERRIDES[class_name] = log_dir_name
+
+
+def resolve_log_dir_name(class_name: str) -> str:
+    """Map a class name to its log directory (override or snake_case)."""
+    if class_name in _LOG_DIR_NAME_OVERRIDES:
+        return _LOG_DIR_NAME_OVERRIDES[class_name]
+    return pascal_to_snake(class_name)
+
+
 def pascal_to_snake(input_str: str) -> str:
-    """Convert PascalCase to snake_case
+    """Convert PascalCase to snake_case.
 
-    Args:
-        input_str (str): string to convert
-
-    Returns:
-        str: converted string
+    Handles embedded acronyms with digits (e.g. ``ServiceabilityPluginMI3XX``,
+    ``MI3XXCollector``) without splitting into single-letter segments.
     """
+    if not input_str:
+        return ""
     if input_str.isupper():
         return input_str.lower()
-    return ("_").join(re.split("(?<=.)(?=[A-Z])", input_str)).lower()
+    normalized = re.sub(r"([A-Z][A-Z0-9]+)([A-Z][a-z])", r"\1_\2", input_str)
+    normalized = re.sub(r"([a-z])([A-Z][A-Z0-9]+)", r"\1_\2", normalized)
+    normalized = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", normalized)
+    return normalized.lower()
 
 
 def bytes_to_human_readable(input_bytes: int) -> str:
