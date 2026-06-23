@@ -32,6 +32,7 @@ import os
 import platform
 import sys
 import uuid
+from collections.abc import Callable, Sequence
 from typing import Optional
 
 import nodescraper
@@ -65,6 +66,7 @@ from nodescraper.connection.redfish.redfish_params import RedfishConnectionParam
 from nodescraper.constants import DEFAULT_LOGGER
 from nodescraper.enums import ExecutionStatus, SystemInteractionLevel, SystemLocation
 from nodescraper.models import SystemInfo
+from nodescraper.models.pluginresult import PluginResult
 from nodescraper.pluginexecutor import PluginExecutor
 from nodescraper.pluginregistry import PluginRegistry
 
@@ -461,6 +463,7 @@ def main(
     arg_input: Optional[list[str]] = None,
     *,
     host_cli_args: Optional[argparse.Namespace] = None,
+    plugin_run_result_hooks: Optional[Sequence[Callable[[PluginResult], None]]] = None,
 ):
     """Main entry point for the CLI
 
@@ -468,6 +471,8 @@ def main(
         arg_input (Optional[list[str]], optional): list of args to parse. Defaults to None.
         host_cli_args: Optional namespace from an embedding host (e.g. detect-errors) for code that
             calls get_plugin_run_invocation during the plugin queue.
+        plugin_run_result_hooks: Optional callbacks invoked with each plugin's :class:`PluginResult`
+            after ``run()`` completes (used by embedded hosts such as error-scraper).
     """
     if arg_input is None:
         arg_input = sys.argv[1:]
@@ -643,6 +648,7 @@ def main(
             sname=sname,
             host_cli_args=host_cli_args,
             session_id=str(uuid.uuid4()),
+            plugin_run_result_hooks=plugin_run_result_hooks,
         )
 
         log_system_info(log_path, system_info, logger)
