@@ -23,10 +23,12 @@
 # SOFTWARE.
 #
 ###############################################################################
-from pydantic import BaseModel, Field, field_validator
+from pydantic import Field, field_validator
+
+from nodescraper.models import CollectorArgs
 
 
-class RedfishEndpointCollectorArgs(BaseModel):
+class RedfishEndpointCollectorArgs(CollectorArgs):
     """Collection args: uris to GET (or discover from tree), optional concurrency and tree discovery."""
 
     uris: list[str] = Field(
@@ -57,7 +59,10 @@ class RedfishEndpointCollectorArgs(BaseModel):
     )
     follow_next_link: bool = Field(
         default=False,
-        description="If True, follow Members@odata.nextLink pagination for each URI and merge all pages into a single response.",
+        description=(
+            "If True, follow Redfish Members collection OData nextLink pagination for each URI "
+            "and merge all pages into a single response."
+        ),
     )
     max_pages: int = Field(
         default=200,

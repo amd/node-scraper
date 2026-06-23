@@ -126,7 +126,7 @@ class ConnectionManager(Task, Generic[TConnection, TConnectArg]):
     def __init_subclass__(cls, **kwargs) -> None:
         super().__init_subclass__(**kwargs)
 
-        if hasattr(cls, "connect"):
+        if "connect" in cls.__dict__:
             cls.connect = connect_decorator(cls.connect)
 
     def __enter__(self):

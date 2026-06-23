@@ -95,6 +95,8 @@ class TestPluginA(PluginInterface[MockConnectionManager, None]):
         self,
         test_bool_arg: bool = True,
         test_str_arg: str = "test",
+        test_list_arg: list[int] = [1],  # noqa: B006
+        test_dict_arg: dict = {},  # noqa: B006
         test_model_arg: Optional[TestModelArg] = None,
     ):
         return PluginResult(

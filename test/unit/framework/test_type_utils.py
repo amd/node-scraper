@@ -45,6 +45,14 @@ class TestGenericImpl(TestGenericBase[str]):
     pass
 
 
+class WiringMixin:
+    pass
+
+
+class TestMixinFirstImpl(WiringMixin, TestGenericBase[str]):
+    pass
+
+
 class TestModel(BaseModel):
     str_attr: str
     int_attr: int
@@ -55,6 +63,10 @@ class TestModel(BaseModel):
 
 def test_generic_map():
     assert TypeUtils.get_generic_map(TestGenericImpl) == {T: str}
+
+
+def test_generic_map_skips_non_generic_mixin_base():
+    assert TypeUtils.get_generic_map(TestMixinFirstImpl) == {T: str}
 
 
 def test_func_arg_types():

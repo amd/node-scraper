@@ -58,7 +58,17 @@ def plugin_has_collector(plugin_name: str) -> bool:
         bool: ``True`` when the plugin class defines ``COLLECTOR``.
     """
     plugin_class = load_plugin_class(plugin_name)
-    return plugin_class is not None and getattr(plugin_class, "COLLECTOR", None) is not None
+    if plugin_class is None:
+        return False
+    collectors = getattr(plugin_class, "get_collector_classes", None)
+    if callable(collectors):
+        return bool(collectors())
+    collector = getattr(plugin_class, "COLLECTOR", None)
+    if collector is None:
+        return False
+    if isinstance(collector, (tuple, list)):
+        return len(collector) > 0
+    return True
 
 
 def plugin_has_analyzer(plugin_name: str) -> bool:

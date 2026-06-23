@@ -28,10 +28,16 @@ import os
 import tempfile
 
 from nodescraper.enums.executionstatus import ExecutionStatus
-from nodescraper.plugins.regex_search.analyzer_args import RegexSearchAnalyzerArgs
-from nodescraper.plugins.regex_search.regex_search_analyzer import RegexSearchAnalyzer
-from nodescraper.plugins.regex_search.regex_search_data import RegexSearchData
-from nodescraper.plugins.regex_search.regex_search_plugin import RegexSearchPlugin
+from nodescraper.plugins.inband.regex_search.analyzer_args import (
+    RegexSearchAnalyzerArgs,
+)
+from nodescraper.plugins.inband.regex_search.regex_search_analyzer import (
+    RegexSearchAnalyzer,
+)
+from nodescraper.plugins.inband.regex_search.regex_search_data import RegexSearchData
+from nodescraper.plugins.inband.regex_search.regex_search_plugin import (
+    RegexSearchPlugin,
+)
 
 EXPECTED_MISSING_ANALYSIS_MSG = "Analysis args need to be provided for the analyzer to run"
 

@@ -1,16 +1,17 @@
 # Plugin Documentation
 
-# Plugin Table
+# IB Plugins
 
 | Plugin | Collection | Analyzer Args | Collection Args | DataModel | Collector | Analyzer |
 | --- | --- | --- | --- | --- | --- | --- |
+| GenericCollectionPlugin | Runs each command from collection_args.commands on the target (in-band host or BMC over OOB SSH).<br>Commands are user-configured; there are no fixed CMD_* class fields. | **Analyzer Args:**<br>- `checks`: list[nodescraper.plugins.generic_collection.analyzer_args.CommandCheck] — Per-command validation rules keyed by collected command name. | **Collection Args:**<br>- `commands`: list[nodescraper.plugins.generic_collection.collector_args.CommandSpec] — Named commands to run. Each entry must include 'name' and 'command'. Prefer small textual stdout; see class docstring...<br>- `sudo`: bool — Default sudo setting for commands that do not specify sudo.<br>- `timeout`: int — Default per-command timeout in seconds.<br>- `include_stdout`: bool — Default: include each command's stdout in collected results for analysis. When false, stdout is omitted from stored r... | [GenericCollectionDataModel](#GenericCollectionDataModel-Model) | [GenericCollectionCollector](#Collector-Class-GenericCollectionCollector) | [GenericAnalyzer](#Data-Analyzer-Class-GenericAnalyzer) |
 | AmdSmiPlugin | bad-pages<br>firmware --json<br>list --json<br>metric -g all<br>partition --json<br>process --json<br>ras --cper --folder={folder}<br>ras --afid --cper-file {cper_file}<br>static -g all --json<br>static -g {gpu_id} --json<br>topology<br>version --json<br>xgmi -l<br>xgmi -m | **Analyzer Args:**<br>- `check_static_data`: bool — If True, run static data checks (e.g. driver version, partition mode).<br>- `expected_gpu_processes`: Optional[int] — Expected number of GPU processes.<br>- `expected_max_power`: Optional[int] — Expected maximum power value (e.g. watts).<br>- `expected_power_management`: Optional[str] — Expected amd-smi metric power_management value per GPU (e.g. DISABLED for active/full power, ENABLED for power-manage...<br>- `expected_driver_version`: Optional[str] — Expected AMD driver version string.<br>- `expected_memory_partition_mode`: Optional[str] — Expected memory partition mode (e.g. sp3, dp).<br>- `expected_compute_partition_mode`: Optional[str] — Expected compute partition mode.<br>- `expected_firmware_versions`: Optional[dict[str, str]] — Expected firmware versions keyed by amd-smi fw_id (e.g. PLDM_BUNDLE).<br>- `l0_to_recovery_count_error_threshold`: Optional[int] — L0-to-recovery count above which an error is raised.<br>- `l0_to_recovery_count_warning_threshold`: Optional[int] — L0-to-recovery count above which a warning is raised.<br>- `vendorid_ep`: Optional[str] — Expected endpoint vendor ID (e.g. for PCIe).<br>- `vendorid_ep_vf`: Optional[str] — Expected endpoint VF vendor ID.<br>- `devid_ep`: Optional[str] — Expected endpoint device ID.<br>- `devid_ep_vf`: Optional[str] — Expected endpoint VF device ID.<br>- `sku_name`: Optional[str] — Expected SKU name string for GPU.<br>- `expected_xgmi_speed`: Optional[list[float]] — Expected xGMI speed value(s) (e.g. link rate).<br>- `analysis_range_start`: Optional[datetime.datetime] — Start of time range for time-windowed analysis.<br>- `analysis_range_end`: Optional[datetime.datetime] — End of time range for time-windowed analysis. | **Collection Args:**<br>- `analysis_firmware_ids`: Optional[list[str]] — amd-smi fw_id values to record in analysis_ref.firmware_versions<br>- `cper_file_path`: Optional[str] — Path to CPER folder or file for RAS AFID collection (ras --afid --cper-file). | [AmdSmiDataModel](#AmdSmiDataModel-Model) | [AmdSmiCollector](#Collector-Class-AmdSmiCollector) | [AmdSmiAnalyzer](#Data-Analyzer-Class-AmdSmiAnalyzer) |
 | BiosPlugin | sh -c 'cat /sys/devices/virtual/dmi/id/bios_version'<br>wmic bios get SMBIOSBIOSVersion /Value | **Analyzer Args:**<br>- `exp_bios_version`: list[str] — Expected BIOS version(s) to match against collected value (str or list).<br>- `regex_match`: bool — If True, match exp_bios_version as regex; otherwise exact match. | - | [BiosDataModel](#BiosDataModel-Model) | [BiosCollector](#Collector-Class-BiosCollector) | [BiosAnalyzer](#Data-Analyzer-Class-BiosAnalyzer) |
 | CmdlinePlugin | cat /proc/cmdline | **Analyzer Args:**<br>- `required_cmdline`: Union[str, List] — Command-line parameters that must be present (e.g. 'pci=bfsort').<br>- `banned_cmdline`: Union[str, List] — Command-line parameters that must not be present.<br>- `os_overrides`: Dict[str, nodescraper.plugins.inband.cmdline.cmdlineconfig.OverrideConfig] — Per-OS overrides for required_cmdline and banned_cmdline (keyed by OS identifier).<br>- `platform_overrides`: Dict[str, nodescraper.plugins.inband.cmdline.cmdlineconfig.OverrideConfig] — Per-platform overrides for required_cmdline and banned_cmdline (keyed by platform). | - | [CmdlineDataModel](#CmdlineDataModel-Model) | [CmdlineCollector](#Collector-Class-CmdlineCollector) | [CmdlineAnalyzer](#Data-Analyzer-Class-CmdlineAnalyzer) |
 | DeviceEnumerationPlugin | powershell -Command "(Get-WmiObject -Class Win32_Processor &#124; Measure-Object).Count"<br>lspci -d {vendorid_ep}: &#124; grep -iE 'VGA&#124;Display&#124;3D&#124;Processing accelerators&#124;Co-processor&#124;Accelerator' &#124; grep -vi 'Virtual Function' &#124; wc -l<br>powershell -Command "(wmic path win32_VideoController get name &#124; findstr AMD &#124; Measure-Object).Count"<br>lscpu<br>lshw<br>lspci -d {vendorid_ep}: &#124; grep -i 'Virtual Function' &#124; wc -l<br>powershell -Command "(Get-VMHostPartitionableGpu &#124; Measure-Object).Count" | **Analyzer Args:**<br>- `cpu_count`: Optional[list[int]] — Expected CPU count(s); pass as int or list of ints. Analysis passes if actual is in list.<br>- `gpu_count`: Optional[list[int]] — Expected GPU count(s); pass as int or list of ints. Analysis passes if actual is in list.<br>- `vf_count`: Optional[list[int]] — Expected virtual function count(s); pass as int or list of ints. Analysis passes if actual is in list. | - | [DeviceEnumerationDataModel](#DeviceEnumerationDataModel-Model) | [DeviceEnumerationCollector](#Collector-Class-DeviceEnumerationCollector) | [DeviceEnumerationAnalyzer](#Data-Analyzer-Class-DeviceEnumerationAnalyzer) |
 | DimmPlugin | sh -c 'dmidecode -t 17 &#124; tr -s " " &#124; grep -v "Volatile\&#124;None\&#124;Module" &#124; grep Size' 2>/dev/null<br>dmidecode<br>wmic memorychip get Capacity | - | **Collection Args:**<br>- `skip_sudo`: bool — If True, do not use sudo when running dmidecode or wmic for memory info. | [DimmDataModel](#DimmDataModel-Model) | [DimmCollector](#Collector-Class-DimmCollector) | - |
 | DkmsPlugin | dkms status<br>dkms --version | **Analyzer Args:**<br>- `dkms_status`: Union[str, list] — Expected dkms status string(s) to match (e.g. 'amd/1.0.0'). At least one of dkms_status or dkms_version required.<br>- `dkms_version`: Union[str, list] — Expected dkms version string(s) to match. At least one of dkms_status or dkms_version required.<br>- `regex_match`: bool — If True, match dkms_status and dkms_version as regex; otherwise exact match. | - | [DkmsDataModel](#DkmsDataModel-Model) | [DkmsCollector](#Collector-Class-DkmsCollector) | [DkmsAnalyzer](#Data-Analyzer-Class-DkmsAnalyzer) |
-| DmesgPlugin | dmesg --time-format iso -x<br>ls -1 /var/log/dmesg* 2>/dev/null &#124; grep -E '^/var/log/dmesg(\.[0-9]+(\.gz)?)?$' &#124;&#124; true | **Built-in Regexes:**<br>- Out of memory error: `(?:oom_kill_process.*)&#124;(?:Out of memory.*)`<br>- I/O Page Fault: `IO_PAGE_FAULT`<br>- Kernel Panic: `\bkernel panic\b.*`<br>- SQ Interrupt: `sq_intr`<br>- SRAM ECC: `sram_ecc.*`<br>- Failed to load driver. IP hardware init error.: `\[amdgpu\]\] \*ERROR\* hw_init of IP block.*`<br>- Failed to load driver. IP software init error.: `\[amdgpu\]\] \*ERROR\* sw_init of IP block.*`<br>- Real Time throttling activated: `sched: RT throttling activated.*`<br>- RCU preempt detected stalls: `rcu_preempt detected stalls.*`<br>- RCU preempt self-detected stall: `rcu_preempt self-detected stall.*`<br>- QCM fence timeout: `qcm fence wait loop timeout.*`<br>- General protection fault: `(?:[\w-]+(?:\[[0-9.]+\])?\s+)?general protectio...`<br>- Segmentation fault: `(?:segfault.*in .*\[)&#124;(?:[Ss]egmentation [Ff]au...`<br>- Failed to disallow cf state: `amdgpu: Failed to disallow cf state.*`<br>- Failed to terminate tmr: `\*ERROR\* Failed to terminate tmr.*`<br>- Suspend of IP block failed: `\*ERROR\* suspend of IP block <\w+> failed.*`<br>- amdgpu Page Fault: `(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:\s+\[\S...`<br>- Page Fault: `page fault for address.*`<br>- Fatal error during GPU init: `(?:amdgpu)(.*Fatal error during GPU init)&#124;(Fata...`<br>- PCIe AER Error Status: `(pcieport [\w:.]+: AER: aer_status:[^\n]*(?:\n[...`<br>- PCIe AER Correctable Error Status: `(.*aer_cor_status: 0x[0-9a-fA-F]+, aer_cor_mask...`<br>- PCIe AER Uncorrectable Error Status: `(.*aer_uncor_status: 0x[0-9a-fA-F]+, aer_uncor_...`<br>- PCIe AER Uncorrectable Error Severity with TLP Header: `(.*aer_uncor_severity: 0x[0-9a-fA-F]+.*)(\n.*TL...`<br>- Failed to read journal file: `Failed to read journal file.*`<br>- Journal file corrupted or uncleanly shut down: `journal corrupted or uncleanly shut down.*`<br>- ACPI BIOS Error: `ACPI BIOS Error`<br>- ACPI Error: `ACPI Error`<br>- Filesystem corrupted!: `EXT4-fs error \(device .*\):`<br>- Error in buffered IO, check filesystem integrity: `(Buffer I\/O error on dev)(?:ice)? (\w+)`<br>- PCIe card no longer present: `pcieport (\w+:\w+:\w+\.\w+):\s+(\w+):\s+(Slot\(...`<br>- PCIe Link Down: `pcieport (\w+:\w+:\w+\.\w+):\s+(\w+):\s+(Slot\(...`<br>- Mismatched clock configuration between PCIe device and host: `pcieport (\w+:\w+:\w+\.\w+):\s+(\w+):\s+(curren...`<br>- RAS Correctable Error: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- RAS Uncorrectable Error: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- RAS Deferred Error: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- RAS Corrected PCIe Error: `((?:\[Hardware Error\]:\s+)?event severity: cor...`<br>- GPU Reset: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- GPU reset failed: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- ACA Error: `(Accelerator Check Architecture[^\n]*)(?:\n[^\n...`<br>- ACA Error: `(Accelerator Check Architecture[^\n]*)(?:\n[^\n...`<br>- MCE Error: `\[Hardware Error\]:.+MC\d+_STATUS.*(?:\n.*){0,5}`<br>- Mode 2 Reset Failed: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)? (...`<br>- RAS Corrected Error: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- SGX Error: `x86/cpu: SGX disabled by BIOS`<br>- MMP Error: `Failed to load MMP firmware qat_4xxx_mmp.bin`<br>- GPU Throttled: `amdgpu \w{4}:\w{2}:\w{2}.\w: amdgpu: WARN: GPU ...`<br>- RAS Poison Consumed: `amdgpu[ 0-9a-fA-F:.]+:(?:\s*amdgpu:)?\s+(?:{\d+...`<br>- RAS Poison created: `amdgpu[ 0-9a-fA-F:.]+:(?:\s*amdgpu:)?\s+(?:{\d+...`<br>- Bad page threshold exceeded: `(amdgpu: Saved bad pages (\d+) reaches threshol...`<br>- RAS Hardware Error: `Hardware error from APEI Generic Hardware Error...`<br>- Error Address: `Error Address.*(?:\s.*)`<br>- RAS EDR Event: `EDR: EDR event received`<br>- DPC Event: `DPC: .*`<br>- LNet: ko2iblnd has no matching interfaces: `(?:\[[^\]]+\]\s*)?LNetError:.*ko2iblnd:\s*No ma...`<br>- LNet: Error starting up LNI: `(?:\[[^\]]+\]\s*)?LNetError:\s*.*Error\s*-?\d+\...`<br>- Lustre: network initialisation failed: `LustreError:.*ptlrpc_init_portals\(\).*network ...` | **Collection Args:**<br>- `collect_rotated_logs`: bool — If True, also collect rotated dmesg log files from /var/log/dmesg*.<br>- `skip_sudo`: bool — If True, do not use sudo when running dmesg or listing log files.<br>- `log_dmesg_data`: bool — If True, log the collected dmesg output in artifacts. | [DmesgData](#DmesgData-Model) | [DmesgCollector](#Collector-Class-DmesgCollector) | [DmesgAnalyzer](#Data-Analyzer-Class-DmesgAnalyzer) |
+| DmesgPlugin | dmesg --time-format iso -x<br>ls -1 /var/log/dmesg* 2>/dev/null &#124; grep -E '^/var/log/dmesg(\.[0-9]+(\.gz)?)?$' &#124;&#124; true | **Built-in Regexes:**<br>- Out of memory error: `(?:oom_kill_process.*)&#124;(?:Out of memory.*)`<br>- I/O Page Fault: `IO_PAGE_FAULT`<br>- Kernel Panic: `\bkernel panic\b.*`<br>- SQ Interrupt: `sq_intr`<br>- SRAM ECC: `sram_ecc.*`<br>- Failed to load driver. IP hardware init error.: `\[amdgpu\]\] \*ERROR\* hw_init of IP block.*`<br>- Failed to load driver. IP software init error.: `\[amdgpu\]\] \*ERROR\* sw_init of IP block.*`<br>- Real Time throttling activated: `sched: RT throttling activated.*`<br>- RCU preempt detected stalls: `rcu_preempt detected stalls.*`<br>- RCU preempt self-detected stall: `rcu_preempt self-detected stall.*`<br>- QCM fence timeout: `qcm fence wait loop timeout.*`<br>- General protection fault: `(?:[\w-]+(?:\[[0-9.]+\])?\s+)?general protectio...`<br>- Segmentation fault: `(?:segfault.*in .*\[)&#124;(?:[Ss]egmentation [Ff]au...`<br>- Failed to disallow cf state: `amdgpu: Failed to disallow cf state.*`<br>- Failed to terminate tmr: `\*ERROR\* Failed to terminate tmr.*`<br>- Suspend of IP block failed: `\*ERROR\* suspend of IP block <\w+> failed.*`<br>- amdgpu Page Fault: `(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:\s+\[\S...`<br>- Page Fault: `page fault for address.*`<br>- Fatal error during GPU init: `(?:amdgpu)(.*Fatal error during GPU init)&#124;(Fata...`<br>- PCIe AER Error Status: `(pcieport [\w:.]+: AER: aer_status:[^\n]*(?:\n[...`<br>- PCIe AER Correctable Error Status: `(.*aer_cor_status: 0x[0-9a-fA-F]+, aer_cor_mask...`<br>- PCIe AER Uncorrectable Error Status: `(.*aer_uncor_status: 0x[0-9a-fA-F]+, aer_uncor_...`<br>- PCIe AER Uncorrectable Error Severity with TLP Header: `(.*aer_uncor_severity: 0x[0-9a-fA-F]+.*)(\n.*TL...`<br>- Failed to read journal file: `Failed to read journal file.*`<br>- Journal file corrupted or uncleanly shut down: `journal corrupted or uncleanly shut down.*`<br>- ACPI BIOS Error: `ACPI BIOS Error`<br>- ACPI Error: `ACPI Error`<br>- Filesystem corrupted!: `EXT4-fs error \(device .*\):`<br>- Error in buffered IO, check filesystem integrity: `(Buffer I\/O error on dev)(?:ice)? (\w+)`<br>- PCIe card no longer present: `pcieport (\w+:\w+:\w+\.\w+):\s+(\w+):\s+(Slot\(...`<br>- PCIe Link Down: `pcieport (\w+:\w+:\w+\.\w+):\s+(\w+):\s+(Slot\(...`<br>- Mismatched clock configuration between PCIe device and host: `pcieport (\w+:\w+:\w+\.\w+):\s+(\w+):\s+(curren...`<br>- RAS Correctable Error: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- RAS Uncorrectable Error: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- RAS Deferred Error: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- RAS Corrected PCIe Error: `((?:\[Hardware Error\]:\s+)?event severity: cor...`<br>- GPU Reset: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- GPU reset failed: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- ACA Error: `(Accelerator Check Architecture[^\n]*)(?:\n[^\n...`<br>- ACA Error: `(Accelerator Check Architecture[^\n]*)(?:\n[^\n...`<br>- MCE Corrected Error: `\[Hardware Error\]:.+MC\d+_STATUS\[[^\]]*\&#124;CE\&#124;...`<br>- MCE Uncorrected Error: `\[Hardware Error\]:.+MC\d+_STATUS\[[^\]]*\&#124;UC\&#124;...`<br>- Mode 2 Reset Failed: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)? (...`<br>- RAS Corrected Error: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- SGX Error: `x86/cpu: SGX disabled by BIOS`<br>- MMP Error: `Failed to load MMP firmware qat_4xxx_mmp.bin`<br>- GPU Throttled: `amdgpu \w{4}:\w{2}:\w{2}.\w: amdgpu: WARN: GPU ...`<br>- RAS Poison Consumed: `amdgpu[ 0-9a-fA-F:.]+:(?:\s*amdgpu:)?\s+(?:{\d+...`<br>- RAS Poison created: `amdgpu[ 0-9a-fA-F:.]+:(?:\s*amdgpu:)?\s+(?:{\d+...`<br>- Bad page threshold exceeded: `(amdgpu: Saved bad pages (\d+) reaches threshol...`<br>- RAS Hardware Error: `Hardware error from APEI Generic Hardware Error...`<br>- Error Address: `Error Address.*(?:\s.*)`<br>- RAS EDR Event: `EDR: EDR event received`<br>- DPC Event: `DPC: .*`<br>- LNet: ko2iblnd has no matching interfaces: `(?:\[[^\]]+\]\s*)?LNetError:.*ko2iblnd:\s*No ma...`<br>- LNet: Error starting up LNI: `(?:\[[^\]]+\]\s*)?LNetError:\s*.*Error\s*-?\d+\...`<br>- Lustre: network initialisation failed: `LustreError:.*ptlrpc_init_portals\(\).*network ...` | **Collection Args:**<br>- `collect_rotated_logs`: bool — If True, also collect rotated dmesg log files from /var/log/dmesg*.<br>- `skip_sudo`: bool — If True, do not use sudo when running dmesg or listing log files.<br>- `log_dmesg_data`: bool — If True, log the collected dmesg output in artifacts. | [DmesgData](#DmesgData-Model) | [DmesgCollector](#Collector-Class-DmesgCollector) | [DmesgAnalyzer](#Data-Analyzer-Class-DmesgAnalyzer) |
 | FabricsPlugin | lspci &#124; grep -i cassini<br>lsmod &#124; grep cxi<br>cxi_stat<br>ibstat<br>ibv_devinfo<br>ls -l /sys/class/infiniband/*/device/net<br>fi_info -p cxi<br>mst start<br>mst status -v<br>ip link show<br>ofed_info -s | - | - | [FabricsDataModel](#FabricsDataModel-Model) | [FabricsCollector](#Collector-Class-FabricsCollector) | - |
 | JournalPlugin | journalctl --no-pager --system --output=short-iso<br>journalctl --no-pager --system --output=json | **Analyzer Args:**<br>- `analysis_range_start`: Optional[datetime.datetime] — Start of time range for analysis (ISO format). Only events on or after this time are analyzed.<br>- `analysis_range_end`: Optional[datetime.datetime] — End of time range for analysis (ISO format). Only events before this time are analyzed.<br>- `check_priority`: Optional[int] — Check against journal log priority (0=emergency..7=debug). If an entry has priority <= check_priority, an ERROR event...<br>- `group`: bool — If True, group entries that have the same priority and message. | **Collection Args:**<br>- `boot`: Optional[int] — Optional boot ID to limit journal collection to a specific boot. | [JournalData](#JournalData-Model) | [JournalCollector](#Collector-Class-JournalCollector) | [JournalAnalyzer](#Data-Analyzer-Class-JournalAnalyzer) |
 | KernelPlugin | sh -c 'uname -a'<br>sh -c 'cat /proc/sys/kernel/numa_balancing'<br>wmic os get Version /Value | **Analyzer Args:**<br>- `exp_kernel`: Union[str, list] — Expected kernel version string(s) to match (e.g. from uname -a).<br>- `exp_numa`: Optional[int] — Expected value for kernel.numa_balancing (e.g. 0 or 1).<br>- `regex_match`: bool — If True, match exp_kernel as regex; otherwise exact match. | - | [KernelDataModel](#KernelDataModel-Model) | [KernelCollector](#Collector-Class-KernelCollector) | [KernelAnalyzer](#Data-Analyzer-Class-KernelAnalyzer) |
@@ -21,17 +22,50 @@
 | NvmePlugin | nvme smart-log {dev}<br>nvme error-log {dev} --log-entries=256<br>nvme id-ctrl {dev}<br>nvme id-ns {dev}{ns}<br>nvme fw-log {dev}<br>nvme self-test-log {dev}<br>nvme get-log {dev} --log-id=6 --log-len=512<br>nvme telemetry-log {dev} --output-file={dev}_{f_name}<br>nvme list -o json | - | - | [NvmeDataModel](#NvmeDataModel-Model) | [NvmeCollector](#Collector-Class-NvmeCollector) | - |
 | OsPlugin | sh -c '( lsb_release -ds &#124;&#124; (cat /etc/*release &#124; grep PRETTY_NAME) &#124;&#124; uname -om ) 2>/dev/null &#124; head -n1'<br>cat /etc/*release &#124; grep VERSION_ID<br>wmic os get Version /value<br>wmic os get Caption /Value | **Analyzer Args:**<br>- `exp_os`: Union[str, list] — Expected OS name/version string(s) to match (e.g. from lsb_release or /etc/os-release).<br>- `exact_match`: bool — If True, require exact match for exp_os; otherwise substring match. | - | [OsDataModel](#OsDataModel-Model) | [OsCollector](#Collector-Class-OsCollector) | [OsAnalyzer](#Data-Analyzer-Class-OsAnalyzer) |
 | PackagePlugin | dnf list --installed<br>dpkg-query -W<br>pacman -Q<br>cat /etc/*release<br>wmic product get name,version | **Analyzer Args:**<br>- `exp_package_ver`: Dict[str, Optional[str]] — Map package name -> expected version (None = any version). Checked against installed packages.<br>- `regex_match`: bool — If True, match package versions with regex; otherwise exact or prefix match.<br>- `rocm_regex`: Optional[str] — Optional regex to identify ROCm package version (used when enable_rocm_regex is True).<br>- `enable_rocm_regex`: bool — If True, use rocm_regex (or default pattern) to extract ROCm version for checks. | - | [PackageDataModel](#PackageDataModel-Model) | [PackageCollector](#Collector-Class-PackageCollector) | [PackageAnalyzer](#Data-Analyzer-Class-PackageAnalyzer) |
-| PciePlugin | lspci -d {vendor_id}: -nn<br>lspci -x<br>lspci -xxxx<br>lspci -PP<br>lspci -PP -d {vendor_id}:{dev_id}<br>lspci -vvv<br>lspci -vvvt | **Analyzer Args:**<br>- `exp_speed`: int — Expected PCIe link speed (generation 1–5).<br>- `exp_width`: int — Expected PCIe link width in lanes (1–16).<br>- `exp_sriov_count`: int — Expected SR-IOV virtual function count.<br>- `exp_gpu_count_override`: Optional[int] — Override expected GPU count for validation.<br>- `exp_max_payload_size`: Union[Dict[int, int], int, NoneType] — Expected max payload size: int for all devices, or dict keyed by device ID.<br>- `exp_max_rd_req_size`: Union[Dict[int, int], int, NoneType] — Expected max read request size: int for all devices, or dict keyed by device ID.<br>- `exp_ten_bit_tag_req_en`: Union[Dict[int, int], int, NoneType] — Expected 10-bit tag request enable: int for all devices, or dict keyed by device ID. | - | [PcieDataModel](#PcieDataModel-Model) | [PcieCollector](#Collector-Class-PcieCollector) | [PcieAnalyzer](#Data-Analyzer-Class-PcieAnalyzer) |
+| PciePlugin | lspci -d {vendor_id}: -nn<br>lspci -x<br>lspci -xxxx<br>lspci -PP<br>lspci -PP -d {vendor_id}:{dev_id}<br>lspci -PP -D -d {vendor_id}:{dev_id}<br>lspci -PP -D<br>lspci -vvv<br>lspci -vvvt | **Analyzer Args:**<br>- `exp_speed`: int — Expected PCIe link speed (generation 1–5).<br>- `exp_width`: int — Expected PCIe link width in lanes (1–16).<br>- `exp_sriov_count`: int — Expected SR-IOV virtual function count.<br>- `exp_gpu_count_override`: Optional[int] — Override expected GPU count for validation.<br>- `exp_max_payload_size`: Union[Dict[int, int], int, NoneType] — Expected max payload size: int for all devices, or dict keyed by device ID.<br>- `exp_max_rd_req_size`: Union[Dict[int, int], int, NoneType] — Expected max read request size: int for all devices, or dict keyed by device ID.<br>- `exp_ten_bit_tag_req_en`: Union[Dict[int, int], int, NoneType] — Expected 10-bit tag request enable: int for all devices, or dict keyed by device ID. | - | [PcieDataModel](#PcieDataModel-Model) | [PcieCollector](#Collector-Class-PcieCollector) | [PcieAnalyzer](#Data-Analyzer-Class-PcieAnalyzer) |
 | ProcessPlugin | top -b -n 1<br>rocm-smi --showpids<br>top -b -n 1 -o %CPU  | **Analyzer Args:**<br>- `max_kfd_processes`: int — Maximum allowed number of KFD (Kernel Fusion Driver) processes; 0 disables the check.<br>- `max_cpu_usage`: float — Maximum allowed CPU usage (percent) for process checks. | **Collection Args:**<br>- `top_n_process`: int — Number of top processes by CPU usage to collect (e.g. for top -b -n 1 -o %%CPU). | [ProcessDataModel](#ProcessDataModel-Model) | [ProcessCollector](#Collector-Class-ProcessCollector) | [ProcessAnalyzer](#Data-Analyzer-Class-ProcessAnalyzer) |
 | RdmaPlugin | rdma link -j<br>rdma dev<br>rdma link<br>rdma statistic -j | - | - | [RdmaDataModel](#RdmaDataModel-Model) | [RdmaCollector](#Collector-Class-RdmaCollector) | [RdmaAnalyzer](#Data-Analyzer-Class-RdmaAnalyzer) |
+| RegexSearchPlugin | - | Runs RegexSearchAnalyzer: user-defined patterns via analysis_args.error_regex (same shape as Dmesg).<br>Emits regex match events with optional per-file source in the description when scanning directories.<br>**Analyzer Args:**<br>- `error_regex`: Optional[list[dict[str, Any]]] — Regex patterns to search for; each dict may include regex (str), message, event_category, event_priority (same as Dme...<br>- `interval_to_collapse_event`: int — Seconds within which repeated events are collapsed into one.<br>- `num_timestamps`: int — Number of timestamps to include per event in output. | - | [RegexSearchData](#RegexSearchData-Model) | - | [RegexSearchAnalyzer](#Data-Analyzer-Class-RegexSearchAnalyzer) |
 | RocmPlugin | {rocm_path}/opencl/bin/*/clinfo<br>env &#124; grep -Ei 'rocm&#124;hsa&#124;hip&#124;mpi&#124;openmp&#124;ucx&#124;miopen'<br>ls /sys/class/kfd/kfd/proc/<br>grep -i -E 'rocm' /etc/ld.so.conf.d/*<br>{rocm_path}/bin/rocminfo<br>ls -v -d {rocm_path}*<br>ls -v -d {rocm_path}-[3-7]* &#124; tail -1<br>ldconfig -p &#124; grep -i -E 'rocm'<br>grep . -H -r -i {rocm_path}/.info/* | **Analyzer Args:**<br>- `exp_rocm`: Union[str, list] — Expected ROCm version string(s) to match (e.g. from rocminfo).<br>- `exp_rocm_latest`: str — Expected 'latest' ROCm path or version string for versioned installs.<br>- `exp_rocm_sub_versions`: dict[str, Union[str, list]] — Map sub-version name (e.g. version_rocm) to expected string or list of allowed strings. | **Collection Args:**<br>- `rocm_path`: str — Base path to ROCm installation (e.g. /opt/rocm). Used for rocminfo, clinfo, and version discovery. | [RocmDataModel](#RocmDataModel-Model) | [RocmCollector](#Collector-Class-RocmCollector) | [RocmAnalyzer](#Data-Analyzer-Class-RocmAnalyzer) |
 | StoragePlugin | sh -c 'df -lH -B1 &#124; grep -v 'boot''<br>wmic LogicalDisk Where DriveType="3" Get DeviceId,Size,FreeSpace | - | **Collection Args:**<br>- `skip_sudo`: bool — If True, do not use sudo when running df and related storage commands. | [StorageDataModel](#StorageDataModel-Model) | [StorageCollector](#Collector-Class-StorageCollector) | [StorageAnalyzer](#Data-Analyzer-Class-StorageAnalyzer) |
 | SysSettingsPlugin | cat /sys/{}<br>ls -1 /sys/{}<br>ls -l /sys/{} | **Analyzer Args:**<br>- `checks`: Optional[list[nodescraper.plugins.inband.sys_settings.analyzer_args.SysfsCheck]] — List of sysfs checks (path, expected values or pattern, display name). | **Collection Args:**<br>- `paths`: list[str] — Sysfs paths to read (cat). Paths with '*' are collected with ls -l (e.g. class/net/*/device).<br>- `directory_paths`: list[str] — Sysfs paths to list (ls -1); used for checks that match entry names by regex. | [SysSettingsDataModel](#SysSettingsDataModel-Model) | [SysSettingsCollector](#Collector-Class-SysSettingsCollector) | [SysSettingsAnalyzer](#Data-Analyzer-Class-SysSettingsAnalyzer) |
 | SysctlPlugin | sysctl -n | **Analyzer Args:**<br>- `exp_vm_swappiness`: Optional[int] — Expected vm.swappiness value.<br>- `exp_vm_numa_balancing`: Optional[int] — Expected vm.numa_balancing value.<br>- `exp_vm_oom_kill_allocating_task`: Optional[int] — Expected vm.oom_kill_allocating_task value.<br>- `exp_vm_compaction_proactiveness`: Optional[int] — Expected vm.compaction_proactiveness value.<br>- `exp_vm_compact_unevictable_allowed`: Optional[int] — Expected vm.compact_unevictable_allowed value.<br>- `exp_vm_extfrag_threshold`: Optional[int] — Expected vm.extfrag_threshold value.<br>- `exp_vm_zone_reclaim_mode`: Optional[int] — Expected vm.zone_reclaim_mode value.<br>- `exp_vm_dirty_background_ratio`: Optional[int] — Expected vm.dirty_background_ratio value.<br>- `exp_vm_dirty_ratio`: Optional[int] — Expected vm.dirty_ratio value.<br>- `exp_vm_dirty_writeback_centisecs`: Optional[int] — Expected vm.dirty_writeback_centisecs value.<br>- `exp_kernel_numa_balancing`: Optional[int] — Expected kernel.numa_balancing value. | - | [SysctlDataModel](#SysctlDataModel-Model) | [SysctlCollector](#Collector-Class-SysctlCollector) | [SysctlAnalyzer](#Data-Analyzer-Class-SysctlAnalyzer) |
-| SyslogPlugin | ls -1 /var/log/syslog* 2>/dev/null &#124; grep -E '^/var/log/syslog(\.[0-9]+(\.gz)?)?$' &#124;&#124; true | - | - | [SyslogData](#SyslogData-Model) | [SyslogCollector](#Collector-Class-SyslogCollector) | - |
+| SyslogPlugin | ls -1 /var/log/syslog* 2>/dev/null &#124; grep -E '^/var/log/syslog(\.[0-9]+(\.gz)?)?$' &#124;&#124; true<br>ls -1 /var/log/messages* 2>/dev/null &#124; grep -E '^/var/log/messages(\.[0-9]+(\.gz)?)?$' &#124;&#124; true | - | - | [SyslogData](#SyslogData-Model) | [SyslogCollector](#Collector-Class-SyslogCollector) | - |
 | UptimePlugin | uptime | - | - | [UptimeDataModel](#UptimeDataModel-Model) | [UptimeCollector](#Collector-Class-UptimeCollector) | - |
 
+# OOB plugins
+
+| Plugin | Collection | Analyzer Args | Collection Args | DataModel | Collector | Analyzer |
+| --- | --- | --- | --- | --- | --- | --- |
+| OobGenericCollectionPlugin | Runs each command from collection_args.commands on the target (in-band host or BMC over OOB SSH).<br>Commands are user-configured; there are no fixed CMD_* class fields. | **Analyzer Args:**<br>- `checks`: list[nodescraper.plugins.generic_collection.analyzer_args.CommandCheck] — Per-command validation rules keyed by collected command name. | **Collection Args:**<br>- `commands`: list[nodescraper.plugins.generic_collection.collector_args.CommandSpec] — Named commands to run. Each entry must include 'name' and 'command'. Prefer small textual stdout; see class docstring...<br>- `sudo`: bool — Default sudo setting for commands that do not specify sudo.<br>- `timeout`: int — Default per-command timeout in seconds.<br>- `include_stdout`: bool — Default: include each command's stdout in collected results for analysis. When false, stdout is omitted from stored r... | [GenericCollectionDataModel](#GenericCollectionDataModel-Model) | [GenericCollectionCollector](#Collector-Class-GenericCollectionCollector) | [GenericAnalyzer](#Data-Analyzer-Class-GenericAnalyzer) |
+| OobBmcArchivePlugin | SSH (BMC) shell: tar+gzip archives for each path in collection_args (see PathSpec entries).<br>Uses sudo on the BMC when collection_args paths require elevated access. | - | **Collection Args:**<br>- `paths`: list[nodescraper.plugins.ooband.bmc_archive.collector_args.PathSpec] — Named BMC paths to archive with tar czf -. Configure in plugin config under plugins.OobBmcArchivePlugin.collection_ar...<br>- `sudo`: bool — Default sudo setting for paths that do not specify sudo.<br>- `timeout`: int — Default per-path tar timeout in seconds.<br>- `skip_if_missing`: bool — Skip paths that do not exist on the BMC instead of failing collection.<br>- `ignore_failed_read`: bool — When true, pass GNU tar's --ignore-failed-read when the remote tar supports it. | [BmcArchiveDataModel](#BmcArchiveDataModel-Model) | [BmcArchiveCollector](#Collector-Class-BmcArchiveCollector) | - |
+| RedfishEndpointPlugin | Redfish GET: explicit paths from collection_args.uris (parallel when max_workers>1).<br>Optional paged GET following the Members collection OData nextLink field when follow_next_link is true.<br>Redfish GET tree: when discover_tree is true, walks from api_root using OData resource id links and Members navigation (depth and endpoint caps from collection_args). | For each entry in analysis_args.checks, reads JSON paths in collected responses and compares values to constraints (eq, min/max, anyOf, regex, etc.).<br>URI key "*" runs checks against every collected response body.<br>**Analyzer Args:**<br>- `checks`: dict[str, dict[str, Union[int, float, str, bool, dict[str, Any]]]] — Map: URI or '*' -> { property_path: constraint }. URI keys must match a key in the collected responses (exact match).... | **Collection Args:**<br>- `uris`: list[str] — Redfish URIs to GET. Ignored when discover_tree is True.<br>- `discover_tree`: bool — If True, discover endpoints from the BMC Redfish tree (service root and links) instead of using uris.<br>- `tree_max_depth`: int — When discover_tree is True: max traversal depth (1=service root only, 2=root + collections, 3=+ members).<br>- `tree_max_endpoints`: int — When discover_tree is True: max endpoints to discover (0=no limit).<br>- `max_workers`: int — Max concurrent GETs (1=sequential). Use >1 for async endpoint fetches.<br>- `follow_next_link`: bool — If True, follow Redfish Members collection OData nextLink pagination for each URI and merge all pages into a single r...<br>- `max_pages`: int — When follow_next_link is True: safety cap on the number of pages to follow per URI (default 200). | [RedfishEndpointDataModel](#RedfishEndpointDataModel-Model) | [RedfishEndpointCollector](#Collector-Class-RedfishEndpointCollector) | [RedfishEndpointAnalyzer](#Data-Analyzer-Class-RedfishEndpointAnalyzer) |
+| RedfishOemDiagPlugin | Redfish LogService.CollectDiagnosticData for each entry in collection_args.oem_diagnostic_types (collection_args.log_service_path selects the LogService).<br>Optional binary archives under the plugin log path when log_path is set. | Summarizes success/failure per OEM diagnostic type from collected results.<br>When analysis_args.require_all_success is true, fails the run if any type failed collection.<br>**Analyzer Args:**<br>- `require_all_success`: bool — If True, analysis fails when any OEM type collection failed. | **Collection Args:**<br>- `log_service_path`: str — Redfish path to the LogService (e.g. DiagLogs).<br>- `oem_diagnostic_types_allowable`: Optional[list[str]] — Allowable OEM diagnostic types for this architecture/BMC. When set, used for validation and as default for oem_diagno...<br>- `oem_diagnostic_types`: list[str] — OEM diagnostic types to collect. When empty and oem_diagnostic_types_allowable is set, defaults to that list.<br>- `task_timeout_s`: int — Max seconds to wait for each BMC task. | [RedfishOemDiagDataModel](#RedfishOemDiagDataModel-Model) | [RedfishOemDiagCollector](#Collector-Class-RedfishOemDiagCollector) | [RedfishOemDiagAnalyzer](#Data-Analyzer-Class-RedfishOemDiagAnalyzer) |
+
 # Collectors
+
+## Collector Class GenericCollectionCollector
+
+### Description
+
+Run user-configured shell commands and report per-command success.
+
+**Bases**: ['InBandDataCollector']
+
+**Link to code**: [generic_collection_collector.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/generic_collection/generic_collection_collector.py)
+
+### Class Variables
+
+- **SUPPORTED_OS_FAMILY**: `{<OSFamily.LINUX: 3>, <OSFamily.UNKNOWN: 2>, <OSFamily.WINDOWS: 1>}`
+
+### Provides Data
+
+GenericCollectionDataModel
+
+### Documented collection
+
+- Runs each command from collection_args.commands on the target (in-band host or BMC over OOB SSH).
+- Commands are user-configured; there are no fixed CMD_* class fields.
 
 ## Collector Class AmdSmiCollector
 
@@ -686,11 +720,13 @@ class for collection of PCIe data only supports Linux OS type.
     - `lspci -vvv` : Verbose collection of PCIe data
     - `lspci -vvvt`: Verbose tree view of PCIe data
     - `lspci -PP`: Path view of PCIe data for the GPUs
+    - `lspci -PP -D`: Path view of PCIe data for the GPUs (with domain prefix)
     - If system interaction level is set to STANDARD or higher, the following commands will be run with sudo:
         - `lspci -xxxx`: Hex view of PCIe data for the GPUs
     - otherwise the following commands will be run without sudo:
         - `lspci -x`: Hex view of PCIe data for the GPUs
-    - `lspci -d <vendor_id>:<dev_id>` : Count the number of GPUs in the system with this command
+    - `lspci -d <vendor_id>:` : Detect AMD GPU device IDs in the system
+    - `lspci -PP -D -d <vendor_id>:<dev_id>` : Upstream BDF path for GPUs (with domain prefix)
     - If system interaction level is set to STANDARD or higher, the following commands will be run with sudo:
         - The sudo lspci -xxxx command is used to collect the PCIe configuration space for the GPUs in the system
     - otherwise the following commands will be run without sudo:
@@ -706,10 +742,12 @@ class for collection of PCIe data only supports Linux OS type.
 - **CMD_LSPCI_VERBOSE**: `lspci -vvv`
 - **CMD_LSPCI_VERBOSE_TREE**: `lspci -vvvt`
 - **CMD_LSPCI_PATH**: `lspci -PP`
+- **CMD_LSPCI_PATH_DOMAIN**: `lspci -PP -D`
 - **CMD_LSPCI_HEX_SUDO**: `lspci -xxxx`
 - **CMD_LSPCI_HEX**: `lspci -x`
 - **CMD_LSPCI_AMD_DEVICES**: `lspci -d {vendor_id}: -nn`
 - **CMD_LSPCI_PATH_DEVICE**: `lspci -PP -d {vendor_id}:{dev_id}`
+- **CMD_LSPCI_PATH_DEVICE_DOMAIN**: `lspci -PP -D -d {vendor_id}:{dev_id}`
 
 ### Provides Data
 
@@ -722,6 +760,8 @@ PcieDataModel
 - lspci -xxxx
 - lspci -PP
 - lspci -PP -d {vendor_id}:{dev_id}
+- lspci -PP -D -d {vendor_id}:{dev_id}
+- lspci -PP -D
 - lspci -vvv
 - lspci -vvvt
 
@@ -907,6 +947,7 @@ Read syslog log
 
 - **SUPPORTED_OS_FAMILY**: `{<OSFamily.LINUX: 3>}`
 - **CMD**: `ls -1 /var/log/syslog* 2>/dev/null | grep -E '^/var/log/syslog(\.[0-9]+(\.gz)?)?$' || true`
+- **CMD_MESSAGES**: `ls -1 /var/log/messages* 2>/dev/null | grep -E '^/var/log/messages(\.[0-9]+(\.gz)?)?$' || true`
 
 ### Provides Data
 
@@ -915,6 +956,7 @@ SyslogData
 ### Commands
 
 - ls -1 /var/log/syslog* 2>/dev/null | grep -E '^/var/log/syslog(\.[0-9]+(\.gz)?)?$' || true
+- ls -1 /var/log/messages* 2>/dev/null | grep -E '^/var/log/messages(\.[0-9]+(\.gz)?)?$' || true
 
 ## Collector Class UptimeCollector
 
@@ -939,7 +981,85 @@ UptimeDataModel
 
 - uptime
 
+## Collector Class BmcArchiveCollector
+
+### Description
+
+Archive BMC directories over SSH using tar czf - <path>.
+
+**Bases**: ['InBandDataCollector']
+
+**Link to code**: [bmc_archive_collector.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/ooband/bmc_archive/bmc_archive_collector.py)
+
+### Class Variables
+
+- **SUPPORTED_OS_FAMILY**: `{<OSFamily.LINUX: 3>, <OSFamily.UNKNOWN: 2>}`
+- **REMOTE_ARCHIVE_TEMPLATE**: `/tmp/node_scraper_{name}.tar.gz`
+- **_tar_ignore_failed_read_supported**: `None`
+
+### Provides Data
+
+BmcArchiveDataModel
+
+### Documented collection
+
+- SSH (BMC) shell: tar+gzip archives for each path in collection_args (see PathSpec entries).
+- Uses sudo on the BMC when collection_args paths require elevated access.
+
+## Collector Class RedfishEndpointCollector
+
+### Description
+
+Collects Redfish endpoint responses for URIs specified in config.
+
+**Bases**: ['RedfishDataCollector']
+
+**Link to code**: [endpoint_collector.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/ooband/redfish_endpoint/endpoint_collector.py)
+
+### Provides Data
+
+RedfishEndpointDataModel
+
+### Documented collection
+
+- Redfish GET: explicit paths from collection_args.uris (parallel when max_workers>1).
+- Optional paged GET following the Members collection OData nextLink field when follow_next_link is true.
+- Redfish GET tree: when discover_tree is true, walks from api_root using OData resource id links and Members navigation (depth and endpoint caps from collection_args).
+
+## Collector Class RedfishOemDiagCollector
+
+### Description
+
+Collects Redfish OEM diagnostic logs (e.g. JournalControl, AllLogs) via LogService.CollectDiagnosticData.
+
+**Bases**: ['RedfishDataCollector']
+
+**Link to code**: [oem_diag_collector.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/ooband/redfish_oem_diag/oem_diag_collector.py)
+
+### Provides Data
+
+RedfishOemDiagDataModel
+
+### Documented collection
+
+- Redfish LogService.CollectDiagnosticData for each entry in collection_args.oem_diagnostic_types (collection_args.log_service_path selects the LogService).
+- Optional binary archives under the plugin log path when log_path is set.
+
 # Data Models
+
+## GenericCollectionDataModel Model
+
+### Description
+
+Results for each command configured in collection_args.
+
+**Link to code**: [generic_collection_data.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/generic_collection/generic_collection_data.py)
+
+**Bases**: ['DataModel']
+
+### Model annotations and fields
+
+- **results**: `list[nodescraper.plugins.generic_collection.generic_collection_data.CommandCollectionResult]`
 
 ## AmdSmiDataModel Model
 
@@ -1237,6 +1357,7 @@ class for collection of PCIe data.
     - lspci_verbose: Verbose collection of PCIe data
     - lspci_verbose_tree: Tree view of PCIe data
     - lspci_path: Path view of PCIe data for the GPUs
+    - lspci_path_domain: Path view of PCIe data for the GPUs (with domain prefix)
     - lspci_hex: Hex view of PCIe data for the GPUs
 
 **Link to code**: [pcie_data.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/pcie/pcie_data.py)
@@ -1276,6 +1397,22 @@ Data model for RDMA (Remote Direct Memory Access) statistics and link informatio
 - **statistic_list**: `list[nodescraper.plugins.inband.rdma.rdmadata.RdmaStatistics]`
 - **dev_list**: `list[nodescraper.plugins.inband.rdma.rdmadata.RdmaDevice]`
 - **link_list_text**: `list[nodescraper.plugins.inband.rdma.rdmadata.RdmaLinkText]`
+
+## RegexSearchData Model
+
+### Description
+
+Loaded file or directory contents passed to the analyzer (via --data).
+
+**Link to code**: [regex_search_data.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/regex_search/regex_search_data.py)
+
+**Bases**: ['DataModel']
+
+### Model annotations and fields
+
+- **content**: `str`
+- **data_root**: `str`
+- **files**: `dict[str, str]`
 
 ## RocmDataModel Model
 
@@ -1369,7 +1506,60 @@ Data model for in band syslog logs
 - **current_time**: `str`
 - **uptime**: `str`
 
+## BmcArchiveDataModel Model
+
+### Description
+
+Collected BMC directory archives.
+
+**Link to code**: [bmc_archive_data.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/ooband/bmc_archive/bmc_archive_data.py)
+
+**Bases**: ['DataModel']
+
+### Model annotations and fields
+
+- **results**: `list[nodescraper.plugins.ooband.bmc_archive.bmc_archive_data.ArchiveCollectionResult]`
+- **archives**: `list[nodescraper.connection.inband.inband.BinaryFileArtifact]`
+
+## RedfishEndpointDataModel Model
+
+### Description
+
+Collected Redfish endpoint responses: URI -> JSON body.
+
+**Link to code**: [endpoint_data.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/ooband/redfish_endpoint/endpoint_data.py)
+
+**Bases**: ['DataModel']
+
+### Model annotations and fields
+
+- **responses**: `dict[str, dict]`
+
+## RedfishOemDiagDataModel Model
+
+### Description
+
+Collected Redfish OEM diagnostic log results: OEM type -> result (success, error, metadata).
+
+**Link to code**: [oem_diag_data.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/ooband/redfish_oem_diag/oem_diag_data.py)
+
+**Bases**: ['DataModel']
+
+### Model annotations and fields
+
+- **results**: `dict[str, nodescraper.plugins.ooband.redfish_oem_diag.oem_diag_data.OemDiagTypeResult]`
+
 # Data Analyzers
+
+## Data Analyzer Class GenericAnalyzer
+
+### Description
+
+Validate generic collection command results against analysis_args checks.
+
+**Bases**: ['DataAnalyzer']
+
+**Link to code**: [generic_analyzer.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/generic_collection/generic_analyzer.py)
 
 ## Data Analyzer Class AmdSmiAnalyzer
 
@@ -1467,17 +1657,18 @@ Check dmesg for errors
   regex=re.compile('pcieport (\\w+:\\w+:\\w+\\.\\w+):\\s+(\\w+):\\s+(Slot\\(\\d+\\)):\\s+(Card not present)') message='PCIe card no longer present' event_category=<EventCategory.IO: 'IO'> event_priority=<EventPriority.ERROR: 3>,
   regex=re.compile('pcieport (\\w+:\\w+:\\w+\\.\\w+):\\s+(\\w+):\\s+(Slot\\(\\d+\\)):\\s+(Link Down)') message='PCIe Link Down' event_category=<EventCategory.IO: 'IO'> event_priority=<EventPriority.ERROR: 3>,
   regex=re.compile('pcieport (\\w+:\\w+:\\w+\\.\\w+):\\s+(\\w+):\\s+(current common clock configuration is inconsistent, reconfiguring)') message='Mismatched clock configuration between PCIe device and host' event_category=<EventCategory.IO: 'IO'> event_priority=<EventPriority.ERROR: 3>,
-  regex=re.compile('(?:\\d{4}-\\d+-\\d+T\\d+:\\d+:\\d+,\\d+[+-]\\d+:\\d+)?(.* correctable hardware errors detected in total in \\w+ block.*)') message='RAS Correctable Error' event_category=<EventCategory.RAS: 'RAS'> event_priority=<EventPriority.ERROR: 3>,
+  regex=re.compile('(?:\\d{4}-\\d+-\\d+T\\d+:\\d+:\\d+,\\d+[+-]\\d+:\\d+)?(.* correctable hardware errors detected in total in \\w+ block.*)') message='RAS Correctable Error' event_category=<EventCategory.RAS: 'RAS'> event_priority=<EventPriority.WARNING: 2>,
   regex=re.compile('(?:\\d{4}-\\d+-\\d+T\\d+:\\d+:\\d+,\\d+[+-]\\d+:\\d+)?(.* uncorrectable hardware errors detected in \\w+ block.*)') message='RAS Uncorrectable Error' event_category=<EventCategory.RAS: 'RAS'> event_priority=<EventPriority.ERROR: 3>,
   regex=re.compile('(?:\\d{4}-\\d+-\\d+T\\d+:\\d+:\\d+,\\d+[+-]\\d+:\\d+)?(.* deferred hardware errors detected in \\w+ block.*)') message='RAS Deferred Error' event_category=<EventCategory.RAS: 'RAS'> event_priority=<EventPriority.ERROR: 3>,
-  regex=re.compile('((?:\\[Hardware Error\\]:\\s+)?event severity: corrected.*)\\n.*(\\[Hardware Error\\]:\\s+Error \\d+, type: corrected.*)\\n.*(\\[Hardware Error\\]:\\s+section_type: PCIe error.*)') message='RAS Corrected PCIe Error' event_category=<EventCategory.RAS: 'RAS'> event_priority=<EventPriority.ERROR: 3>,
+  regex=re.compile('((?:\\[Hardware Error\\]:\\s+)?event severity: corrected.*)\\n.*(\\[Hardware Error\\]:\\s+Error \\d+, type: corrected.*)\\n.*(\\[Hardware Error\\]:\\s+section_type: PCIe error.*)') message='RAS Corrected PCIe Error' event_category=<EventCategory.RAS: 'RAS'> event_priority=<EventPriority.WARNING: 2>,
   regex=re.compile('(?:\\d{4}-\\d+-\\d+T\\d+:\\d+:\\d+,\\d+[+-]\\d+:\\d+)?(.*GPU reset begin.*)') message='GPU Reset' event_category=<EventCategory.RAS: 'RAS'> event_priority=<EventPriority.ERROR: 3>,
   regex=re.compile('(?:\\d{4}-\\d+-\\d+T\\d+:\\d+:\\d+,\\d+[+-]\\d+:\\d+)?(.*GPU reset(?:\\(\\d+\\))? failed.*)') message='GPU reset failed' event_category=<EventCategory.RAS: 'RAS'> event_priority=<EventPriority.ERROR: 3>,
   regex=re.compile('(Accelerator Check Architecture[^\\n]*)(?:\\n[^\\n]*){0,10}?(amdgpu[ 0-9a-fA-F:.]+:? [^\\n]*entry\\[\\d+\\]\\.STATUS=0x[0-9a-fA-F]+)(?:\\n[^\\n]*){0,5}?(amdgpu[ 0-9a-fA-F:.]+:? [^\\n]*entry\\[\\d+\\], re.MULTILINE) message='ACA Error' event_category=<EventCategory.RAS: 'RAS'> event_priority=<EventPriority.ERROR: 3>,
   regex=re.compile('(Accelerator Check Architecture[^\\n]*)(?:\\n[^\\n]*){0,10}?(amdgpu[ 0-9a-fA-F:.]+:? [^\\n]*CONTROL=0x[0-9a-fA-F]+)(?:\\n[^\\n]*){0,5}?(amdgpu[ 0-9a-fA-F:.]+:? [^\\n]*STATUS=0x[0-9a-fA-F]+)(?:\\n[^\\, re.MULTILINE) message='ACA Error' event_category=<EventCategory.RAS: 'RAS'> event_priority=<EventPriority.ERROR: 3>,
-  regex=re.compile('\\[Hardware Error\\]:.+MC\\d+_STATUS.*(?:\\n.*){0,5}') message='MCE Error' event_category=<EventCategory.RAS: 'RAS'> event_priority=<EventPriority.ERROR: 3>,
+  regex=re.compile('\\[Hardware Error\\]:.+MC\\d+_STATUS\\[[^\\]]*\\|CE\\|[^\\]]*\\].*(?:\\n.*){0,5}') message='MCE Corrected Error' event_category=<EventCategory.RAS: 'RAS'> event_priority=<EventPriority.WARNING: 2>,
+  regex=re.compile('\\[Hardware Error\\]:.+MC\\d+_STATUS\\[[^\\]]*\\|UC\\|[^\\]]*\\].*(?:\\n.*){0,5}') message='MCE Uncorrected Error' event_category=<EventCategory.RAS: 'RAS'> event_priority=<EventPriority.ERROR: 3>,
   regex=re.compile('(?:\\d{4}-\\d+-\\d+T\\d+:\\d+:\\d+,\\d+[+-]\\d+:\\d+)? (.*Mode2 reset failed.*)') message='Mode 2 Reset Failed' event_category=<EventCategory.RAS: 'RAS'> event_priority=<EventPriority.ERROR: 3>,
-  regex=re.compile('(?:\\d{4}-\\d+-\\d+T\\d+:\\d+:\\d+,\\d+[+-]\\d+:\\d+)?(.*\\[Hardware Error\\]: Corrected error.*)') message='RAS Corrected Error' event_category=<EventCategory.RAS: 'RAS'> event_priority=<EventPriority.ERROR: 3>,
+  regex=re.compile('(?:\\d{4}-\\d+-\\d+T\\d+:\\d+:\\d+,\\d+[+-]\\d+:\\d+)?(.*\\[Hardware Error\\]: Corrected error.*)') message='RAS Corrected Error' event_category=<EventCategory.RAS: 'RAS'> event_priority=<EventPriority.WARNING: 2>,
   regex=re.compile('x86/cpu: SGX disabled by BIOS') message='SGX Error' event_category=<EventCategory.BIOS: 'BIOS'> event_priority=<EventPriority.WARNING: 2>,
   regex=re.compile('Failed to load MMP firmware qat_4xxx_mmp.bin') message='MMP Error' event_category=<EventCategory.BIOS: 'BIOS'> event_priority=<EventPriority.WARNING: 2>,
   regex=re.compile('amdgpu \\w{4}:\\w{2}:\\w{2}.\\w: amdgpu: WARN: GPU is throttled.*') message='GPU Throttled' event_category=<EventCategory.SW_DRIVER: 'SW_DRIVER'> event_priority=<EventPriority.WARNING: 2>,
@@ -1495,7 +1686,7 @@ Check dmesg for errors
 
 ### Regex Patterns
 
-*57 items defined*
+*58 items defined*
 
 - **Built-in Regexes:**
 - - Out of memory error: `(?:oom_kill_process.*)|(?:Out of memory.*)`
@@ -1538,7 +1729,8 @@ Check dmesg for errors
 - - GPU reset failed: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`
 - - ACA Error: `(Accelerator Check Architecture[^\n]*)(?:\n[^\n...`
 - - ACA Error: `(Accelerator Check Architecture[^\n]*)(?:\n[^\n...`
-- - MCE Error: `\[Hardware Error\]:.+MC\d+_STATUS.*(?:\n.*){0,5}`
+- - MCE Corrected Error: `\[Hardware Error\]:.+MC\d+_STATUS\[[^\]]*\|CE\|...`
+- - MCE Uncorrected Error: `\[Hardware Error\]:.+MC\d+_STATUS\[[^\]]*\|UC\|...`
 - - Mode 2 Reset Failed: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)? (...`
 - - RAS Corrected Error: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`
 - - SGX Error: `x86/cpu: SGX disabled by BIOS`
@@ -1698,6 +1890,20 @@ Check RDMA statistics for errors (RoCE and other RDMA error counters).
 
 **Link to code**: [rdma_analyzer.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/rdma/rdma_analyzer.py)
 
+## Data Analyzer Class RegexSearchAnalyzer
+
+### Description
+
+Run user-provided regexes against text loaded from --data (file or directory).
+
+**Bases**: ['RegexAnalyzer']
+
+**Link to code**: [regex_search_analyzer.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/regex_search/regex_search_analyzer.py)
+
+### Class Variables
+
+- **ERROR_REGEX**: `[]`
+
 ## Data Analyzer Class RocmAnalyzer
 
 ### Description
@@ -1742,7 +1948,47 @@ Check sysctl matches expected sysctl details
 
 **Link to code**: [sysctl_analyzer.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/sysctl/sysctl_analyzer.py)
 
+## Data Analyzer Class RedfishEndpointAnalyzer
+
+### Description
+
+Checks Redfish endpoint responses against configured thresholds and key/value rules.
+
+**Bases**: ['DataAnalyzer']
+
+**Link to code**: [endpoint_analyzer.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/ooband/redfish_endpoint/endpoint_analyzer.py)
+
+### Documented analysis
+
+- For each entry in analysis_args.checks, reads JSON paths in collected responses and compares values to constraints (eq, min/max, anyOf, regex, etc.).
+- URI key "*" runs checks against every collected response body.
+
+## Data Analyzer Class RedfishOemDiagAnalyzer
+
+### Description
+
+Analyzes Redfish OEM diagnostic log collection results.
+
+**Bases**: ['DataAnalyzer']
+
+**Link to code**: [oem_diag_analyzer.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/ooband/redfish_oem_diag/oem_diag_analyzer.py)
+
+### Documented analysis
+
+- Summarizes success/failure per OEM diagnostic type from collected results.
+- When analysis_args.require_all_success is true, fails the run if any type failed collection.
+
 # Analyzer Args
+
+## Analyzer Args Class GenericAnalyzerArgs
+
+**Bases**: ['AnalyzerArgs']
+
+**Link to code**: [analyzer_args.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/generic_collection/analyzer_args.py)
+
+### Annotations / fields
+
+- **checks**: `list[nodescraper.plugins.generic_collection.analyzer_args.CommandCheck]` — Per-command validation rules keyed by collected command name.
 
 ## Analyzer Args Class AmdSmiAnalyzerArgs
 
@@ -1962,6 +2208,22 @@ Arguments for PCIe analyzer
 - **max_kfd_processes**: `int` — Maximum allowed number of KFD (Kernel Fusion Driver) processes; 0 disables the check.
 - **max_cpu_usage**: `float` — Maximum allowed CPU usage (percent) for process checks.
 
+## Analyzer Args Class RegexSearchAnalyzerArgs
+
+### Description
+
+Arguments for RegexSearchAnalyzer (dict items match Dmesg-style error_regex).
+
+**Bases**: ['AnalyzerArgs']
+
+**Link to code**: [analyzer_args.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/regex_search/analyzer_args.py)
+
+### Annotations / fields
+
+- **error_regex**: `Optional[list[dict[str, Any]]]` — Regex patterns to search for; each dict may include regex (str), message, event_category, event_priority (same as Dmesg analyzer error_regex).
+- **interval_to_collapse_event**: `int` — Seconds within which repeated events are collapsed into one.
+- **num_timestamps**: `int` — Number of timestamps to include per event in output.
+
 ## Analyzer Args Class RocmAnalyzerArgs
 
 **Bases**: ['AnalyzerArgs']
@@ -2010,3 +2272,31 @@ Sysfs settings for analysis via a list of checks (path, expected values, name).
 - **exp_vm_dirty_ratio**: `Optional[int]` — Expected vm.dirty_ratio value.
 - **exp_vm_dirty_writeback_centisecs**: `Optional[int]` — Expected vm.dirty_writeback_centisecs value.
 - **exp_kernel_numa_balancing**: `Optional[int]` — Expected kernel.numa_balancing value.
+
+## Analyzer Args Class RedfishEndpointAnalyzerArgs
+
+### Description
+
+Analyzer args for config-driven Redfish checks.
+
+**Bases**: ['AnalyzerArgs']
+
+**Link to code**: [analyzer_args.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/ooband/redfish_endpoint/analyzer_args.py)
+
+### Annotations / fields
+
+- **checks**: `dict[str, dict[str, Union[int, float, str, bool, dict[str, Any]]]]` — Map: URI or '*' -> { property_path: constraint }. URI keys must match a key in the collected responses (exact match). Use '*' as the key to apply the inner constraints to every collected response body. Property paths use '/' for nesting and indices, e.g. 'Status/Health', 'PowerControl/0/PowerConsumedWatts'. Constraints: 'eq' — value must equal the given literal (int, float, str, bool). 'min' — value must be numeric and >= the given number. 'max' — value must be numeric and <= the given number. 'anyOf' — value must be in the given list (OR; any match passes). Example: { "/redfish/v1/Systems/1": { "Status/Health": { "anyOf": ["OK", "Warning"] }, "PowerState": "On" }, "*": { "Status/Health": { "anyOf": ["OK"] } } }.
+
+## Analyzer Args Class RedfishOemDiagAnalyzerArgs
+
+### Description
+
+Analyzer args for Redfish OEM diagnostic log results.
+
+**Bases**: ['AnalyzerArgs']
+
+**Link to code**: [analyzer_args.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/ooband/redfish_oem_diag/analyzer_args.py)
+
+### Annotations / fields
+
+- **require_all_success**: `bool` — If True, analysis fails when any OEM type collection failed.
