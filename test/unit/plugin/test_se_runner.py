@@ -166,7 +166,7 @@ def test_serviceability_block_from_service_result():
         afid_sag_metadata={
             "sag_pid": DUMMY_SAG_PID,
             "revision": DUMMY_SAG_REVISION,
-            "sag_variant": DUMMY_SAG_VARIANT,
+            "variant": DUMMY_SAG_VARIANT,
         },
         engine_version_info={"version": DUMMY_HUB_VERSION},
     )
@@ -195,7 +195,7 @@ def test_serviceability_block_from_service_result_isa_version_info():
         afid_sag_metadata={
             "sag_pid": DUMMY_SAG_PID,
             "revision": DUMMY_SAG_REVISION,
-            "sag_variant": DUMMY_SAG_VARIANT,
+            "variant": DUMMY_SAG_VARIANT,
         },
         isa_version_info={"VERSION": "1.2.3"},
     )

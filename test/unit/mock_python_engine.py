@@ -42,7 +42,7 @@ class MockServiceEngine:
             afid_sag_metadata={
                 "sag_pid": DUMMY_SAG_PID,
                 "revision": DUMMY_SAG_REVISION,
-                "sag_variant": DUMMY_SAG_VARIANT,
+                "variant": DUMMY_SAG_VARIANT,
             },
             engine_version_info={"version": DUMMY_HUB_VERSION},
         )

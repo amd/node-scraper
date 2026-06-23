@@ -82,7 +82,7 @@ def _afid_sag_file_version_display(metadata: Any) -> Optional[str]:
         return None
     pid = metadata.get("sag_pid") or metadata.get("pid")
     rev = metadata.get("revision")
-    variant = metadata.get("sag_variant") or metadata.get("variant")
+    variant = metadata.get("variant")
     parts: list[str] = []
     if pid and str(pid).strip():
         parts.append(f"PID {str(pid).strip()}")
