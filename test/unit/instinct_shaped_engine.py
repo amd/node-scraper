@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# Copyright (c) 2025 Advanced Micro Devices, Inc.
+# Copyright (c) 2026 Advanced Micro Devices, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,31 +23,45 @@
 # SOFTWARE.
 #
 ###############################################################################
-import os
-from typing import Optional
+from __future__ import annotations
 
-from nodescraper.interfaces.taskresulthook import TaskResultHook
-from nodescraper.models import DataModel, TaskResult
-from nodescraper.utils import resolve_log_dir_name
+from typing import Any, Optional
+
+__all__ = ["InstinctShapedEngine"]
+
+_LAST_CALL: dict[str, Any] = {}
 
 
-class FileSystemLogHook(TaskResultHook):
+def clear_last_call() -> None:
+    _LAST_CALL.clear()
 
-    def __init__(self, log_base_path=None, **kwargs) -> None:
-        if log_base_path is None:
-            log_base_path = os.getcwd()
 
-        self.log_base_path = log_base_path
+def get_last_call() -> dict[str, Any]:
+    return dict(_LAST_CALL)
 
-    def process_result(self, task_result: TaskResult, data: Optional[DataModel] = None, **kwargs):
-        """Log task result to the filesystem (single events.json per directory)."""
-        log_path = self.log_base_path
-        if task_result.parent:
-            log_path = os.path.join(log_path, resolve_log_dir_name(task_result.parent))
-        if task_result.task:
-            log_path = os.path.join(log_path, resolve_log_dir_name(task_result.task))
 
-        task_result.log_result(log_path)
+class InstinctShapedEngine:
+    """Mirrors keyword parameters of ``InstinctServiceAssistant.get_service_info``."""
 
-        if data:
-            data.log_model(log_path)
+    def __init__(self, afid_sag: str) -> None:
+        self.afid_sag = afid_sag
+
+    def get_service_info(
+        self,
+        rf_events: list[Any],
+        from_ac_cycle: int = -1,
+        from_date: Optional[str] = None,
+        cper_data: Optional[dict[str, Any]] = None,
+        designation_serials: Optional[dict[str, str]] = None,
+        suppress_service_actions: Optional[list[str]] = None,
+    ) -> None:
+        _LAST_CALL.clear()
+        _LAST_CALL.update(
+            from_ac_cycle=from_ac_cycle,
+            from_date=from_date,
+            cper_data=cper_data,
+            designation_serials=designation_serials,
+            suppress_service_actions=suppress_service_actions,
+            rf_len=len(rf_events),
+        )
+        return None

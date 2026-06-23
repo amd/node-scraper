@@ -204,7 +204,8 @@ class DataCollector(Task, abc.ABC, Generic[TConnection, TDataModel, TCollectArg]
             if not issubclass(cls.DATA_MODEL, DataModel):
                 raise TypeError(f"DATA_MODEL must be a subclass of DataModel in {cls.__name__}")
         if hasattr(cls, "collect_data"):
-            cls.collect_data = collect_decorator(cls.collect_data)
+            if "collect_data" in vars(cls):
+                cls.collect_data = collect_decorator(cls.collect_data)
         else:
             raise TypeError(f"Data collector {cls.__name__} must implement collect_data")
 

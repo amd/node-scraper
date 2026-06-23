@@ -99,7 +99,7 @@ def analyze_decorator(func: Callable[..., TaskResult]) -> Callable[..., TaskResu
         result = analyzer.result
         result.finalize(analyzer.logger)
 
-        analyzer._run_hooks(result)
+        analyzer._run_hooks(result, data=data)
 
         return result
 
