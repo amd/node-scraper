@@ -284,9 +284,7 @@ class CommandArtifactHtml(PluginResultCollator):
             html_path = self._generate_html(artifact_path)
             if html_path:
                 generated += 1
-                self.logger.info("Generated command artifact HTML: %s", html_path)
-
-        self.logger.info("CommandArtifactHtml: generated %d HTML artifact(s)", generated)
+                self.logger.info("Generated command artifact HTML")
 
     @staticmethod
     def _find_artifact_files(root: str) -> list[str]:

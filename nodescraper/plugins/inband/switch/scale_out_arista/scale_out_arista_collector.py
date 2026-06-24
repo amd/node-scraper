@@ -91,23 +91,38 @@ class ScaleOutAristaCollector(
     CMD_PAUSE_FRAME_COUNTERS = "show interfaces flow-control | json | no-more"
     CMD_ECN_COUNTERS = "show qos interfaces ecn counters queue | json | no-more"
 
-    # Commands run for diagnostics; output is captured in command_artifacts.json
-    # (not parsed into a data model).
-    CMD_ARTIFACTS: list[str] = [
-        "show running-config",
-        "show startup-config",
-        "show ip interface",
-        "show interfaces phy",
-        "show interfaces phy detail",
-        "show qos profile",
-        "show qos profile summary",
-        "show qos maps",
-        "show qos interfaces",
-        "show qos interfaces trust",
-        "show priority-flow-control status",
-        "show qos interfaces ecn",
-        "show lldp",
-        "show platform trident mmu queue status",
+    # Commands run for diagnostics, not parsed into a data model.
+    CMD_RUNNING_CONFIG = "show running-config | no-more"
+    CMD_STARTUP_CONFIG = "show startup-config | no-more"
+    CMD_IP_INTERFACE = "show ip interface | no-more"
+    CMD_INTERFACES_PHY = "show interfaces phy | no-more"
+    CMD_INTERFACES_PHY_DETAIL = "show interfaces phy detail | no-more"
+    CMD_QOS_PROFILE = "show qos profile | no-more"
+    CMD_QOS_PROFILE_SUMMARY = "show qos profile summary | no-more"
+    CMD_QOS_MAPS = "show qos maps | no-more"
+    CMD_QOS_INTERFACES = "show qos interfaces | no-more"
+    CMD_QOS_INTERFACES_TRUST = "show qos interfaces trust | no-more"
+    CMD_PFC_STATUS = "show priority-flow-control status | no-more"
+    CMD_QOS_INTERFACES_ECN = "show qos interfaces ecn | no-more"
+    CMD_LLDP = "show lldp | no-more"
+    CMD_TRIDENT_MMU_QUEUE_STATUS = "show platform trident mmu queue status | no-more"
+
+    # Aggregate of the diagnostic CMD_* commands above.
+    ARTIFACT_COMMANDS: list[str] = [
+        CMD_RUNNING_CONFIG,
+        CMD_STARTUP_CONFIG,
+        CMD_IP_INTERFACE,
+        CMD_INTERFACES_PHY,
+        CMD_INTERFACES_PHY_DETAIL,
+        CMD_QOS_PROFILE,
+        CMD_QOS_PROFILE_SUMMARY,
+        CMD_QOS_MAPS,
+        CMD_QOS_INTERFACES,
+        CMD_QOS_INTERFACES_TRUST,
+        CMD_PFC_STATUS,
+        CMD_QOS_INTERFACES_ECN,
+        CMD_LLDP,
+        CMD_TRIDENT_MMU_QUEUE_STATUS,
     ]
 
     # helpers
@@ -668,24 +683,16 @@ class ScaleOutAristaCollector(
     # artifact-only collectors
 
     def collect_artifact_commands(self) -> None:
-        """Run diagnostic commands so their output is captured in ``command_artifacts.json``.
-
-        Each command is executed via :meth:`_run_sut_cmd`, which records the
-        command, stdout, stderr and exit code as a ``CommandArtifact`` in
-        ``command_artifacts.json``. No separate per-command ``.log`` files are
-        written. Failures are logged but do **not** cause the overall
-        collection to fail.
-        """
-        for command in self.CMD_ARTIFACTS:
-            full_cmd = f"{command} | no-more"
+        """Run diagnostic commands so their output is captured in ``command_artifacts.json``."""
+        for command in self.ARTIFACT_COMMANDS:
             try:
-                cmd_ret = self._run_sut_cmd(full_cmd)
+                cmd_ret = self._run_sut_cmd(command)
                 if cmd_ret.exit_code != 0:
                     self._log_event(
                         category=EventCategory.SWITCH,
                         description=f"Error running artifact command: `{command}`",
                         data={
-                            "command": full_cmd,
+                            "command": command,
                             "exit_code": cmd_ret.exit_code,
                             "stderr": cmd_ret.stderr,
                         },
@@ -706,16 +713,7 @@ class ScaleOutAristaCollector(
                 )
 
     def _collect_html_view(self, command: str) -> None:
-        """Re-run a ``| json`` command without the json tag for readable output.
-
-        Called right after the JSON version of ``command`` is sent. When the
-        ``html_view`` collector arg is set, the plain-text (non-JSON) output is
-        recorded as a ``CommandArtifact`` so it appears in
-        ``command_artifacts.json`` (and the HTML artifact) in a human-friendly
-        form. No-op when ``html_view`` is unset or ``command`` is not a JSON
-        command. Failures are logged but do **not** cause the overall
-        collection to fail.
-        """
+        """Re-run a ``| json`` command without the json tag for readable output."""
         if not self._html_view or "| json" not in command:
             return
         text_command = command.replace(" | json", "")
@@ -737,11 +735,7 @@ class ScaleOutAristaCollector(
         """Verify the switch is a reachable Arista EOS device.
 
         Verifies the switch responds to the basic ``show version`` command
-        before running the rest of the collector, and that the reported
-        ``mfgName`` identifies the device as an Arista switch.  If either
-        check fails, the device is unreachable, not an Arista EOS switch, or
-        otherwise incompatible -- treat like an unsupported OS and bail out
-        early.
+        before running the rest of the collector
 
         On failure this sets ``self.result.status`` to
         :attr:`ExecutionStatus.EXECUTION_FAILURE` and returns ``None``.

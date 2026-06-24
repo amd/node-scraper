@@ -76,45 +76,81 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
     )
     CMD_QUEUE_COUNTERS = "show queue counters | no-more"
 
-    # Commands run for diagnostics; output is captured in command_artifacts.json
-    # (not parsed into the data model).
-    CMD_ARTIFACTS: list[str] = [
-        "show clock",
-        "show platform syseeprom",
-        "show platform firmware detail",
-        "show running-configuration",
-        "show interface transceiver",
-        "show interface transceiver summary",
-        "show ip interfaces",
-        "show qos map dscp-tc",
-        "show qos map tc-queue",
-        "show qos map tc-pg",
-        "show qos map tc-dscp",
-        "show qos map tc-dot1p",
-        "show qos map pfc-priority-queue",
-        "show qos map pfc-priority-pg",
-        "show qos map dot1p-tc",
-        "show qos scheduler-policy",
-        "show qos wred-policy",
-        "show qos interface Eth all",
-        "show qos interface Eth all queue all",
-        "show priority-flow-control watchdog",
-        "show buffer profile",
-        "show buffer pool",
-        "show interface transceiver dom",
-        "show lldp table",
-        "show lldp neighbor",
-        "show interface Eth",
-        "show interface phy counters",
-        "show interface counters rate",
-        "show queue watermark unicast",
-        "show queue watermark multicast",
-        "show queue persistent-watermark unicast",
-        "show queue persistent-watermark multicast",
-        "show platform environment",
-        "show event details",
-        "show alarm",
-        "show interface fec status",  # temporarily added as artifact
+    # Commands run for diagnostics, not parsed into a data model.
+    CMD_CLOCK = "show clock | no-more"
+    CMD_PLATFORM_SYSEEPROM = "show platform syseeprom | no-more"
+    CMD_PLATFORM_FIRMWARE_DETAIL = "show platform firmware detail | no-more"
+    CMD_RUNNING_CONFIGURATION = "show running-configuration | no-more"
+    CMD_INTERFACE_TRANSCEIVER = "show interface transceiver | no-more"
+    CMD_INTERFACE_TRANSCEIVER_SUMMARY = "show interface transceiver summary | no-more"
+    CMD_IP_INTERFACES = "show ip interfaces | no-more"
+    CMD_QOS_MAP_DSCP_TC = "show qos map dscp-tc | no-more"
+    CMD_QOS_MAP_TC_QUEUE = "show qos map tc-queue | no-more"
+    CMD_QOS_MAP_TC_PG = "show qos map tc-pg | no-more"
+    CMD_QOS_MAP_TC_DSCP = "show qos map tc-dscp | no-more"
+    CMD_QOS_MAP_TC_DOT1P = "show qos map tc-dot1p | no-more"
+    CMD_QOS_MAP_PFC_PRIORITY_QUEUE = "show qos map pfc-priority-queue | no-more"
+    CMD_QOS_MAP_PFC_PRIORITY_PG = "show qos map pfc-priority-pg | no-more"
+    CMD_QOS_MAP_DOT1P_TC = "show qos map dot1p-tc | no-more"
+    CMD_QOS_SCHEDULER_POLICY = "show qos scheduler-policy | no-more"
+    CMD_QOS_WRED_POLICY = "show qos wred-policy | no-more"
+    CMD_QOS_INTERFACE_ETH_ALL = "show qos interface Eth all | no-more"
+    CMD_QOS_INTERFACE_ETH_ALL_QUEUE_ALL = "show qos interface Eth all queue all | no-more"
+    CMD_PFC_WATCHDOG = "show priority-flow-control watchdog | no-more"
+    CMD_BUFFER_PROFILE = "show buffer profile | no-more"
+    CMD_BUFFER_POOL = "show buffer pool | no-more"
+    CMD_INTERFACE_TRANSCEIVER_DOM = "show interface transceiver dom | no-more"
+    CMD_LLDP_TABLE = "show lldp table | no-more"
+    CMD_LLDP_NEIGHBOR = "show lldp neighbor | no-more"
+    CMD_INTERFACE_ETH = "show interface Eth | no-more"
+    CMD_INTERFACE_PHY_COUNTERS = "show interface phy counters | no-more"
+    CMD_INTERFACE_COUNTERS_RATE = "show interface counters rate | no-more"
+    CMD_QUEUE_WATERMARK_UNICAST = "show queue watermark unicast | no-more"
+    CMD_QUEUE_WATERMARK_MULTICAST = "show queue watermark multicast | no-more"
+    CMD_QUEUE_PERSISTENT_WATERMARK_UNICAST = "show queue persistent-watermark unicast | no-more"
+    CMD_QUEUE_PERSISTENT_WATERMARK_MULTICAST = "show queue persistent-watermark multicast | no-more"
+    CMD_PLATFORM_ENVIRONMENT = "show platform environment | no-more"
+    CMD_EVENT_DETAILS = "show event details | no-more"
+    CMD_ALARM = "show alarm | no-more"
+
+    # Aggregate of the diagnostic CMD_* commands above
+    ARTIFACT_COMMANDS: list[str] = [
+        CMD_CLOCK,
+        CMD_PLATFORM_SYSEEPROM,
+        CMD_PLATFORM_FIRMWARE_DETAIL,
+        CMD_RUNNING_CONFIGURATION,
+        CMD_INTERFACE_TRANSCEIVER,
+        CMD_INTERFACE_TRANSCEIVER_SUMMARY,
+        CMD_IP_INTERFACES,
+        CMD_QOS_MAP_DSCP_TC,
+        CMD_QOS_MAP_TC_QUEUE,
+        CMD_QOS_MAP_TC_PG,
+        CMD_QOS_MAP_TC_DSCP,
+        CMD_QOS_MAP_TC_DOT1P,
+        CMD_QOS_MAP_PFC_PRIORITY_QUEUE,
+        CMD_QOS_MAP_PFC_PRIORITY_PG,
+        CMD_QOS_MAP_DOT1P_TC,
+        CMD_QOS_SCHEDULER_POLICY,
+        CMD_QOS_WRED_POLICY,
+        CMD_QOS_INTERFACE_ETH_ALL,
+        CMD_QOS_INTERFACE_ETH_ALL_QUEUE_ALL,
+        CMD_PFC_WATCHDOG,
+        CMD_BUFFER_PROFILE,
+        CMD_BUFFER_POOL,
+        CMD_INTERFACE_TRANSCEIVER_DOM,
+        CMD_LLDP_TABLE,
+        CMD_LLDP_NEIGHBOR,
+        CMD_INTERFACE_ETH,
+        CMD_INTERFACE_PHY_COUNTERS,
+        CMD_INTERFACE_COUNTERS_RATE,
+        CMD_QUEUE_WATERMARK_UNICAST,
+        CMD_QUEUE_WATERMARK_MULTICAST,
+        CMD_QUEUE_PERSISTENT_WATERMARK_UNICAST,
+        CMD_QUEUE_PERSISTENT_WATERMARK_MULTICAST,
+        CMD_PLATFORM_ENVIRONMENT,
+        CMD_EVENT_DETAILS,
+        CMD_ALARM,
+        CMD_FEC_STATUS,  # temporarily added as artifact
     ]
 
     # helpers
@@ -607,9 +643,8 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
         written. Failures are logged but do **not** cause the overall
         collection to fail.
         """
-        for command in self.CMD_ARTIFACTS:
-            inner = command if command.strip() == self.CMD_VERSION else f"{command} | no-more"
-            full_cmd = self._wrap_sonic_cli(inner)
+        for command in self.ARTIFACT_COMMANDS:
+            full_cmd = self._wrap_sonic_cli(command)
             try:
                 cmd_ret = self._run_sut_cmd(full_cmd)
                 if cmd_ret.exit_code != 0:
