@@ -678,7 +678,7 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
         Ensures the device responds and identifies as Dell SONiC.
 
         On failure this sets ``self.result.status`` to
-        :attr:`ExecutionStatus.EXECUTION_FAILURE` and returns ``False``.
+        :attr:`ExecutionStatus.NOT_RAN` and returns ``False``.
 
         Returns:
             ``True`` if the pre-flight check passed, ``False`` otherwise.
@@ -691,7 +691,7 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
                 priority=EventPriority.ERROR,
                 console_log=True,
             )
-            self.result.status = ExecutionStatus.EXECUTION_FAILURE
+            self.result.status = ExecutionStatus.NOT_RAN
             return False
 
         if not self._is_dell_output(version_text):
@@ -702,7 +702,7 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
                 priority=EventPriority.ERROR,
                 console_log=True,
             )
-            self.result.status = ExecutionStatus.EXECUTION_FAILURE
+            self.result.status = ExecutionStatus.NOT_RAN
             return False
 
         return True

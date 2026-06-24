@@ -738,7 +738,7 @@ class ScaleOutAristaCollector(
         before running the rest of the collector
 
         On failure this sets ``self.result.status`` to
-        :attr:`ExecutionStatus.EXECUTION_FAILURE` and returns ``None``.
+        :attr:`ExecutionStatus.NOT_RAN` and returns ``None``.
 
         Returns:
             The collected :class:`AristaVersion` on success, or ``None`` if the
@@ -752,7 +752,7 @@ class ScaleOutAristaCollector(
                 priority=EventPriority.ERROR,
                 console_log=True,
             )
-            self.result.status = ExecutionStatus.EXECUTION_FAILURE
+            self.result.status = ExecutionStatus.NOT_RAN
             return None
 
         mfg_name = version.mfg_name or ""
@@ -764,7 +764,7 @@ class ScaleOutAristaCollector(
                 priority=EventPriority.ERROR,
                 console_log=True,
             )
-            self.result.status = ExecutionStatus.EXECUTION_FAILURE
+            self.result.status = ExecutionStatus.NOT_RAN
             return None
 
         return version
