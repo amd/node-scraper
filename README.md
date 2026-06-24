@@ -32,6 +32,12 @@ Node Scraper is published on [PyPI](https://pypi.org/project/amd-node-scraper/) 
 pip install amd-node-scraper
 ```
 
+With [uv](https://docs.astral.sh/uv/):
+
+```sh
+uv pip install amd-node-scraper
+```
+
 Use a virtual environment if you prefer. After installation, confirm the CLI is available:
 
 ```sh
@@ -40,8 +46,8 @@ node-scraper --help
 
 ### Install from Source
 Node Scraper requires Python 3.9+ for installation. After cloning this repository,
-call dev-setup.sh script with 'source'. This script creates an editable install of Node Scraper in
-a python virtual environment and also configures the pre-commit hooks for the project.
+run `dev-setup.sh` with `source`. This script uses [uv](https://docs.astral.sh/uv/) to create a
+Python 3.9 virtual environment, perform an editable install, and configure pre-commit hooks.
 
 ```sh
 source dev-setup.sh
@@ -49,20 +55,31 @@ source dev-setup.sh
 
 Alternatively, follow these manual steps:
 
-### 1. Virtual Environment (Optional)
+### 1. Install uv
 ```sh
-python3 -m venv venv
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+### 2. Virtual Environment (Optional)
+```sh
+uv venv venv --python 3.9
 source venv/bin/activate
 ```
-On Debian/Ubuntu, you may need: `sudo apt install python3-venv`
+On Debian/Ubuntu without uv, you can use `python3.9 -m venv venv` instead.
 
-### 2. Install from Source (Required)
+### 3. Install from Source (Required)
 ```sh
-python3 -m pip install --editable .[dev] --upgrade
+uv pip install -e ".[dev]"
 ```
 This installs Node Scraper in editable mode with development dependencies. To verify: `node-scraper --help`
 
-### 3. Git Hooks (Optional)
+Equivalent using pip:
+
+```sh
+python3 -m pip install --editable .[dev] --upgrade
+```
+
+### 4. Git Hooks (Optional)
 ```sh
 pre-commit install
 ```
