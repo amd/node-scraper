@@ -26,12 +26,12 @@
 
 import json
 import re
-from typing import Any, Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union
 
 from pydantic import ValidationError
 
 from nodescraper.base import InBandDataCollector
-from nodescraper.connection.inband import CommandArtifact, TextFileArtifact
+from nodescraper.connection.inband import CommandArtifact
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.models import TaskResult
 from nodescraper.utils import get_exception_details, get_exception_traceback
@@ -49,7 +49,6 @@ from .scaleoutaristadata import (
     AristaPauseFrameCounters,
     AristaPerQueueCounters,
     AristaPfcCounters,
-    AristaPhyStatus,
     AristaPortStatus,
     AristaRatesCounters,
     AristaSystemEnv,
@@ -57,51 +56,6 @@ from .scaleoutaristadata import (
     PortData,
     ScaleOutAristaDataModel,
 )
-
-# Placeholder embedded in every Arista command that supports a per-port
-# qualifier.  At command-run time it is replaced with ``ethernet <port>``
-# (when a port filter is active) or stripped entirely (when no filter is set).
-ETHERNET_PLACEHOLDER = "ethernet_x"
-
-
-def _normalize_port_spec(ports: Any) -> Optional[List[str]]:
-    """Convert a user-supplied port filter into a list of Arista spec strings.
-
-    Each element of the returned list yields a single command invocation.
-
-    Accepted input:
-      * None (no filter; commands run once with the placeholder
-        stripped).
-      * A list of strings -> one spec per element, e.g.
-        ["1/1-3/1", "17/1-17/1"] (two command calls).
-
-    """
-    if ports is None:
-        return None
-
-    if not isinstance(ports, list):
-        raise TypeError(f"'ports' must be a list of strings, got {type(ports).__name__}")
-
-    specs: list[str] = []
-    for item in ports:
-        if not isinstance(item, str):
-            raise TypeError(f"Port filter tokens must be strings, got {item!r}")
-        cleaned: list[str] = []
-        for tok in item.split(","):
-            tok = tok.strip()
-            if not tok:
-                continue
-            # Matches a single port-spec token like ``1/1``, ``1/1-8`` or
-            # ``1/1-8/1``.
-            match = re.match(r"^(\d+(?:/\d+)?)(?:-(\d+(?:/\d+)?))?$", tok)
-            if not match:
-                raise ValueError(f"Invalid port spec token: {tok!r}")
-            start, end = match.group(1), match.group(2)
-            cleaned.append(f"{start}-{end}" if end else start)
-        if cleaned:
-            specs.append(",".join(cleaned))
-
-    return specs or None
 
 
 class ScaleOutAristaCollector(
@@ -117,14 +71,34 @@ class ScaleOutAristaCollector(
 
     DATA_MODEL = ScaleOutAristaDataModel
 
-    _port_specs: Optional[List[str]] = None
+    # When set (via the ``html_view`` collector arg), each ``| json`` command
+    # is followed by its non-JSON version for human-readable artifact output.
+    _html_view: bool = False
 
-    # Commands whose output is saved as file artifacts (not parsed into a data model).
-    ARTIFACT_COMMANDS: list[str] = [
-        "show version",
+    CMD_VERSION = "show version | json | no-more"
+    CMD_LLDP_NEIGHBORS = "show lldp neighbors | json | no-more"
+    CMD_SYSTEM_ENV = "show system environment cooling | json | no-more"
+    CMD_PORT_STATUS = "show interfaces status | json | no-more"
+    CMD_ERROR_COUNTERS = "show interfaces counters errors | json | no-more"
+    CMD_PACKET_COUNTERS = "show interfaces counters | json | no-more"
+    CMD_BINS_COUNTERS = "show interfaces counters bins | json | no-more"
+    CMD_IP_COUNTERS = "show interfaces counters ip | json | no-more"
+    CMD_RATES_COUNTERS = "show interfaces counters rates | json | no-more"
+    CMD_PFC_COUNTERS = "show priority-flow-control counters | json | no-more"
+    CMD_DROPPED_PACKET_COUNTERS = "show interfaces counters queue | no-more"
+    CMD_DROP_PRECEDENCE_COUNTERS = "show interfaces counters queue drop-precedence | no-more"
+    CMD_PER_QUEUE_COUNTERS = "show interfaces counters queue detail | no-more"
+    CMD_PAUSE_FRAME_COUNTERS = "show interfaces flow-control | json | no-more"
+    CMD_ECN_COUNTERS = "show qos interfaces ecn counters queue | json | no-more"
+
+    # Commands run for diagnostics; output is captured in command_artifacts.json
+    # (not parsed into a data model).
+    CMD_ARTIFACTS: list[str] = [
         "show running-config",
         "show startup-config",
         "show ip interface",
+        "show interfaces phy",
+        "show interfaces phy detail",
         "show qos profile",
         "show qos profile summary",
         "show qos maps",
@@ -133,158 +107,88 @@ class ScaleOutAristaCollector(
         "show priority-flow-control status",
         "show qos interfaces ecn",
         "show lldp",
-        # "show priority-flow-control counters watchdog",
         "show platform trident mmu queue status",
     ]
 
-    # ------------------------------------------------------------------
     # helpers
-    # ------------------------------------------------------------------
-
-    def _log_file_artifact(self, filename: str, contents: str) -> None:
-        """Append plain-text command output to the result as a file artifact."""
-        self.result.artifacts.append(TextFileArtifact(filename=filename, contents=contents))
-
-    def _iter_port_specs(self) -> List[Optional[str]]:
-        """Return one entry per command invocation (None when no filter)."""
-        return list(self._port_specs) if self._port_specs else [None]
-
-    def _substitute_port_placeholder(self, command: str, spec: Optional[str]) -> str:
-        """Replace the ``ethernet_x`` placeholder with ``ethernet <spec>``.
-
-        Args:
-            command: Command containing the placeholder.
-            spec: Port spec to insert, or ``None`` to strip the placeholder.
-
-        Returns:
-            The rendered command string.
-        """
-        if ETHERNET_PLACEHOLDER not in command:
-            return command
-        replacement = f"ethernet {spec}" if spec else ""
-        result = command.replace(ETHERNET_PLACEHOLDER, replacement)
-        return re.sub(r"\s{2,}", " ", result).strip()
-
-    @staticmethod
-    def _merge_json(
-        accumulated: Optional[Union[dict, list]], new: Optional[Union[dict, list]]
-    ) -> Optional[Union[dict, list]]:
-        """Merge two JSON results (dicts recursively, lists concatenated).
-
-        Args:
-            accumulated: Previously merged result.
-            new: New result to merge in.
-
-        Returns:
-            The merged JSON value.
-        """
-        if accumulated is None:
-            return new
-        if new is None:
-            return accumulated
-        if isinstance(accumulated, dict) and isinstance(new, dict):
-            merged = dict(accumulated)
-            for key, value in new.items():
-                if key in merged and isinstance(merged[key], (dict, list)):
-                    merged[key] = ScaleOutAristaCollector._merge_json(merged[key], value)
-                else:
-                    merged[key] = value
-            return merged
-        if isinstance(accumulated, list) and isinstance(new, list):
-            return accumulated + new
-        return new
-
     def _run_arista_json(self, command: str) -> Optional[Union[dict, list]]:
-        """Run an Arista EOS command returning JSON, merging per-spec results.
+        """Run an Arista EOS command returning JSON.
 
         Args:
-            command: The EOS command (``| json`` is appended automatically).
+            command: The full EOS command (already including ``| json | no-more``).
 
         Returns:
-            Parsed JSON (dict or list), or ``None`` if every call failed.
+            Parsed JSON (dict or list), or ``None`` if the call failed.
         """
-        specs = self._iter_port_specs() if ETHERNET_PLACEHOLDER in command else [None]
-        accumulated: Optional[Union[dict, list]] = None
-        for spec in specs:
-            rendered = self._substitute_port_placeholder(command, spec)
-            cmd_ret: CommandArtifact = self._run_sut_cmd(f"{rendered} | json | no-more")
-            if cmd_ret.exit_code != 0:
-                self._log_event(
-                    category=EventCategory.APPLICATION,
-                    description=f"Error running Arista command: `{rendered}`",
-                    data={
-                        "command": rendered,
-                        "exit_code": cmd_ret.exit_code,
-                        "stderr": cmd_ret.stderr,
-                    },
-                    priority=EventPriority.ERROR,
-                    console_log=True,
-                )
-                continue
-            try:
-                parsed = json.loads(cmd_ret.stdout)
-            except json.JSONDecodeError as e:
-                self._log_event(
-                    category=EventCategory.APPLICATION,
-                    description=f"Error parsing JSON from Arista command: `{rendered}`",
-                    data={
-                        "command": rendered,
-                        "exception": get_exception_traceback(e),
-                    },
-                    priority=EventPriority.ERROR,
-                    console_log=True,
-                )
-                continue
-            accumulated = self._merge_json(accumulated, parsed)
-        return accumulated
+        cmd_ret: CommandArtifact = self._run_sut_cmd(command)
+        # After sending the JSON version, also send the non-JSON version when
+        # the html_view flag is set so readable output is captured too.
+        self._collect_html_view(command)
+        if cmd_ret.exit_code != 0:
+            self._log_event(
+                category=EventCategory.SWITCH,
+                description=f"Error running Arista command: `{command}`",
+                data={
+                    "command": command,
+                    "exit_code": cmd_ret.exit_code,
+                    "stderr": cmd_ret.stderr,
+                },
+                priority=EventPriority.ERROR,
+                console_log=True,
+            )
+            return None
+        try:
+            return json.loads(cmd_ret.stdout)
+        except json.JSONDecodeError as e:
+            self._log_event(
+                category=EventCategory.SWITCH,
+                description=f"Error parsing JSON from Arista command: `{command}`",
+                data={
+                    "command": command,
+                    "exception": get_exception_traceback(e),
+                },
+                priority=EventPriority.ERROR,
+                console_log=True,
+            )
+            return None
 
     def _run_arista_text(self, command: str) -> Optional[str]:
-        """Run an Arista EOS command returning text, concatenating per-spec output.
+        """Run an Arista EOS command returning text.
 
         Args:
-            command: The EOS command (``| no-more`` is appended automatically).
+            command: The full EOS command (already including ``| no-more``).
 
         Returns:
-            The combined stdout text, or ``None`` if every call failed.
+            The stdout text, or ``None`` if the call failed.
         """
-        specs = self._iter_port_specs() if ETHERNET_PLACEHOLDER in command else [None]
-        chunks: list[str] = []
-        for spec in specs:
-            rendered = self._substitute_port_placeholder(command, spec)
-            cmd_ret: CommandArtifact = self._run_sut_cmd(f"{rendered} | no-more")
-            if cmd_ret.exit_code != 0:
-                self._log_event(
-                    category=EventCategory.APPLICATION,
-                    description=f"Error running Arista command: `{rendered}`",
-                    data={
-                        "command": rendered,
-                        "exit_code": cmd_ret.exit_code,
-                        "stderr": cmd_ret.stderr,
-                    },
-                    priority=EventPriority.ERROR,
-                    console_log=True,
-                )
-                continue
-            if cmd_ret.stdout:
-                chunks.append(cmd_ret.stdout)
-        if not chunks:
+        cmd_ret: CommandArtifact = self._run_sut_cmd(command)
+        if cmd_ret.exit_code != 0:
+            self._log_event(
+                category=EventCategory.SWITCH,
+                description=f"Error running Arista command: `{command}`",
+                data={
+                    "command": command,
+                    "exit_code": cmd_ret.exit_code,
+                    "stderr": cmd_ret.stderr,
+                },
+                priority=EventPriority.ERROR,
+                console_log=True,
+            )
             return None
-        return "\n".join(chunks)
+        return cmd_ret.stdout or None
 
-    # ------------------------------------------------------------------
     # sub-collectors
-    # ------------------------------------------------------------------
 
     def get_version(self) -> Optional[AristaVersion]:
         """Collect version information via ``show version | json``."""
-        data = self._run_arista_json("show version")
+        data = self._run_arista_json(self.CMD_VERSION)
         if not isinstance(data, dict):
             return None
         try:
             return AristaVersion(**data)
         except (ValidationError, TypeError) as e:
             self._log_event(
-                category=EventCategory.APPLICATION,
+                category=EventCategory.SWITCH,
                 description="Failed to build AristaVersion model",
                 data=get_exception_details(e),
                 priority=EventPriority.WARNING,
@@ -301,174 +205,49 @@ class ScaleOutAristaCollector(
             return "Ethernet" + short_name[2:]
         return short_name
 
-    @staticmethod
-    def _port_id_from_name(port_name: str) -> Optional[str]:
-        """Extract the numeric identifier from an Ethernet port name.
-
-        Args:
-            port_name: Full port name (e.g. ``"Ethernet1/1"``).
-
-        Returns:
-            The portion after ``Ethernet`` (e.g. ``"1/1"``), or ``None``.
-        """
-        match = re.match(r"Ethernet(\S+)", port_name)
-        return match.group(1) if match else None
-
-    def get_port_status(self, port_names: list[str]) -> Optional[Dict[str, AristaPortStatus]]:
-        """Collect per-port status via ``show interfaces ethernet <id> status``.
-
-        Args:
-            port_names: Port names to query (e.g. ``["Ethernet1/1"]``).
+    def get_port_status(self) -> Optional[Dict[str, AristaPortStatus]]:
+        """Collect per-port status via ``show interfaces status | json | no-more``.
 
         Returns:
             Mapping of port name to :class:`AristaPortStatus`, or ``None``.
         """
+        data = self._run_arista_json(self.CMD_PORT_STATUS)
+        if not isinstance(data, dict):
+            return None
+        interfaces = data.get("interfaceStatuses", data)
+        if not isinstance(interfaces, dict):
+            self._log_event(
+                category=EventCategory.SWITCH,
+                description="Unexpected format for 'show interfaces status' output",
+                priority=EventPriority.WARNING,
+            )
+            return None
         result: Dict[str, AristaPortStatus] = {}
-        for port_name in port_names:
-            port_id = self._port_id_from_name(port_name)
-            if port_id is None:
-                self._log_event(
-                    category=EventCategory.APPLICATION,
-                    description=f"Could not extract port id from: {port_name}",
-                    priority=EventPriority.WARNING,
-                )
-                continue
-            data = self._run_arista_json(f"show interfaces Ethernet {port_id} status")
-            if not isinstance(data, dict):
-                continue
-            interfaces = data.get("interfaceStatuses", data)
-            if not isinstance(interfaces, dict):
-                self._log_event(
-                    category=EventCategory.APPLICATION,
-                    description=f"Unexpected format for port status of {port_name}",
-                    priority=EventPriority.WARNING,
-                )
-                continue
-            # The response is keyed by port name; grab the matching entry.
-            port_data = interfaces.get(port_name)
-            if port_data is None and interfaces:
-                # Fallback: take the first (and likely only) entry.
-                port_data = next(iter(interfaces.values()))
-            if port_data is None:
+        for port_name, port_data in interfaces.items():
+            # Restrict to Ethernet ports, matching the other per-port collectors.
+            if not isinstance(port_data, dict) or not port_name.startswith("Ethernet"):
                 continue
             try:
                 result[port_name] = AristaPortStatus(**port_data)
             except (ValidationError, TypeError) as e:
                 self._log_event(
-                    category=EventCategory.APPLICATION,
+                    category=EventCategory.SWITCH,
                     description=f"Failed to build AristaPortStatus for {port_name}",
                     data=get_exception_details(e),
                     priority=EventPriority.WARNING,
                 )
         return result or None
 
-    def get_phy_status(self) -> Optional[Dict[str, AristaPhyStatus]]:
-        """Collect PHY status via ``show interfaces phy | json``.
-
-        Returns:
-            Mapping of port name to :class:`AristaPhyStatus`, or ``None``.
-        """
-        data = self._run_arista_json("show interfaces ethernet_x phy")
-        if not isinstance(data, dict):
-            return None
-        interfaces = data.get("interfacePhyStatuses", data)
-        if not isinstance(interfaces, dict):
-            self._log_event(
-                category=EventCategory.APPLICATION,
-                description="Unexpected format for 'show interfaces phy' output",
-                priority=EventPriority.WARNING,
-            )
-            return None
-        return self.parse_phy_status(interfaces)
-
-    @staticmethod
-    def parse_phy_status(
-        interfaces: Dict[str, dict],
-    ) -> Optional[Dict[str, AristaPhyStatus]]:
-        """Parse the JSON output of ``show interfaces phy`` into models.
-
-        Args:
-            interfaces: The ``interfacePhyStatuses`` dict from the output.
-
-        Returns:
-            Mapping of port name to :class:`AristaPhyStatus`, or ``None``.
-        """
-        # Pattern to match the fixed-width text row embedded in each entry.
-        #   Port           PHY state      StateChanges ResetCount PMA/PMD PCS   XAUI
-        line_pattern = re.compile(
-            r"(?P<port>Ethernet\S+)"  # Port name (starts with Ethernet)
-            r"\s+"
-            r"(?P<phy_state>\S+)"  # PHY state (e.g. linkUp, linkDown)
-            r"\s+"
-            r"(?P<state_changes>\d+)"  # State Changes
-            r"\s+"
-            r"(?P<reset_count>\d+|-)"  # Reset Count (integer or '-')
-            r"\s+"
-            r"(?P<pma_pmd>\S+)"  # PMA/PMD flags
-            r"\s+"
-            r"(?P<pcs>\S+)"  # PCS flags
-            r"\s+"
-            r"(?P<xaui>\S+)"  # XAUI flags
-        )
-
-        result: Dict[str, AristaPhyStatus] = {}
-        for port_name, entry in interfaces.items():
-            if not isinstance(entry, dict):
-                continue
-            text = entry.get("text", "")
-            match = line_pattern.search(text)
-            if not match:
-                continue
-
-            pma_pmd = match.group("pma_pmd")
-            pcs = match.group("pcs")
-            xaui = match.group("xaui")
-            reset_count_raw = match.group("reset_count")
-
-            # Decode PMA/PMD flags (3 chars: [U/D][R/.][T/.])
-            link_up = pma_pmd[0] == "U" if len(pma_pmd) >= 1 else None
-            rx_fault = pma_pmd[1] == "R" if len(pma_pmd) >= 2 else None
-            tx_fault = pma_pmd[2] == "T" if len(pma_pmd) >= 3 else None
-
-            # Decode PCS flags (up to 5 chars: [U/D][B/.][.][.][L/.])
-            high_ber = pcs[1] == "B" if len(pcs) >= 2 else None
-            no_block_lock = pcs[4] == "L" if len(pcs) >= 5 else None
-
-            # Decode XAUI flags
-            no_xaui_lane_alignment = "A" in xaui if xaui != "-" else None
-            no_xaui_lane_sync: Optional[List[int]] = None
-            if xaui != "-":
-                lanes = [int(ch) for ch in xaui if ch.isdigit()]
-                no_xaui_lane_sync = lanes if lanes else None
-
-            result[port_name] = AristaPhyStatus(
-                phy_state=match.group("phy_state"),
-                state_changes=int(match.group("state_changes")),
-                reset_count=int(reset_count_raw) if reset_count_raw != "-" else None,
-                pma_pmd=pma_pmd,
-                pcs=pcs,
-                xaui=xaui,
-                link_up=link_up,
-                rx_fault=rx_fault,
-                tx_fault=tx_fault,
-                high_ber=high_ber,
-                no_block_lock=no_block_lock,
-                no_xaui_lane_alignment=no_xaui_lane_alignment,
-                no_xaui_lane_sync=no_xaui_lane_sync,
-            )
-
-        return result or None
-
     def get_lldp_neighbors(self) -> Optional[AristaNeighbors]:
         """Collect LLDP neighbor info via ``show lldp neighbors | json | no-more``."""
-        data = self._run_arista_json("show lldp neighbors")
+        data = self._run_arista_json(self.CMD_LLDP_NEIGHBORS)
         if not isinstance(data, dict):
             return None
         try:
             return AristaNeighbors(**data)
         except (ValidationError, TypeError) as e:
             self._log_event(
-                category=EventCategory.APPLICATION,
+                category=EventCategory.SWITCH,
                 description="Failed to build AristaNeighbors model",
                 data=get_exception_details(e),
                 priority=EventPriority.WARNING,
@@ -477,7 +256,7 @@ class ScaleOutAristaCollector(
 
     def get_system_env(self) -> Optional[AristaSystemEnv]:
         """Collect system environment via ``show system environment cooling | json | no-more``."""
-        data = self._run_arista_json("show system environment cooling")
+        data = self._run_arista_json(self.CMD_SYSTEM_ENV)
         if not isinstance(data, dict):
             return None
         # Extract inner fan configurations from slot wrappers.
@@ -504,7 +283,7 @@ class ScaleOutAristaCollector(
             return AristaSystemEnv(**data)
         except (ValidationError, TypeError) as e:
             self._log_event(
-                category=EventCategory.APPLICATION,
+                category=EventCategory.SWITCH,
                 description="Failed to build AristaSystemEnv model",
                 data=get_exception_details(e),
                 priority=EventPriority.WARNING,
@@ -513,13 +292,13 @@ class ScaleOutAristaCollector(
 
     def get_error_counters(self) -> Optional[Dict[str, AristaCountersErrors]]:
         """Collect error counters via ``show interfaces counters errors | json | no-more``."""
-        data = self._run_arista_json("show interfaces ethernet_x counters errors")
+        data = self._run_arista_json(self.CMD_ERROR_COUNTERS)
         if not isinstance(data, dict):
             return None
         interfaces = data.get("interfaceErrorCounters", data)
         if not isinstance(interfaces, dict):
             self._log_event(
-                category=EventCategory.APPLICATION,
+                category=EventCategory.SWITCH,
                 description="Unexpected format for 'show interfaces counters errors' output",
                 priority=EventPriority.WARNING,
             )
@@ -530,7 +309,7 @@ class ScaleOutAristaCollector(
                 result[port_name] = AristaCountersErrors(**counters)
             except (ValidationError, TypeError) as e:
                 self._log_event(
-                    category=EventCategory.APPLICATION,
+                    category=EventCategory.SWITCH,
                     description=f"Failed to build AristaCountersErrors for {port_name}",
                     data=get_exception_details(e),
                     priority=EventPriority.WARNING,
@@ -539,13 +318,13 @@ class ScaleOutAristaCollector(
 
     def get_packet_counters(self) -> Optional[Dict[str, AristaPacketCounters]]:
         """Collect packet counters via ``show interfaces counters | json | no-more``."""
-        data = self._run_arista_json("show interfaces ethernet_x counters")
+        data = self._run_arista_json(self.CMD_PACKET_COUNTERS)
         if not isinstance(data, dict):
             return None
         interfaces = data.get("interfaces", data)
         if not isinstance(interfaces, dict):
             self._log_event(
-                category=EventCategory.APPLICATION,
+                category=EventCategory.SWITCH,
                 description="Unexpected format for 'show interfaces counters' output",
                 priority=EventPriority.WARNING,
             )
@@ -556,7 +335,7 @@ class ScaleOutAristaCollector(
                 result[port_name] = AristaPacketCounters(**counters)
             except (ValidationError, TypeError) as e:
                 self._log_event(
-                    category=EventCategory.APPLICATION,
+                    category=EventCategory.SWITCH,
                     description=f"Failed to build AristaPacketCounters for {port_name}",
                     data=get_exception_details(e),
                     priority=EventPriority.WARNING,
@@ -571,13 +350,13 @@ class ScaleOutAristaCollector(
         Returns:
             Tuple of ``(out_bins, in_bins)`` dicts keyed by port name.
         """
-        data = self._run_arista_json("show interfaces ethernet_x counters bins")
+        data = self._run_arista_json(self.CMD_BINS_COUNTERS)
         if not isinstance(data, dict):
             return None, None
         interfaces = data.get("interfaces", data)
         if not isinstance(interfaces, dict):
             self._log_event(
-                category=EventCategory.APPLICATION,
+                category=EventCategory.SWITCH,
                 description="Unexpected format for 'show interfaces counters bins' output",
                 priority=EventPriority.WARNING,
             )
@@ -594,7 +373,7 @@ class ScaleOutAristaCollector(
                     out_bins[port_name] = AristaBinsCounters(**out_data)
                 except (ValidationError, TypeError) as e:
                     self._log_event(
-                        category=EventCategory.APPLICATION,
+                        category=EventCategory.SWITCH,
                         description=f"Failed to build out AristaBinsCounters for {port_name}",
                         data=get_exception_details(e),
                         priority=EventPriority.WARNING,
@@ -604,7 +383,7 @@ class ScaleOutAristaCollector(
                     in_bins[port_name] = AristaBinsCounters(**in_data)
                 except (ValidationError, TypeError) as e:
                     self._log_event(
-                        category=EventCategory.APPLICATION,
+                        category=EventCategory.SWITCH,
                         description=f"Failed to build in AristaBinsCounters for {port_name}",
                         data=get_exception_details(e),
                         priority=EventPriority.WARNING,
@@ -613,13 +392,13 @@ class ScaleOutAristaCollector(
 
     def get_ip_counters(self) -> Optional[Dict[str, AristaIpCounters]]:
         """Collect IP counters via ``show interfaces counters ip | json | no-more``."""
-        data = self._run_arista_json("show interfaces ethernet_x counters ip")
+        data = self._run_arista_json(self.CMD_IP_COUNTERS)
         if not isinstance(data, dict):
             return None
         interfaces = data.get("interfaces", data)
         if not isinstance(interfaces, dict):
             self._log_event(
-                category=EventCategory.APPLICATION,
+                category=EventCategory.SWITCH,
                 description="Unexpected format for 'show interfaces counters ip' output",
                 priority=EventPriority.WARNING,
             )
@@ -630,7 +409,7 @@ class ScaleOutAristaCollector(
                 result[port_name] = AristaIpCounters(**counters)
             except (ValidationError, TypeError) as e:
                 self._log_event(
-                    category=EventCategory.APPLICATION,
+                    category=EventCategory.SWITCH,
                     description=f"Failed to build AristaIpCounters for {port_name}",
                     data=get_exception_details(e),
                     priority=EventPriority.WARNING,
@@ -639,13 +418,13 @@ class ScaleOutAristaCollector(
 
     def get_rates_counters(self) -> Optional[Dict[str, AristaRatesCounters]]:
         """Collect rates counters via ``show interfaces counters rates | json | no-more``."""
-        data = self._run_arista_json("show interfaces ethernet_x counters rates")
+        data = self._run_arista_json(self.CMD_RATES_COUNTERS)
         if not isinstance(data, dict):
             return None
         interfaces = data.get("interfaces", data)
         if not isinstance(interfaces, dict):
             self._log_event(
-                category=EventCategory.APPLICATION,
+                category=EventCategory.SWITCH,
                 description="Unexpected format for 'show interfaces counters rates' output",
                 priority=EventPriority.WARNING,
             )
@@ -656,7 +435,7 @@ class ScaleOutAristaCollector(
                 result[port_name] = AristaRatesCounters(**counters)
             except (ValidationError, TypeError) as e:
                 self._log_event(
-                    category=EventCategory.APPLICATION,
+                    category=EventCategory.SWITCH,
                     description=f"Failed to build AristaRatesCounters for {port_name}",
                     data=get_exception_details(e),
                     priority=EventPriority.WARNING,
@@ -669,17 +448,13 @@ class ScaleOutAristaCollector(
         Returns:
             Mapping of port name to :class:`AristaPfcCounters`, or ``None``.
         """
-        if self._port_specs:
-            command = "show priority-flow-control interfaces ethernet_x counters"
-        else:
-            command = "show priority-flow-control counters"
-        data = self._run_arista_json(command)
+        data = self._run_arista_json(self.CMD_PFC_COUNTERS)
         if not isinstance(data, dict):
             return None
         interfaces = data.get("interfaceCounters", data)
         if not isinstance(interfaces, dict):
             self._log_event(
-                category=EventCategory.APPLICATION,
+                category=EventCategory.SWITCH,
                 description="Unexpected format for 'show priority-flow-control counters' output",
                 priority=EventPriority.WARNING,
             )
@@ -690,7 +465,7 @@ class ScaleOutAristaCollector(
                 result[port_name] = AristaPfcCounters(**counters)
             except (ValidationError, TypeError) as e:
                 self._log_event(
-                    category=EventCategory.APPLICATION,
+                    category=EventCategory.SWITCH,
                     description=f"Failed to build AristaPfcCounters for {port_name}",
                     data=get_exception_details(e),
                     priority=EventPriority.WARNING,
@@ -706,7 +481,7 @@ class ScaleOutAristaCollector(
             Mapping of port name to :class:`AristaDroppedPacketCounters`,
             or ``None``.
         """
-        text = self._run_arista_text("show interfaces ethernet_x counters queue")
+        text = self._run_arista_text(self.CMD_DROPPED_PACKET_COUNTERS)
         if text is None:
             return None
         line_pattern = re.compile(
@@ -729,7 +504,7 @@ class ScaleOutAristaCollector(
                 )
             except (ValidationError, TypeError) as e:
                 self._log_event(
-                    category=EventCategory.APPLICATION,
+                    category=EventCategory.SWITCH,
                     description=f"Failed to build AristaDroppedPacketCounters for {port_name}",
                     data=get_exception_details(e),
                     priority=EventPriority.WARNING,
@@ -745,7 +520,7 @@ class ScaleOutAristaCollector(
             Mapping of port name to :class:`AristaDropPrecedenceCounters`,
             or ``None``.
         """
-        text = self._run_arista_text("show interfaces ethernet_x counters queue drop-precedence")
+        text = self._run_arista_text(self.CMD_DROP_PRECEDENCE_COUNTERS)
         if text is None:
             return None
         line_pattern = re.compile(
@@ -765,7 +540,7 @@ class ScaleOutAristaCollector(
                 )
             except (ValidationError, TypeError) as e:
                 self._log_event(
-                    category=EventCategory.APPLICATION,
+                    category=EventCategory.SWITCH,
                     description=f"Failed to build AristaDropPrecedenceCounters for {port_name}",
                     data=get_exception_details(e),
                     priority=EventPriority.WARNING,
@@ -781,7 +556,7 @@ class ScaleOutAristaCollector(
             Mapping of port name to a list of :class:`AristaPerQueueCounters`,
             or ``None``.
         """
-        text = self._run_arista_text("show interfaces ethernet_x counters queue detail")
+        text = self._run_arista_text(self.CMD_PER_QUEUE_COUNTERS)
         if text is None:
             return None
         line_pattern = re.compile(
@@ -809,7 +584,7 @@ class ScaleOutAristaCollector(
                 result.setdefault(port_name, []).append(entry)
             except (ValidationError, TypeError) as e:
                 self._log_event(
-                    category=EventCategory.APPLICATION,
+                    category=EventCategory.SWITCH,
                     description=f"Failed to build AristaPerQueueCounters for {port_name}",
                     data=get_exception_details(e),
                     priority=EventPriority.WARNING,
@@ -820,13 +595,13 @@ class ScaleOutAristaCollector(
         self,
     ) -> Optional[Dict[str, AristaPauseFrameCounters]]:
         """Collect pause frame counters via ``show interfaces flow-control | json | no-more``."""
-        data = self._run_arista_json("show interfaces ethernet_x flow-control")
+        data = self._run_arista_json(self.CMD_PAUSE_FRAME_COUNTERS)
         if not isinstance(data, dict):
             return None
         interfaces = data.get("interfaceFlowControls", data)
         if not isinstance(interfaces, dict):
             self._log_event(
-                category=EventCategory.APPLICATION,
+                category=EventCategory.SWITCH,
                 description="Unexpected format for 'show interfaces flow-control' output",
                 priority=EventPriority.WARNING,
             )
@@ -837,7 +612,7 @@ class ScaleOutAristaCollector(
                 result[port_name] = AristaPauseFrameCounters(**counters)
             except (ValidationError, TypeError) as e:
                 self._log_event(
-                    category=EventCategory.APPLICATION,
+                    category=EventCategory.SWITCH,
                     description=f"Failed to build AristaPauseFrameCounters for {port_name}",
                     data=get_exception_details(e),
                     priority=EventPriority.WARNING,
@@ -852,13 +627,13 @@ class ScaleOutAristaCollector(
         Returns:
             A dict mapping port name to a list of per-queue ECN counter entries.
         """
-        data = self._run_arista_json("show qos interfaces ethernet_x ecn counters queue")
+        data = self._run_arista_json(self.CMD_ECN_COUNTERS)
         if not isinstance(data, dict):
             return None
         interfaces = data.get("intfQueueCounters", data)
         if not isinstance(interfaces, dict):
             self._log_event(
-                category=EventCategory.APPLICATION,
+                category=EventCategory.SWITCH,
                 description="Unexpected format for 'show qos interfaces ecn counters queue' output",
                 priority=EventPriority.WARNING,
             )
@@ -881,7 +656,7 @@ class ScaleOutAristaCollector(
                     )
                 except (ValidationError, TypeError) as e:
                     self._log_event(
-                        category=EventCategory.APPLICATION,
+                        category=EventCategory.SWITCH,
                         description=f"Failed to build AristaEcnCounters for {port_name} queue {queue_id}",
                         data=get_exception_details(e),
                         priority=EventPriority.WARNING,
@@ -890,75 +665,73 @@ class ScaleOutAristaCollector(
                 result[port_name] = entries
         return result or None
 
-    # ------------------------------------------------------------------
     # artifact-only collectors
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def _command_to_filename(command: str) -> str:
-        """Convert a command string to a ``.log`` filename.
-
-        Args:
-            command: The command string.
-
-        Returns:
-            Filename with spaces/hyphens replaced by underscores.
-        """
-        return command.replace(" ", "_").replace("-", "_") + ".log"
 
     def collect_artifact_commands(self) -> None:
-        """Run diagnostic commands and store their output as file artifacts.
+        """Run diagnostic commands so their output is captured in ``command_artifacts.json``.
 
-        Failures are logged but do **not** cause the overall collection to fail.
+        Each command is executed via :meth:`_run_sut_cmd`, which records the
+        command, stdout, stderr and exit code as a ``CommandArtifact`` in
+        ``command_artifacts.json``. No separate per-command ``.log`` files are
+        written. Failures are logged but do **not** cause the overall
+        collection to fail.
         """
-        for command in self.ARTIFACT_COMMANDS:
-            specs = self._iter_port_specs() if ETHERNET_PLACEHOLDER in command else [None]
-            chunks: list[str] = []
-            for spec in specs:
-                substituted = self._substitute_port_placeholder(command, spec)
-                full_cmd = f"{substituted} | no-more"
-                try:
-                    cmd_ret = self._run_sut_cmd(full_cmd)
-                    if cmd_ret.exit_code != 0:
-                        self._log_event(
-                            category=EventCategory.APPLICATION,
-                            description=f"Error running artifact command: `{command}`",
-                            data={
-                                "command": full_cmd,
-                                "exit_code": cmd_ret.exit_code,
-                                "stderr": cmd_ret.stderr,
-                            },
-                            priority=EventPriority.ERROR,
-                            console_log=True,
-                        )
-                        continue
-                    if cmd_ret.stdout:
-                        chunks.append(cmd_ret.stdout)
-                except Exception as e:
+        for command in self.CMD_ARTIFACTS:
+            full_cmd = f"{command} | no-more"
+            try:
+                cmd_ret = self._run_sut_cmd(full_cmd)
+                if cmd_ret.exit_code != 0:
                     self._log_event(
-                        category=EventCategory.APPLICATION,
-                        description=f"Error collecting artifact for command: `{command}`",
+                        category=EventCategory.SWITCH,
+                        description=f"Error running artifact command: `{command}`",
                         data={
-                            "command": command,
-                            "exception": get_exception_traceback(e),
+                            "command": full_cmd,
+                            "exit_code": cmd_ret.exit_code,
+                            "stderr": cmd_ret.stderr,
                         },
-                        priority=EventPriority.WARNING,
+                        priority=EventPriority.ERROR,
                         console_log=True,
                     )
-            if chunks:
-                try:
-                    self._log_file_artifact(self._command_to_filename(command), "\n".join(chunks))
-                except Exception as e:
-                    self._log_event(
-                        category=EventCategory.APPLICATION,
-                        description=f"Error saving artifact for command: `{command}`",
-                        data={
-                            "command": command,
-                            "exception": get_exception_traceback(e),
-                        },
-                        priority=EventPriority.WARNING,
-                        console_log=True,
-                    )
+                    continue
+            except Exception as e:
+                self._log_event(
+                    category=EventCategory.SWITCH,
+                    description=f"Error collecting artifact for command: `{command}`",
+                    data={
+                        "command": command,
+                        "exception": get_exception_traceback(e),
+                    },
+                    priority=EventPriority.WARNING,
+                    console_log=True,
+                )
+
+    def _collect_html_view(self, command: str) -> None:
+        """Re-run a ``| json`` command without the json tag for readable output.
+
+        Called right after the JSON version of ``command`` is sent. When the
+        ``html_view`` collector arg is set, the plain-text (non-JSON) output is
+        recorded as a ``CommandArtifact`` so it appears in
+        ``command_artifacts.json`` (and the HTML artifact) in a human-friendly
+        form. No-op when ``html_view`` is unset or ``command`` is not a JSON
+        command. Failures are logged but do **not** cause the overall
+        collection to fail.
+        """
+        if not self._html_view or "| json" not in command:
+            return
+        text_command = command.replace(" | json", "")
+        try:
+            self._run_sut_cmd(text_command)
+        except Exception as e:
+            self._log_event(
+                category=EventCategory.SWITCH,
+                description=f"Error running html_view command: `{text_command}`",
+                data={
+                    "command": text_command,
+                    "exception": get_exception_traceback(e),
+                },
+                priority=EventPriority.WARNING,
+                console_log=True,
+            )
 
     def _preflight_check(self) -> Optional[AristaVersion]:
         """Verify the switch is a reachable Arista EOS device.
@@ -980,7 +753,7 @@ class ScaleOutAristaCollector(
         version = self.get_version()
         if version is None:
             self._log_event(
-                category=EventCategory.APPLICATION,
+                category=EventCategory.SWITCH,
                 description=("ScaleOutAristaCollector pre-flight check failed"),
                 priority=EventPriority.ERROR,
                 console_log=True,
@@ -991,7 +764,7 @@ class ScaleOutAristaCollector(
         mfg_name = version.mfg_name or ""
         if "arista" not in mfg_name.lower():
             self._log_event(
-                category=EventCategory.APPLICATION,
+                category=EventCategory.SWITCH,
                 description=("Not Arista switch"),
                 data={"mfg_name": mfg_name},
                 priority=EventPriority.ERROR,
@@ -1002,9 +775,7 @@ class ScaleOutAristaCollector(
 
         return version
 
-    # ------------------------------------------------------------------
     # main entry point
-    # ------------------------------------------------------------------
 
     def collect_data(
         self, args: Optional[ScaleOutAristaCollectorArgs] = None
@@ -1012,24 +783,12 @@ class ScaleOutAristaCollector(
         """Run all Arista collectors and assemble the switch data model.
 
         Args:
-            args: Optional :class:`ScaleOutAristaCollectorArgs`; its ``ports``
-                attribute restricts collection, defaulting to all ports.
+            args: Optional :class:`ScaleOutAristaCollectorArgs`.
 
         Returns:
             Tuple of ``(TaskResult, ScaleOutAristaDataModel | None)``.
         """
-        ports = args.collection_ports if args else None
-        try:
-            self._port_specs = _normalize_port_spec(ports)
-        except (TypeError, ValueError) as exc:
-            self._log_event(
-                category=EventCategory.APPLICATION,
-                description=f"Invalid 'ports' arg for ScaleOutAristaCollector: {exc}",
-                priority=EventPriority.ERROR,
-                console_log=True,
-            )
-            self.result.status = ExecutionStatus.EXECUTION_FAILURE
-            return self.result, None
+        self._html_view = bool(args and args.html_view)
 
         version = self._preflight_check()
         if version is None:
@@ -1039,9 +798,7 @@ class ScaleOutAristaCollector(
             lldp_neighbors = self.get_lldp_neighbors()
             system_env = self.get_system_env()
 
-            phy_status = self.get_phy_status()
-            port_names = list(phy_status.keys()) if phy_status else []
-            port_status = self.get_port_status(port_names) if port_names else None
+            port_status = self.get_port_status()
             error_counters = self.get_error_counters()
             packet_counters = self.get_packet_counters()
             out_bins, in_bins = self.get_bins_counters()
@@ -1057,7 +814,7 @@ class ScaleOutAristaCollector(
             self.collect_artifact_commands()
         except Exception as e:
             self._log_event(
-                category=EventCategory.APPLICATION,
+                category=EventCategory.SWITCH,
                 description="Error running Arista collector sub commands",
                 data={"exception": get_exception_traceback(e)},
                 priority=EventPriority.ERROR,
@@ -1069,7 +826,6 @@ class ScaleOutAristaCollector(
         # Build per-port PortData from all per-port collectors.
         all_port_names: set[str] = set()
         for d in (
-            phy_status,
             port_status,
             error_counters,
             packet_counters,
@@ -1093,7 +849,6 @@ class ScaleOutAristaCollector(
             for name in sorted(all_port_names):
                 port_data[name] = PortData(
                     port_status=port_status.get(name) if port_status else None,
-                    phy_status=phy_status.get(name) if phy_status else None,
                     error_counters=error_counters.get(name) if error_counters else None,
                     packet_counters=packet_counters.get(name) if packet_counters else None,
                     ip_counters=ip_counters.get(name) if ip_counters else None,
@@ -1124,7 +879,7 @@ class ScaleOutAristaCollector(
             )
         except (ValidationError, TypeError) as e:
             self._log_event(
-                category=EventCategory.APPLICATION,
+                category=EventCategory.SWITCH,
                 description="Failed to build ScaleOutAristaDataModel",
                 data=get_exception_details(e),
                 priority=EventPriority.ERROR,

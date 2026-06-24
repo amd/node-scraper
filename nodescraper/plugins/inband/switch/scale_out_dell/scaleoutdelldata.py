@@ -97,12 +97,6 @@ class DellFecStatus(BaseModel):
     admin: Optional[str] = None
     if_state: Optional[str] = None
 
-    # ticket opened with Dell to fix output formatting before re-enabling
-    # error_fields: ClassVar[dict[str, str]] = {
-    #     "oper": "rs",
-    #     "if_state": "oper-up",
-    # }
-
 
 class DellInterfaceCounters(BaseModel):
     """Per-port summary counters from ``show interface counters``"""
@@ -177,6 +171,7 @@ class DellInterfaceDetailCounters(BaseModel):
 
     error_fields: ClassVar[dict[str, str]] = {
         "packets_received_9217_16383_octets": "0",
+        "packets_transmitted_9217_16383_octets": "0",
         "jabbers_received": "0",
         "fragments_received": "0",
         "undersize_received": "0",

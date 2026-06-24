@@ -23,8 +23,6 @@
 # SOFTWARE.
 #
 ###############################################################################
-from typing import List, Optional
-
 from pydantic import Field
 
 from nodescraper.models import CollectorArgs
@@ -33,13 +31,10 @@ from nodescraper.models import CollectorArgs
 class ScaleOutAristaCollectorArgs(CollectorArgs):
     """Arguments for the Arista switch collector."""
 
-    collection_ports: Optional[List[str]] = Field(
-        default=None,
+    html_view: bool = Field(
+        default=False,
         description=(
-            "Restrict collection to the given port(s). Each list element "
-            "triggers one command invocation"
-            "Accepted forms include '1/1', '1/1-8/1'"
-            "(e.g. ['1/1-3/1', '17/1-17/1']). "
-            "When omitted, commands run once against all ports."
+            "Set true to run the '| json' commands again without the json tag, "
+            "producing human-readable (non-JSON) command output for HTML artifact."
         ),
     )

@@ -162,7 +162,7 @@ class SwitchAnalyzerBase(Generic[TSwitchData]):
             error_state = self._run_checks(data, allowed_ports)
         except Exception as e:
             self._log_event(
-                category=EventCategory.APPLICATION,
+                category=EventCategory.SWITCH,
                 description=f"Unhandled error while analyzing {self.VENDOR_NAME} data",
                 data={"exception": get_exception_traceback(e)},
                 priority=EventPriority.ERROR,
@@ -179,19 +179,13 @@ class SwitchAnalyzerBase(Generic[TSwitchData]):
 
         return self.result
 
-    # ------------------------------------------------------------------
     # Hooks for subclasses
-    # ------------------------------------------------------------------
-
     def _walk_system(self, switch_data: TSwitchData) -> list[dict[str, Any]]:
         """Return findings for vendor-specific top-level (non-port) sections"""
 
         return []
 
-    # ------------------------------------------------------------------
     # Common machinery
-    # ------------------------------------------------------------------
-
     def _normalize_port(self, name: str) -> Optional[str]:
         """Return ``name`` as a canonical port key, else ``None``"""
 
@@ -199,7 +193,7 @@ class SwitchAnalyzerBase(Generic[TSwitchData]):
         if not match:
             return None
         # Vendor regexes either expose a single capture group with the
-        # whole canonical key (slash-joined) or two groups (M, S).
+        # whole canonical key (slash-joined) or two groups (P, S).
         groups = match.groups()
         if len(groups) == 1:
             return groups[0]

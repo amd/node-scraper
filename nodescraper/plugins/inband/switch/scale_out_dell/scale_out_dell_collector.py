@@ -30,7 +30,7 @@ from typing import Dict, List, Optional
 from pydantic import ValidationError
 
 from nodescraper.base import InBandDataCollector
-from nodescraper.connection.inband import CommandArtifact, TextFileArtifact
+from nodescraper.connection.inband import CommandArtifact
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.models import TaskResult
 from nodescraper.utils import get_exception_details, get_exception_traceback
@@ -62,10 +62,24 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
 
     DATA_MODEL = ScaleOutDellDataModel
 
-    # Commands whose output is saved as file artifacts (not parsed into the data model).
-    ARTIFACT_COMMANDS: list[str] = [
+    # Each is wrapped in `` sonic-cli -c "<CMD>" `` at run-time
+    CMD_VERSION = "show version | no-more"
+    CMD_INTERFACE_STATUS = "show interface status | no-more"
+    CMD_INTERFACE_COUNTERS = "show interface counters | no-more"
+    CMD_DETAIL_COUNTERS = "show interface counters {port} | no-more"
+    CMD_FEC_STATUS = "show interface fec status | no-more"
+    CMD_IP_ARP = "show ip arp | no-more"
+    CMD_IP_ROUTE = "show ip route | no-more"
+    CMD_PFC_STATISTICS = "show qos interface Ethall priority-flow-control statistics | no-more"
+    CMD_PFC_WATCHDOG_STATISTICS = (
+        "show qos interface Ethall queue all priority-flow-control watchdog-statistics | no-more"
+    )
+    CMD_QUEUE_COUNTERS = "show queue counters | no-more"
+
+    # Commands run for diagnostics; output is captured in command_artifacts.json
+    # (not parsed into the data model).
+    CMD_ARTIFACTS: list[str] = [
         "show clock",
-        "show version",
         "show platform syseeprom",
         "show platform firmware detail",
         "show running-configuration",
@@ -103,14 +117,7 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
         "show interface fec status",  # temporarily added as artifact
     ]
 
-    # ------------------------------------------------------------------
     # helpers
-    # ------------------------------------------------------------------
-
-    def _log_file_artifact(self, filename: str, contents: str) -> None:
-        """Append plain-text command output to the result as a file artifact."""
-        self.result.artifacts.append(TextFileArtifact(filename=filename, contents=contents))
-
     @staticmethod
     def _is_dell_output(text: str) -> bool:
         lowered = text.lower()
@@ -129,20 +136,20 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
         return f'sonic-cli -c "{command}"'
 
     def _run_dell_command(self, command: str) -> Optional[str]:
-        """Run a Dell SONiC CLI command via ``sonic-cli -c`` with paging suppressed.
+        """Run a Dell SONiC CLI command via ``sonic-cli -c``.
 
         Args:
-            command: The CLI command to run.
+            command: The full CLI command to run (already including
+                ``| no-more`` where paging applies).
 
         Returns:
             The command stdout, or ``None`` on error.
         """
-        inner = command if command.strip() == "show version" else f"{command} | no-more"
-        full_cmd = self._wrap_sonic_cli(inner)
+        full_cmd = self._wrap_sonic_cli(command)
         cmd_ret: CommandArtifact = self._run_sut_cmd(full_cmd)
         if cmd_ret.exit_code != 0:
             self._log_event(
-                category=EventCategory.APPLICATION,
+                category=EventCategory.SWITCH,
                 description=f"Error running Dell command: `{full_cmd}`",
                 data={
                     "command": full_cmd,
@@ -155,28 +162,25 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
             return None
         return cmd_ret.stdout or ""
 
-    # ------------------------------------------------------------------
     # sub-collectors
-    # ------------------------------------------------------------------
-
     def get_interface_status(self) -> Optional[Dict[str, DellInterfaceStatus]]:
         """Parse ``show interface status`` into per-port status models.
 
         Returns:
             Mapping of port name to :class:`DellInterfaceStatus`, or ``None``.
         """
-        text = self._run_dell_command("show interface status")
+        text = self._run_dell_command(self.CMD_INTERFACE_STATUS)
         if text is None:
             return None
         line_pattern = re.compile(
             r"^(?P<name>Eth\S+)"
-            r"\s+(?P<description>\S+)"
+            r"\s+(?P<description>.+?)"
             r"\s+(?P<oper>\S+)"
             r"\s+(?P<reason>\S+)"
             r"\s+(?P<auto_neg>\S+)"
             r"\s+(?P<speed>\d+)"
             r"\s+(?P<mtu>\d+)"
-            r"\s+(?P<alt>\S+)"
+            r"\s+(?P<alt>\S+)\s*$"
         )
         result: Dict[str, DellInterfaceStatus] = {}
         for line in text.splitlines():
@@ -197,7 +201,7 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
                 )
             except (ValidationError, TypeError) as e:
                 self._log_event(
-                    category=EventCategory.APPLICATION,
+                    category=EventCategory.SWITCH,
                     description=f"Failed to build DellInterfaceStatus for {name}",
                     data=get_exception_details(e),
                     priority=EventPriority.WARNING,
@@ -210,7 +214,7 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
         Returns:
             Mapping of port name to :class:`DellInterfaceCounters`, or ``None``.
         """
-        text = self._run_dell_command("show interface counters")
+        text = self._run_dell_command(self.CMD_INTERFACE_COUNTERS)
         if text is None:
             return None
         line_pattern = re.compile(
@@ -245,7 +249,7 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
                 )
             except (ValidationError, TypeError) as e:
                 self._log_event(
-                    category=EventCategory.APPLICATION,
+                    category=EventCategory.SWITCH,
                     description=f"Failed to build DellInterfaceCounters for {name}",
                     data=get_exception_details(e),
                     priority=EventPriority.WARNING,
@@ -273,7 +277,7 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
             return None
         result: Dict[str, DellInterfaceDetailCounters] = {}
         for port_name in port_names:
-            text = self._run_dell_command(f"show interface counters {port_name}")
+            text = self._run_dell_command(self.CMD_DETAIL_COUNTERS.format(port=port_name))
             if text is None:
                 continue
             parsed = self._parse_detail_counters_block(text)
@@ -282,8 +286,7 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
             result[port_name] = parsed
         return result or None
 
-    @classmethod
-    def _parse_detail_counters_block(cls, text: str) -> Optional[DellInterfaceDetailCounters]:
+    def _parse_detail_counters_block(self, text: str) -> Optional[DellInterfaceDetailCounters]:
         """Parse one port's ``<label>  <value>`` detail-counter rows.
 
         Args:
@@ -301,7 +304,7 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
             match = line_pattern.match(stripped)
             if not match:
                 continue
-            field = cls._label_to_field(match.group("label").strip())
+            field = self._label_to_field(match.group("label").strip())
             if field not in DellInterfaceDetailCounters.model_fields:
                 continue
             kwargs[field] = match.group("value").strip()
@@ -309,7 +312,13 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
             return None
         try:
             return DellInterfaceDetailCounters.model_validate(kwargs)
-        except (ValidationError, TypeError):
+        except (ValidationError, TypeError) as e:
+            self._log_event(
+                category=EventCategory.SWITCH,
+                description="Failed to build DellInterfaceDetailCounters",
+                data={**get_exception_details(e), "parsed_fields": kwargs},
+                priority=EventPriority.WARNING,
+            )
             return None
 
     def get_fec_status(self) -> Optional[Dict[str, DellFecStatus]]:
@@ -318,7 +327,7 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
         Returns:
             Mapping of port name to :class:`DellFecStatus`, or ``None``.
         """
-        text = self._run_dell_command("show interface fec status")
+        text = self._run_dell_command(self.CMD_FEC_STATUS)
         if text is None:
             return None
         result: Dict[str, DellFecStatus] = {}
@@ -343,7 +352,7 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
                 )
             except (ValidationError, TypeError) as e:
                 self._log_event(
-                    category=EventCategory.APPLICATION,
+                    category=EventCategory.SWITCH,
                     description=f"Failed to build DellFecStatus for {name}",
                     data=get_exception_details(e),
                     priority=EventPriority.WARNING,
@@ -356,7 +365,7 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
         Returns:
             List of :class:`DellArpEntry`, or ``None``.
         """
-        text = self._run_dell_command("show ip arp")
+        text = self._run_dell_command(self.CMD_IP_ARP)
         if text is None:
             return None
         line_pattern = re.compile(
@@ -385,7 +394,7 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
                 )
             except (ValidationError, TypeError) as e:
                 self._log_event(
-                    category=EventCategory.APPLICATION,
+                    category=EventCategory.SWITCH,
                     description="Failed to build DellArpEntry",
                     data=get_exception_details(e),
                     priority=EventPriority.WARNING,
@@ -398,7 +407,7 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
         Returns:
             List of :class:`DellRouteEntry`, or ``None``.
         """
-        text = self._run_dell_command("show ip route")
+        text = self._run_dell_command(self.CMD_IP_ROUTE)
         if text is None:
             return None
         line_pattern = re.compile(
@@ -427,7 +436,7 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
                 )
             except (ValidationError, TypeError) as e:
                 self._log_event(
-                    category=EventCategory.APPLICATION,
+                    category=EventCategory.SWITCH,
                     description="Failed to build DellRouteEntry",
                     data=get_exception_details(e),
                     priority=EventPriority.WARNING,
@@ -442,7 +451,7 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
         Returns:
             Tuple of ``(rx_by_port, tx_by_port)`` dicts, each value or ``None``.
         """
-        cmd = "show qos interface Ethall priority-flow-control statistics"
+        cmd = self.CMD_PFC_STATISTICS
         text = self._run_dell_command(cmd)
         if text is None:
             return None, None
@@ -472,7 +481,7 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
                 )
             except (ValidationError, TypeError) as e:
                 self._log_event(
-                    category=EventCategory.APPLICATION,
+                    category=EventCategory.SWITCH,
                     description=f"Failed to build DellPfcStatistics for {name}",
                     data=get_exception_details(e),
                     priority=EventPriority.WARNING,
@@ -488,7 +497,7 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
             Mapping of port name to a list of
             :class:`DellPfcWatchdogQueueStats`, or ``None``.
         """
-        cmd = "show qos interface Ethall queue all priority-flow-control watchdog-statistics"
+        cmd = self.CMD_PFC_WATCHDOG_STATISTICS
 
         text = self._run_dell_command(cmd)
         if text is None:
@@ -532,7 +541,7 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
                 result.setdefault(name, []).append(entry)
             except (ValidationError, TypeError) as e:
                 self._log_event(
-                    category=EventCategory.APPLICATION,
+                    category=EventCategory.SWITCH,
                     description=f"Failed to build DellPfcWatchdogQueueStats for {name}",
                     data=get_exception_details(e),
                     priority=EventPriority.WARNING,
@@ -546,7 +555,7 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
             Mapping of port name to a list of :class:`DellQueueCounter`,
             or ``None``.
         """
-        text = self._run_dell_command("show queue counters")
+        text = self._run_dell_command(self.CMD_QUEUE_COUNTERS)
         if text is None:
             return None
         line_pattern = re.compile(
@@ -580,35 +589,32 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
                 result.setdefault(name, []).append(entry)
             except (ValidationError, TypeError) as e:
                 self._log_event(
-                    category=EventCategory.APPLICATION,
+                    category=EventCategory.SWITCH,
                     description=f"Failed to build DellQueueCounter for {name}",
                     data=get_exception_details(e),
                     priority=EventPriority.WARNING,
                 )
         return result or None
 
-    # ------------------------------------------------------------------
     # artifact-only collectors
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def _command_to_filename(command: str) -> str:
-        """Convert a command string to a log filename."""
-        return command.replace(" ", "_").replace("-", "_") + ".log"
 
     def collect_artifact_commands(self) -> None:
-        """Run diagnostic commands and store their output as file artifacts.
+        """Run diagnostic commands so their output is captured in ``command_artifacts.json``.
 
-        Failures are logged but do **not** cause the overall collection to fail.
+        Each command is executed via :meth:`_run_sut_cmd`, which records the
+        command, stdout, stderr and exit code as a ``CommandArtifact`` in
+        ``command_artifacts.json``. No separate per-command ``.log`` files are
+        written. Failures are logged but do **not** cause the overall
+        collection to fail.
         """
-        for command in self.ARTIFACT_COMMANDS:
-            inner = command if command.strip() == "show version" else f"{command} | no-more"
+        for command in self.CMD_ARTIFACTS:
+            inner = command if command.strip() == self.CMD_VERSION else f"{command} | no-more"
             full_cmd = self._wrap_sonic_cli(inner)
             try:
                 cmd_ret = self._run_sut_cmd(full_cmd)
                 if cmd_ret.exit_code != 0:
                     self._log_event(
-                        category=EventCategory.APPLICATION,
+                        category=EventCategory.SWITCH,
                         description=f"Error running artifact command: `{full_cmd}`",
                         data={
                             "command": full_cmd,
@@ -619,10 +625,9 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
                         console_log=True,
                     )
                     continue
-                self._log_file_artifact(self._command_to_filename(command), cmd_ret.stdout or "")
             except Exception as e:
                 self._log_event(
-                    category=EventCategory.APPLICATION,
+                    category=EventCategory.SWITCH,
                     description=f"Error collecting artifact for command: `{command}`",
                     data={
                         "command": command,
@@ -636,9 +641,6 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
         """Verify the device is a reachable Dell SONiC switch.
 
         Ensures the device responds and identifies as Dell SONiC.
-        ``_run_dell_command`` wraps every command in ``sonic-cli -c "..."``,
-        so there is no separate "enter the shell" step -- each SSH exec is
-        self-contained.
 
         On failure this sets ``self.result.status`` to
         :attr:`ExecutionStatus.EXECUTION_FAILURE` and returns ``False``.
@@ -646,10 +648,10 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
         Returns:
             ``True`` if the pre-flight check passed, ``False`` otherwise.
         """
-        version_text = self._run_dell_command("show version")
+        version_text = self._run_dell_command(self.CMD_VERSION)
         if version_text is None:
             self._log_event(
-                category=EventCategory.APPLICATION,
+                category=EventCategory.SWITCH,
                 description="ScaleOutDellCollector pre-flight check failed",
                 priority=EventPriority.ERROR,
                 console_log=True,
@@ -659,7 +661,7 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
 
         if not self._is_dell_output(version_text):
             self._log_event(
-                category=EventCategory.APPLICATION,
+                category=EventCategory.SWITCH,
                 description="Not a Dell SONiC switch",
                 data={"raw_output": version_text},
                 priority=EventPriority.ERROR,
@@ -670,9 +672,7 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
 
         return True
 
-    # ------------------------------------------------------------------
     # main entry point
-    # ------------------------------------------------------------------
 
     def collect_data(
         self, args: Optional[ScaleOutDellCollectorArgs] = None
@@ -708,7 +708,7 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
                     isinstance(p, str) for p in ports_arg
                 ):
                     self._log_event(
-                        category=EventCategory.APPLICATION,
+                        category=EventCategory.SWITCH,
                         description="Invalid 'ports' arg for ScaleOutDellCollector",
                         data={"ports": ports_arg},
                         priority=EventPriority.ERROR,
@@ -727,7 +727,7 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
             self.collect_artifact_commands()
         except Exception as e:
             self._log_event(
-                category=EventCategory.APPLICATION,
+                category=EventCategory.SWITCH,
                 description="Error running Dell collector sub commands",
                 data={"exception": get_exception_traceback(e)},
                 priority=EventPriority.ERROR,
@@ -737,8 +737,7 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
             return self.result, None
 
         # The canonical port list comes from ``show interface status`` so
-        # that names are in ``Eth1/x/y`` form (not the SONiC ``EthernetN``
-        # alternate names returned by some other commands).
+        # that names are in ``Eth1/x/y`` form
         all_port_names: set[str] = set(interface_status.keys()) if interface_status else set()
 
         port_data: Optional[Dict[str, DellPortData]] = None
@@ -767,7 +766,7 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
             )
         except (ValidationError, TypeError) as e:
             self._log_event(
-                category=EventCategory.APPLICATION,
+                category=EventCategory.SWITCH,
                 description="Failed to build ScaleOutDellDataModel",
                 data=get_exception_details(e),
                 priority=EventPriority.ERROR,

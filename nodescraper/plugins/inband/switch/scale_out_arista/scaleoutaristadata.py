@@ -168,36 +168,6 @@ class AristaPortStatus(BaseModel):
     }
 
 
-class AristaPhyStatus(BaseModel):
-    """Contains the PHY status info for an Arista switch port.
-
-    Key for status flag fields (from 'show interfaces phy' output):
-        U = Link up, D = Link down,
-        R = RX Fault, T = TX Fault,
-        B = High BER, L = No Block Lock,
-        A = No XAUI Lane Alignment,
-        0123 = No XAUI lane sync in lane N
-    """
-
-    phy_state: Optional[str] = None
-    state_changes: Optional[int] = None
-    reset_count: Optional[int] = None
-    pma_pmd: Optional[str] = None
-    pcs: Optional[str] = None
-    xaui: Optional[str] = None
-    link_up: Optional[bool] = None
-    rx_fault: Optional[bool] = None
-    tx_fault: Optional[bool] = None
-    high_ber: Optional[bool] = None
-    no_block_lock: Optional[bool] = None
-    no_xaui_lane_alignment: Optional[bool] = None
-    no_xaui_lane_sync: Optional[List[int]] = None
-
-    error_fields: ClassVar[dict[str, Union[str, bool]]] = {
-        "tx_fault": False,
-    }
-
-
 class AristaCountersErrors(BaseModel):
     """Contains the error counters for an Arista switch port."""
 
@@ -379,7 +349,6 @@ class PortData(BaseModel):
     """Contains all the data for a single port on an Arista switch."""
 
     port_status: Optional[AristaPortStatus] = None
-    phy_status: Optional[AristaPhyStatus] = None
     error_counters: Optional[AristaCountersErrors] = None
     packet_counters: Optional[AristaPacketCounters] = None
     ip_counters: Optional[AristaIpCounters] = None

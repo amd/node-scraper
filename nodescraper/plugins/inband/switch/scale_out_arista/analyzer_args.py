@@ -36,9 +36,9 @@ class ScaleOutAristaAnalyzerArgs(AnalyzerArgs):
     analysis_ports: Optional[List[str]] = Field(
         default=None,
         description=(
-            "Restrict per-port analysis to the given ports. Ports specified in"
-            "the form 'S/P' (e.g. ['1/1', '2/1', '17/1']) "
-            "When omitted, every port present in the data is "
-            "analyzed, Independent of any collection-time port filter."
+            "Restrict per-port analysis to the given ports. Ports are "
+            "S/P/[SP] where subport is optional (e.g. ['1/1', '1/31', '1/1/1']) "
+            "When omitted, every port present in the data is analyzed."
+            "Independent of any collection-time filter."
         ),
     )

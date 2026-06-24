@@ -48,11 +48,8 @@ class ScaleOutAristaAnalyzer(
     VENDOR_NAME: ClassVar[str] = "Arista"
     DATA_MODEL = ScaleOutAristaDataModel
 
-    # ``M/S`` port identifier (e.g. ``1/1``), with optional ``Ethernet``
-    # prefix so both filter tokens (``"1/1"``) and live port names
-    # (``"Ethernet1/1"``) normalize to the same canonical key.
-    PORT_NAME_RE: ClassVar[re.Pattern] = re.compile(r"^(?:Ethernet)?(\d+)/(\d+)$", re.IGNORECASE)
-    PORT_FORMAT_HINT: ClassVar[str] = "expected form 'M/S'"
+    PORT_NAME_RE: ClassVar[re.Pattern] = re.compile(r"^(?:Ethernet)?(\d+(?:/\d+)*)$", re.IGNORECASE)
+    PORT_FORMAT_HINT: ClassVar[str] = "expected slash-separated decimals (e.g. 'M/S', 'A/B/C')"
 
     def _walk_system(self, switch_data: ScaleOutAristaDataModel) -> list[dict[str, Any]]:
         findings: list[dict[str, Any]] = []
