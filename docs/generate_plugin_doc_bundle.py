@@ -26,10 +26,8 @@
 """
 Usage
 python generate_plugin_doc_bundle.py \
-  --package /home/alexbara/node-scraper/nodescraper/plugins/inband \
-  --output PLUGIN_DOC.md \
+  --output docs/PLUGIN_DOC.md \
   --update-readme-help
-
 """
 import argparse
 import importlib
@@ -43,8 +41,14 @@ from pathlib import Path
 from typing import Any, Iterable, List, Optional, Type
 
 LINK_BASE_DEFAULT = "https://github.com/amd/node-scraper/blob/HEAD/"
-REL_ROOT_DEFAULT = "nodescraper/plugins/inband"
-DEFAULT_ROOT_PACKAGE = "nodescraper.plugins"
+REL_ROOT_DEFAULT = "nodescraper/plugins"
+# Import and document every concrete plugin under nodescraper.plugins (inband, ooband,
+# generic_collection, regex_search, serviceability, …).
+PACKAGE_PLUGINS_ROOT = "nodescraper.plugins"
+# ``plugins_for_package_prefix`` matches on ``cls.__module__``; keep the trailing dot so
+# ``nodescraper.plugins`` itself does not match every module starting with that string.
+PLUGIN_MODULE_PREFIX = f"{PACKAGE_PLUGINS_ROOT}."
+DEFAULT_PACKAGES = (PACKAGE_PLUGINS_ROOT,)
 
 
 def get_attr(obj: Any, name: str, default: Any = None) -> Any:
@@ -182,6 +186,54 @@ def find_inband_plugin_base():
     return get_attr(base_mod, "InBandDataPlugin")
 
 
+def find_oob_plugin_bases() -> tuple[type, ...]:
+    """Return OOB plugin base classes (Redfish + BMC SSH) used to discover OOB plugins."""
+    base_mod = importlib.import_module("nodescraper.base")
+    oob = get_attr(base_mod, "OOBandDataPlugin")
+    oob_ssh = get_attr(base_mod, "OOBSSHDataPlugin")
+    bases = [b for b in (oob, oob_ssh) if b is not None]
+    return tuple(bases)
+
+
+def is_concrete_plugin_class(cls: type) -> bool:
+    if not inspect.isclass(cls):
+        return False
+    return not bool(get_attr(cls, "__abstractmethods__", set()))
+
+
+def all_subclasses_union(bases: Iterable[type]) -> set[type]:
+    """All distinct concrete descendants across one or more base classes (transitive)."""
+    merged: set[type] = set()
+    for base in bases:
+        merged |= all_subclasses_single(base)
+    return merged
+
+
+def all_subclasses_single(cls: type) -> set[type]:
+    seen, out, work = set(), set(), [cls]
+    while work:
+        parent = work.pop()
+        for sub in parent.__subclasses__():
+            if sub not in seen:
+                seen.add(sub)
+                out.add(sub)
+                work.append(sub)
+    return out
+
+
+def plugins_for_package_prefix(base_classes: Iterable[type], package_prefix: str) -> List[type]:
+    """Non-abstract plugin classes under ``base_classes`` whose ``__module__`` starts with *package_prefix*."""
+    found: List[type] = []
+    for cls in all_subclasses_union(base_classes):
+        mod = getattr(cls, "__module__", "") or ""
+        if not mod.startswith(package_prefix):
+            continue
+        if not is_concrete_plugin_class(cls):
+            continue
+        found.append(cls)
+    return found
+
+
 def link_anchor(obj: Any, kind: str) -> str:
     if obj is None or not inspect.isclass(obj):
         return "-"
@@ -226,6 +278,126 @@ def extract_cmds_from_classvars(collector_cls: type) -> List[str]:
         else:
             add_cmd(val)
     return cmds
+
+
+# Optional human-readable bullets for plugins without CMD_* shell snippets (e.g. Redfish).
+DOCUMENTATION_COLLECTION_ITEMS_ATTR = "DOCUMENTATION_COLLECTION_ITEMS"
+DOCUMENTATION_ANALYSIS_ITEMS_ATTR = "DOCUMENTATION_ANALYSIS_ITEMS"
+
+
+def _documentation_lines_for_attr(cls: Any, attr_name: str) -> List[str]:
+    if cls is None or not inspect.isclass(cls):
+        return []
+    raw = get_attr(cls, attr_name, None)
+    if raw is None:
+        return []
+    if isinstance(raw, str):
+        return [ln.strip() for ln in raw.splitlines() if ln.strip()]
+    if isinstance(raw, (list, tuple)):
+        return [str(x).strip() for x in raw if isinstance(x, str) and str(x).strip()]
+    return []
+
+
+def merge_unique_lines(*line_groups: Iterable[str]) -> List[str]:
+    """Concatenate line groups, dropping exact duplicates while preserving order."""
+    seen: set[str] = set()
+    out: List[str] = []
+    for group in line_groups:
+        for line in group:
+            if line not in seen:
+                seen.add(line)
+                out.append(line)
+    return out
+
+
+def extract_collection_lines_for_table(plugin_cls: type, collector_cls: Any) -> List[str]:
+    """Shell CMD_* lines plus optional DOCUMENTATION_COLLECTION_ITEMS (collector then plugin)."""
+    cmd_lines: List[str] = []
+    if inspect.isclass(collector_cls):
+        cmd_lines = extract_cmds_from_classvars(collector_cls)
+    doc_collector = _documentation_lines_for_attr(
+        collector_cls, DOCUMENTATION_COLLECTION_ITEMS_ATTR
+    )
+    doc_plugin = _documentation_lines_for_attr(plugin_cls, DOCUMENTATION_COLLECTION_ITEMS_ATTR)
+    return merge_unique_lines(cmd_lines, doc_collector, doc_plugin)
+
+
+def extract_analysis_doc_lines_for_table(plugin_cls: type, analyzer_cls: Any) -> List[str]:
+    """Optional DOCUMENTATION_ANALYSIS_ITEMS (analyzer then plugin) for the analyzer column."""
+    doc_an = _documentation_lines_for_attr(analyzer_cls, DOCUMENTATION_ANALYSIS_ITEMS_ATTR)
+    doc_pl = _documentation_lines_for_attr(plugin_cls, DOCUMENTATION_ANALYSIS_ITEMS_ATTR)
+    return merge_unique_lines(doc_an, doc_pl)
+
+
+def iter_plugin_collector_classes(plugin_cls: type) -> List[type]:
+    """Return collector class(es) for a plugin (supports tuple COLLECTOR via DataPlugin.get_collector_classes)."""
+    gcs = getattr(plugin_cls, "get_collector_classes", None)
+    if callable(gcs):
+        try:
+            return [c for c in gcs() if inspect.isclass(c)]
+        except Exception:
+            return []
+    return []
+
+
+def collector_has_table_collection_coverage(plugin_cls: type, collector_cls: type) -> bool:
+    """True if the plugin table Collection cell would be non-empty from CMD_* or documentation lines."""
+    if extract_cmds_from_classvars(collector_cls):
+        return True
+    if _documentation_lines_for_attr(collector_cls, DOCUMENTATION_COLLECTION_ITEMS_ATTR):
+        return True
+    if _documentation_lines_for_attr(plugin_cls, DOCUMENTATION_COLLECTION_ITEMS_ATTR):
+        return True
+    return False
+
+
+def analyzer_has_table_analysis_coverage(
+    plugin_cls: type, analyzer_cls: type, analyzer_args_cls: Any
+) -> bool:
+    """True if the Analyzer Args table cell would be non-empty from regex/args extraction or doc lines."""
+    if _documentation_lines_for_attr(analyzer_cls, DOCUMENTATION_ANALYSIS_ITEMS_ATTR):
+        return True
+    if _documentation_lines_for_attr(plugin_cls, DOCUMENTATION_ANALYSIS_ITEMS_ATTR):
+        return True
+    if extract_regexes_and_args_from_analyzer(analyzer_cls, analyzer_args_cls):
+        return True
+    return False
+
+
+def collect_plugin_doc_table_coverage_messages(plugins: List[type]) -> List[str]:
+    """Messages for plugins whose generated table would show '-' for collection or analysis unjustifiably."""
+    msgs: List[str] = []
+    for p in plugins:
+        pname = p.__name__
+        for c in iter_plugin_collector_classes(p):
+            if not collector_has_table_collection_coverage(p, c):
+                msgs.append(
+                    f"{pname}: collector {c.__name__} has no CMD_* command strings and no "
+                    f"{DOCUMENTATION_COLLECTION_ITEMS_ATTR} on the collector or plugin."
+                )
+        an = get_attr(p, "ANALYZER", None)
+        aargs = get_attr(p, "ANALYZER_ARGS", None)
+        if inspect.isclass(an) and not analyzer_has_table_analysis_coverage(p, an, aargs):
+            msgs.append(
+                f"{pname}: analyzer {an.__name__} has no extractable analyzer table content "
+                f"(built-in regexes / *REGEX* attrs / analyzer args fields) and no "
+                f"{DOCUMENTATION_ANALYSIS_ITEMS_ATTR} on the analyzer or plugin."
+            )
+    return msgs
+
+
+def emit_plugin_doc_coverage_warnings(msgs: List[str], *, strict: bool) -> None:
+    if not msgs:
+        return
+    sys.stderr.write("PLUGIN_DOC.md table coverage warnings:\n")
+    for m in msgs:
+        sys.stderr.write(f"  WARNING: {m}\n")
+    if strict:
+        sys.stderr.write(
+            f"error: {len(msgs)} plugin documentation coverage warning(s) "
+            "(--strict-plugin-doc-coverage)\n"
+        )
+        sys.exit(1)
 
 
 def extract_regexes_and_args_from_analyzer(
@@ -335,7 +507,8 @@ def escape_table_cell(s: str) -> str:
     """
     if not s:
         return s
-    return s.replace("|", "&#124;").replace("\n", " ").replace("\r", " ")
+    # Avoid @ in cells (e.g. OData property names) being turned into mail/mention links in Outlook/HTML viewers.
+    return s.replace("|", "&#124;").replace("@", "&#64;").replace("\n", " ").replace("\r", " ")
 
 
 def md_header(text: str, level: int = 2) -> str:
@@ -454,14 +627,14 @@ def generate_plugin_table_rows(plugins: List[type]) -> List[List[str]]:
         an = get_attr(p, "ANALYZER", None)
         args = get_attr(p, "ANALYZER_ARGS", None)
         collector_args_cls = get_attr(p, "COLLECTOR_ARGS", None)
-        cmds: List[str] = []
-        if inspect.isclass(col):
-            cmds = extract_cmds_from_classvars(col)
+        cmds = extract_collection_lines_for_table(p, col)
 
-        # Extract regexes and args from analyzer
-        regex_and_args = []
+        # Extract regexes and args from analyzer; optional DOCUMENTATION_ANALYSIS_* lines first
+        regex_and_args: List[str] = extract_analysis_doc_lines_for_table(
+            p, an if inspect.isclass(an) else None
+        )
         if inspect.isclass(an):
-            regex_and_args = extract_regexes_and_args_from_analyzer(an, args)
+            regex_and_args.extend(extract_regexes_and_args_from_analyzer(an, args))
 
         # Extract collection args from collector args class
         collection_args_lines = extract_collection_args_from_collector_args(collector_args_cls)
@@ -504,7 +677,13 @@ def render_collector_section(col: type, link_base: str, rel_root: Optional[str])
     _url = setup_link(col, link_base, rel_root)
     s += md_kv("Link to code", f"[{Path(_url).name}]({_url})")
 
-    exclude = {"__doc__", "__module__", "__weakref__", "__dict__"}
+    exclude = {
+        "__doc__",
+        "__module__",
+        "__weakref__",
+        "__dict__",
+        DOCUMENTATION_COLLECTION_ITEMS_ATTR,
+    }
     cv = class_vars_dump(col, exclude)
     if cv:
         s += md_header("Class Variables", 3) + md_list(cv)
@@ -515,6 +694,10 @@ def render_collector_section(col: type, link_base: str, rel_root: Optional[str])
     cmds = extract_cmds_from_classvars(col)
     if cmds:
         s += md_header("Commands", 3) + md_list(cmds)
+
+    doc_coll = _documentation_lines_for_attr(col, DOCUMENTATION_COLLECTION_ITEMS_ATTR)
+    if doc_coll:
+        s += md_header("Documented collection", 3) + md_list(doc_coll)
 
     return s
 
@@ -529,10 +712,20 @@ def render_analyzer_section(an: type, link_base: str, rel_root: Optional[str]) -
     _url = setup_link(an, link_base, rel_root)
     s += md_kv("Link to code", f"[{Path(_url).name}]({_url})")
 
-    exclude = {"__doc__", "__module__", "__weakref__", "__dict__"}
+    exclude = {
+        "__doc__",
+        "__module__",
+        "__weakref__",
+        "__dict__",
+        DOCUMENTATION_ANALYSIS_ITEMS_ATTR,
+    }
     cv = class_vars_dump(an, exclude)
     if cv:
         s += md_header("Class Variables", 3) + md_list(cv)
+
+    doc_an = _documentation_lines_for_attr(an, DOCUMENTATION_ANALYSIS_ITEMS_ATTR)
+    if doc_an:
+        s += md_header("Documented analysis", 3) + md_list(doc_an)
 
     # Add regex patterns if present (pass None for args_cls since we don't have context here)
     regex_info = extract_regexes_and_args_from_analyzer(an, None)
@@ -648,9 +841,21 @@ def main():
         description="Generate Plugin Table and detail sections with setup_link + rel-root."
     )
     ap.add_argument(
-        "--package", default=DEFAULT_ROOT_PACKAGE, help="Dotted package or filesystem path"
+        "--package",
+        action="append",
+        dest="packages",
+        default=None,
+        metavar="PKG",
+        help=(
+            "Dotted package or filesystem path to import in addition to the default plugin "
+            f"packages ({', '.join(DEFAULT_PACKAGES)}). Repeatable."
+        ),
     )
-    ap.add_argument("--output", default="PLUGIN_DOC.md", help="Output Markdown file")
+    ap.add_argument(
+        "--output",
+        default="docs/PLUGIN_DOC.md",
+        help="Output Markdown file (default: docs/PLUGIN_DOC.md under repo root)",
+    )
     ap.add_argument(
         "--update-readme-help",
         action="store_true",
@@ -661,31 +866,57 @@ def main():
         default=None,
         help="Path to README.md (default: README.md in current working directory)",
     )
+    ap.add_argument(
+        "--strict-plugin-doc-coverage",
+        action="store_true",
+        help=(
+            "Exit with status 1 if any plugin lacks CMD_* / DOCUMENTATION_COLLECTION_ITEMS "
+            "for collectors or lacks analyzer table content / DOCUMENTATION_ANALYSIS_ITEMS "
+            "when an analyzer is defined."
+        ),
+    )
     args = ap.parse_args()
 
-    root = args.package
-    root_path = Path(root)
-    if os.sep in root or root_path.exists():
-        root = dotted_from_path(root_path)
-    base = find_inband_plugin_base()
-    import_all_modules(root)
+    normalized_extra: List[str] = []
+    if args.packages:
+        for root in args.packages:
+            root_path = Path(root)
+            if os.sep in root or root_path.exists():
+                root = dotted_from_path(root_path)
+            normalized_extra.append(root)
 
-    def all_subclasses(cls: Type) -> set[type]:
-        seen, out, work = set(), set(), [cls]
-        while work:
-            parent = work.pop()
-            for sub in parent.__subclasses__():
-                if sub not in seen:
-                    seen.add(sub)
-                    out.add(sub)
-                    work.append(sub)
-        return out
+    # Always import the full nodescraper.plugins tree; append optional extras.
+    to_import: List[str] = []
+    seen_pkg: set[str] = set()
+    for pkg in list(DEFAULT_PACKAGES) + normalized_extra:
+        if pkg not in seen_pkg:
+            seen_pkg.add(pkg)
+            to_import.append(pkg)
 
-    plugins = [c for c in all_subclasses(base) if c is not base]
-    plugins = [c for c in plugins if not get_attr(c, "__abstractmethods__", set())]
-    plugins.sort(key=lambda c: f"{c.__module__}.{c.__name__}".lower())
+    for pkg in to_import:
+        import_all_modules(pkg)
 
-    rows = generate_plugin_table_rows(plugins)
+    inband_base = find_inband_plugin_base()
+    oob_bases = find_oob_plugin_bases()
+
+    ib_plugins = sorted(
+        plugins_for_package_prefix((inband_base,), PLUGIN_MODULE_PREFIX),
+        key=lambda c: f"{c.__module__}.{c.__name__}".lower(),
+    )
+    oob_plugins = sorted(
+        plugins_for_package_prefix(oob_bases, PLUGIN_MODULE_PREFIX),
+        key=lambda c: f"{c.__module__}.{c.__name__}".lower(),
+    )
+    plugins = sorted(
+        set(ib_plugins) | set(oob_plugins),
+        key=lambda c: f"{c.__module__}.{c.__name__}".lower(),
+    )
+
+    coverage_msgs = collect_plugin_doc_table_coverage_messages(plugins)
+    emit_plugin_doc_coverage_warnings(coverage_msgs, strict=args.strict_plugin_doc_coverage)
+
+    ib_rows = generate_plugin_table_rows(ib_plugins)
+    oob_rows = generate_plugin_table_rows(oob_plugins)
     headers = [
         "Plugin",
         "Collection",
@@ -718,8 +949,10 @@ def main():
 
     out = []
     out.append(md_header("Plugin Documentation", 1))
-    out.append(md_header("Plugin Table", 1))
-    out.append(render_table(headers, rows))
+    out.append(md_header("IB Plugins", 1))
+    out.append(render_table(headers, ib_rows))
+    out.append(md_header("OOB plugins", 1))
+    out.append(render_table(headers, oob_rows))
 
     if collectors:
         out.append(md_header("Collectors", 1))

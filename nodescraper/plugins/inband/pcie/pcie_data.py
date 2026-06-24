@@ -157,6 +157,7 @@ class ExtendedCapabilityEnum(Enum):
     ALT_PROTOCOL = 0x002B  # Alternate Protocol Extended Capability
     SFI = 0x002C  # System Firmware Intermediary (SFI)Extended Capability
     DOE = 0x2E  # 	0x2e	 Data Object Exchange
+    IDE = 0x2F  # 	0x2f	Integrity and Data Encryption (IDE)
     INT_DOE = 0x30  # 	0x30	Integrity and Data Encryption
 
 

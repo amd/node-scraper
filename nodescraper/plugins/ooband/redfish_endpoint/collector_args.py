@@ -59,7 +59,10 @@ class RedfishEndpointCollectorArgs(CollectorArgs):
     )
     follow_next_link: bool = Field(
         default=False,
-        description="If True, follow Members@odata.nextLink pagination for each URI and merge all pages into a single response.",
+        description=(
+            "If True, follow Redfish Members collection OData nextLink pagination for each URI "
+            "and merge all pages into a single response."
+        ),
     )
     max_pages: int = Field(
         default=200,

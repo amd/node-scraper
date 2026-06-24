@@ -38,6 +38,11 @@ class RedfishOemDiagAnalyzer(DataAnalyzer[RedfishOemDiagDataModel, RedfishOemDia
 
     DATA_MODEL = RedfishOemDiagDataModel
 
+    DOCUMENTATION_ANALYSIS_ITEMS: tuple[str, ...] = (
+        "Summarizes success/failure per OEM diagnostic type from collected results.",
+        "When analysis_args.require_all_success is true, fails the run if any type failed collection.",
+    )
+
     def analyze_data(
         self,
         data: RedfishOemDiagDataModel,
