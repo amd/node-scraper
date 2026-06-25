@@ -33,7 +33,7 @@ from typing import Iterable, Optional
 
 # Python 3.9 compatibility: EntryPoints type was added in 3.10
 try:
-    from importlib.metadata import EntryPoints
+    from importlib.metadata import EntryPoints  # type: ignore[attr-defined]
 except ImportError:
     EntryPoints = Iterable  # type: ignore[misc, assignment]
 
