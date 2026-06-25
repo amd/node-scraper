@@ -67,7 +67,7 @@ class ScaleOutAristaCollector(
     output into a :class:`ScaleOutAristaDataModel`.
     """
 
-    SUPPORTED_OS_FAMILY: set[OSFamily] = {OSFamily.LINUX, OSFamily.UNKNOWN}
+    SUPPORTED_OS_FAMILY: set[OSFamily] = {OSFamily.EOS, OSFamily.LINUX, OSFamily.UNKNOWN}
 
     DATA_MODEL = ScaleOutAristaDataModel
 
@@ -136,9 +136,6 @@ class ScaleOutAristaCollector(
             Parsed JSON (dict or list), or ``None`` if the call failed.
         """
         cmd_ret: CommandArtifact = self._run_sut_cmd(command)
-        # After sending the JSON version, also send the non-JSON version when
-        # the html_view flag is set so readable output is captured too.
-        self._collect_html_view(command)
         if cmd_ret.exit_code != 0:
             self._log_event(
                 category=EventCategory.SWITCH,
@@ -153,7 +150,7 @@ class ScaleOutAristaCollector(
             )
             return None
         try:
-            return json.loads(cmd_ret.stdout)
+            parsed = json.loads(cmd_ret.stdout)
         except json.JSONDecodeError as e:
             self._log_event(
                 category=EventCategory.SWITCH,
@@ -166,6 +163,9 @@ class ScaleOutAristaCollector(
                 console_log=True,
             )
             return None
+
+        self._append_html_view_artifact(command, cmd_ret, parsed)
+        return parsed
 
     def _run_arista_text(self, command: str) -> Optional[str]:
         """Run an Arista EOS command returning text.
@@ -220,6 +220,11 @@ class ScaleOutAristaCollector(
             return "Ethernet" + short_name[2:]
         return short_name
 
+    @staticmethod
+    def _is_ethernet_port(port_name: str) -> bool:
+        """Return True for physical Ethernet interfaces (not Port-Channel, Management, etc.)."""
+        return port_name.startswith("Ethernet")
+
     def get_port_status(self) -> Optional[Dict[str, AristaPortStatus]]:
         """Collect per-port status via ``show interfaces status | json | no-more``.
 
@@ -239,8 +244,7 @@ class ScaleOutAristaCollector(
             return None
         result: Dict[str, AristaPortStatus] = {}
         for port_name, port_data in interfaces.items():
-            # Restrict to Ethernet ports, matching the other per-port collectors.
-            if not isinstance(port_data, dict) or not port_name.startswith("Ethernet"):
+            if not isinstance(port_data, dict) or not self._is_ethernet_port(port_name):
                 continue
             try:
                 result[port_name] = AristaPortStatus(**port_data)
@@ -320,6 +324,8 @@ class ScaleOutAristaCollector(
             return None
         result: Dict[str, AristaCountersErrors] = {}
         for port_name, counters in interfaces.items():
+            if not self._is_ethernet_port(port_name):
+                continue
             try:
                 result[port_name] = AristaCountersErrors(**counters)
             except (ValidationError, TypeError) as e:
@@ -346,6 +352,8 @@ class ScaleOutAristaCollector(
             return None
         result: Dict[str, AristaPacketCounters] = {}
         for port_name, counters in interfaces.items():
+            if not self._is_ethernet_port(port_name):
+                continue
             try:
                 result[port_name] = AristaPacketCounters(**counters)
             except (ValidationError, TypeError) as e:
@@ -379,7 +387,7 @@ class ScaleOutAristaCollector(
         out_bins: Dict[str, AristaBinsCounters] = {}
         in_bins: Dict[str, AristaBinsCounters] = {}
         for port_name, counters in interfaces.items():
-            if not isinstance(counters, dict):
+            if not self._is_ethernet_port(port_name) or not isinstance(counters, dict):
                 continue
             out_data = counters.get("outBinsCounters")
             in_data = counters.get("inBinsCounters")
@@ -420,6 +428,8 @@ class ScaleOutAristaCollector(
             return None
         result: Dict[str, AristaIpCounters] = {}
         for port_name, counters in interfaces.items():
+            if not self._is_ethernet_port(port_name):
+                continue
             try:
                 result[port_name] = AristaIpCounters(**counters)
             except (ValidationError, TypeError) as e:
@@ -446,6 +456,8 @@ class ScaleOutAristaCollector(
             return None
         result: Dict[str, AristaRatesCounters] = {}
         for port_name, counters in interfaces.items():
+            if not self._is_ethernet_port(port_name):
+                continue
             try:
                 result[port_name] = AristaRatesCounters(**counters)
             except (ValidationError, TypeError) as e:
@@ -476,6 +488,8 @@ class ScaleOutAristaCollector(
             return None
         result: Dict[str, AristaPfcCounters] = {}
         for port_name, counters in interfaces.items():
+            if not self._is_ethernet_port(port_name):
+                continue
             try:
                 result[port_name] = AristaPfcCounters(**counters)
             except (ValidationError, TypeError) as e:
@@ -511,6 +525,8 @@ class ScaleOutAristaCollector(
             if not match:
                 continue
             port_name = self._expand_port_name(match.group("port"))
+            if not self._is_ethernet_port(port_name):
+                continue
             try:
                 result[port_name] = AristaDroppedPacketCounters(
                     in_dropped_pkts=int(match.group("in_dropped")),
@@ -547,6 +563,8 @@ class ScaleOutAristaCollector(
             if not match:
                 continue
             port_name = match.group("port")
+            if not self._is_ethernet_port(port_name):
+                continue
             try:
                 result[port_name] = AristaDropPrecedenceCounters(
                     dp0_dropped_pkts=int(match.group("dp0")),
@@ -588,6 +606,8 @@ class ScaleOutAristaCollector(
             if not match:
                 continue
             port_name = self._expand_port_name(match.group("port"))
+            if not self._is_ethernet_port(port_name):
+                continue
             try:
                 entry = AristaPerQueueCounters(
                     txq=match.group("txq"),
@@ -623,6 +643,8 @@ class ScaleOutAristaCollector(
             return None
         result: Dict[str, AristaPauseFrameCounters] = {}
         for port_name, counters in interfaces.items():
+            if not self._is_ethernet_port(port_name):
+                continue
             try:
                 result[port_name] = AristaPauseFrameCounters(**counters)
             except (ValidationError, TypeError) as e:
@@ -655,7 +677,7 @@ class ScaleOutAristaCollector(
             return None
         result: Dict[str, List[AristaEcnCounters]] = {}
         for port_name, port_data in interfaces.items():
-            if not isinstance(port_data, dict):
+            if not self._is_ethernet_port(port_name) or not isinstance(port_data, dict):
                 continue
             queue_counters = port_data.get("queueCounters", {})
             if not isinstance(queue_counters, dict):
@@ -712,24 +734,24 @@ class ScaleOutAristaCollector(
                     console_log=True,
                 )
 
-    def _collect_html_view(self, command: str) -> None:
-        """Re-run a ``| json`` command without the json tag for readable output."""
-        if not self._html_view or "| json" not in command:
+    def _append_html_view_artifact(
+        self,
+        json_command: str,
+        cmd_ret: CommandArtifact,
+        parsed: Union[dict, list],
+    ) -> None:
+        """Add a human-readable artifact for HTML reports without a second SSH command."""
+        if not self._html_view or "| json" not in json_command:
             return
-        text_command = command.replace(" | json", "")
-        try:
-            self._run_sut_cmd(text_command)
-        except Exception as e:
-            self._log_event(
-                category=EventCategory.SWITCH,
-                description=f"Error running html_view command: `{text_command}`",
-                data={
-                    "command": text_command,
-                    "exception": get_exception_traceback(e),
-                },
-                priority=EventPriority.WARNING,
-                console_log=True,
+        text_command = json_command.replace(" | json", "")
+        self.result.artifacts.append(
+            CommandArtifact(
+                command=text_command,
+                stdout=json.dumps(parsed, indent=2, sort_keys=True),
+                stderr=cmd_ret.stderr or "",
+                exit_code=cmd_ret.exit_code,
             )
+        )
 
     def _preflight_check(self) -> Optional[AristaVersion]:
         """Verify the switch is a reachable Arista EOS device.
@@ -817,10 +839,8 @@ class ScaleOutAristaCollector(
             self.result.status = ExecutionStatus.EXECUTION_FAILURE
             return self.result, None
 
-        # Build per-port PortData from all per-port collectors.
-        all_port_names: set[str] = set()
-        for d in (
-            port_status,
+        # Canonical port list from interface status; fall back to filtered union.
+        per_port_dicts = (
             error_counters,
             packet_counters,
             out_bins,
@@ -833,9 +853,14 @@ class ScaleOutAristaCollector(
             per_queue_counters,
             pause_frame_counters,
             ecn_counters,
-        ):
-            if d:
-                all_port_names.update(d.keys())
+        )
+        if port_status:
+            all_port_names = set(port_status.keys())
+        else:
+            all_port_names = set()
+            for d in per_port_dicts:
+                if d:
+                    all_port_names.update(name for name in d.keys() if self._is_ethernet_port(name))
 
         port_data: Optional[Dict[str, PortData]] = None
         if all_port_names:

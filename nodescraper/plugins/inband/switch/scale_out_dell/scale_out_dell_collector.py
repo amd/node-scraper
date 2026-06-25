@@ -25,7 +25,7 @@
 ###############################################################################
 
 import re
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, TypedDict
 
 from pydantic import ValidationError
 
@@ -36,6 +36,7 @@ from nodescraper.models import TaskResult
 from nodescraper.utils import get_exception_details, get_exception_traceback
 
 from .collector_args import ScaleOutDellCollectorArgs
+from .port_names import resolve_detail_port_names, to_eth_port_name
 from .scaleoutdelldata import (
     DellArpEntry,
     DellFecStatus,
@@ -51,6 +52,17 @@ from .scaleoutdelldata import (
 )
 
 
+class _ParsedInterfaceStatusLine(TypedDict):
+    name: str
+    description: str
+    oper: str
+    reason: str
+    auto_neg: str
+    speed: int
+    mtu: int
+    alternate_name: str
+
+
 class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutDellCollectorArgs]):
     """Collect Dell SONiC switch data.
 
@@ -58,7 +70,7 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
     output into a :class:`ScaleOutDellDataModel`.
     """
 
-    SUPPORTED_OS_FAMILY: set[OSFamily] = {OSFamily.LINUX, OSFamily.UNKNOWN}
+    SUPPORTED_OS_FAMILY: set[OSFamily] = {OSFamily.SONIC, OSFamily.LINUX, OSFamily.UNKNOWN}
 
     DATA_MODEL = ScaleOutDellDataModel
 
@@ -113,6 +125,27 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
     CMD_EVENT_DETAILS = "show event details | no-more"
     CMD_ALARM = "show alarm | no-more"
 
+    _INTERFACE_STATUS_LINE_RE = re.compile(
+        r"^"
+        r"(?P<name>Eth\S+)"
+        r"\s+"
+        r"(?P<description>.+)"
+        r"\s+"
+        r"(?P<oper>up|down)"
+        r"\s+"
+        r"(?P<reason>\S+)"
+        r"\s+"
+        r"(?P<auto_neg>\S+)"
+        r"\s+"
+        r"(?P<speed>\d+)"
+        r"\s+"
+        r"(?P<mtu>\d+)"
+        r"\s+"
+        r"(?P<alt>\S+)"
+        r"\s*$",
+        re.IGNORECASE,
+    )
+
     # Aggregate of the diagnostic CMD_* commands above
     ARTIFACT_COMMANDS: list[str] = [
         CMD_CLOCK,
@@ -150,7 +183,6 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
         CMD_PLATFORM_ENVIRONMENT,
         CMD_EVENT_DETAILS,
         CMD_ALARM,
-        CMD_FEC_STATUS,  # temporarily added as artifact
     ]
 
     # helpers
@@ -170,6 +202,11 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
             The command as ``sonic-cli -c "<command>"``.
         """
         return f'sonic-cli -c "{command}"'
+
+    @staticmethod
+    def _canonical_eth_port(port: str) -> Optional[str]:
+        """Return a validated ``Eth…`` port name safe for CLI interpolation."""
+        return to_eth_port_name(port)
 
     def _run_dell_command(self, command: str) -> Optional[str]:
         """Run a Dell SONiC CLI command via ``sonic-cli -c``.
@@ -199,6 +236,26 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
         return cmd_ret.stdout or ""
 
     # sub-collectors
+    @classmethod
+    def _parse_interface_status_line(cls, line: str) -> Optional[_ParsedInterfaceStatusLine]:
+        """Parse one ``show interface status`` row by anchoring fixed trailing columns."""
+        stripped = line.strip()
+        if not stripped or not stripped.startswith("Eth"):
+            return None
+        match = cls._INTERFACE_STATUS_LINE_RE.match(stripped)
+        if not match:
+            return None
+        return {
+            "name": match.group("name"),
+            "description": match.group("description").strip(),
+            "oper": match.group("oper").lower(),
+            "reason": match.group("reason"),
+            "auto_neg": match.group("auto_neg"),
+            "speed": int(match.group("speed")),
+            "mtu": int(match.group("mtu")),
+            "alternate_name": match.group("alt"),
+        }
+
     def get_interface_status(self) -> Optional[Dict[str, DellInterfaceStatus]]:
         """Parse ``show interface status`` into per-port status models.
 
@@ -208,33 +265,14 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
         text = self._run_dell_command(self.CMD_INTERFACE_STATUS)
         if text is None:
             return None
-        line_pattern = re.compile(
-            r"^(?P<name>Eth\S+)"
-            r"\s+(?P<description>.+?)"
-            r"\s+(?P<oper>\S+)"
-            r"\s+(?P<reason>\S+)"
-            r"\s+(?P<auto_neg>\S+)"
-            r"\s+(?P<speed>\d+)"
-            r"\s+(?P<mtu>\d+)"
-            r"\s+(?P<alt>\S+)\s*$"
-        )
         result: Dict[str, DellInterfaceStatus] = {}
         for line in text.splitlines():
-            match = line_pattern.match(line.strip())
-            if not match:
+            parsed = self._parse_interface_status_line(line)
+            if parsed is None:
                 continue
-            name = match.group("name")
+            name = str(parsed["name"])
             try:
-                result[name] = DellInterfaceStatus(
-                    name=name,
-                    description=match.group("description"),
-                    oper=match.group("oper"),
-                    reason=match.group("reason"),
-                    auto_neg=match.group("auto_neg"),
-                    speed=int(match.group("speed")),
-                    mtu=int(match.group("mtu")),
-                    alternate_name=match.group("alt"),
-                )
+                result[name] = DellInterfaceStatus(**parsed)
             except (ValidationError, TypeError) as e:
                 self._log_event(
                     category=EventCategory.SWITCH,
@@ -313,7 +351,16 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
             return None
         result: Dict[str, DellInterfaceDetailCounters] = {}
         for port_name in port_names:
-            text = self._run_dell_command(self.CMD_DETAIL_COUNTERS.format(port=port_name))
+            safe_port = self._canonical_eth_port(port_name)
+            if safe_port is None:
+                self._log_event(
+                    category=EventCategory.SWITCH,
+                    description=f"Skipping detail counters for invalid port name: {port_name!r}",
+                    data={"port": port_name},
+                    priority=EventPriority.WARNING,
+                )
+                continue
+            text = self._run_dell_command(self.CMD_DETAIL_COUNTERS.format(port=safe_port))
             if text is None:
                 continue
             parsed = self._parse_detail_counters_block(text)
@@ -738,6 +785,7 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
 
             # Determine the port list before issuing per-port commands.
             ports_arg = args.collection_ports if args else None
+            detail_port_names: List[str]
             if ports_arg is not None:
                 if not isinstance(ports_arg, list) or not all(
                     isinstance(p, str) for p in ports_arg
@@ -751,7 +799,20 @@ class ScaleOutDellCollector(InBandDataCollector[ScaleOutDellDataModel, ScaleOutD
                     )
                     self.result.status = ExecutionStatus.EXECUTION_FAILURE
                     return self.result, None
-                detail_port_names = [p if p.startswith("Eth") else f"Eth{p}" for p in ports_arg]
+                resolved_names, invalid_port = resolve_detail_port_names(
+                    ports_arg, interface_status
+                )
+                if invalid_port is not None or resolved_names is None:
+                    self._log_event(
+                        category=EventCategory.SWITCH,
+                        description="Invalid collection_ports entry for ScaleOutDellCollector",
+                        data={"port": invalid_port, "ports": ports_arg},
+                        priority=EventPriority.ERROR,
+                        console_log=True,
+                    )
+                    self.result.status = ExecutionStatus.EXECUTION_FAILURE
+                    return self.result, None
+                detail_port_names = resolved_names
             elif interface_status:
                 detail_port_names = list(interface_status.keys())
             else:

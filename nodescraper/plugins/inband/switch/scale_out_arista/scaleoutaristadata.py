@@ -162,7 +162,6 @@ class AristaPortStatus(BaseModel):
 
     error_fields: ClassVar[dict[str, str]] = {
         "link_status": "connected",
-        "bandwidth": "400000000000",
         "duplex": "duplexFull",
         "line_protocol_status": "up",
     }

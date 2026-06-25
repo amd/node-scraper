@@ -27,11 +27,14 @@
 import re
 from typing import Any, ClassVar
 
+from pydantic import BaseModel
+
 from nodescraper.interfaces import DataAnalyzer
 
 from ..switch_analyzer_base import SwitchAnalyzerBase
 from .analyzer_args import ScaleOutDellAnalyzerArgs
-from .scaleoutdelldata import ScaleOutDellDataModel
+from .port_names import PORT_TOKEN_RE
+from .scaleoutdelldata import DellPortData, ScaleOutDellDataModel
 
 
 class ScaleOutDellAnalyzer(
@@ -48,7 +51,7 @@ class ScaleOutDellAnalyzer(
     VENDOR_NAME: ClassVar[str] = "Dell"
     DATA_MODEL = ScaleOutDellDataModel
 
-    PORT_NAME_RE: ClassVar[re.Pattern] = re.compile(r"^(?:Eth)?(\d+(?:/\d+)*)$", re.IGNORECASE)
+    PORT_NAME_RE: ClassVar[re.Pattern] = PORT_TOKEN_RE
     PORT_FORMAT_HINT: ClassVar[str] = "expected slash-separated decimals (e.g. 'M/S', 'A/B/C')"
 
     def _walk_system(self, switch_data: ScaleOutDellDataModel) -> list[dict[str, Any]]:
@@ -71,3 +74,25 @@ class ScaleOutDellAnalyzer(
             )
 
         return findings
+
+    def _extra_port_findings(self, port_name: str, port_data: BaseModel) -> list[dict[str, Any]]:
+        if not isinstance(port_data, DellPortData):
+            return []
+
+        args = self._analyzer_args
+        if not isinstance(args, ScaleOutDellAnalyzerArgs):
+            args = ScaleOutDellAnalyzerArgs()
+
+        status = port_data.interface_status
+        if status is None:
+            return []
+
+        finding = self._port_field_mismatch(
+            port_name,
+            "interface_status",
+            "speed",
+            status.speed,
+            args.expected_port_speed,
+            "DellInterfaceStatus",
+        )
+        return [finding] if finding else []

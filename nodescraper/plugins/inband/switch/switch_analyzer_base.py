@@ -150,6 +150,7 @@ class SwitchAnalyzerBase(Generic[TSwitchData]):
         """Analyze a single vendor's switch data model"""
 
         ports = getattr(args, "analysis_ports", None) if args is not None else None
+        self._analyzer_args = args
 
         try:
             allowed_ports = self._parse_ports_kwarg(ports)
@@ -159,7 +160,7 @@ class SwitchAnalyzerBase(Generic[TSwitchData]):
             return self.result
 
         try:
-            error_state = self._run_checks(data, allowed_ports)
+            has_errors, has_warnings = self._run_checks(data, allowed_ports)
         except Exception as e:
             self._log_event(
                 category=EventCategory.SWITCH,
@@ -172,10 +173,18 @@ class SwitchAnalyzerBase(Generic[TSwitchData]):
             self.result.status = ExecutionStatus.EXECUTION_FAILURE
             return self.result
 
-        if error_state:
-            self.result.message = f"{self.VENDOR_NAME} errors or warnings detected"
-        else:
+        if not has_errors and not has_warnings:
             self.result.message = f"No {self.VENDOR_NAME} errors or warnings detected"
+            self.result.status = ExecutionStatus.OK
+        elif has_errors and has_warnings:
+            self.result.message = f"{self.VENDOR_NAME} errors and warnings detected"
+            self.result.status = ExecutionStatus.ERROR
+        elif has_errors:
+            self.result.message = f"{self.VENDOR_NAME} errors detected"
+            self.result.status = ExecutionStatus.ERROR
+        else:
+            self.result.message = f"{self.VENDOR_NAME} warnings detected"
+            self.result.status = ExecutionStatus.WARNING
 
         return self.result
 
@@ -225,8 +234,12 @@ class SwitchAnalyzerBase(Generic[TSwitchData]):
         self,
         switch_data: TSwitchData,
         allowed_ports: Optional[set[str]],
-    ) -> bool:
-        """Execute system- and per-port-level checks"""
+    ) -> tuple[bool, bool]:
+        """Execute system- and per-port-level checks.
+
+        Returns:
+            Tuple of (has_errors, has_warnings) derived from findings before events are emitted.
+        """
 
         findings: list[dict[str, Any]] = list(self._walk_system(switch_data))
 
@@ -260,7 +273,9 @@ class SwitchAnalyzerBase(Generic[TSwitchData]):
                 )
 
         self._emit_grouped_findings(findings)
-        return bool(findings)
+        has_errors = any(f["priority"] >= EventPriority.ERROR for f in findings)
+        has_warnings = any(f["priority"] == EventPriority.WARNING for f in findings)
+        return has_errors, has_warnings
 
     def _emit_grouped_findings(self, findings: list[dict[str, Any]]) -> None:
         """Emit at most one event per (location, priority) group"""
@@ -277,7 +292,7 @@ class SwitchAnalyzerBase(Generic[TSwitchData]):
             kind = "warnings" if priority == EventPriority.WARNING else "errors"
             mismatches = ", ".join(self._format_mismatch(item) for item in items)
             self._log_event(
-                category=EventCategory.NETWORK,
+                category=EventCategory.SWITCH,
                 description=(f"{self.VENDOR_NAME} {kind} detected on {location}: {mismatches}"),
                 data={
                     "location": location,
@@ -321,7 +336,13 @@ class SwitchAnalyzerBase(Generic[TSwitchData]):
             model = getattr(port_data, attr, None)
             if model is None:
                 if _model_is_analyzed(model_cls):
-                    findings.append(self._missing_submodel_finding(port_name, attr, model_cls))
+                    findings.append(
+                        self._missing_submodel_finding(
+                            attr,
+                            model_cls,
+                            {"port": port_name, "section": attr},
+                        )
+                    )
                 continue
             findings.extend(
                 self._check_model(
@@ -334,7 +355,13 @@ class SwitchAnalyzerBase(Generic[TSwitchData]):
             items = getattr(port_data, attr, None)
             if items is None:
                 if _model_is_analyzed(elem_cls):
-                    findings.append(self._missing_submodel_finding(port_name, attr, elem_cls))
+                    findings.append(
+                        self._missing_submodel_finding(
+                            attr,
+                            elem_cls,
+                            {"port": port_name, "section": attr},
+                        )
+                    )
                 continue
             for idx, item in enumerate(items):
                 if item is None:
@@ -346,20 +373,57 @@ class SwitchAnalyzerBase(Generic[TSwitchData]):
                     )
                 )
 
+        findings.extend(self._extra_port_findings(port_name, port_data))
+
         return findings
 
+    def _extra_port_findings(self, port_name: str, port_data: BaseModel) -> list[dict[str, Any]]:
+        """Return additional per-port findings from analyzer args (subclass hook)."""
+
+        return []
+
+    def _port_field_mismatch(
+        self,
+        port_name: str,
+        section: str,
+        field_name: str,
+        actual: Any,
+        expected: Any,
+        model_name: str,
+        priority: EventPriority = EventPriority.ERROR,
+    ) -> Optional[dict[str, Any]]:
+        """Build a finding when a port field does not match the expected value."""
+
+        if actual is None:
+            return None
+        if _values_match(actual, expected):
+            return None
+        return {
+            "priority": priority,
+            "field": field_name,
+            "actual": actual,
+            "expected": expected,
+            "model": model_name,
+            "context": {"port": port_name, "section": section},
+        }
+
     def _missing_submodel_finding(
-        self, port_name: str, attr: str, model_cls: Type[BaseModel]
+        self,
+        attr: str,
+        model_cls: Type[BaseModel],
+        context: Mapping[str, Any],
     ) -> dict[str, Any]:
         """Build a warning finding for an analyzed sub-model that is absent"""
 
+        parent_section = context.get("section")
+        section = f"{parent_section}.{attr}" if parent_section else attr
         return {
             "priority": EventPriority.WARNING,
             "field": attr,
             "actual": None,
             "model": model_cls.__name__,
             "missing": True,
-            "context": {"port": port_name, "section": attr},
+            "context": {**dict(context), "section": section},
         }
 
     def _check_model(self, model: BaseModel, context: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -374,6 +438,40 @@ class SwitchAnalyzerBase(Generic[TSwitchData]):
             if not fields:
                 continue
             findings.extend(self._check_fields(model, fields, priority, context))
+
+        parent_section = context.get("section")
+        scalar_attrs, list_attrs = _classify_port_submodel_fields(type(model))
+
+        for attr, model_cls in scalar_attrs:
+            if not _model_is_analyzed(model_cls):
+                continue
+            nested = getattr(model, attr, None)
+            nested_context = {
+                **dict(context),
+                "section": f"{parent_section}.{attr}" if parent_section else attr,
+            }
+            if nested is None:
+                findings.append(self._missing_submodel_finding(attr, model_cls, context))
+                continue
+            findings.extend(self._check_model(nested, nested_context))
+
+        for attr, elem_cls in list_attrs:
+            if not _model_is_analyzed(elem_cls):
+                continue
+            items = getattr(model, attr, None)
+            nested_section = f"{parent_section}.{attr}" if parent_section else attr
+            if items is None:
+                findings.append(self._missing_submodel_finding(attr, elem_cls, context))
+                continue
+            for idx, item in enumerate(items):
+                if item is None:
+                    continue
+                findings.extend(
+                    self._check_model(
+                        item,
+                        {**dict(context), "section": nested_section, "index": idx},
+                    )
+                )
 
         return findings
 

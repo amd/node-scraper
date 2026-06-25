@@ -83,7 +83,6 @@ class DellInterfaceStatus(BaseModel):
 
     error_fields: ClassVar[dict[str, str]] = {
         "oper": "up",
-        "speed": "400000",
     }
 
 

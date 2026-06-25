@@ -34,7 +34,8 @@ class ScaleOutAristaCollectorArgs(CollectorArgs):
     html_view: bool = Field(
         default=False,
         description=(
-            "Set true to run the '| json' commands again without the json tag, "
-            "producing human-readable (non-JSON) command output for HTML artifact."
+            "When true, add a second command_artifacts entry per '| json' command "
+            "using pretty-printed JSON from the same SSH run (labeled with the "
+            "non-json command name) for HTML reports. Does not re-run commands on the switch."
         ),
     )

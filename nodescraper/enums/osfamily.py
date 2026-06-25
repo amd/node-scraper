@@ -32,3 +32,5 @@ class OSFamily(enum.Enum):
     WINDOWS = enum.auto()
     UNKNOWN = enum.auto()
     LINUX = enum.auto()
+    EOS = enum.auto()
+    SONIC = enum.auto()

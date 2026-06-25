@@ -27,11 +27,13 @@
 import re
 from typing import Any, ClassVar
 
+from pydantic import BaseModel
+
 from nodescraper.interfaces import DataAnalyzer
 
 from ..switch_analyzer_base import SwitchAnalyzerBase
 from .analyzer_args import ScaleOutAristaAnalyzerArgs
-from .scaleoutaristadata import ScaleOutAristaDataModel
+from .scaleoutaristadata import PortData, ScaleOutAristaDataModel
 
 
 class ScaleOutAristaAnalyzer(
@@ -89,3 +91,25 @@ class ScaleOutAristaAnalyzer(
             )
 
         return findings
+
+    def _extra_port_findings(self, port_name: str, port_data: BaseModel) -> list[dict[str, Any]]:
+        if not isinstance(port_data, PortData):
+            return []
+
+        args = self._analyzer_args
+        if not isinstance(args, ScaleOutAristaAnalyzerArgs):
+            args = ScaleOutAristaAnalyzerArgs()
+
+        status = port_data.port_status
+        if status is None:
+            return []
+
+        finding = self._port_field_mismatch(
+            port_name,
+            "port_status",
+            "bandwidth",
+            status.bandwidth,
+            args.expected_port_bandwidth,
+            "AristaPortStatus",
+        )
+        return [finding] if finding else []

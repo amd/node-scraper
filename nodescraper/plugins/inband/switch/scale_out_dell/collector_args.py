@@ -36,9 +36,8 @@ class ScaleOutDellCollectorArgs(CollectorArgs):
     collection_ports: Optional[List[str]] = Field(
         default=None,
         description=(
-            "Restrict the detail port status collection to the "
-            "given port names (e.g. ['1/1', '1/1/2'] )"
-            "When omitted, every port discovered "
-            "via 'show interface status' is queried."
+            "Restrict detail counter collection to these ports. Accepts the same "
+            "tokens as analysis_ports (e.g. ['1/1', '1/1/2'] or ['Eth1/1/1']). "
+            "When omitted, every port from 'show interface status' is queried."
         ),
     )

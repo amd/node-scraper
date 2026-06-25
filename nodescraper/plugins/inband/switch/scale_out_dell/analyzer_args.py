@@ -36,9 +36,16 @@ class ScaleOutDellAnalyzerArgs(AnalyzerArgs):
     analysis_ports: Optional[List[str]] = Field(
         default=None,
         description=(
-            "Restrict per-port analysis to the given ports. Ports are "
-            "S/P/[SP] where subport is optional (e.g. ['1/1', '1/31', '1/1/1']) "
-            "When omitted, every port present in the data is analyzed."
+            "Restrict per-port analysis to the given ports. Accepts optional Eth "
+            "prefix (e.g. ['1/1', '1/31', '1/1/1'] or ['Eth1/1/1']). "
+            "When omitted, every port present in the data is analyzed. "
             "Independent of any collection-time filter."
+        ),
+    )
+    expected_port_speed: int = Field(
+        default=400000,
+        description=(
+            "Expected interface speed (Mbps) from show interface status "
+            "(DellInterfaceStatus.speed). Ports with a different speed are flagged."
         ),
     )

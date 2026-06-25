@@ -23,29 +23,36 @@
 # SOFTWARE.
 #
 ###############################################################################
-from typing import List, Optional
+from nodescraper.plugins.inband.switch.scale_out_dell.port_names import (
+    normalize_port_token,
+    resolve_detail_port_names,
+    to_eth_port_name,
+)
 
-from pydantic import Field
 
-from nodescraper.models import AnalyzerArgs
+def test_normalize_port_token_accepts_eth_prefix():
+    assert normalize_port_token("Eth1/1/1") == "1/1/1"
+    assert normalize_port_token("1/1") == "1/1"
 
 
-class ScaleOutAristaAnalyzerArgs(AnalyzerArgs):
-    """Arguments for the Arista switch analyzer."""
+def test_to_eth_port_name_builds_valid_cli_name():
+    assert to_eth_port_name("1/1/1") == "Eth1/1/1"
+    assert to_eth_port_name("Eth1/1") == "Eth1/1"
 
-    analysis_ports: Optional[List[str]] = Field(
-        default=None,
-        description=(
-            "Restrict per-port analysis to the given ports. Ports are "
-            "S/P/[SP] where subport is optional (e.g. ['1/1', '1/31', '1/1/1']) "
-            "When omitted, every port present in the data is analyzed."
-            "Independent of any collection-time filter."
-        ),
-    )
-    expected_port_bandwidth: int = Field(
-        default=400000000000,
-        description=(
-            "Expected interface bandwidth (bps) from show interfaces status "
-            "(AristaPortStatus.bandwidth). Ports with a different bandwidth are flagged."
-        ),
-    )
+
+def test_to_eth_port_name_rejects_injection():
+    assert to_eth_port_name('Eth1"; rm -rf /') is None
+    assert to_eth_port_name("not-a-port") is None
+
+
+def test_resolve_detail_port_names_uses_interface_status_keys():
+    status = {"Eth1/1/1": object(), "Eth1/1/2": object()}
+    names, invalid = resolve_detail_port_names(["1/1/1", "Eth1/1/2"], status)
+    assert invalid is None
+    assert names == ["Eth1/1/1", "Eth1/1/2"]
+
+
+def test_resolve_detail_port_names_falls_back_without_status():
+    names, invalid = resolve_detail_port_names(["1/1/1"], None)
+    assert invalid is None
+    assert names == ["Eth1/1/1"]
