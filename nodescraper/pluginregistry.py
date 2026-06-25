@@ -29,8 +29,13 @@ import inspect
 import pkgutil
 import threading
 import types
-from importlib.metadata import EntryPoints
 from typing import Iterable, Optional
+
+# Python 3.9 compatibility: EntryPoints type was added in 3.10
+try:
+    from importlib.metadata import EntryPoints
+except ImportError:
+    EntryPoints = Iterable  # type: ignore[misc, assignment]
 
 import nodescraper.connection as internal_connections
 import nodescraper.plugins as internal_plugins
