@@ -25,7 +25,7 @@
 ###############################################################################
 from typing import Any
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, ConfigDict, model_serializer, model_validator
 
 
 class AnalyzerArgs(BaseModel):
@@ -37,7 +37,16 @@ class AnalyzerArgs(BaseModel):
 
     """
 
-    model_config = {"extra": "forbid", "exclude_none": True}
+    model_config = ConfigDict(extra="forbid")
+
+    @model_serializer
+    def serialize_exclude_none(self) -> dict:
+        """Serialize the model to a dictionary, excluding None values.
+
+        Returns:
+            A dictionary representation of the model with None values excluded.
+        """
+        return self.model_dump(exclude_none=True)
 
     @model_validator(mode="before")
     @classmethod
@@ -89,5 +98,5 @@ class AnalyzerArgs(BaseModel):
             NotImplementedError: Not implemented error
         """
         raise NotImplementedError(
-            "Setting analyzer args from datamodel is not implemented for class: %s", cls.__name__
+            f"Setting analyzer args from datamodel is not implemented for class: {cls.__name__}",
         )
