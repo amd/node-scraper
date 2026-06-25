@@ -60,12 +60,12 @@ class PluginDiscovery:
         if not self._use_cache:
             return PluginRegistry().plugins.get(plugin_name)
 
-        if self._plugin_cache is None:
-            with self._cache_lock:
-                if self._plugin_cache is None:
-                    self._plugin_cache = PluginRegistry().plugins
+        if PluginDiscovery._plugin_cache is None:
+            with PluginDiscovery._cache_lock:
+                if PluginDiscovery._plugin_cache is None:
+                    PluginDiscovery._plugin_cache = PluginRegistry().plugins
 
-        return self._plugin_cache.get(plugin_name)
+        return PluginDiscovery._plugin_cache.get(plugin_name)
 
     def plugin_has_collector(self, plugin_name: str) -> bool:
         """Check if a plugin has a COLLECTOR attribute.
@@ -119,13 +119,14 @@ class PluginDiscovery:
         """
         return tuple(sorted(name for name in plugin_names if self.plugin_has_analyzer(name)))
 
-    def clear_cache(self) -> None:
+    @staticmethod
+    def clear_cache() -> None:
         """Clears the plugin cache, forcing future lookups to query the PluginRegistry again.
 
         Thread-safe: Acquires the cache lock to ensure no other thread is accessing the cache.
         """
-        with self._cache_lock:
-            self._plugin_cache = None
+        with PluginDiscovery._cache_lock:
+            PluginDiscovery._plugin_cache = None
 
     def registered_plugin_names(self) -> tuple[str, ...]:
         """Return all plugin names known to :class:`~nodescraper.pluginregistry.PluginRegistry`.
@@ -136,12 +137,11 @@ class PluginDiscovery:
         if not self._use_cache:
             return tuple(sorted(PluginRegistry().plugins.keys()))
 
-        if self._plugin_cache is None:
-            with self._cache_lock:
-                if self._plugin_cache is None:
-                    self._plugin_cache = PluginRegistry().plugins
-
-        return tuple(sorted(self._plugin_cache.keys()))
+        if PluginDiscovery._plugin_cache is None:
+            with PluginDiscovery._cache_lock:
+                if PluginDiscovery._plugin_cache is None:
+                    PluginDiscovery._plugin_cache = PluginRegistry().plugins
+        return tuple(sorted(PluginDiscovery._plugin_cache.keys()))
 
     def plugin_names_matching(self, names: Iterable[str]) -> tuple[str, ...]:
         """Return plugin names from ``names`` that are registered at runtime.

@@ -25,7 +25,13 @@
 ###############################################################################
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, model_serializer, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    SerializerFunctionWrapHandler,
+    model_serializer,
+    model_validator,
+)
 
 
 class AnalyzerArgs(BaseModel):
@@ -39,14 +45,16 @@ class AnalyzerArgs(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    @model_serializer
-    def serialize_exclude_none(self) -> dict:
-        """Serialize the model to a dictionary, excluding None values.
-
-        Returns:
-            A dictionary representation of the model with None values excluded.
-        """
-        return self.model_dump(exclude_none=True)
+    @model_serializer(mode="wrap")
+    def serialize_model(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
+        serialized = handler(self)
+        remove_keys = []
+        for key, value in serialized.items():
+            if value is None:
+                remove_keys.append(key)
+        for key in remove_keys:
+            del serialized[key]
+        return serialized
 
     @model_validator(mode="before")
     @classmethod
