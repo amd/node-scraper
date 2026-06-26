@@ -86,5 +86,6 @@ class MemoryDataModel(DataModel):
 
     mem_free: str
     mem_total: str
+    mem_available: Optional[str] = None
     lsmem_data: Optional[LsmemData] = None
     numa_topology: Optional[NumaTopology] = None
