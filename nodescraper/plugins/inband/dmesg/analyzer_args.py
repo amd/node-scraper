@@ -62,3 +62,10 @@ class DmesgAnalyzerArgs(TimeRangeAnalysisArgs):
             "or 'NO_CHANGE' to leave the priority unchanged."
         ),
     )
+    mce_threshold: Optional[int] = Field(
+        default=None,
+        description=(
+            "When set, raise ERROR if correctable MCE/RAS error count for any component "
+            "(CPU, GPU BDF/block, etc.) reaches or exceeds this value."
+        ),
+    )
