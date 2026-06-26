@@ -1267,6 +1267,7 @@ Memory data model
 
 - **mem_free**: `str`
 - **mem_total**: `str`
+- **mem_available**: `Optional[str]`
 - **lsmem_data**: `Optional[nodescraper.plugins.inband.memory.memorydata.LsmemData]`
 - **numa_topology**: `Optional[nodescraper.plugins.inband.memory.memorydata.NumaTopology]`
 
