@@ -52,6 +52,7 @@ from nodescraper.enums import ExecutionStatus, SystemInteractionLevel
 from nodescraper.models import PluginConfig, TaskResult
 from nodescraper.models.datapluginresult import DataPluginResult
 from nodescraper.models.pluginresult import PluginResult
+from nodescraper.pluginexecutor import PluginExecutor
 from nodescraper.pluginregistry import PluginRegistry
 
 
@@ -122,6 +123,13 @@ def test_get_plugin_configs():
             },
         ),
     ]
+
+
+def test_global_collection_args_html_view_merged():
+    merged = PluginExecutor.merge_configs(
+        [PluginConfig(global_args={"collection_args": {"html_view": True}})]
+    )
+    assert merged.global_args["collection_args"]["html_view"] is True
 
 
 def test_config_builder(plugin_registry):

@@ -71,10 +71,6 @@ class ScaleOutAristaCollector(
 
     DATA_MODEL = ScaleOutAristaDataModel
 
-    # When set (via the ``html_view`` collector arg), each ``| json`` command
-    # is followed by its non-JSON version for human-readable artifact output.
-    _html_view: bool = False
-
     CMD_VERSION = "show version | json | no-more"
     CMD_LLDP_NEIGHBORS = "show lldp neighbors | json | no-more"
     CMD_SYSTEM_ENV = "show system environment cooling | json | no-more"
@@ -135,7 +131,10 @@ class ScaleOutAristaCollector(
         Returns:
             Parsed JSON (dict or list), or ``None`` if the call failed.
         """
-        cmd_ret: CommandArtifact = self._run_sut_cmd(command)
+        cmd_ret: CommandArtifact = self._run_sut_cmd(
+            command,
+            html_view=False if self._html_view else None,
+        )
         if cmd_ret.exit_code != 0:
             self._log_event(
                 category=EventCategory.SWITCH,
@@ -164,8 +163,27 @@ class ScaleOutAristaCollector(
             )
             return None
 
-        self._append_html_view_artifact(command, cmd_ret, parsed)
+        self._run_html_view_command(command)
         return parsed
+
+    def _run_html_view_command(self, json_command: str) -> None:
+        """Re-run a ``| json`` command without JSON for human-readable HTML output."""
+        if not self._html_view or "| json" not in json_command:
+            return
+        text_command = json_command.replace(" | json", "")
+        cmd_ret = self._run_sut_cmd(text_command, html_view=True)
+        if cmd_ret.exit_code != 0:
+            self._log_event(
+                category=EventCategory.SWITCH,
+                description=f"Error running Arista html_view command: `{text_command}`",
+                data={
+                    "command": text_command,
+                    "exit_code": cmd_ret.exit_code,
+                    "stderr": cmd_ret.stderr,
+                },
+                priority=EventPriority.WARNING,
+                console_log=True,
+            )
 
     def _run_arista_text(self, command: str) -> Optional[str]:
         """Run an Arista EOS command returning text.
@@ -734,25 +752,6 @@ class ScaleOutAristaCollector(
                     console_log=True,
                 )
 
-    def _append_html_view_artifact(
-        self,
-        json_command: str,
-        cmd_ret: CommandArtifact,
-        parsed: Union[dict, list],
-    ) -> None:
-        """Add a human-readable artifact for HTML reports without a second SSH command."""
-        if not self._html_view or "| json" not in json_command:
-            return
-        text_command = json_command.replace(" | json", "")
-        self.result.artifacts.append(
-            CommandArtifact(
-                command=text_command,
-                stdout=json.dumps(parsed, indent=2, sort_keys=True),
-                stderr=cmd_ret.stderr or "",
-                exit_code=cmd_ret.exit_code,
-            )
-        )
-
     def _preflight_check(self) -> Optional[AristaVersion]:
         """Verify the switch is a reachable Arista EOS device.
 
@@ -804,8 +803,6 @@ class ScaleOutAristaCollector(
         Returns:
             Tuple of ``(TaskResult, ScaleOutAristaDataModel | None)``.
         """
-        self._html_view = bool(args and args.html_view)
-
         version = self._preflight_check()
         if version is None:
             return self.result, None

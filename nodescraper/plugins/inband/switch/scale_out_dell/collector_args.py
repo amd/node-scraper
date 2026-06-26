@@ -33,6 +33,14 @@ from nodescraper.models import CollectorArgs
 class ScaleOutDellCollectorArgs(CollectorArgs):
     """Arguments for the Dell SONiC switch collector."""
 
+    html_view: bool = Field(
+        default=True,
+        description=(
+            "When true, include logged command artifacts in command_artifacts.html "
+            "using human-readable output."
+        ),
+    )
+
     collection_ports: Optional[List[str]] = Field(
         default=None,
         description=(

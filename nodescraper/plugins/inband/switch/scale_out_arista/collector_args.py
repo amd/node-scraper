@@ -32,10 +32,10 @@ class ScaleOutAristaCollectorArgs(CollectorArgs):
     """Arguments for the Arista switch collector."""
 
     html_view: bool = Field(
-        default=False,
+        default=True,
         description=(
-            "When true, add a second command_artifacts entry per '| json' command "
-            "using pretty-printed JSON from the same SSH run (labeled with the "
-            "non-json command name) for HTML reports. Does not re-run commands on the switch."
+            "When true, include logged command artifacts in command_artifacts.html "
+            "using human-readable output. Re-runs successful '| json' commands without "
+            "'| json' so HTML shows native EOS text instead of raw JSON."
         ),
     )

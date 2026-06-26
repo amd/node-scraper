@@ -80,26 +80,51 @@ def test_get_port_status_filters_non_ethernet(collector, conn_mock):
     assert list(result.keys()) == ["Ethernet1/1"]
 
 
-def test_html_view_adds_local_artifact_without_second_ssh(collector, conn_mock):
-    collector._html_view = True
-    version_json = {"mfgName": "Arista Networks", "version": "4.28.0F"}
-    conn_mock.run_command.return_value = CommandArtifact(
-        exit_code=0,
-        stdout=json.dumps(version_json),
-        stderr="",
-        command="show version | json | no-more",
+def test_html_view_reruns_command_without_json(collector, conn_mock):
+    from nodescraper.plugins.inband.switch.scale_out_arista.collector_args import (
+        ScaleOutAristaCollectorArgs,
     )
+
+    collector.apply_collection_html_view(ScaleOutAristaCollectorArgs(html_view=True))
+    version_json = {"mfgName": "Arista Networks", "version": "4.28.0F"}
+    pretty_stdout = "Arista DCS-7050CX3-32S-C32\nHardware version: 11.00"
+    conn_mock.run_command.side_effect = [
+        CommandArtifact(
+            exit_code=0,
+            stdout=json.dumps(version_json),
+            stderr="",
+            command="show version | json | no-more",
+        ),
+        CommandArtifact(
+            exit_code=0,
+            stdout=pretty_stdout,
+            stderr="",
+            command="show version | no-more",
+        ),
+    ]
 
     collector.get_version()
 
-    assert conn_mock.run_command.call_count == 1
+    assert conn_mock.run_command.call_count == 2
+    second_call = conn_mock.run_command.call_args_list[1]
+    second_command = second_call.args[0] if second_call.args else second_call.kwargs["command"]
+    assert second_command == "show version | no-more"
     commands = [artifact.command for artifact in collector.result.artifacts]
     assert "show version | json | no-more" in commands
     assert "show version | no-more" in commands
-    assert any(
-        artifact.command == "show version | no-more" and "Arista Networks" in artifact.stdout
+    pretty_artifact = next(
+        artifact
         for artifact in collector.result.artifacts
+        if artifact.command == "show version | no-more"
     )
+    assert pretty_artifact.stdout == pretty_stdout
+    assert pretty_artifact.log_html is True
+    json_artifact = next(
+        artifact
+        for artifact in collector.result.artifacts
+        if artifact.command == "show version | json | no-more"
+    )
+    assert json_artifact.log_html is False
 
 
 def test_preflight_not_ran_when_not_arista(collector, conn_mock):

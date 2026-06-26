@@ -24,16 +24,8 @@
 #
 ###############################################################################
 import html
-import json
-import os
-from typing import Optional
 
-from nodescraper.interfaces import PluginResultCollator
-from nodescraper.models import PluginResult, TaskResult
-
-ARTIFACT_PREFIX = "command_artifacts"
-ARTIFACT_SUFFIX = ".json"
-HTML_SUFFIX = ".html"
+COMMAND_ARTIFACTS_BASENAME = "command_artifacts"
 
 _HTML_HEAD = """<!DOCTYPE html>
 <html lang="en">
@@ -191,18 +183,14 @@ _HTML_TAIL = """
 
 
 def render_command_artifacts_html(entries: list[dict], title: str) -> str:
-    """Render a list of command artifact entries into a self-contained HTML page.
-
-    Each entry is shown as a collapsible dropdown titled with the command, with the
-    stdout (and stderr, when present) revealed inside.
+    """Render command artifact entries into a self-contained HTML page.
 
     Args:
-        entries (list[dict]): command artifact records with ``command``/``stdout``/
-            ``stderr``/``exit_code`` keys.
-        title (str): label shown in the page header (e.g. the collector path).
+        entries: Records with command, stdout, stderr, and exit_code keys.
+        title: Label shown in the page header.
 
     Returns:
-        str: full HTML document.
+        str: Full HTML document.
     """
     cards: list[str] = []
     for entry in entries:
@@ -241,102 +229,3 @@ def render_command_artifacts_html(entries: list[dict], title: str) -> str:
         + "\n".join(cards)
         + _HTML_TAIL
     )
-
-
-class CommandArtifactHtml(PluginResultCollator):
-    """Generate browsable HTML artifacts from ``command_artifacts.json`` files.
-
-    Disabled by default. Enable it by adding ``CommandArtifactHtml`` to the
-    ``result_collators`` section of a plugin config, or by passing ``--html-artifact``
-    on the CLI. For every ``command_artifacts.json`` found under the run log
-    directory, a sibling ``command_artifacts.html`` is written where each command is
-    a collapsible dropdown revealing its stdout (and stderr when present).
-    """
-
-    def collate_results(
-        self, plugin_results: list[PluginResult], connection_results: list[TaskResult], **kwargs
-    ):
-        """Walk the run log directory and render an HTML artifact per artifact file.
-
-        Args:
-            plugin_results (list[PluginResult]): plugin results (unused; artifacts are
-                read from the files already written to ``log_path``).
-            connection_results (list[TaskResult]): connection results (unused).
-        """
-        if not self.log_path:
-            self.logger.warning(
-                "CommandArtifactHtml skipped: no log_path is set, nothing to generate"
-            )
-            return
-
-        artifact_files = self._find_artifact_files(self.log_path)
-        if not artifact_files:
-            self.logger.info(
-                "CommandArtifactHtml: no %s%s files found under %s",
-                ARTIFACT_PREFIX,
-                ARTIFACT_SUFFIX,
-                self.log_path,
-            )
-            return
-
-        generated = 0
-        for artifact_path in artifact_files:
-            html_path = self._generate_html(artifact_path)
-            if html_path:
-                generated += 1
-                self.logger.info("Generated command artifact HTML")
-
-    @staticmethod
-    def _find_artifact_files(root: str) -> list[str]:
-        """Recursively find ``command_artifacts*.json`` files under ``root``.
-
-        Args:
-            root (str): directory to search.
-
-        Returns:
-            list[str]: sorted absolute paths to matching artifact files.
-        """
-        matches: list[str] = []
-        for dirpath, _dirnames, filenames in os.walk(root):
-            for filename in filenames:
-                if filename.startswith(ARTIFACT_PREFIX) and filename.endswith(ARTIFACT_SUFFIX):
-                    matches.append(os.path.join(dirpath, filename))
-        return sorted(matches)
-
-    def _generate_html(self, artifact_path: str) -> Optional[str]:
-        """Render a single artifact file to a sibling HTML artifact.
-
-        Args:
-            artifact_path (str): path to a ``command_artifacts*.json`` file.
-
-        Returns:
-            Optional[str]: path to the written HTML file, or None if skipped/failed.
-        """
-        try:
-            with open(artifact_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-        except (OSError, json.JSONDecodeError) as e:
-            self.logger.warning("Could not read artifact file %s: %s", artifact_path, e)
-            return None
-
-        if not isinstance(data, list):
-            self.logger.warning("Skipping %s: expected a list of command artifacts", artifact_path)
-            return None
-
-        artifact_dir = os.path.dirname(artifact_path)
-        title = os.path.relpath(artifact_dir, self.log_path)
-        if title in (".", ""):
-            title = os.path.basename(os.path.normpath(artifact_dir))
-
-        html_name = os.path.basename(artifact_path)[: -len(ARTIFACT_SUFFIX)] + HTML_SUFFIX
-        html_path = os.path.join(artifact_dir, html_name)
-
-        try:
-            html_doc = render_command_artifacts_html(data, title)
-            with open(html_path, "w", encoding="utf-8") as f:
-                f.write(html_doc)
-        except OSError as e:
-            self.logger.warning("Could not write HTML artifact %s: %s", html_path, e)
-            return None
-
-        return html_path

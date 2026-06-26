@@ -178,7 +178,7 @@ class RedfishEndpointCollector(
                 max_endpoints=max_endpoints,
             )
             for res in results:
-                self.result.artifacts.append(res)
+                self._append_redfish_artifact(res)
                 if not res.success and res.error:
                     self._log_event(
                         category=EventCategory.RUNTIME,
@@ -269,7 +269,7 @@ class RedfishEndpointCollector(
                             console_log=True,
                         )
             for res in results:
-                self.result.artifacts.append(res)
+                self._append_redfish_artifact(res)
 
         if not responses:
             self.result.message = "No Redfish endpoints could be read"

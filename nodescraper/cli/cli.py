@@ -200,14 +200,6 @@ def _add_cli_root_globals(
         help="Skip plugins that require sudo permissions",
     )
 
-    parser.add_argument(
-        "--html-artifact",
-        dest="html_artifact",
-        action="store_true",
-        help="Generate browsable HTML artifacts (command_artifacts.html) from "
-        "command_artifacts.json files in the run directory. Disabled by default.",
-    )
-
 
 def build_global_argument_parser(*, add_help: bool = True) -> argparse.ArgumentParser:
     """Globals only (no subcommands), for host CLIs."""
@@ -640,9 +632,6 @@ def main(
             plugin_config_inst_list[-1].global_args.setdefault("collection_args", {})[
                 "skip_sudo"
             ] = True
-
-        if getattr(parsed_args, "html_artifact", False) and plugin_config_inst_list:
-            plugin_config_inst_list[-1].result_collators.setdefault("CommandArtifactHtml", {})
 
     except Exception as e:
         parser.error(str(e))
