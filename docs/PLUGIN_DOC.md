@@ -1051,7 +1051,8 @@ RedfishOemDiagDataModel
 
 ### Description
 
-MI3XX OOB Redfish serviceability collector.
+Collect MI3XX BMC Redfish data: event log members (with pagination), firmware inventory,
+    CPER attachment bytes for qualifying events, and optional assembly/chassis metadata.
 
 **Bases**: ['ServiceabilityCollectorBase']
 

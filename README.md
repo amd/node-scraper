@@ -1,6 +1,6 @@
 # Node Scraper
 Node Scraper is a tool which performs automated data collection and analysis for the purposes of
-system debug.
+system debug. For details on what data is collected and analyzed, see the [plugin reference table](docs/PLUGIN_DOC.md).
 
 ## Table of Contents
 - [Installation](#installation)
