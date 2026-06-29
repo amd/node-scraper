@@ -8,15 +8,6 @@
 from nodescraper.models import PluginConfig
 
 from .all_plugins import AllPlugins
-from .discovery import (
-    load_plugin_class,
-    plugin_has_analyzer,
-    plugin_has_collector,
-    plugin_names_matching,
-    plugins_with_analyzer,
-    plugins_with_collector,
-    registered_plugin_names,
-)
 from .node_status import NodeStatus
 from .pluginrecipe import (
     ANALYZE_ONLY,
@@ -40,12 +31,5 @@ __all__ = [
     "PluginConfig",
     "PluginRecipe",
     "PluginRunFlags",
-    "load_plugin_class",
     "merge_plugin_configs",
-    "plugin_has_analyzer",
-    "plugin_has_collector",
-    "plugin_names_matching",
-    "plugins_with_analyzer",
-    "plugins_with_collector",
-    "registered_plugin_names",
 ]

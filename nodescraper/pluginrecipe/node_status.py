@@ -7,7 +7,7 @@
 ###############################################################################
 from __future__ import annotations
 
-from .discovery import plugin_names_matching
+from .discovery import PluginDiscovery
 from .pluginrecipe import PluginRecipe
 
 _NODE_STATUS_PLUGINS = (
@@ -35,4 +35,4 @@ class NodeStatus(PluginRecipe):
         Returns:
             tuple[str, ...]: Sorted node-status plugin names registered in the plugin registry.
         """
-        return plugin_names_matching(_NODE_STATUS_PLUGINS)
+        return PluginDiscovery().plugin_names_matching(_NODE_STATUS_PLUGINS)
