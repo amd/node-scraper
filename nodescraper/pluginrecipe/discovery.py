@@ -60,12 +60,10 @@ class PluginDiscovery:
         if not self._use_cache:
             return PluginRegistry().plugins.get(plugin_name)
 
-        if PluginDiscovery._plugin_cache is None:
-            with PluginDiscovery._cache_lock:
-                if PluginDiscovery._plugin_cache is None:
-                    PluginDiscovery._plugin_cache = PluginRegistry().plugins
-
-        return PluginDiscovery._plugin_cache.get(plugin_name)
+        with PluginDiscovery._cache_lock:
+            if PluginDiscovery._plugin_cache is None:
+                PluginDiscovery._plugin_cache = PluginRegistry().plugins.copy()
+            return PluginDiscovery._plugin_cache.get(plugin_name)
 
     def plugin_has_collector(self, plugin_name: str) -> bool:
         """Check if a plugin has a COLLECTOR attribute.
@@ -137,11 +135,10 @@ class PluginDiscovery:
         if not self._use_cache:
             return tuple(sorted(PluginRegistry().plugins.keys()))
 
-        if PluginDiscovery._plugin_cache is None:
-            with PluginDiscovery._cache_lock:
-                if PluginDiscovery._plugin_cache is None:
-                    PluginDiscovery._plugin_cache = PluginRegistry().plugins
-        return tuple(sorted(PluginDiscovery._plugin_cache.keys()))
+        with PluginDiscovery._cache_lock:
+            if PluginDiscovery._plugin_cache is None:
+                PluginDiscovery._plugin_cache = PluginRegistry().plugins
+            return tuple(sorted(PluginDiscovery._plugin_cache.keys()))
 
     def plugin_names_matching(self, names: Iterable[str]) -> tuple[str, ...]:
         """Return plugin names from ``names`` that are registered at runtime.

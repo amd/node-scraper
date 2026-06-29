@@ -203,7 +203,7 @@ class PluginRegistry:
             ep_name = getattr(entry_point, "name", None)
             if ep_name and ep_name != cls.__name__:
                 managers[ep_name] = cls
-        return managers
+        return managers.copy()
 
     @staticmethod
     def load_connection_managers_from_entry_points() -> dict[str, type]:
@@ -311,7 +311,7 @@ class PluginRegistry:
 
             # Cache the result - no need to copy before caching
             PluginRegistry._entry_point_plugins_cache = plugins
-            return plugins
+            return plugins.copy()
 
     @classmethod
     def clear_caches(cls) -> None:
