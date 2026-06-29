@@ -235,7 +235,7 @@ class PluginRegistry:
 
             # Cache the result
             PluginRegistry._entry_point_connection_managers_cache = managers
-            return managers
+            return managers.copy()
 
     @staticmethod
     def _load_entry_points_uncached(entry_point: str) -> EntryPoints:
