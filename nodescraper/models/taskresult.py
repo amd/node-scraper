@@ -37,6 +37,7 @@ from pydantic import (
     model_validator,
 )
 
+from nodescraper.command_artifact_html import render_command_artifacts_html
 from nodescraper.enums import EventPriority, ExecutionStatus
 from nodescraper.utils import get_unique_filename, pascal_to_snake
 
@@ -171,6 +172,7 @@ class TaskResult(BaseModel):
             log_file.write(self.model_dump_json(exclude={"artifacts", "events"}, indent=2))
 
         artifact_map: dict[str, list[dict[str, Any]]] = {}
+        html_entries_by_name: dict[str, list[dict[str, Any]]] = {}
         for artifact in self.artifacts:
             if isinstance(artifact, BaseFileArtifact):
                 artifact.log_model(log_path)
@@ -183,15 +185,27 @@ class TaskResult(BaseModel):
                     )
                     or f"{pascal_to_snake(artifact.__class__.__name__)}s"
                 )
+                dumped = artifact.model_dump(mode="json")
                 if name in artifact_map:
-                    artifact_map[name].append(artifact.model_dump(mode="json"))
+                    artifact_map[name].append(dumped)
                 else:
-                    artifact_map[name] = [artifact.model_dump(mode="json")]
+                    artifact_map[name] = [dumped]
+                if getattr(artifact, "log_html", False) and hasattr(artifact, "to_html_entry"):
+                    html_entries_by_name.setdefault(name, []).append(artifact.to_html_entry())
 
         for name, artifacts in artifact_map.items():
             log_name = get_unique_filename(log_path, f"{name}.json")
-            with open(os.path.join(log_path, log_name), "w", encoding="utf-8") as log_file:
+            json_path = os.path.join(log_path, log_name)
+            with open(json_path, "w", encoding="utf-8") as log_file:
                 json.dump(artifacts, log_file, indent=2)
+
+            html_entries = html_entries_by_name.get(name, [])
+            if html_entries:
+                html_name = log_name[: -len(".json")] + ".html"
+                html_path = os.path.join(log_path, html_name)
+                title = self.task or self.parent or name
+                with open(html_path, "w", encoding="utf-8") as html_file:
+                    html_file.write(render_command_artifacts_html(html_entries, title))
 
         if self.events:
             event_log = os.path.join(log_path, "events.json")

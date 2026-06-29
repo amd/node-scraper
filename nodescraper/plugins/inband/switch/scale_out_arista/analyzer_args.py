@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# Copyright (c) 2025 Advanced Micro Devices, Inc.
+# Copyright (c) 2026 Advanced Micro Devices, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,18 +23,29 @@
 # SOFTWARE.
 #
 ###############################################################################
-from pydantic import BaseModel, Field
+from typing import List, Optional
+
+from pydantic import Field
+
+from nodescraper.models import AnalyzerArgs
 
 
-class CollectorArgs(BaseModel):
-    html_view: bool = Field(
-        default=False,
+class ScaleOutAristaAnalyzerArgs(AnalyzerArgs):
+    """Arguments for the Arista switch analyzer."""
+
+    analysis_ports: Optional[List[str]] = Field(
+        default=None,
         description=(
-            "When true, include logged command artifacts in command_artifacts.html "
-            "using human-readable output. Arista collectors re-run successful "
-            "'| json' commands without '| json' so HTML shows native EOS text "
-            "instead of raw JSON."
+            "Restrict per-port analysis to the given ports. Ports are "
+            "S/P/[SP] where subport is optional (e.g. ['1/1', '1/31', '1/1/1']) "
+            "When omitted, every port present in the data is analyzed."
+            "Independent of any collection-time filter."
         ),
     )
-
-    model_config = {"extra": "forbid", "exclude_none": True}
+    expected_port_bandwidth: int = Field(
+        default=400000000000,
+        description=(
+            "Expected interface bandwidth (bps) from show interfaces status "
+            "(AristaPortStatus.bandwidth). Ports with a different bandwidth are flagged."
+        ),
+    )

@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# Copyright (c) 2025 Advanced Micro Devices, Inc.
+# Copyright (c) 2026 Advanced Micro Devices, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,18 +23,6 @@
 # SOFTWARE.
 #
 ###############################################################################
-from pydantic import BaseModel, Field
+from .scale_out_dell_plugin import ScaleOutDellPlugin
 
-
-class CollectorArgs(BaseModel):
-    html_view: bool = Field(
-        default=False,
-        description=(
-            "When true, include logged command artifacts in command_artifacts.html "
-            "using human-readable output. Arista collectors re-run successful "
-            "'| json' commands without '| json' so HTML shows native EOS text "
-            "instead of raw JSON."
-        ),
-    )
-
-    model_config = {"extra": "forbid", "exclude_none": True}
+__all__ = ["ScaleOutDellPlugin"]

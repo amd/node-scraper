@@ -25,6 +25,7 @@
 ###############################################################################
 from __future__ import annotations
 
+import json
 from typing import Any, ClassVar, Optional, Union
 from urllib.parse import urljoin
 
@@ -52,6 +53,19 @@ class RedfishGetResult(BaseModel):
     data: Optional[dict[str, Any]] = None
     error: Optional[str] = None
     status_code: Optional[int] = None
+    log_html: bool = False
+
+    def to_html_entry(self) -> dict:
+        """Return a dict suitable for HTML command artifact rendering."""
+        stdout = json.dumps(self.data, indent=2, sort_keys=True) if self.data is not None else ""
+        stderr = self.error or ""
+        exit_code = 0 if self.success else (self.status_code if self.status_code is not None else 1)
+        return {
+            "command": f"GET {self.path}",
+            "stdout": stdout,
+            "stderr": stderr,
+            "exit_code": exit_code,
+        }
 
 
 class RedfishConnectionError(Exception):

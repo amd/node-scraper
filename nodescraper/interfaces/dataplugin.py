@@ -339,7 +339,11 @@ class DataPlugin(
             ):
                 self.connection_manager.connect()
 
-            if self.connection_manager.result.status != ExecutionStatus.OK:
+            # Proceed as long as a connection was established.
+            if (
+                self.connection_manager.connection is None
+                or self.connection_manager.result.status >= ExecutionStatus.ERROR
+            ):
                 self.collection_result = TaskResult(
                     task=primary_collector.__name__,
                     parent=self.__class__.__name__,

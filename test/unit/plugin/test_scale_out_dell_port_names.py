@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# Copyright (c) 2025 Advanced Micro Devices, Inc.
+# Copyright (c) 2026 Advanced Micro Devices, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,18 +23,36 @@
 # SOFTWARE.
 #
 ###############################################################################
-from pydantic import BaseModel, Field
+from nodescraper.plugins.inband.switch.scale_out_dell.port_names import (
+    normalize_port_token,
+    resolve_detail_port_names,
+    to_eth_port_name,
+)
 
 
-class CollectorArgs(BaseModel):
-    html_view: bool = Field(
-        default=False,
-        description=(
-            "When true, include logged command artifacts in command_artifacts.html "
-            "using human-readable output. Arista collectors re-run successful "
-            "'| json' commands without '| json' so HTML shows native EOS text "
-            "instead of raw JSON."
-        ),
-    )
+def test_normalize_port_token_accepts_eth_prefix():
+    assert normalize_port_token("Eth1/1/1") == "1/1/1"
+    assert normalize_port_token("1/1") == "1/1"
 
-    model_config = {"extra": "forbid", "exclude_none": True}
+
+def test_to_eth_port_name_builds_valid_cli_name():
+    assert to_eth_port_name("1/1/1") == "Eth1/1/1"
+    assert to_eth_port_name("Eth1/1") == "Eth1/1"
+
+
+def test_to_eth_port_name_rejects_injection():
+    assert to_eth_port_name('Eth1"; rm -rf /') is None
+    assert to_eth_port_name("not-a-port") is None
+
+
+def test_resolve_detail_port_names_uses_interface_status_keys():
+    status = {"Eth1/1/1": object(), "Eth1/1/2": object()}
+    names, invalid = resolve_detail_port_names(["1/1/1", "Eth1/1/2"], status)
+    assert invalid is None
+    assert names == ["Eth1/1/1", "Eth1/1/2"]
+
+
+def test_resolve_detail_port_names_falls_back_without_status():
+    names, invalid = resolve_detail_port_names(["1/1/1"], None)
+    assert invalid is None
+    assert names == ["Eth1/1/1"]

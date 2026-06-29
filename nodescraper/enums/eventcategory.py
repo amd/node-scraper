@@ -65,6 +65,8 @@ class EventCategory(AutoNameStrEnum):
         Network, IT issues, Downtime
     - NETWORK
         Network configuration, interfaces, routing, neighbors, ethtool data
+    - SWITCH
+        Switch configuration, switch OS, command issues
     - TELEMETRY
         Telemetry / monitored data checks (e.g. Redfish endpoint constraint violations)
     - RUNTIME
@@ -87,6 +89,7 @@ class EventCategory(AutoNameStrEnum):
     BIOS = auto()
     INFRASTRUCTURE = auto()
     NETWORK = auto()
+    SWITCH = auto()
     TELEMETRY = auto()
     RUNTIME = auto()
     UNKNOWN = auto()

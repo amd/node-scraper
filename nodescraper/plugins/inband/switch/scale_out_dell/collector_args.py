@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# Copyright (c) 2025 Advanced Micro Devices, Inc.
+# Copyright (c) 2026 Advanced Micro Devices, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,18 +23,29 @@
 # SOFTWARE.
 #
 ###############################################################################
-from pydantic import BaseModel, Field
+from typing import List, Optional
+
+from pydantic import Field
+
+from nodescraper.models import CollectorArgs
 
 
-class CollectorArgs(BaseModel):
+class ScaleOutDellCollectorArgs(CollectorArgs):
+    """Arguments for the Dell SONiC switch collector."""
+
     html_view: bool = Field(
-        default=False,
+        default=True,
         description=(
             "When true, include logged command artifacts in command_artifacts.html "
-            "using human-readable output. Arista collectors re-run successful "
-            "'| json' commands without '| json' so HTML shows native EOS text "
-            "instead of raw JSON."
+            "using human-readable output."
         ),
     )
 
-    model_config = {"extra": "forbid", "exclude_none": True}
+    collection_ports: Optional[List[str]] = Field(
+        default=None,
+        description=(
+            "Restrict detail counter collection to these ports. Accepts the same "
+            "tokens as analysis_ports (e.g. ['1/1', '1/1/2'] or ['Eth1/1/1']). "
+            "When omitted, every port from 'show interface status' is queried."
+        ),
+    )
