@@ -5,27 +5,29 @@
 # Copyright (c) 2025 Advanced Micro Devices, Inc.
 #
 ###############################################################################
+
 from __future__ import annotations
 
 import abc
-from dataclasses import dataclass
 from typing import Any, Iterable
 
+from pydantic import BaseModel, ConfigDict
+
 from nodescraper.models import PluginConfig
+from nodescraper.pluginrecipe.discovery import PluginDiscovery
 
 
-@dataclass(frozen=True)
-class PluginRunFlags:
-    """Collection/analysis toggles passed to nodescraper ``DataPlugin.run``."""
+class PluginRunFlags(BaseModel):
+    model_config = ConfigDict(frozen=True)
 
     collection: bool = True
     analysis: bool = True
 
     def as_config(self) -> dict[str, bool]:
-        """Return nodescraper per-plugin config fields.
+        """Return collection and analysis fields for one plugin entry.
 
         Returns:
-            dict[str, bool]: ``collection`` and ``analysis`` entries for a plugin config.
+            dict[str, bool]: ``collection`` and ``analysis`` entries for a plugin entry.
         """
         return {"collection": self.collection, "analysis": self.analysis}
 
@@ -71,7 +73,7 @@ class PluginRecipe(abc.ABC):
 
     @classmethod
     def flags_for_plugin(cls, plugin_name: str) -> PluginRunFlags:
-        """Return collection/analysis flags for one plugin.
+        """Return collection and analysis flags for the given plugin.
 
         Args:
             plugin_name (str): Registered plugin name.
@@ -91,18 +93,17 @@ class PluginRecipe(abc.ABC):
         Returns:
             dict[str, Any]: Extra plugin config kwargs merged into the entry dict.
         """
-        del plugin_name
+        _plugin_name = plugin_name  # Avoid unused variable warning
         return {}
 
     @classmethod
     def plugin_entry(cls, plugin_name: str) -> dict[str, Any]:
-        """Build the nodescraper plugin config entry for one plugin.
-
+        """Build the per-plugin config entry for one plugin.plugins: type[PluginInterface] | None
         Args:
             plugin_name (str): Registered plugin name.
 
         Returns:
-            dict[str, Any]: Per-plugin config passed to node-scraper.
+            dict[str, Any]: Per-plugin config for a single plugin.
         """
         entry: dict[str, Any] = dict(cls.flags_for_plugin(plugin_name).as_config())
         entry.update(cls.extra_plugin_args(plugin_name))
@@ -110,11 +111,10 @@ class PluginRecipe(abc.ABC):
 
     @classmethod
     def plugin_config(cls) -> PluginConfig:
-        """Build a node-scraper plugin config at runtime.
+        """Build the full plugin config for this recipe.
 
         Returns:
-            PluginConfig: Plugin config with ``name``, ``desc``, ``global_args``,
-            ``plugins``, and ``result_collators`` fields.
+            PluginConfig: Config with recipe name, description, and per-plugin entries.
         """
         return PluginConfig(
             name=cls.name(),
@@ -138,11 +138,10 @@ class CollectorOnlyPluginRecipe(PluginRecipe):
             names (Iterable[str]): Candidate plugin names.
 
         Returns:
-            tuple[str, ...]: Sorted names with a ``COLLECTOR`` implementation.
+            tuple[str, ...]: Sorted names that implement collection.
         """
-        from .discovery import plugins_with_collector
 
-        return plugins_with_collector(names)
+        return PluginDiscovery().plugins_with_collector(names)
 
 
 class AnalyzerOnlyPluginRecipe(PluginRecipe):
@@ -158,11 +157,10 @@ class AnalyzerOnlyPluginRecipe(PluginRecipe):
             names (Iterable[str]): Candidate plugin names.
 
         Returns:
-            tuple[str, ...]: Sorted names with an ``ANALYZER`` implementation.
+            tuple[str, ...]: Sorted names that implement analysis.
         """
-        from .discovery import plugins_with_analyzer
 
-        return plugins_with_analyzer(names)
+        return PluginDiscovery().plugins_with_analyzer(names)
 
 
 def merge_plugin_configs(*configs: PluginConfig | dict[str, Any]) -> PluginConfig:

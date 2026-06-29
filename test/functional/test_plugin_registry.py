@@ -26,6 +26,7 @@
 """Functional tests for plugin registry and plugin loading."""
 
 import inspect
+import threading
 
 from nodescraper.pluginregistry import PluginRegistry
 
@@ -73,3 +74,102 @@ def test_plugin_registry_get_plugin():
 
     assert plugin is not None
     assert hasattr(plugin, "run")
+
+
+# ============================================================================
+# CACHING TESTS
+# ============================================================================
+
+
+def test_entry_point_plugins_are_cached():
+    """Test that entry point plugins are cached and subsequent calls use the cache."""
+    # Clear cache to start fresh
+    PluginRegistry.clear_caches()
+    assert PluginRegistry._entry_point_plugins_cache is None
+
+    # First call - should populate cache
+    plugins1 = PluginRegistry.load_plugins_from_entry_points()
+    assert PluginRegistry._entry_point_plugins_cache is not None
+
+    # Second call - should return from cache (but as a copy)
+    plugins2 = PluginRegistry.load_plugins_from_entry_points()
+
+    # Verify it's a copy (different object but same content)
+    assert plugins1 is not plugins2, "Should return copy, not same reference"
+    assert plugins1 == plugins2, "Content should be identical"
+
+
+def test_cache_returns_copy_prevents_corruption():
+    """Test that cache returns a copy to prevent caller modifications from corrupting cache."""
+    PluginRegistry.clear_caches()
+
+    # Get plugins from cache
+    plugins1 = PluginRegistry.load_plugins_from_entry_points()
+    plugins2 = PluginRegistry.load_plugins_from_entry_points()
+
+    # Modify first copy
+    if plugins1:
+        test_key = list(plugins1.keys())[0]
+        plugins1.pop(test_key)
+        assert test_key not in plugins1
+
+    # Second copy should be unaffected
+    if plugins2:
+        test_key = list(plugins2.keys())[0]
+        assert test_key in plugins2, "Cache was corrupted by caller modification"
+
+
+def test_concurrent_cache_access_thread_safe():
+    """Test that concurrent cache access is thread-safe with no race conditions."""
+    PluginRegistry.clear_caches()
+    results = []
+    errors = []
+
+    def load_plugins_worker():
+        try:
+            plugins = PluginRegistry.load_plugins_from_entry_points()
+            results.append(plugins)
+        except Exception as e:
+            errors.append(e)
+
+    # Create 10 threads that simultaneously try to load plugins
+    threads = [threading.Thread(target=load_plugins_worker) for _ in range(10)]
+
+    # Start all threads at once
+    for thread in threads:
+        thread.start()
+
+    # Wait for completion
+    for thread in threads:
+        thread.join()
+
+    # No errors should occur
+    assert len(errors) == 0, f"Thread safety errors: {errors}"
+
+    # All threads should get consistent results
+    assert len(results) == 10
+    first_keys = set(results[0].keys())
+    for result in results[1:]:
+        assert set(result.keys()) == first_keys, "Inconsistent results across threads"
+
+
+def test_clear_caches_resets_all_caches():
+    """Test that clear_caches properly clears all cache storage."""
+    # Populate all caches
+    PluginRegistry.load_plugins_from_entry_points()
+    PluginRegistry.load_connection_managers_from_entry_points()
+    PluginRegistry.load_entry_points("nodescraper.plugins")
+
+    # Verify caches are populated
+    assert PluginRegistry._entry_point_plugins_cache is not None
+    assert PluginRegistry._entry_point_connection_managers_cache is not None
+    assert len(PluginRegistry._entry_points_cache) > 0
+
+    # Clear all caches
+    PluginRegistry.clear_caches()
+
+    # Verify all caches are cleared
+    assert PluginRegistry._entry_point_plugins_cache is None
+    assert PluginRegistry._entry_point_connection_managers_cache is None
+    assert len(PluginRegistry._entry_points_cache) == 0
+    assert len(PluginRegistry._module_cache) == 0

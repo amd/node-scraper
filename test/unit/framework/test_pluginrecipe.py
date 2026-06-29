@@ -10,8 +10,11 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+import pytest
+
 from nodescraper.models import PluginConfig
 from nodescraper.pluginrecipe.all_plugins import AllPlugins
+from nodescraper.pluginrecipe.discovery import PluginDiscovery
 from nodescraper.pluginrecipe.node_status import NodeStatus
 from nodescraper.pluginrecipe.pluginrecipe import (
     ANALYZE_ONLY,
@@ -22,6 +25,13 @@ from nodescraper.pluginrecipe.pluginrecipe import (
     merge_plugin_configs,
 )
 from nodescraper.pluginregistry import PluginRegistry
+
+
+@pytest.fixture(autouse=True)
+def clear_cache():
+    yield
+    PluginDiscovery.clear_cache()
+    PluginRegistry().clear_caches()
 
 
 class _CollectorOnlyPlugin:
@@ -97,8 +107,9 @@ def test_analyzer_only_recipe_sets_collection_false() -> None:
     assert config.plugins["DmesgPlugin"] == ANALYZE_ONLY.as_config()
 
 
-@patch("nodescraper.pluginrecipe.discovery.load_plugin_class")
+@patch("nodescraper.pluginrecipe.discovery.PluginDiscovery.load_plugin_class")
 def test_filter_plugin_names_by_task_type(mock_load_plugin_class) -> None:
+
     mock_load_plugin_class.side_effect = lambda name: {
         "CollectorPlugin": _CollectorOnlyPlugin,
         "AnalyzerPlugin": _AnalyzerOnlyPlugin,
