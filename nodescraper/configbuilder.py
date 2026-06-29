@@ -24,6 +24,7 @@
 #
 ###############################################################################
 import enum
+import inspect
 import logging
 from typing import Any, Optional, Type, Union
 
@@ -64,9 +65,17 @@ class ConfigBuilder:
     @classmethod
     def _build_plugin_config(cls, plugin_class: Type[PluginInterface]) -> dict:
         type_map = TypeUtils.get_func_arg_types(plugin_class.run, plugin_class)
+        run_sig = inspect.signature(plugin_class.run)
         config = {}
 
         for arg, arg_data in type_map.items():
+            param = run_sig.parameters.get(arg)
+            # abstraction level for the ServiceabilityPlugin to allow kwargs for hub call
+            if param is not None and param.kind in (
+                inspect.Parameter.VAR_KEYWORD,
+                inspect.Parameter.VAR_POSITIONAL,
+            ):
+                continue
             cls._update_config(arg, arg_data, config)
 
         return config

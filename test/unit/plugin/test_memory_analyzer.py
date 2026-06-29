@@ -60,6 +60,28 @@ def test_config_provided(analyzer, model_obj):
     assert result.status == ExecutionStatus.OK
 
 
+def test_linux_low_free_high_available_passes(analyzer):
+    """MemFree alone looks tight; MemAvailable reflects reclaimable cache."""
+    model = MemoryDataModel(
+        mem_total="128Gi",
+        mem_free="2Gi",
+        mem_available="100Gi",
+    )
+    args = MemoryAnalyzerArgs(memory_threshold="128Gi", ratio=0.66)
+    result = analyzer.analyze_data(model, args)
+    assert result.status == ExecutionStatus.OK
+
+
+def test_linux_low_free_high_available_fails_without_mem_available(analyzer):
+    model = MemoryDataModel(
+        mem_total="128Gi",
+        mem_free="2Gi",
+    )
+    args = MemoryAnalyzerArgs(memory_threshold="128Gi", ratio=0.66)
+    result = analyzer.analyze_data(model, args)
+    assert result.status == ExecutionStatus.ERROR
+
+
 def test_windows_like_memory(analyzer):
     model = MemoryDataModel(mem_free="751720910848", mem_total="1013310287872")
     result = analyzer.analyze_data(model)

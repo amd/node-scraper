@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# Copyright (c) 2025 Advanced Micro Devices, Inc.
+# Copyright (c) 2026 Advanced Micro Devices, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,31 +23,29 @@
 # SOFTWARE.
 #
 ###############################################################################
-import os
-from typing import Optional
+from nodescraper.plugins.serviceability.analyzer_args import ServiceabilityAnalyzerArgs
+from nodescraper.plugins.serviceability.serviceability_data import (
+    ServiceabilityDataModel,
+)
+from nodescraper.plugins.serviceability.serviceability_plugin_base import (
+    ServiceabilityPluginBase,
+)
+from nodescraper.utils import register_log_dir_name
 
-from nodescraper.interfaces.taskresulthook import TaskResultHook
-from nodescraper.models import DataModel, TaskResult
-from nodescraper.utils import resolve_log_dir_name
+from .mi3xx_analyzer import MI3XXAnalyzer
+from .mi3xx_collector import MI3XXCollector
+from .mi3xx_collector_args import MI3XXCollectorArgs
+
+register_log_dir_name("ServiceabilityPluginMI3XX", "serviceability_plugin_MI3XX")
+register_log_dir_name("MI3XXCollector", "MI3XX_collector")
+register_log_dir_name("MI3XXAnalyzer", "MI3XX_analyzer")
 
 
-class FileSystemLogHook(TaskResultHook):
+class ServiceabilityPluginMI3XX(ServiceabilityPluginBase):
+    """MI3XX OOB Redfish serviceability: BMC event log, CPER attachments, and service hub analysis."""
 
-    def __init__(self, log_base_path=None, **kwargs) -> None:
-        if log_base_path is None:
-            log_base_path = os.getcwd()
-
-        self.log_base_path = log_base_path
-
-    def process_result(self, task_result: TaskResult, data: Optional[DataModel] = None, **kwargs):
-        """Log task result to the filesystem (single events.json per directory)."""
-        log_path = self.log_base_path
-        if task_result.parent:
-            log_path = os.path.join(log_path, resolve_log_dir_name(task_result.parent))
-        if task_result.task:
-            log_path = os.path.join(log_path, resolve_log_dir_name(task_result.task))
-
-        task_result.log_result(log_path)
-
-        if data:
-            data.log_model(log_path)
+    DATA_MODEL = ServiceabilityDataModel
+    COLLECTOR = MI3XXCollector
+    ANALYZER = MI3XXAnalyzer
+    COLLECTOR_ARGS = MI3XXCollectorArgs
+    ANALYZER_ARGS = ServiceabilityAnalyzerArgs

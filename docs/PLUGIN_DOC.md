@@ -41,6 +41,8 @@
 | OobBmcArchivePlugin | SSH (BMC) shell: tar+gzip archives for each path in collection_args (see PathSpec entries).<br>Uses sudo on the BMC when collection_args paths require elevated access. | - | **Collection Args:**<br>- `paths`: list[nodescraper.plugins.ooband.bmc_archive.collector_args.PathSpec] — Named BMC paths to archive with tar czf -. Configure in plugin config under plugins.OobBmcArchivePlugin.collection_ar...<br>- `sudo`: bool — Default sudo setting for paths that do not specify sudo.<br>- `timeout`: int — Default per-path tar timeout in seconds.<br>- `skip_if_missing`: bool — Skip paths that do not exist on the BMC instead of failing collection.<br>- `ignore_failed_read`: bool — When true, pass GNU tar's --ignore-failed-read when the remote tar supports it. | [BmcArchiveDataModel](#BmcArchiveDataModel-Model) | [BmcArchiveCollector](#Collector-Class-BmcArchiveCollector) | - |
 | RedfishEndpointPlugin | Redfish GET: explicit paths from collection_args.uris (parallel when max_workers>1).<br>Optional paged GET following the Members collection OData nextLink field when follow_next_link is true.<br>Redfish GET tree: when discover_tree is true, walks from api_root using OData resource id links and Members navigation (depth and endpoint caps from collection_args). | For each entry in analysis_args.checks, reads JSON paths in collected responses and compares values to constraints (eq, min/max, anyOf, regex, etc.).<br>URI key "*" runs checks against every collected response body.<br>**Analyzer Args:**<br>- `checks`: dict[str, dict[str, Union[int, float, str, bool, dict[str, Any]]]] — Map: URI or '*' -> { property_path: constraint }. URI keys must match a key in the collected responses (exact match).... | **Collection Args:**<br>- `uris`: list[str] — Redfish URIs to GET. Ignored when discover_tree is True.<br>- `discover_tree`: bool — If True, discover endpoints from the BMC Redfish tree (service root and links) instead of using uris.<br>- `tree_max_depth`: int — When discover_tree is True: max traversal depth (1=service root only, 2=root + collections, 3=+ members).<br>- `tree_max_endpoints`: int — When discover_tree is True: max endpoints to discover (0=no limit).<br>- `max_workers`: int — Max concurrent GETs (1=sequential). Use >1 for async endpoint fetches.<br>- `follow_next_link`: bool — If True, follow Redfish Members collection OData nextLink pagination for each URI and merge all pages into a single r...<br>- `max_pages`: int — When follow_next_link is True: safety cap on the number of pages to follow per URI (default 200). | [RedfishEndpointDataModel](#RedfishEndpointDataModel-Model) | [RedfishEndpointCollector](#Collector-Class-RedfishEndpointCollector) | [RedfishEndpointAnalyzer](#Data-Analyzer-Class-RedfishEndpointAnalyzer) |
 | RedfishOemDiagPlugin | Redfish LogService.CollectDiagnosticData for each entry in collection_args.oem_diagnostic_types (collection_args.log_service_path selects the LogService).<br>Optional binary archives under the plugin log path when log_path is set. | Summarizes success/failure per OEM diagnostic type from collected results.<br>When analysis_args.require_all_success is true, fails the run if any type failed collection.<br>**Analyzer Args:**<br>- `require_all_success`: bool — If True, analysis fails when any OEM type collection failed. | **Collection Args:**<br>- `log_service_path`: str — Redfish path to the LogService (e.g. DiagLogs).<br>- `oem_diagnostic_types_allowable`: Optional[list[str]] — Allowable OEM diagnostic types for this architecture/BMC. When set, used for validation and as default for oem_diagno...<br>- `oem_diagnostic_types`: list[str] — OEM diagnostic types to collect. When empty and oem_diagnostic_types_allowable is set, defaults to that list.<br>- `task_timeout_s`: int — Max seconds to wait for each BMC task. | [RedfishOemDiagDataModel](#RedfishOemDiagDataModel-Model) | [RedfishOemDiagCollector](#Collector-Class-RedfishOemDiagCollector) | [RedfishOemDiagAnalyzer](#Data-Analyzer-Class-RedfishOemDiagAnalyzer) |
+| ServiceabilityPluginMI3XX | - | **Analyzer Args:**<br>- `hub_python_module`: Optional[str] — Import path for the hub module (class implements hub_analyze_method); hub_options forwards kwargs.<br>- `hub_display_name`: Optional[str] — Optional label for analyzer status messages.<br>- `afid_sag_path`: Optional[str] — Path to hub config (e.g. AFID_SAG.json); passed as hub_init_path_kwarg.<br>- `hub_init_path_kwarg`: str — Hub __init__ keyword that receives afid_sag_path.<br>- `hub_analyze_method`: str — Hub method called with rf_events first (default get_service_info).<br>- `skip_hub`: bool — If True, only build afid_events without running the service hub.<br>- `cper_decode_module`: Optional[str] — Module import path for CPER decoding when events include CPER attachments.<br>- `cper_decode_method`: str — Callable on cper_decode_module: file-like CPER in, (return_code, decode_dict) out.<br>- `hub_options`: Optional[dict[str, Any]] — Extra kwargs for hub __init__ and analyze; collected cper_data overrides cper_data key.<br>- `from_ac_cycle`: int — from_ac_cycle kwarg for the hub analyze call (merged after hub_options).<br>- `from_date`: Optional[str] — Optional from_date for the hub analyze call (merged after hub_options).<br>- `designation_serials`: Optional[dict[str, str]] — Optional designation_serials for the hub analyze call (merged after hub_options).<br>- `suppress_service_actions`: Optional[list[str]] — Optional suppress_service_actions for the hub analyze call (merged after hub_options). | **Collection Args:**<br>- `uri`: Optional[str] — Optional alias for ``rf_event_log_uri``. When both ``uri`` and ``rf_event_log_uri`` are explicitly set to non-empty v...<br>- `rf_event_log_uri`: str — Redfish URI for the event log ``Entries`` collection.<br>- `rf_chassis_devices`: Optional[List[str]] — Chassis designations for Assembly GETs; required with ``rf_assembly_uri_template``.<br>- `rf_assembly_uri_template`: Optional[str] — Redfish URI template containing ``{device}`` for each chassis Assembly resource.<br>- `rf_firmware_bundle_uri`: Optional[str] — Redfish URI for firmware bundle inventory when subclasses extract component details.<br>- `follow_next_link`: bool — If True, follow Members&#64;odata.nextLink up to max_pages; else single GET.<br>- `max_pages`: int — Safety cap on the number of pages when following event log pagination.<br>- `top`: Optional[int] — Most recent N entries via $skip after count probe; None collects full window.<br>- `reference_time`: Optional[str] — Optional ISO-8601 date or date-time used with time_operator (e.g. 2026-05-17 or 2026-05-17T13:01:00).<br>- `time_operator`: Optional[Literal['>', '>=', '<', '<=', '==']] — Comparison operator applied when reference_time is set. | [ServiceabilityDataModel](#ServiceabilityDataModel-Model) | [MI3XXCollector](#Collector-Class-MI3XXCollector) | [MI3XXAnalyzer](#Data-Analyzer-Class-MI3XXAnalyzer) |
+| ServiceabilityPluginBase | - | - | - | [ServiceabilityDataModel](#ServiceabilityDataModel-Model) | [ServiceabilityCollectorBase](#Collector-Class-ServiceabilityCollectorBase) | - |
 
 # Collectors
 
@@ -1045,6 +1047,35 @@ RedfishOemDiagDataModel
 - Redfish LogService.CollectDiagnosticData for each entry in collection_args.oem_diagnostic_types (collection_args.log_service_path selects the LogService).
 - Optional binary archives under the plugin log path when log_path is set.
 
+## Collector Class MI3XXCollector
+
+### Description
+
+Collect MI3XX BMC Redfish data: event log members (with pagination), firmware inventory,
+    CPER attachment bytes for qualifying events, and optional assembly/chassis metadata.
+
+**Bases**: ['ServiceabilityCollectorBase']
+
+**Link to code**: [mi3xx_collector.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/serviceability/mi3xx/mi3xx_collector.py)
+
+### Provides Data
+
+ServiceabilityDataModel
+
+## Collector Class ServiceabilityCollectorBase
+
+### Description
+
+OOB Redfish collection skeleton; subclasses implement filtering, CPER handling, and JSON parsing.
+
+**Bases**: ['RedfishDataCollector', 'Generic']
+
+**Link to code**: [serviceability_collector.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/serviceability/serviceability_collector.py)
+
+### Provides Data
+
+ServiceabilityDataModel
+
 # Data Models
 
 ## GenericCollectionDataModel Model
@@ -1236,6 +1267,7 @@ Memory data model
 
 - **mem_free**: `str`
 - **mem_total**: `str`
+- **mem_available**: `Optional[str]`
 - **lsmem_data**: `Optional[nodescraper.plugins.inband.memory.memorydata.LsmemData]`
 - **numa_topology**: `Optional[nodescraper.plugins.inband.memory.memorydata.NumaTopology]`
 
@@ -1548,6 +1580,30 @@ Collected Redfish OEM diagnostic log results: OEM type -> result (success, error
 ### Model annotations and fields
 
 - **results**: `dict[str, nodescraper.plugins.ooband.redfish_oem_diag.oem_diag_data.OemDiagTypeResult]`
+
+## ServiceabilityDataModel Model
+
+### Description
+
+Collected Redfish responses and intermediate serviceability fields.
+
+**Link to code**: [serviceability_data.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/serviceability/serviceability_data.py)
+
+**Bases**: ['DataModel']
+
+### Model annotations and fields
+
+- **responses**: `dict[str, Any]`
+- **rf_events**: `list[Any]`
+- **assembly_info**: `Dict[str, DeviceInfo]`
+- **cper_raw**: `Dict[str, str]`
+- **cper_data**: `Dict[str, Any]`
+- **component_details**: `Optional[str]`
+- **log_path**: `Optional[str]`
+- **bmc_host**: `Optional[str]`
+- **afid_events**: `List[AfidEvent]`
+- **serviceability**: `Optional[ServiceabilityBlock]`
+- **result**: `Optional[ServiceabilityResult]`
 
 # Data Analyzers
 
@@ -1978,6 +2034,16 @@ Analyzes Redfish OEM diagnostic log collection results.
 - Summarizes success/failure per OEM diagnostic type from collected results.
 - When analysis_args.require_all_success is true, fails the run if any type failed collection.
 
+## Data Analyzer Class MI3XXAnalyzer
+
+### Description
+
+Build AFID events from collected data and run the configured service hub.
+
+**Bases**: ['DataAnalyzer']
+
+**Link to code**: [mi3xx_analyzer.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/serviceability/mi3xx/mi3xx_analyzer.py)
+
 # Analyzer Args
 
 ## Analyzer Args Class GenericAnalyzerArgs
@@ -2300,3 +2366,29 @@ Analyzer args for Redfish OEM diagnostic log results.
 ### Annotations / fields
 
 - **require_all_success**: `bool` — If True, analysis fails when any OEM type collection failed.
+
+## Analyzer Args Class ServiceabilityAnalyzerArgs
+
+### Description
+
+Analyzer args for serviceability plugins that run a configurable Python hub.
+
+**Bases**: ['AnalyzerArgs']
+
+**Link to code**: [analyzer_args.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/serviceability/analyzer_args.py)
+
+### Annotations / fields
+
+- **hub_python_module**: `Optional[str]` — Import path for the hub module (class implements hub_analyze_method); hub_options forwards kwargs.
+- **hub_display_name**: `Optional[str]` — Optional label for analyzer status messages.
+- **afid_sag_path**: `Optional[str]` — Path to hub config (e.g. AFID_SAG.json); passed as hub_init_path_kwarg.
+- **hub_init_path_kwarg**: `str` — Hub __init__ keyword that receives afid_sag_path.
+- **hub_analyze_method**: `str` — Hub method called with rf_events first (default get_service_info).
+- **skip_hub**: `bool` — If True, only build afid_events without running the service hub.
+- **cper_decode_module**: `Optional[str]` — Module import path for CPER decoding when events include CPER attachments.
+- **cper_decode_method**: `str` — Callable on cper_decode_module: file-like CPER in, (return_code, decode_dict) out.
+- **hub_options**: `Optional[dict[str, Any]]` — Extra kwargs for hub __init__ and analyze; collected cper_data overrides cper_data key.
+- **from_ac_cycle**: `int` — from_ac_cycle kwarg for the hub analyze call (merged after hub_options).
+- **from_date**: `Optional[str]` — Optional from_date for the hub analyze call (merged after hub_options).
+- **designation_serials**: `Optional[dict[str, str]]` — Optional designation_serials for the hub analyze call (merged after hub_options).
+- **suppress_service_actions**: `Optional[list[str]]` — Optional suppress_service_actions for the hub analyze call (merged after hub_options).

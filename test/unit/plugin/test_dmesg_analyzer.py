@@ -1020,3 +1020,56 @@ def test_priority_override_updates_unkown_dmesg_error(system_info):
 
     assert len(res.events) == 1
     assert res.events[0].priority == EventPriority.ERROR
+
+
+def test_mce_threshold_raises_error_for_gpu(system_info):
+    dmesg_content = (
+        "kern  :err   : 2024-10-07T10:17:15,145363-04:00 "
+        "amdgpu 0000:c1:00.0: amdgpu: socket: 4, die: 0 "
+        "3 correctable hardware errors detected in total in gfx block\n"
+    )
+
+    analyzer = DmesgAnalyzer(system_info=system_info)
+    res = analyzer.analyze_data(
+        DmesgData(dmesg_content=dmesg_content),
+        args=DmesgAnalyzerArgs(check_unknown_dmesg_errors=False, mce_threshold=3),
+    )
+
+    threshold_events = [e for e in res.events if e.data.get("mce_threshold") == 3]
+    assert len(threshold_events) == 1
+    assert threshold_events[0].priority == EventPriority.ERROR
+    assert threshold_events[0].data["part"] == "GPU0/gfx"
+    assert threshold_events[0].data["correctable_mce_count"] == 3
+    assert res.status == ExecutionStatus.ERROR
+
+
+def test_mce_threshold_not_triggered_below_limit(system_info):
+    dmesg_content = (
+        "kern  :warn  : 2024-06-11T14:30:00,123456+00:00 "
+        "mce: 2 correctable hardware errors detected in total in mc0 block on CPU1\n"
+    )
+
+    analyzer = DmesgAnalyzer(system_info=system_info)
+    res = analyzer.analyze_data(
+        DmesgData(dmesg_content=dmesg_content),
+        args=DmesgAnalyzerArgs(check_unknown_dmesg_errors=False, mce_threshold=3),
+    )
+
+    threshold_events = [e for e in res.events if "mce_threshold" in e.data]
+    assert threshold_events == []
+    assert res.status == ExecutionStatus.WARNING
+
+
+def test_mce_threshold_disabled_when_none(system_info):
+    dmesg_content = (
+        "kern  :warn  : 2024-06-11T14:30:00,123456+00:00 "
+        "mce: 99 correctable hardware errors detected in total in mc0 block on CPU1\n"
+    )
+
+    analyzer = DmesgAnalyzer(system_info=system_info)
+    res = analyzer.analyze_data(
+        DmesgData(dmesg_content=dmesg_content),
+        args=DmesgAnalyzerArgs(check_unknown_dmesg_errors=False),
+    )
+
+    assert not any("mce_threshold" in e.data for e in res.events)

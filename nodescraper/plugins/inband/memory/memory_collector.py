@@ -60,7 +60,7 @@ class MemoryCollector(InBandDataCollector[MemoryDataModel, None]):
         Returns:
             tuple[TaskResult, Optional[MemoryDataModel]]: tuple containing the task result and memory data model or None if data is not available.
         """
-        mem_free, mem_total = None, None
+        mem_free, mem_total, mem_available = None, None, None
         if self.system_info.os_family == OSFamily.WINDOWS:
             os_memory_cmd = self._run_sut_cmd(self.CMD_WINDOWS)
             if os_memory_cmd.exit_code == 0:
@@ -71,9 +71,12 @@ class MemoryCollector(InBandDataCollector[MemoryDataModel, None]):
         else:
             os_memory_cmd = self._run_sut_cmd(self.CMD)
             if os_memory_cmd.exit_code == 0:
-                pattern = r"Mem:\s+(\d\.?\d*\w+)\s+\d\.?\d*\w+\s+(\d\.?\d*\w+)"
-                mem_free = re.search(pattern, os_memory_cmd.stdout).group(2)
-                mem_total = re.search(pattern, os_memory_cmd.stdout).group(1)
+                pattern = r"Mem:\s+(\S+)\s+\S+\s+(\S+)(?:\s+\S+\s+\S+\s+(\S+))?"
+                match = re.search(pattern, os_memory_cmd.stdout)
+                if match:
+                    mem_total = match.group(1)
+                    mem_free = match.group(2)
+                    mem_available = match.group(3)
 
         if os_memory_cmd.exit_code != 0:
             self._log_event(
@@ -163,6 +166,7 @@ class MemoryCollector(InBandDataCollector[MemoryDataModel, None]):
             mem_data = MemoryDataModel(
                 mem_free=mem_free,
                 mem_total=mem_total,
+                mem_available=mem_available,
                 lsmem_data=lsmem_data,
                 numa_topology=numa_topology,
             )
@@ -172,7 +176,10 @@ class MemoryCollector(InBandDataCollector[MemoryDataModel, None]):
                 data=mem_data.model_dump(),
                 priority=EventPriority.INFO,
             )
-            self.result.message = f"Memory: mem_free={mem_free}, mem_total={mem_total}"
+            if mem_available:
+                self.result.message = f"Memory: mem_total={mem_total}, mem_available={mem_available}, mem_free={mem_free}"
+            else:
+                self.result.message = f"Memory: mem_free={mem_free}, mem_total={mem_total}"
             self.result.status = ExecutionStatus.OK
         else:
             mem_data = None
