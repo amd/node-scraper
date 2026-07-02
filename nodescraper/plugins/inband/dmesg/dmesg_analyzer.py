@@ -27,6 +27,7 @@ import datetime
 import re
 from typing import Optional
 
+from nodescraper.base.match_ignore import parse_ignore_match_rules
 from nodescraper.base.regexanalyzer import ErrorRegex, RegexAnalyzer
 from nodescraper.connection.inband import TextFileArtifact
 from nodescraper.enums import EventCategory, EventPriority
@@ -641,10 +642,19 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
 
         return current_priority  # if no rules are matched, keep the current priority
 
-    def _check_mce_threshold(self, dmesg_content: str, threshold: int) -> None:
+    def _check_mce_threshold(
+        self,
+        dmesg_content: str,
+        threshold: int,
+        ignore_mce_banks: frozenset[int],
+    ) -> None:
         """Raise ERROR events when correctable MCE counts per component reach the threshold."""
-        correctable_counts = parse_correctable_mce_counts(dmesg_content)
-        uncorrectable_counts = parse_uncorrectable_mce_counts(dmesg_content)
+        correctable_counts = parse_correctable_mce_counts(
+            dmesg_content, ignore_banks=ignore_mce_banks
+        )
+        uncorrectable_counts = parse_uncorrectable_mce_counts(
+            dmesg_content, ignore_banks=ignore_mce_banks
+        )
 
         for part, count in sorted(correctable_counts.items()):
             if count >= threshold:
@@ -703,12 +713,15 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
         else:
             dmesg_content = data.dmesg_content
 
+        ignore_match_rules, ignore_mce_banks = parse_ignore_match_rules(args.ignore_match_rules)
+
         known_err_events = self.check_all_regexes(
             content=dmesg_content,
             source="dmesg",
             error_regex=final_error_regex,
             num_timestamps=args.num_timestamps,
             interval_to_collapse_event=args.interval_to_collapse_event,
+            ignore_match_rules=ignore_match_rules,
         )
         if args.exclude_category:
             known_err_events = [
@@ -738,6 +751,7 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
                 error_regex=unknown_dmesg_error_regexes,
                 num_timestamps=args.num_timestamps,
                 interval_to_collapse_event=args.interval_to_collapse_event,
+                ignore_match_rules=ignore_match_rules,
             )
 
             for err_event in err_events:
@@ -746,6 +760,6 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
                     self.result.events.append(err_event)
 
         if args.mce_threshold is not None:
-            self._check_mce_threshold(dmesg_content, args.mce_threshold)
+            self._check_mce_threshold(dmesg_content, args.mce_threshold, ignore_mce_banks)
 
         return self.result

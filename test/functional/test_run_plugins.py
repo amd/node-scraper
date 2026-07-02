@@ -125,17 +125,20 @@ def test_run_comma_separated_plugins_with_invalid(run_cli_command, tmp_path):
 
 
 def test_run_plugin_with_data_file_no_collection(run_cli_command, tmp_path):
-    """Test running plugin with --data argument and --collection False."""
+    """Test running DmesgPlugin with --data, analysis-only, and ignore_match_rules config."""
     fixtures_dir = Path(__file__).parent / "fixtures"
-    dmesg_fixture = fixtures_dir / "dmesg_sample.log"
+    dmesg_fixture = fixtures_dir / "dmesg_sample_ignore_match_rules.log"
+    plugin_config = fixtures_dir / "dmesg_plugin_config_ignore_match_rules.json"
 
     assert dmesg_fixture.exists(), f"Fixture file not found: {dmesg_fixture}"
+    assert plugin_config.exists(), f"Plugin config not found: {plugin_config}"
 
     analyze_log_path = str(tmp_path / "analyze_logs")
     result = run_cli_command(
         [
             "--log-path",
             analyze_log_path,
+            f"--plugin-configs={plugin_config}",
             "run-plugins",
             "DmesgPlugin",
             "--data",
@@ -177,6 +180,26 @@ def test_run_plugin_with_data_file_no_collection(run_cli_command, tmp_path):
             f"Bug regression: DmesgPlugin status is NOT_RAN with --data file. "
             f"Analysis should have run on provided data. Status: {status}"
         )
+
+    events_file = analyze_path / "dmesg_plugin" / "dmesg_analyzer" / "events.json"
+    if events_file.exists():
+        with open(events_file, encoding="utf-8") as f:
+            events = json.load(f)
+
+        descriptions = [event["description"] for event in events]
+        mce_events = [event for event in events if event["description"] == "MCE Corrected Error"]
+        harness_events = [
+            event for event in events if event["description"] == "Custom Test Harness Fault"
+        ]
+
+        assert len(mce_events) == 1, "Ignored MCA banks 1 and 2 should leave one MCE event"
+        assert "MC5_STATUS" in str(mce_events[0]["data"]["match_content"])
+
+        assert len(harness_events) == 1, "Ignored alpha harness line should leave one harness event"
+        assert "probe beta" in str(harness_events[0]["data"]["match_content"])
+
+        assert "ACPI Error" in descriptions
+        assert any("mce_threshold" in event.get("data", {}) for event in events)
 
 
 def test_rocm_plugin_with_custom_rocm_path_collection_args(run_cli_command, tmp_path):

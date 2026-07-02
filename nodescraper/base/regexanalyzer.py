@@ -25,10 +25,11 @@
 ###############################################################################
 import datetime
 import re
-from typing import Optional, Union
+from typing import Optional, Sequence, Union
 
 from pydantic import BaseModel
 
+from nodescraper.base.match_ignore import ParsedIgnoreMatchRule, should_ignore_match
 from nodescraper.enums import EventCategory, EventPriority
 from nodescraper.generictypes import TAnalyzeArg, TDataModel
 from nodescraper.interfaces.dataanalyzertask import DataAnalyzer
@@ -121,6 +122,51 @@ class RegexAnalyzer(DataAnalyzer[TDataModel, TAnalyzeArg]):
         timestamp_match = self.TIMESTAMP_PATTERN.search(first_line)
         return timestamp_match.group(1) if timestamp_match else None
 
+    def _line_at_match_position(self, content: str, match_start: int) -> str:
+        """Return the full line containing a regex match start position.
+
+        Args:
+            content: Full content being analyzed.
+            match_start: Start position of the regex match.
+
+        Returns:
+            str: Line text containing the match.
+        """
+        line_start = content.rfind("\n", 0, match_start) + 1
+        line_end = content.find("\n", match_start)
+        if line_end == -1:
+            line_end = len(content)
+        return content[line_start:line_end]
+
+    def _should_ignore_regex_match(
+        self,
+        content: str,
+        match_start: int,
+        match_text: str,
+        error_regex_message: str,
+        ignore_match_rules: Sequence[ParsedIgnoreMatchRule],
+    ) -> bool:
+        """Return True when ignore_match_rules say to skip this regex hit.
+
+        Args:
+            content: Full content being analyzed.
+            match_start: Start position of the regex match.
+            match_text: Regex match text.
+            error_regex_message: ErrorRegex.message for the pattern that matched.
+            ignore_match_rules: Parsed ignore rules.
+
+        Returns:
+            bool: True when the match should be skipped.
+        """
+        if not ignore_match_rules:
+            return False
+        return should_ignore_match(
+            line=self._line_at_match_position(content, match_start),
+            match_text=match_text,
+            error_regex_message=error_regex_message,
+            rules=ignore_match_rules,
+        )
+
     def _convert_and_extend_error_regex(
         self,
         custom_regex: Optional[Union[list[ErrorRegex], list[dict]]],
@@ -198,6 +244,7 @@ class RegexAnalyzer(DataAnalyzer[TDataModel, TAnalyzeArg]):
         group: bool = True,
         num_timestamps: int = 3,
         interval_to_collapse_event: int = 60,
+        ignore_match_rules: Optional[Sequence[ParsedIgnoreMatchRule]] = None,
     ) -> list[RegexEvent]:
         """Iterate over all ERROR_REGEX and check content for any matches
 
@@ -205,6 +252,7 @@ class RegexAnalyzer(DataAnalyzer[TDataModel, TAnalyzeArg]):
         - Extracts timestamps from matched lines
         - Collapses events within interval_to_collapse_event seconds
         - Prunes timestamp lists to keep first N and last N timestamps
+        - Skips matches that satisfy ignore_match_rules
 
         Args:
             content (str): content to match regex on
@@ -213,6 +261,7 @@ class RegexAnalyzer(DataAnalyzer[TDataModel, TAnalyzeArg]):
             group (bool, optional): flag to control whether matches should be grouped together. Defaults to True.
             num_timestamps (int, optional): maximum number of timestamps to keep for each event. Defaults to 3.
             interval_to_collapse_event (int, optional): time interval in seconds to collapse events. Defaults to 60.
+            ignore_match_rules (Optional[Sequence[ParsedIgnoreMatchRule]], optional): Parsed skip rules. Defaults to None.
 
         Returns:
             list[RegexEvent]: list of regex event objects
@@ -246,8 +295,20 @@ class RegexAnalyzer(DataAnalyzer[TDataModel, TAnalyzeArg]):
                     continue
             return False
 
+        skip_rules = list(ignore_match_rules) if ignore_match_rules else []
+
         for error_regex_obj in error_regex:
             for match_obj in error_regex_obj.regex.finditer(content):
+                raw_match = match_obj.group(0)
+                if self._should_ignore_regex_match(
+                    content,
+                    match_obj.start(),
+                    raw_match,
+                    error_regex_obj.message,
+                    skip_rules,
+                ):
+                    continue
+
                 # Extract timestamp from the line where match occurs
                 timestamp = self._extract_timestamp_from_match_position(content, match_obj.start())
 
