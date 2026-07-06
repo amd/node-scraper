@@ -8,7 +8,7 @@
 # of this software and associated documentation files (the "Software"), to deal
 # in the Software without restriction, including without limitation the rights
 # to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
+# copies of the  Software, and to permit persons to whom the Software is
 # furnished to do so, subject to the following conditions:
 #
 # The above copyright notice and this permission notice shall be included in all
@@ -25,8 +25,18 @@
 ###############################################################################
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from nodescraper.connection.inband.inbandmanager import InBandConnectionManager
+from nodescraper.pluginrecipe.discovery import PluginDiscovery
 from nodescraper.pluginregistry import PluginRegistry
+
+
+@pytest.fixture(autouse=True)
+def clear_cache():
+    yield
+    PluginDiscovery.clear_cache()
+    PluginRegistry().clear_caches()
 
 
 def _entry_points_side_effect_cm_only(mock_ep, *args, **kwargs):
@@ -40,11 +50,10 @@ def test_load_connection_managers_from_entry_points_registers_class_and_alias():
     mock_ep = MagicMock()
     mock_ep.name = "AliasInBand"
     mock_ep.load.return_value = InBandConnectionManager
-
+    PluginRegistry.clear_caches()
     with patch("nodescraper.pluginregistry.importlib.metadata.entry_points") as mock_eps:
         mock_eps.side_effect = lambda *a, **k: _entry_points_side_effect_cm_only(mock_ep, *a, **k)
         found = PluginRegistry.load_connection_managers_from_entry_points()
-
     assert found["InBandConnectionManager"] is InBandConnectionManager
     assert found["AliasInBand"] is InBandConnectionManager
 

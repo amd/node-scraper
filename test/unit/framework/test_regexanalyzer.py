@@ -27,6 +27,7 @@ import re
 
 from pydantic import BaseModel
 
+from nodescraper.base.match_ignore import parse_ignore_match_rules
 from nodescraper.base.regexanalyzer import ErrorRegex, RegexAnalyzer
 from nodescraper.enums import EventCategory, EventPriority
 from nodescraper.models.datamodel import DataModel
@@ -234,3 +235,31 @@ def test_convert_and_extend_preserves_base_regex(system_info):
 
     assert len(base_regex) == original_base_length
     assert len(result) == original_base_length + 1
+
+
+def test_check_all_regexes_skips_ignore_match_rules(system_info):
+    analyzer = TestRegexAnalyzer(system_info=system_info)
+    error_regex = [
+        ErrorRegex(
+            regex=re.compile(r"dummy error \d+"),
+            message="Dummy Error",
+            event_category=EventCategory.SW_DRIVER,
+        )
+    ]
+    content = (
+        "dummy error 1 on node alpha\n"
+        "dummy error 2 on node alpha\n"
+        "dummy error 3 on node beta\n"
+    )
+    ignore_rules, _ = parse_ignore_match_rules([{"line_regex": r"node alpha"}])
+
+    events = analyzer.check_all_regexes(
+        content=content,
+        source="test_log",
+        error_regex=error_regex,
+        group=False,
+        ignore_match_rules=ignore_rules,
+    )
+
+    assert len(events) == 1
+    assert "dummy error 3" in str(events[0].data["match_content"])

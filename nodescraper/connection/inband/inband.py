@@ -37,6 +37,16 @@ class CommandArtifact(BaseModel):
     stdout: str
     stderr: str
     exit_code: int
+    log_html: bool = False
+
+    def to_html_entry(self) -> dict:
+        """Return a dict suitable for HTML command artifact rendering."""
+        return {
+            "command": self.command,
+            "stdout": self.stdout,
+            "stderr": self.stderr,
+            "exit_code": self.exit_code,
+        }
 
 
 class BaseFileArtifact(BaseModel, abc.ABC):

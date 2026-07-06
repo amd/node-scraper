@@ -4,31 +4,33 @@
 
 | Plugin | Collection | Analyzer Args | Collection Args | DataModel | Collector | Analyzer |
 | --- | --- | --- | --- | --- | --- | --- |
-| GenericCollectionPlugin | Runs each command from collection_args.commands on the target (in-band host or BMC over OOB SSH).<br>Commands are user-configured; there are no fixed CMD_* class fields. | **Analyzer Args:**<br>- `checks`: list[nodescraper.plugins.generic_collection.analyzer_args.CommandCheck] — Per-command validation rules keyed by collected command name. | **Collection Args:**<br>- `commands`: list[nodescraper.plugins.generic_collection.collector_args.CommandSpec] — Named commands to run. Each entry must include 'name' and 'command'. Prefer small textual stdout; see class docstring...<br>- `sudo`: bool — Default sudo setting for commands that do not specify sudo.<br>- `timeout`: int — Default per-command timeout in seconds.<br>- `include_stdout`: bool — Default: include each command's stdout in collected results for analysis. When false, stdout is omitted from stored r... | [GenericCollectionDataModel](#GenericCollectionDataModel-Model) | [GenericCollectionCollector](#Collector-Class-GenericCollectionCollector) | [GenericAnalyzer](#Data-Analyzer-Class-GenericAnalyzer) |
-| AmdSmiPlugin | bad-pages<br>firmware --json<br>list --json<br>metric -g all<br>partition --json<br>process --json<br>ras --cper --folder={folder}<br>ras --afid --cper-file {cper_file}<br>static -g all --json<br>static -g {gpu_id} --json<br>topology<br>version --json<br>xgmi -l<br>xgmi -m | **Analyzer Args:**<br>- `check_static_data`: bool — If True, run static data checks (e.g. driver version, partition mode).<br>- `expected_gpu_processes`: Optional[int] — Expected number of GPU processes.<br>- `expected_max_power`: Optional[int] — Expected maximum power value (e.g. watts).<br>- `expected_power_management`: Optional[str] — Expected amd-smi metric power_management value per GPU (e.g. DISABLED for active/full power, ENABLED for power-manage...<br>- `expected_driver_version`: Optional[str] — Expected AMD driver version string.<br>- `expected_memory_partition_mode`: Optional[str] — Expected memory partition mode (e.g. sp3, dp).<br>- `expected_compute_partition_mode`: Optional[str] — Expected compute partition mode.<br>- `expected_firmware_versions`: Optional[dict[str, str]] — Expected firmware versions keyed by amd-smi fw_id (e.g. PLDM_BUNDLE).<br>- `l0_to_recovery_count_error_threshold`: Optional[int] — L0-to-recovery count above which an error is raised.<br>- `l0_to_recovery_count_warning_threshold`: Optional[int] — L0-to-recovery count above which a warning is raised.<br>- `vendorid_ep`: Optional[str] — Expected endpoint vendor ID (e.g. for PCIe).<br>- `vendorid_ep_vf`: Optional[str] — Expected endpoint VF vendor ID.<br>- `devid_ep`: Optional[str] — Expected endpoint device ID.<br>- `devid_ep_vf`: Optional[str] — Expected endpoint VF device ID.<br>- `sku_name`: Optional[str] — Expected SKU name string for GPU.<br>- `expected_xgmi_speed`: Optional[list[float]] — Expected xGMI speed value(s) (e.g. link rate).<br>- `analysis_range_start`: Optional[datetime.datetime] — Start of time range for time-windowed analysis.<br>- `analysis_range_end`: Optional[datetime.datetime] — End of time range for time-windowed analysis. | **Collection Args:**<br>- `analysis_firmware_ids`: Optional[list[str]] — amd-smi fw_id values to record in analysis_ref.firmware_versions<br>- `cper_file_path`: Optional[str] — Path to CPER folder or file for RAS AFID collection (ras --afid --cper-file). | [AmdSmiDataModel](#AmdSmiDataModel-Model) | [AmdSmiCollector](#Collector-Class-AmdSmiCollector) | [AmdSmiAnalyzer](#Data-Analyzer-Class-AmdSmiAnalyzer) |
+| GenericCollectionPlugin | Runs each command from collection_args.commands on the target (in-band host or BMC over OOB SSH).<br>Commands are user-configured; there are no fixed CMD_* class fields. | **Analyzer Args:**<br>- `checks`: list[nodescraper.plugins.generic_collection.analyzer_args.CommandCheck] — Per-command validation rules keyed by collected command name. | **Collection Args:**<br>- `html_view`: bool — When true, include logged command artifacts in command_artifacts.html using human-readable output. Arista collectors...<br>- `commands`: list[nodescraper.plugins.generic_collection.collector_args.CommandSpec] — Named commands to run. Each entry must include 'name' and 'command'. Prefer small textual stdout; see class docstring...<br>- `sudo`: bool — Default sudo setting for commands that do not specify sudo.<br>- `timeout`: int — Default per-command timeout in seconds.<br>- `include_stdout`: bool — Default: include each command's stdout in collected results for analysis. When false, stdout is omitted from stored r... | [GenericCollectionDataModel](#GenericCollectionDataModel-Model) | [GenericCollectionCollector](#Collector-Class-GenericCollectionCollector) | [GenericAnalyzer](#Data-Analyzer-Class-GenericAnalyzer) |
+| AmdSmiPlugin | bad-pages<br>firmware --json<br>list --json<br>metric -g all<br>partition --json<br>process --json<br>ras --cper --folder={folder}<br>ras --afid --cper-file {cper_file}<br>static -g all --json<br>static -g {gpu_id} --json<br>topology<br>version --json<br>xgmi -l<br>xgmi -m | **Analyzer Args:**<br>- `check_static_data`: bool — If True, run static data checks (e.g. driver version, partition mode).<br>- `expected_gpu_processes`: Optional[int] — Expected number of GPU processes.<br>- `expected_max_power`: Optional[int] — Expected maximum power value (e.g. watts).<br>- `expected_power_management`: Optional[str] — Expected amd-smi metric power_management value per GPU (e.g. DISABLED for active/full power, ENABLED for power-manage...<br>- `expected_driver_version`: Optional[str] — Expected AMD driver version string.<br>- `expected_memory_partition_mode`: Optional[str] — Expected memory partition mode (e.g. sp3, dp).<br>- `expected_compute_partition_mode`: Optional[str] — Expected compute partition mode.<br>- `expected_firmware_versions`: Optional[dict[str, str]] — Expected firmware versions keyed by amd-smi fw_id (e.g. PLDM_BUNDLE).<br>- `l0_to_recovery_count_error_threshold`: Optional[int] — L0-to-recovery count above which an error is raised.<br>- `l0_to_recovery_count_warning_threshold`: Optional[int] — L0-to-recovery count above which a warning is raised.<br>- `vendorid_ep`: Optional[str] — Expected endpoint vendor ID (e.g. for PCIe).<br>- `vendorid_ep_vf`: Optional[str] — Expected endpoint VF vendor ID.<br>- `devid_ep`: Optional[str] — Expected endpoint device ID.<br>- `devid_ep_vf`: Optional[str] — Expected endpoint VF device ID.<br>- `sku_name`: Optional[str] — Expected SKU name string for GPU.<br>- `expected_xgmi_speed`: Optional[list[float]] — Expected xGMI speed value(s) (e.g. link rate).<br>- `analysis_range_start`: Optional[datetime.datetime] — Start of time range for time-windowed analysis.<br>- `analysis_range_end`: Optional[datetime.datetime] — End of time range for time-windowed analysis. | **Collection Args:**<br>- `html_view`: bool — When true, include logged command artifacts in command_artifacts.html using human-readable output. Arista collectors...<br>- `analysis_firmware_ids`: Optional[list[str]] — amd-smi fw_id values to record in analysis_ref.firmware_versions<br>- `cper_file_path`: Optional[str] — Path to CPER folder or file for RAS AFID collection (ras --afid --cper-file). | [AmdSmiDataModel](#AmdSmiDataModel-Model) | [AmdSmiCollector](#Collector-Class-AmdSmiCollector) | [AmdSmiAnalyzer](#Data-Analyzer-Class-AmdSmiAnalyzer) |
 | BiosPlugin | sh -c 'cat /sys/devices/virtual/dmi/id/bios_version'<br>wmic bios get SMBIOSBIOSVersion /Value | **Analyzer Args:**<br>- `exp_bios_version`: list[str] — Expected BIOS version(s) to match against collected value (str or list).<br>- `regex_match`: bool — If True, match exp_bios_version as regex; otherwise exact match. | - | [BiosDataModel](#BiosDataModel-Model) | [BiosCollector](#Collector-Class-BiosCollector) | [BiosAnalyzer](#Data-Analyzer-Class-BiosAnalyzer) |
 | CmdlinePlugin | cat /proc/cmdline | **Analyzer Args:**<br>- `required_cmdline`: Union[str, List] — Command-line parameters that must be present (e.g. 'pci=bfsort').<br>- `banned_cmdline`: Union[str, List] — Command-line parameters that must not be present.<br>- `os_overrides`: Dict[str, nodescraper.plugins.inband.cmdline.cmdlineconfig.OverrideConfig] — Per-OS overrides for required_cmdline and banned_cmdline (keyed by OS identifier).<br>- `platform_overrides`: Dict[str, nodescraper.plugins.inband.cmdline.cmdlineconfig.OverrideConfig] — Per-platform overrides for required_cmdline and banned_cmdline (keyed by platform). | - | [CmdlineDataModel](#CmdlineDataModel-Model) | [CmdlineCollector](#Collector-Class-CmdlineCollector) | [CmdlineAnalyzer](#Data-Analyzer-Class-CmdlineAnalyzer) |
 | DeviceEnumerationPlugin | powershell -Command "(Get-WmiObject -Class Win32_Processor &#124; Measure-Object).Count"<br>lspci -d {vendorid_ep}: &#124; grep -iE 'VGA&#124;Display&#124;3D&#124;Processing accelerators&#124;Co-processor&#124;Accelerator' &#124; grep -vi 'Virtual Function' &#124; wc -l<br>powershell -Command "(wmic path win32_VideoController get name &#124; findstr AMD &#124; Measure-Object).Count"<br>lscpu<br>lshw<br>lspci -d {vendorid_ep}: &#124; grep -i 'Virtual Function' &#124; wc -l<br>powershell -Command "(Get-VMHostPartitionableGpu &#124; Measure-Object).Count" | **Analyzer Args:**<br>- `cpu_count`: Optional[list[int]] — Expected CPU count(s); pass as int or list of ints. Analysis passes if actual is in list.<br>- `gpu_count`: Optional[list[int]] — Expected GPU count(s); pass as int or list of ints. Analysis passes if actual is in list.<br>- `vf_count`: Optional[list[int]] — Expected virtual function count(s); pass as int or list of ints. Analysis passes if actual is in list. | - | [DeviceEnumerationDataModel](#DeviceEnumerationDataModel-Model) | [DeviceEnumerationCollector](#Collector-Class-DeviceEnumerationCollector) | [DeviceEnumerationAnalyzer](#Data-Analyzer-Class-DeviceEnumerationAnalyzer) |
-| DimmPlugin | sh -c 'dmidecode -t 17 &#124; tr -s " " &#124; grep -v "Volatile\&#124;None\&#124;Module" &#124; grep Size' 2>/dev/null<br>dmidecode<br>wmic memorychip get Capacity | - | **Collection Args:**<br>- `skip_sudo`: bool — If True, do not use sudo when running dmidecode or wmic for memory info. | [DimmDataModel](#DimmDataModel-Model) | [DimmCollector](#Collector-Class-DimmCollector) | - |
+| DimmPlugin | sh -c 'dmidecode -t 17 &#124; tr -s " " &#124; grep -v "Volatile\&#124;None\&#124;Module" &#124; grep Size' 2>/dev/null<br>dmidecode<br>wmic memorychip get Capacity | - | **Collection Args:**<br>- `html_view`: bool — When true, include logged command artifacts in command_artifacts.html using human-readable output. Arista collectors...<br>- `skip_sudo`: bool — If True, do not use sudo when running dmidecode or wmic for memory info. | [DimmDataModel](#DimmDataModel-Model) | [DimmCollector](#Collector-Class-DimmCollector) | - |
 | DkmsPlugin | dkms status<br>dkms --version | **Analyzer Args:**<br>- `dkms_status`: Union[str, list] — Expected dkms status string(s) to match (e.g. 'amd/1.0.0'). At least one of dkms_status or dkms_version required.<br>- `dkms_version`: Union[str, list] — Expected dkms version string(s) to match. At least one of dkms_status or dkms_version required.<br>- `regex_match`: bool — If True, match dkms_status and dkms_version as regex; otherwise exact match. | - | [DkmsDataModel](#DkmsDataModel-Model) | [DkmsCollector](#Collector-Class-DkmsCollector) | [DkmsAnalyzer](#Data-Analyzer-Class-DkmsAnalyzer) |
-| DmesgPlugin | dmesg --time-format iso -x<br>ls -1 /var/log/dmesg* 2>/dev/null &#124; grep -E '^/var/log/dmesg(\.[0-9]+(\.gz)?)?$' &#124;&#124; true | **Built-in Regexes:**<br>- Out of memory error: `(?:oom_kill_process.*)&#124;(?:Out of memory.*)`<br>- I/O Page Fault: `IO_PAGE_FAULT`<br>- Kernel Panic: `\bkernel panic\b.*`<br>- SQ Interrupt: `sq_intr`<br>- SRAM ECC: `sram_ecc.*`<br>- Failed to load driver. IP hardware init error.: `\[amdgpu\]\] \*ERROR\* hw_init of IP block.*`<br>- Failed to load driver. IP software init error.: `\[amdgpu\]\] \*ERROR\* sw_init of IP block.*`<br>- Real Time throttling activated: `sched: RT throttling activated.*`<br>- RCU preempt detected stalls: `rcu_preempt detected stalls.*`<br>- RCU preempt self-detected stall: `rcu_preempt self-detected stall.*`<br>- QCM fence timeout: `qcm fence wait loop timeout.*`<br>- General protection fault: `(?:[\w-]+(?:\[[0-9.]+\])?\s+)?general protectio...`<br>- Segmentation fault: `(?:segfault.*in .*\[)&#124;(?:[Ss]egmentation [Ff]au...`<br>- Failed to disallow cf state: `amdgpu: Failed to disallow cf state.*`<br>- Failed to terminate tmr: `\*ERROR\* Failed to terminate tmr.*`<br>- Suspend of IP block failed: `\*ERROR\* suspend of IP block <\w+> failed.*`<br>- amdgpu Page Fault: `(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:\s+\[\S...`<br>- Page Fault: `page fault for address.*`<br>- Fatal error during GPU init: `(?:amdgpu)(.*Fatal error during GPU init)&#124;(Fata...`<br>- PCIe AER Error Status: `(pcieport [\w:.]+: AER: aer_status:[^\n]*(?:\n[...`<br>- PCIe AER Correctable Error Status: `(.*aer_cor_status: 0x[0-9a-fA-F]+, aer_cor_mask...`<br>- PCIe AER Uncorrectable Error Status: `(.*aer_uncor_status: 0x[0-9a-fA-F]+, aer_uncor_...`<br>- PCIe AER Uncorrectable Error Severity with TLP Header: `(.*aer_uncor_severity: 0x[0-9a-fA-F]+.*)(\n.*TL...`<br>- Failed to read journal file: `Failed to read journal file.*`<br>- Journal file corrupted or uncleanly shut down: `journal corrupted or uncleanly shut down.*`<br>- ACPI BIOS Error: `ACPI BIOS Error`<br>- ACPI Error: `ACPI Error`<br>- Filesystem corrupted!: `EXT4-fs error \(device .*\):`<br>- Error in buffered IO, check filesystem integrity: `(Buffer I\/O error on dev)(?:ice)? (\w+)`<br>- PCIe card no longer present: `pcieport (\w+:\w+:\w+\.\w+):\s+(\w+):\s+(Slot\(...`<br>- PCIe Link Down: `pcieport (\w+:\w+:\w+\.\w+):\s+(\w+):\s+(Slot\(...`<br>- Mismatched clock configuration between PCIe device and host: `pcieport (\w+:\w+:\w+\.\w+):\s+(\w+):\s+(curren...`<br>- RAS Correctable Error: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- RAS Uncorrectable Error: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- RAS Deferred Error: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- RAS Corrected PCIe Error: `((?:\[Hardware Error\]:\s+)?event severity: cor...`<br>- GPU Reset: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- GPU reset failed: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- ACA Error: `(Accelerator Check Architecture[^\n]*)(?:\n[^\n...`<br>- ACA Error: `(Accelerator Check Architecture[^\n]*)(?:\n[^\n...`<br>- MCE Corrected Error: `\[Hardware Error\]:.+MC\d+_STATUS\[[^\]]*\&#124;CE\&#124;...`<br>- MCE Uncorrected Error: `\[Hardware Error\]:.+MC\d+_STATUS\[[^\]]*\&#124;UC\&#124;...`<br>- Mode 2 Reset Failed: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)? (...`<br>- RAS Corrected Error: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- SGX Error: `x86/cpu: SGX disabled by BIOS`<br>- MMP Error: `Failed to load MMP firmware qat_4xxx_mmp.bin`<br>- GPU Throttled: `amdgpu \w{4}:\w{2}:\w{2}.\w: amdgpu: WARN: GPU ...`<br>- RAS Poison Consumed: `amdgpu[ 0-9a-fA-F:.]+:(?:\s*amdgpu:)?\s+(?:{\d+...`<br>- RAS Poison created: `amdgpu[ 0-9a-fA-F:.]+:(?:\s*amdgpu:)?\s+(?:{\d+...`<br>- Bad page threshold exceeded: `(amdgpu: Saved bad pages (\d+) reaches threshol...`<br>- RAS Hardware Error: `Hardware error from APEI Generic Hardware Error...`<br>- Error Address: `Error Address.*(?:\s.*)`<br>- RAS EDR Event: `EDR: EDR event received`<br>- DPC Event: `DPC: .*`<br>- LNet: ko2iblnd has no matching interfaces: `(?:\[[^\]]+\]\s*)?LNetError:.*ko2iblnd:\s*No ma...`<br>- LNet: Error starting up LNI: `(?:\[[^\]]+\]\s*)?LNetError:\s*.*Error\s*-?\d+\...`<br>- Lustre: network initialisation failed: `LustreError:.*ptlrpc_init_portals\(\).*network ...` | **Collection Args:**<br>- `collect_rotated_logs`: bool — If True, also collect rotated dmesg log files from /var/log/dmesg*.<br>- `skip_sudo`: bool — If True, do not use sudo when running dmesg or listing log files.<br>- `log_dmesg_data`: bool — If True, log the collected dmesg output in artifacts. | [DmesgData](#DmesgData-Model) | [DmesgCollector](#Collector-Class-DmesgCollector) | [DmesgAnalyzer](#Data-Analyzer-Class-DmesgAnalyzer) |
+| DmesgPlugin | dmesg --time-format iso -x<br>ls -1 /var/log/dmesg* 2>/dev/null &#124; grep -E '^/var/log/dmesg(\.[0-9]+(\.gz)?)?$' &#124;&#124; true | **Built-in Regexes:**<br>- Out of memory error: `(?:oom_kill_process.*)&#124;(?:Out of memory.*)`<br>- I/O Page Fault: `IO_PAGE_FAULT`<br>- Kernel Panic: `\bkernel panic\b.*`<br>- SQ Interrupt: `sq_intr`<br>- SRAM ECC: `sram_ecc.*`<br>- Failed to load driver. IP hardware init error.: `\[amdgpu\]\] \*ERROR\* hw_init of IP block.*`<br>- Failed to load driver. IP software init error.: `\[amdgpu\]\] \*ERROR\* sw_init of IP block.*`<br>- Real Time throttling activated: `sched: RT throttling activated.*`<br>- RCU preempt detected stalls: `rcu_preempt detected stalls.*`<br>- RCU preempt self-detected stall: `rcu_preempt self-detected stall.*`<br>- QCM fence timeout: `qcm fence wait loop timeout.*`<br>- General protection fault: `(?:[\w-]+(?:\[[0-9.]+\])?\s+)?general protectio...`<br>- Segmentation fault: `(?:segfault.*in .*\[)&#124;(?:[Ss]egmentation [Ff]au...`<br>- Failed to disallow cf state: `amdgpu: Failed to disallow cf state.*`<br>- Failed to terminate tmr: `\*ERROR\* Failed to terminate tmr.*`<br>- Suspend of IP block failed: `\*ERROR\* suspend of IP block <\w+> failed.*`<br>- amdgpu Page Fault: `(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:\s+\[\S...`<br>- Page Fault: `page fault for address.*`<br>- Fatal error during GPU init: `(?:amdgpu)(.*Fatal error during GPU init)&#124;(Fata...`<br>- PCIe AER Error Status: `(pcieport [\w:.]+: AER: aer_status:[^\n]*(?:\n[...`<br>- PCIe AER Correctable Error Status: `(.*aer_cor_status: 0x[0-9a-fA-F]+, aer_cor_mask...`<br>- PCIe AER Uncorrectable Error Status: `(.*aer_uncor_status: 0x[0-9a-fA-F]+, aer_uncor_...`<br>- PCIe AER Uncorrectable Error Severity with TLP Header: `(.*aer_uncor_severity: 0x[0-9a-fA-F]+.*)(\n.*TL...`<br>- Failed to read journal file: `Failed to read journal file.*`<br>- Journal file corrupted or uncleanly shut down: `journal corrupted or uncleanly shut down.*`<br>- ACPI BIOS Error: `ACPI BIOS Error`<br>- ACPI Error: `ACPI Error`<br>- Filesystem corrupted!: `EXT4-fs error \(device .*\):`<br>- Error in buffered IO, check filesystem integrity: `(Buffer I\/O error on dev)(?:ice)? (\w+)`<br>- PCIe card no longer present: `pcieport (\w+:\w+:\w+\.\w+):\s+(\w+):\s+(Slot\(...`<br>- PCIe Link Down: `pcieport (\w+:\w+:\w+\.\w+):\s+(\w+):\s+(Slot\(...`<br>- Mismatched clock configuration between PCIe device and host: `pcieport (\w+:\w+:\w+\.\w+):\s+(\w+):\s+(curren...`<br>- RAS Correctable Error: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- RAS Uncorrectable Error: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- RAS Deferred Error: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- RAS Corrected PCIe Error: `((?:\[Hardware Error\]:\s+)?event severity: cor...`<br>- GPU Reset: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- GPU reset failed: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- ACA Error: `(Accelerator Check Architecture[^\n]*)(?:\n[^\n...`<br>- ACA Error: `(Accelerator Check Architecture[^\n]*)(?:\n[^\n...`<br>- MCE Corrected Error: `\[Hardware Error\]:.+MC\d+_STATUS\[[^\]]*\&#124;CE\&#124;...`<br>- MCE Uncorrected Error: `\[Hardware Error\]:.+MC\d+_STATUS\[[^\]]*\&#124;UC\&#124;...`<br>- Mode 2 Reset Failed: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)? (...`<br>- RAS Corrected Error: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- SGX Error: `x86/cpu: SGX disabled by BIOS`<br>- MMP Error: `Failed to load MMP firmware qat_4xxx_mmp.bin`<br>- GPU Throttled: `amdgpu \w{4}:\w{2}:\w{2}.\w: amdgpu: WARN: GPU ...`<br>- RAS Poison Consumed: `amdgpu[ 0-9a-fA-F:.]+:(?:\s*amdgpu:)?\s+(?:{\d+...`<br>- RAS Poison created: `amdgpu[ 0-9a-fA-F:.]+:(?:\s*amdgpu:)?\s+(?:{\d+...`<br>- Bad page threshold exceeded: `(amdgpu: Saved bad pages (\d+) reaches threshol...`<br>- RAS Hardware Error: `Hardware error from APEI Generic Hardware Error...`<br>- Error Address: `Error Address.*(?:\s.*)`<br>- RAS EDR Event: `EDR: EDR event received`<br>- DPC Event: `DPC: .*`<br>- LNet: ko2iblnd has no matching interfaces: `(?:\[[^\]]+\]\s*)?LNetError:.*ko2iblnd:\s*No ma...`<br>- LNet: Error starting up LNI: `(?:\[[^\]]+\]\s*)?LNetError:\s*.*Error\s*-?\d+\...`<br>- Lustre: network initialisation failed: `LustreError:.*ptlrpc_init_portals\(\).*network ...` | **Collection Args:**<br>- `html_view`: bool — When true, include logged command artifacts in command_artifacts.html using human-readable output. Arista collectors...<br>- `collect_rotated_logs`: bool — If True, also collect rotated dmesg log files from /var/log/dmesg*.<br>- `skip_sudo`: bool — If True, do not use sudo when running dmesg or listing log files.<br>- `log_dmesg_data`: bool — If True, log the collected dmesg output in artifacts. | [DmesgData](#DmesgData-Model) | [DmesgCollector](#Collector-Class-DmesgCollector) | [DmesgAnalyzer](#Data-Analyzer-Class-DmesgAnalyzer) |
 | FabricsPlugin | lspci &#124; grep -i cassini<br>lsmod &#124; grep cxi<br>cxi_stat<br>ibstat<br>ibv_devinfo<br>ls -l /sys/class/infiniband/*/device/net<br>fi_info -p cxi<br>mst start<br>mst status -v<br>ip link show<br>ofed_info -s | - | - | [FabricsDataModel](#FabricsDataModel-Model) | [FabricsCollector](#Collector-Class-FabricsCollector) | - |
-| JournalPlugin | journalctl --no-pager --system --output=short-iso<br>journalctl --no-pager --system --output=json | **Analyzer Args:**<br>- `analysis_range_start`: Optional[datetime.datetime] — Start of time range for analysis (ISO format). Only events on or after this time are analyzed.<br>- `analysis_range_end`: Optional[datetime.datetime] — End of time range for analysis (ISO format). Only events before this time are analyzed.<br>- `check_priority`: Optional[int] — Check against journal log priority (0=emergency..7=debug). If an entry has priority <= check_priority, an ERROR event...<br>- `group`: bool — If True, group entries that have the same priority and message. | **Collection Args:**<br>- `boot`: Optional[int] — Optional boot ID to limit journal collection to a specific boot. | [JournalData](#JournalData-Model) | [JournalCollector](#Collector-Class-JournalCollector) | [JournalAnalyzer](#Data-Analyzer-Class-JournalAnalyzer) |
+| JournalPlugin | journalctl --no-pager --system --output=short-iso<br>journalctl --no-pager --system --output=json | **Analyzer Args:**<br>- `analysis_range_start`: Optional[datetime.datetime] — Start of time range for analysis (ISO format). Only events on or after this time are analyzed.<br>- `analysis_range_end`: Optional[datetime.datetime] — End of time range for analysis (ISO format). Only events before this time are analyzed.<br>- `check_priority`: Optional[int] — Check against journal log priority (0=emergency..7=debug). If an entry has priority <= check_priority, an ERROR event...<br>- `group`: bool — If True, group entries that have the same priority and message. | **Collection Args:**<br>- `html_view`: bool — When true, include logged command artifacts in command_artifacts.html using human-readable output. Arista collectors...<br>- `boot`: Optional[int] — Optional boot ID to limit journal collection to a specific boot. | [JournalData](#JournalData-Model) | [JournalCollector](#Collector-Class-JournalCollector) | [JournalAnalyzer](#Data-Analyzer-Class-JournalAnalyzer) |
 | KernelPlugin | sh -c 'uname -a'<br>sh -c 'cat /proc/sys/kernel/numa_balancing'<br>wmic os get Version /Value | **Analyzer Args:**<br>- `exp_kernel`: Union[str, list] — Expected kernel version string(s) to match (e.g. from uname -a).<br>- `exp_numa`: Optional[int] — Expected value for kernel.numa_balancing (e.g. 0 or 1).<br>- `regex_match`: bool — If True, match exp_kernel as regex; otherwise exact match. | - | [KernelDataModel](#KernelDataModel-Model) | [KernelCollector](#Collector-Class-KernelCollector) | [KernelAnalyzer](#Data-Analyzer-Class-KernelAnalyzer) |
 | KernelModulePlugin | cat /proc/modules<br>modinfo amdgpu<br>wmic os get Version /Value | **Analyzer Args:**<br>- `kernel_modules`: dict[str, dict] — Expected kernel module name -> {version, etc.}. Analyzer checks collected modules match.<br>- `regex_filter`: list[str] — List of regex patterns to filter which collected modules are checked (default: amd). | - | [KernelModuleDataModel](#KernelModuleDataModel-Model) | [KernelModuleCollector](#Collector-Class-KernelModuleCollector) | [KernelModuleAnalyzer](#Data-Analyzer-Class-KernelModuleAnalyzer) |
 | MemoryPlugin | free -b<br>lsmem<br>numactl -H<br>wmic OS get FreePhysicalMemory /Value; wmic ComputerSystem get TotalPhysicalMemory /Value | **Analyzer Args:**<br>- `ratio`: float — Required free-memory ratio (0-1). Analysis fails if free/total < ratio.<br>- `memory_threshold`: str — Minimum free memory required (e.g. '30Gi', '1T'). Used when ratio is not sufficient. | - | [MemoryDataModel](#MemoryDataModel-Model) | [MemoryCollector](#Collector-Class-MemoryCollector) | [MemoryAnalyzer](#Data-Analyzer-Class-MemoryAnalyzer) |
-| NetworkPlugin | ip addr show<br>curl<br>ethtool -S {interface}<br>ethtool {interface}<br>lldpcli show neighbor<br>lldpctl<br>ip neighbor show<br>ping<br>rdma link -j<br>ip route show<br>ip rule show<br>wget | **Built-in Regexes:**<br>- tx_pfc_frames is non-zero: `^tx_pfc_frames$`<br>- tx_pfc_ena_frames_pri* is non-zero: `^tx_pfc_ena_frames_pri\d+$`<br>- pfc_pri*_tx_transitions is non-zero: `^pfc_pri\d+_tx_transitions$`<br>**Analyzer Args:**<br>- `error_regex`: Union[list[nodescraper.base.regexanalyzer.ErrorRegex], list[dict], NoneType] — Custom error regex patterns; each item can be ErrorRegex or dict with category/pattern. | **Collection Args:**<br>- `url`: Optional[str] — Optional URL to probe for network connectivity (used with netprobe).<br>- `netprobe`: Optional[Literal['ping', 'wget', 'curl']] — Tool to use for network connectivity probe: ping, wget, or curl. | [NetworkDataModel](#NetworkDataModel-Model) | [NetworkCollector](#Collector-Class-NetworkCollector) | [NetworkAnalyzer](#Data-Analyzer-Class-NetworkAnalyzer) |
-| NicPlugin | niccli --listdev<br>niccli --list<br>niccli --list_devices<br>niccli -dev {device_num} nvm -getoption pcie_relaxed_ordering<br>niccli --dev {device_num} nvm --getoption pcie_relaxed_ordering<br>niccli -dev {device_num} nvm -getoption performance_profile<br>niccli --dev {device_num} nvm --getoption performance_profile<br>niccli -dev {device_num} nvm -getoption support_rdma -scope 0<br>niccli -dev {device_num} getqos<br>niccli --dev {device_num} nvm --getoption support_rdma --scope 0<br>niccli --dev {device_num} qos --ets --show<br>niccli --version<br>nicctl show card<br>nicctl --version<br>nicctl show card flash partition --json<br>nicctl show card interrupts --json<br>nicctl show card logs --non-persistent<br>nicctl show card logs --boot-fault<br>nicctl show card logs --persistent<br>nicctl show card profile --json<br>nicctl show card time --json<br>nicctl show card statistics packet-buffer summary --json<br>nicctl show lif statistics --json<br>nicctl show lif internal queue-to-ud-pinning<br>nicctl show pipeline internal anomalies<br>nicctl show pipeline internal rsq-ring<br>nicctl show pipeline internal statistics memory<br>nicctl show port fsm<br>nicctl show port transceiver --json<br>nicctl show port statistics --json<br>nicctl show port internal mac<br>nicctl show qos headroom --json<br>nicctl show rdma queue --json<br>nicctl show rdma queue-pair --detail --json<br>nicctl show version firmware<br>nicctl show dcqcn<br>nicctl show environment<br>nicctl show lif<br>nicctl show pcie ats<br>nicctl show port<br>nicctl show qos<br>nicctl show rdma statistics<br>nicctl show version host-software<br>nicctl show dcqcn --card {card_id} --json<br>nicctl show card hardware-config --card {card_id} | **Analyzer Args:**<br>- `expected_values`: Optional[Dict[str, Dict[str, Any]]] — Per-command expected checks keyed by canonical key (see command_to_canonical_key).<br>- `performance_profile_expected`: str — Expected Broadcom performance_profile value (case-insensitive). Default RoCE.<br>- `support_rdma_disabled_values`: List[str] — Values that indicate RDMA is not supported (case-insensitive).<br>- `pcie_relaxed_ordering_expected`: str — Expected Broadcom pcie_relaxed_ordering value (e.g. 'Relaxed ordering = enabled'); checked case-insensitively. Defaul...<br>- `expected_qos_prio_map`: Optional[Dict[Any, Any]] — Expected priority-to-TC map (e.g. {0: 0, 1: 1}; keys may be int or str in config). Checked per device when set.<br>- `expected_qos_pfc_enabled`: Optional[int] — Expected PFC enabled value (0/1 or bitmask). Checked per device when set.<br>- `expected_qos_tsa_map`: Optional[Dict[Any, Any]] — Expected TSA map for ETS (e.g. {0: 'ets', 1: 'strict'}; keys may be int or str in config). Checked per device when set.<br>- `expected_qos_tc_bandwidth`: Optional[List[int]] — Expected TC bandwidth percentages. Checked per device when set.<br>- `require_qos_consistent_across_adapters`: bool — When True and no expected_qos_* are set, require all adapters to have the same prio_map, pfc_enabled, and tsa_map.<br>- `nicctl_log_error_regex`: Optional[List[Dict[str, Any]]] — Optional list of error patterns for nicctl show card logs. | **Collection Args:**<br>- `commands`: Optional[List[str]] — Optional list of niccli/nicctl commands to run. When None, default command set is used.<br>- `use_sudo_niccli`: bool — If True, run niccli commands with sudo when required.<br>- `use_sudo_nicctl`: bool — If True, run nicctl commands with sudo when required. | [NicDataModel](#NicDataModel-Model) | [NicCollector](#Collector-Class-NicCollector) | [NicAnalyzer](#Data-Analyzer-Class-NicAnalyzer) |
+| NetworkPlugin | ip addr show<br>curl<br>ethtool -S {interface}<br>ethtool {interface}<br>lldpcli show neighbor<br>lldpctl<br>ip neighbor show<br>ping<br>rdma link -j<br>ip route show<br>ip rule show<br>wget | **Built-in Regexes:**<br>- tx_pfc_frames is non-zero: `^tx_pfc_frames$`<br>- tx_pfc_ena_frames_pri* is non-zero: `^tx_pfc_ena_frames_pri\d+$`<br>- pfc_pri*_tx_transitions is non-zero: `^pfc_pri\d+_tx_transitions$`<br>**Analyzer Args:**<br>- `error_regex`: Union[list[nodescraper.base.regexanalyzer.ErrorRegex], list[dict], NoneType] — Custom error regex patterns; each item can be ErrorRegex or dict with category/pattern. | **Collection Args:**<br>- `html_view`: bool — When true, include logged command artifacts in command_artifacts.html using human-readable output. Arista collectors...<br>- `url`: Optional[str] — Optional URL to probe for network connectivity (used with netprobe).<br>- `netprobe`: Optional[Literal['ping', 'wget', 'curl']] — Tool to use for network connectivity probe: ping, wget, or curl. | [NetworkDataModel](#NetworkDataModel-Model) | [NetworkCollector](#Collector-Class-NetworkCollector) | [NetworkAnalyzer](#Data-Analyzer-Class-NetworkAnalyzer) |
+| NicPlugin | niccli --listdev<br>niccli --list<br>niccli --list_devices<br>niccli -dev {device_num} nvm -getoption pcie_relaxed_ordering<br>niccli --dev {device_num} nvm --getoption pcie_relaxed_ordering<br>niccli -dev {device_num} nvm -getoption performance_profile<br>niccli --dev {device_num} nvm --getoption performance_profile<br>niccli -dev {device_num} nvm -getoption support_rdma -scope 0<br>niccli -dev {device_num} getqos<br>niccli --dev {device_num} nvm --getoption support_rdma --scope 0<br>niccli --dev {device_num} qos --ets --show<br>niccli --version<br>nicctl show card<br>nicctl --version<br>nicctl show card flash partition --json<br>nicctl show card interrupts --json<br>nicctl show card logs --non-persistent<br>nicctl show card logs --boot-fault<br>nicctl show card logs --persistent<br>nicctl show card profile --json<br>nicctl show card time --json<br>nicctl show card statistics packet-buffer summary --json<br>nicctl show lif statistics --json<br>nicctl show lif internal queue-to-ud-pinning<br>nicctl show pipeline internal anomalies<br>nicctl show pipeline internal rsq-ring<br>nicctl show pipeline internal statistics memory<br>nicctl show port fsm<br>nicctl show port transceiver --json<br>nicctl show port statistics --json<br>nicctl show port internal mac<br>nicctl show qos headroom --json<br>nicctl show rdma queue --json<br>nicctl show rdma queue-pair --detail --json<br>nicctl show version firmware<br>nicctl show dcqcn<br>nicctl show environment<br>nicctl show lif<br>nicctl show pcie ats<br>nicctl show port<br>nicctl show qos<br>nicctl show rdma statistics<br>nicctl show version host-software<br>nicctl show dcqcn --card {card_id} --json<br>nicctl show card hardware-config --card {card_id} | **Analyzer Args:**<br>- `expected_values`: Optional[Dict[str, Dict[str, Any]]] — Per-command expected checks keyed by canonical key (see command_to_canonical_key).<br>- `performance_profile_expected`: str — Expected Broadcom performance_profile value (case-insensitive). Default RoCE.<br>- `support_rdma_disabled_values`: List[str] — Values that indicate RDMA is not supported (case-insensitive).<br>- `pcie_relaxed_ordering_expected`: str — Expected Broadcom pcie_relaxed_ordering value (e.g. 'Relaxed ordering = enabled'); checked case-insensitively. Defaul...<br>- `expected_qos_prio_map`: Optional[Dict[Any, Any]] — Expected priority-to-TC map (e.g. {0: 0, 1: 1}; keys may be int or str in config). Checked per device when set.<br>- `expected_qos_pfc_enabled`: Optional[int] — Expected PFC enabled value (0/1 or bitmask). Checked per device when set.<br>- `expected_qos_tsa_map`: Optional[Dict[Any, Any]] — Expected TSA map for ETS (e.g. {0: 'ets', 1: 'strict'}; keys may be int or str in config). Checked per device when set.<br>- `expected_qos_tc_bandwidth`: Optional[List[int]] — Expected TC bandwidth percentages. Checked per device when set.<br>- `require_qos_consistent_across_adapters`: bool — When True and no expected_qos_* are set, require all adapters to have the same prio_map, pfc_enabled, and tsa_map.<br>- `nicctl_log_error_regex`: Optional[List[Dict[str, Any]]] — Optional list of error patterns for nicctl show card logs. | **Collection Args:**<br>- `html_view`: bool — When true, include logged command artifacts in command_artifacts.html using human-readable output. Arista collectors...<br>- `commands`: Optional[List[str]] — Optional list of niccli/nicctl commands to run. When None, default command set is used.<br>- `use_sudo_niccli`: bool — If True, run niccli commands with sudo when required.<br>- `use_sudo_nicctl`: bool — If True, run nicctl commands with sudo when required. | [NicDataModel](#NicDataModel-Model) | [NicCollector](#Collector-Class-NicCollector) | [NicAnalyzer](#Data-Analyzer-Class-NicAnalyzer) |
 | NvmePlugin | nvme smart-log {dev}<br>nvme error-log {dev} --log-entries=256<br>nvme id-ctrl {dev}<br>nvme id-ns {dev}{ns}<br>nvme fw-log {dev}<br>nvme self-test-log {dev}<br>nvme get-log {dev} --log-id=6 --log-len=512<br>nvme telemetry-log {dev} --output-file={dev}_{f_name}<br>nvme list -o json | - | - | [NvmeDataModel](#NvmeDataModel-Model) | [NvmeCollector](#Collector-Class-NvmeCollector) | - |
 | OsPlugin | sh -c '( lsb_release -ds &#124;&#124; (cat /etc/*release &#124; grep PRETTY_NAME) &#124;&#124; uname -om ) 2>/dev/null &#124; head -n1'<br>cat /etc/*release &#124; grep VERSION_ID<br>wmic os get Version /value<br>wmic os get Caption /Value | **Analyzer Args:**<br>- `exp_os`: Union[str, list] — Expected OS name/version string(s) to match (e.g. from lsb_release or /etc/os-release).<br>- `exact_match`: bool — If True, require exact match for exp_os; otherwise substring match. | - | [OsDataModel](#OsDataModel-Model) | [OsCollector](#Collector-Class-OsCollector) | [OsAnalyzer](#Data-Analyzer-Class-OsAnalyzer) |
 | PackagePlugin | dnf list --installed<br>dpkg-query -W<br>pacman -Q<br>cat /etc/*release<br>wmic product get name,version | **Analyzer Args:**<br>- `exp_package_ver`: Dict[str, Optional[str]] — Map package name -> expected version (None = any version). Checked against installed packages.<br>- `regex_match`: bool — If True, match package versions with regex; otherwise exact or prefix match.<br>- `rocm_regex`: Optional[str] — Optional regex to identify ROCm package version (used when enable_rocm_regex is True).<br>- `enable_rocm_regex`: bool — If True, use rocm_regex (or default pattern) to extract ROCm version for checks. | - | [PackageDataModel](#PackageDataModel-Model) | [PackageCollector](#Collector-Class-PackageCollector) | [PackageAnalyzer](#Data-Analyzer-Class-PackageAnalyzer) |
 | PciePlugin | lspci -d {vendor_id}: -nn<br>lspci -x<br>lspci -xxxx<br>lspci -PP<br>lspci -PP -d {vendor_id}:{dev_id}<br>lspci -PP -D -d {vendor_id}:{dev_id}<br>lspci -PP -D<br>lspci -vvv<br>lspci -vvvt | **Analyzer Args:**<br>- `exp_speed`: int — Expected PCIe link speed (generation 1–5).<br>- `exp_width`: int — Expected PCIe link width in lanes (1–16).<br>- `exp_sriov_count`: int — Expected SR-IOV virtual function count.<br>- `exp_gpu_count_override`: Optional[int] — Override expected GPU count for validation.<br>- `exp_max_payload_size`: Union[Dict[int, int], int, NoneType] — Expected max payload size: int for all devices, or dict keyed by device ID.<br>- `exp_max_rd_req_size`: Union[Dict[int, int], int, NoneType] — Expected max read request size: int for all devices, or dict keyed by device ID.<br>- `exp_ten_bit_tag_req_en`: Union[Dict[int, int], int, NoneType] — Expected 10-bit tag request enable: int for all devices, or dict keyed by device ID. | - | [PcieDataModel](#PcieDataModel-Model) | [PcieCollector](#Collector-Class-PcieCollector) | [PcieAnalyzer](#Data-Analyzer-Class-PcieAnalyzer) |
-| ProcessPlugin | top -b -n 1<br>rocm-smi --showpids<br>top -b -n 1 -o %CPU  | **Analyzer Args:**<br>- `max_kfd_processes`: int — Maximum allowed number of KFD (Kernel Fusion Driver) processes; 0 disables the check.<br>- `max_cpu_usage`: float — Maximum allowed CPU usage (percent) for process checks. | **Collection Args:**<br>- `top_n_process`: int — Number of top processes by CPU usage to collect (e.g. for top -b -n 1 -o %%CPU). | [ProcessDataModel](#ProcessDataModel-Model) | [ProcessCollector](#Collector-Class-ProcessCollector) | [ProcessAnalyzer](#Data-Analyzer-Class-ProcessAnalyzer) |
+| ProcessPlugin | top -b -n 1<br>rocm-smi --showpids<br>top -b -n 1 -o %CPU  | **Analyzer Args:**<br>- `max_kfd_processes`: int — Maximum allowed number of KFD (Kernel Fusion Driver) processes; 0 disables the check.<br>- `max_cpu_usage`: float — Maximum allowed CPU usage (percent) for process checks. | **Collection Args:**<br>- `html_view`: bool — When true, include logged command artifacts in command_artifacts.html using human-readable output. Arista collectors...<br>- `top_n_process`: int — Number of top processes by CPU usage to collect (e.g. for top -b -n 1 -o %%CPU). | [ProcessDataModel](#ProcessDataModel-Model) | [ProcessCollector](#Collector-Class-ProcessCollector) | [ProcessAnalyzer](#Data-Analyzer-Class-ProcessAnalyzer) |
 | RdmaPlugin | rdma link -j<br>rdma dev<br>rdma link<br>rdma statistic -j | - | - | [RdmaDataModel](#RdmaDataModel-Model) | [RdmaCollector](#Collector-Class-RdmaCollector) | [RdmaAnalyzer](#Data-Analyzer-Class-RdmaAnalyzer) |
 | RegexSearchPlugin | - | Runs RegexSearchAnalyzer: user-defined patterns via analysis_args.error_regex (same shape as Dmesg).<br>Emits regex match events with optional per-file source in the description when scanning directories.<br>**Analyzer Args:**<br>- `error_regex`: Optional[list[dict[str, Any]]] — Regex patterns to search for; each dict may include regex (str), message, event_category, event_priority (same as Dme...<br>- `interval_to_collapse_event`: int — Seconds within which repeated events are collapsed into one.<br>- `num_timestamps`: int — Number of timestamps to include per event in output. | - | [RegexSearchData](#RegexSearchData-Model) | - | [RegexSearchAnalyzer](#Data-Analyzer-Class-RegexSearchAnalyzer) |
-| RocmPlugin | {rocm_path}/opencl/bin/*/clinfo<br>env &#124; grep -Ei 'rocm&#124;hsa&#124;hip&#124;mpi&#124;openmp&#124;ucx&#124;miopen'<br>ls /sys/class/kfd/kfd/proc/<br>grep -i -E 'rocm' /etc/ld.so.conf.d/*<br>{rocm_path}/bin/rocminfo<br>ls -v -d {rocm_path}*<br>ls -v -d {rocm_path}-[3-7]* &#124; tail -1<br>ldconfig -p &#124; grep -i -E 'rocm'<br>grep . -H -r -i {rocm_path}/.info/* | **Analyzer Args:**<br>- `exp_rocm`: Union[str, list] — Expected ROCm version string(s) to match (e.g. from rocminfo).<br>- `exp_rocm_latest`: str — Expected 'latest' ROCm path or version string for versioned installs.<br>- `exp_rocm_sub_versions`: dict[str, Union[str, list]] — Map sub-version name (e.g. version_rocm) to expected string or list of allowed strings. | **Collection Args:**<br>- `rocm_path`: str — Base path to ROCm installation (e.g. /opt/rocm). Used for rocminfo, clinfo, and version discovery. | [RocmDataModel](#RocmDataModel-Model) | [RocmCollector](#Collector-Class-RocmCollector) | [RocmAnalyzer](#Data-Analyzer-Class-RocmAnalyzer) |
-| StoragePlugin | sh -c 'df -lH -B1 &#124; grep -v 'boot''<br>wmic LogicalDisk Where DriveType="3" Get DeviceId,Size,FreeSpace | - | **Collection Args:**<br>- `skip_sudo`: bool — If True, do not use sudo when running df and related storage commands. | [StorageDataModel](#StorageDataModel-Model) | [StorageCollector](#Collector-Class-StorageCollector) | [StorageAnalyzer](#Data-Analyzer-Class-StorageAnalyzer) |
-| SysSettingsPlugin | cat /sys/{}<br>ls -1 /sys/{}<br>ls -l /sys/{} | **Analyzer Args:**<br>- `checks`: Optional[list[nodescraper.plugins.inband.sys_settings.analyzer_args.SysfsCheck]] — List of sysfs checks (path, expected values or pattern, display name). | **Collection Args:**<br>- `paths`: list[str] — Sysfs paths to read (cat). Paths with '*' are collected with ls -l (e.g. class/net/*/device).<br>- `directory_paths`: list[str] — Sysfs paths to list (ls -1); used for checks that match entry names by regex. | [SysSettingsDataModel](#SysSettingsDataModel-Model) | [SysSettingsCollector](#Collector-Class-SysSettingsCollector) | [SysSettingsAnalyzer](#Data-Analyzer-Class-SysSettingsAnalyzer) |
+| RocmPlugin | {rocm_path}/opencl/bin/*/clinfo<br>env &#124; grep -Ei 'rocm&#124;hsa&#124;hip&#124;mpi&#124;openmp&#124;ucx&#124;miopen'<br>ls /sys/class/kfd/kfd/proc/<br>grep -i -E 'rocm' /etc/ld.so.conf.d/*<br>{rocm_path}/bin/rocminfo<br>ls -v -d {rocm_path}*<br>ls -v -d {rocm_path}-[3-7]* &#124; tail -1<br>ldconfig -p &#124; grep -i -E 'rocm'<br>grep . -H -r -i {rocm_path}/.info/* | **Analyzer Args:**<br>- `exp_rocm`: Union[str, list] — Expected ROCm version string(s) to match (e.g. from rocminfo).<br>- `exp_rocm_latest`: str — Expected 'latest' ROCm path or version string for versioned installs.<br>- `exp_rocm_sub_versions`: dict[str, Union[str, list]] — Map sub-version name (e.g. version_rocm) to expected string or list of allowed strings. | **Collection Args:**<br>- `html_view`: bool — When true, include logged command artifacts in command_artifacts.html using human-readable output. Arista collectors...<br>- `rocm_path`: str — Base path to ROCm installation (e.g. /opt/rocm). Used for rocminfo, clinfo, and version discovery. | [RocmDataModel](#RocmDataModel-Model) | [RocmCollector](#Collector-Class-RocmCollector) | [RocmAnalyzer](#Data-Analyzer-Class-RocmAnalyzer) |
+| StoragePlugin | sh -c 'df -lH -B1 &#124; grep -v 'boot''<br>wmic LogicalDisk Where DriveType="3" Get DeviceId,Size,FreeSpace | - | **Collection Args:**<br>- `html_view`: bool — When true, include logged command artifacts in command_artifacts.html using human-readable output. Arista collectors...<br>- `skip_sudo`: bool — If True, do not use sudo when running df and related storage commands. | [StorageDataModel](#StorageDataModel-Model) | [StorageCollector](#Collector-Class-StorageCollector) | [StorageAnalyzer](#Data-Analyzer-Class-StorageAnalyzer) |
+| ScaleOutAristaPlugin | show interfaces counters bins &#124; json &#124; no-more<br>show interfaces counters queue &#124; no-more<br>show interfaces counters queue drop-precedence &#124; no-more<br>show qos interfaces ecn counters queue &#124; json &#124; no-more<br>show interfaces counters errors &#124; json &#124; no-more<br>show interfaces phy &#124; no-more<br>show interfaces phy detail &#124; no-more<br>show interfaces counters ip &#124; json &#124; no-more<br>show ip interface &#124; no-more<br>show lldp &#124; no-more<br>show lldp neighbors &#124; json &#124; no-more<br>show interfaces counters &#124; json &#124; no-more<br>show interfaces flow-control &#124; json &#124; no-more<br>show interfaces counters queue detail &#124; no-more<br>show priority-flow-control counters &#124; json &#124; no-more<br>show priority-flow-control status &#124; no-more<br>show interfaces status &#124; json &#124; no-more<br>show qos interfaces &#124; no-more<br>show qos interfaces ecn &#124; no-more<br>show qos interfaces trust &#124; no-more<br>show qos maps &#124; no-more<br>show qos profile &#124; no-more<br>show qos profile summary &#124; no-more<br>show interfaces counters rates &#124; json &#124; no-more<br>show running-config &#124; no-more<br>show startup-config &#124; no-more<br>show system environment cooling &#124; json &#124; no-more<br>show platform trident mmu queue status &#124; no-more<br>show version &#124; json &#124; no-more | **Analyzer Args:**<br>- `analysis_ports`: Optional[List[str]] — Restrict per-port analysis to the given ports. Ports are S/P/[SP] where subport is optional (e.g. ['1/1', '1/31', '1/...<br>- `expected_port_bandwidth`: int — Expected interface bandwidth (bps) from show interfaces status (AristaPortStatus.bandwidth). Ports with a different b... | **Collection Args:**<br>- `html_view`: bool — When true, include logged command artifacts in command_artifacts.html using human-readable output. Re-runs successful... | [ScaleOutAristaDataModel](#ScaleOutAristaDataModel-Model) | [ScaleOutAristaCollector](#Collector-Class-ScaleOutAristaCollector) | [ScaleOutAristaAnalyzer](#Data-Analyzer-Class-ScaleOutAristaAnalyzer) |
+| ScaleOutDellPlugin | show alarm &#124; no-more<br>show buffer pool &#124; no-more<br>show buffer profile &#124; no-more<br>show clock &#124; no-more<br>show interface counters {port} &#124; no-more<br>show event details &#124; no-more<br>show interface fec status &#124; no-more<br>show interface counters &#124; no-more<br>show interface counters rate &#124; no-more<br>show interface Eth &#124; no-more<br>show interface phy counters &#124; no-more<br>show interface status &#124; no-more<br>show interface transceiver &#124; no-more<br>show interface transceiver dom &#124; no-more<br>show interface transceiver summary &#124; no-more<br>show ip arp &#124; no-more<br>show ip interfaces &#124; no-more<br>show ip route &#124; no-more<br>show lldp neighbor &#124; no-more<br>show lldp table &#124; no-more<br>show qos interface Ethall priority-flow-control statistics &#124; no-more<br>show priority-flow-control watchdog &#124; no-more<br>show qos interface Ethall queue all priority-flow-control watchdog-statistics &#124; no-more<br>show platform environment &#124; no-more<br>show platform firmware detail &#124; no-more<br>show platform syseeprom &#124; no-more<br>show qos interface Eth all &#124; no-more<br>show qos interface Eth all queue all &#124; no-more<br>show qos map dot1p-tc &#124; no-more<br>show qos map dscp-tc &#124; no-more<br>show qos map pfc-priority-pg &#124; no-more<br>show qos map pfc-priority-queue &#124; no-more<br>show qos map tc-dot1p &#124; no-more<br>show qos map tc-dscp &#124; no-more<br>show qos map tc-pg &#124; no-more<br>show qos map tc-queue &#124; no-more<br>show qos scheduler-policy &#124; no-more<br>show qos wred-policy &#124; no-more<br>show queue counters &#124; no-more<br>show queue persistent-watermark multicast &#124; no-more<br>show queue persistent-watermark unicast &#124; no-more<br>show queue watermark multicast &#124; no-more<br>show queue watermark unicast &#124; no-more<br>show running-configuration &#124; no-more<br>show version &#124; no-more | **Analyzer Args:**<br>- `analysis_ports`: Optional[List[str]] — Restrict per-port analysis to the given ports. Accepts optional Eth prefix (e.g. ['1/1', '1/31', '1/1/1'] or ['Eth1/1...<br>- `expected_port_speed`: int — Expected interface speed (Mbps) from show interface status (DellInterfaceStatus.speed). Ports with a different speed... | **Collection Args:**<br>- `html_view`: bool — When true, include logged command artifacts in command_artifacts.html using human-readable output.<br>- `collection_ports`: Optional[List[str]] — Restrict detail counter collection to these ports. Accepts the same tokens as analysis_ports (e.g. ['1/1', '1/1/2'] o... | [ScaleOutDellDataModel](#ScaleOutDellDataModel-Model) | [ScaleOutDellCollector](#Collector-Class-ScaleOutDellCollector) | [ScaleOutDellAnalyzer](#Data-Analyzer-Class-ScaleOutDellAnalyzer) |
+| SysSettingsPlugin | cat /sys/{}<br>ls -1 /sys/{}<br>ls -l /sys/{} | **Analyzer Args:**<br>- `checks`: Optional[list[nodescraper.plugins.inband.sys_settings.analyzer_args.SysfsCheck]] — List of sysfs checks (path, expected values or pattern, display name). | **Collection Args:**<br>- `html_view`: bool — When true, include logged command artifacts in command_artifacts.html using human-readable output. Arista collectors...<br>- `paths`: list[str] — Sysfs paths to read (cat). Paths with '*' are collected with ls -l (e.g. class/net/*/device).<br>- `directory_paths`: list[str] — Sysfs paths to list (ls -1); used for checks that match entry names by regex. | [SysSettingsDataModel](#SysSettingsDataModel-Model) | [SysSettingsCollector](#Collector-Class-SysSettingsCollector) | [SysSettingsAnalyzer](#Data-Analyzer-Class-SysSettingsAnalyzer) |
 | SysctlPlugin | sysctl -n | **Analyzer Args:**<br>- `exp_vm_swappiness`: Optional[int] — Expected vm.swappiness value.<br>- `exp_vm_numa_balancing`: Optional[int] — Expected vm.numa_balancing value.<br>- `exp_vm_oom_kill_allocating_task`: Optional[int] — Expected vm.oom_kill_allocating_task value.<br>- `exp_vm_compaction_proactiveness`: Optional[int] — Expected vm.compaction_proactiveness value.<br>- `exp_vm_compact_unevictable_allowed`: Optional[int] — Expected vm.compact_unevictable_allowed value.<br>- `exp_vm_extfrag_threshold`: Optional[int] — Expected vm.extfrag_threshold value.<br>- `exp_vm_zone_reclaim_mode`: Optional[int] — Expected vm.zone_reclaim_mode value.<br>- `exp_vm_dirty_background_ratio`: Optional[int] — Expected vm.dirty_background_ratio value.<br>- `exp_vm_dirty_ratio`: Optional[int] — Expected vm.dirty_ratio value.<br>- `exp_vm_dirty_writeback_centisecs`: Optional[int] — Expected vm.dirty_writeback_centisecs value.<br>- `exp_kernel_numa_balancing`: Optional[int] — Expected kernel.numa_balancing value. | - | [SysctlDataModel](#SysctlDataModel-Model) | [SysctlCollector](#Collector-Class-SysctlCollector) | [SysctlAnalyzer](#Data-Analyzer-Class-SysctlAnalyzer) |
 | SyslogPlugin | ls -1 /var/log/syslog* 2>/dev/null &#124; grep -E '^/var/log/syslog(\.[0-9]+(\.gz)?)?$' &#124;&#124; true<br>ls -1 /var/log/messages* 2>/dev/null &#124; grep -E '^/var/log/messages(\.[0-9]+(\.gz)?)?$' &#124;&#124; true | - | - | [SyslogData](#SyslogData-Model) | [SyslogCollector](#Collector-Class-SyslogCollector) | - |
 | UptimePlugin | uptime | - | - | [UptimeDataModel](#UptimeDataModel-Model) | [UptimeCollector](#Collector-Class-UptimeCollector) | - |
@@ -37,12 +39,12 @@
 
 | Plugin | Collection | Analyzer Args | Collection Args | DataModel | Collector | Analyzer |
 | --- | --- | --- | --- | --- | --- | --- |
-| OobGenericCollectionPlugin | Runs each command from collection_args.commands on the target (in-band host or BMC over OOB SSH).<br>Commands are user-configured; there are no fixed CMD_* class fields. | **Analyzer Args:**<br>- `checks`: list[nodescraper.plugins.generic_collection.analyzer_args.CommandCheck] — Per-command validation rules keyed by collected command name. | **Collection Args:**<br>- `commands`: list[nodescraper.plugins.generic_collection.collector_args.CommandSpec] — Named commands to run. Each entry must include 'name' and 'command'. Prefer small textual stdout; see class docstring...<br>- `sudo`: bool — Default sudo setting for commands that do not specify sudo.<br>- `timeout`: int — Default per-command timeout in seconds.<br>- `include_stdout`: bool — Default: include each command's stdout in collected results for analysis. When false, stdout is omitted from stored r... | [GenericCollectionDataModel](#GenericCollectionDataModel-Model) | [GenericCollectionCollector](#Collector-Class-GenericCollectionCollector) | [GenericAnalyzer](#Data-Analyzer-Class-GenericAnalyzer) |
-| OobBmcArchivePlugin | SSH (BMC) shell: tar+gzip archives for each path in collection_args (see PathSpec entries).<br>Uses sudo on the BMC when collection_args paths require elevated access. | - | **Collection Args:**<br>- `paths`: list[nodescraper.plugins.ooband.bmc_archive.collector_args.PathSpec] — Named BMC paths to archive with tar czf -. Configure in plugin config under plugins.OobBmcArchivePlugin.collection_ar...<br>- `sudo`: bool — Default sudo setting for paths that do not specify sudo.<br>- `timeout`: int — Default per-path tar timeout in seconds.<br>- `skip_if_missing`: bool — Skip paths that do not exist on the BMC instead of failing collection.<br>- `ignore_failed_read`: bool — When true, pass GNU tar's --ignore-failed-read when the remote tar supports it. | [BmcArchiveDataModel](#BmcArchiveDataModel-Model) | [BmcArchiveCollector](#Collector-Class-BmcArchiveCollector) | - |
-| RedfishEndpointPlugin | Redfish GET: explicit paths from collection_args.uris (parallel when max_workers>1).<br>Optional paged GET following the Members collection OData nextLink field when follow_next_link is true.<br>Redfish GET tree: when discover_tree is true, walks from api_root using OData resource id links and Members navigation (depth and endpoint caps from collection_args). | For each entry in analysis_args.checks, reads JSON paths in collected responses and compares values to constraints (eq, min/max, anyOf, regex, etc.).<br>URI key "*" runs checks against every collected response body.<br>**Analyzer Args:**<br>- `checks`: dict[str, dict[str, Union[int, float, str, bool, dict[str, Any]]]] — Map: URI or '*' -> { property_path: constraint }. URI keys must match a key in the collected responses (exact match).... | **Collection Args:**<br>- `uris`: list[str] — Redfish URIs to GET. Ignored when discover_tree is True.<br>- `discover_tree`: bool — If True, discover endpoints from the BMC Redfish tree (service root and links) instead of using uris.<br>- `tree_max_depth`: int — When discover_tree is True: max traversal depth (1=service root only, 2=root + collections, 3=+ members).<br>- `tree_max_endpoints`: int — When discover_tree is True: max endpoints to discover (0=no limit).<br>- `max_workers`: int — Max concurrent GETs (1=sequential). Use >1 for async endpoint fetches.<br>- `follow_next_link`: bool — If True, follow Redfish Members collection OData nextLink pagination for each URI and merge all pages into a single r...<br>- `max_pages`: int — When follow_next_link is True: safety cap on the number of pages to follow per URI (default 200). | [RedfishEndpointDataModel](#RedfishEndpointDataModel-Model) | [RedfishEndpointCollector](#Collector-Class-RedfishEndpointCollector) | [RedfishEndpointAnalyzer](#Data-Analyzer-Class-RedfishEndpointAnalyzer) |
-| RedfishOemDiagPlugin | Redfish LogService.CollectDiagnosticData for each entry in collection_args.oem_diagnostic_types (collection_args.log_service_path selects the LogService).<br>Optional binary archives under the plugin log path when log_path is set. | Summarizes success/failure per OEM diagnostic type from collected results.<br>When analysis_args.require_all_success is true, fails the run if any type failed collection.<br>**Analyzer Args:**<br>- `require_all_success`: bool — If True, analysis fails when any OEM type collection failed. | **Collection Args:**<br>- `log_service_path`: str — Redfish path to the LogService (e.g. DiagLogs).<br>- `oem_diagnostic_types_allowable`: Optional[list[str]] — Allowable OEM diagnostic types for this architecture/BMC. When set, used for validation and as default for oem_diagno...<br>- `oem_diagnostic_types`: list[str] — OEM diagnostic types to collect. When empty and oem_diagnostic_types_allowable is set, defaults to that list.<br>- `task_timeout_s`: int — Max seconds to wait for each BMC task. | [RedfishOemDiagDataModel](#RedfishOemDiagDataModel-Model) | [RedfishOemDiagCollector](#Collector-Class-RedfishOemDiagCollector) | [RedfishOemDiagAnalyzer](#Data-Analyzer-Class-RedfishOemDiagAnalyzer) |
-| ServiceabilityPluginMI3XX | - | **Analyzer Args:**<br>- `hub_python_module`: Optional[str] — Import path for the hub module (class implements hub_analyze_method); hub_options forwards kwargs.<br>- `hub_display_name`: Optional[str] — Optional label for analyzer status messages.<br>- `afid_sag_path`: Optional[str] — Path to hub config (e.g. AFID_SAG.json); passed as hub_init_path_kwarg.<br>- `hub_init_path_kwarg`: str — Hub __init__ keyword that receives afid_sag_path.<br>- `hub_analyze_method`: str — Hub method called with rf_events first (default get_service_info).<br>- `skip_hub`: bool — If True, only build afid_events without running the service hub.<br>- `cper_decode_module`: Optional[str] — Module import path for CPER decoding when events include CPER attachments.<br>- `cper_decode_method`: str — Callable on cper_decode_module: file-like CPER in, (return_code, decode_dict) out.<br>- `hub_options`: Optional[dict[str, Any]] — Extra kwargs for hub __init__ and analyze; collected cper_data overrides cper_data key.<br>- `from_ac_cycle`: int — from_ac_cycle kwarg for the hub analyze call (merged after hub_options).<br>- `from_date`: Optional[str] — Optional from_date for the hub analyze call (merged after hub_options).<br>- `designation_serials`: Optional[dict[str, str]] — Optional designation_serials for the hub analyze call (merged after hub_options).<br>- `suppress_service_actions`: Optional[list[str]] — Optional suppress_service_actions for the hub analyze call (merged after hub_options). | **Collection Args:**<br>- `uri`: Optional[str] — Optional alias for ``rf_event_log_uri``. When both ``uri`` and ``rf_event_log_uri`` are explicitly set to non-empty v...<br>- `rf_event_log_uri`: str — Redfish URI for the event log ``Entries`` collection.<br>- `rf_chassis_devices`: Optional[List[str]] — Chassis designations for Assembly GETs; required with ``rf_assembly_uri_template``.<br>- `rf_assembly_uri_template`: Optional[str] — Redfish URI template containing ``{device}`` for each chassis Assembly resource.<br>- `rf_firmware_bundle_uri`: Optional[str] — Redfish URI for firmware bundle inventory when subclasses extract component details.<br>- `follow_next_link`: bool — If True, follow Members&#64;odata.nextLink up to max_pages; else single GET.<br>- `max_pages`: int — Safety cap on the number of pages when following event log pagination.<br>- `top`: Optional[int] — Most recent N entries via $skip after count probe; None collects full window.<br>- `reference_time`: Optional[str] — Optional ISO-8601 date or date-time used with time_operator (e.g. 2026-05-17 or 2026-05-17T13:01:00).<br>- `time_operator`: Optional[Literal['>', '>=', '<', '<=', '==']] — Comparison operator applied when reference_time is set. | [ServiceabilityDataModel](#ServiceabilityDataModel-Model) | [MI3XXCollector](#Collector-Class-MI3XXCollector) | [MI3XXAnalyzer](#Data-Analyzer-Class-MI3XXAnalyzer) |
-| ServiceabilityPluginBase | - | - | - | [ServiceabilityDataModel](#ServiceabilityDataModel-Model) | [ServiceabilityCollectorBase](#Collector-Class-ServiceabilityCollectorBase) | - |
+| OobGenericCollectionPlugin | Runs each command from collection_args.commands on the target (in-band host or BMC over OOB SSH).<br>Commands are user-configured; there are no fixed CMD_* class fields. | **Analyzer Args:**<br>- `checks`: list[nodescraper.plugins.generic_collection.analyzer_args.CommandCheck] — Per-command validation rules keyed by collected command name. | **Collection Args:**<br>- `html_view`: bool — When true, include logged command artifacts in command_artifacts.html using human-readable output. Arista collectors...<br>- `commands`: list[nodescraper.plugins.generic_collection.collector_args.CommandSpec] — Named commands to run. Each entry must include 'name' and 'command'. Prefer small textual stdout; see class docstring...<br>- `sudo`: bool — Default sudo setting for commands that do not specify sudo.<br>- `timeout`: int — Default per-command timeout in seconds.<br>- `include_stdout`: bool — Default: include each command's stdout in collected results for analysis. When false, stdout is omitted from stored r... | [GenericCollectionDataModel](#GenericCollectionDataModel-Model) | [GenericCollectionCollector](#Collector-Class-GenericCollectionCollector) | [GenericAnalyzer](#Data-Analyzer-Class-GenericAnalyzer) |
+| OobBmcArchivePlugin | SSH (BMC) shell: tar+gzip archives for each path in collection_args (see PathSpec entries).<br>Uses sudo on the BMC when collection_args paths require elevated access. | - | **Collection Args:**<br>- `html_view`: bool — When true, include logged command artifacts in command_artifacts.html using human-readable output. Arista collectors...<br>- `paths`: list[nodescraper.plugins.ooband.bmc_archive.collector_args.PathSpec] — Named BMC paths to archive with tar czf -. Configure in plugin config under plugins.OobBmcArchivePlugin.collection_ar...<br>- `sudo`: bool — Default sudo setting for paths that do not specify sudo.<br>- `timeout`: int — Default per-path tar timeout in seconds.<br>- `skip_if_missing`: bool — Skip paths that do not exist on the BMC instead of failing collection.<br>- `ignore_failed_read`: bool — When true, pass GNU tar's --ignore-failed-read when the remote tar supports it. | [BmcArchiveDataModel](#BmcArchiveDataModel-Model) | [BmcArchiveCollector](#Collector-Class-BmcArchiveCollector) | - |
+| RedfishEndpointPlugin | Redfish GET: explicit paths from collection_args.uris (parallel when max_workers>1).<br>Optional paged GET following the Members collection OData nextLink field when follow_next_link is true.<br>Redfish GET tree: when discover_tree is true, walks from api_root using OData resource id links and Members navigation (depth and endpoint caps from collection_args). | For each entry in analysis_args.checks, reads JSON paths in collected responses and compares values to constraints (eq, min/max, anyOf, regex, etc.).<br>URI key "*" runs checks against every collected response body.<br>**Analyzer Args:**<br>- `checks`: dict[str, dict[str, Union[int, float, str, bool, dict[str, Any]]]] — Map: URI or '*' -> { property_path: constraint }. URI keys must match a key in the collected responses (exact match).... | **Collection Args:**<br>- `html_view`: bool — When true, include logged command artifacts in command_artifacts.html using human-readable output. Arista collectors...<br>- `uris`: list[str] — Redfish URIs to GET. Ignored when discover_tree is True.<br>- `discover_tree`: bool — If True, discover endpoints from the BMC Redfish tree (service root and links) instead of using uris.<br>- `tree_max_depth`: int — When discover_tree is True: max traversal depth (1=service root only, 2=root + collections, 3=+ members).<br>- `tree_max_endpoints`: int — When discover_tree is True: max endpoints to discover (0=no limit).<br>- `max_workers`: int — Max concurrent GETs (1=sequential). Use >1 for async endpoint fetches.<br>- `follow_next_link`: bool — If True, follow Redfish Members collection OData nextLink pagination for each URI and merge all pages into a single r...<br>- `max_pages`: int — When follow_next_link is True: safety cap on the number of pages to follow per URI (default 200). | [RedfishEndpointDataModel](#RedfishEndpointDataModel-Model) | [RedfishEndpointCollector](#Collector-Class-RedfishEndpointCollector) | [RedfishEndpointAnalyzer](#Data-Analyzer-Class-RedfishEndpointAnalyzer) |
+| RedfishOemDiagPlugin | Redfish LogService.CollectDiagnosticData for each entry in collection_args.oem_diagnostic_types (collection_args.log_service_path selects the LogService).<br>Optional binary archives under the plugin log path when log_path is set. | Summarizes success/failure per OEM diagnostic type from collected results.<br>When analysis_args.require_all_success is true, fails the run if any type failed collection.<br>**Analyzer Args:**<br>- `require_all_success`: bool — If True, analysis fails when any OEM type collection failed. | **Collection Args:**<br>- `html_view`: bool — When true, include logged command artifacts in command_artifacts.html using human-readable output. Arista collectors...<br>- `log_service_path`: str — Redfish path to the LogService (e.g. DiagLogs).<br>- `oem_diagnostic_types_allowable`: Optional[list[str]] — Allowable OEM diagnostic types for this architecture/BMC. When set, used for validation and as default for oem_diagno...<br>- `oem_diagnostic_types`: list[str] — OEM diagnostic types to collect. When empty and oem_diagnostic_types_allowable is set, defaults to that list.<br>- `task_timeout_s`: int — Max seconds to wait for each BMC task. | [RedfishOemDiagDataModel](#RedfishOemDiagDataModel-Model) | [RedfishOemDiagCollector](#Collector-Class-RedfishOemDiagCollector) | [RedfishOemDiagAnalyzer](#Data-Analyzer-Class-RedfishOemDiagAnalyzer) |
+| ServiceabilityPluginMI3XX | - | **Analyzer Args:**<br>- `hub_python_module`: Optional[str] — Import path for the hub module (class implements hub_analyze_method); hub_options forwards kwargs.<br>- `hub_display_name`: Optional[str] — Optional label for analyzer status messages.<br>- `afid_sag_path`: Optional[str] — Path to hub config (e.g. AFID_SAG.json); passed as hub_init_path_kwarg.<br>- `hub_init_path_kwarg`: str — Hub __init__ keyword that receives afid_sag_path.<br>- `hub_analyze_method`: str — Hub method called with rf_events first (default get_service_info).<br>- `skip_hub`: bool — If True, only build afid_events without running the service hub.<br>- `cper_decode_module`: Optional[str] — Module import path for CPER decoding when events include CPER attachments.<br>- `cper_decode_method`: str — Callable on cper_decode_module: file-like CPER in, (return_code, decode_dict) out.<br>- `hub_options`: Optional[dict[str, Any]] — Extra kwargs for hub __init__ and analyze; collected cper_data overrides cper_data key.<br>- `from_ac_cycle`: int — from_ac_cycle kwarg for the hub analyze call (merged after hub_options).<br>- `from_date`: Optional[str] — Optional from_date for the hub analyze call (merged after hub_options).<br>- `designation_serials`: Optional[dict[str, str]] — Optional designation_serials for the hub analyze call (merged after hub_options).<br>- `suppress_service_actions`: Optional[list[str]] — Optional suppress_service_actions for the hub analyze call (merged after hub_options). | **Collection Args:**<br>- `html_view`: bool — When true, include logged command artifacts in command_artifacts.html using human-readable output. Arista collectors...<br>- `uri`: Optional[str] — Optional alias for ``rf_event_log_uri``. When both ``uri`` and ``rf_event_log_uri`` are explicitly set to non-empty v...<br>- `rf_event_log_uri`: str — Redfish URI for the event log ``Entries`` collection.<br>- `rf_chassis_devices`: Optional[List[str]] — Chassis designations for Assembly GETs; required with ``rf_assembly_uri_template``.<br>- `rf_assembly_uri_template`: Optional[str] — Redfish URI template containing ``{device}`` for each chassis Assembly resource.<br>- `rf_firmware_bundle_uri`: Optional[str] — Redfish URI for firmware bundle inventory when subclasses extract component details.<br>- `follow_next_link`: bool — If True, follow Members&#64;odata.nextLink up to max_pages; else single GET.<br>- `max_pages`: int — Safety cap on the number of pages when following event log pagination.<br>- `top`: Optional[int] — Most recent N entries via $skip after count probe; None collects full window.<br>- `reference_time`: Optional[str] — Optional ISO-8601 date or date-time used with time_operator (e.g. 2026-05-17 or 2026-05-17T13:01:00).<br>- `time_operator`: Optional[Literal['>', '>=', '<', '<=', '==']] — Comparison operator applied when reference_time is set. | [ServiceabilityDataModel](#ServiceabilityDataModel-Model) | [MI3XXCollector](#Collector-Class-MI3XXCollector) | [MI3XXAnalyzer](#Data-Analyzer-Class-MI3XXAnalyzer) |
+| ServiceabilityPluginBase | - | - | **Collection Args:**<br>- `html_view`: bool — When true, include logged command artifacts in command_artifacts.html using human-readable output. Arista collectors... | [ServiceabilityDataModel](#ServiceabilityDataModel-Model) | [ServiceabilityCollectorBase](#Collector-Class-ServiceabilityCollectorBase) | - |
 
 # Collectors
 
@@ -886,6 +888,256 @@ StorageDataModel
 - sh -c 'df -lH -B1 | grep -v 'boot''
 - wmic LogicalDisk Where DriveType="3" Get DeviceId,Size,FreeSpace
 
+## Collector Class ScaleOutAristaCollector
+
+### Description
+
+Collect Arista switch data.
+
+    Runs Arista EOS ``show`` commands (JSON and text) and parses their
+    output into a :class:`ScaleOutAristaDataModel`.
+
+**Bases**: ['InBandDataCollector']
+
+**Link to code**: [scale_out_arista_collector.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/switch/scale_out_arista/scale_out_arista_collector.py)
+
+### Class Variables
+
+- **SUPPORTED_OS_FAMILY**: `{<OSFamily.EOS: 4>, <OSFamily.LINUX: 3>, <OSFamily.UNKNOWN: 2>}`
+- **CMD_VERSION**: `show version | json | no-more`
+- **CMD_LLDP_NEIGHBORS**: `show lldp neighbors | json | no-more`
+- **CMD_SYSTEM_ENV**: `show system environment cooling | json | no-more`
+- **CMD_PORT_STATUS**: `show interfaces status | json | no-more`
+- **CMD_ERROR_COUNTERS**: `show interfaces counters errors | json | no-more`
+- **CMD_PACKET_COUNTERS**: `show interfaces counters | json | no-more`
+- **CMD_BINS_COUNTERS**: `show interfaces counters bins | json | no-more`
+- **CMD_IP_COUNTERS**: `show interfaces counters ip | json | no-more`
+- **CMD_RATES_COUNTERS**: `show interfaces counters rates | json | no-more`
+- **CMD_PFC_COUNTERS**: `show priority-flow-control counters | json | no-more`
+- **CMD_DROPPED_PACKET_COUNTERS**: `show interfaces counters queue | no-more`
+- **CMD_DROP_PRECEDENCE_COUNTERS**: `show interfaces counters queue drop-precedence | no-more`
+- **CMD_PER_QUEUE_COUNTERS**: `show interfaces counters queue detail | no-more`
+- **CMD_PAUSE_FRAME_COUNTERS**: `show interfaces flow-control | json | no-more`
+- **CMD_ECN_COUNTERS**: `show qos interfaces ecn counters queue | json | no-more`
+- **CMD_RUNNING_CONFIG**: `show running-config | no-more`
+- **CMD_STARTUP_CONFIG**: `show startup-config | no-more`
+- **CMD_IP_INTERFACE**: `show ip interface | no-more`
+- **CMD_INTERFACES_PHY**: `show interfaces phy | no-more`
+- **CMD_INTERFACES_PHY_DETAIL**: `show interfaces phy detail | no-more`
+- **CMD_QOS_PROFILE**: `show qos profile | no-more`
+- **CMD_QOS_PROFILE_SUMMARY**: `show qos profile summary | no-more`
+- **CMD_QOS_MAPS**: `show qos maps | no-more`
+- **CMD_QOS_INTERFACES**: `show qos interfaces | no-more`
+- **CMD_QOS_INTERFACES_TRUST**: `show qos interfaces trust | no-more`
+- **CMD_PFC_STATUS**: `show priority-flow-control status | no-more`
+- **CMD_QOS_INTERFACES_ECN**: `show qos interfaces ecn | no-more`
+- **CMD_LLDP**: `show lldp | no-more`
+- **CMD_TRIDENT_MMU_QUEUE_STATUS**: `show platform trident mmu queue status | no-more`
+- **ARTIFACT_COMMANDS**: `[
+  show running-config | no-more,
+  show startup-config | no-more,
+  show ip interface | no-more,
+  show interfaces phy | no-more,
+  show interfaces phy detail | no-more,
+  show qos profile | no-more,
+  show qos profile summary | no-more,
+  show qos maps | no-more,
+  show qos interfaces | no-more,
+  show qos interfaces trust | no-more,
+  show priority-flow-control status | no-more,
+  show qos interfaces ecn | no-more,
+  show lldp | no-more,
+  show platform trident mmu queue status | no-more
+]`
+
+### Provides Data
+
+ScaleOutAristaDataModel
+
+### Commands
+
+- show interfaces counters bins | json | no-more
+- show interfaces counters queue | no-more
+- show interfaces counters queue drop-precedence | no-more
+- show qos interfaces ecn counters queue | json | no-more
+- show interfaces counters errors | json | no-more
+- show interfaces phy | no-more
+- show interfaces phy detail | no-more
+- show interfaces counters ip | json | no-more
+- show ip interface | no-more
+- show lldp | no-more
+- show lldp neighbors | json | no-more
+- show interfaces counters | json | no-more
+- show interfaces flow-control | json | no-more
+- show interfaces counters queue detail | no-more
+- show priority-flow-control counters | json | no-more
+- show priority-flow-control status | no-more
+- show interfaces status | json | no-more
+- show qos interfaces | no-more
+- show qos interfaces ecn | no-more
+- show qos interfaces trust | no-more
+- show qos maps | no-more
+- show qos profile | no-more
+- show qos profile summary | no-more
+- show interfaces counters rates | json | no-more
+- show running-config | no-more
+- show startup-config | no-more
+- show system environment cooling | json | no-more
+- show platform trident mmu queue status | no-more
+- show version | json | no-more
+
+## Collector Class ScaleOutDellCollector
+
+### Description
+
+Collect Dell SONiC switch data.
+
+    Runs Dell SONiC CLI ``show`` commands over SSH and parses their text
+    output into a :class:`ScaleOutDellDataModel`.
+
+**Bases**: ['InBandDataCollector']
+
+**Link to code**: [scale_out_dell_collector.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/switch/scale_out_dell/scale_out_dell_collector.py)
+
+### Class Variables
+
+- **SUPPORTED_OS_FAMILY**: `{<OSFamily.LINUX: 3>, <OSFamily.SONIC: 5>, <OSFamily.UNKNOWN: 2>}`
+- **CMD_VERSION**: `show version | no-more`
+- **CMD_INTERFACE_STATUS**: `show interface status | no-more`
+- **CMD_INTERFACE_COUNTERS**: `show interface counters | no-more`
+- **CMD_DETAIL_COUNTERS**: `show interface counters {port} | no-more`
+- **CMD_FEC_STATUS**: `show interface fec status | no-more`
+- **CMD_IP_ARP**: `show ip arp | no-more`
+- **CMD_IP_ROUTE**: `show ip route | no-more`
+- **CMD_PFC_STATISTICS**: `show qos interface Ethall priority-flow-control statistics | no-more`
+- **CMD_PFC_WATCHDOG_STATISTICS**: `show qos interface Ethall queue all priority-flow-control watchdog-statistics | no-more`
+- **CMD_QUEUE_COUNTERS**: `show queue counters | no-more`
+- **CMD_CLOCK**: `show clock | no-more`
+- **CMD_PLATFORM_SYSEEPROM**: `show platform syseeprom | no-more`
+- **CMD_PLATFORM_FIRMWARE_DETAIL**: `show platform firmware detail | no-more`
+- **CMD_RUNNING_CONFIGURATION**: `show running-configuration | no-more`
+- **CMD_INTERFACE_TRANSCEIVER**: `show interface transceiver | no-more`
+- **CMD_INTERFACE_TRANSCEIVER_SUMMARY**: `show interface transceiver summary | no-more`
+- **CMD_IP_INTERFACES**: `show ip interfaces | no-more`
+- **CMD_QOS_MAP_DSCP_TC**: `show qos map dscp-tc | no-more`
+- **CMD_QOS_MAP_TC_QUEUE**: `show qos map tc-queue | no-more`
+- **CMD_QOS_MAP_TC_PG**: `show qos map tc-pg | no-more`
+- **CMD_QOS_MAP_TC_DSCP**: `show qos map tc-dscp | no-more`
+- **CMD_QOS_MAP_TC_DOT1P**: `show qos map tc-dot1p | no-more`
+- **CMD_QOS_MAP_PFC_PRIORITY_QUEUE**: `show qos map pfc-priority-queue | no-more`
+- **CMD_QOS_MAP_PFC_PRIORITY_PG**: `show qos map pfc-priority-pg | no-more`
+- **CMD_QOS_MAP_DOT1P_TC**: `show qos map dot1p-tc | no-more`
+- **CMD_QOS_SCHEDULER_POLICY**: `show qos scheduler-policy | no-more`
+- **CMD_QOS_WRED_POLICY**: `show qos wred-policy | no-more`
+- **CMD_QOS_INTERFACE_ETH_ALL**: `show qos interface Eth all | no-more`
+- **CMD_QOS_INTERFACE_ETH_ALL_QUEUE_ALL**: `show qos interface Eth all queue all | no-more`
+- **CMD_PFC_WATCHDOG**: `show priority-flow-control watchdog | no-more`
+- **CMD_BUFFER_PROFILE**: `show buffer profile | no-more`
+- **CMD_BUFFER_POOL**: `show buffer pool | no-more`
+- **CMD_INTERFACE_TRANSCEIVER_DOM**: `show interface transceiver dom | no-more`
+- **CMD_LLDP_TABLE**: `show lldp table | no-more`
+- **CMD_LLDP_NEIGHBOR**: `show lldp neighbor | no-more`
+- **CMD_INTERFACE_ETH**: `show interface Eth | no-more`
+- **CMD_INTERFACE_PHY_COUNTERS**: `show interface phy counters | no-more`
+- **CMD_INTERFACE_COUNTERS_RATE**: `show interface counters rate | no-more`
+- **CMD_QUEUE_WATERMARK_UNICAST**: `show queue watermark unicast | no-more`
+- **CMD_QUEUE_WATERMARK_MULTICAST**: `show queue watermark multicast | no-more`
+- **CMD_QUEUE_PERSISTENT_WATERMARK_UNICAST**: `show queue persistent-watermark unicast | no-more`
+- **CMD_QUEUE_PERSISTENT_WATERMARK_MULTICAST**: `show queue persistent-watermark multicast | no-more`
+- **CMD_PLATFORM_ENVIRONMENT**: `show platform environment | no-more`
+- **CMD_EVENT_DETAILS**: `show event details | no-more`
+- **CMD_ALARM**: `show alarm | no-more`
+- **_INTERFACE_STATUS_LINE_RE**: `re.compile('^(?P<name>Eth\\S+)\\s+(?P<description>.+)\\s+(?P<oper>up|down)\\s+(?P<reason>\\S+)\\s+(?P<auto_neg>\\S+)\\s+(?P<speed>\\d+)\\s+(?P<mtu>\\d+)\\s+(?P<alt>\\S+)\\s*$', re.IGNORECASE)`
+- **ARTIFACT_COMMANDS**: `[
+  show clock | no-more,
+  show platform syseeprom | no-more,
+  show platform firmware detail | no-more,
+  show running-configuration | no-more,
+  show interface transceiver | no-more,
+  show interface transceiver summary | no-more,
+  show ip interfaces | no-more,
+  show qos map dscp-tc | no-more,
+  show qos map tc-queue | no-more,
+  show qos map tc-pg | no-more,
+  show qos map tc-dscp | no-more,
+  show qos map tc-dot1p | no-more,
+  show qos map pfc-priority-queue | no-more,
+  show qos map pfc-priority-pg | no-more,
+  show qos map dot1p-tc | no-more,
+  show qos scheduler-policy | no-more,
+  show qos wred-policy | no-more,
+  show qos interface Eth all | no-more,
+  show qos interface Eth all queue all | no-more,
+  show priority-flow-control watchdog | no-more,
+  show buffer profile | no-more,
+  show buffer pool | no-more,
+  show interface transceiver dom | no-more,
+  show lldp table | no-more,
+  show lldp neighbor | no-more,
+  show interface Eth | no-more,
+  show interface phy counters | no-more,
+  show interface counters rate | no-more,
+  show queue watermark unicast | no-more,
+  show queue watermark multicast | no-more,
+  show queue persistent-watermark unicast | no-more,
+  show queue persistent-watermark multicast | no-more,
+  show platform environment | no-more,
+  show event details | no-more,
+  show alarm | no-more
+]`
+
+### Provides Data
+
+ScaleOutDellDataModel
+
+### Commands
+
+- show alarm | no-more
+- show buffer pool | no-more
+- show buffer profile | no-more
+- show clock | no-more
+- show interface counters {port} | no-more
+- show event details | no-more
+- show interface fec status | no-more
+- show interface counters | no-more
+- show interface counters rate | no-more
+- show interface Eth | no-more
+- show interface phy counters | no-more
+- show interface status | no-more
+- show interface transceiver | no-more
+- show interface transceiver dom | no-more
+- show interface transceiver summary | no-more
+- show ip arp | no-more
+- show ip interfaces | no-more
+- show ip route | no-more
+- show lldp neighbor | no-more
+- show lldp table | no-more
+- show qos interface Ethall priority-flow-control statistics | no-more
+- show priority-flow-control watchdog | no-more
+- show qos interface Ethall queue all priority-flow-control watchdog-statistics | no-more
+- show platform environment | no-more
+- show platform firmware detail | no-more
+- show platform syseeprom | no-more
+- show qos interface Eth all | no-more
+- show qos interface Eth all queue all | no-more
+- show qos map dot1p-tc | no-more
+- show qos map dscp-tc | no-more
+- show qos map pfc-priority-pg | no-more
+- show qos map pfc-priority-queue | no-more
+- show qos map tc-dot1p | no-more
+- show qos map tc-dscp | no-more
+- show qos map tc-pg | no-more
+- show qos map tc-queue | no-more
+- show qos scheduler-policy | no-more
+- show qos wred-policy | no-more
+- show queue counters | no-more
+- show queue persistent-watermark multicast | no-more
+- show queue persistent-watermark unicast | no-more
+- show queue watermark multicast | no-more
+- show queue watermark unicast | no-more
+- show running-configuration | no-more
+- show version | no-more
+
 ## Collector Class SysSettingsCollector
 
 ### Description
@@ -1267,6 +1519,7 @@ Memory data model
 
 - **mem_free**: `str`
 - **mem_total**: `str`
+- **mem_available**: `Optional[str]`
 - **lsmem_data**: `Optional[nodescraper.plugins.inband.memory.memorydata.LsmemData]`
 - **numa_topology**: `Optional[nodescraper.plugins.inband.memory.memorydata.NumaTopology]`
 
@@ -1474,6 +1727,41 @@ Loaded file or directory contents passed to the analyzer (via --data).
 ### Model annotations and fields
 
 - **storage_data**: `dict[str, nodescraper.plugins.inband.storage.storagedata.DeviceStorageData]`
+
+## ScaleOutAristaDataModel Model
+
+### Description
+
+Collected output of Arista commands.
+
+**Link to code**: [scaleoutaristadata.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/switch/scale_out_arista/scaleoutaristadata.py)
+
+**Bases**: ['DataModel']
+
+### Model annotations and fields
+
+- **version**: `Optional[nodescraper.plugins.inband.switch.scale_out_arista.scaleoutaristadata.AristaVersion]`
+- **lldp_neighbors**: `Optional[nodescraper.plugins.inband.switch.scale_out_arista.scaleoutaristadata.AristaNeighbors]`
+- **system_env**: `Optional[nodescraper.plugins.inband.switch.scale_out_arista.scaleoutaristadata.AristaSystemEnv]`
+- **port_list**: `Optional[List[str]]`
+- **port**: `Optional[Dict[str, nodescraper.plugins.inband.switch.scale_out_arista.scaleoutaristadata.PortData]]`
+
+## ScaleOutDellDataModel Model
+
+### Description
+
+Collected output of Dell SONiC switch commands
+
+**Link to code**: [scaleoutdelldata.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/switch/scale_out_dell/scaleoutdelldata.py)
+
+**Bases**: ['DataModel']
+
+### Model annotations and fields
+
+- **ip_arp**: `Optional[List[nodescraper.plugins.inband.switch.scale_out_dell.scaleoutdelldata.DellArpEntry]]`
+- **ip_route**: `Optional[List[nodescraper.plugins.inband.switch.scale_out_dell.scaleoutdelldata.DellRouteEntry]]`
+- **port_list**: `Optional[List[str]]`
+- **port**: `Optional[Dict[str, nodescraper.plugins.inband.switch.scale_out_dell.scaleoutdelldata.DellPortData]]`
 
 ## SysSettingsDataModel Model
 
@@ -1983,6 +2271,46 @@ Check storage usage
 
 **Link to code**: [storage_analyzer.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/storage/storage_analyzer.py)
 
+## Data Analyzer Class ScaleOutAristaAnalyzer
+
+### Description
+
+Check Arista switch data for errors and warnings.
+
+    Walks every model in the collected :class:`ScaleOutAristaDataModel` and checks
+    each ``error_fields`` / ``warning_fields`` ClassVar against an optional
+    ``ports`` filter.
+
+**Bases**: ['SwitchAnalyzerBase', 'DataAnalyzer']
+
+**Link to code**: [scale_out_arista_analyzer.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/switch/scale_out_arista/scale_out_arista_analyzer.py)
+
+### Class Variables
+
+- **VENDOR_NAME**: `Arista`
+- **PORT_NAME_RE**: `re.compile('^(?:Ethernet)?(\\d+(?:/\\d+)*)$', re.IGNORECASE)`
+- **PORT_FORMAT_HINT**: `expected slash-separated decimals (e.g. 'M/S', 'A/B/C')`
+
+## Data Analyzer Class ScaleOutDellAnalyzer
+
+### Description
+
+Check Dell SONiC switch data for errors and warnings.
+
+    Walks every model in the collected :class:`ScaleOutDellDataModel` and checks
+    each ``error_fields`` / ``warning_fields`` ClassVar against an optional
+    ``ports`` filter.
+
+**Bases**: ['SwitchAnalyzerBase', 'DataAnalyzer']
+
+**Link to code**: [scale_out_dell_analyzer.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/switch/scale_out_dell/scale_out_dell_analyzer.py)
+
+### Class Variables
+
+- **VENDOR_NAME**: `Dell`
+- **PORT_NAME_RE**: `re.compile('^(?:Eth)?(\\d+(?:/\\d+)*)$', re.IGNORECASE)`
+- **PORT_FORMAT_HINT**: `expected slash-separated decimals (e.g. 'M/S', 'A/B/C')`
+
 ## Data Analyzer Class SysSettingsAnalyzer
 
 ### Description
@@ -2300,6 +2628,36 @@ Arguments for RegexSearchAnalyzer (dict items match Dmesg-style error_regex).
 - **exp_rocm**: `Union[str, list]` — Expected ROCm version string(s) to match (e.g. from rocminfo).
 - **exp_rocm_latest**: `str` — Expected 'latest' ROCm path or version string for versioned installs.
 - **exp_rocm_sub_versions**: `dict[str, Union[str, list]]` — Map sub-version name (e.g. version_rocm) to expected string or list of allowed strings.
+
+## Analyzer Args Class ScaleOutAristaAnalyzerArgs
+
+### Description
+
+Arguments for the Arista switch analyzer.
+
+**Bases**: ['AnalyzerArgs']
+
+**Link to code**: [analyzer_args.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/switch/scale_out_arista/analyzer_args.py)
+
+### Annotations / fields
+
+- **analysis_ports**: `Optional[List[str]]` — Restrict per-port analysis to the given ports. Ports are S/P/[SP] where subport is optional (e.g. ['1/1', '1/31', '1/1/1']) When omitted, every port present in the data is analyzed.Independent of any collection-time filter.
+- **expected_port_bandwidth**: `int` — Expected interface bandwidth (bps) from show interfaces status (AristaPortStatus.bandwidth). Ports with a different bandwidth are flagged.
+
+## Analyzer Args Class ScaleOutDellAnalyzerArgs
+
+### Description
+
+Arguments for the Dell SONiC switch analyzer.
+
+**Bases**: ['AnalyzerArgs']
+
+**Link to code**: [analyzer_args.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/switch/scale_out_dell/analyzer_args.py)
+
+### Annotations / fields
+
+- **analysis_ports**: `Optional[List[str]]` — Restrict per-port analysis to the given ports. Accepts optional Eth prefix (e.g. ['1/1', '1/31', '1/1/1'] or ['Eth1/1/1']). When omitted, every port present in the data is analyzed. Independent of any collection-time filter.
+- **expected_port_speed**: `int` — Expected interface speed (Mbps) from show interface status (DellInterfaceStatus.speed). Ports with a different speed are flagged.
 
 ## Analyzer Args Class SysSettingsAnalyzerArgs
 

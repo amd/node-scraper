@@ -1,0 +1,6 @@
+kern  :err   : 2038-01-19T00:00:00,000000+00:00 [Hardware Error]: Machine Check: CPU0 MC1_STATUS[0x0|CE|Misc]: 0x1
+kern  :err   : 2038-01-19T00:00:01,000000+00:00 [Hardware Error]: Machine Check: CPU0 MC2_STATUS[0x0|CE|Misc]: 0x2
+kern  :err   : 2038-01-19T00:00:02,000000+00:00 [Hardware Error]: Machine Check: CPU0 MC5_STATUS[0x0|CE|Misc]: 0x3
+kern  :err   : 2038-01-19T00:00:03,000000+00:00 CUSTOM_TEST_HARNESS_FAULT: probe alpha failed
+kern  :err   : 2038-01-19T00:00:04,000000+00:00 CUSTOM_TEST_HARNESS_FAULT: probe beta failed
+kern  :err   : 2026-01-07T10:00:20,567890-06:00 ACPI Error: Method parse/execution failed \_SB.PCI0.GPP0._BCM, AE_NOT_FOUND

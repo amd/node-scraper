@@ -27,6 +27,7 @@ from typing import Optional, Union
 
 from pydantic import Field
 
+from nodescraper.base.match_ignore import IgnoreMatchRuleSpec
 from nodescraper.base.regexanalyzer import ErrorRegex
 from nodescraper.models import TimeRangeAnalysisArgs
 
@@ -60,5 +61,21 @@ class DmesgAnalyzerArgs(TimeRangeAnalysisArgs):
             "are filter fields matched against ErrorRegex attributes. "
             "'new_priority' must be an EventPriority name (e.g. 'WARNING', 'ERROR') "
             "or 'NO_CHANGE' to leave the priority unchanged."
+        ),
+    )
+    mce_threshold: Optional[int] = Field(
+        default=None,
+        description=(
+            "When set, raise ERROR if correctable MCE/RAS error count for any component "
+            "(CPU, GPU BDF/block, etc.) reaches or exceeds this value."
+        ),
+    )
+    ignore_match_rules: Optional[list[IgnoreMatchRuleSpec]] = Field(
+        default=None,
+        description=(
+            "Rules that skip regex matches during analysis. Each rule may use line_regex, "
+            "match_regex, message, and/or mce_banks. Within a rule all specified fields must "
+            "match; any matching rule suppresses the hit. mce_banks accepts bank ids and "
+            'inclusive ranges such as "60-63".'
         ),
     )

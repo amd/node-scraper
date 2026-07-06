@@ -592,3 +592,45 @@ kern  :err   : 2026-01-07T10:00:30,000000-06:00 IO_PAGE_FAULT
                     # Should have multiple timestamps since interval is small
                     timestamps = io_events[0]["data"].get("timestamps", [])
                     assert len(timestamps) >= 3
+
+
+def test_dmesg_plugin_with_ignore_match_rules_config(run_cli_command, fixtures_dir, tmp_path):
+    """Test DmesgPlugin with ignore_match_rules and custom error regex in plugin config."""
+    dmesg_fixture = fixtures_dir / "dmesg_sample_ignore_match_rules.log"
+    config_file = fixtures_dir / "dmesg_plugin_config_ignore_match_rules.json"
+
+    assert dmesg_fixture.exists()
+    assert config_file.exists()
+
+    log_path = str(tmp_path / "logs_ignore_match_rules")
+    result = run_cli_command(
+        [
+            "--log-path",
+            log_path,
+            f"--plugin-configs={config_file}",
+            "run-plugins",
+            "DmesgPlugin",
+            "--data",
+            str(dmesg_fixture),
+            "--collection",
+            "False",
+        ],
+        check=False,
+    )
+
+    assert result.returncode in [0, 1, 2]
+
+    events_file = Path(log_path) / "dmesg_plugin" / "dmesg_analyzer" / "events.json"
+    if events_file.exists():
+        with open(events_file, encoding="utf-8") as f:
+            events = json.load(f)
+
+        mce_events = [event for event in events if event["description"] == "MCE Corrected Error"]
+        harness_events = [
+            event for event in events if event["description"] == "Custom Test Harness Fault"
+        ]
+
+        assert len(mce_events) == 1
+        assert "MC5_STATUS" in str(mce_events[0]["data"]["match_content"])
+        assert len(harness_events) == 1
+        assert "probe beta" in str(harness_events[0]["data"]["match_content"])

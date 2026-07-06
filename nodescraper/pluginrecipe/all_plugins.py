@@ -7,7 +7,7 @@
 ###############################################################################
 from __future__ import annotations
 
-from .discovery import registered_plugin_names
+from .discovery import PluginDiscovery
 from .pluginrecipe import PluginRecipe
 
 
@@ -21,4 +21,4 @@ class AllPlugins(PluginRecipe):
         Returns:
             tuple[str, ...]: Sorted names of all plugins in the plugin registry.
         """
-        return registered_plugin_names()
+        return PluginDiscovery().registered_plugin_names()

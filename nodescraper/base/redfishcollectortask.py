@@ -68,18 +68,23 @@ class RedfishDataCollector(
         self,
         path: str,
         log_artifact: bool = True,
+        html_view: Optional[bool] = None,
     ) -> RedfishGetResult:
         """Run a Redfish GET request and return the result.
 
         Args:
             path: Redfish URI path
             log_artifact: If True, append the result to self.result.artifacts.
+            html_view: When set, controls HTML artifact output. When omitted, uses
+                collection_args.html_view.
 
         Returns:
             RedfishGetResult: path, success, data (or error), status_code.
         """
         res = self.connection.run_get(path)
-        if log_artifact:
+        effective_html_view = self._effective_html_view(html_view)
+        if log_artifact or effective_html_view:
+            res.log_html = effective_html_view
             self.result.artifacts.append(res)
         return res
 
@@ -88,6 +93,7 @@ class RedfishDataCollector(
         path: str,
         max_pages: int = 200,
         log_artifact: bool = True,
+        html_view: Optional[bool] = None,
     ) -> RedfishGetResult:
         """
         Run a Redfish GET and follow Members@odata.nextLink pagination, merging all pages into a single response.
@@ -96,11 +102,29 @@ class RedfishDataCollector(
             path (str): Redfish URI path.
             max_pages (int, optional): safety cap on the number of pages to follow. Defaults to 200.
             log_artifact (bool, optional): whether we should log the merged result. Defaults to True.
+            html_view (Optional[bool], optional): whether to include this request in HTML artifacts.
+                When omitted, uses collection_args.html_view.
 
         Returns:
             RedfishGetResult: path, success, merged data (or error), status_code.
         """
         res = self.connection.run_get_paged(path, max_pages=max_pages)
-        if log_artifact:
+        effective_html_view = self._effective_html_view(html_view)
+        if log_artifact or effective_html_view:
+            res.log_html = effective_html_view
+            self.result.artifacts.append(res)
+        return res
+
+    def _append_redfish_artifact(
+        self,
+        res: RedfishGetResult,
+        *,
+        log_artifact: bool = True,
+        html_view: Optional[bool] = None,
+    ) -> RedfishGetResult:
+        """Append a Redfish GET result to task artifacts with log flags applied."""
+        effective_html_view = self._effective_html_view(html_view)
+        if log_artifact or effective_html_view:
+            res.log_html = effective_html_view
             self.result.artifacts.append(res)
         return res

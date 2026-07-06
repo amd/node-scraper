@@ -25,7 +25,13 @@
 ###############################################################################
 from typing import Any
 
-from pydantic import BaseModel, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    SerializerFunctionWrapHandler,
+    model_serializer,
+    model_validator,
+)
 
 
 class AnalyzerArgs(BaseModel):
@@ -37,7 +43,18 @@ class AnalyzerArgs(BaseModel):
 
     """
 
-    model_config = {"extra": "forbid", "exclude_none": True}
+    model_config = ConfigDict(extra="forbid")
+
+    @model_serializer(mode="wrap")
+    def serialize_model(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
+        serialized = handler(self)
+        remove_keys = []
+        for key, value in serialized.items():
+            if value is None:
+                remove_keys.append(key)
+        for key in remove_keys:
+            del serialized[key]
+        return serialized
 
     @model_validator(mode="before")
     @classmethod
@@ -89,5 +106,5 @@ class AnalyzerArgs(BaseModel):
             NotImplementedError: Not implemented error
         """
         raise NotImplementedError(
-            "Setting analyzer args from datamodel is not implemented for class: %s", cls.__name__
+            f"Setting analyzer args from datamodel is not implemented for class: {cls.__name__}",
         )

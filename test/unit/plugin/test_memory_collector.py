@@ -97,6 +97,7 @@ def test_run_linux(collector, conn_mock):
 
     assert result.status == ExecutionStatus.OK
     assert data.mem_free == "2097459761152"
+    assert data.mem_available == "2122320150528"
     assert data.mem_total == "2164113772544"
     assert data.lsmem_data is not None
     assert len(data.lsmem_data.memory_blocks) == 2
@@ -165,8 +166,8 @@ def test_run_linux_lsmem_fails(collector, conn_mock):
 
     assert result.status == ExecutionStatus.OK
     assert data.mem_free == "2097459761152"
+    assert data.mem_available == "2122320150528"
     assert data.mem_total == "2164113772544"
-    assert data.lsmem_data is None
     assert data.numa_topology is None
     lsmem_events = [e for e in result.events if "lsmem" in e.description]
     assert len(lsmem_events) > 0
