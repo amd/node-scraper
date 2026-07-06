@@ -289,7 +289,7 @@ class RdmaCollector(InBandDataCollector[RdmaDataModel, None]):
                 data={"exception": get_exception_traceback(e)},
                 priority=EventPriority.WARNING,
             )
-        return links
+        return None
 
     def collect_data(self, args: None = None) -> tuple[TaskResult, Optional[RdmaDataModel]]:
         """Collect RDMA statistics, link data, and device/link text output.
@@ -300,6 +300,14 @@ class RdmaCollector(InBandDataCollector[RdmaDataModel, None]):
         try:
             links = self._get_rdma_link()
             statistics = self._get_rdma_statistics()
+
+            # Cross-reference netdev from link data onto statistics (the
+            # 'rdma statistic' output does not include the netdev name).
+            if statistics and links:
+                netdev_map = {link.ifname: link.netdev for link in links if link.ifname is not None}
+                for stat in statistics:
+                    if stat.ifname in netdev_map:
+                        stat.netdev = netdev_map[stat.ifname]
 
             dev_list: list[RdmaDevice] = []
             res_rdma_dev = self._run_sut_cmd(self.CMD_RDMA_DEV)

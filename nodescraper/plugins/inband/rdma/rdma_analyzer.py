@@ -23,21 +23,25 @@
 # SOFTWARE.
 #
 ###############################################################################
+import re
 from typing import Optional
 
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
 from nodescraper.interfaces import DataAnalyzer
 from nodescraper.models import TaskResult
 
+from .analyzer_args import RdmaAnalyzerArgs
 from .rdmadata import RdmaDataModel
 
 
-class RdmaAnalyzer(DataAnalyzer[RdmaDataModel, None]):
+class RdmaAnalyzer(DataAnalyzer[RdmaDataModel, RdmaAnalyzerArgs]):
     """Check RDMA statistics for errors (RoCE and other RDMA error counters)."""
 
     DATA_MODEL = RdmaDataModel
 
-    def analyze_data(self, data: RdmaDataModel, args: Optional[None] = None) -> TaskResult:
+    def analyze_data(
+        self, data: RdmaDataModel, args: Optional[RdmaAnalyzerArgs] = None
+    ) -> TaskResult:
         """Analyze RDMA statistics for non-zero error counters.
 
         Error and critical counter names come from each vendor's statistics model
@@ -55,37 +59,55 @@ class RdmaAnalyzer(DataAnalyzer[RdmaDataModel, None]):
             self.result.status = ExecutionStatus.WARNING
             return self.result
 
+        if not args:
+            args = RdmaAnalyzerArgs()
+
+        compiled_exclusions = [re.compile(pattern) for pattern in (args.exclusion_regex or [])]
+
         error_state = False
+        skipped_count = 0
 
         for stat in data.statistic_list:
+            # Skip this interface if its netdev matches any exclusion regex
+            if stat.netdev and any(pattern.search(stat.netdev) for pattern in compiled_exclusions):
+                skipped_count += 1
+                continue
+
             if stat.vendor_statistics is None:
                 continue
 
             error_fields = stat.vendor_statistics.error_fields
-            critical_fields = stat.vendor_statistics.critial_error_fields
+            critical_fields = stat.vendor_statistics.critical_error_fields
 
+            detected_errors: dict[str, int] = {}
+            has_critical = False
             for error_field in error_fields + critical_fields:
                 error_value = getattr(stat.vendor_statistics, error_field, None)
-
                 if error_value is not None and error_value > 0:
-                    priority = (
-                        EventPriority.CRITICAL
-                        if error_field in critical_fields
-                        else EventPriority.ERROR
-                    )
-                    self._log_event(
-                        category=EventCategory.NETWORK,
-                        description=f"RDMA error detected: {error_field}",
-                        data={
-                            "interface": stat.ifname,
-                            "port": stat.port,
-                            "error_field": error_field,
-                            "error_count": error_value,
-                        },
-                        priority=priority,
-                        console_log=True,
-                    )
-                    error_state = True
+                    detected_errors[error_field] = error_value
+                    if error_field in critical_fields:
+                        has_critical = True
+
+            if not detected_errors:
+                continue
+
+            priority = EventPriority.CRITICAL if has_critical else EventPriority.ERROR
+            error_summary = ", ".join(
+                f"{field}={value}" for field, value in detected_errors.items()
+            )
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description=f"RDMA errors detected on {stat.netdev or stat.ifname}: {error_summary}",
+                data={
+                    "netdev": stat.netdev,
+                    "interface": stat.ifname,
+                    "port": stat.port,
+                    "errors": detected_errors,
+                },
+                priority=priority,
+                console_log=True,
+            )
+            error_state = True
 
         if error_state:
             self.result.message = "RDMA errors detected in statistics"
@@ -93,4 +115,8 @@ class RdmaAnalyzer(DataAnalyzer[RdmaDataModel, None]):
         else:
             self.result.message = "No RDMA errors detected in statistics"
             self.result.status = ExecutionStatus.OK
+
+        if skipped_count:
+            self.result.message += f" ({skipped_count} skipped)"
+
         return self.result

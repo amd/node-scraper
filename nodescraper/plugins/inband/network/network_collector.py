@@ -483,11 +483,17 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
                 stats_dict[key.strip()] = value.strip()
         return stats_dict
 
-    def _collect_ethtool_info(self, interfaces: List[NetworkInterface]) -> Dict[str, EthtoolInfo]:
+    def _collect_ethtool_info(
+        self,
+        interfaces: List[NetworkInterface],
+        exclusions: Optional[List[re.Pattern]] = None,
+    ) -> Dict[str, EthtoolInfo]:
         """Collect ethtool information for all network interfaces.
 
         Args:
             interfaces: List of NetworkInterface objects to collect ethtool info for
+            exclusions: Compiled regex patterns; interfaces whose name matches any
+                pattern are skipped (ethtool is not run against them).
 
         Returns:
             Dictionary mapping interface name to EthtoolInfo
@@ -495,6 +501,8 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
         ethtool_data = {}
 
         for iface in interfaces:
+            if exclusions and any(pattern.search(iface.name) for pattern in exclusions):
+                continue
             cmd = self.CMD_ETHTOOL_TEMPLATE.format(interface=iface.name)
             res_ethtool = self._run_sut_cmd(cmd, sudo=True)
 
@@ -634,8 +642,15 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
             vendor_statistics=vendor_stats,
         )
 
-    def _collect_rdma_scoped_ethtool(self) -> tuple[List[str], List[EthtoolStatistics]]:
-        """Collect ethtool -S for netdevs listed on RDMA links (error-scraper EthtoolCollector parity)."""
+    def _collect_rdma_scoped_ethtool(
+        self, exclusions: Optional[List[re.Pattern]] = None
+    ) -> tuple[List[str], List[EthtoolStatistics]]:
+        """Collect ethtool -S for netdevs listed on RDMA links (error-scraper EthtoolCollector parity).
+
+        Args:
+            exclusions: Compiled regex patterns; netdevs whose name matches any pattern
+                are skipped (ethtool -S is not run against them).
+        """
         netdev_list: List[str] = []
         statistics_list: List[EthtoolStatistics] = []
 
@@ -657,6 +672,8 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
             ifname = link.get("ifname") or ""
 
             if netdev:
+                if exclusions and any(pattern.search(netdev) for pattern in exclusions):
+                    continue
                 netdev_list.append(netdev)
                 stat = self._collect_rdma_scoped_ethtool_statistic(netdev, ifname)
                 if stat is not None:
@@ -776,6 +793,11 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
         rdma_ethtool_netdevs: List[str] = []
         rdma_ethtool_statistics: List[EthtoolStatistics] = []
 
+        # Compile device-exclusion regex patterns (netdevs matching any pattern are skipped)
+        compiled_exclusions = [
+            re.compile(pattern) for pattern in ((args.exclusion_regex if args else None) or [])
+        ]
+
         # Check network connectivity if URL is provided
         if args and args.url:
             cmd = args.netprobe if args.netprobe else "ping"
@@ -812,7 +834,7 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
 
         # Collect ethtool information for interfaces
         if interfaces:
-            ethtool_data = self._collect_ethtool_info(interfaces)
+            ethtool_data = self._collect_ethtool_info(interfaces, compiled_exclusions)
             self._log_event(
                 category=EventCategory.NETWORK,
                 description=f"Collected ethtool info for {len(ethtool_data)} interfaces",
@@ -820,7 +842,9 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
             )
 
         if self.system_info.os_family == OSFamily.LINUX:
-            rdma_ethtool_netdevs, rdma_ethtool_statistics = self._collect_rdma_scoped_ethtool()
+            rdma_ethtool_netdevs, rdma_ethtool_statistics = self._collect_rdma_scoped_ethtool(
+                compiled_exclusions
+            )
 
         # Collect routing table
         res_route = self._run_sut_cmd(self.CMD_ROUTE)

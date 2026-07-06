@@ -35,40 +35,26 @@ from .networkdata import NetworkDataModel
 
 
 class NetworkAnalyzer(RegexAnalyzer[NetworkDataModel, NetworkAnalyzerArgs]):
-    """Check network statistics for errors (PFC and other network error counters)."""
+    """Check network statistics for errors."""
 
     DATA_MODEL = NetworkDataModel
 
-    # Regex patterns for error fields checked from network statistics
-    ERROR_REGEX: list[ErrorRegex] = [
-        ErrorRegex(
-            regex=re.compile(r"^tx_pfc_frames$"),
-            message="tx_pfc_frames is non-zero",
-            event_category=EventCategory.NETWORK,
-        ),
-        ErrorRegex(
-            regex=re.compile(r"^tx_pfc_ena_frames_pri\d+$"),
-            message="tx_pfc_ena_frames_pri* is non-zero",
-            event_category=EventCategory.NETWORK,
-        ),
-        ErrorRegex(
-            regex=re.compile(r"^pfc_pri\d+_tx_transitions$"),
-            message="pfc_pri*_tx_transitions is non-zero",
-            event_category=EventCategory.NETWORK,
-        ),
-    ]
+    # No built-in regex patterns: RDMA-scoped counter classification lives in the vendor
+    # ethtool models (ethtool_vendor.py). This list is only extended by user-supplied
+    # NetworkAnalyzerArgs.error_regex patterns.
+    ERROR_REGEX: list[ErrorRegex] = []
 
     def analyze_data(
         self, data: NetworkDataModel, args: Optional[NetworkAnalyzerArgs] = None
     ) -> TaskResult:
-        """Analyze ethtool -S statistics: regex-based (per interface) and vendor-based (RDMA-scoped).
+        """Analyze ethtool -S statistics via RDMA-scoped vendor models and any user-supplied regex.
 
         Args:
             data: Network data model with ethtool_info and/or rdma_ethtool_statistics.
             args: Optional analyzer arguments with custom error regex support.
 
         Returns:
-            TaskResult with OK, WARNING (no data or vendor warning counters only), or ERROR.
+            TaskResult with OK, WARNING (no devices, or only warning-tier counters), or ERROR.
         """
         if not data.ethtool_info and not data.rdma_ethtool_statistics:
             self.result.message = "No network devices found"
@@ -79,10 +65,18 @@ class NetworkAnalyzer(RegexAnalyzer[NetworkDataModel, NetworkAnalyzerArgs]):
             args = NetworkAnalyzerArgs()
 
         final_error_regex = self._convert_and_extend_error_regex(args.error_regex, self.ERROR_REGEX)
+        compiled_exclusions = [re.compile(pattern) for pattern in (args.exclusion_regex or [])]
+        skipped_devices: set[str] = set()
 
         regex_error = False
+        regex_warning = False
         for interface_name, ethtool_info in data.ethtool_info.items():
-            errors_on_interface: list[tuple[str, int]] = []
+            if compiled_exclusions and any(
+                pattern.search(interface_name) for pattern in compiled_exclusions
+            ):
+                skipped_devices.add(interface_name)
+                continue
+            matches_on_interface: list[tuple[str, int, EventPriority]] = []
             for stat_name, stat_value in ethtool_info.statistics.items():
                 for error_regex_obj in final_error_regex:
                     if error_regex_obj.regex.match(stat_name):
@@ -92,27 +86,44 @@ class NetworkAnalyzer(RegexAnalyzer[NetworkDataModel, NetworkAnalyzerArgs]):
                             break
 
                         if value > 0:
-                            errors_on_interface.append((stat_name, value))
+                            matches_on_interface.append(
+                                (stat_name, value, error_regex_obj.event_priority)
+                            )
                         break
 
-            if errors_on_interface:
-                regex_error = True
-                error_names = [e[0] for e in errors_on_interface]
-                errors_data = {field: value for field, value in errors_on_interface}
+            if matches_on_interface:
+                has_error = any(
+                    priority == EventPriority.ERROR for _, _, priority in matches_on_interface
+                )
+                if has_error:
+                    regex_error = True
+                else:
+                    regex_warning = True
+                priority = EventPriority.ERROR if has_error else EventPriority.WARNING
+                severity = "error" if has_error else "warning"
+                match_names = [match[0] for match in matches_on_interface]
+                matches_data = {name: value for name, value, _ in matches_on_interface}
                 self._log_event(
                     category=EventCategory.NETWORK,
-                    description=f"Network error detected on {interface_name}: [{', '.join(error_names)}]",
+                    description=f"Network {severity} detected on {interface_name}: [{', '.join(match_names)}]",
                     data={
                         "interface": interface_name,
-                        "errors": errors_data,
+                        "errors": matches_data,
                     },
-                    priority=EventPriority.ERROR,
+                    priority=priority,
                     console_log=True,
                 )
 
         vendor_error = False
         vendor_warning = False
         for stat in data.rdma_ethtool_statistics:
+            if (
+                stat.netdev
+                and compiled_exclusions
+                and any(pattern.search(stat.netdev) for pattern in compiled_exclusions)
+            ):
+                skipped_devices.add(stat.netdev)
+                continue
             if stat.vendor_statistics is None:
                 continue
 
@@ -150,10 +161,14 @@ class NetworkAnalyzer(RegexAnalyzer[NetworkDataModel, NetworkAnalyzerArgs]):
         if regex_error or vendor_error:
             self.result.message = "Network errors detected in statistics"
             self.result.status = ExecutionStatus.ERROR
-        elif vendor_warning:
-            self.result.message = "Network vendor ethtool warning counters non-zero"
+        elif regex_warning or vendor_warning:
+            self.result.message = "Network warning counters non-zero in statistics"
             self.result.status = ExecutionStatus.WARNING
         else:
             self.result.message = "No network errors detected in statistics"
             self.result.status = ExecutionStatus.OK
+
+        if skipped_devices:
+            self.result.message += f" ({len(skipped_devices)} skipped)"
+
         return self.result

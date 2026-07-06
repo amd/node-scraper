@@ -131,7 +131,7 @@ class PollaraRdmaStatistics(BaseModel):
         "rx_rdma_mtu_discard_pkts",
     ]
 
-    critial_error_fields: ClassVar[list[str]] = []
+    critical_error_fields: ClassVar[list[str]] = []
 
 
 class Thor2RdmaStatistics(BaseModel):
@@ -291,7 +291,7 @@ class Thor2RdmaStatistics(BaseModel):
         "rx_icrc_encapsulated",
     ]
 
-    critial_error_fields: ClassVar[list[str]] = [
+    critical_error_fields: ClassVar[list[str]] = [
         "unrecoverable_err",
         "res_tx_pci_err",
         "res_rx_pci_err",
@@ -354,7 +354,7 @@ class Cx7RdmaStatistics(BaseModel):
         "rx_icrc_encapsulated",
     ]
 
-    critial_error_fields: ClassVar[list[str]] = []
+    critical_error_fields: ClassVar[list[str]] = []
 
 
 RdmaVendorStatistics = Union[PollaraRdmaStatistics, Thor2RdmaStatistics, Cx7RdmaStatistics]
@@ -370,6 +370,7 @@ VENDOR_PREFIX_MAP: dict[str, type[RdmaVendorStatistics]] = {
 class RdmaStatistics(BaseModel):
     # Interface information
     ifname: Optional[str] = None
+    netdev: Optional[str] = None
     port: Optional[int] = None
     vendor_statistics: Optional[RdmaVendorStatistics] = None
 
