@@ -186,3 +186,18 @@ def test_connection_manager_from_plugin_when_not_in_registry():
     assert len(results) == 1
     assert results[0].source == "testB"
     assert results[0].status == ExecutionStatus.OK
+
+
+def test_plugin_run_result_hooks_called_after_each_plugin(plugin_registry):
+    seen: list[str] = []
+
+    def hook(res: PluginResult) -> None:
+        seen.append(res.source)
+
+    executor = PluginExecutor(
+        plugin_configs=[PluginConfig(plugins={"TestPluginB": {}})],
+        plugin_registry=plugin_registry,
+        plugin_run_result_hooks=[hook],
+    )
+    executor.run_queue()
+    assert seen == ["testB"]

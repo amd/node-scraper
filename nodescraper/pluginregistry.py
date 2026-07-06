@@ -27,8 +27,15 @@ import importlib
 import importlib.metadata
 import inspect
 import pkgutil
+import threading
 import types
 from typing import Iterable, Optional
+
+# Python 3.9 compatibility: EntryPoints type was added in 3.10
+try:
+    from importlib.metadata import EntryPoints  # type: ignore[attr-defined]
+except ImportError:
+    EntryPoints = Iterable  # type: ignore[misc, assignment]
 
 import nodescraper.connection as internal_connections
 import nodescraper.plugins as internal_plugins
@@ -39,8 +46,32 @@ from nodescraper.interfaces import (
     PluginResultCollator,
 )
 
+# Entry point group names
+ENTRY_POINT_PLUGINS = "nodescraper.plugins"
+ENTRY_POINT_CONNECTION_MANAGERS = "nodescraper.connection_managers"
+
 
 class PluginRegistry:
+    """This class dynamically loads plugins. Internal plugins are loaded by default using
+    the ``nodescraper.plugins``, ``nodescraper.connection``, and ``nodescraper.resultcollators`` packages.
+    A caller of node-scraper can also specify entry points for plugins and connection managers. The
+    user could also define entrypoints which ``nodescraper.connection_managers`` or ``nodescraper.plugins``
+    entry point groups. The PluginRegistry will load these plugins and connection managers as well.
+    """
+
+    # Class-level caches for entry points (shared across all instances)
+    _entry_point_plugins_cache: Optional[dict[str, type]] = None
+    _entry_point_connection_managers_cache: Optional[dict[str, type]] = None
+    # Cache for loaded modules to avoid re-importing
+    _module_cache: dict[str, types.ModuleType] = {}
+    # Cache for entry points by group name
+    _entry_points_cache: dict[str, EntryPoints] = {}
+
+    # Global cache control switch
+    _use_cache: bool = True
+
+    # Single lock for all cache operations to ensure atomicity
+    _cache_lock = threading.RLock()
 
     def __init__(
         self,
@@ -59,7 +90,11 @@ class PluginRegistry:
                 ``nodescraper.connection_managers`` entry-point group. Defaults to True.
         """
         if load_internal_plugins:
-            self.plugin_pkg = [internal_plugins, internal_connections, internal_collators]
+            self.plugin_pkg = [
+                internal_plugins,
+                internal_connections,
+                internal_collators,
+            ]
         else:
             self.plugin_pkg = []
 
@@ -105,12 +140,22 @@ class PluginRegistry:
 
         def _recurse_pkg(pkg: types.ModuleType, base_class: type) -> None:
             for _, module_name, ispkg in pkgutil.iter_modules(pkg.__path__, pkg.__name__ + "."):
-                module = importlib.import_module(module_name)
+                # Check module cache first with thread safety (if caching enabled)
+                if PluginRegistry._use_cache:
+                    with PluginRegistry._cache_lock:
+                        if module_name in PluginRegistry._module_cache:
+                            module = PluginRegistry._module_cache[module_name]
+                        else:
+                            module = importlib.import_module(module_name)
+                            PluginRegistry._module_cache[module_name] = module
+                else:
+                    module = importlib.import_module(module_name)
+
                 for _, plugin in inspect.getmembers(
                     module,
-                    lambda x: inspect.isclass(x)
-                    and issubclass(x, base_class)
-                    and not inspect.isabstract(x),
+                    lambda x: PluginRegistry._valid_sub_class_check(
+                        in_cls=x, base_class=base_class
+                    ),
                 ):
                     if hasattr(plugin, "is_valid") and not plugin.is_valid():
                         continue
@@ -123,6 +168,44 @@ class PluginRegistry:
         return registry
 
     @staticmethod
+    def _valid_sub_class_check(in_cls: type, base_class: type) -> bool:
+        """Check if a class is a subclass of the specified base class.
+
+        Args:
+            cls (type): The class to check.
+            base_class (type): The base class to check against.
+
+        Returns:
+            bool: True if cls is a subclass of base_class, False otherwise.
+        """
+        return (
+            inspect.isclass(in_cls)
+            and issubclass(in_cls, base_class)
+            and not inspect.isabstract(in_cls)
+        )
+
+    @staticmethod
+    def _load_connection_managers_uncached() -> dict[str, type]:
+        """Internal: Load connection managers without caching logic."""
+        managers: dict[str, type] = {}
+        eps: Iterable = PluginRegistry.load_entry_points(ENTRY_POINT_CONNECTION_MANAGERS)
+
+        for entry_point in eps:
+            loaded = entry_point.load()  # type: ignore[attr-defined, union-attr]
+            if not PluginRegistry._valid_sub_class_check(
+                in_cls=loaded, base_class=ConnectionManager
+            ):
+                continue
+            if hasattr(loaded, "is_valid") and not loaded.is_valid():
+                continue
+            cls = loaded
+            managers[cls.__name__] = cls
+            ep_name = getattr(entry_point, "name", None)
+            if ep_name and ep_name != cls.__name__:
+                managers[ep_name] = cls
+        return managers.copy()
+
+    @staticmethod
     def load_connection_managers_from_entry_points() -> dict[str, type]:
         """Load ConnectionManager subclasses from ``nodescraper.connection_managers`` entry points.
 
@@ -132,41 +215,77 @@ class PluginRegistry:
         Returns:
             dict[str, type]: Map of lookup key to connection manager class.
         """
-        managers: dict[str, type] = {}
+        # Return cached result if caching is enabled and cache exists
+        if (
+            PluginRegistry._use_cache
+            and PluginRegistry._entry_point_connection_managers_cache is not None
+        ):
+            return PluginRegistry._entry_point_connection_managers_cache
 
+        # If caching disabled, skip lock and always reload
+        if not PluginRegistry._use_cache:
+            return PluginRegistry._load_connection_managers_uncached()
+
+        with PluginRegistry._cache_lock:
+            # Check again inside the lock to prevent duplicate work
+            if PluginRegistry._entry_point_connection_managers_cache is not None:
+                return PluginRegistry._entry_point_connection_managers_cache
+
+            managers = PluginRegistry._load_connection_managers_uncached()
+
+            # Cache the result
+            PluginRegistry._entry_point_connection_managers_cache = managers
+            return managers.copy()
+
+    @staticmethod
+    def _load_entry_points_uncached(entry_point: str) -> EntryPoints:
+        """Internal: Load entry points without caching logic."""
         try:
-            eps: Iterable
-            try:
-                eps = importlib.metadata.entry_points(  # type: ignore[call-arg]
-                    group="nodescraper.connection_managers"
-                )
-            except TypeError:
-                all_eps = importlib.metadata.entry_points()  # type: ignore[assignment]
-                eps = all_eps.get("nodescraper.connection_managers", [])  # type: ignore[assignment, attr-defined, arg-type]
+            eps: EntryPoints = importlib.metadata.entry_points(group=entry_point)  # type: ignore[call-arg]
+        except TypeError:
+            all_eps: EntryPoints = importlib.metadata.entry_points()  # type: ignore[assignment]
+            eps = all_eps.get(entry_point, [])  # type: ignore[assignment, attr-defined, arg-type]
+        return eps
 
-            for entry_point in eps:
-                try:
-                    loaded = entry_point.load()  # type: ignore[attr-defined, union-attr]
-                    if not (
-                        inspect.isclass(loaded)
-                        and issubclass(loaded, ConnectionManager)
-                        and not inspect.isabstract(loaded)
-                    ):
-                        continue
-                    if hasattr(loaded, "is_valid") and not loaded.is_valid():
-                        continue
-                    cls = loaded
-                    managers[cls.__name__] = cls
-                    ep_name = getattr(entry_point, "name", None)
-                    if ep_name and ep_name != cls.__name__:
-                        managers[ep_name] = cls
-                except Exception:
-                    pass
+    @staticmethod
+    def load_entry_points(entry_point: str) -> EntryPoints:
+        # Return cached result if caching is enabled and cache exists
+        if PluginRegistry._use_cache and entry_point in PluginRegistry._entry_points_cache:
+            return PluginRegistry._entry_points_cache[entry_point]
 
-        except Exception:
-            pass
+        # If caching disabled, skip lock and always reload
+        if not PluginRegistry._use_cache:
+            return PluginRegistry._load_entry_points_uncached(entry_point)
 
-        return managers
+        with PluginRegistry._cache_lock:
+            # Check again inside the lock to prevent duplicate work
+            if entry_point in PluginRegistry._entry_points_cache:
+                return PluginRegistry._entry_points_cache[entry_point]
+
+            eps = PluginRegistry._load_entry_points_uncached(entry_point)
+
+            # Cache the result
+            PluginRegistry._entry_points_cache[entry_point] = eps
+            return eps
+
+    @staticmethod
+    def _load_plugins_uncached() -> dict[str, type]:
+        """Internal: Load plugins without caching logic."""
+        plugins = {}
+        eps: Iterable = PluginRegistry.load_entry_points(ENTRY_POINT_PLUGINS)
+
+        for entry_point in eps:
+            plugin_class = entry_point.load()  # type: ignore[attr-defined, union-attr]
+
+            if not PluginRegistry._valid_sub_class_check(
+                in_cls=plugin_class, base_class=PluginInterface
+            ):
+                continue
+            if hasattr(plugin_class, "is_valid") and not plugin_class.is_valid():
+                continue
+
+            plugins[plugin_class.__name__] = plugin_class
+        return plugins
 
     @staticmethod
     def load_plugins_from_entry_points() -> dict[str, type]:
@@ -175,35 +294,33 @@ class PluginRegistry:
         Returns:
             dict[str, type]: A dictionary mapping plugin names to their classes.
         """
-        plugins = {}
+        # Return cached result if caching is enabled and cache exists
+        if PluginRegistry._use_cache and PluginRegistry._entry_point_plugins_cache is not None:
+            return PluginRegistry._entry_point_plugins_cache.copy()
 
-        try:
-            eps: Iterable
-            # Python 3.10+ supports group parameter
-            try:
-                eps = importlib.metadata.entry_points(group="nodescraper.plugins")  # type: ignore[call-arg]
-            except TypeError:
-                # Python 3.9 - entry_points() returns dict-like object
-                all_eps = importlib.metadata.entry_points()  # type: ignore[assignment]
-                eps = all_eps.get("nodescraper.plugins", [])  # type: ignore[assignment, attr-defined, arg-type]
+        # If caching disabled, skip lock and always reload
+        if not PluginRegistry._use_cache:
+            return PluginRegistry._load_plugins_uncached()
 
-            for entry_point in eps:
-                try:
-                    plugin_class = entry_point.load()  # type: ignore[attr-defined, union-attr]
+        with PluginRegistry._cache_lock:
+            # Check again inside the lock to prevent duplicate work
+            if PluginRegistry._entry_point_plugins_cache is not None:
+                return PluginRegistry._entry_point_plugins_cache.copy()
 
-                    if (
-                        inspect.isclass(plugin_class)
-                        and issubclass(plugin_class, PluginInterface)
-                        and not inspect.isabstract(plugin_class)
-                    ):
-                        if hasattr(plugin_class, "is_valid") and not plugin_class.is_valid():
-                            continue
+            plugins = PluginRegistry._load_plugins_uncached()
 
-                        plugins[plugin_class.__name__] = plugin_class
-                except Exception:
-                    pass
+            # Cache the result - no need to copy before caching
+            PluginRegistry._entry_point_plugins_cache = plugins
+            return plugins.copy()
 
-        except Exception:
-            pass
+    @classmethod
+    def clear_caches(cls) -> None:
+        """Clear all caches. Useful for testing or when plugins are dynamically installed.
 
-        return plugins
+        Thread-safe: Acquires all locks to ensure no other thread is accessing caches.
+        """
+        with cls._cache_lock:
+            cls._entry_point_plugins_cache = None
+            cls._entry_point_connection_managers_cache = None
+            cls._module_cache.clear()
+            cls._entry_points_cache.clear()

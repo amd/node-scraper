@@ -57,9 +57,9 @@ class MemoryAnalyzer(DataAnalyzer[MemoryDataModel, MemoryAnalyzerArgs]):
         def _bytes_to_gb(n: float) -> float:
             return n / (1024**3)
 
-        free_memory = convert_to_bytes(data.mem_free)
+        available_memory = convert_to_bytes(data.mem_available or data.mem_free)
         total_memory = convert_to_bytes(data.mem_total)
-        used_memory = total_memory - free_memory
+        used_memory = total_memory - available_memory
 
         threshold_bytes = convert_to_bytes(args.memory_threshold)
 
@@ -93,7 +93,8 @@ class MemoryAnalyzer(DataAnalyzer[MemoryDataModel, MemoryAnalyzerArgs]):
                     "used_memory": used_memory,
                     "max_allowed_used_mem": max_allowed_used_mem,
                     "total_memory": total_memory,
-                    "free_memory": free_memory,
+                    "available_memory": available_memory,
+                    "mem_free": convert_to_bytes(data.mem_free),
                 },
             )
 

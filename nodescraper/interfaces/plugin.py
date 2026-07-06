@@ -26,7 +26,7 @@
 import abc
 import inspect
 import logging
-from typing import Callable, Generic, Optional, Type, Union
+from typing import Any, Callable, Generic, Optional, Type, Union
 
 from nodescraper.constants import DEFAULT_EVENT_REPORTER, DEFAULT_LOGGER
 from nodescraper.models import PluginResult, SystemInfo
@@ -125,7 +125,7 @@ class PluginInterface(abc.ABC, Generic[TConnectionManager, TConnectArg]):
             self.queue_callback(queue_item)
 
     @abc.abstractmethod
-    def run(self, **kwargs) -> PluginResult:
+    def run(self, **kwargs: Any) -> PluginResult:
         """Plugin run function
 
         Returns:

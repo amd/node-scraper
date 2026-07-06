@@ -41,7 +41,7 @@ from pathlib import Path
 from typing import Any, Iterable, List, Optional, Type
 
 LINK_BASE_DEFAULT = "https://github.com/amd/node-scraper/blob/HEAD/"
-REL_ROOT_DEFAULT = "nodescraper/plugins/inband"
+REL_ROOT_DEFAULT = "nodescraper/plugins"
 # Import and document every concrete plugin under nodescraper.plugins (inband, ooband,
 # generic_collection, regex_search, serviceability, …).
 PACKAGE_PLUGINS_ROOT = "nodescraper.plugins"

@@ -28,7 +28,7 @@ from typing import Optional
 
 from nodescraper.interfaces.taskresulthook import TaskResultHook
 from nodescraper.models import DataModel, TaskResult
-from nodescraper.utils import pascal_to_snake
+from nodescraper.utils import resolve_log_dir_name
 
 
 class FileSystemLogHook(TaskResultHook):
@@ -43,9 +43,9 @@ class FileSystemLogHook(TaskResultHook):
         """Log task result to the filesystem (single events.json per directory)."""
         log_path = self.log_base_path
         if task_result.parent:
-            log_path = os.path.join(log_path, pascal_to_snake(task_result.parent))
+            log_path = os.path.join(log_path, resolve_log_dir_name(task_result.parent))
         if task_result.task:
-            log_path = os.path.join(log_path, pascal_to_snake(task_result.task))
+            log_path = os.path.join(log_path, resolve_log_dir_name(task_result.task))
 
         task_result.log_result(log_path)
 

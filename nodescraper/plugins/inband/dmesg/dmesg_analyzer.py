@@ -34,6 +34,7 @@ from nodescraper.models import Event, TaskResult
 
 from .analyzer_args import DmesgAnalyzerArgs
 from .dmesgdata import DmesgData
+from .mce_utils import parse_correctable_mce_counts, parse_uncorrectable_mce_counts
 
 
 class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
@@ -640,6 +641,28 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
 
         return current_priority  # if no rules are matched, keep the current priority
 
+    def _check_mce_threshold(self, dmesg_content: str, threshold: int) -> None:
+        """Raise ERROR events when correctable MCE counts per component reach the threshold."""
+        correctable_counts = parse_correctable_mce_counts(dmesg_content)
+        uncorrectable_counts = parse_uncorrectable_mce_counts(dmesg_content)
+
+        for part, count in sorted(correctable_counts.items()):
+            if count >= threshold:
+                self._log_event(
+                    category=EventCategory.RAS,
+                    description=(
+                        f"{part} has {count} correctable MCE(s), " f"mce_threshold={threshold}"
+                    ),
+                    priority=EventPriority.ERROR,
+                    data={
+                        "part": part,
+                        "correctable_mce_count": count,
+                        "uncorrectable_mce_count": uncorrectable_counts.get(part, 0),
+                        "mce_threshold": threshold,
+                    },
+                    console_log=True,
+                )
+
     def analyze_data(
         self,
         data: DmesgData,
@@ -721,5 +744,8 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
                 match_content = err_event.data["match_content"]
                 if not self._is_known_error(known_err_events, match_content, final_error_regex):
                     self.result.events.append(err_event)
+
+        if args.mce_threshold is not None:
+            self._check_mce_threshold(dmesg_content, args.mce_threshold)
 
         return self.result

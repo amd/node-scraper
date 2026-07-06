@@ -87,6 +87,7 @@ def collect_decorator(
                 if not collection_arg_model:
                     raise ValueError("No model defined for analysis args")
                 args = collection_arg_model(**args)  # type: ignore
+            collector.apply_collection_html_view(args)
             result, data = func(collector, args)
         except Exception as exception:
             if isinstance(exception, ValidationError):
@@ -181,6 +182,7 @@ class DataCollector(Task, abc.ABC, Generic[TConnection, TDataModel, TCollectArg]
 
         self.system_interaction_level = system_interaction_level
         self.connection = connection
+        self._html_view = False
 
         allowed_skus = _supported_sku_name_set(self.SUPPORTED_SKUS)
         if (
@@ -196,6 +198,19 @@ class DataCollector(Task, abc.ABC, Generic[TConnection, TDataModel, TCollectArg]
                 f"{self.system_info.platform} platform is not supported for this collector"
             )
 
+    def apply_collection_html_view(self, args: Optional[TCollectArg]) -> None:
+        """Apply collection_args.html_view for this collector run."""
+        if args is not None and hasattr(args, "html_view"):
+            self._html_view = bool(args.html_view)
+        else:
+            self._html_view = False
+
+    def _effective_html_view(self, html_view: Optional[bool]) -> bool:
+        """Resolve per-call html_view override against collection_args.html_view."""
+        if html_view is not None:
+            return html_view
+        return self._html_view
+
     def __init_subclass__(cls, **kwargs) -> None:
         super().__init_subclass__(**kwargs)
         if not inspect.isabstract(cls):
@@ -204,7 +219,8 @@ class DataCollector(Task, abc.ABC, Generic[TConnection, TDataModel, TCollectArg]
             if not issubclass(cls.DATA_MODEL, DataModel):
                 raise TypeError(f"DATA_MODEL must be a subclass of DataModel in {cls.__name__}")
         if hasattr(cls, "collect_data"):
-            cls.collect_data = collect_decorator(cls.collect_data)
+            if "collect_data" in vars(cls):
+                cls.collect_data = collect_decorator(cls.collect_data)
         else:
             raise TypeError(f"Data collector {cls.__name__} must implement collect_data")
 

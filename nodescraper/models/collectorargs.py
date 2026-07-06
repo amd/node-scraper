@@ -23,8 +23,18 @@
 # SOFTWARE.
 #
 ###############################################################################
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class CollectorArgs(BaseModel):
+    html_view: bool = Field(
+        default=False,
+        description=(
+            "When true, include logged command artifacts in command_artifacts.html "
+            "using human-readable output. Arista collectors re-run successful "
+            "'| json' commands without '| json' so HTML shows native EOS text "
+            "instead of raw JSON."
+        ),
+    )
+
     model_config = {"extra": "forbid", "exclude_none": True}

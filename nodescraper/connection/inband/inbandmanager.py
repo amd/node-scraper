@@ -43,6 +43,7 @@ from nodescraper.utils import get_exception_traceback
 from .inband import InBandConnection
 from .inbandlocal import LocalShell
 from .inbandremote import RemoteShell, SSHConnectionError
+from .osdetection import NetworkOsDetection, detect_network_os
 from .sshparams import SSHConnectionParams
 
 
@@ -68,6 +69,18 @@ class InBandConnectionManager(ConnectionManager[InBandConnection, SSHConnectionP
             **kwargs,
         )
 
+    @staticmethod
+    def _apply_network_os_detection(
+        system_info: SystemInfo,
+        detection: NetworkOsDetection,
+    ) -> None:
+        """Apply network OS probe results to system info."""
+        system_info.os_family = detection.os_family
+        system_info.platform = detection.platform
+        if system_info.metadata is None:
+            system_info.metadata = {}
+        system_info.metadata.update(detection.metadata)
+
     def _check_os_family(self):
         """Check the OS family of the system under test (SUT)
 
@@ -84,12 +97,23 @@ class InBandConnectionManager(ConnectionManager[InBandConnection, SSHConnectionP
         elif res.exit_code == 0:
             self.system_info.os_family = OSFamily.LINUX
         else:
-            self._log_event(
-                category=EventCategory.UNKNOWN,
-                description="Unable to determine SUT OS",
-                priority=EventPriority.WARNING,
+            detection = detect_network_os(self.connection)
+            if detection is not None:
+                self._apply_network_os_detection(self.system_info, detection)
+            else:
+                self._log_event(
+                    category=EventCategory.UNKNOWN,
+                    description="Unable to determine SUT OS",
+                    priority=EventPriority.WARNING,
+                )
+        if self.system_info.platform:
+            self.logger.info(
+                "OS Family: %s (%s)",
+                self.system_info.os_family.name,
+                self.system_info.platform,
             )
-        self.logger.info("OS Family: %s", self.system_info.os_family.name)
+        else:
+            self.logger.info("OS Family: %s", self.system_info.os_family.name)
 
     def connect(
         self,
