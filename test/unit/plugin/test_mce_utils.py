@@ -64,3 +64,15 @@ def test_parse_uncorrectable_mce_counts():
     counts = parse_uncorrectable_mce_counts(content)
 
     assert counts == {"CPU1": 1, "GPU0/gfx": 2}
+
+
+def test_parse_correctable_mce_counts_skips_ignored_banks():
+    content = (
+        "[Hardware Error]: CPU0 MC1_STATUS[0x0|CE|]: 0x1\n"
+        "[Hardware Error]: CPU0 MC2_STATUS[0x0|CE|]: 0x2\n"
+        "[Hardware Error]: CPU0 MC5_STATUS[0x0|CE|]: 0x3\n"
+    )
+
+    counts = parse_correctable_mce_counts(content, ignore_banks=frozenset({1, 2}))
+
+    assert counts == {"CPU0": 1}

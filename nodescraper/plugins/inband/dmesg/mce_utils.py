@@ -24,7 +24,9 @@
 #
 ###############################################################################
 import re
-from typing import Optional
+from typing import FrozenSet, Optional
+
+from nodescraper.base.match_ignore import extract_mce_bank_from_line
 
 _CORRECTABLE_SUMMARY_RE = re.compile(
     r"(?P<count>\d+)\s+correctable hardware errors detected in total in (?P<block>\w+) block"
@@ -91,7 +93,10 @@ def _gpu_index_for_bdf(bdf: str, bdf_order: list[str]) -> int:
     return bdf_order.index(bdf)
 
 
-def parse_correctable_mce_counts(content: str) -> dict[str, int]:
+def parse_correctable_mce_counts(
+    content: str,
+    ignore_banks: Optional[FrozenSet[int]] = None,
+) -> dict[str, int]:
     """Count correctable MCE / RAS hardware errors per component from dmesg text.
 
     Handles summary lines (for example ``mce: 3 correctable ... on CPU1``),
@@ -99,6 +104,7 @@ def parse_correctable_mce_counts(content: str) -> dict[str, int]:
     """
     counts: dict[str, int] = {}
     gpu_bdf_order: list[str] = []
+    ignored = ignore_banks or frozenset()
 
     for line in content.splitlines():
         gpu_match = _GPU_CORRECTABLE_RE.search(line)
@@ -123,16 +129,23 @@ def parse_correctable_mce_counts(content: str) -> dict[str, int]:
 
         status_match = _MCE_CE_STATUS_RE.search(line)
         if status_match:
+            bank = extract_mce_bank_from_line(line)
+            if bank is not None and bank in ignored:
+                continue
             part = status_match.group("cpu") if status_match.group("cpu") else "unknown"
             _add_count(counts, part, 1)
 
     return counts
 
 
-def parse_uncorrectable_mce_counts(content: str) -> dict[str, int]:
+def parse_uncorrectable_mce_counts(
+    content: str,
+    ignore_banks: Optional[FrozenSet[int]] = None,
+) -> dict[str, int]:
     """Count uncorrectable MCE / RAS hardware errors per component from dmesg text."""
     counts: dict[str, int] = {}
     gpu_bdf_order: list[str] = []
+    ignored = ignore_banks or frozenset()
 
     for line in content.splitlines():
         gpu_match = _GPU_UNCORRECTABLE_RE.search(line)
@@ -154,6 +167,9 @@ def parse_uncorrectable_mce_counts(content: str) -> dict[str, int]:
 
         status_match = _MCE_UC_STATUS_RE.search(line)
         if status_match:
+            bank = extract_mce_bank_from_line(line)
+            if bank is not None and bank in ignored:
+                continue
             part = status_match.group("cpu") if status_match.group("cpu") else "unknown"
             _add_count(counts, part, 1)
 

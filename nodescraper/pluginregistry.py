@@ -178,11 +178,12 @@ class PluginRegistry:
         Returns:
             bool: True if cls is a subclass of base_class, False otherwise.
         """
-        return (
-            inspect.isclass(in_cls)
-            and issubclass(in_cls, base_class)
-            and not inspect.isabstract(in_cls)
-        )
+        if not inspect.isclass(in_cls):
+            return False
+        try:
+            return issubclass(in_cls, base_class) and not inspect.isabstract(in_cls)
+        except TypeError:
+            return False
 
     @staticmethod
     def _load_connection_managers_uncached() -> dict[str, type]:
