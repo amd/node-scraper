@@ -44,6 +44,10 @@ from nodescraper.plugins.inband.switch.scale_out_dell.scaleoutdelldata import (
     DellPortData,
     ScaleOutDellDataModel,
 )
+from nodescraper.plugins.inband.switch.switch_analyzer_base import (
+    _expects_not_null,
+    _values_match,
+)
 
 
 @pytest.fixture
@@ -169,3 +173,80 @@ def test_analyzer_messages_distinguish_errors_and_warnings(analyzer):
     result = analyzer.analyze_data(data)
     assert result.status == ExecutionStatus.ERROR
     assert result.message.startswith("Arista errors and warnings detected")
+
+
+@pytest.mark.parametrize(
+    "actual, expected, matches",
+    [
+        ("U", ["U", "S"], True),
+        ("S", ["U", "S"], True),
+        ("D", ["U", "S"], False),
+        ("U", ["U"], True),
+        ("D", ["U"], False),
+        ("anything", ["NOT_NULL"], True),
+        (None, ["NOT_NULL"], False),
+    ],
+)
+def test_values_match_supports_list_or(actual, expected, matches):
+    assert _values_match(actual, expected) is matches
+
+
+def test_expects_not_null_detects_nested_not_null():
+    assert _expects_not_null(["U", "NOT_NULL"]) is True
+    assert _expects_not_null(["U", "S"]) is False
+    assert _expects_not_null(["NOT_NULL"]) is True
+
+
+def test_error_warning_field_values_are_lists():
+    assert DellInterfaceCounters.error_fields["state"] == ["U"]
+    assert DellInterfaceCounters.warning_fields["rx_drp"] == ["0"]
+    assert AristaPortStatus.error_fields["link_status"] == ["connected"]
+    assert all(isinstance(value, list) for value in DellInterfaceCounters.error_fields.values())
+
+
+def test_dell_state_list_or_passes_on_any_match(dell_analyzer, monkeypatch):
+    monkeypatch.setitem(DellInterfaceCounters.error_fields, "state", ["U", "S"])
+    data = ScaleOutDellDataModel(
+        port={
+            "Eth1/1/1": DellPortData(
+                interface_counters=DellInterfaceCounters(
+                    state="S",
+                    rx_err=0,
+                    rx_oversize=0,
+                    tx_err=0,
+                    tx_oversize=0,
+                    rx_drp=0,
+                    tx_drp=0,
+                ),
+            ),
+        }
+    )
+
+    result = dell_analyzer.analyze_data(data)
+
+    assert result.status != ExecutionStatus.ERROR
+    assert not any("state" in event.description for event in result.events)
+
+
+def test_dell_state_list_or_errors_when_no_match(dell_analyzer, monkeypatch):
+    monkeypatch.setitem(DellInterfaceCounters.error_fields, "state", ["U", "S"])
+    data = ScaleOutDellDataModel(
+        port={
+            "Eth1/1/1": DellPortData(
+                interface_counters=DellInterfaceCounters(
+                    state="D",
+                    rx_err=0,
+                    rx_oversize=0,
+                    tx_err=0,
+                    tx_oversize=0,
+                    rx_drp=0,
+                    tx_drp=0,
+                ),
+            ),
+        }
+    )
+
+    result = dell_analyzer.analyze_data(data)
+
+    assert result.status == ExecutionStatus.ERROR
+    assert any("state" in event.description for event in result.events)

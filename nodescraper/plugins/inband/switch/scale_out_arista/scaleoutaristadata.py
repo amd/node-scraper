@@ -24,7 +24,7 @@
 #
 ###############################################################################
 
-from typing import ClassVar, Dict, List, Optional, Union
+from typing import ClassVar, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict
 from pydantic.alias_generators import to_camel
@@ -98,8 +98,8 @@ class FanConfiguration(BaseModel):
     speed_hw_override: Optional[bool] = None
     speed_stable: Optional[bool] = None
 
-    error_fields: ClassVar[dict[str, str]] = {
-        "status": "ok",
+    error_fields: ClassVar[dict[str, List[str]]] = {
+        "status": ["ok"],
     }
 
 
@@ -124,9 +124,9 @@ class AristaSystemEnv(BaseModel):
     power_supply_slots: Optional[List[FanConfiguration]] = None
     fan_tray_slots: Optional[List[FanConfiguration]] = None
 
-    error_fields: ClassVar[dict[str, Union[str, bool]]] = {
-        "system_status": "coolingOk",
-        "fans_status": "fanAlarmOk",
+    error_fields: ClassVar[dict[str, List[str]]] = {
+        "system_status": ["coolingOk"],
+        "fans_status": ["fanAlarmOk"],
     }
 
 
@@ -139,9 +139,9 @@ class VlanInformation(BaseModel):
     interface_mode: Optional[str] = None
     interface_forwarding_model: Optional[str] = None
 
-    error_fields: ClassVar[dict[str, str]] = {
-        "interface_mode": "routed",
-        "interface_forwarding_model": "routed",
+    error_fields: ClassVar[dict[str, List[str]]] = {
+        "interface_mode": ["routed"],
+        "interface_forwarding_model": ["routed"],
     }
 
 
@@ -160,10 +160,10 @@ class AristaPortStatus(BaseModel):
     line_protocol_status: Optional[str] = None
     interface_damped: Optional[bool] = None
 
-    error_fields: ClassVar[dict[str, str]] = {
-        "link_status": "connected",
-        "duplex": "duplexFull",
-        "line_protocol_status": "up",
+    error_fields: ClassVar[dict[str, List[str]]] = {
+        "link_status": ["connected"],
+        "duplex": ["duplexFull"],
+        "line_protocol_status": ["up"],
     }
 
 
@@ -180,14 +180,14 @@ class AristaCountersErrors(BaseModel):
     alignment_errors: Optional[int] = None
     symbol_errors: Optional[int] = None
 
-    error_fields: ClassVar[dict[str, str]] = {
-        "in_errors": "0",
-        "frame_too_longs": "0",
-        "out_errors": "0",
-        "frame_too_shorts": "0",
-        "fcs_errors": "0",
-        "alignment_errors": "0",
-        "symbol_errors": "0",
+    error_fields: ClassVar[dict[str, List[str]]] = {
+        "in_errors": ["0"],
+        "frame_too_longs": ["0"],
+        "out_errors": ["0"],
+        "frame_too_shorts": ["0"],
+        "fcs_errors": ["0"],
+        "alignment_errors": ["0"],
+        "symbol_errors": ["0"],
     }
 
 
@@ -259,10 +259,10 @@ class AristaDroppedPacketCounters(BaseModel):
     out_uc_dropped_pkts: Optional[int] = None
     out_mc_dropped_pkts: Optional[int] = None
 
-    warning_fields: ClassVar[dict[str, str]] = {
-        "in_dropped_pkts": "0",
-        "out_uc_dropped_pkts": "0",
-        "out_mc_dropped_pkts": "0",
+    warning_fields: ClassVar[dict[str, List[str]]] = {
+        "in_dropped_pkts": ["0"],
+        "out_uc_dropped_pkts": ["0"],
+        "out_mc_dropped_pkts": ["0"],
     }
 
 
@@ -275,10 +275,10 @@ class AristaDropPrecedenceCounters(BaseModel):
     dp1_dropped_pkts: Optional[int] = None
     dp2_dropped_pkts: Optional[int] = None
 
-    error_fields: ClassVar[dict[str, str]] = {
-        "dp0_dropped_pkts": "0",
-        "dp1_dropped_pkts": "0",
-        "dp2_dropped_pkts": "0",
+    error_fields: ClassVar[dict[str, List[str]]] = {
+        "dp0_dropped_pkts": ["0"],
+        "dp1_dropped_pkts": ["0"],
+        "dp2_dropped_pkts": ["0"],
     }
 
 
@@ -293,9 +293,9 @@ class AristaPerQueueCounters(BaseModel):
     pkts_drop: Optional[int] = None
     bytes_drop: Optional[int] = None
 
-    warning_fields: ClassVar[dict[str, str]] = {
-        "pkts_drop": "0",
-        "bytes_drop": "0",
+    warning_fields: ClassVar[dict[str, List[str]]] = {
+        "pkts_drop": ["0"],
+        "bytes_drop": ["0"],
     }
 
 
@@ -311,9 +311,9 @@ class AristaPauseFrameCounters(BaseModel):
     tx_pause: Optional[int] = None
     rx_pause: Optional[int] = None
 
-    error_fields: ClassVar[dict[str, str]] = {
-        "tx_pause": "0",
-        "rx_pause": "0",
+    error_fields: ClassVar[dict[str, List[str]]] = {
+        "tx_pause": ["0"],
+        "rx_pause": ["0"],
     }
 
 
@@ -325,8 +325,8 @@ class AristaEcnCounters(BaseModel):
     txq: Optional[str] = None
     marked_packets: Optional[str] = None
 
-    warning_fields: ClassVar[dict[str, str]] = {
-        "marked_packets": "0",
+    warning_fields: ClassVar[dict[str, List[str]]] = {
+        "marked_packets": ["0", "-"],
     }
 
 
@@ -338,9 +338,9 @@ class AristaPfcCounters(BaseModel):
     rx_frames: Optional[int] = None
     tx_frames: Optional[int] = None
 
-    warning_fields: ClassVar[dict[str, str]] = {
-        "rx_frames": "0",
-        "tx_frames": "0",
+    warning_fields: ClassVar[dict[str, List[str]]] = {
+        "rx_frames": ["0"],
+        "tx_frames": ["0"],
     }
 
 
