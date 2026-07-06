@@ -64,7 +64,10 @@ class RdmaAnalyzer(DataAnalyzer[RdmaDataModel, RdmaAnalyzerArgs]):
 
         compiled_exclusions = [re.compile(pattern) for pattern in (args.exclusion_regex or [])]
 
-        error_state = False
+        error_detected = False
+        critical_detected = False
+        error_fields_seen: set[str] = set()
+        critical_fields_seen: set[str] = set()
         skipped_count = 0
 
         for stat in data.statistic_list:
@@ -87,17 +90,20 @@ class RdmaAnalyzer(DataAnalyzer[RdmaDataModel, RdmaAnalyzerArgs]):
                     detected_errors[error_field] = error_value
                     if error_field in critical_fields:
                         has_critical = True
+                        critical_detected = True
+                        critical_fields_seen.add(error_field)
+                    else:
+                        error_detected = True
+                        error_fields_seen.add(error_field)
 
             if not detected_errors:
                 continue
 
             priority = EventPriority.CRITICAL if has_critical else EventPriority.ERROR
-            error_summary = ", ".join(
-                f"{field}={value}" for field, value in detected_errors.items()
-            )
+            desc = "RDMA critical error detected" if has_critical else "RDMA error detected"
             self._log_event(
                 category=EventCategory.NETWORK,
-                description=f"RDMA errors detected on {stat.netdev or stat.ifname}: {error_summary}",
+                description=desc,
                 data={
                     "netdev": stat.netdev,
                     "interface": stat.ifname,
@@ -105,11 +111,17 @@ class RdmaAnalyzer(DataAnalyzer[RdmaDataModel, RdmaAnalyzerArgs]):
                     "errors": detected_errors,
                 },
                 priority=priority,
-                console_log=True,
+                console_log=False,
             )
-            error_state = True
 
-        if error_state:
+        if critical_detected:
+            self.logger.critical(
+                "RDMA critical error detected: %s", ", ".join(sorted(critical_fields_seen))
+            )
+        if error_detected:
+            self.logger.error("RDMA error detected: %s", ", ".join(sorted(error_fields_seen)))
+
+        if error_detected or critical_detected:
             self.result.message = "RDMA errors detected in statistics"
             self.result.status = ExecutionStatus.ERROR
         else:

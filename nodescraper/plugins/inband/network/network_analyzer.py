@@ -23,7 +23,6 @@
 # SOFTWARE.
 #
 ###############################################################################
-import re
 from typing import Optional
 
 from nodescraper.base.regexanalyzer import ErrorRegex, RegexAnalyzer
@@ -65,17 +64,10 @@ class NetworkAnalyzer(RegexAnalyzer[NetworkDataModel, NetworkAnalyzerArgs]):
             args = NetworkAnalyzerArgs()
 
         final_error_regex = self._convert_and_extend_error_regex(args.error_regex, self.ERROR_REGEX)
-        compiled_exclusions = [re.compile(pattern) for pattern in (args.exclusion_regex or [])]
-        skipped_devices: set[str] = set()
 
         regex_error = False
         regex_warning = False
         for interface_name, ethtool_info in data.ethtool_info.items():
-            if compiled_exclusions and any(
-                pattern.search(interface_name) for pattern in compiled_exclusions
-            ):
-                skipped_devices.add(interface_name)
-                continue
             matches_on_interface: list[tuple[str, int, EventPriority]] = []
             for stat_name, stat_value in ethtool_info.statistics.items():
                 for error_regex_obj in final_error_regex:
@@ -116,14 +108,9 @@ class NetworkAnalyzer(RegexAnalyzer[NetworkDataModel, NetworkAnalyzerArgs]):
 
         vendor_error = False
         vendor_warning = False
+        vendor_error_fields: set[str] = set()
+        vendor_warning_fields: set[str] = set()
         for stat in data.rdma_ethtool_statistics:
-            if (
-                stat.netdev
-                and compiled_exclusions
-                and any(pattern.search(stat.netdev) for pattern in compiled_exclusions)
-            ):
-                skipped_devices.add(stat.netdev)
-                continue
             if stat.vendor_statistics is None:
                 continue
 
@@ -138,13 +125,22 @@ class NetworkAnalyzer(RegexAnalyzer[NetworkDataModel, NetworkAnalyzerArgs]):
                     priority = EventPriority.WARNING if is_warning_tier else EventPriority.ERROR
                     if is_warning_tier:
                         vendor_warning = True
+                        vendor_warning_fields.add(field_name)
                     else:
                         vendor_error = True
+                        vendor_error_fields.add(field_name)
+                    # Use a single grouped description per severity so the run summary
+                    # collapses every occurrence into one "Ethtool warning detected" /
+                    # "Ethtool error detected" entry instead of one line per field. The
+                    # specific field is still preserved in the event data below and in
+                    # the consolidated console line emitted after the loop.
                     desc = (
-                        f"Ethtool warning detected: {field_name}"
-                        if is_warning_tier
-                        else f"Ethtool error detected: {field_name}"
+                        "Ethtool warning detected" if is_warning_tier else "Ethtool error detected"
                     )
+                    # Per-field events are still recorded for the run summary and event
+                    # log, but console logging is suppressed here to avoid repeating the
+                    # same message once per device. A single consolidated line is emitted
+                    # after the loop instead.
                     self._log_event(
                         category=EventCategory.NETWORK,
                         description=desc,
@@ -155,8 +151,15 @@ class NetworkAnalyzer(RegexAnalyzer[NetworkDataModel, NetworkAnalyzerArgs]):
                             "error_count": error_value,
                         },
                         priority=priority,
-                        console_log=True,
+                        console_log=False,
                     )
+
+        if vendor_error:
+            self.logger.error("Ethtool error detected: %s", ", ".join(sorted(vendor_error_fields)))
+        if vendor_warning:
+            self.logger.warning(
+                "Ethtool warning detected: %s", ", ".join(sorted(vendor_warning_fields))
+            )
 
         if regex_error or vendor_error:
             self.result.message = "Network errors detected in statistics"
@@ -167,8 +170,5 @@ class NetworkAnalyzer(RegexAnalyzer[NetworkDataModel, NetworkAnalyzerArgs]):
         else:
             self.result.message = "No network errors detected in statistics"
             self.result.status = ExecutionStatus.OK
-
-        if skipped_devices:
-            self.result.message += f" ({len(skipped_devices)} skipped)"
 
         return self.result

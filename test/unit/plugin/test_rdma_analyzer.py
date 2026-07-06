@@ -104,7 +104,7 @@ def test_single_error_detected(rdma_analyzer, example_stat_dicts):
     assert result.status == ExecutionStatus.ERROR
     assert "RDMA errors detected in statistics" in result.message
     assert len(result.events) == 1
-    assert "req_rx_pkt_seq_err=5" in result.events[0].description
+    assert result.events[0].description == "RDMA error detected"
     assert result.events[0].priority == EventPriority.ERROR
     assert result.events[0].data["errors"]["req_rx_pkt_seq_err"] == 5
     assert result.events[0].data["interface"] == "ionic_0"
@@ -336,7 +336,7 @@ def test_netdev_used_in_event(rdma_analyzer):
     assert result.status == ExecutionStatus.ERROR
     assert len(result.events) == 1
     assert result.events[0].data["netdev"] == "benic8p1"
-    assert "benic8p1" in result.events[0].description
+    assert result.events[0].description == "RDMA error detected"
 
 
 def test_exclusion_regex_skips_interface(rdma_analyzer):

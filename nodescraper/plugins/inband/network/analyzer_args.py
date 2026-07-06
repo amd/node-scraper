@@ -38,7 +38,3 @@ class NetworkAnalyzerArgs(AnalyzerArgs):
         default=None,
         description="Custom error regex patterns; each item can be ErrorRegex or dict with category/pattern.",
     )
-    exclusion_regex: Optional[list[str]] = Field(
-        default=None,
-        description="Regex patterns matched (search) against netdev/interface names; any match is skipped (not analyzed).",
-    )
