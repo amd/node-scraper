@@ -49,6 +49,8 @@ PACKAGE_PLUGINS_ROOT = "nodescraper.plugins"
 # ``nodescraper.plugins`` itself does not match every module starting with that string.
 PLUGIN_MODULE_PREFIX = f"{PACKAGE_PLUGINS_ROOT}."
 DEFAULT_PACKAGES = (PACKAGE_PLUGINS_ROOT,)
+# OOB plugin stubs with no concrete COLLECTOR/ANALYZER; document subclasses only.
+PLUGIN_DOC_IGNORE_CLASSES = frozenset({"ServiceabilityPluginBase"})
 
 
 def get_attr(obj: Any, name: str, default: Any = None) -> Any:
@@ -229,6 +231,8 @@ def plugins_for_package_prefix(base_classes: Iterable[type], package_prefix: str
         if not mod.startswith(package_prefix):
             continue
         if not is_concrete_plugin_class(cls):
+            continue
+        if cls.__name__ in PLUGIN_DOC_IGNORE_CLASSES:
             continue
         found.append(cls)
     return found
