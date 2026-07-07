@@ -1043,6 +1043,26 @@ def test_mce_threshold_raises_error_for_gpu(system_info):
     assert res.status == ExecutionStatus.ERROR
 
 
+def test_mce_threshold_raises_error_for_cpu_colon_status(system_info):
+    dmesg_content = (
+        "kern  :err   : 2038-01-19T00:00:00,000000+00:00 "
+        "[Hardware Error]: CPU:72 (00:00:0) MC60_STATUS[-|CE|Misc]: 0xabc\n"
+    )
+
+    analyzer = DmesgAnalyzer(system_info=system_info)
+    res = analyzer.analyze_data(
+        DmesgData(dmesg_content=dmesg_content),
+        args=DmesgAnalyzerArgs(check_unknown_dmesg_errors=False, mce_threshold=1),
+    )
+
+    threshold_events = [e for e in res.events if e.data.get("mce_threshold") == 1]
+    assert len(threshold_events) == 1
+    assert threshold_events[0].priority == EventPriority.ERROR
+    assert threshold_events[0].data["part"] == "CPU72"
+    assert threshold_events[0].data["correctable_mce_count"] == 1
+    assert res.status == ExecutionStatus.ERROR
+
+
 def test_mce_threshold_not_triggered_below_limit(system_info):
     dmesg_content = (
         "kern  :warn  : 2024-06-11T14:30:00,123456+00:00 "
@@ -1073,3 +1093,120 @@ def test_mce_threshold_disabled_when_none(system_info):
     )
 
     assert not any("mce_threshold" in e.data for e in res.events)
+
+
+def test_ignore_match_rules_skips_matching_lines(system_info):
+    dmesg_content = (
+        "kern  :err   : 2038-01-19T00:00:00,000000+00:00 dummy plugin error on node alpha\n"
+        "kern  :err   : 2038-01-19T00:00:01,000000+00:00 dummy plugin error on node alpha\n"
+        "kern  :err   : 2038-01-19T00:00:02,000000+00:00 dummy plugin error on node beta\n"
+    )
+    custom_regex = [
+        {
+            "regex": r"dummy plugin error on node \w+",
+            "message": "Dummy Plugin Error",
+            "event_category": "SW_DRIVER",
+        }
+    ]
+
+    analyzer = DmesgAnalyzer(system_info=system_info)
+    res = analyzer.analyze_data(
+        DmesgData(dmesg_content=dmesg_content),
+        args=DmesgAnalyzerArgs(
+            check_unknown_dmesg_errors=False,
+            error_regex=custom_regex,
+            ignore_match_rules=[{"line_regex": r"node alpha"}],
+        ),
+    )
+
+    dummy_events = [event for event in res.events if event.description == "Dummy Plugin Error"]
+    assert len(dummy_events) == 1
+    assert "node beta" in str(dummy_events[0].data["match_content"])
+
+
+def test_ignore_match_rules_mce_banks_and_threshold(system_info):
+    dmesg_content = (
+        "kern  :err   : 2038-01-19T00:00:00,000000+00:00 "
+        "[Hardware Error]: Machine Check: CPU0 MC1_STATUS[0xcafe|CE|Misc]: 0x0\n"
+        "kern  :err   : 2038-01-19T00:00:01,000000+00:00 "
+        "[Hardware Error]: Machine Check: CPU0 MC2_STATUS[0xfeed|CE|Misc]: 0x0\n"
+        "kern  :err   : 2038-01-19T00:00:02,000000+00:00 "
+        "[Hardware Error]: Machine Check: CPU0 MC5_STATUS[0xbeef|CE|Misc]: 0x0\n"
+    )
+
+    analyzer = DmesgAnalyzer(system_info=system_info)
+    res = analyzer.analyze_data(
+        DmesgData(dmesg_content=dmesg_content),
+        args=DmesgAnalyzerArgs(
+            check_unknown_dmesg_errors=False,
+            mce_threshold=1,
+            ignore_match_rules=[{"mce_banks": [1, 2]}],
+        ),
+    )
+
+    mce_events = [event for event in res.events if event.description == "MCE Corrected Error"]
+    assert len(mce_events) == 1
+    assert "MC5_STATUS" in str(mce_events[0].data["match_content"])
+
+    threshold_events = [event for event in res.events if "mce_threshold" in event.data]
+    assert len(threshold_events) == 1
+    assert threshold_events[0].data["correctable_mce_count"] == 1
+
+
+def test_ignore_match_rules_mce_bank_range(system_info):
+    dmesg_content = (
+        "kern  :err   : 2038-01-19T00:00:00,000000+00:00 "
+        "[Hardware Error]: Machine Check: CPU0 MC6_STATUS[0x1|CE|Misc]: 0x0\n"
+        "kern  :err   : 2038-01-19T00:00:01,000000+00:00 "
+        "[Hardware Error]: Machine Check: CPU0 MC7_STATUS[0x2|CE|Misc]: 0x0\n"
+        "kern  :err   : 2038-01-19T00:00:02,000000+00:00 "
+        "[Hardware Error]: Machine Check: CPU0 MC9_STATUS[0x3|CE|Misc]: 0x0\n"
+    )
+
+    analyzer = DmesgAnalyzer(system_info=system_info)
+    res = analyzer.analyze_data(
+        DmesgData(dmesg_content=dmesg_content),
+        args=DmesgAnalyzerArgs(
+            check_unknown_dmesg_errors=False,
+            ignore_match_rules=[{"mce_banks": ["6-7"]}],
+        ),
+    )
+
+    mce_events = [event for event in res.events if event.description == "MCE Corrected Error"]
+    assert len(mce_events) == 1
+    assert "MC9_STATUS" in str(mce_events[0].data["match_content"])
+
+
+def test_ignore_match_rules_scoped_by_message(system_info):
+    dmesg_content = (
+        "kern  :err   : 2038-01-19T00:00:00,000000+00:00 dummy error alpha\n"
+        "kern  :err   : 2038-01-19T00:00:01,000000+00:00 dummy error beta\n"
+    )
+    custom_regex = [
+        {
+            "regex": r"dummy error alpha",
+            "message": "Dummy Error Alpha",
+            "event_category": "SW_DRIVER",
+        },
+        {
+            "regex": r"dummy error beta",
+            "message": "Dummy Error Beta",
+            "event_category": "SW_DRIVER",
+        },
+    ]
+
+    analyzer = DmesgAnalyzer(system_info=system_info)
+    res = analyzer.analyze_data(
+        DmesgData(dmesg_content=dmesg_content),
+        args=DmesgAnalyzerArgs(
+            check_unknown_dmesg_errors=False,
+            error_regex=custom_regex,
+            ignore_match_rules=[
+                {"message": "Dummy Error Alpha", "line_regex": r"dummy error alpha"},
+            ],
+        ),
+    )
+
+    by_desc = {event.description: event for event in res.events}
+    assert "Dummy Error Alpha" not in by_desc
+    assert "Dummy Error Beta" in by_desc

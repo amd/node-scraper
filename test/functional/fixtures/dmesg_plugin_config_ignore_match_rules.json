@@ -1,0 +1,33 @@
+{
+  "global_args": {},
+  "plugins": {
+    "DmesgPlugin": {
+      "analysis_args": {
+        "check_unknown_dmesg_errors": false,
+        "mce_threshold": 1,
+        "ignore_match_rules": [
+          {
+            "mce_banks": [1, 2]
+          },
+          {
+            "mce_banks": ["6-7"]
+          },
+          {
+            "line_regex": "CUSTOM_TEST_HARNESS_FAULT: probe alpha"
+          }
+        ],
+        "error_regex": [
+          {
+            "regex": "CUSTOM_TEST_HARNESS_FAULT: .*",
+            "message": "Custom Test Harness Fault",
+            "event_category": "SW_DRIVER",
+            "event_priority": 3
+          }
+        ]
+      }
+    }
+  },
+  "result_collators": {},
+  "name": "DmesgPlugin ignore match rules",
+  "desc": "Functional test config: ignore MCA banks 1-2 and 6-7 range, alpha harness fault; custom harness regex"
+}
