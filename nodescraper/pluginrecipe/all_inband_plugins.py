@@ -7,7 +7,7 @@
 ###############################################################################
 from __future__ import annotations
 
-from .discovery import PluginDiscovery
+from .band_plugin_names import registered_plugin_names_for_band
 from .pluginrecipe import PluginRecipe
 
 
@@ -21,4 +21,4 @@ class AllInbandPlugins(PluginRecipe):
         Returns:
             tuple[str, ...]: Sorted names of in-band plugins in the plugin registry.
         """
-        return PluginDiscovery().registered_inband_plugin_names()
+        return registered_plugin_names_for_band(0)
