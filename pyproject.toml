@@ -72,6 +72,8 @@ node-scraper = "nodescraper.cli:cli_entry"
 [project.entry-points."nodescraper.plugin_configs"]
 NodeStatus = "nodescraper.pluginrecipe.node_status:NodeStatus"
 AllPlugins = "nodescraper.pluginrecipe.all_plugins:AllPlugins"
+AllInbandPlugins = "nodescraper.pluginrecipe.all_inband_plugins:AllInbandPlugins"
+AllOutofbandPlugins = "nodescraper.pluginrecipe.all_outofband_plugins:AllOutofbandPlugins"
 
 [tool.black]
 line-length = 100
