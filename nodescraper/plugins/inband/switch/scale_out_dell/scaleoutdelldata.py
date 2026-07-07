@@ -44,9 +44,9 @@ class DellArpEntry(BaseModel):
     type: Optional[str] = None
     action: Optional[str] = None
 
-    error_fields: ClassVar[dict[str, str]] = {
-        "address": "NOT_NULL",
-        "hardware_address": "NOT_NULL",
+    error_fields: ClassVar[dict[str, List[str]]] = {
+        "address": ["NOT_NULL"],
+        "hardware_address": ["NOT_NULL"],
     }
 
 
@@ -62,8 +62,8 @@ class DellRouteEntry(BaseModel):
     distance_metric: Optional[str] = None
     last_update: Optional[str] = None
 
-    error_fields: ClassVar[dict[str, str]] = {
-        "destination": "NOT_NULL",
+    error_fields: ClassVar[dict[str, List[str]]] = {
+        "destination": ["NOT_NULL"],
     }
 
 
@@ -81,8 +81,8 @@ class DellInterfaceStatus(BaseModel):
     mtu: Optional[int] = None
     alternate_name: Optional[str] = None
 
-    error_fields: ClassVar[dict[str, str]] = {
-        "oper": "up",
+    error_fields: ClassVar[dict[str, List[str]]] = {
+        "oper": ["up"],
     }
 
 
@@ -112,17 +112,17 @@ class DellInterfaceCounters(BaseModel):
     tx_drp: Optional[int] = None
     tx_oversize: Optional[int] = None
 
-    error_fields: ClassVar[dict[str, str]] = {
-        "state": "U",
-        "rx_err": "0",
-        "rx_oversize": "0",
-        "tx_err": "0",
-        "tx_oversize": "0",
+    error_fields: ClassVar[dict[str, List[str]]] = {
+        "state": ["U"],
+        "rx_err": ["0"],
+        "rx_oversize": ["0"],
+        "tx_err": ["0"],
+        "tx_oversize": ["0"],
     }
 
-    warning_fields: ClassVar[dict[str, str]] = {
-        "rx_drp": "0",
-        "tx_drp": "0",
+    warning_fields: ClassVar[dict[str, List[str]]] = {
+        "rx_drp": ["0"],
+        "tx_drp": ["0"],
     }
 
 
@@ -168,14 +168,14 @@ class DellInterfaceDetailCounters(BaseModel):
 
     time_since_counters_last_cleared: Optional[str] = None
 
-    error_fields: ClassVar[dict[str, str]] = {
-        "packets_received_9217_16383_octets": "0",
-        "packets_transmitted_9217_16383_octets": "0",
-        "jabbers_received": "0",
-        "fragments_received": "0",
-        "undersize_received": "0",
-        "overruns_received": "0",
-        "crc_errors_received": "0",
+    error_fields: ClassVar[dict[str, List[str]]] = {
+        "packets_received_9217_16383_octets": ["0"],
+        "packets_transmitted_9217_16383_octets": ["0"],
+        "jabbers_received": ["0"],
+        "fragments_received": ["0"],
+        "undersize_received": ["0"],
+        "overruns_received": ["0"],
+        "crc_errors_received": ["0"],
     }
 
 
@@ -193,9 +193,9 @@ class DellQueueCounter(BaseModel):
     drop_pkts: Optional[int] = None
     drop_bytes: Optional[int] = None
 
-    warning_fields: ClassVar[dict[str, str]] = {
-        "drop_pkts": "0",
-        "drop_bytes": "0",
+    warning_fields: ClassVar[dict[str, List[str]]] = {
+        "drop_pkts": ["0"],
+        "drop_bytes": ["0"],
     }
 
 
@@ -217,15 +217,15 @@ class DellPfcStatistics(BaseModel):
     pfc6: Optional[int] = None
     pfc7: Optional[int] = None
 
-    warning_fields: ClassVar[dict[str, str]] = {
-        "pfc0": "0",
-        "pfc1": "0",
-        "pfc2": "0",
-        "pfc3": "0",
-        "pfc4": "0",
-        "pfc5": "0",
-        "pfc6": "0",
-        "pfc7": "0",
+    warning_fields: ClassVar[dict[str, List[str]]] = {
+        "pfc0": ["0"],
+        "pfc1": ["0"],
+        "pfc2": ["0"],
+        "pfc3": ["0"],
+        "pfc4": ["0"],
+        "pfc5": ["0"],
+        "pfc6": ["0"],
+        "pfc7": ["0"],
     }
 
 
@@ -247,17 +247,17 @@ class DellPfcWatchdogQueueStats(BaseModel):
     rx_last_ok: Optional[int] = None
     rx_last_drop: Optional[int] = None
 
-    warning_fields: ClassVar[dict[str, str]] = {
-        "storms_detected": "0",
-        "storms_restored": "0",
-        "transmitted_ok": "0",
-        "transmitted_drop": "0",
-        "received_ok": "0",
-        "received_drop": "0",
-        "tx_last_ok": "0",
-        "tx_last_drop": "0",
-        "rx_last_ok": "0",
-        "rx_last_drop": "0",
+    warning_fields: ClassVar[dict[str, List[str]]] = {
+        "storms_detected": ["0"],
+        "storms_restored": ["0"],
+        "transmitted_ok": ["0"],
+        "transmitted_drop": ["0"],
+        "received_ok": ["0"],
+        "received_drop": ["0"],
+        "tx_last_ok": ["0"],
+        "tx_last_drop": ["0"],
+        "rx_last_ok": ["0"],
+        "rx_last_drop": ["0"],
     }
 
 
