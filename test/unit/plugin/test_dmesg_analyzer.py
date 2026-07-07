@@ -1043,6 +1043,26 @@ def test_mce_threshold_raises_error_for_gpu(system_info):
     assert res.status == ExecutionStatus.ERROR
 
 
+def test_mce_threshold_raises_error_for_cpu_colon_status(system_info):
+    dmesg_content = (
+        "kern  :err   : 2038-01-19T00:00:00,000000+00:00 "
+        "[Hardware Error]: CPU:72 (00:00:0) MC60_STATUS[-|CE|Misc]: 0xabc\n"
+    )
+
+    analyzer = DmesgAnalyzer(system_info=system_info)
+    res = analyzer.analyze_data(
+        DmesgData(dmesg_content=dmesg_content),
+        args=DmesgAnalyzerArgs(check_unknown_dmesg_errors=False, mce_threshold=1),
+    )
+
+    threshold_events = [e for e in res.events if e.data.get("mce_threshold") == 1]
+    assert len(threshold_events) == 1
+    assert threshold_events[0].priority == EventPriority.ERROR
+    assert threshold_events[0].data["part"] == "CPU72"
+    assert threshold_events[0].data["correctable_mce_count"] == 1
+    assert res.status == ExecutionStatus.ERROR
+
+
 def test_mce_threshold_not_triggered_below_limit(system_info):
     dmesg_content = (
         "kern  :warn  : 2024-06-11T14:30:00,123456+00:00 "
