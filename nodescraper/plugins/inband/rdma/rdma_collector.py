@@ -34,7 +34,6 @@ from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSF
 from nodescraper.models import TaskResult
 from nodescraper.utils import get_exception_traceback
 
-from .collector_args import RdmaCollectorArgs
 from .rdmadata import (
     VENDOR_PREFIX_MAP,
     RdmaDataModel,
@@ -46,7 +45,7 @@ from .rdmadata import (
 )
 
 
-class RdmaCollector(InBandDataCollector[RdmaDataModel, RdmaCollectorArgs]):
+class RdmaCollector(InBandDataCollector[RdmaDataModel, None]):
     """Collect RDMA status and statistics via rdma link and rdma statistic commands."""
 
     DATA_MODEL = RdmaDataModel
@@ -292,9 +291,7 @@ class RdmaCollector(InBandDataCollector[RdmaDataModel, RdmaCollectorArgs]):
             )
         return None
 
-    def collect_data(
-        self, args: Optional[RdmaCollectorArgs] = None
-    ) -> tuple[TaskResult, Optional[RdmaDataModel]]:
+    def collect_data(self, args=None) -> tuple[TaskResult, Optional[RdmaDataModel]]:
         """Collect RDMA statistics, link data, and device/link text output.
 
         Returns:

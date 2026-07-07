@@ -26,17 +26,15 @@
 from nodescraper.base import InBandDataPlugin
 
 from .analyzer_args import RdmaAnalyzerArgs
-from .collector_args import RdmaCollectorArgs
 from .rdma_analyzer import RdmaAnalyzer
 from .rdma_collector import RdmaCollector
 from .rdmadata import RdmaDataModel
 
 
-class RdmaPlugin(InBandDataPlugin[RdmaDataModel, RdmaCollectorArgs, RdmaAnalyzerArgs]):
+class RdmaPlugin(InBandDataPlugin[RdmaDataModel, None, RdmaAnalyzerArgs]):
     """Plugin for collection and analysis of RDMA statistics and link data."""
 
     DATA_MODEL = RdmaDataModel
     COLLECTOR = RdmaCollector
-    COLLECTOR_ARGS = RdmaCollectorArgs
     ANALYZER = RdmaAnalyzer
     ANALYZER_ARGS = RdmaAnalyzerArgs
