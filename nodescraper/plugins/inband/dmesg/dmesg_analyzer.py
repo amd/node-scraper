@@ -35,7 +35,12 @@ from nodescraper.models import Event, TaskResult
 
 from .analyzer_args import DmesgAnalyzerArgs
 from .dmesgdata import DmesgData
-from .mce_utils import parse_correctable_mce_counts, parse_uncorrectable_mce_counts
+from .mce_utils import (
+    hardware_error_block_line_indices,
+    ignored_mce_block_line_indices,
+    parse_correctable_mce_counts,
+    parse_uncorrectable_mce_counts,
+)
 
 
 class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
@@ -714,6 +719,8 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
             dmesg_content = data.dmesg_content
 
         ignore_match_rules, ignore_mce_banks = parse_ignore_match_rules(args.ignore_match_rules)
+        ignored_mce_block_lines = ignored_mce_block_line_indices(dmesg_content, ignore_mce_banks)
+        hardware_error_block_lines = hardware_error_block_line_indices(dmesg_content)
 
         known_err_events = self.check_all_regexes(
             content=dmesg_content,
@@ -722,6 +729,7 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
             num_timestamps=args.num_timestamps,
             interval_to_collapse_event=args.interval_to_collapse_event,
             ignore_match_rules=ignore_match_rules,
+            skip_line_indices=ignored_mce_block_lines,
         )
         if args.exclude_category:
             known_err_events = [
@@ -752,6 +760,7 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
                 num_timestamps=args.num_timestamps,
                 interval_to_collapse_event=args.interval_to_collapse_event,
                 ignore_match_rules=ignore_match_rules,
+                skip_line_indices=hardware_error_block_lines,
             )
 
             for err_event in err_events:

@@ -76,6 +76,8 @@ class DmesgAnalyzerArgs(TimeRangeAnalysisArgs):
             "Rules that skip regex matches during analysis. Each rule may use line_regex, "
             "match_regex, message, and/or mce_banks. Within a rule all specified fields must "
             "match; any matching rule suppresses the hit. mce_banks accepts bank ids and "
-            'inclusive ranges such as "60-63".'
+            'inclusive ranges such as "60-63". When a rule matches an MCA bank, only '
+            "[Hardware Error]: lines in that incident block are suppressed; interleaved "
+            "non-MCE dmesg lines in the same block are not."
         ),
     )
