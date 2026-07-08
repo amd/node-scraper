@@ -125,13 +125,43 @@ def _mce_detail_line_indices_in_range(lines: Sequence[str], start: int, end: int
     return {index for index in range(start, end) if _is_mce_detail_line(lines[index])}
 
 
+def _next_non_blank_line_index(lines: Sequence[str], index: int) -> Optional[int]:
+    """Return the next non-blank line index after index, or None when none remain."""
+    for candidate in range(index + 1, len(lines)):
+        if lines[candidate].strip():
+            return candidate
+    return None
+
+
+def _is_mce_status_only_starter(line: str) -> bool:
+    """Return True when line opens a block via MCn_STATUS without a primary header."""
+    return not _is_mce_primary_starter(line) and _MCE_STATUS_START_RE.search(line) is not None
+
+
+def _has_mce_detail_line_ahead(lines: Sequence[str], start_index: int) -> bool:
+    """Return True when another [Hardware Error]: line appears before the next incident."""
+    for idx in range(start_index + 1, len(lines)):
+        line = lines[idx]
+        if not line.strip():
+            continue
+        if _is_mce_primary_starter(line):
+            return False
+        if _is_mce_status_only_starter(line):
+            return False
+        if _is_mce_detail_line(line):
+            return True
+    return False
+
+
 def iter_hardware_error_block_ranges(lines: Sequence[str]) -> list[tuple[int, int]]:
     """Return (start, end) line index ranges for MCE incident blocks.
 
     A block begins at a primary MCE header (Corrected/Uncorrected/Machine check logged)
     or at the first MCn_STATUS line when not already inside a block. The block then
-    includes subsequent lines until the next primary header or EOF. Blank lines, warn/err
-    noise, and other non-MCE dmesg lines between detail entries belong to the same block.
+    includes subsequent lines until the next primary header, a blank line before a bare
+    MCn_STATUS starter, trailing non-MCE lines with no further [Hardware Error]: detail,
+    or EOF. Blank lines, warn/err noise, and other non-MCE dmesg lines between detail
+    entries belong to the same block.
     """
     blocks: list[tuple[int, int]] = []
     index = 0
@@ -143,7 +173,15 @@ def iter_hardware_error_block_ranges(lines: Sequence[str]) -> list[tuple[int, in
         start = index
         index += 1
         while index < total:
-            if _is_mce_block_starter(lines[index], in_block=True):
+            if not lines[index].strip():
+                next_line = _next_non_blank_line_index(lines, index)
+                if next_line is not None and _is_mce_status_only_starter(lines[next_line]):
+                    break
+            elif _is_mce_block_starter(lines[index], in_block=True):
+                break
+            elif not _is_mce_detail_line(lines[index]) and not _has_mce_detail_line_ahead(
+                lines, index
+            ):
                 break
             index += 1
         blocks.append((start, index))
@@ -156,6 +194,15 @@ def hardware_error_block_line_indices(content: str) -> frozenset[int]:
     suppressed: set[int] = set()
     for start, end in iter_hardware_error_block_ranges(lines):
         suppressed.update(_mce_detail_line_indices_in_range(lines, start, end))
+    return frozenset(suppressed)
+
+
+def mce_block_all_line_indices(content: str) -> frozenset[int]:
+    """Return every line index that belongs to an MCE incident block."""
+    lines = content.splitlines()
+    suppressed: set[int] = set()
+    for start, end in iter_hardware_error_block_ranges(lines):
+        suppressed.update(range(start, end))
     return frozenset(suppressed)
 
 

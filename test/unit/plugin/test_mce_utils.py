@@ -182,10 +182,10 @@ def test_mce_block_includes_blank_line_and_warn_interleave():
     )
     lines = content.splitlines()
 
-    assert iter_hardware_error_block_ranges(lines) == [(0, 1), (1, 9), (9, 10), (10, 13)]
+    assert iter_hardware_error_block_ranges(lines) == [(0, 1), (1, 8), (8, 9), (9, 12)]
     assert hardware_error_block_line_indices(content) == frozenset({0, 1, 2, 4, 5, 7, 8, 9, 10, 11})
     assert ignored_mce_block_line_indices(content, frozenset({60})) == frozenset(
-        {1, 2, 4, 5, 7, 10, 11}
+        {1, 2, 4, 5, 7, 9, 10, 11}
     )
     assert 3 not in ignored_mce_block_line_indices(content, frozenset({60}))
     assert 6 not in ignored_mce_block_line_indices(content, frozenset({60}))
