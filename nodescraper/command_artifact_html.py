@@ -121,6 +121,17 @@ _HTML_HEAD = """<!DOCTYPE html>
   }
   pre.stderr { color: var(--fail-fg); }
   .no-results { color: var(--muted); padding: 24px; text-align: center; display: none; }
+  .copy-btn {
+    flex: 0 0 auto;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: var(--bg); color: var(--muted);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 5px 7px; cursor: pointer; line-height: 0;
+    transition: color .15s ease, border-color .15s ease, background .15s ease;
+  }
+  .copy-btn:hover { background: var(--panel-hover); border-color: var(--accent); color: var(--text); }
+  .copy-btn.copied { color: var(--ok-fg); border-color: var(--ok-fg); }
+  .copy-btn svg { display: block; }
 </style>
 </head>
 <body>
@@ -143,6 +154,9 @@ _CARD_TEMPLATE = """    <details class="cmd">
         <span class="chevron">&#9656;</span>
         <code class="title">{command}</code>
         <span class="badge {badge_cls}">exit {exit_code}</span>
+        <button class="copy-btn" type="button" title="Copy output" aria-label="Copy output">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+        </button>
       </summary>
       <div class="body">
         {stdout_block}
@@ -175,6 +189,51 @@ _HTML_TAIL = """
   });
   document.getElementById('collapseAll').addEventListener('click', () => {
     items.forEach(d => d.open = false);
+  });
+
+  const copyButtons = Array.from(document.querySelectorAll('.copy-btn'));
+  const COPY_SVG = copyButtons.length ? copyButtons[0].innerHTML : '';
+  const CHECK_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+
+  function showCopied(btn) {
+    btn.classList.add('copied');
+    btn.innerHTML = CHECK_SVG;
+    if (btn._resetTimer) clearTimeout(btn._resetTimer);
+    btn._resetTimer = setTimeout(() => {
+      btn.classList.remove('copied');
+      btn.innerHTML = COPY_SVG;
+    }, 1200);
+  }
+
+  function fallbackCopy(text, btn) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.top = '-1000px';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    try { document.execCommand('copy'); showCopied(btn); } catch (e) {}
+    document.body.removeChild(ta);
+  }
+
+  copyButtons.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const card = btn.closest('details.cmd');
+      const parts = [];
+      card.querySelectorAll('pre').forEach(pre => {
+        if (!pre.classList.contains('empty')) parts.push(pre.textContent);
+      });
+      const text = parts.join('\\n');
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => showCopied(btn)).catch(() => fallbackCopy(text, btn));
+      } else {
+        fallbackCopy(text, btn);
+      }
+    });
   });
 </script>
 </body>

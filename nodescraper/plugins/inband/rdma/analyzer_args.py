@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# Copyright (c) 2025 Advanced Micro Devices, Inc.
+# Copyright (c) 2026 Advanced Micro Devices, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,24 +23,17 @@
 # SOFTWARE.
 #
 ###############################################################################
-
-from typing import Literal, Optional
+from typing import Optional
 
 from pydantic import Field
 
-from nodescraper.models import CollectorArgs
+from nodescraper.models import AnalyzerArgs
 
 
-class NetworkCollectorArgs(CollectorArgs):
-    url: Optional[str] = Field(
-        default=None,
-        description="Optional URL to probe for network connectivity (used with netprobe).",
-    )
-    netprobe: Optional[Literal["ping", "wget", "curl"]] = Field(
-        default=None,
-        description="Tool to use for network connectivity probe: ping, wget, or curl.",
-    )
+class RdmaAnalyzerArgs(AnalyzerArgs):
+    """Arguments for the RDMA analyzer."""
+
     exclusion_regex: Optional[list[str]] = Field(
         default=None,
-        description="Regex patterns matched (search) against netdev/interface names; any match is skipped (ethtool not run against it).",
+        description="Regex patterns matched against an interface netdev; matching interfaces are skipped.",
     )

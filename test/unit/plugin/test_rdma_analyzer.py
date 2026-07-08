@@ -30,6 +30,7 @@ from typing import Optional
 import pytest
 
 from nodescraper.enums import EventPriority, ExecutionStatus
+from nodescraper.plugins.inband.rdma.analyzer_args import RdmaAnalyzerArgs
 from nodescraper.plugins.inband.rdma.rdma_analyzer import RdmaAnalyzer
 from nodescraper.plugins.inband.rdma.rdmadata import (
     VENDOR_PREFIX_MAP,
@@ -103,9 +104,9 @@ def test_single_error_detected(rdma_analyzer, example_stat_dicts):
     assert result.status == ExecutionStatus.ERROR
     assert "RDMA errors detected in statistics" in result.message
     assert len(result.events) == 1
-    assert result.events[0].description == "RDMA error detected: req_rx_pkt_seq_err"
+    assert result.events[0].description == "RDMA error detected"
     assert result.events[0].priority == EventPriority.ERROR
-    assert result.events[0].data["error_count"] == 5
+    assert result.events[0].data["errors"]["req_rx_pkt_seq_err"] == 5
     assert result.events[0].data["interface"] == "ionic_0"
 
 
@@ -118,9 +119,17 @@ def test_multiple_errors_detected(rdma_analyzer, example_stat_dicts):
     result = rdma_analyzer.analyze_data(model)
     assert result.status == ExecutionStatus.ERROR
     assert "RDMA errors detected in statistics" in result.message
-    assert len(result.events) == 3
+    # Errors on the same interface are aggregated into a single event:
+    # ionic_0 (2 counters) + mlx5_0 (1 counter) -> 2 events
+    assert len(result.events) == 2
     for event in result.events:
         assert event.priority == EventPriority.ERROR
+    events_by_iface = {event.data["interface"]: event for event in result.events}
+    assert events_by_iface["ionic_0"].data["errors"] == {
+        "req_rx_rmt_acc_err": 10,
+        "req_tx_loc_oper_err": 3,
+    }
+    assert events_by_iface["mlx5_0"].data["errors"] == {"packet_seq_err": 7}
 
 
 def test_critical_error_detected(rdma_analyzer):
@@ -138,9 +147,10 @@ def test_critical_error_detected(rdma_analyzer):
     result = rdma_analyzer.analyze_data(model)
     assert result.status == ExecutionStatus.ERROR
     assert "RDMA errors detected in statistics" in result.message
-    assert len(result.events) == 2
-    critical_events = [e for e in result.events if e.priority == EventPriority.CRITICAL]
-    assert len(critical_events) == 2
+    # One event per interface; escalated to CRITICAL because critical counters are set.
+    assert len(result.events) == 1
+    assert result.events[0].priority == EventPriority.CRITICAL
+    assert result.events[0].data["errors"] == {"unrecoverable_err": 1, "res_tx_pci_err": 2}
 
 
 def test_empty_statistics(rdma_analyzer):
@@ -184,7 +194,7 @@ def test_all_error_types(rdma_analyzer):
     model = RdmaDataModel(statistic_list=stats)
     result = rdma_analyzer.analyze_data(model)
     assert result.status == ExecutionStatus.ERROR
-    assert len(result.events) == 3
+    assert len(result.events) == 2
     interfaces = {event.data["interface"] for event in result.events}
     assert interfaces == {"ionic_test", "mlx5_test"}
 
@@ -310,3 +320,60 @@ def test_rdma_link_multiple_interfaces(rdma_analyzer, clean_stats):
     result = rdma_analyzer.analyze_data(model)
     assert result.status == ExecutionStatus.OK
     assert len(result.events) == 0
+
+
+def test_netdev_used_in_event(rdma_analyzer):
+    stats = [
+        RdmaStatistics(
+            ifname="ionic_0",
+            netdev="benic8p1",
+            port=1,
+            vendor_statistics=PollaraRdmaStatistics(req_rx_pkt_seq_err=4),
+        )
+    ]
+    model = RdmaDataModel(statistic_list=stats)
+    result = rdma_analyzer.analyze_data(model)
+    assert result.status == ExecutionStatus.ERROR
+    assert len(result.events) == 1
+    assert result.events[0].data["netdev"] == "benic8p1"
+    assert result.events[0].description == "RDMA error detected"
+
+
+def test_exclusion_regex_skips_interface(rdma_analyzer):
+    stats = [
+        RdmaStatistics(
+            ifname="ionic_0",
+            netdev="benic8p1",
+            port=1,
+            vendor_statistics=PollaraRdmaStatistics(req_rx_pkt_seq_err=4),
+        ),
+        RdmaStatistics(
+            ifname="mlx5_0",
+            netdev="benic9p1",
+            port=1,
+            vendor_statistics=Cx7RdmaStatistics(packet_seq_err=2),
+        ),
+    ]
+    model = RdmaDataModel(statistic_list=stats)
+    result = rdma_analyzer.analyze_data(model, RdmaAnalyzerArgs(exclusion_regex=["benic8"]))
+    assert result.status == ExecutionStatus.ERROR
+    # ionic_0 (netdev benic8p1) is excluded; only the mlx5_0 error is reported.
+    assert len(result.events) == 1
+    assert result.events[0].data["interface"] == "mlx5_0"
+    assert "1 skipped" in result.message
+
+
+def test_exclusion_regex_all_skipped(rdma_analyzer):
+    stats = [
+        RdmaStatistics(
+            ifname="ionic_0",
+            netdev="benic8p1",
+            port=1,
+            vendor_statistics=PollaraRdmaStatistics(req_rx_pkt_seq_err=4),
+        )
+    ]
+    model = RdmaDataModel(statistic_list=stats)
+    result = rdma_analyzer.analyze_data(model, RdmaAnalyzerArgs(exclusion_regex=["benic8p1"]))
+    assert result.status == ExecutionStatus.OK
+    assert len(result.events) == 0
+    assert "1 skipped" in result.message

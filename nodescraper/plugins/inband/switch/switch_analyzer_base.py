@@ -100,8 +100,14 @@ def _model_is_analyzed(model_cls: Type[BaseModel]) -> bool:
 
 
 def _values_match(actual: Any, expected: Any) -> bool:
-    """Compare an actual model value to an expected value."""
+    """Compare an actual model value to an expected value.
 
+    When ``expected`` is a list or tuple of candidate values the comparison
+    succeeds if ``actual`` matches any candidate (logical OR).
+    """
+
+    if isinstance(expected, (list, tuple)):
+        return any(_values_match(actual, candidate) for candidate in expected)
     if isinstance(expected, str) and expected == "NOT_NULL":
         if actual is None:
             return False
@@ -109,6 +115,17 @@ def _values_match(actual: Any, expected: Any) -> bool:
     if isinstance(expected, bool) or isinstance(actual, bool):
         return bool(actual) == bool(expected)
     return str(actual) == str(expected)
+
+
+def _expects_not_null(expected: Any) -> bool:
+    """Return True if ``expected`` requires a non-null actual value.
+
+    Supports ``expected`` being a list/tuple of candidate values.
+    """
+
+    if isinstance(expected, (list, tuple)):
+        return any(_expects_not_null(item) for item in expected)
+    return isinstance(expected, str) and expected == "NOT_NULL"
 
 
 class SwitchAnalyzerBase(Generic[TSwitchData]):
@@ -498,7 +515,7 @@ class SwitchAnalyzerBase(Generic[TSwitchData]):
             if not hasattr(model, field_name):
                 continue
             actual = getattr(model, field_name)
-            if actual is None and not (isinstance(expected, str) and expected == "NOT_NULL"):
+            if actual is None and not _expects_not_null(expected):
                 continue
             if _values_match(actual, expected):
                 continue

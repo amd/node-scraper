@@ -30,7 +30,6 @@ from typing import Dict, List, Optional, Tuple
 from pydantic import ValidationError
 
 from nodescraper.base import InBandDataCollector
-from nodescraper.connection.inband import TextFileArtifact
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.models import TaskResult
 from nodescraper.utils import get_exception_traceback
@@ -483,36 +482,34 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
                 stats_dict[key.strip()] = value.strip()
         return stats_dict
 
-    def _collect_ethtool_info(self, interfaces: List[NetworkInterface]) -> Dict[str, EthtoolInfo]:
+    def _collect_ethtool_info(
+        self,
+        interfaces: List[NetworkInterface],
+        exclusions: Optional[List[re.Pattern]] = None,
+    ) -> Tuple[Dict[str, EthtoolInfo], set[str]]:
         """Collect ethtool information for all network interfaces.
 
         Args:
             interfaces: List of NetworkInterface objects to collect ethtool info for
+            exclusions: Compiled regex patterns; interfaces whose name matches any
+                pattern are skipped (ethtool is not run against them).
 
         Returns:
-            Dictionary mapping interface name to EthtoolInfo
+            Tuple of (dictionary mapping interface name to EthtoolInfo, set of
+            interface names skipped due to an exclusion regex)
         """
         ethtool_data = {}
+        skipped: set[str] = set()
 
         for iface in interfaces:
+            if exclusions and any(pattern.search(iface.name) for pattern in exclusions):
+                skipped.add(iface.name)
+                continue
             cmd = self.CMD_ETHTOOL_TEMPLATE.format(interface=iface.name)
             res_ethtool = self._run_sut_cmd(cmd, sudo=True)
 
             if res_ethtool.exit_code == 0:
                 ethtool_info = self._parse_ethtool(iface.name, res_ethtool.stdout)
-                # Collect ethtool -S (statistics) for error/health analysis
-                cmd_s = self.CMD_ETHTOOL_S_TEMPLATE.format(interface=iface.name)
-                res_ethtool_s = self._run_sut_cmd(cmd_s, sudo=True)
-                if res_ethtool_s.exit_code == 0 and res_ethtool_s.stdout:
-                    ethtool_info.statistics = self._parse_ethtool_statistics(
-                        res_ethtool_s.stdout, iface.name
-                    )
-                    self.result.artifacts.append(
-                        TextFileArtifact(
-                            filename=f"{iface.name}.log",
-                            contents=res_ethtool_s.stdout,
-                        )
-                    )
                 ethtool_data[iface.name] = ethtool_info
                 self._log_event(
                     category=EventCategory.NETWORK,
@@ -527,7 +524,7 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
                     priority=EventPriority.WARNING,
                 )
 
-        return ethtool_data
+        return ethtool_data, skipped
 
     def _collect_rdma_link_json(self) -> Optional[list[dict]]:
         """Parse JSON from `rdma link -j`. Returns None on failure, [] when no links."""
@@ -570,7 +567,7 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
         self, netdev: str, ifname: str
     ) -> Optional[EthtoolStatistics]:
         """Run `ethtool -S` for netdev and attach vendor-parsed stats (prefix from RDMA ifname)."""
-        cmd_s = f"ethtool -S {netdev}"
+        cmd_s = self.CMD_ETHTOOL_S_TEMPLATE.format(interface=netdev)
         res = self._run_sut_cmd(cmd_s, sudo=True)
         if res.exit_code != 0:
             self._log_event(
@@ -586,13 +583,6 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
             )
             return None
 
-        if res.stdout:
-            self.result.artifacts.append(
-                TextFileArtifact(
-                    filename=f"rdma-ethtool-{netdev}.log",
-                    contents=res.stdout,
-                )
-            )
         stats_dict = self._parse_ethtool_statistics(res.stdout, netdev)
 
         vendor_stats: Optional[VendorEthtoolStatisticsModel] = None
@@ -634,14 +624,26 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
             vendor_statistics=vendor_stats,
         )
 
-    def _collect_rdma_scoped_ethtool(self) -> tuple[List[str], List[EthtoolStatistics]]:
-        """Collect ethtool -S for netdevs listed on RDMA links (error-scraper EthtoolCollector parity)."""
+    def _collect_rdma_scoped_ethtool(
+        self, exclusions: Optional[List[re.Pattern]] = None
+    ) -> tuple[List[str], List[EthtoolStatistics], set[str]]:
+        """Collect ethtool -S for netdevs listed on RDMA links (error-scraper EthtoolCollector parity).
+
+        Args:
+            exclusions: Compiled regex patterns; netdevs whose name matches any pattern
+                are skipped (ethtool -S is not run against them).
+
+        Returns:
+            Tuple of (netdev list, statistics list, set of netdev names skipped due to
+            an exclusion regex)
+        """
         netdev_list: List[str] = []
         statistics_list: List[EthtoolStatistics] = []
+        skipped: set[str] = set()
 
         link_data = self._collect_rdma_link_json()
         if link_data is None:
-            return netdev_list, statistics_list
+            return netdev_list, statistics_list, skipped
 
         for link in link_data:
             if not isinstance(link, dict):
@@ -657,6 +659,9 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
             ifname = link.get("ifname") or ""
 
             if netdev:
+                if exclusions and any(pattern.search(netdev) for pattern in exclusions):
+                    skipped.add(netdev)
+                    continue
                 netdev_list.append(netdev)
                 stat = self._collect_rdma_scoped_ethtool_statistic(netdev, ifname)
                 if stat is not None:
@@ -672,7 +677,7 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
                 priority=EventPriority.INFO,
             )
 
-        return netdev_list, statistics_list
+        return netdev_list, statistics_list, skipped
 
     def _collect_lldp_info(self) -> None:
         """Collect LLDP information using lldpcli and lldpctl commands."""
@@ -771,10 +776,16 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
         routes = []
         rules = []
         neighbors = []
-        ethtool_data = {}
+        ethtool_data: Dict[str, EthtoolInfo] = {}
         network_accessible: Optional[bool] = None
         rdma_ethtool_netdevs: List[str] = []
         rdma_ethtool_statistics: List[EthtoolStatistics] = []
+        skipped_devices: set[str] = set()
+
+        # Compile device-exclusion regex patterns (netdevs matching any pattern are skipped)
+        compiled_exclusions = [
+            re.compile(pattern) for pattern in ((args.exclusion_regex if args else None) or [])
+        ]
 
         # Check network connectivity if URL is provided
         if args and args.url:
@@ -812,7 +823,10 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
 
         # Collect ethtool information for interfaces
         if interfaces:
-            ethtool_data = self._collect_ethtool_info(interfaces)
+            ethtool_data, ethtool_skipped = self._collect_ethtool_info(
+                interfaces, compiled_exclusions
+            )
+            skipped_devices |= ethtool_skipped
             self._log_event(
                 category=EventCategory.NETWORK,
                 description=f"Collected ethtool info for {len(ethtool_data)} interfaces",
@@ -820,7 +834,12 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
             )
 
         if self.system_info.os_family == OSFamily.LINUX:
-            rdma_ethtool_netdevs, rdma_ethtool_statistics = self._collect_rdma_scoped_ethtool()
+            (
+                rdma_ethtool_netdevs,
+                rdma_ethtool_statistics,
+                rdma_skipped,
+            ) = self._collect_rdma_scoped_ethtool(compiled_exclusions)
+            skipped_devices |= rdma_skipped
 
         # Collect routing table
         res_route = self._run_sut_cmd(self.CMD_ROUTE)
@@ -877,6 +896,8 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
         self._collect_lldp_info()
 
         self.result.message = "Network data collected successfully"
+        if skipped_devices:
+            self.result.message += f" ({len(skipped_devices)} skipped)"
 
         network_data = NetworkDataModel(
             interfaces=interfaces,

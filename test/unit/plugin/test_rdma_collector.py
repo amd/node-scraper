@@ -78,6 +78,8 @@ def test_collect_success(collector, conn_mock, rdma_link_output, rdma_statistic_
     # Full link fixture has 4 ionic links
     assert len(data.link_list) == 4
     assert data.link_list[0].ifname == "ionic_0"
+    # netdev is cross-referenced from link data onto statistics
+    assert data.statistic_list[0].netdev == "benic8p1"
 
 
 def test_collect_both_commands_fail(collector, conn_mock):
