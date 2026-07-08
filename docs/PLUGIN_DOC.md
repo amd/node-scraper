@@ -1313,20 +1313,6 @@ Collect MI3XX BMC Redfish data: event log members (with pagination), firmware in
 
 ServiceabilityDataModel
 
-## Collector Class ServiceabilityCollectorBase
-
-### Description
-
-OOB Redfish collection skeleton; subclasses implement filtering, CPER handling, and JSON parsing.
-
-**Bases**: ['RedfishDataCollector', 'Generic']
-
-**Link to code**: [serviceability_collector.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/serviceability/serviceability_collector.py)
-
-### Provides Data
-
-ServiceabilityDataModel
-
 # Data Models
 
 ## GenericCollectionDataModel Model
