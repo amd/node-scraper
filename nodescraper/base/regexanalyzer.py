@@ -138,6 +138,34 @@ class RegexAnalyzer(DataAnalyzer[TDataModel, TAnalyzeArg]):
             line_end = len(content)
         return content[line_start:line_end]
 
+    def _line_index_at_position(self, content: str, position: int) -> int:
+        if position <= 0:
+            return 0
+        return content.count("\n", 0, position)
+
+    def _match_intersects_skip_lines(
+        self,
+        content: str,
+        match_start: int,
+        match_end: int,
+        skip_line_indices: frozenset[int],
+    ) -> bool:
+        if not skip_line_indices:
+            return False
+        start_line = self._line_index_at_position(content, match_start)
+        end_line = self._line_index_at_position(content, max(match_start, match_end - 1))
+        return any(line_idx in skip_line_indices for line_idx in range(start_line, end_line + 1))
+
+    def _match_on_skipped_line(
+        self,
+        content: str,
+        match_start: int,
+        skip_line_indices: frozenset[int],
+    ) -> bool:
+        if not skip_line_indices:
+            return False
+        return self._line_index_at_position(content, match_start) in skip_line_indices
+
     def _should_ignore_regex_match(
         self,
         content: str,
@@ -245,6 +273,7 @@ class RegexAnalyzer(DataAnalyzer[TDataModel, TAnalyzeArg]):
         num_timestamps: int = 3,
         interval_to_collapse_event: int = 60,
         ignore_match_rules: Optional[Sequence[ParsedIgnoreMatchRule]] = None,
+        skip_line_indices: Optional[frozenset[int]] = None,
     ) -> list[RegexEvent]:
         """Iterate over all ERROR_REGEX and check content for any matches
 
@@ -262,6 +291,7 @@ class RegexAnalyzer(DataAnalyzer[TDataModel, TAnalyzeArg]):
             num_timestamps (int, optional): maximum number of timestamps to keep for each event. Defaults to 3.
             interval_to_collapse_event (int, optional): time interval in seconds to collapse events. Defaults to 60.
             ignore_match_rules (Optional[Sequence[ParsedIgnoreMatchRule]], optional): Parsed skip rules. Defaults to None.
+            skip_line_indices (Optional[frozenset[int]], optional): Line indices to skip entirely. Defaults to None.
 
         Returns:
             list[RegexEvent]: list of regex event objects
@@ -296,10 +326,22 @@ class RegexAnalyzer(DataAnalyzer[TDataModel, TAnalyzeArg]):
             return False
 
         skip_rules = list(ignore_match_rules) if ignore_match_rules else []
+        suppressed_lines = skip_line_indices or frozenset()
 
         for error_regex_obj in error_regex:
-            for match_obj in error_regex_obj.regex.finditer(content):
+            search_from = 0
+            while search_from <= len(content):
+                match_obj = error_regex_obj.regex.search(content, search_from)
+                if match_obj is None:
+                    break
                 raw_match = match_obj.group(0)
+                if self._match_on_skipped_line(
+                    content,
+                    match_obj.start(),
+                    suppressed_lines,
+                ):
+                    search_from = match_obj.start() + 1
+                    continue
                 if self._should_ignore_regex_match(
                     content,
                     match_obj.start(),
@@ -307,6 +349,7 @@ class RegexAnalyzer(DataAnalyzer[TDataModel, TAnalyzeArg]):
                     error_regex_obj.message,
                     skip_rules,
                 ):
+                    search_from = match_obj.start() + 1
                     continue
 
                 # Extract timestamp from the line where match occurs
@@ -359,6 +402,8 @@ class RegexAnalyzer(DataAnalyzer[TDataModel, TAnalyzeArg]):
                         new_event.data["timestamp"] = timestamp
 
                     regex_event_list.append(new_event)
+
+                search_from = match_obj.end()
 
         all_events = list(regex_map.values()) if group else regex_event_list
 

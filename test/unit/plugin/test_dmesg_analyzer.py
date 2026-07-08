@@ -1127,9 +1127,14 @@ def test_ignore_match_rules_skips_matching_lines(system_info):
 def test_ignore_match_rules_mce_banks_and_threshold(system_info):
     dmesg_content = (
         "kern  :err   : 2038-01-19T00:00:00,000000+00:00 "
+        "[Hardware Error]: Corrected error, no action required.\n"
+        "kern  :err   : 2038-01-19T00:00:00,000000+00:00 "
         "[Hardware Error]: Machine Check: CPU0 MC1_STATUS[0xcafe|CE|Misc]: 0x0\n"
         "kern  :err   : 2038-01-19T00:00:01,000000+00:00 "
         "[Hardware Error]: Machine Check: CPU0 MC2_STATUS[0xfeed|CE|Misc]: 0x0\n"
+        "\n"
+        "kern  :err   : 2038-01-19T00:00:02,000000+00:00 "
+        "[Hardware Error]: Corrected error, no action required.\n"
         "kern  :err   : 2038-01-19T00:00:02,000000+00:00 "
         "[Hardware Error]: Machine Check: CPU0 MC5_STATUS[0xbeef|CE|Misc]: 0x0\n"
     )
@@ -1159,6 +1164,8 @@ def test_ignore_match_rules_mce_bank_range(system_info):
         "[Hardware Error]: Machine Check: CPU0 MC6_STATUS[0x1|CE|Misc]: 0x0\n"
         "kern  :err   : 2038-01-19T00:00:01,000000+00:00 "
         "[Hardware Error]: Machine Check: CPU0 MC7_STATUS[0x2|CE|Misc]: 0x0\n"
+        "kern  :err   : 2038-01-19T00:00:02,000000+00:00 "
+        "[Hardware Error]: Corrected error, no action required.\n"
         "kern  :err   : 2038-01-19T00:00:02,000000+00:00 "
         "[Hardware Error]: Machine Check: CPU0 MC9_STATUS[0x3|CE|Misc]: 0x0\n"
     )
@@ -1210,3 +1217,112 @@ def test_ignore_match_rules_scoped_by_message(system_info):
     by_desc = {event.description: event for event in res.events}
     assert "Dummy Error Alpha" not in by_desc
     assert "Dummy Error Beta" in by_desc
+
+
+def test_hardware_error_block_not_reported_as_unknown(system_info):
+    dmesg_content = (
+        "kern  :info  : 2038-01-19T00:00:00,000000+00:00 "
+        "mce: [Hardware Error]: Machine check events logged\n"
+        "kern  :emerg : 2038-01-19T00:00:01,000000+00:00 "
+        "[Hardware Error]: Corrected error, no action required.\n"
+        "kern  :emerg : 2038-01-19T00:00:02,000000+00:00 "
+        "[Hardware Error]: CPU:12 (00:00:0) MC60_STATUS[Over|CE|MiscV|-|-|-|SyndV|UECC|-|-|-]: 0xaaa\n"
+        "kern  :emerg : 2038-01-19T00:00:03,000000+00:00 "
+        "amdgpu 0000:de:ad.0: amdgpu: dummy notice inside block\n"
+        "kern  :emerg : 2038-01-19T00:00:04,000000+00:00 [Hardware Error]: PPIN: 0xbbbbbbbbbbbbbbbb\n"
+        "kern  :emerg : 2038-01-19T00:00:05,000000+00:00 "
+        "[Hardware Error]: IPID: 0x0000000000000001, Syndrome: 0x0000000000000001\n"
+        "kern  :emerg : 2038-01-19T00:00:06,000000+00:00 "
+        "[Hardware Error]: cache level: L3/GEN, mem/io: IO, mem-tx: GEN, part-proc: SRC (no timeout)\n"
+        "kern  :err   : 2038-01-19T00:00:10,000000+00:00 unrelated plugin failure\n"
+    )
+
+    analyzer = DmesgAnalyzer(system_info=system_info)
+    res = analyzer.analyze_data(
+        DmesgData(dmesg_content=dmesg_content),
+        args=DmesgAnalyzerArgs(
+            check_unknown_dmesg_errors=True,
+            ignore_match_rules=[{"mce_banks": ["60-63"]}],
+        ),
+    )
+
+    descriptions = {event.description for event in res.events}
+    assert "MCE Corrected Error" not in descriptions
+    assert "RAS Corrected Error" not in descriptions
+    unknown_events = [event for event in res.events if event.description == "Unknown dmesg error"]
+    assert len(unknown_events) == 1
+    assert unknown_events[0].data["match_content"] == "unrelated plugin failure"
+
+
+def test_hardware_error_block_reports_mce_without_ignore(system_info):
+    dmesg_content = (
+        "kern  :emerg : 2038-01-19T00:00:01,000000+00:00 "
+        "[Hardware Error]: Corrected error, no action required.\n"
+        "kern  :emerg : 2038-01-19T00:00:02,000000+00:00 "
+        "[Hardware Error]: CPU:12 (00:00:0) MC60_STATUS[Over|CE|MiscV|-|-|-|SyndV|UECC|-|-|-]: 0xaaa\n"
+        "kern  :emerg : 2038-01-19T00:00:04,000000+00:00 [Hardware Error]: PPIN: 0xbbbbbbbbbbbbbbbb\n"
+    )
+
+    analyzer = DmesgAnalyzer(system_info=system_info)
+    res = analyzer.analyze_data(
+        DmesgData(dmesg_content=dmesg_content),
+        args=DmesgAnalyzerArgs(check_unknown_dmesg_errors=True),
+    )
+
+    descriptions = {event.description for event in res.events}
+    assert "Unknown dmesg error" not in descriptions
+    assert "MCE Corrected Error" in descriptions or "RAS Corrected Error" in descriptions
+
+
+def test_mce_interleave_pattern_suppresses_block_with_ignored_banks(system_info):
+    """Dummy excerpt modeled on dmesg_mce_interleave.log: warn/blank lines inside MCE blocks."""
+    dmesg_content = (
+        "kern  :info  : 2038-01-19T00:00:00,000000+00:00 "
+        "mce: [Hardware Error]: Machine check events logged\n"
+        "kern  :emerg : 2038-01-19T00:00:01,000000+00:00 "
+        "[Hardware Error]: Corrected error, no action required.\n"
+        "kern  :emerg : 2038-01-19T00:00:02,000000+00:00 "
+        "[Hardware Error]: CPU:12 (00:00:0) MC60_STATUS[Over|CE|MiscV|-|-|-|SyndV|UECC|-|-|-]: 0xaaa\n"
+        "kern  :warn  : 2038-01-19T00:00:03,000000+00:00 "
+        "workqueue: dummy_mce_worker hogged CPU for >10000us 5 times, consider switching to WQ_UNBOUND\n"
+        "kern  :emerg : 2038-01-19T00:00:04,000000+00:00 [Hardware Error]: PPIN: 0xbbbbbbbbbbbbbbbb\n"
+        "kern  :emerg : 2038-01-19T00:00:05,000000+00:00 "
+        "[Hardware Error]: IPID: 0x0000000000000001, Syndrome: 0x0000000000000001\n"
+        "\n"
+        "kern  :emerg : 2038-01-19T00:00:06,000000+00:00 "
+        "[Hardware Error]: cache level: L3/GEN, mem/io: IO, mem-tx: GEN, part-proc: SRC (no timeout)\n"
+        "kern  :info  : 2038-01-19T00:00:07,000000+00:00 "
+        "mce: [Hardware Error]: Machine check events logged\n"
+        "kern  :emerg : 2038-01-19T00:00:08,000000+00:00 "
+        "[Hardware Error]: Corrected error, no action required.\n"
+        "kern  :emerg : 2038-01-19T00:00:09,000000+00:00 "
+        "[Hardware Error]: CPU:24 (00:00:0) MC60_STATUS[Over|CE|MiscV|-|-|-|SyndV|UECC|-|-|-]: 0xbbb\n"
+        "kern  :emerg : 2038-01-19T00:00:10,000000+00:00 [Hardware Error]: PPIN: 0xcccccccccccccccc\n"
+        "kern  :err   : 2038-01-19T00:00:11,000000+00:00 dummy harness fault outside mce blocks\n"
+    )
+
+    analyzer = DmesgAnalyzer(system_info=system_info)
+    res = analyzer.analyze_data(
+        DmesgData(dmesg_content=dmesg_content),
+        args=DmesgAnalyzerArgs(
+            check_unknown_dmesg_errors=True,
+            mce_threshold=1,
+            ignore_match_rules=[{"mce_banks": ["60-63"]}],
+            error_regex=[
+                {
+                    "regex": r"dummy_mce_worker hogged CPU",
+                    "message": "Dummy Workqueue Hog",
+                    "event_category": "SW_DRIVER",
+                }
+            ],
+        ),
+    )
+
+    descriptions = {event.description for event in res.events}
+    assert "MCE Corrected Error" not in descriptions
+    assert "RAS Corrected Error" not in descriptions
+    assert not any("mce_threshold" in event.data for event in res.events)
+    assert "Dummy Workqueue Hog" in descriptions
+    unknown_events = [event for event in res.events if event.description == "Unknown dmesg error"]
+    assert len(unknown_events) == 1
+    assert unknown_events[0].data["match_content"] == "dummy harness fault outside mce blocks"
