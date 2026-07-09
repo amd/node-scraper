@@ -44,6 +44,14 @@ class MI3XXCollector(ServiceabilityCollectorBase[MI3XXCollectorArgs]):
     """Collect MI3XX BMC Redfish data: event log members (with pagination), firmware inventory,
     CPER attachment bytes for qualifying events, and optional assembly/chassis metadata."""
 
+    DOCUMENTATION_COLLECTION_ITEMS: tuple[str, ...] = (
+        "Redfish GET: BMC event log Entries (collection_args.rf_event_log_uri; optional uri alias).",
+        "Paginated Members collection and optional top, reference_time/time_operator filters.",
+        "Redfish GET: CPER AdditionalDataURI binaries for DiagnosticDataType=CPER events (base64 in data model).",
+        "Optional chassis Assembly GETs (rf_assembly_uri_template + rf_chassis_devices).",
+        "Optional firmware bundle inventory GET (rf_firmware_bundle_uri) for component details.",
+    )
+
     def satisfies_reference_time(
         self,
         candidate: str,

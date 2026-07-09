@@ -41,4 +41,6 @@ class StoragePlugin(InBandDataPlugin[StorageDataModel, StorageCollectorArgs, Sto
 
     ANALYZER = StorageAnalyzer
 
+    ANALYZER_ARGS = StorageAnalyzerArgs
+
     COLLECTOR_ARGS = StorageCollectorArgs
