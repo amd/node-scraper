@@ -1326,3 +1326,41 @@ def test_mce_interleave_pattern_suppresses_block_with_ignored_banks(system_info)
     unknown_events = [event for event in res.events if event.description == "Unknown dmesg error"]
     assert len(unknown_events) == 1
     assert unknown_events[0].data["match_content"] == "dummy harness fault outside mce blocks"
+
+
+def test_mce_match_content_is_single_status_line(system_info):
+    """Adjacent incidents: events.json match_content must be one MCn_STATUS row."""
+    dmesg_content = (
+        "kern  :emerg : 2038-01-19T00:00:00,000000+00:00 "
+        "[Hardware Error]: Corrected error, no action required.\n"
+        "kern  :emerg : 2038-01-19T00:00:01,000000+00:00 "
+        "[Hardware Error]: CPU:72 (00:00:0) MC60_STATUS[Over|CE|MiscV|-|-|-|SyndV|UECC|-|-|-]: 0xaaa\n"
+        "kern  :emerg : 2038-01-19T00:00:02,000000+00:00 "
+        "[Hardware Error]: Corrected error, no action required.\n"
+        "kern  :emerg : 2038-01-19T00:00:03,000000+00:00 "
+        "[Hardware Error]: CPU:29 (00:00:0) MC49_STATUS[Over|CE|MiscV|-|-|-|SyndV|UECC|-|-|-]: 0xbbb\n"
+        "kern  :emerg : 2038-01-19T00:00:04,000000+00:00 "
+        "[Hardware Error]: Corrected error, no action required.\n"
+        "kern  :emerg : 2038-01-19T00:00:05,000000+00:00 "
+        "[Hardware Error]: CPU:8 (00:00:0) MC60_STATUS[Over|CE|MiscV|-|-|-|SyndV|UECC|-|-|-]: 0xccc\n"
+    )
+
+    analyzer = DmesgAnalyzer(system_info=system_info)
+    res = analyzer.analyze_data(
+        DmesgData(dmesg_content=dmesg_content),
+        args=DmesgAnalyzerArgs(
+            check_unknown_dmesg_errors=False,
+            mce_threshold=1,
+            ignore_match_rules=[{"mce_banks": ["60-63"]}],
+        ),
+    )
+
+    mce_events = [event for event in res.events if event.description == "MCE Corrected Error"]
+    assert len(mce_events) == 1
+    match_content = str(mce_events[0].data["match_content"])
+    assert match_content.startswith("[Hardware Error]:")
+    assert "MC49_STATUS" in match_content
+    assert "MC60_STATUS" not in match_content
+    assert "CPU:29" in match_content
+    assert "CPU:8" not in match_content
+    assert "\n" not in match_content

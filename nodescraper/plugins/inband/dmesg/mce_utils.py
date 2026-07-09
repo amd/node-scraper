@@ -24,7 +24,7 @@
 #
 ###############################################################################
 import re
-from typing import FrozenSet, Optional, Sequence
+from typing import FrozenSet, Optional, Sequence, Union
 
 from nodescraper.base.match_ignore import extract_mce_banks_from_text
 
@@ -67,6 +67,45 @@ _MCE_UC_STATUS_RE = re.compile(
     r"\[Hardware Error\]:.*?(?P<cpu>CPU:?\d+).*?MC\d+_STATUS\[[^\]]*\|UC\|[^\]]*\]",
     re.IGNORECASE,
 )
+
+_MCE_CE_STATUS_LINE_RE = re.compile(
+    r"\[Hardware Error\]:[^\n]*MC\d+_STATUS\[[^\]]*\|CE\|[^\]]*\][^\n]*",
+    re.IGNORECASE,
+)
+
+_MCE_UC_STATUS_LINE_RE = re.compile(
+    r"\[Hardware Error\]:[^\n]*MC\d+_STATUS\[[^\]]*\|UC\|[^\]]*\][^\n]*",
+    re.IGNORECASE,
+)
+
+
+def compile_mce_ce_status_regex() -> re.Pattern[str]:
+    """Return a single-line regex for corrected MCn_STATUS hardware error rows."""
+    return _MCE_CE_STATUS_LINE_RE
+
+
+def compile_mce_uc_status_regex() -> re.Pattern[str]:
+    """Return a single-line regex for uncorrected MCn_STATUS hardware error rows."""
+    return _MCE_UC_STATUS_LINE_RE
+
+
+def trim_mce_status_match_content(match: Union[str, list[str]]) -> str:
+    """Keep only the MCn_STATUS [Hardware Error] row in match_content."""
+    if isinstance(match, list):
+        for item in match:
+            trimmed = trim_mce_status_match_content(item)
+            if _MCE_STATUS_START_RE.search(trimmed):
+                return trimmed
+        return match[0] if match else ""
+
+    for line in str(match).splitlines():
+        ce_match = _MCE_CE_STATUS_LINE_RE.search(line)
+        if ce_match:
+            return ce_match.group(0)
+        uc_match = _MCE_UC_STATUS_LINE_RE.search(line)
+        if uc_match:
+            return uc_match.group(0)
+    return str(match)
 
 
 def _normalize_cpu_label(cpu: str) -> str:

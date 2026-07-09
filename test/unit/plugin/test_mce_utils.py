@@ -29,6 +29,7 @@ from nodescraper.plugins.inband.dmesg.mce_utils import (
     iter_hardware_error_block_ranges,
     parse_correctable_mce_counts,
     parse_uncorrectable_mce_counts,
+    trim_mce_status_match_content,
 )
 
 
@@ -189,6 +190,20 @@ def test_mce_block_includes_blank_line_and_warn_interleave():
     )
     assert 3 not in ignored_mce_block_line_indices(content, frozenset({60}))
     assert 6 not in ignored_mce_block_line_indices(content, frozenset({60}))
+
+
+def test_trim_mce_status_match_content_keeps_status_row_only():
+    multiline = (
+        "[Hardware Error]: CPU:29 (00:00:0) MC49_STATUS[Over|CE|MiscV]: 0xbbb\n"
+        "[Hardware Error]: Corrected error, no action required.\n"
+        "[Hardware Error]: CPU:8 (00:00:0) MC60_STATUS[Over|CE|MiscV]: 0xccc\n"
+    )
+
+    trimmed = trim_mce_status_match_content(multiline)
+
+    assert trimmed == ("[Hardware Error]: CPU:29 (00:00:0) MC49_STATUS[Over|CE|MiscV]: 0xbbb")
+    assert "MC60_STATUS" not in trimmed
+    assert "\n" not in trimmed
 
 
 def test_parse_correctable_mce_counts_cpu_colon_status():
