@@ -140,6 +140,8 @@ def test_serviceability_plugin_mi3xx_wiring():
     assert ServiceabilityPluginMI3XX.COLLECTOR is MI3XXCollector
     assert ServiceabilityPluginMI3XX.COLLECTOR_ARGS is MI3XXCollectorArgs
     assert ServiceabilityPluginMI3XX.ANALYZER is MI3XXAnalyzer
+    assert MI3XXCollector.DOCUMENTATION_COLLECTION_ITEMS
+    assert MI3XXAnalyzer.DOCUMENTATION_ANALYSIS_ITEMS
 
 
 def test_mi3xx_collector_no_args(mi3xx_collector):

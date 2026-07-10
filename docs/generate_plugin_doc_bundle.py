@@ -505,12 +505,25 @@ def extract_collection_args_from_collector_args(args_cls: Optional[type]) -> Lis
     return output
 
 
+def escape_lone_markdown_asterisks(s: str) -> str:
+    """Escape single asterisks so GFM does not start emphasis spans; preserve **bold** and `code`."""
+    parts = re.split(r"(`[^`]*`)", s)
+    out: list[str] = []
+    for index, part in enumerate(parts):
+        if index % 2 == 1:
+            out.append(part)
+        else:
+            out.append(re.sub(r"(?<!\*)\*(?!\*)", r"\\*", part))
+    return "".join(out)
+
+
 def escape_table_cell(s: str) -> str:
     """Escape content for a markdown table cell so pipes and newlines don't break columns.
     Use HTML entity for pipe so all markdown parsers treat it as content, not column separator.
     """
     if not s:
         return s
+    s = escape_lone_markdown_asterisks(s)
     # Avoid @ in cells (e.g. OData property names) being turned into mail/mention links in Outlook/HTML viewers.
     return s.replace("|", "&#124;").replace("@", "&#64;").replace("\n", " ").replace("\r", " ")
 
@@ -524,7 +537,9 @@ def md_kv(key: str, value: str) -> str:
 
 
 def md_list(items: List[str]) -> str:
-    return "".join(f"- {i}\n" for i in items) + ("\n" if items else "")
+    return "".join(f"- {escape_lone_markdown_asterisks(i)}\n" for i in items) + (
+        "\n" if items else ""
+    )
 
 
 def bases_list(cls: type) -> List[str]:
