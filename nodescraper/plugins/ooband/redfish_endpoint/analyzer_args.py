@@ -53,9 +53,9 @@ class RedfishEndpointAnalyzerArgs(AnalyzerArgs):
     checks: dict[str, dict[str, RedfishConstraint]] = Field(
         default_factory=dict,
         description=(
-            "Map: URI or '*' -> { property_path: constraint }. "
+            "Map: URI or `*` -> { property_path: constraint }. "
             "URI keys must match a key in the collected responses (exact match). "
-            "Use '*' as the key to apply the inner constraints to every collected response body. "
+            "Use `*` as the key to apply the inner constraints to every collected response body. "
             "Property paths use '/' for nesting and indices, e.g. 'Status/Health', 'PowerControl/0/PowerConsumedWatts'. "
             "Constraints: "
             "'eq' — value must equal the given literal (int, float, str, bool). "

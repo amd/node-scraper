@@ -63,6 +63,13 @@ class MI3XXAnalyzer(DataAnalyzer[ServiceabilityDataModel, ServiceabilityAnalyzer
 
     DATA_MODEL = ServiceabilityDataModel
 
+    DOCUMENTATION_ANALYSIS_ITEMS: tuple[str, ...] = (
+        "Builds AFID events from collected Redfish event log members (and optional assembly metadata).",
+        "Optionally decodes CPER attachments via analysis_args.cper_decode_module before hub analysis.",
+        "Runs the configured Python service hub (hub_python_module) to produce service recommendations.",
+        "When analysis_args.skip_hub is true, only builds AFID events without running the hub.",
+    )
+
     def analyze_data(
         self,
         data: ServiceabilityDataModel,
