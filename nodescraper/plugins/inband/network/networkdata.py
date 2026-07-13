@@ -119,7 +119,7 @@ class NetworkDataModel(DataModel):
     ethtool_info: Dict[str, EthtoolInfo] = Field(
         default_factory=dict
     )  # Interface name -> EthtoolInfo mapping
-    # RDMA-scoped ethtool -S: netdevs from `rdma link -j` with vendor-parsed counters
-    rdma_ethtool_netdevs: List[str] = Field(default_factory=list)
-    rdma_ethtool_statistics: List[EthtoolStatistics] = Field(default_factory=list)
+    # ethtool -S vendor-parsed counters for netdevs whose driver matches a known vendor
+    ethtool_netdevs: List[str] = Field(default_factory=list)
+    ethtool_statistics: List[EthtoolStatistics] = Field(default_factory=list)
     accessible: Optional[bool] = None  # Network accessibility check via ping

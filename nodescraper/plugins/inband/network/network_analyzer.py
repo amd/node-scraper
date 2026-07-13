@@ -23,6 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
+import re
 from typing import Optional
 
 from nodescraper.base.regexanalyzer import ErrorRegex, RegexAnalyzer
@@ -49,13 +50,13 @@ class NetworkAnalyzer(RegexAnalyzer[NetworkDataModel, NetworkAnalyzerArgs]):
         """Analyze ethtool -S statistics via RDMA-scoped vendor models and any user-supplied regex.
 
         Args:
-            data: Network data model with ethtool_info and/or rdma_ethtool_statistics.
+            data: Network data model with ethtool_info and/or ethtool_statistics.
             args: Optional analyzer arguments with custom error regex support.
 
         Returns:
             TaskResult with OK, WARNING (no devices, or only warning-tier counters), or ERROR.
         """
-        if not data.ethtool_info and not data.rdma_ethtool_statistics:
+        if not data.ethtool_info and not data.ethtool_statistics:
             self.result.message = "No network devices found"
             self.result.status = ExecutionStatus.WARNING
             return self.result
@@ -110,7 +111,9 @@ class NetworkAnalyzer(RegexAnalyzer[NetworkDataModel, NetworkAnalyzerArgs]):
         vendor_warning = False
         vendor_error_fields: set[str] = set()
         vendor_warning_fields: set[str] = set()
-        for stat in data.rdma_ethtool_statistics:
+        vendor_queue_error_fields: set[str] = set()
+        vendor_queue_warning_fields: set[str] = set()
+        for stat in data.ethtool_statistics:
             if stat.vendor_statistics is None:
                 continue
 
@@ -129,24 +132,18 @@ class NetworkAnalyzer(RegexAnalyzer[NetworkDataModel, NetworkAnalyzerArgs]):
                     else:
                         vendor_error = True
                         vendor_error_fields.add(field_name)
-                    # Use a single grouped description per severity so the run summary
-                    # collapses every occurrence into one "Ethtool warning detected" /
-                    # "Ethtool error detected" entry instead of one line per field. The
-                    # specific field is still preserved in the event data below and in
-                    # the consolidated console line emitted after the loop.
+                    # Use a single grouped description per severity
                     desc = (
                         "Ethtool warning detected" if is_warning_tier else "Ethtool error detected"
                     )
                     # Per-field events are still recorded for the run summary and event
-                    # log, but console logging is suppressed here to avoid repeating the
-                    # same message once per device. A single consolidated line is emitted
-                    # after the loop instead.
+                    # log, but console logging is suppressed here
                     self._log_event(
                         category=EventCategory.NETWORK,
                         description=desc,
                         data={
                             "netdev": stat.netdev,
-                            "rdma_ifname": stat.rdma_ifname,
+                            "driver": stat.driver,
                             "error_field": field_name,
                             "error_count": error_value,
                         },
@@ -154,11 +151,67 @@ class NetworkAnalyzer(RegexAnalyzer[NetworkDataModel, NetworkAnalyzerArgs]):
                         console_log=False,
                     )
 
-        if vendor_error:
+            # Per-queue counters matched against the vendor's adjustable regex
+            queue_error_patterns = [
+                re.compile(pattern) for pattern in getattr(type(vs), "queue_error_regex", [])
+            ]
+            queue_warning_patterns = [
+                re.compile(pattern) for pattern in getattr(type(vs), "queue_warning_regex", [])
+            ]
+            if stat.queue_statistics and (queue_error_patterns or queue_warning_patterns):
+                for counter_name, counter_value in stat.queue_statistics.items():
+                    if counter_value <= 0:
+                        continue
+                    if queue_error_patterns and any(
+                        pattern.search(counter_name) for pattern in queue_error_patterns
+                    ):
+                        vendor_error = True
+                        vendor_queue_error_fields.add(f"{stat.netdev} {counter_name}")
+                        self._log_event(
+                            category=EventCategory.NETWORK,
+                            description="Ethtool queue error detected",
+                            data={
+                                "netdev": stat.netdev,
+                                "driver": stat.driver,
+                                "error_field": counter_name,
+                                "error_count": counter_value,
+                            },
+                            priority=EventPriority.ERROR,
+                            console_log=False,
+                        )
+                    elif queue_warning_patterns and any(
+                        pattern.search(counter_name) for pattern in queue_warning_patterns
+                    ):
+                        vendor_warning = True
+                        vendor_queue_warning_fields.add(f"{stat.netdev} {counter_name}")
+                        self._log_event(
+                            category=EventCategory.NETWORK,
+                            description="Ethtool queue warning detected",
+                            data={
+                                "netdev": stat.netdev,
+                                "driver": stat.driver,
+                                "error_field": counter_name,
+                                "error_count": counter_value,
+                            },
+                            priority=EventPriority.WARNING,
+                            console_log=False,
+                        )
+
+        if vendor_error_fields:
             self.logger.error("Ethtool error detected: %s", ", ".join(sorted(vendor_error_fields)))
-        if vendor_warning:
+        if vendor_queue_error_fields:
+            self.logger.error(
+                "Ethtool queue error detected: %s",
+                ", ".join(sorted(vendor_queue_error_fields)),
+            )
+        if vendor_warning_fields:
             self.logger.warning(
                 "Ethtool warning detected: %s", ", ".join(sorted(vendor_warning_fields))
+            )
+        if vendor_queue_warning_fields:
+            self.logger.warning(
+                "Ethtool queue warning detected: %s",
+                ", ".join(sorted(vendor_queue_warning_fields)),
             )
 
         if regex_error or vendor_error:

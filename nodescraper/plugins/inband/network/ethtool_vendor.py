@@ -25,6 +25,7 @@
 ###############################################################################
 """Vendor-specific ethtool -S statistics models (Pollara / Thor2 / ConnectX-7)."""
 
+import re
 from typing import ClassVar, Optional, Union
 
 from pydantic import BaseModel, Field, model_validator
@@ -32,7 +33,18 @@ from typing_extensions import Self
 
 
 class PollaraEthtoolStatistics(BaseModel):
-    """ifname ionic. Keeping only fields of interest. Skip queue-specific stats for now"""
+    """ionic (Pollara) ethtool -S counters."""
+
+    #: Regex matched against raw ``ethtool -S`` field names to identify per-queue
+    queue_counter_regex: ClassVar[str] = r"^(rx|tx)_\d+"
+    queue_error_regex: ClassVar[list[str]] = [
+        r"dma_map_err",
+        r"hwstamp_invalid",
+        r"alloc_err",
+        r"csum_error",
+        r"dropped",
+    ]
+    queue_warning_regex: ClassVar[list[str]] = []
 
     rx_csum_error: Optional[int] = None
     hw_tx_dropped: Optional[int] = None
@@ -157,7 +169,27 @@ class PollaraEthtoolStatistics(BaseModel):
 
 
 class Thor2EthtoolStatistics(BaseModel):
-    """ifname bnxt. Keeping only fields of interest. Skip queue-specific stats for now"""
+    """bnxt (Thor2) ethtool -S counters."""
+
+    #: Regex matched against raw ``ethtool -S`` field names to identify per-queue
+    queue_counter_regex: ClassVar[str] = r"^\[\d+\]"
+    queue_error_regex: ClassVar[list[str]] = [
+        r"rx_discards",
+        r"rx_errors",
+        r"tx_errors",
+        r"tx_discards",
+        r"rx_l4_csum_errors",
+        r"rx_buf_errors",
+        r"so_txtime_cmpl_errors",
+        r"missed_irqs",
+        r"xsk_rx_redirect_fail",
+        r"xsk_rx_alloc_fail",
+        r"xsk_rx_no_room",
+        r"xsk_tx_ring_full",
+    ]
+    queue_warning_regex: ClassVar[list[str]] = [
+        r"rx_resets",
+    ]
 
     rx_total_l4_csum_errors: Optional[int] = None
     rx_total_resets: Optional[int] = None
@@ -356,7 +388,22 @@ class Thor2EthtoolStatistics(BaseModel):
 
 
 class Cx7EthtoolStatistics(BaseModel):
-    """ifname mlx. Keeping only fields of interest. Skip queue-specific stats for now"""
+    """mlx (ConnectX-7) ethtool -S counters."""
+
+    #: Regex matched against raw ``ethtool -S`` field names to identify per-queue
+    queue_counter_regex: ClassVar[str] = r"^(rx|tx|ch)\d+"
+    queue_error_regex: ClassVar[list[str]] = [
+        r"xdp_drop",
+        r"wqe_err",
+        r"oversize_pkts_sw_drop",
+        r"buff_alloc_err",
+        r"arfs_err",
+        r"tls_err",
+        r"xdp_tx_err",
+        r"dropped",
+        r"cqe_err",
+    ]
+    queue_warning_regex: ClassVar[list[str]] = []
 
     rx_xdp_drop: Optional[int] = None
     rx_xdp_tx_err: Optional[int] = None
@@ -645,15 +692,51 @@ VENDOR_PREFIX_MAP: dict[str, VendorEthtoolStatisticsCls] = {
 }
 
 
+def extract_queue_counters(stats: dict[str, str], queue_counter_regex: str) -> dict[str, int]:
+    """Extract per-queue counters from a raw ``ethtool -S`` stats dict.
+
+    Devices can report hundreds of per-queue counters. These are matched by the
+    vendor's ``queue_counter_regex`` and retained (rather than dropped like other
+    non-enumerated fields) so they remain available in the data model for error
+    detection.
+
+    Args:
+        stats: Mapping of raw ``ethtool -S`` field name -> string value.
+        queue_counter_regex: Vendor regex matched against field names to identify
+            per-queue counters.
+
+    Returns:
+        Mapping of matching field name -> integer value. The ``netdev`` marker key
+        and non-integer values are skipped.
+    """
+    pattern = re.compile(queue_counter_regex)
+    queue_counters: dict[str, int] = {}
+    for name, value in stats.items():
+        if name == "netdev" or not pattern.match(name):
+            continue
+        try:
+            queue_counters[name] = int(value)
+        except (TypeError, ValueError):
+            continue
+    return queue_counters
+
+
 class EthtoolStatistics(BaseModel):
     """Per-netdev ethtool -S row with optional vendor-parsed counters."""
 
     netdev: Optional[str] = None
-    rdma_ifname: Optional[str] = Field(
+    driver: Optional[str] = Field(
         default=None,
-        description="RDMA interface name from 'rdma link -j' used for vendor prefix selection",
+        description="Kernel driver (from 'ethtool -i') used for vendor model selection",
     )
     vendor_statistics: Optional[VendorEthtoolStatisticsModel] = None
+    queue_statistics: dict[str, int] = Field(
+        default_factory=dict,
+        description=(
+            "High-cardinality per-queue ethtool -S counters (raw field name -> value) "
+            "captured via the vendor queue_counter_regex for error detection"
+        ),
+    )
 
     @model_validator(mode="after")
     def validate_atleast_one_field(self) -> Self:
