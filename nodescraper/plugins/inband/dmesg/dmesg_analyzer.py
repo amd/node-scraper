@@ -35,7 +35,15 @@ from nodescraper.models import Event, TaskResult
 
 from .analyzer_args import DmesgAnalyzerArgs
 from .dmesgdata import DmesgData
-from .mce_utils import parse_correctable_mce_counts, parse_uncorrectable_mce_counts
+from .mce_utils import (
+    compile_mce_ce_status_regex,
+    compile_mce_uc_status_regex,
+    ignored_mce_block_line_indices,
+    mce_block_all_line_indices,
+    parse_correctable_mce_counts,
+    parse_uncorrectable_mce_counts,
+    trim_mce_status_match_content,
+)
 
 
 class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
@@ -338,17 +346,13 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
             event_category=EventCategory.RAS,
         ),
         ErrorRegex(
-            regex=re.compile(
-                r"\[Hardware Error\]:.+MC\d+_STATUS\[[^\]]*\|CE\|[^\]]*\].*(?:\n.*){0,5}"
-            ),
+            regex=compile_mce_ce_status_regex(),
             message="MCE Corrected Error",
             event_category=EventCategory.RAS,
             event_priority=EventPriority.WARNING,
         ),
         ErrorRegex(
-            regex=re.compile(
-                r"\[Hardware Error\]:.+MC\d+_STATUS\[[^\]]*\|UC\|[^\]]*\].*(?:\n.*){0,5}"
-            ),
+            regex=compile_mce_uc_status_regex(),
             message="MCE Uncorrected Error",
             event_category=EventCategory.RAS,
         ),
@@ -714,6 +718,8 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
             dmesg_content = data.dmesg_content
 
         ignore_match_rules, ignore_mce_banks = parse_ignore_match_rules(args.ignore_match_rules)
+        ignored_mce_block_lines = ignored_mce_block_line_indices(dmesg_content, ignore_mce_banks)
+        mce_block_lines = mce_block_all_line_indices(dmesg_content)
 
         known_err_events = self.check_all_regexes(
             content=dmesg_content,
@@ -722,7 +728,13 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
             num_timestamps=args.num_timestamps,
             interval_to_collapse_event=args.interval_to_collapse_event,
             ignore_match_rules=ignore_match_rules,
+            skip_line_indices=ignored_mce_block_lines,
         )
+        for event in known_err_events:
+            if event.description in ("MCE Corrected Error", "MCE Uncorrected Error"):
+                event.data["match_content"] = trim_mce_status_match_content(
+                    event.data["match_content"]
+                )
         if args.exclude_category:
             known_err_events = [
                 event for event in known_err_events if event.category not in args.exclude_category
@@ -752,6 +764,7 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
                 num_timestamps=args.num_timestamps,
                 interval_to_collapse_event=args.interval_to_collapse_event,
                 ignore_match_rules=ignore_match_rules,
+                skip_line_indices=mce_block_lines,
             )
 
             for err_event in err_events:

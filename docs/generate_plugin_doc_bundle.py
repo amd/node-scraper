@@ -49,6 +49,8 @@ PACKAGE_PLUGINS_ROOT = "nodescraper.plugins"
 # ``nodescraper.plugins`` itself does not match every module starting with that string.
 PLUGIN_MODULE_PREFIX = f"{PACKAGE_PLUGINS_ROOT}."
 DEFAULT_PACKAGES = (PACKAGE_PLUGINS_ROOT,)
+# OOB plugin stubs with no concrete COLLECTOR/ANALYZER; document subclasses only.
+PLUGIN_DOC_IGNORE_CLASSES = frozenset({"ServiceabilityPluginBase"})
 
 
 def get_attr(obj: Any, name: str, default: Any = None) -> Any:
@@ -229,6 +231,8 @@ def plugins_for_package_prefix(base_classes: Iterable[type], package_prefix: str
         if not mod.startswith(package_prefix):
             continue
         if not is_concrete_plugin_class(cls):
+            continue
+        if cls.__name__ in PLUGIN_DOC_IGNORE_CLASSES:
             continue
         found.append(cls)
     return found
@@ -501,12 +505,25 @@ def extract_collection_args_from_collector_args(args_cls: Optional[type]) -> Lis
     return output
 
 
+def escape_lone_markdown_asterisks(s: str) -> str:
+    """Escape single asterisks so GFM does not start emphasis spans; preserve **bold** and `code`."""
+    parts = re.split(r"(`[^`]*`)", s)
+    out: list[str] = []
+    for index, part in enumerate(parts):
+        if index % 2 == 1:
+            out.append(part)
+        else:
+            out.append(re.sub(r"(?<!\*)\*(?!\*)", r"\\*", part))
+    return "".join(out)
+
+
 def escape_table_cell(s: str) -> str:
     """Escape content for a markdown table cell so pipes and newlines don't break columns.
     Use HTML entity for pipe so all markdown parsers treat it as content, not column separator.
     """
     if not s:
         return s
+    s = escape_lone_markdown_asterisks(s)
     # Avoid @ in cells (e.g. OData property names) being turned into mail/mention links in Outlook/HTML viewers.
     return s.replace("|", "&#124;").replace("@", "&#64;").replace("\n", " ").replace("\r", " ")
 
@@ -520,7 +537,9 @@ def md_kv(key: str, value: str) -> str:
 
 
 def md_list(items: List[str]) -> str:
-    return "".join(f"- {i}\n" for i in items) + ("\n" if items else "")
+    return "".join(f"- {escape_lone_markdown_asterisks(i)}\n" for i in items) + (
+        "\n" if items else ""
+    )
 
 
 def bases_list(cls: type) -> List[str]:

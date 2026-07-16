@@ -24,9 +24,16 @@
 #
 ###############################################################################
 import re
-from typing import FrozenSet, Optional
+from typing import FrozenSet, Optional, Sequence, Union
 
-from nodescraper.base.match_ignore import extract_mce_bank_from_line
+from nodescraper.base.match_ignore import extract_mce_banks_from_text
+
+_MCE_PRIMARY_START_RE = re.compile(
+    r"\[Hardware Error\]:\s*(?:Corrected error|Uncorrected error|Machine check events logged)",
+    re.IGNORECASE,
+)
+_MCE_STATUS_START_RE = re.compile(r"\bMC\d+_STATUS\[", re.IGNORECASE)
+_MCE_DETAIL_LINE_RE = re.compile(r"\[Hardware Error\]:")
 
 _CORRECTABLE_SUMMARY_RE = re.compile(
     r"(?P<count>\d+)\s+correctable hardware errors detected in total in (?P<block>\w+) block"
@@ -60,6 +67,45 @@ _MCE_UC_STATUS_RE = re.compile(
     r"\[Hardware Error\]:.*?(?P<cpu>CPU:?\d+).*?MC\d+_STATUS\[[^\]]*\|UC\|[^\]]*\]",
     re.IGNORECASE,
 )
+
+_MCE_CE_STATUS_LINE_RE = re.compile(
+    r"\[Hardware Error\]:[^\n]*MC\d+_STATUS\[[^\]]*\|CE\|[^\]]*\][^\n]*",
+    re.IGNORECASE,
+)
+
+_MCE_UC_STATUS_LINE_RE = re.compile(
+    r"\[Hardware Error\]:[^\n]*MC\d+_STATUS\[[^\]]*\|UC\|[^\]]*\][^\n]*",
+    re.IGNORECASE,
+)
+
+
+def compile_mce_ce_status_regex() -> re.Pattern[str]:
+    """Return a single-line regex for corrected MCn_STATUS hardware error rows."""
+    return _MCE_CE_STATUS_LINE_RE
+
+
+def compile_mce_uc_status_regex() -> re.Pattern[str]:
+    """Return a single-line regex for uncorrected MCn_STATUS hardware error rows."""
+    return _MCE_UC_STATUS_LINE_RE
+
+
+def trim_mce_status_match_content(match: Union[str, list[str]]) -> str:
+    """Keep only the MCn_STATUS [Hardware Error] row in match_content."""
+    if isinstance(match, list):
+        for item in match:
+            trimmed = trim_mce_status_match_content(item)
+            if _MCE_STATUS_START_RE.search(trimmed):
+                return trimmed
+        return match[0] if match else ""
+
+    for line in str(match).splitlines():
+        ce_match = _MCE_CE_STATUS_LINE_RE.search(line)
+        if ce_match:
+            return ce_match.group(0)
+        uc_match = _MCE_UC_STATUS_LINE_RE.search(line)
+        if uc_match:
+            return uc_match.group(0)
+    return str(match)
 
 
 def _normalize_cpu_label(cpu: str) -> str:
@@ -97,6 +143,123 @@ def _gpu_index_for_bdf(bdf: str, bdf_order: list[str]) -> int:
     return bdf_order.index(bdf)
 
 
+def _is_mce_primary_starter(line: str) -> bool:
+    return _MCE_PRIMARY_START_RE.search(line) is not None
+
+
+def _is_mce_block_starter(line: str, *, in_block: bool) -> bool:
+    """Return True when line opens a new MCE incident block."""
+    if _is_mce_primary_starter(line):
+        return True
+    if not in_block and _MCE_STATUS_START_RE.search(line) is not None:
+        return True
+    return False
+
+
+def _is_mce_detail_line(line: str) -> bool:
+    return _MCE_DETAIL_LINE_RE.search(line) is not None
+
+
+def _mce_detail_line_indices_in_range(lines: Sequence[str], start: int, end: int) -> set[int]:
+    return {index for index in range(start, end) if _is_mce_detail_line(lines[index])}
+
+
+def _next_non_blank_line_index(lines: Sequence[str], index: int) -> Optional[int]:
+    """Return the next non-blank line index after index, or None when none remain."""
+    for candidate in range(index + 1, len(lines)):
+        if lines[candidate].strip():
+            return candidate
+    return None
+
+
+def _is_mce_status_only_starter(line: str) -> bool:
+    """Return True when line opens a block via MCn_STATUS without a primary header."""
+    return not _is_mce_primary_starter(line) and _MCE_STATUS_START_RE.search(line) is not None
+
+
+def _has_mce_detail_line_ahead(lines: Sequence[str], start_index: int) -> bool:
+    """Return True when another [Hardware Error]: line appears before the next incident."""
+    for idx in range(start_index + 1, len(lines)):
+        line = lines[idx]
+        if not line.strip():
+            continue
+        if _is_mce_primary_starter(line):
+            return False
+        if _is_mce_status_only_starter(line):
+            return False
+        if _is_mce_detail_line(line):
+            return True
+    return False
+
+
+def iter_hardware_error_block_ranges(lines: Sequence[str]) -> list[tuple[int, int]]:
+    """Return (start, end) line index ranges for MCE incident blocks.
+
+    A block begins at a primary MCE header (Corrected/Uncorrected/Machine check logged)
+    or at the first MCn_STATUS line when not already inside a block. The block then
+    includes subsequent lines until the next primary header, a blank line before a bare
+    MCn_STATUS starter, trailing non-MCE lines with no further [Hardware Error]: detail,
+    or EOF. Blank lines, warn/err noise, and other non-MCE dmesg lines between detail
+    entries belong to the same block.
+    """
+    blocks: list[tuple[int, int]] = []
+    index = 0
+    total = len(lines)
+    while index < total:
+        if not _is_mce_block_starter(lines[index], in_block=False):
+            index += 1
+            continue
+        start = index
+        index += 1
+        while index < total:
+            if not lines[index].strip():
+                next_line = _next_non_blank_line_index(lines, index)
+                if next_line is not None and _is_mce_status_only_starter(lines[next_line]):
+                    break
+            elif _is_mce_block_starter(lines[index], in_block=True):
+                break
+            elif not _is_mce_detail_line(lines[index]) and not _has_mce_detail_line_ahead(
+                lines, index
+            ):
+                break
+            index += 1
+        blocks.append((start, index))
+    return blocks
+
+
+def hardware_error_block_line_indices(content: str) -> frozenset[int]:
+    """Return [Hardware Error]: line indices that belong to an MCE incident block."""
+    lines = content.splitlines()
+    suppressed: set[int] = set()
+    for start, end in iter_hardware_error_block_ranges(lines):
+        suppressed.update(_mce_detail_line_indices_in_range(lines, start, end))
+    return frozenset(suppressed)
+
+
+def mce_block_all_line_indices(content: str) -> frozenset[int]:
+    """Return every line index that belongs to an MCE incident block."""
+    lines = content.splitlines()
+    suppressed: set[int] = set()
+    for start, end in iter_hardware_error_block_ranges(lines):
+        suppressed.update(range(start, end))
+    return frozenset(suppressed)
+
+
+def ignored_mce_block_line_indices(content: str, ignore_banks: FrozenSet[int]) -> frozenset[int]:
+    """Return [Hardware Error]: line indices for MCE blocks containing any ignored MCA bank."""
+    if not ignore_banks:
+        return frozenset()
+    lines = content.splitlines()
+    suppressed: set[int] = set()
+    for start, end in iter_hardware_error_block_ranges(lines):
+        block_banks: set[int] = set()
+        for line in lines[start:end]:
+            block_banks.update(extract_mce_banks_from_text(line))
+        if block_banks & ignore_banks:
+            suppressed.update(_mce_detail_line_indices_in_range(lines, start, end))
+    return frozenset(suppressed)
+
+
 def parse_correctable_mce_counts(
     content: str,
     ignore_banks: Optional[FrozenSet[int]] = None,
@@ -109,8 +272,11 @@ def parse_correctable_mce_counts(
     counts: dict[str, int] = {}
     gpu_bdf_order: list[str] = []
     ignored = ignore_banks or frozenset()
+    ignored_block_lines = ignored_mce_block_line_indices(content, ignored)
 
-    for line in content.splitlines():
+    for line_no, line in enumerate(content.splitlines()):
+        if line_no in ignored_block_lines:
+            continue
         gpu_match = _GPU_CORRECTABLE_RE.search(line)
         if gpu_match:
             bdf = gpu_match.group("bdf")
@@ -134,9 +300,6 @@ def parse_correctable_mce_counts(
 
         status_match = _MCE_CE_STATUS_RE.search(line)
         if status_match:
-            bank = extract_mce_bank_from_line(line)
-            if bank is not None and bank in ignored:
-                continue
             part = (
                 _normalize_cpu_label(status_match.group("cpu"))
                 if status_match.group("cpu")
@@ -155,8 +318,11 @@ def parse_uncorrectable_mce_counts(
     counts: dict[str, int] = {}
     gpu_bdf_order: list[str] = []
     ignored = ignore_banks or frozenset()
+    ignored_block_lines = ignored_mce_block_line_indices(content, ignored)
 
-    for line in content.splitlines():
+    for line_no, line in enumerate(content.splitlines()):
+        if line_no in ignored_block_lines:
+            continue
         gpu_match = _GPU_UNCORRECTABLE_RE.search(line)
         if gpu_match:
             bdf = gpu_match.group("bdf")
@@ -176,9 +342,6 @@ def parse_uncorrectable_mce_counts(
 
         status_match = _MCE_UC_STATUS_RE.search(line)
         if status_match:
-            bank = extract_mce_bank_from_line(line)
-            if bank is not None and bank in ignored:
-                continue
             part = (
                 _normalize_cpu_label(status_match.group("cpu"))
                 if status_match.group("cpu")
