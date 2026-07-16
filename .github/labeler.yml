@@ -1,0 +1,31 @@
+# Path-based PR labels for actions/labeler.
+# Labels are created automatically when sync-labels is enabled in label.yml.
+
+documentation:
+  - docs/**
+  - README.md
+  - .github/**/*.md
+
+ci:
+  - .github/**
+
+tests:
+  - test/**
+
+plugins-inband:
+  - nodescraper/plugins/inband/**
+
+plugins-ooband:
+  - nodescraper/plugins/ooband/**
+
+plugins-serviceability:
+  - nodescraper/plugins/serviceability/**
+
+plugins-generic:
+  - nodescraper/plugins/generic_collection/**
+
+framework:
+  - nodescraper/base/**
+  - nodescraper/interfaces/**
+  - nodescraper/cli/**
+  - nodescraper/models/**
