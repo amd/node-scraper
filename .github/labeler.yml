@@ -1,31 +1,47 @@
-# Path-based PR labels for actions/labeler.
-# Labels are created automatically when sync-labels is enabled in label.yml.
+# Path-based PR labels for actions/labeler v5+.
+# See: https://github.com/actions/labeler#pull-request-labeler
 
 documentation:
-  - docs/**
-  - README.md
-  - .github/**/*.md
+  - changed-files:
+      - any-glob-to-any-file:
+          - docs/**
+          - README.md
+          - .github/**/*.md
 
 ci:
-  - .github/**
+  - changed-files:
+      - any-glob-to-any-file:
+          - .github/**
 
 tests:
-  - test/**
+  - changed-files:
+      - any-glob-to-any-file:
+          - test/**
 
 plugins-inband:
-  - nodescraper/plugins/inband/**
+  - changed-files:
+      - any-glob-to-any-file:
+          - nodescraper/plugins/inband/**
 
 plugins-ooband:
-  - nodescraper/plugins/ooband/**
+  - changed-files:
+      - any-glob-to-any-file:
+          - nodescraper/plugins/ooband/**
 
 plugins-serviceability:
-  - nodescraper/plugins/serviceability/**
+  - changed-files:
+      - any-glob-to-any-file:
+          - nodescraper/plugins/serviceability/**
 
 plugins-generic:
-  - nodescraper/plugins/generic_collection/**
+  - changed-files:
+      - any-glob-to-any-file:
+          - nodescraper/plugins/generic_collection/**
 
 framework:
-  - nodescraper/base/**
-  - nodescraper/interfaces/**
-  - nodescraper/cli/**
-  - nodescraper/models/**
+  - changed-files:
+      - any-glob-to-any-file:
+          - nodescraper/base/**
+          - nodescraper/interfaces/**
+          - nodescraper/cli/**
+          - nodescraper/models/**
