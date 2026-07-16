@@ -40,6 +40,7 @@ from .mce_utils import (
     compile_mce_uc_status_regex,
     ignored_mce_block_line_indices,
     mce_block_all_line_indices,
+    orphan_mce_detail_line_indices,
     parse_correctable_mce_counts,
     parse_uncorrectable_mce_counts,
     trim_mce_status_match_content,
@@ -720,6 +721,7 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
         ignore_match_rules, ignore_mce_banks = parse_ignore_match_rules(args.ignore_match_rules)
         ignored_mce_block_lines = ignored_mce_block_line_indices(dmesg_content, ignore_mce_banks)
         mce_block_lines = mce_block_all_line_indices(dmesg_content)
+        orphan_mce_lines = orphan_mce_detail_line_indices(dmesg_content)
 
         known_err_events = self.check_all_regexes(
             content=dmesg_content,
@@ -764,7 +766,7 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
                 num_timestamps=args.num_timestamps,
                 interval_to_collapse_event=args.interval_to_collapse_event,
                 ignore_match_rules=ignore_match_rules,
-                skip_line_indices=mce_block_lines,
+                skip_line_indices=mce_block_lines | orphan_mce_lines,
             )
 
             for err_event in err_events:

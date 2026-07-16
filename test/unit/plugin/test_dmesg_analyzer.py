@@ -1364,3 +1364,26 @@ def test_mce_match_content_is_single_status_line(system_info):
     assert "CPU:29" in match_content
     assert "CPU:8" not in match_content
     assert "\n" not in match_content
+
+
+def test_orphan_mce_tail_not_reported_as_unknown(system_info):
+    dmesg_content = (
+        "kern  :emerg : 2038-01-19T00:00:00,000000+00:00 "
+        "[Hardware Error]: cache level: L3/GEN, mem/io: IO, mem-tx: GEN, part-proc: SRC (no timeout)\n"
+        "kern  :info  : 2038-01-19T00:00:01,000000+00:00 "
+        "mce: [Hardware Error]: Machine check events logged\n"
+        "kern  :emerg : 2038-01-19T00:00:02,000000+00:00 "
+        "[Hardware Error]: Corrected error, no action required.\n"
+        "kern  :emerg : 2038-01-19T00:00:03,000000+00:00 "
+        "[Hardware Error]: CPU:12 (00:00:0) MC60_STATUS[Over|CE|MiscV|-|-|-|SyndV|UECC|-|-|-]: 0xaaa\n"
+    )
+
+    analyzer = DmesgAnalyzer(system_info=system_info)
+    res = analyzer.analyze_data(
+        DmesgData(dmesg_content=dmesg_content),
+        args=DmesgAnalyzerArgs(check_unknown_dmesg_errors=True),
+    )
+
+    descriptions = {event.description for event in res.events}
+    assert "Unknown dmesg error" not in descriptions
+    assert "MCE Corrected Error" in descriptions

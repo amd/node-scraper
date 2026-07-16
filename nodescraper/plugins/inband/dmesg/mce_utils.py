@@ -35,6 +35,11 @@ _MCE_PRIMARY_START_RE = re.compile(
 _MCE_STATUS_START_RE = re.compile(r"\bMC\d+_STATUS\[", re.IGNORECASE)
 _MCE_DETAIL_LINE_RE = re.compile(r"\[Hardware Error\]:")
 
+_MCE_ORPHAN_DETAIL_RE = re.compile(
+    r"\[Hardware Error\]:\s*(?:cache level:|PPIN:|IPID:|transaction:)",
+    re.IGNORECASE,
+)
+
 _CORRECTABLE_SUMMARY_RE = re.compile(
     r"(?P<count>\d+)\s+correctable hardware errors detected in total in (?P<block>\w+) block"
     r"(?:\s+on\s+(?P<cpu>CPU:?\d+))?",
@@ -160,6 +165,11 @@ def _is_mce_detail_line(line: str) -> bool:
     return _MCE_DETAIL_LINE_RE.search(line) is not None
 
 
+def _is_mce_orphan_detail_line(line: str) -> bool:
+    """Return True for MCE block continuation rows that cannot start an incident."""
+    return _MCE_ORPHAN_DETAIL_RE.search(line) is not None
+
+
 def _mce_detail_line_indices_in_range(lines: Sequence[str], start: int, end: int) -> set[int]:
     return {index for index in range(start, end) if _is_mce_detail_line(lines[index])}
 
@@ -243,6 +253,17 @@ def mce_block_all_line_indices(content: str) -> frozenset[int]:
     for start, end in iter_hardware_error_block_ranges(lines):
         suppressed.update(range(start, end))
     return frozenset(suppressed)
+
+
+def orphan_mce_detail_line_indices(content: str) -> frozenset[int]:
+    """Return MCE continuation detail lines that sit outside any incident block."""
+    lines = content.splitlines()
+    blocked = mce_block_all_line_indices(content)
+    return frozenset(
+        index
+        for index, line in enumerate(lines)
+        if index not in blocked and _is_mce_orphan_detail_line(line)
+    )
 
 
 def ignored_mce_block_line_indices(content: str, ignore_banks: FrozenSet[int]) -> frozenset[int]:

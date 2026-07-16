@@ -27,6 +27,7 @@ from nodescraper.plugins.inband.dmesg.mce_utils import (
     hardware_error_block_line_indices,
     ignored_mce_block_line_indices,
     iter_hardware_error_block_ranges,
+    orphan_mce_detail_line_indices,
     parse_correctable_mce_counts,
     parse_uncorrectable_mce_counts,
     trim_mce_status_match_content,
@@ -240,3 +241,17 @@ def test_parse_uncorrectable_mce_counts_cpu_colon_status():
     counts = parse_uncorrectable_mce_counts(content)
 
     assert counts == {"CPU72": 1}
+
+
+def test_orphan_mce_detail_line_indices_detects_tail_without_block_start():
+    content = (
+        "kern  :emerg : 2038-01-19T00:00:00,000000+00:00 "
+        "[Hardware Error]: cache level: L3/GEN, mem/io: IO, mem-tx: GEN, part-proc: SRC (no timeout)\n"
+        "kern  :emerg : 2038-01-19T00:00:01,000000+00:00 "
+        "[Hardware Error]: Corrected error, no action required.\n"
+        "kern  :emerg : 2038-01-19T00:00:02,000000+00:00 "
+        "[Hardware Error]: CPU:12 (00:00:0) MC60_STATUS[Over|CE|MiscV|-|-|-|SyndV|UECC|-|-|-]: 0xaaa\n"
+        "kern  :emerg : 2038-01-19T00:00:03,000000+00:00 [Hardware Error]: PPIN: 0xbbbbbbbbbbbbbbbb\n"
+    )
+
+    assert orphan_mce_detail_line_indices(content) == frozenset({0})
