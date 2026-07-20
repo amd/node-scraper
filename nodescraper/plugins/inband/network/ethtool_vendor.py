@@ -675,16 +675,12 @@ VendorEthtoolStatisticsModel = Union[
     Cx7EthtoolStatistics,
 ]
 
-VendorEthtoolStatisticsCls = Union[
-    type[PollaraEthtoolStatistics],
-    type[Thor2EthtoolStatistics],
-    type[Cx7EthtoolStatistics],
-]
+
+VendorEthtoolStatisticsCls = type[VendorEthtoolStatisticsModel]
 
 
-# Map ifname prefixes to vendor-specific statistic models
-# If netdev is ens, use Cx7
-# If netdev is benic, check if it starts with ionic or bnxt to determine if it's Pollara or Thor2
+# Map kernel driver name prefixes (from `ethtool -i`) to vendor-specific models
+# ionic -> Pollara, bnxt  -> Thor2, mlx   -> ConnectX-7
 VENDOR_PREFIX_MAP: dict[str, VendorEthtoolStatisticsCls] = {
     "ionic": PollaraEthtoolStatistics,
     "bnxt": Thor2EthtoolStatistics,

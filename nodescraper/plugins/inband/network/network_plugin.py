@@ -25,14 +25,13 @@
 ###############################################################################
 from nodescraper.base import InBandDataPlugin
 
-from .analyzer_args import NetworkAnalyzerArgs
 from .collector_args import NetworkCollectorArgs
 from .network_analyzer import NetworkAnalyzer
 from .network_collector import NetworkCollector
 from .networkdata import NetworkDataModel
 
 
-class NetworkPlugin(InBandDataPlugin[NetworkDataModel, NetworkCollectorArgs, NetworkAnalyzerArgs]):
+class NetworkPlugin(InBandDataPlugin[NetworkDataModel, NetworkCollectorArgs, None]):
     """Plugin for collection of network configuration data"""
 
     DATA_MODEL = NetworkDataModel
@@ -42,5 +41,3 @@ class NetworkPlugin(InBandDataPlugin[NetworkDataModel, NetworkCollectorArgs, Net
     COLLECTOR_ARGS = NetworkCollectorArgs
 
     ANALYZER = NetworkAnalyzer
-
-    ANALYZER_ARGS = NetworkAnalyzerArgs

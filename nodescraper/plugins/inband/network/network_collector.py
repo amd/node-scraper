@@ -529,6 +529,9 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
 
         The vendor model is selected by matching ``driver`` (from ``ethtool -i``)
         against the known vendor prefixes in ``VENDOR_PREFIX_MAP``.
+
+        Returns:
+            EthtoolStatistics, or None on command failure.
         """
         cmd_s = self.CMD_ETHTOOL_S_TEMPLATE.format(interface=netdev)
         res = self._run_sut_cmd(cmd_s, sudo=True)
@@ -613,11 +616,7 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
         """Collect ethtool -S for vendor netdevs discovered from `ip addr`.
 
         Each interface's driver is resolved via `ethtool -i`; only interfaces whose
-        driver matches a known vendor prefix (see VENDOR_PREFIX_MAP) are collected. The
-        matched driver selects the respective vendor data model used to parse the
-        `ethtool -S` counters. Interfaces without a known vendor driver (lo, docker,
-        veth, ...) are skipped, which avoids noisy `ethtool -S` failures. This does not
-        depend on RDMA.
+        driver matches a known vendor prefix (see VENDOR_PREFIX_MAP) are collected.
 
         Args:
             interfaces: Interfaces discovered from `ip addr` to consider.
