@@ -24,7 +24,7 @@
 #
 ###############################################################################
 import logging
-from typing import Generic, Optional, Union
+from typing import Generic, Optional, Sequence, Union
 
 from nodescraper.connection.inband import InBandConnection
 from nodescraper.connection.inband.inband import BaseFileArtifact, CommandArtifact
@@ -99,6 +99,42 @@ class InBandDataCollector(
         """
         command_res = self.connection.run_command(
             command=command, sudo=sudo, timeout=timeout, strip=strip
+        )
+        effective_html_view = self._effective_html_view(html_view)
+        if log_artifact or effective_html_view:
+            command_res.log_html = effective_html_view
+            self.result.artifacts.append(command_res)
+
+        return command_res
+
+    def _run_sut_argv(
+        self,
+        argv: Sequence[str],
+        sudo: bool = False,
+        timeout: int = 300,
+        strip: bool = True,
+        log_artifact: bool = True,
+        html_view: Optional[bool] = None,
+    ) -> CommandArtifact:
+        """Run a command via argv list (shell=False locally; quoted on remote SSH).
+
+        Prefer this over _run_sut_cmd for commands that include config/user values.
+        Legacy shell strings (pipes, globs, redirection) still use _run_sut_cmd.
+
+        Args:
+            argv (Sequence[str]): executable and arguments, e.g. ["ping", host, "-c", "1"].
+            sudo (bool, optional): whether to run the command with sudo. Defaults to False.
+            timeout (int, optional): command timeout in seconds. Defaults to 300.
+            strip (bool, optional): whether output should be stripped. Defaults to True.
+            log_artifact (bool, optional): whether we should log the command result. Defaults to True.
+            html_view (Optional[bool], optional): whether to include this command in HTML
+                artifacts. When omitted, uses collection_args.html_view.
+
+        Returns:
+            CommandArtifact: The result of the command execution.
+        """
+        command_res = self.connection.run_command(
+            command=list(argv), sudo=sudo, timeout=timeout, strip=strip
         )
         effective_html_view = self._effective_html_view(html_view)
         if log_artifact or effective_html_view:

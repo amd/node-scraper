@@ -39,6 +39,12 @@ from .inband import (
     CommandArtifact,
     InBandConnection,
 )
+from .shellcommand import (
+    ShellCommand,
+    build_exec_argv,
+    build_sudo_password_argv,
+    format_argv_display,
+)
 from .sshparams import SSHConnectionParams
 
 
@@ -123,15 +129,15 @@ class RemoteShell(InBandConnection):
 
     def run_command(
         self,
-        command: str,
+        command: ShellCommand,
         sudo=False,
         timeout: int = 30,
         strip: bool = True,
     ) -> CommandArtifact:
-        """Run a shell command over ssh
+        """Run a shell command over ssh.
 
         Args:
-            command (str): command to run
+            command (ShellCommand): shell string (legacy) or argv list (preferred).
             sudo (bool, optional): run command with sudo (Linux only). Defaults to False.
             timeout (int, optional): timeout for command in seconds. Defaults to 300.
             strip (bool, optional): strip output of command. Defaults to True.
@@ -140,13 +146,24 @@ class RemoteShell(InBandConnection):
             CommandArtifact: Command artifact with stdout, stderr, which have been decoded and stripped as well as exit code
         """
         write_password = sudo and self.ssh_params.username != "root" and self.ssh_params.password
-        if write_password:
-            command = f"sudo -S -p '' {command}"
-        elif sudo:
-            command = f"sudo {command}"
+
+        if isinstance(command, str):
+            cmd_str = command
+            if write_password:
+                cmd_str = f"sudo -S -p '' {cmd_str}"
+            elif sudo:
+                cmd_str = f"sudo {cmd_str}"
+        else:
+            argv = list(command)
+            if write_password:
+                cmd_str = format_argv_display(build_sudo_password_argv(argv))
+            elif sudo:
+                cmd_str = format_argv_display(build_exec_argv(argv, sudo=True))
+            else:
+                cmd_str = format_argv_display(argv)
 
         try:
-            stdin, stdout, stderr = self.client.exec_command(command, timeout=timeout)
+            stdin, stdout, stderr = self.client.exec_command(cmd_str, timeout=timeout)
 
             if write_password:
                 stdin.write(
@@ -166,7 +183,7 @@ class RemoteShell(InBandConnection):
             exit_code = 124
 
         return CommandArtifact(
-            command=command,
+            command=cmd_str,
             stdout=stdout_str.strip() if strip else stdout_str,
             stderr=stderr_str.strip() if strip else stderr_str,
             exit_code=exit_code,

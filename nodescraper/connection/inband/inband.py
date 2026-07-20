@@ -29,6 +29,8 @@ from typing import Optional
 
 from pydantic import BaseModel
 
+from .shellcommand import ShellCommand
+
 
 class CommandArtifact(BaseModel):
     """Artifact for the result of shell command execution"""
@@ -151,12 +153,18 @@ class InBandConnection(abc.ABC):
 
     @abc.abstractmethod
     def run_command(
-        self, command: str, sudo: bool = False, timeout: int = 300, strip: bool = True
+        self,
+        command: ShellCommand,
+        sudo: bool = False,
+        timeout: int = 300,
+        strip: bool = True,
     ) -> CommandArtifact:
-        """Run an in band shell command
+        """Run an in band shell command.
 
         Args:
-            command (str): command to run
+            command (ShellCommand): full shell string (legacy) or argv list (preferred).
+                When a sequence is passed, collectors should use shell=False locally and
+                safely quoted execution remotely.
             sudo (bool, optional): run command with sudo (Linux only). Defaults to False.
             timeout (int, optional): timeout for command in seconds. Defaults to 300.
             strip (bool, optional): strip output of command. Defaults to True.
