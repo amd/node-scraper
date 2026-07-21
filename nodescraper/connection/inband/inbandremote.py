@@ -51,6 +51,9 @@ class RemoteShell(InBandConnection):
 
     host_key_policy: Type[paramiko.MissingHostKeyPolicy] = paramiko.RejectPolicy
 
+    # Interval in seconds for TCP keepalive packets on the SSH transport.
+    keepalive_interval: int = 30
+
     def __init__(
         self,
         ssh_params: SSHConnectionParams,
@@ -79,6 +82,10 @@ class RemoteShell(InBandConnection):
                 auth_timeout=60,
                 banner_timeout=200,
             )
+            if self.keepalive_interval:
+                transport = self.client.get_transport()
+                if transport is not None:
+                    transport.set_keepalive(self.keepalive_interval)
         except socket.timeout:
             raise SSHConnectionError("SSH Request timeout") from socket.timeout
         except socket.gaierror as e:
