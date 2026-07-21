@@ -30,6 +30,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+events = [
+    "httpx>=0.27.0",
+]
 dev = [
     "build",
     "black",
@@ -44,6 +47,7 @@ dev = [
     "types-paramiko",
     "types-requests",
     "types-setuptools",
+    "httpx>=0.27.0",
 ]
 
 [project.urls]
@@ -88,6 +92,14 @@ ignore = ["E501", "N806"]
 python_version = "3.9"
 mypy_path = ["test/unit"]
 explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+module = "httpx"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "httpx.*"
+ignore_missing_imports = true
 
 [tool.setuptools_scm]
 version_scheme = "post-release"

@@ -1,0 +1,43 @@
+{
+  "stream": {
+    "event_types": ["Alert", "StatusChange"],
+    "severities": ["Warning", "Critical"],
+    "reconnect_delay_seconds": 30,
+    "baseline_pull_enabled": true,
+    "enable_webhook_fallback": true,
+    "allow_loopback_webhook": true,
+    "dedupe_events": true
+  },
+  "targets": [
+    {
+      "target_key": "node-a",
+      "name": "MI300X Node A",
+      "host": "10.0.0.10",
+      "username": "root",
+      "password": "changeme",
+      "verify_ssl": false,
+      "transport": "auto",
+      "webhook_url": "http://collector-host:8081/hook/node-a"
+    }
+  ],
+  "trigger": {
+    "min_events": 3,
+    "window_seconds": 10,
+    "cooldown_seconds": 60
+  },
+  "analysis": {
+    "hub_python_module": "your_hub_package.hub_module",
+    "hub_display_name": "MI3XX Service Hub",
+    "afid_sag_path": "/path/to/AFID_SAG.json",
+    "hub_analyze_method": "get_service_info",
+    "skip_hub": false
+  },
+  "http": {
+    "enabled": true,
+    "host": "0.0.0.0",
+    "port": 8081,
+    "webhook_path_prefix": "/hook",
+    "recommendations_path": "/recommendations",
+    "status_path": "/status"
+  }
+}

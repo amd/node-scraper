@@ -24,6 +24,7 @@
 #
 ###############################################################################
 from .afid_events import build_afid_events_from_data
+from .analysis_window import ServiceabilityWindowResult, analyze_serviceability_window
 from .analyzer_args import ServiceabilityAnalyzerArgs
 from .mi3xx import (
     MI3XXAnalyzer,
@@ -75,7 +76,9 @@ __all__ = [
     "ServiceabilityPluginMI3XX",
     "ServiceabilityResult",
     "ServiceabilitySolution",
+    "ServiceabilityWindowResult",
     "TimeOperator",
+    "analyze_serviceability_window",
     "build_afid_events_from_data",
     "build_mi3xx_reporting_version_fields",
     "compare_iso_datetime",
