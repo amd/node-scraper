@@ -335,6 +335,16 @@ def build_parser(
         help="Redfish path to LogService (e.g. redfish/v1/Systems/UBB/LogServices/DiagLogs)",
     )
 
+    daemon_parser = subparsers.add_parser(
+        "daemon",
+        help="Run the long-lived Redfish event daemon (requires amd-node-scraper[events])",
+    )
+    daemon_parser.add_argument(
+        "--daemon-config",
+        required=True,
+        help="Path to daemon JSON config (see config/redfish_events_daemon.example.json)",
+    )
+
     config_builder_parser.add_argument(
         "--plugins",
         nargs="*",
@@ -545,6 +555,12 @@ def main(
                 truncate_message=not getattr(parsed_args, "dont_truncate", False),
                 artifact_dir=log_path,
             )
+            sys.exit(0)
+
+        if parsed_args.subcmd == "daemon":
+            from nodescraper.cli.daemon_cmd import run_daemon_cli
+
+            run_daemon_cli(parsed_args.daemon_config, logger)
             sys.exit(0)
 
         if parsed_args.subcmd == "show-redfish-oem-allowable":
