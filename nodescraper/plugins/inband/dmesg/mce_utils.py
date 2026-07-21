@@ -35,29 +35,6 @@ _MCE_PRIMARY_START_RE = re.compile(
 _MCE_STATUS_START_RE = re.compile(r"\bMC\d+_STATUS\[", re.IGNORECASE)
 _MCE_DETAIL_LINE_RE = re.compile(r"\[Hardware Error\]:")
 
-_CORRECTABLE_SUMMARY_RE = re.compile(
-    r"(?P<count>\d+)\s+correctable hardware errors detected in total in (?P<block>\w+) block"
-    r"(?:\s+on\s+(?P<cpu>CPU:?\d+))?",
-    re.IGNORECASE,
-)
-
-_UNCORRECTABLE_SUMMARY_RE = re.compile(
-    r"(?P<count>\d+)\s+uncorrectable hardware errors detected in (?P<block>\w+) block",
-    re.IGNORECASE,
-)
-
-_GPU_CORRECTABLE_RE = re.compile(
-    r"amdgpu\s+(?P<bdf>[\w:.]+):.*?(?P<count>\d+)\s+correctable hardware errors detected in total in "
-    r"(?P<block>\w+) block",
-    re.IGNORECASE,
-)
-
-_GPU_UNCORRECTABLE_RE = re.compile(
-    r"amdgpu\s+(?P<bdf>[\w:.]+):.*?(?P<count>\d+)\s+uncorrectable hardware errors detected in "
-    r"(?P<block>\w+) block",
-    re.IGNORECASE,
-)
-
 _MCE_CE_STATUS_RE = re.compile(
     r"\[Hardware Error\]:.*?(?P<cpu>CPU:?\d+).*?MC\d+_STATUS\[[^\]]*\|CE\|[^\]]*\]",
     re.IGNORECASE,
@@ -116,33 +93,6 @@ def _add_count(counts: dict[str, int], part: str, amount: int) -> None:
     counts[part] = counts.get(part, 0) + amount
 
 
-def _part_label(
-    *,
-    cpu: Optional[str] = None,
-    block: Optional[str] = None,
-    bdf: Optional[str] = None,
-    gpu_index: Optional[int] = None,
-) -> str:
-    if bdf is not None:
-        block_suffix = f"/{block}" if block else ""
-        if gpu_index is not None:
-            return f"GPU{gpu_index}{block_suffix}"
-        return f"GPU {bdf}{block_suffix}"
-    if cpu and block:
-        return f"{cpu}/{block}"
-    if cpu:
-        return cpu
-    if block:
-        return block
-    return "unknown"
-
-
-def _gpu_index_for_bdf(bdf: str, bdf_order: list[str]) -> int:
-    if bdf not in bdf_order:
-        bdf_order.append(bdf)
-    return bdf_order.index(bdf)
-
-
 def _is_mce_primary_starter(line: str) -> bool:
     return _MCE_PRIMARY_START_RE.search(line) is not None
 
@@ -190,6 +140,48 @@ def _has_mce_detail_line_ahead(lines: Sequence[str], start_index: int) -> bool:
         if _is_mce_detail_line(line):
             return True
     return False
+
+
+def mce_defining_status_line_indices(content: str) -> frozenset[int]:
+    """Return line indices for MCn_STATUS rows that define a corrected or uncorrected MCE."""
+    lines = content.splitlines()
+    indices: set[int] = set()
+    for index, line in enumerate(lines):
+        if _MCE_CE_STATUS_LINE_RE.search(line) or _MCE_UC_STATUS_LINE_RE.search(line):
+            indices.add(index)
+    return frozenset(indices)
+
+
+def mce_hardware_error_line_indices(content: str) -> frozenset[int]:
+    """Return every line index containing [Hardware Error]:."""
+    lines = content.splitlines()
+    return frozenset(index for index, line in enumerate(lines) if _is_mce_detail_line(line))
+
+
+def mce_non_status_hardware_error_line_indices(content: str) -> frozenset[int]:
+    """Return [Hardware Error]: detail lines that are not defining MCn_STATUS CE/UC rows."""
+    defining = mce_defining_status_line_indices(content)
+    return frozenset(
+        index for index in mce_hardware_error_line_indices(content) if index not in defining
+    )
+
+
+def mce_known_regex_skip_line_indices(
+    content: str,
+    ignore_banks: Optional[FrozenSet[int]] = None,
+) -> frozenset[int]:
+    """Skip non-defining MCE detail lines and ignored-bank incidents during known regex scan."""
+    ignored = ignore_banks or frozenset()
+    skipped = set(mce_non_status_hardware_error_line_indices(content))
+    skipped.update(ignored_mce_block_line_indices(content, ignored))
+    return frozenset(skipped)
+
+
+def mce_unknown_suppress_line_indices(content: str) -> frozenset[int]:
+    """Suppress MCE block context and every [Hardware Error]: line from unknown scan."""
+    suppressed = set(mce_block_all_line_indices(content))
+    suppressed.update(mce_hardware_error_line_indices(content))
+    return frozenset(suppressed)
 
 
 def iter_hardware_error_block_ranges(lines: Sequence[str]) -> list[tuple[int, int]]:
@@ -264,38 +256,13 @@ def parse_correctable_mce_counts(
     content: str,
     ignore_banks: Optional[FrozenSet[int]] = None,
 ) -> dict[str, int]:
-    """Count correctable MCE / RAS hardware errors per component from dmesg text.
-
-    Handles summary lines (for example ``mce: 3 correctable ... on CPU1``),
-    amdgpu block summaries, and per-event ``MCn_STATUS[|CE|]`` hardware error lines.
-    """
+    """Count correctable MCE hardware errors per CPU from MCn_STATUS[|CE|] rows."""
     counts: dict[str, int] = {}
-    gpu_bdf_order: list[str] = []
     ignored = ignore_banks or frozenset()
     ignored_block_lines = ignored_mce_block_line_indices(content, ignored)
 
     for line_no, line in enumerate(content.splitlines()):
         if line_no in ignored_block_lines:
-            continue
-        gpu_match = _GPU_CORRECTABLE_RE.search(line)
-        if gpu_match:
-            bdf = gpu_match.group("bdf")
-            part = _part_label(
-                bdf=bdf,
-                block=gpu_match.group("block"),
-                gpu_index=_gpu_index_for_bdf(bdf, gpu_bdf_order),
-            )
-            _add_count(counts, part, int(gpu_match.group("count")))
-            continue
-
-        summary_match = _CORRECTABLE_SUMMARY_RE.search(line)
-        if summary_match:
-            cpu = summary_match.group("cpu")
-            part = _part_label(
-                cpu=_normalize_cpu_label(cpu) if cpu else None,
-                block=summary_match.group("block"),
-            )
-            _add_count(counts, part, int(summary_match.group("count")))
             continue
 
         status_match = _MCE_CE_STATUS_RE.search(line)
@@ -314,30 +281,13 @@ def parse_uncorrectable_mce_counts(
     content: str,
     ignore_banks: Optional[FrozenSet[int]] = None,
 ) -> dict[str, int]:
-    """Count uncorrectable MCE / RAS hardware errors per component from dmesg text."""
+    """Count uncorrectable MCE hardware errors per CPU from MCn_STATUS[|UC|] rows."""
     counts: dict[str, int] = {}
-    gpu_bdf_order: list[str] = []
     ignored = ignore_banks or frozenset()
     ignored_block_lines = ignored_mce_block_line_indices(content, ignored)
 
     for line_no, line in enumerate(content.splitlines()):
         if line_no in ignored_block_lines:
-            continue
-        gpu_match = _GPU_UNCORRECTABLE_RE.search(line)
-        if gpu_match:
-            bdf = gpu_match.group("bdf")
-            part = _part_label(
-                bdf=bdf,
-                block=gpu_match.group("block"),
-                gpu_index=_gpu_index_for_bdf(bdf, gpu_bdf_order),
-            )
-            _add_count(counts, part, int(gpu_match.group("count")))
-            continue
-
-        summary_match = _UNCORRECTABLE_SUMMARY_RE.search(line)
-        if summary_match:
-            part = _part_label(block=summary_match.group("block"))
-            _add_count(counts, part, int(summary_match.group("count")))
             continue
 
         status_match = _MCE_UC_STATUS_RE.search(line)

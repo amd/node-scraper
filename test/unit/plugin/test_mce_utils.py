@@ -27,6 +27,10 @@ from nodescraper.plugins.inband.dmesg.mce_utils import (
     hardware_error_block_line_indices,
     ignored_mce_block_line_indices,
     iter_hardware_error_block_ranges,
+    mce_defining_status_line_indices,
+    mce_hardware_error_line_indices,
+    mce_non_status_hardware_error_line_indices,
+    mce_unknown_suppress_line_indices,
     parse_correctable_mce_counts,
     parse_uncorrectable_mce_counts,
     trim_mce_status_match_content,
@@ -43,7 +47,7 @@ def test_parse_correctable_mce_counts_cpu_summary_and_status():
 
     counts = parse_correctable_mce_counts(content)
 
-    assert counts == {"CPU1/mc0": 3, "CPU0": 1}
+    assert counts == {"CPU0": 1}
 
 
 def test_parse_correctable_mce_counts_gpu_summary():
@@ -55,7 +59,7 @@ def test_parse_correctable_mce_counts_gpu_summary():
 
     counts = parse_correctable_mce_counts(content)
 
-    assert counts == {"GPU0/gfx": 3}
+    assert counts == {}
 
 
 def test_parse_uncorrectable_mce_counts():
@@ -67,7 +71,7 @@ def test_parse_uncorrectable_mce_counts():
 
     counts = parse_uncorrectable_mce_counts(content)
 
-    assert counts == {"CPU1": 1, "GPU0/gfx": 2}
+    assert counts == {"CPU1": 1}
 
 
 def test_parse_correctable_mce_counts_skips_ignored_banks():
@@ -192,6 +196,55 @@ def test_mce_block_includes_blank_line_and_warn_interleave():
     assert 6 not in ignored_mce_block_line_indices(content, frozenset({60}))
 
 
+def test_mce_non_status_hardware_error_line_indices():
+    content = (
+        "kern  :emerg : ts [Hardware Error]: Corrected error, no action required.\n"
+        "kern  :emerg : ts [Hardware Error]: CPU:12 MC60_STATUS[Over|CE|MiscV]: 0x1\n"
+        "kern  :emerg : ts [Hardware Error]: PPIN: 0xabc\n"
+    )
+
+    assert mce_defining_status_line_indices(content) == frozenset({1})
+    assert mce_non_status_hardware_error_line_indices(content) == frozenset({0, 2})
+
+
+def test_mce_unknown_suppress_orphan_detail_lines():
+    """Tail of an MCE block without the defining MCn_STATUS row still suppresses unknowns."""
+    content = (
+        "kern  :emerg : 2026-07-14T22:21:10,315164-07:00 "
+        "[Hardware Error]: IPID: 0x000001e11ccc0005, Syndrome: 0x000000005a800001\n"
+        "kern  :emerg : 2026-07-14T22:21:10,335516-07:00 "
+        "[Hardware Error]: cache level: L3/GEN, mem/io: IO, mem-tx: GEN, part-proc: SRC (no timeout)\n"
+        "kern  :err   : 2026-07-14T22:21:10,400000-07:00 unrelated plugin failure\n"
+    )
+
+    suppressed = mce_unknown_suppress_line_indices(content)
+
+    assert 0 in suppressed
+    assert 1 in suppressed
+    assert 2 not in suppressed
+
+
+def test_mce_unknown_suppress_status_and_tail_lines():
+    """Status row plus PPIN/IPID/cache tail must never reach unknown dmesg matching."""
+    content = (
+        "kern  :emerg : 2026-07-14T22:21:10,266984-07:00 "
+        "[Hardware Error]: Corrected error, no action required.\n"
+        "kern  :emerg : 2026-07-14T22:21:10,280615-07:00 "
+        "[Hardware Error]: CPU:56 (1a:51:0) MC60_STATUS[Over|CE|MiscV|-|-|-|SyndV|UECC|-|-|-]: 0xabc\n"
+        "kern  :emerg : 2026-07-14T22:21:10,303837-07:00 [Hardware Error]: PPIN: 0x00831e03ffcb8015\n"
+        "kern  :emerg : 2026-07-14T22:21:10,315164-07:00 "
+        "[Hardware Error]: IPID: 0x000001e11ccc0005, Syndrome: 0x000000005a800001\n"
+        "kern  :emerg : 2026-07-14T22:21:10,335516-07:00 "
+        "[Hardware Error]: cache level: L3/GEN, mem/io: IO, mem-tx: GEN, part-proc: SRC (no timeout)\n"
+        "kern  :err   : 2026-07-14T22:21:10,400000-07:00 unrelated plugin failure\n"
+    )
+
+    suppressed = mce_unknown_suppress_line_indices(content)
+
+    assert suppressed == frozenset({0, 1, 2, 3, 4})
+    assert mce_hardware_error_line_indices(content) == frozenset({0, 1, 2, 3, 4})
+
+
 def test_trim_mce_status_match_content_keeps_status_row_only():
     multiline = (
         "[Hardware Error]: CPU:29 (00:00:0) MC49_STATUS[Over|CE|MiscV]: 0xbbb\n"
@@ -228,7 +281,7 @@ def test_parse_correctable_mce_counts_both_cpu_formats():
 
     counts = parse_correctable_mce_counts(content)
 
-    assert counts == {"CPU0": 1, "CPU72": 1, "CPU1/mc0": 2}
+    assert counts == {"CPU0": 1, "CPU72": 1}
 
 
 def test_parse_uncorrectable_mce_counts_cpu_colon_status():
