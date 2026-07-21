@@ -23,7 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
-"""Baseline pull of existing Redfish LogService entries (adapted from Gyanam)."""
+"""Baseline pull of existing Redfish LogService entries."""
 from __future__ import annotations
 
 import logging

@@ -5,7 +5,7 @@ The Redfish event daemon is a long-running process that subscribes to BMC event 
 ## Install
 
 ```bash
-cd ~/node-scraper_public
+cd ~/node-scraper
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev,events]"
 ```
@@ -30,7 +30,7 @@ Copy the example config, set BMC credentials, hub module paths, and (for webhook
 | Output | Log directory + artifacts | Logs + HTTP `/recommendations` JSON |
 | Use when | Ad-hoc debug, CI, field capture | Live monitoring, NOC integration |
 
-The on-demand MI3XX plugin path is unchanged. Both flows call `analyze_serviceability_window()` so hub configuration stays aligned.
+The on-demand serviceability plugin path is unchanged. Both flows call `analyze_serviceability_window()` so hub configuration stays aligned.
 
 ## Configuration
 

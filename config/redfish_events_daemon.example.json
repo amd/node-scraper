@@ -11,7 +11,7 @@
   "targets": [
     {
       "target_key": "node-a",
-      "name": "MI300X Node A",
+      "name": "Example Node A",
       "host": "10.0.0.10",
       "username": "root",
       "password": "changeme",
@@ -27,7 +27,7 @@
   },
   "analysis": {
     "hub_python_module": "your_hub_package.hub_module",
-    "hub_display_name": "MI3XX Service Hub",
+    "hub_display_name": "Example Service Hub",
     "afid_sag_path": "/path/to/AFID_SAG.json",
     "hub_analyze_method": "get_service_info",
     "skip_hub": false

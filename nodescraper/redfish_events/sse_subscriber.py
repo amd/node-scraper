@@ -23,7 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
-"""SSE alert subscriber for a single Redfish target (adapted from Gyanam)."""
+"""SSE alert subscriber for a single Redfish target."""
 from __future__ import annotations
 
 import asyncio

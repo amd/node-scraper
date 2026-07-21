@@ -23,7 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
-"""Redfish event parsing helpers (adapted from Gyanam alert ingest)."""
+"""Redfish event parsing helpers for continuous ingest."""
 from __future__ import annotations
 
 import re

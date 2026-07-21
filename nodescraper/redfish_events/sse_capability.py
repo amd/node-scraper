@@ -23,7 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
-"""Detect whether a BMC supports Redfish EventService SSE (adapted from Gyanam)."""
+"""Detect whether a BMC supports Redfish EventService SSE."""
 from __future__ import annotations
 
 import asyncio

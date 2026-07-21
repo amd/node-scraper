@@ -23,7 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
-"""Webhook-based Redfish event subscriptions (adapted from Gyanam)."""
+"""Webhook-based Redfish event subscriptions."""
 from __future__ import annotations
 
 import logging
