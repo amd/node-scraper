@@ -106,6 +106,8 @@ class RedfishConnection:
                 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
             self._session = requests.Session()
             self._session.verify = self.verify_ssl
+            if not self.verify_ssl:
+                self._session.trust_env = False
             self._session.headers["Content-Type"] = "application/json"
             self._session.headers["Accept"] = "application/json"
             if self.use_session_auth and self.password:
