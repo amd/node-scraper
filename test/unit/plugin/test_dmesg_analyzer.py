@@ -1285,7 +1285,7 @@ def test_hardware_error_block_reports_mce_without_ignore(system_info):
 
 
 def test_mce_interleave_pattern_suppresses_block_with_ignored_banks(system_info):
-    """Dummy excerpt modeled on dmesg_mce_interleave.log: warn/blank lines inside MCE blocks."""
+    """Dummy excerpt: warn/blank lines interleaved inside MCE hardware-error blocks."""
     dmesg_content = (
         "kern  :info  : 2038-01-19T00:00:00,000000+00:00 "
         "mce: [Hardware Error]: Machine check events logged\n"
@@ -1341,11 +1341,11 @@ def test_mce_interleave_pattern_suppresses_block_with_ignored_banks(system_info)
 def test_orphan_mce_detail_lines_not_reported_as_unknown(system_info):
     """When analysis window omits MCn_STATUS, trailing detail lines must not become unknowns."""
     dmesg_content = (
-        "kern  :emerg : 2026-07-14T22:21:10,315164-07:00 "
-        "[Hardware Error]: IPID: 0x000001e11ccc0005, Syndrome: 0x000000005a800001\n"
-        "kern  :emerg : 2026-07-14T22:21:10,335516-07:00 "
+        "kern  :emerg : 2038-01-19T00:00:04,000000+00:00 "
+        "[Hardware Error]: IPID: 0x0000000000000001, Syndrome: 0x0000000000000002\n"
+        "kern  :emerg : 2038-01-19T00:00:05,000000+00:00 "
         "[Hardware Error]: cache level: L3/GEN, mem/io: IO, mem-tx: GEN, part-proc: SRC (no timeout)\n"
-        "kern  :err   : 2026-07-14T22:21:10,400000-07:00 unrelated plugin failure\n"
+        "kern  :err   : 2038-01-19T00:00:06,000000+00:00 unrelated plugin failure\n"
     )
 
     analyzer = DmesgAnalyzer(system_info=system_info)
@@ -1360,20 +1360,22 @@ def test_orphan_mce_detail_lines_not_reported_as_unknown(system_info):
 
 
 def test_filtered_window_orphan_mce_tail_not_unknown(system_info):
-    """i198-maxcorestim: analysis window can start after MCn_STATUS but before IPID/cache tail."""
+    """Analysis window can start after MCn_STATUS but before IPID/cache tail lines."""
     dmesg_content = (
-        "kern  :info  : 2026-07-14T22:21:10,254124-07:00 mce: [Hardware Error]: Machine check events logged\n"
-        "kern  :emerg : 2026-07-14T22:21:10,266984-07:00 [Hardware Error]: Corrected error, no action required.\n"
-        "kern  :emerg : 2026-07-14T22:21:10,280615-07:00 "
-        "[Hardware Error]: CPU:56 (1a:51:0) MC60_STATUS[Over|CE|MiscV|-|-|-|SyndV|UECC|-|-|-]: 0xd8202000000c080b\n"
-        "kern  :emerg : 2026-07-14T22:21:10,303837-07:00 [Hardware Error]: PPIN: 0x00831e03ffcb8015\n"
-        "kern  :emerg : 2026-07-14T22:21:10,315164-07:00 "
-        "[Hardware Error]: IPID: 0x000001e11ccc0005, Syndrome: 0x000000005a800001\n"
-        "kern  :emerg : 2026-07-14T22:21:10,335516-07:00 "
+        "kern  :info  : 2038-01-19T00:00:10,254124+00:00 "
+        "mce: [Hardware Error]: Machine check events logged\n"
+        "kern  :emerg : 2038-01-19T00:00:10,266984+00:00 "
+        "[Hardware Error]: Corrected error, no action required.\n"
+        "kern  :emerg : 2038-01-19T00:00:10,280615+00:00 "
+        "[Hardware Error]: CPU:12 (00:00:0) MC60_STATUS[Over|CE|MiscV|-|-|-|SyndV|UECC|-|-|-]: 0xaaa\n"
+        "kern  :emerg : 2038-01-19T00:00:10,303837+00:00 [Hardware Error]: PPIN: 0xbbbbbbbbbbbbbbbb\n"
+        "kern  :emerg : 2038-01-19T00:00:10,315164+00:00 "
+        "[Hardware Error]: IPID: 0x0000000000000001, Syndrome: 0x0000000000000002\n"
+        "kern  :emerg : 2038-01-19T00:00:10,335516+00:00 "
         "[Hardware Error]: cache level: L3/GEN, mem/io: IO, mem-tx: GEN, part-proc: SRC (no timeout)\n"
     )
     analysis_range_start = datetime.datetime.fromisoformat(
-        "2026-07-14 22:21:10.314-07:00"
+        "2038-01-19T00:00:10.314000+00:00"
     ).astimezone(datetime.timezone.utc)
 
     analyzer = DmesgAnalyzer(system_info=system_info)
