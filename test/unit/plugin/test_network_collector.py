@@ -30,6 +30,12 @@ import pytest
 from nodescraper.enums.executionstatus import ExecutionStatus
 from nodescraper.enums.systeminteraction import SystemInteractionLevel
 from nodescraper.models.systeminfo import OSFamily
+from nodescraper.plugins.inband.network.ethtool_vendor import (
+    Cx7EthtoolStatistics,
+    PollaraEthtoolStatistics,
+    Thor2EthtoolStatistics,
+    extract_queue_counters,
+)
 from nodescraper.plugins.inband.network.network_collector import NetworkCollector
 from nodescraper.plugins.inband.network.networkdata import (
     EthtoolInfo,
@@ -510,7 +516,10 @@ def test_parse_ethtool_empty_output(collector):
 
 
 def test_parse_ethtool_statistics(collector):
-    """Test parsing ethtool -S output (statistics) for error/health analysis."""
+    """Test parsing ethtool -S output (statistics) for error/health analysis.
+
+    Per-queue bracket lines keep their full raw name so vendor queue patterns match.
+    """
     output = """NIC statistics:
      [0]: rx_ucast_packets: 162692536538787551
      [0]: rx_errors: 0
@@ -519,11 +528,49 @@ def test_parse_ethtool_statistics(collector):
      rx_total_buf_errors: 0"""
     stats = collector._parse_ethtool_statistics(output, "abc1p1")
     assert stats.get("netdev") == "abc1p1"
-    assert stats.get("0_rx_ucast_packets") == "162692536538787551"
-    assert stats.get("0_rx_errors") == "0"
-    assert stats.get("1_rx_ucast_packets") == "79657418409137764"
+    assert stats.get("[0]: rx_ucast_packets") == "162692536538787551"
+    assert stats.get("[0]: rx_errors") == "0"
+    assert stats.get("[1]: rx_ucast_packets") == "79657418409137764"
     assert stats.get("rx_total_l4_csum_errors") == "0"
     assert stats.get("rx_total_buf_errors") == "0"
+
+
+def test_extract_queue_counters_thor2():
+    """Thor2 per-queue counters are the bracket-indexed "[<int>]" lines."""
+    stats = {
+        "netdev": "benic1p1",
+        "[0]: rx_ucast_packets": "5",
+        "[15]: tx_errors": "0",
+        "rx_total_l4_csum_errors": "0",
+    }
+    queue = extract_queue_counters(stats, Thor2EthtoolStatistics.queue_counter_regex)
+    assert queue == {"[0]: rx_ucast_packets": 5, "[15]: tx_errors": 0}
+    assert "rx_total_l4_csum_errors" not in queue
+    assert "netdev" not in queue
+
+
+def test_extract_queue_counters_pollara():
+    """Pollara per-queue counters start with "rx_<int>" / "tx_<int>"."""
+    stats = {
+        "rx_0_pkts": "3",
+        "tx_12_bytes": "9",
+        "rx_csum_error": "0",
+        "frames_tx_pri_0": "1",
+    }
+    queue = extract_queue_counters(stats, PollaraEthtoolStatistics.queue_counter_regex)
+    assert queue == {"rx_0_pkts": 3, "tx_12_bytes": 9}
+
+
+def test_extract_queue_counters_cx7():
+    """CX7 per-queue counters start with "rx<int>" / "tx<int>"."""
+    stats = {
+        "rx0_packets": "7",
+        "tx3_bytes": "8",
+        "rx_out_of_buffer": "0",
+        "rx_prio0_pause": "2",
+    }
+    queue = extract_queue_counters(stats, Cx7EthtoolStatistics.queue_counter_regex)
+    assert queue == {"rx0_packets": 7, "tx3_bytes": 8}
 
 
 def test_network_data_model_creation(collector):
@@ -650,13 +697,10 @@ def test_network_accessibility_failure(collector, conn_mock):
         assert accessible is False
 
 
-def test_collect_data_includes_rdma_ethtool(collector, conn_mock):
-    """RDMA-scoped ethtool -S is stored on NetworkDataModel when rdma link succeeds."""
-    import json
-
+def test_collect_data_includes_ethtool_statistics(collector, conn_mock):
+    """ethtool -S is collected for vendor NICs via driver detection (no RDMA)."""
     collector.system_info.os_family = OSFamily.LINUX
 
-    rdma_link = [{"netdev": "eth0", "ifname": "bnxt0"}]
     ethtool_s_bnxt = "NIC statistics:\n    tx_pfc_frames: 0\n    rx_pause_frames: 0\n"
 
     def run_sut_cmd_side_effect(cmd, **kwargs):
@@ -668,8 +712,8 @@ def test_collect_data_includes_rdma_ethtool(collector, conn_mock):
             return MagicMock(exit_code=0, stdout=IP_RULE_OUTPUT, command=cmd)
         elif "neighbor show" in cmd:
             return MagicMock(exit_code=0, stdout=IP_NEIGHBOR_OUTPUT, command=cmd)
-        elif "rdma link -j" in cmd:
-            return MagicMock(exit_code=0, stdout=json.dumps(rdma_link), command=cmd)
+        elif "ethtool -i" in cmd and "eth0" in cmd:
+            return MagicMock(exit_code=0, stdout="driver: bnxt_en\nversion: 1.0\n", command=cmd)
         elif "ethtool -S" in cmd and "eth0" in cmd:
             return MagicMock(exit_code=0, stdout=ethtool_s_bnxt, command=cmd)
         elif "ethtool" in cmd:
@@ -684,8 +728,46 @@ def test_collect_data_includes_rdma_ethtool(collector, conn_mock):
 
     assert result.status == ExecutionStatus.OK
     assert data is not None
-    assert "eth0" in data.rdma_ethtool_netdevs
-    assert len(data.rdma_ethtool_statistics) == 1
-    assert data.rdma_ethtool_statistics[0].netdev == "eth0"
-    assert data.rdma_ethtool_statistics[0].rdma_ifname == "bnxt0"
-    assert data.rdma_ethtool_statistics[0].vendor_statistics is not None
+    # lo has no vendor driver and is skipped; eth0 (bnxt_en) is collected
+    assert data.ethtool_netdevs == ["eth0"]
+    assert len(data.ethtool_statistics) == 1
+    assert data.ethtool_statistics[0].netdev == "eth0"
+    assert data.ethtool_statistics[0].driver == "bnxt_en"
+    assert data.ethtool_statistics[0].vendor_statistics is not None
+
+
+def test_collect_data_skips_non_vendor_netdev(collector, conn_mock):
+    """ethtool -S is not run for netdevs whose driver is not a known vendor."""
+    collector.system_info.os_family = OSFamily.LINUX
+
+    ethtool_s_called = {"value": False}
+
+    def run_sut_cmd_side_effect(cmd, **kwargs):
+        if "addr show" in cmd:
+            return MagicMock(exit_code=0, stdout=IP_ADDR_OUTPUT, command=cmd)
+        elif "route show" in cmd:
+            return MagicMock(exit_code=0, stdout=IP_ROUTE_OUTPUT, command=cmd)
+        elif "rule show" in cmd:
+            return MagicMock(exit_code=0, stdout=IP_RULE_OUTPUT, command=cmd)
+        elif "neighbor show" in cmd:
+            return MagicMock(exit_code=0, stdout=IP_NEIGHBOR_OUTPUT, command=cmd)
+        elif "ethtool -i" in cmd and "eth0" in cmd:
+            return MagicMock(exit_code=0, stdout="driver: e1000e\n", command=cmd)
+        elif "ethtool -S" in cmd:
+            ethtool_s_called["value"] = True
+            return MagicMock(exit_code=0, stdout="NIC statistics:\n", command=cmd)
+        elif "ethtool" in cmd:
+            return MagicMock(exit_code=1, stdout="", command=cmd)
+        elif "lldpcli" in cmd or "lldpctl" in cmd:
+            return MagicMock(exit_code=1, stdout="", command=cmd)
+        return MagicMock(exit_code=1, stdout="", command=cmd)
+
+    collector._run_sut_cmd = MagicMock(side_effect=run_sut_cmd_side_effect)
+
+    result, data = collector.collect_data()
+
+    assert result.status == ExecutionStatus.OK
+    assert data is not None
+    assert data.ethtool_netdevs == []
+    assert data.ethtool_statistics == []
+    assert ethtool_s_called["value"] is False
