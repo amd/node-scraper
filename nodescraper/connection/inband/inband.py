@@ -162,9 +162,7 @@ class InBandConnection(abc.ABC):
         """Run an in band shell command.
 
         Args:
-            command (ShellCommand): full shell string (legacy) or argv list (preferred).
-                When a sequence is passed, collectors should use shell=False locally and
-                safely quoted execution remotely.
+            command (ShellCommand): shell command string, or argv tokens (quoted over SSH).
             sudo (bool, optional): run command with sudo (Linux only). Defaults to False.
             timeout (int, optional): timeout for command in seconds. Defaults to 300.
             strip (bool, optional): strip output of command. Defaults to True.

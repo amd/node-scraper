@@ -47,7 +47,7 @@ class LocalShell(InBandConnection):
         """Run a local in band shell command.
 
         Args:
-            command (ShellCommand): shell string (legacy) or argv list (preferred).
+            command (ShellCommand): shell command string, or argv tokens for shell=False execution.
             sudo (bool, optional): run command with sudo (Linux only). Defaults to False.
             timeout (int, optional): timeout for command in seconds. Defaults to 300.
             strip (bool, optional): strip output of command. Defaults to True.

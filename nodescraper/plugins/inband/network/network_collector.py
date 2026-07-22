@@ -32,7 +32,7 @@ from pydantic import ValidationError
 from nodescraper.base import InBandDataCollector
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.models import TaskResult
-from nodescraper.utils import get_exception_traceback
+from nodescraper.utils import get_exception_traceback, shell_quote
 
 from .collector_args import NetworkCollectorArgs
 from .ethtool_vendor import (
@@ -729,17 +729,16 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
                 f"Valid options are: 'ping', 'wget', 'curl'"
             )
 
-        # Determine ping options based on OS
+        url_q = shell_quote(url)
         if cmd == "ping":
             if self.system_info.os_family == OSFamily.LINUX:
-                argv = [self.CMD_PING, url, "-c", "1"]
+                result = self._run_sut_cmd(f"{self.CMD_PING} {url_q} -c 1")
             else:
-                argv = [self.CMD_PING, url, "-n", "1"]
-            result = self._run_sut_argv(argv)
+                result = self._run_sut_cmd(f"{self.CMD_PING} {url_q} -n 1")
         elif cmd == "wget":
-            result = self._run_sut_argv([self.CMD_WGET, url])
+            result = self._run_sut_cmd(f"{self.CMD_WGET} {url_q}")
         else:  # curl
-            result = self._run_sut_argv([self.CMD_CURL, url])
+            result = self._run_sut_cmd(f"{self.CMD_CURL} {url_q}")
 
         if result.exit_code == 0:
             self._log_event(

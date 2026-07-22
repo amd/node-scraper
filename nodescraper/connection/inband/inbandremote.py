@@ -137,7 +137,7 @@ class RemoteShell(InBandConnection):
         """Run a shell command over ssh.
 
         Args:
-            command (ShellCommand): shell string (legacy) or argv list (preferred).
+            command (ShellCommand): shell command string, or argv tokens (quoted for SSH).
             sudo (bool, optional): run command with sudo (Linux only). Defaults to False.
             timeout (int, optional): timeout for command in seconds. Defaults to 300.
             strip (bool, optional): strip output of command. Defaults to True.
