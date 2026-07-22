@@ -31,7 +31,7 @@ from pydantic import ValidationError
 
 from nodescraper.base import InBandDataCollector
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
-from nodescraper.models import TaskResult
+from nodescraper.models import CollectorArgs, TaskResult
 from nodescraper.utils import get_exception_traceback
 
 from .rdmadata import (
@@ -45,7 +45,7 @@ from .rdmadata import (
 )
 
 
-class RdmaCollector(InBandDataCollector[RdmaDataModel, None]):
+class RdmaCollector(InBandDataCollector[RdmaDataModel, CollectorArgs]):
     """Collect RDMA status and statistics via rdma link and rdma statistic commands."""
 
     DATA_MODEL = RdmaDataModel
@@ -291,7 +291,9 @@ class RdmaCollector(InBandDataCollector[RdmaDataModel, None]):
             )
         return None
 
-    def collect_data(self, args=None) -> tuple[TaskResult, Optional[RdmaDataModel]]:
+    def collect_data(
+        self, args: Optional[CollectorArgs] = None
+    ) -> tuple[TaskResult, Optional[RdmaDataModel]]:
         """Collect RDMA statistics, link data, and device/link text output.
 
         Returns:
