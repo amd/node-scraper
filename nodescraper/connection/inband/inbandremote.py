@@ -128,10 +128,10 @@ class RemoteShell(InBandConnection):
         timeout: int = 30,
         strip: bool = True,
     ) -> CommandArtifact:
-        """Run a shell command over ssh
+        """Run a shell command over ssh.
 
         Args:
-            command (str): command to run
+            command (str): shell command string.
             sudo (bool, optional): run command with sudo (Linux only). Defaults to False.
             timeout (int, optional): timeout for command in seconds. Defaults to 300.
             strip (bool, optional): strip output of command. Defaults to True.
@@ -140,13 +140,15 @@ class RemoteShell(InBandConnection):
             CommandArtifact: Command artifact with stdout, stderr, which have been decoded and stripped as well as exit code
         """
         write_password = sudo and self.ssh_params.username != "root" and self.ssh_params.password
+
+        cmd_str = command
         if write_password:
-            command = f"sudo -S -p '' {command}"
+            cmd_str = f"sudo -S -p '' {cmd_str}"
         elif sudo:
-            command = f"sudo {command}"
+            cmd_str = f"sudo {cmd_str}"
 
         try:
-            stdin, stdout, stderr = self.client.exec_command(command, timeout=timeout)
+            stdin, stdout, stderr = self.client.exec_command(cmd_str, timeout=timeout)
 
             if write_password:
                 stdin.write(
@@ -166,7 +168,7 @@ class RemoteShell(InBandConnection):
             exit_code = 124
 
         return CommandArtifact(
-            command=command,
+            command=cmd_str,
             stdout=stdout_str.strip() if strip else stdout_str,
             stderr=stderr_str.strip() if strip else stderr_str,
             exit_code=exit_code,
