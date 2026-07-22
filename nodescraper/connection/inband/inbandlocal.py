@@ -25,21 +25,19 @@
 ###############################################################################
 import os
 import subprocess
-from typing import Sequence
 
 from .inband import (
     BaseFileArtifact,
     CommandArtifact,
     InBandConnection,
 )
-from .shellcommand import ShellCommand, build_exec_argv, format_argv_display
 
 
 class LocalShell(InBandConnection):
 
     def run_command(
         self,
-        command: ShellCommand,
+        command: str,
         sudo: bool = False,
         timeout: int = 300,
         strip: bool = True,
@@ -47,7 +45,7 @@ class LocalShell(InBandConnection):
         """Run a local in band shell command.
 
         Args:
-            command (ShellCommand): shell command string, or argv tokens for shell=False execution.
+            command (str): shell command string.
             sudo (bool, optional): run command with sudo (Linux only). Defaults to False.
             timeout (int, optional): timeout for command in seconds. Defaults to 300.
             strip (bool, optional): strip output of command. Defaults to True.
@@ -55,13 +53,6 @@ class LocalShell(InBandConnection):
         Returns:
             CommandArtifact: command result object
         """
-        if isinstance(command, str):
-            return self._run_shell_string(command, sudo=sudo, timeout=timeout, strip=strip)
-        return self._run_argv(command, sudo=sudo, timeout=timeout, strip=strip)
-
-    def _run_shell_string(
-        self, command: str, *, sudo: bool, timeout: int, strip: bool
-    ) -> CommandArtifact:
         if sudo:
             command = f"sudo {command}"
 
@@ -77,29 +68,6 @@ class LocalShell(InBandConnection):
 
         return CommandArtifact(
             command=command,
-            stdout=res.stdout.strip() if strip else res.stdout,
-            stderr=res.stderr.strip() if strip else res.stderr,
-            exit_code=res.returncode,
-        )
-
-    def _run_argv(
-        self, argv: Sequence[str], *, sudo: bool, timeout: int, strip: bool
-    ) -> CommandArtifact:
-        exec_argv = build_exec_argv(argv, sudo=sudo)
-        display = format_argv_display(exec_argv)
-
-        res = subprocess.run(
-            exec_argv,
-            encoding="utf-8",
-            shell=False,
-            errors="replace",
-            timeout=timeout,
-            capture_output=True,
-            check=False,
-        )
-
-        return CommandArtifact(
-            command=display,
             stdout=res.stdout.strip() if strip else res.stdout,
             stderr=res.stderr.strip() if strip else res.stderr,
             exit_code=res.returncode,
