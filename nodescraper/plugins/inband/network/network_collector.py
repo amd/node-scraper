@@ -23,7 +23,6 @@
 # SOFTWARE.
 #
 ###############################################################################
-import json
 import re
 from typing import Dict, List, Optional, Tuple
 
@@ -39,6 +38,7 @@ from .ethtool_vendor import (
     VENDOR_PREFIX_MAP,
     EthtoolStatistics,
     VendorEthtoolStatisticsModel,
+    extract_queue_counters,
 )
 from .networkdata import (
     EthtoolInfo,
@@ -61,7 +61,7 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
     CMD_NEIGHBOR = "ip neighbor show"
     CMD_ETHTOOL_TEMPLATE = "ethtool {interface}"
     CMD_ETHTOOL_S_TEMPLATE = "ethtool -S {interface}"
-    CMD_RDMA_LINK_JSON = "rdma link -j"
+    CMD_ETHTOOL_I_TEMPLATE = "ethtool -i {interface}"
     CMD_PING = "ping"
     CMD_WGET = "wget"
     CMD_CURL = "curl"
@@ -453,6 +453,10 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
     def _parse_ethtool_statistics(self, output: str, interface: str) -> Dict[str, str]:
         """Parse 'ethtool -S <interface>' output into a key-value dictionary.
 
+        Per-queue counters keep their full raw field name (e.g. "[0]: rx_ucast_packets")
+        so vendor ``queue_counter_regex`` patterns can match them; scalar counters are
+        stored under their plain name (e.g. "rx_total_l4_csum_errors").
+
         Args:
             output: Raw output from 'ethtool -S <interface>' command
             interface: Name of the network interface (for netdev key)
@@ -462,24 +466,18 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
         """
         stats_dict: Dict[str, str] = {}
         for line in output.splitlines():
-            if ":" not in line:
+            line = line.strip()
+            if not line:
                 continue
             if "NIC statistics" in line:
                 stats_dict["netdev"] = interface
-            elif "]: " in line and line.strip().startswith("["):
-                # Format: "     [0]: rx_ucast_packets: 162"
-                bracket_part, rest = line.split("]: ", 1)
-                index = bracket_part.strip().lstrip("[")
-                if ": " in rest:
-                    stat_key, stat_value = rest.split(": ", 1)
-                    key = f"{index}_{stat_key.strip()}"
-                    stats_dict[key] = stat_value.strip()
-                else:
-                    key, value = line.split(":", 1)
-                    stats_dict[key.strip()] = value.strip()
-            else:
-                key, value = line.split(":", 1)
-                stats_dict[key.strip()] = value.strip()
+                continue
+            if ": " not in line:
+                continue
+            # Split on the last ": " so per-queue lines like "[0]: rx_ucast_packets: 5"
+            # preserve their full "[0]: rx_ucast_packets" name for vendor queue matching.
+            name, value = line.rsplit(": ", 1)
+            stats_dict[name.strip()] = value.strip()
         return stats_dict
 
     def _collect_ethtool_info(
@@ -526,47 +524,15 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
 
         return ethtool_data, skipped
 
-    def _collect_rdma_link_json(self) -> Optional[list[dict]]:
-        """Parse JSON from `rdma link -j`. Returns None on failure, [] when no links."""
-        res = self._run_sut_cmd(self.CMD_RDMA_LINK_JSON)
-        if res.exit_code != 0:
-            self._log_event(
-                category=EventCategory.NETWORK,
-                description="rdma link -j failed (RDMA-scoped ethtool collection skipped)",
-                data={
-                    "command": self.CMD_RDMA_LINK_JSON,
-                    "exit_code": res.exit_code,
-                    "stderr": res.stderr,
-                },
-                priority=EventPriority.WARNING,
-            )
-            return None
-        if not res.stdout.strip():
-            return []
-        try:
-            parsed = json.loads(res.stdout)
-        except json.JSONDecodeError as e:
-            self._log_event(
-                category=EventCategory.NETWORK,
-                description="Failed to parse rdma link -j JSON",
-                data={"exception": get_exception_traceback(e)},
-                priority=EventPriority.WARNING,
-            )
-            return None
-        if not isinstance(parsed, list):
-            self._log_event(
-                category=EventCategory.NETWORK,
-                description="Unexpected rdma link -j JSON type",
-                data={"data_type": type(parsed).__name__},
-                priority=EventPriority.WARNING,
-            )
-            return None
-        return parsed
+    def _collect_ethtool_statistic(self, netdev: str, driver: str) -> Optional[EthtoolStatistics]:
+        """Run `ethtool -S` for netdev and attach vendor-parsed stats.
 
-    def _collect_rdma_scoped_ethtool_statistic(
-        self, netdev: str, ifname: str
-    ) -> Optional[EthtoolStatistics]:
-        """Run `ethtool -S` for netdev and attach vendor-parsed stats (prefix from RDMA ifname)."""
+        The vendor model is selected by matching ``driver`` (from ``ethtool -i``)
+        against the known vendor prefixes in ``VENDOR_PREFIX_MAP``.
+
+        Returns:
+            EthtoolStatistics, or None on command failure.
+        """
         cmd_s = self.CMD_ETHTOOL_S_TEMPLATE.format(interface=netdev)
         res = self._run_sut_cmd(cmd_s, sudo=True)
         if res.exit_code != 0:
@@ -586,10 +552,15 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
         stats_dict = self._parse_ethtool_statistics(res.stdout, netdev)
 
         vendor_stats: Optional[VendorEthtoolStatisticsModel] = None
+        queue_statistics: Dict[str, int] = {}
         for prefix, vendor_cls in VENDOR_PREFIX_MAP.items():
-            if ifname.startswith(prefix):
+            if driver.startswith(prefix):
                 vendor_fields = set(vendor_cls.model_fields.keys())
                 stat_fields = set(stats_dict.keys()) - {"netdev"}
+
+                queue_statistics = extract_queue_counters(
+                    stats_dict, vendor_cls.queue_counter_regex
+                )
 
                 missing_fields = vendor_fields - stat_fields
                 if missing_fields:
@@ -599,7 +570,7 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
                         description=f"Missing fields in ethtool statistic for {netdev}",
                         data={
                             "netdev": netdev,
-                            "ifname": ifname,
+                            "driver": driver,
                             "missing_fields_count": len(sorted_missing),
                             "missing_fields": sorted_missing[:50],
                         },
@@ -620,18 +591,36 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
 
         return EthtoolStatistics(
             netdev=netdev,
-            rdma_ifname=ifname or None,
+            driver=driver or None,
             vendor_statistics=vendor_stats,
+            queue_statistics=queue_statistics,
         )
 
-    def _collect_rdma_scoped_ethtool(
-        self, exclusions: Optional[List[re.Pattern]] = None
+    def _get_netdev_driver(self, netdev: str) -> str:
+        """Return the kernel driver for a netdev via `ethtool -i` ("" on failure)."""
+        cmd = self.CMD_ETHTOOL_I_TEMPLATE.format(interface=netdev)
+        res = self._run_sut_cmd(cmd, sudo=True)
+        if res.exit_code != 0:
+            return ""
+        for line in res.stdout.splitlines():
+            line = line.strip()
+            if line.startswith("driver:"):
+                return line.split(":", 1)[1].strip()
+        return ""
+
+    def _collect_ethtool_statistics(
+        self,
+        interfaces: List[NetworkInterface],
+        exclusions: Optional[List[re.Pattern]] = None,
     ) -> tuple[List[str], List[EthtoolStatistics], set[str]]:
-        """Collect ethtool -S for netdevs listed on RDMA links (error-scraper EthtoolCollector parity).
+        """Collect ethtool -S for vendor netdevs discovered from `ip addr`.
+
+        Each interface's driver is resolved via `ethtool -i`; only interfaces whose
+        driver matches a known vendor prefix (see VENDOR_PREFIX_MAP) are collected.
 
         Args:
-            exclusions: Compiled regex patterns; netdevs whose name matches any pattern
-                are skipped (ethtool -S is not run against them).
+            interfaces: Interfaces discovered from `ip addr` to consider.
+            exclusions: Compiled regex patterns; matching netdevs are skipped.
 
         Returns:
             Tuple of (netdev list, statistics list, set of netdev names skipped due to
@@ -641,38 +630,27 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
         statistics_list: List[EthtoolStatistics] = []
         skipped: set[str] = set()
 
-        link_data = self._collect_rdma_link_json()
-        if link_data is None:
-            return netdev_list, statistics_list, skipped
-
-        for link in link_data:
-            if not isinstance(link, dict):
-                self._log_event(
-                    category=EventCategory.NETWORK,
-                    description="Invalid data type for RDMA link entry",
-                    data={"data_type": type(link).__name__},
-                    priority=EventPriority.WARNING,
-                )
+        for iface in interfaces:
+            netdev = iface.name
+            if not netdev:
                 continue
-
-            netdev = link.get("netdev") or ""
-            ifname = link.get("ifname") or ""
-
-            if netdev:
-                if exclusions and any(pattern.search(netdev) for pattern in exclusions):
-                    skipped.add(netdev)
-                    continue
-                netdev_list.append(netdev)
-                stat = self._collect_rdma_scoped_ethtool_statistic(netdev, ifname)
-                if stat is not None:
-                    statistics_list.append(stat)
+            if exclusions and any(pattern.search(netdev) for pattern in exclusions):
+                skipped.add(netdev)
+                continue
+            driver = self._get_netdev_driver(netdev)
+            if not any(driver.startswith(prefix) for prefix in VENDOR_PREFIX_MAP):
+                continue
+            netdev_list.append(netdev)
+            stat = self._collect_ethtool_statistic(netdev, driver)
+            if stat is not None:
+                statistics_list.append(stat)
 
         if netdev_list:
             self._log_event(
                 category=EventCategory.NETWORK,
                 description=(
-                    f"Collected RDMA-scoped ethtool -S for {len(statistics_list)}/"
-                    f"{len(netdev_list)} netdev(s) from rdma link"
+                    f"Collected ethtool -S for {len(statistics_list)}/"
+                    f"{len(netdev_list)} vendor netdev(s)"
                 ),
                 priority=EventPriority.INFO,
             )
@@ -778,8 +756,8 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
         neighbors = []
         ethtool_data: Dict[str, EthtoolInfo] = {}
         network_accessible: Optional[bool] = None
-        rdma_ethtool_netdevs: List[str] = []
-        rdma_ethtool_statistics: List[EthtoolStatistics] = []
+        ethtool_netdevs: List[str] = []
+        ethtool_statistics: List[EthtoolStatistics] = []
         skipped_devices: set[str] = set()
 
         # Compile device-exclusion regex patterns (netdevs matching any pattern are skipped)
@@ -835,11 +813,11 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
 
         if self.system_info.os_family == OSFamily.LINUX:
             (
-                rdma_ethtool_netdevs,
-                rdma_ethtool_statistics,
-                rdma_skipped,
-            ) = self._collect_rdma_scoped_ethtool(compiled_exclusions)
-            skipped_devices |= rdma_skipped
+                ethtool_netdevs,
+                ethtool_statistics,
+                ethtool_stat_skipped,
+            ) = self._collect_ethtool_statistics(interfaces, compiled_exclusions)
+            skipped_devices |= ethtool_stat_skipped
 
         # Collect routing table
         res_route = self._run_sut_cmd(self.CMD_ROUTE)
@@ -905,8 +883,8 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
             rules=rules,
             neighbors=neighbors,
             ethtool_info=ethtool_data,
-            rdma_ethtool_netdevs=rdma_ethtool_netdevs,
-            rdma_ethtool_statistics=rdma_ethtool_statistics,
+            ethtool_netdevs=ethtool_netdevs,
+            ethtool_statistics=ethtool_statistics,
             accessible=network_accessible,
         )
         self.result.status = ExecutionStatus.OK
