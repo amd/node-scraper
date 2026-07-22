@@ -187,6 +187,18 @@ def mce_non_status_hardware_error_line_indices(content: str) -> frozenset[int]:
     )
 
 
+def _primary_starters_in_mce_status_blocks(
+    lines: Sequence[str], defining: frozenset[int]
+) -> frozenset[int]:
+    """Return primary MCE header lines that belong to blocks with MCn_STATUS CE/UC rows."""
+    primary_starters = {index for index, line in enumerate(lines) if _is_mce_primary_starter(line)}
+    suppressed: set[int] = set()
+    for start, end in iter_hardware_error_block_ranges(lines):
+        if any(index in defining for index in range(start, end)):
+            suppressed.update(index for index in range(start, end) if index in primary_starters)
+    return frozenset(suppressed)
+
+
 def mce_known_regex_skip_line_indices(
     content: str,
     ignore_banks: Optional[FrozenSet[int]] = None,
@@ -198,7 +210,9 @@ def mce_known_regex_skip_line_indices(
     primary_starters = frozenset(
         index for index, line in enumerate(lines) if _is_mce_primary_starter(line)
     )
+    primary_in_status_blocks = _primary_starters_in_mce_status_blocks(lines, defining)
     skipped = set(hardware_error_block_line_indices(content)) - defining - primary_starters
+    skipped.update(primary_in_status_blocks)
     skipped.update(ignored_mce_block_line_indices(content, ignored))
     return frozenset(skipped)
 
