@@ -76,7 +76,7 @@ from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     normalize_static_limit_dict,
 )
 from nodescraper.plugins.inband.amdsmi.collector_args import AmdSmiCollectorArgs
-from nodescraper.utils import get_exception_traceback
+from nodescraper.utils import get_exception_traceback, shell_quote
 
 
 class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs]):
@@ -1489,7 +1489,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
         Returns:
             Optional[int]: AFID value or None if command fails or no value found
         """
-        cmd = self.CMD_RAS_AFID.format(cper_file=cper_file_path)
+        cmd = self.CMD_RAS_AFID.format(cper_file=shell_quote(cper_file_path))
         result = self._run_amd_smi(cmd)
 
         if result is None:

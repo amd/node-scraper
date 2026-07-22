@@ -31,7 +31,7 @@ from nodescraper.base import InBandDataCollector
 from nodescraper.connection.inband import TextFileArtifact
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.models import TaskResult
-from nodescraper.utils import strip_ansi_codes
+from nodescraper.utils import shell_quote, strip_ansi_codes
 
 from .collector_args import RocmCollectorArgs
 from .rocmdata import RocmDataModel
@@ -63,6 +63,7 @@ class RocmCollector(InBandDataCollector[RocmDataModel, RocmCollectorArgs]):
         """
         if args is None:
             args = RocmCollectorArgs()
+        rocm_path_q = shell_quote(args.rocm_path)
         version_paths = [
             f"{args.rocm_path}/.info/version-rocm",
             f"{args.rocm_path}/.info/version",
@@ -73,7 +74,7 @@ class RocmCollector(InBandDataCollector[RocmDataModel, RocmCollectorArgs]):
 
         # First, try to collect all sub-versions
         sub_versions_res = self._run_sut_cmd(
-            self.CMD_ROCM_SUB_VERSIONS_TMPL.format(rocm_path=args.rocm_path)
+            self.CMD_ROCM_SUB_VERSIONS_TMPL.format(rocm_path=rocm_path_q)
         )
         if sub_versions_res.exit_code == 0:
             for line in sub_versions_res.stdout.splitlines():
@@ -86,7 +87,7 @@ class RocmCollector(InBandDataCollector[RocmDataModel, RocmCollectorArgs]):
 
         # Determine the main ROCm version
         for path in version_paths:
-            res = self._run_sut_cmd(f"grep . {path}")
+            res = self._run_sut_cmd(f"grep . {shell_quote(path)}")
             if res.exit_code == 0:
                 try:
                     rocm_data = RocmDataModel(
@@ -124,15 +125,13 @@ class RocmCollector(InBandDataCollector[RocmDataModel, RocmCollectorArgs]):
         if rocm_data:
             # Collect latest versioned ROCm path (rocm-[3-7]*)
             versioned_path_res = self._run_sut_cmd(
-                self.CMD_ROCM_LATEST_TMPL.format(rocm_path=args.rocm_path)
+                self.CMD_ROCM_LATEST_TMPL.format(rocm_path=rocm_path_q)
             )
             if versioned_path_res.exit_code == 0:
                 rocm_data.rocm_latest_versioned_path = versioned_path_res.stdout.strip()
 
             # Collect all ROCm paths as list
-            all_paths_res = self._run_sut_cmd(
-                self.CMD_ROCM_DIRS_TMPL.format(rocm_path=args.rocm_path)
-            )
+            all_paths_res = self._run_sut_cmd(self.CMD_ROCM_DIRS_TMPL.format(rocm_path=rocm_path_q))
             if all_paths_res.exit_code == 0:
                 rocm_data.rocm_all_paths = [
                     path.strip()
@@ -141,7 +140,7 @@ class RocmCollector(InBandDataCollector[RocmDataModel, RocmCollectorArgs]):
                 ]
 
             # Collect rocminfo output as list of lines with ANSI codes stripped
-            rocminfo_cmd = self.CMD_ROCMINFO_TMPL.format(rocm_path=args.rocm_path)
+            rocminfo_cmd = self.CMD_ROCMINFO_TMPL.format(rocm_path=rocm_path_q)
             rocminfo_res = self._run_sut_cmd(rocminfo_cmd)
             rocminfo_artifact_content = ""
             if rocminfo_res.exit_code == 0:
@@ -178,7 +177,7 @@ class RocmCollector(InBandDataCollector[RocmDataModel, RocmCollectorArgs]):
                 ]
 
             # Collect clinfo output
-            clinfo_cmd = self.CMD_CLINFO_TMPL.format(rocm_path=args.rocm_path)
+            clinfo_cmd = self.CMD_CLINFO_TMPL.format(rocm_path=rocm_path_q)
             clinfo_res = self._run_sut_cmd(clinfo_cmd)
 
             # Always append clinfo section to artifact, even if empty or failed

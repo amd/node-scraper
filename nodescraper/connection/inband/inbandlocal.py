@@ -36,12 +36,16 @@ from .inband import (
 class LocalShell(InBandConnection):
 
     def run_command(
-        self, command: str, sudo: bool = False, timeout: int = 300, strip: bool = True
+        self,
+        command: str,
+        sudo: bool = False,
+        timeout: int = 300,
+        strip: bool = True,
     ) -> CommandArtifact:
-        """Run a local in band shell command
+        """Run a local in band shell command.
 
         Args:
-            command (str): command to run
+            command (str): shell command string.
             sudo (bool, optional): run command with sudo (Linux only). Defaults to False.
             timeout (int, optional): timeout for command in seconds. Defaults to 300.
             strip (bool, optional): strip output of command. Defaults to True.
