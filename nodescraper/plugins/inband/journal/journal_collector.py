@@ -31,7 +31,7 @@ from pydantic import ValidationError
 from nodescraper.base import InBandDataCollector
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.models import TaskResult
-from nodescraper.utils import get_exception_details
+from nodescraper.utils import get_exception_details, shell_quote
 
 from .collector_args import JournalCollectorArgs
 from .journaldata import JournalData, JournalJsonEntry
@@ -56,7 +56,8 @@ class JournalCollector(InBandDataCollector[JournalData, JournalCollectorArgs]):
         try:
             # safe check for args.boot
             if args is not None and getattr(args, "boot", None):
-                cmd = f"{self.CMD} -b {args.boot}"
+                boot_q = shell_quote(str(args.boot))
+                cmd = f"{self.CMD} -b {boot_q}"
 
             res = self._run_sut_cmd(cmd, sudo=True, log_artifact=False, strip=False)
 
@@ -99,7 +100,8 @@ class JournalCollector(InBandDataCollector[JournalData, JournalCollectorArgs]):
         try:
             # safe check for args.boot
             if args is not None and getattr(args, "boot", None):
-                cmd = f"{self.CMD_JSON} -b {args.boot}"
+                boot_q = shell_quote(str(args.boot))
+                cmd = f"{self.CMD_JSON} -b {boot_q}"
 
             res = self._run_sut_cmd(cmd, sudo=True, log_artifact=False, strip=False)
 

@@ -105,8 +105,6 @@ class EthtoolInfo(BaseModel):
     port: Optional[str] = None  # Port type (e.g., "Twisted Pair")
     auto_negotiation: Optional[str] = None  # Auto-negotiation status (e.g., "on", "off")
     link_detected: Optional[str] = None  # Link detection status (e.g., "yes", "no")
-    # ethtool -S (statistics) output: parsed key-value for error/health analysis
-    statistics: Dict[str, str] = Field(default_factory=dict)
 
 
 class NetworkDataModel(DataModel):
@@ -116,10 +114,8 @@ class NetworkDataModel(DataModel):
     routes: List[Route] = Field(default_factory=list)
     rules: List[RoutingRule] = Field(default_factory=list)
     neighbors: List[Neighbor] = Field(default_factory=list)
-    ethtool_info: Dict[str, EthtoolInfo] = Field(
-        default_factory=dict
-    )  # Interface name -> EthtoolInfo mapping
-    # RDMA-scoped ethtool -S: netdevs from `rdma link -j` with vendor-parsed counters
-    rdma_ethtool_netdevs: List[str] = Field(default_factory=list)
-    rdma_ethtool_statistics: List[EthtoolStatistics] = Field(default_factory=list)
+    ethtool_info: Dict[str, EthtoolInfo] = Field(default_factory=dict)
+    # ethtool -S vendor-parsed counters for netdevs whose driver matches a known vendor
+    ethtool_netdevs: List[str] = Field(default_factory=list)
+    ethtool_statistics: List[EthtoolStatistics] = Field(default_factory=list)
     accessible: Optional[bool] = None  # Network accessibility check via ping

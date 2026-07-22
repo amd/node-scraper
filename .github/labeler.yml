@@ -1,0 +1,47 @@
+# Path-based PR labels for actions/labeler v5+.
+# See: https://github.com/actions/labeler#pull-request-labeler
+
+documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - docs/**
+          - README.md
+          - .github/**/*.md
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file:
+          - .github/**
+
+tests:
+  - changed-files:
+      - any-glob-to-any-file:
+          - test/**
+
+plugins-inband:
+  - changed-files:
+      - any-glob-to-any-file:
+          - nodescraper/plugins/inband/**
+
+plugins-ooband:
+  - changed-files:
+      - any-glob-to-any-file:
+          - nodescraper/plugins/ooband/**
+
+plugins-serviceability:
+  - changed-files:
+      - any-glob-to-any-file:
+          - nodescraper/plugins/serviceability/**
+
+plugins-generic:
+  - changed-files:
+      - any-glob-to-any-file:
+          - nodescraper/plugins/generic_collection/**
+
+framework:
+  - changed-files:
+      - any-glob-to-any-file:
+          - nodescraper/base/**
+          - nodescraper/interfaces/**
+          - nodescraper/cli/**
+          - nodescraper/models/**

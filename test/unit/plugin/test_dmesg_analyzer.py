@@ -1022,11 +1022,11 @@ def test_priority_override_updates_unkown_dmesg_error(system_info):
     assert res.events[0].priority == EventPriority.ERROR
 
 
-def test_mce_threshold_raises_error_for_gpu(system_info):
+def test_mce_threshold_raises_error_for_status_lines(system_info):
     dmesg_content = (
-        "kern  :err   : 2024-10-07T10:17:15,145363-04:00 "
-        "amdgpu 0000:c1:00.0: amdgpu: socket: 4, die: 0 "
-        "3 correctable hardware errors detected in total in gfx block\n"
+        "[Hardware Error]: CPU0 MC0_STATUS[0x0|CE|]: 0x1\n"
+        "[Hardware Error]: CPU0 MC0_STATUS[0x0|CE|]: 0x2\n"
+        "[Hardware Error]: CPU0 MC0_STATUS[0x0|CE|]: 0x3\n"
     )
 
     analyzer = DmesgAnalyzer(system_info=system_info)
@@ -1038,7 +1038,7 @@ def test_mce_threshold_raises_error_for_gpu(system_info):
     threshold_events = [e for e in res.events if e.data.get("mce_threshold") == 3]
     assert len(threshold_events) == 1
     assert threshold_events[0].priority == EventPriority.ERROR
-    assert threshold_events[0].data["part"] == "GPU0/gfx"
+    assert threshold_events[0].data["part"] == "CPU0"
     assert threshold_events[0].data["correctable_mce_count"] == 3
     assert res.status == ExecutionStatus.ERROR
 
@@ -1065,8 +1065,8 @@ def test_mce_threshold_raises_error_for_cpu_colon_status(system_info):
 
 def test_mce_threshold_not_triggered_below_limit(system_info):
     dmesg_content = (
-        "kern  :warn  : 2024-06-11T14:30:00,123456+00:00 "
-        "mce: 2 correctable hardware errors detected in total in mc0 block on CPU1\n"
+        "[Hardware Error]: CPU1 MC0_STATUS[0x0|CE|]: 0x1\n"
+        "[Hardware Error]: CPU1 MC0_STATUS[0x0|CE|]: 0x2\n"
     )
 
     analyzer = DmesgAnalyzer(system_info=system_info)
@@ -1260,7 +1260,11 @@ def test_hardware_error_block_reports_mce_without_ignore(system_info):
         "[Hardware Error]: Corrected error, no action required.\n"
         "kern  :emerg : 2038-01-19T00:00:02,000000+00:00 "
         "[Hardware Error]: CPU:12 (00:00:0) MC60_STATUS[Over|CE|MiscV|-|-|-|SyndV|UECC|-|-|-]: 0xaaa\n"
-        "kern  :emerg : 2038-01-19T00:00:04,000000+00:00 [Hardware Error]: PPIN: 0xbbbbbbbbbbbbbbbb\n"
+        "kern  :emerg : 2038-01-19T00:00:03,000000+00:00 [Hardware Error]: PPIN: 0xbbbbbbbbbbbbbbbb\n"
+        "kern  :emerg : 2038-01-19T00:00:04,000000+00:00 "
+        "[Hardware Error]: IPID: 0x0000000000000001, Syndrome: 0x0000000000000001\n"
+        "kern  :emerg : 2038-01-19T00:00:05,000000+00:00 "
+        "[Hardware Error]: cache level: L3/GEN, mem/io: IO, mem-tx: GEN, part-proc: SRC (no timeout)\n"
     )
 
     analyzer = DmesgAnalyzer(system_info=system_info)
@@ -1270,12 +1274,18 @@ def test_hardware_error_block_reports_mce_without_ignore(system_info):
     )
 
     descriptions = {event.description for event in res.events}
+    unknown_events = [event for event in res.events if event.description == "Unknown dmesg error"]
+    mce_events = [event for event in res.events if event.description == "MCE Corrected Error"]
+    assert unknown_events == []
+    assert len(mce_events) == 1
+    assert "MC60_STATUS" in str(mce_events[0].data["match_content"])
     assert "Unknown dmesg error" not in descriptions
-    assert "MCE Corrected Error" in descriptions or "RAS Corrected Error" in descriptions
+    assert "MCE Corrected Error" in descriptions
+    assert "RAS Corrected Error" not in descriptions
 
 
 def test_mce_interleave_pattern_suppresses_block_with_ignored_banks(system_info):
-    """Dummy excerpt modeled on dmesg_mce_interleave.log: warn/blank lines inside MCE blocks."""
+    """Dummy excerpt: warn/blank lines interleaved inside MCE hardware-error blocks."""
     dmesg_content = (
         "kern  :info  : 2038-01-19T00:00:00,000000+00:00 "
         "mce: [Hardware Error]: Machine check events logged\n"
@@ -1326,3 +1336,102 @@ def test_mce_interleave_pattern_suppresses_block_with_ignored_banks(system_info)
     unknown_events = [event for event in res.events if event.description == "Unknown dmesg error"]
     assert len(unknown_events) == 1
     assert unknown_events[0].data["match_content"] == "dummy harness fault outside mce blocks"
+
+
+def test_orphan_mce_detail_lines_not_reported_as_unknown(system_info):
+    """When analysis window omits MCn_STATUS, trailing detail lines must not become unknowns."""
+    dmesg_content = (
+        "kern  :emerg : 2038-01-19T00:00:04,000000+00:00 "
+        "[Hardware Error]: IPID: 0x0000000000000001, Syndrome: 0x0000000000000002\n"
+        "kern  :emerg : 2038-01-19T00:00:05,000000+00:00 "
+        "[Hardware Error]: cache level: L3/GEN, mem/io: IO, mem-tx: GEN, part-proc: SRC (no timeout)\n"
+        "kern  :err   : 2038-01-19T00:00:06,000000+00:00 unrelated plugin failure\n"
+    )
+
+    analyzer = DmesgAnalyzer(system_info=system_info)
+    res = analyzer.analyze_data(
+        DmesgData(dmesg_content=dmesg_content),
+        args=DmesgAnalyzerArgs(check_unknown_dmesg_errors=True),
+    )
+
+    unknown_events = [event for event in res.events if event.description == "Unknown dmesg error"]
+    assert len(unknown_events) == 1
+    assert unknown_events[0].data["match_content"] == "unrelated plugin failure"
+
+
+def test_filtered_window_orphan_mce_tail_not_unknown(system_info):
+    """Analysis window can start after MCn_STATUS but before IPID/cache tail lines."""
+    dmesg_content = (
+        "kern  :info  : 2038-01-19T00:00:10,254124+00:00 "
+        "mce: [Hardware Error]: Machine check events logged\n"
+        "kern  :emerg : 2038-01-19T00:00:10,266984+00:00 "
+        "[Hardware Error]: Corrected error, no action required.\n"
+        "kern  :emerg : 2038-01-19T00:00:10,280615+00:00 "
+        "[Hardware Error]: CPU:12 (00:00:0) MC60_STATUS[Over|CE|MiscV|-|-|-|SyndV|UECC|-|-|-]: 0xaaa\n"
+        "kern  :emerg : 2038-01-19T00:00:10,303837+00:00 [Hardware Error]: PPIN: 0xbbbbbbbbbbbbbbbb\n"
+        "kern  :emerg : 2038-01-19T00:00:10,315164+00:00 "
+        "[Hardware Error]: IPID: 0x0000000000000001, Syndrome: 0x0000000000000002\n"
+        "kern  :emerg : 2038-01-19T00:00:10,335516+00:00 "
+        "[Hardware Error]: cache level: L3/GEN, mem/io: IO, mem-tx: GEN, part-proc: SRC (no timeout)\n"
+    )
+    analysis_range_start = datetime.datetime.fromisoformat(
+        "2038-01-19T00:00:10.314000+00:00"
+    ).astimezone(datetime.timezone.utc)
+
+    analyzer = DmesgAnalyzer(system_info=system_info)
+    res = analyzer.analyze_data(
+        DmesgData(dmesg_content=dmesg_content),
+        args=DmesgAnalyzerArgs(
+            check_unknown_dmesg_errors=True,
+            analysis_range_start=analysis_range_start,
+        ),
+    )
+
+    filtered_artifact = next(
+        artifact for artifact in res.artifacts if artifact.filename == "filtered_dmesg.log"
+    )
+    assert "MC60_STATUS" not in filtered_artifact.contents
+    assert "IPID:" in filtered_artifact.contents
+
+    descriptions = {event.description for event in res.events}
+    assert "Unknown dmesg error" not in descriptions
+    assert "MCE Corrected Error" not in descriptions
+    assert "RAS Corrected Error" not in descriptions
+
+
+def test_mce_match_content_is_single_status_line(system_info):
+    """Adjacent incidents: events.json match_content must be one MCn_STATUS row."""
+    dmesg_content = (
+        "kern  :emerg : 2038-01-19T00:00:00,000000+00:00 "
+        "[Hardware Error]: Corrected error, no action required.\n"
+        "kern  :emerg : 2038-01-19T00:00:01,000000+00:00 "
+        "[Hardware Error]: CPU:72 (00:00:0) MC60_STATUS[Over|CE|MiscV|-|-|-|SyndV|UECC|-|-|-]: 0xaaa\n"
+        "kern  :emerg : 2038-01-19T00:00:02,000000+00:00 "
+        "[Hardware Error]: Corrected error, no action required.\n"
+        "kern  :emerg : 2038-01-19T00:00:03,000000+00:00 "
+        "[Hardware Error]: CPU:29 (00:00:0) MC49_STATUS[Over|CE|MiscV|-|-|-|SyndV|UECC|-|-|-]: 0xbbb\n"
+        "kern  :emerg : 2038-01-19T00:00:04,000000+00:00 "
+        "[Hardware Error]: Corrected error, no action required.\n"
+        "kern  :emerg : 2038-01-19T00:00:05,000000+00:00 "
+        "[Hardware Error]: CPU:8 (00:00:0) MC60_STATUS[Over|CE|MiscV|-|-|-|SyndV|UECC|-|-|-]: 0xccc\n"
+    )
+
+    analyzer = DmesgAnalyzer(system_info=system_info)
+    res = analyzer.analyze_data(
+        DmesgData(dmesg_content=dmesg_content),
+        args=DmesgAnalyzerArgs(
+            check_unknown_dmesg_errors=False,
+            mce_threshold=1,
+            ignore_match_rules=[{"mce_banks": ["60-63"]}],
+        ),
+    )
+
+    mce_events = [event for event in res.events if event.description == "MCE Corrected Error"]
+    assert len(mce_events) == 1
+    match_content = str(mce_events[0].data["match_content"])
+    assert match_content.startswith("[Hardware Error]:")
+    assert "MC49_STATUS" in match_content
+    assert "MC60_STATUS" not in match_content
+    assert "CPU:29" in match_content
+    assert "CPU:8" not in match_content
+    assert "\n" not in match_content

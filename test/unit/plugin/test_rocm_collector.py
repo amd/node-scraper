@@ -32,7 +32,7 @@ from nodescraper.enums.executionstatus import ExecutionStatus
 from nodescraper.enums.systeminteraction import SystemInteractionLevel
 from nodescraper.plugins.inband.rocm.rocm_collector import RocmCollector
 
-ROCM_SUB_VERSIONS_GREP_CMD = "grep . -H -r -i /opt/rocm/.info/*"
+ROCM_SUB_VERSIONS_GREP_CMD = "grep . -H -r -i '/opt/rocm'/.info/*"
 # gfx942 (CDNA3 / MI300) and gfx950 (CDNA4 / MI350) — released ROCm 7.13 LLVM targets
 ROCM_7_13_GFX_VERSION = "7.13.0-123-gfx942;gfx950"
 

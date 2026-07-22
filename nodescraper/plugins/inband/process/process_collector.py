@@ -83,8 +83,9 @@ class ProcessCollector(InBandDataCollector[ProcessDataModel, ProcessCollectorArg
             )
             process_data.cpu_usage = 100 - float(cpu_idle)
 
+        last_line = args.top_n_process + 7
         processes = self._run_sut_cmd(
-            f"self.CMD_PROCESS | sed -n '8,{args.top_n_process + 7}p'"
+            f"{self.CMD_PROCESS} | sed -n '8,{last_line}p'"
         )  # Remove system header
         if processes.exit_code == 0:
             for line in processes.stdout.splitlines():

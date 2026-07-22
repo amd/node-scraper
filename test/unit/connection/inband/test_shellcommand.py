@@ -23,18 +23,26 @@
 # SOFTWARE.
 #
 ###############################################################################
-from typing import Optional, Union
+from unittest.mock import MagicMock, patch
 
-from pydantic import Field
-
-from nodescraper.base.regexanalyzer import ErrorRegex
-from nodescraper.models import AnalyzerArgs
+from nodescraper.connection.inband.inbandlocal import LocalShell
 
 
-class NetworkAnalyzerArgs(AnalyzerArgs):
-    """Arguments for the network analyzer plugin."""
+@patch("nodescraper.connection.inband.inbandlocal.subprocess.run")
+def test_localshell_string_uses_shell_true(mock_run):
+    mock_run.return_value = MagicMock(stdout="ok\n", stderr="", returncode=0)
 
-    error_regex: Optional[Union[list[ErrorRegex], list[dict]]] = Field(
-        default=None,
-        description="Custom error regex patterns; each item can be ErrorRegex or dict with category/pattern.",
-    )
+    shell = LocalShell()
+    shell.run_command("ip addr show")
+
+    assert mock_run.call_args.kwargs["shell"] is True
+
+
+@patch("nodescraper.connection.inband.inbandlocal.subprocess.run")
+def test_localshell_string_with_sudo(mock_run):
+    mock_run.return_value = MagicMock(stdout="", stderr="", returncode=0)
+
+    shell = LocalShell()
+    shell.run_command("cat /etc/shadow", sudo=True)
+
+    assert mock_run.call_args.args[0] == "sudo cat /etc/shadow"
