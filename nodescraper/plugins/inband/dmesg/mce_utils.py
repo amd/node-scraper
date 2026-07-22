@@ -55,6 +55,21 @@ _MCE_UC_STATUS_LINE_RE = re.compile(
     re.IGNORECASE,
 )
 
+# MCE incident rows only
+_MCE_INCIDENT_LINE_RE = re.compile(
+    r"\[Hardware Error\]:\s*(?:"
+    r"(?:Corrected error|Uncorrected error|Machine check events logged)|"
+    r"Machine Check:|"
+    r"CPU:?\d|"
+    r"MC\d+_STATUS|"
+    r"PPIN:|"
+    r"IPID:|"
+    r"Syndrome:|"
+    r"cache level:"
+    r")",
+    re.IGNORECASE,
+)
+
 
 def compile_mce_ce_status_regex() -> re.Pattern[str]:
     """Return a single-line regex for corrected MCn_STATUS hardware error rows."""
@@ -110,6 +125,10 @@ def _is_mce_detail_line(line: str) -> bool:
     return _MCE_DETAIL_LINE_RE.search(line) is not None
 
 
+def _is_mce_incident_line(line: str) -> bool:
+    return _MCE_INCIDENT_LINE_RE.search(line) is not None
+
+
 def _mce_detail_line_indices_in_range(lines: Sequence[str], start: int, end: int) -> set[int]:
     return {index for index in range(start, end) if _is_mce_detail_line(lines[index])}
 
@@ -127,8 +146,8 @@ def _is_mce_status_only_starter(line: str) -> bool:
     return not _is_mce_primary_starter(line) and _MCE_STATUS_START_RE.search(line) is not None
 
 
-def _has_mce_detail_line_ahead(lines: Sequence[str], start_index: int) -> bool:
-    """Return True when another [Hardware Error]: line appears before the next incident."""
+def _has_mce_incident_line_ahead(lines: Sequence[str], start_index: int) -> bool:
+    """Return True when another MCE incident [Hardware Error]: row appears before the next block."""
     for idx in range(start_index + 1, len(lines)):
         line = lines[idx]
         if not line.strip():
@@ -137,8 +156,10 @@ def _has_mce_detail_line_ahead(lines: Sequence[str], start_index: int) -> bool:
             return False
         if _is_mce_status_only_starter(line):
             return False
-        if _is_mce_detail_line(line):
+        if _is_mce_incident_line(line):
             return True
+        if _is_mce_detail_line(line):
+            return False
     return False
 
 
@@ -172,7 +193,12 @@ def mce_known_regex_skip_line_indices(
 ) -> frozenset[int]:
     """Skip non-defining MCE detail lines and ignored-bank incidents during known regex scan."""
     ignored = ignore_banks or frozenset()
-    skipped = set(mce_non_status_hardware_error_line_indices(content))
+    lines = content.splitlines()
+    defining = mce_defining_status_line_indices(content)
+    primary_starters = frozenset(
+        index for index, line in enumerate(lines) if _is_mce_primary_starter(line)
+    )
+    skipped = set(hardware_error_block_line_indices(content)) - defining - primary_starters
     skipped.update(ignored_mce_block_line_indices(content, ignored))
     return frozenset(skipped)
 
@@ -190,9 +216,9 @@ def iter_hardware_error_block_ranges(lines: Sequence[str]) -> list[tuple[int, in
     A block begins at a primary MCE header (Corrected/Uncorrected/Machine check logged)
     or at the first MCn_STATUS line when not already inside a block. The block then
     includes subsequent lines until the next primary header, a blank line before a bare
-    MCn_STATUS starter, trailing non-MCE lines with no further [Hardware Error]: detail,
-    or EOF. Blank lines, warn/err noise, and other non-MCE dmesg lines between detail
-    entries belong to the same block.
+    MCn_STATUS starter, a non-MCE [Hardware Error]: row, trailing lines with no further
+    MCE incident detail, or EOF. Blank lines, warn/err noise, and other non-MCE dmesg
+    lines between MCE incident entries belong to the same block.
     """
     blocks: list[tuple[int, int]] = []
     index = 0
@@ -208,9 +234,11 @@ def iter_hardware_error_block_ranges(lines: Sequence[str]) -> list[tuple[int, in
                 next_line = _next_non_blank_line_index(lines, index)
                 if next_line is not None and _is_mce_status_only_starter(lines[next_line]):
                     break
+            elif _is_mce_detail_line(lines[index]) and not _is_mce_incident_line(lines[index]):
+                break
             elif _is_mce_block_starter(lines[index], in_block=True):
                 break
-            elif not _is_mce_detail_line(lines[index]) and not _has_mce_detail_line_ahead(
+            elif not _is_mce_incident_line(lines[index]) and not _has_mce_incident_line_ahead(
                 lines, index
             ):
                 break
