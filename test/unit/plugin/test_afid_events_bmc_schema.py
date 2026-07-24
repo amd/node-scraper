@@ -26,15 +26,18 @@
 """AFID / serviceable unit extraction for OpenBMC-style LogEntry payloads."""
 from __future__ import annotations
 
-from serviceability_dummy_data import (
+from framework.common.serviceability_dummy_data import (
     DUMMY_AFID_A,
     DUMMY_AFID_BELOW_RF,
     DUMMY_AFID_FATAL_HBM,
+    DUMMY_NESTED_OEM_AFID,
     DUMMY_TIMESTAMP,
     DUMMY_UNIT_A,
     DUMMY_UNIT_B,
     DUMMY_UNIT_C,
+    DUMMY_UNIT_NESTED,
     dummy_fatal_hbm_log_entry,
+    dummy_helios_sensor_log_entry,
     dummy_openbmc_log_entry,
     dummy_openbmc_log_entry_serviceable_units_only,
 )
@@ -61,6 +64,14 @@ def test_serviceable_unit_from_oem_serviceable_units_when_no_links():
     assert ev is not None
     assert ev.afid == DUMMY_AFID_A
     assert ev.serviceable_unit == DUMMY_UNIT_B
+
+
+def test_afid_event_nested_oem_amd_log_entry():
+    ev = _afid_event_from_rf_member(dummy_helios_sensor_log_entry())
+    assert ev is not None
+    assert ev.afid == DUMMY_NESTED_OEM_AFID
+    assert ev.serviceable_unit == DUMMY_UNIT_NESTED
+    assert ev.time.startswith(DUMMY_TIMESTAMP[:10])
 
 
 def test_afid_event_fatal_hbm_log_entry():

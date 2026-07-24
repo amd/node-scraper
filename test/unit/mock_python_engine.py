@@ -5,7 +5,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any, Optional
 
-from serviceability_dummy_data import (
+from framework.common.serviceability_dummy_data import (
     DUMMY_HUB_VERSION,
     DUMMY_SAG_PID,
     DUMMY_SAG_REVISION,

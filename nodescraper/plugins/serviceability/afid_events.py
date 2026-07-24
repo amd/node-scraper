@@ -36,7 +36,7 @@ _AFID_KEYS = ("Afid", "AFID", "afid")
 
 
 def build_afid_events_from_data(data: ServiceabilityDataModel) -> list[AfidEvent]:
-    """Build SE input events from collected Redfish and CPER fields."""
+    """Build hub input events from collected Redfish and CPER fields."""
     events: list[AfidEvent] = []
     seen: set[tuple[int, str, str]] = set()
 
@@ -106,18 +106,31 @@ def _extract_afid(payload: dict[str, Any]) -> Optional[int]:
     return None
 
 
+def _afid_from_field_identifiers(identifiers: Any) -> Optional[int]:
+    if not isinstance(identifiers, list):
+        return None
+    for item in identifiers:
+        if not isinstance(item, dict):
+            continue
+        for key in _AFID_KEYS:
+            if key in item and item[key] is not None:
+                return int(item[key])
+    return None
+
+
 def _extract_afid_from_oem_fragment(vendor_payload: Any) -> Optional[int]:
     """Resolve AFID from one ``Oem`` property value (dict or list of dicts, e.g. ``AMDFieldIdentifiers``)."""
     if isinstance(vendor_payload, dict):
         for key in _AFID_KEYS:
             if key in vendor_payload and vendor_payload[key] is not None:
                 return int(vendor_payload[key])
+        found = _afid_from_field_identifiers(vendor_payload.get("AMDFieldIdentifiers"))
+        if found is not None:
+            return found
     elif isinstance(vendor_payload, list):
-        for item in vendor_payload:
-            if isinstance(item, dict):
-                for key in _AFID_KEYS:
-                    if key in item and item[key] is not None:
-                        return int(item[key])
+        found = _afid_from_field_identifiers(vendor_payload)
+        if found is not None:
+            return found
     return None
 
 
@@ -163,6 +176,16 @@ def _extract_serviceable_unit(payload: dict[str, Any]) -> Optional[str]:
                 )
                 if unit is not None and str(unit).strip():
                     return str(unit).strip()
+                identifiers = vendor_payload.get("AMDFieldIdentifiers")
+                if isinstance(identifiers, list):
+                    for item in identifiers:
+                        if not isinstance(item, dict):
+                            continue
+                        su = item.get("ServiceableUnits") or item.get("serviceable_units")
+                        if isinstance(su, list) and su:
+                            u = _origin_dict_to_unit(su[0])
+                            if u:
+                                return u
             elif isinstance(vendor_payload, list):
                 for item in vendor_payload:
                     if not isinstance(item, dict):

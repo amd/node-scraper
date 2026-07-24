@@ -29,8 +29,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from pydantic import ValidationError
-from serviceability_dummy_data import (
+from framework.common.serviceability_dummy_data import (
     DUMMY_AFID_A,
     DUMMY_AFID_B,
     DUMMY_AFID_C,
@@ -48,12 +47,13 @@ from serviceability_dummy_data import (
     DUMMY_UNIT_B,
     DUMMY_UNIT_C,
 )
+from pydantic import ValidationError
 
 from nodescraper.enums import ExecutionStatus
 from nodescraper.plugins.serviceability import (
     AfidEvent,
+    HubRunError,
     MI3XXAnalyzer,
-    SeRunError,
     ServiceabilityAnalyzerArgs,
     ServiceabilityBlock,
     ServiceabilityDataModel,
@@ -61,6 +61,7 @@ from nodescraper.plugins.serviceability import (
     format_serviceability_solution_lines,
     normalize_se_timestamp,
     run_service_hub,
+    serviceability_block_from_entry_point_hub,
     serviceability_block_from_service_result,
 )
 from nodescraper.plugins.serviceability.se_models import ServiceabilitySolution
@@ -84,16 +85,20 @@ def test_normalize_se_timestamp_preserves_format_value():
     assert normalize_se_timestamp(sample) == sample
 
 
-def test_analyzer_args_require_hub_config():
-    with pytest.raises(ValidationError):
-        ServiceabilityAnalyzerArgs()
-    with pytest.raises(ValidationError, match="hub_python_module"):
-        ServiceabilityAnalyzerArgs(afid_sag_path=str(AFID_SAG))
-    args = ServiceabilityAnalyzerArgs(
+def test_analyzer_args_hub_config_fields():
+    args = ServiceabilityAnalyzerArgs()
+    assert args.hub_python_module is None
+    assert args.hub_entry_point is None
+    args_mod = ServiceabilityAnalyzerArgs(
         hub_python_module="dummy.test.module",
         afid_sag_path=str(AFID_SAG),
     )
-    assert args.hub_python_module == "dummy.test.module"
+    assert args_mod.hub_python_module == "dummy.test.module"
+    assert args_mod.uses_module_hub() is True
+    assert args_mod.uses_entry_point_hub() is False
+    args_ep = ServiceabilityAnalyzerArgs(hub_entry_point="amdse")
+    assert args_ep.hub_entry_point == "amdse"
+    assert args_ep.uses_entry_point_hub() is True
 
 
 def test_resolved_hub_options_explicit_fields_override_options_bag():
@@ -140,7 +145,71 @@ def test_format_serviceability_solution_lines():
     )
     assert f"AFID {DUMMY_AFID_A}" in lines[3]
     assert DUMMY_DESIGNATION_A in lines[3]
-    assert "service action 99 (RMA)" in lines[3]
+    assert 'service action 99: "RMA"' in lines[3]
+
+
+def test_serviceability_block_from_entry_point_hub_uses_sag_labels(tmp_path):
+    sag = tmp_path / "sag.json"
+    sag.write_text(
+        json.dumps(
+            {
+                "afid": {
+                    "11110": {
+                        "error_category": "ReadingAboveUpperFatalThreshold",
+                        "error_type": "DegreesC",
+                        "service_action_num": 111,
+                        "service_action": "Update FW",
+                    }
+                },
+                "service_actions": {
+                    "111": {
+                        "title": "Update FW",
+                        "category": "Reflash",
+                        "severity": 20,
+                        "steps": [
+                            {"step_num": 0, "description": "Check higher priority AFIDs first."}
+                        ],
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    hub_result = {
+        "engine": "amdse",
+        "engine_version": "0.1.0",
+        "results": [
+            {
+                "afid_num": 11110,
+                "location": "Instinct_EAM_0",
+                "service_action_num": 111,
+                "tier_label": "Secondary",
+                "tier": 2,
+                "fru": "EAM_AMC-COMPUTE",
+                "fru_rank": 1,
+                "priority": 20,
+                "sa_severity": 20,
+                "count": 1,
+            }
+        ],
+    }
+    block = serviceability_block_from_entry_point_hub(
+        EXAMPLE_EVENTS[:1],
+        hub_result,
+        afid_sag_path=str(sag),
+        rf_event_count=1,
+    )
+    assert block.solution[0].service_action_title == "Update FW"
+    assert block.solution[0].service_action_tier == "Secondary"
+    assert block.solution[0].afid_summary == "ReadingAboveUpperFatalThreshold / DegreesC"
+    assert len(block.hub_triage_results) == 1
+    triage = block.hub_triage_results[0]
+    assert triage.service_action_steps
+    assert triage.service_action_category == "Reflash"
+    lines = format_serviceability_solution_lines(block)
+    assert "Hub triage results:" in lines
+    assert "priority=" in "\n".join(lines)
+    assert "step 0:" in "\n".join(lines)
 
 
 def test_serviceability_block_from_service_result():
@@ -344,7 +413,7 @@ def test_run_service_hub_collected_cper_overrides_hub_options_cper_data():
 
 
 def test_run_service_hub_missing_sag_raises():
-    with pytest.raises(SeRunError, match="Hub config file not found"):
+    with pytest.raises(HubRunError, match="Hub config file not found"):
         run_service_hub(
             hub_python_module="mock_python_engine",
             afid_events=EXAMPLE_EVENTS,

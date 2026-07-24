@@ -1,0 +1,2443 @@
+{
+  "pid": "SAG-71477",
+  "variant": "DLC",
+  "revision": "1.3.0",
+  "afid_revision": "1.2.6",
+  "sag_revision": "2.1.5",
+  "notes": "DLC Field Guidance",
+  "generated_at": "2026-03-11T19:59:53.756360",
+  "schema_version": "1.0.0",
+  "afid": {
+    "1": {
+      "error_category": "Boot-Time Errors",
+      "error_type": "FW Load",
+      "error_severity": "Fail-to-init",
+      "fru": "OAM",
+      "status": "active",
+      "method": "CPER",
+      "threshold": 2,
+      "priority": 3,
+      "service_action_num": 2,
+      "service_action": "RMA the Failing OAM",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "2": {
+      "error_category": "Boot-Time Errors",
+      "error_type": "HBM BIST Test",
+      "error_severity": "Fail-to-init",
+      "fru": "OAM",
+      "status": "active",
+      "method": "CPER",
+      "threshold": 2,
+      "priority": 3,
+      "service_action_num": 2,
+      "service_action": "RMA the Failing OAM",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "3": {
+      "error_category": "Boot-Time Errors",
+      "error_type": "HBM Memory Test",
+      "error_severity": "Fail-to-init",
+      "fru": "OAM",
+      "status": "active",
+      "method": "CPER",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 15,
+      "service_action": "Stress-test the System",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "4": {
+      "error_category": "Boot-Time Errors",
+      "error_type": "HBM Training",
+      "error_severity": "Fail-to-init",
+      "fru": "OAM",
+      "status": "active",
+      "method": "CPER",
+      "threshold": 2,
+      "priority": 3,
+      "service_action_num": 2,
+      "service_action": "RMA the Failing OAM",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "5": {
+      "error_category": "Boot-Time Errors",
+      "error_type": "Unhandled",
+      "error_severity": "Fail-to-init",
+      "fru": "UBB",
+      "status": "active",
+      "method": "CPER",
+      "threshold": 2,
+      "priority": 3,
+      "service_action_num": 7,
+      "service_action": "RMA the Failing UBB Assembly",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "6": {
+      "error_category": "Boot-Time Errors",
+      "error_type": "Unknown",
+      "error_severity": "Fail-to-init",
+      "fru": "OAM",
+      "status": "active",
+      "method": "CPER",
+      "threshold": 2,
+      "priority": 3,
+      "service_action_num": 2,
+      "service_action": "RMA the Failing OAM",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "7": {
+      "error_category": "Boot-Time Errors",
+      "error_type": "USR CP Link Training",
+      "error_severity": "Fail-to-init",
+      "fru": "OAM",
+      "status": "active",
+      "method": "CPER",
+      "threshold": 2,
+      "priority": 4,
+      "service_action_num": 2,
+      "service_action": "RMA the Failing OAM",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "8": {
+      "error_category": "Boot-Time Errors",
+      "error_type": "USR DP Link Training",
+      "error_severity": "Fail-to-init",
+      "fru": "OAM",
+      "status": "active",
+      "method": "CPER",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 7,
+      "service_action": "RMA the Failing UBB Assembly",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "9": {
+      "error_category": "Boot-Time Errors",
+      "error_type": "WAFL Link Training",
+      "error_severity": "Fail-to-init",
+      "fru": "OAM",
+      "status": "active",
+      "method": "CPER",
+      "threshold": 2,
+      "priority": 4,
+      "service_action_num": 7,
+      "service_action": "RMA the Failing UBB Assembly",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10": {
+      "error_category": "Boot-Time Errors",
+      "error_type": "XGMI Link Training",
+      "error_severity": "Fail-to-init",
+      "fru": "OAM",
+      "status": "active",
+      "method": "CPER",
+      "threshold": 2,
+      "priority": 4,
+      "service_action_num": 33,
+      "service_action": "xGMI WAFL Swap",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "11": {
+      "error_category": "Boot-Time Errors",
+      "error_type": "Boot Controller Data Abort",
+      "error_severity": "Fail-to-init",
+      "fru": "OAM",
+      "status": "active",
+      "method": "CPER",
+      "threshold": 2,
+      "priority": 3,
+      "service_action_num": 2,
+      "service_action": "RMA the Failing OAM",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "12": {
+      "error_category": "Boot-Time Errors",
+      "error_type": "Boot Controller Generic",
+      "error_severity": "Fail-to-init",
+      "fru": "OAM",
+      "status": "active",
+      "method": "CPER",
+      "threshold": 2,
+      "priority": 3,
+      "service_action_num": 32,
+      "service_action": "Contact AMD",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "13": {
+      "error_category": "Off-Package Link Errors",
+      "error_type": "PCIe AER",
+      "error_severity": "Corrected",
+      "fru": "OAM",
+      "status": "active",
+      "method": "CPER",
+      "threshold": 1,
+      "priority": 5,
+      "service_action_num": 1,
+      "service_action": "Monitor",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "14": {
+      "error_category": "Off-Package Link Errors",
+      "error_type": "PCIe AER",
+      "error_severity": "Fatal",
+      "fru": "OAM",
+      "status": "active",
+      "method": "CPER",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 16,
+      "service_action": "Check PCIe Links",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "15": {
+      "error_category": "Off-Package Link Errors",
+      "error_type": "WAFL",
+      "error_severity": "Corrected",
+      "fru": "OAM",
+      "status": "active",
+      "method": "CPER",
+      "threshold": 1,
+      "priority": 5,
+      "service_action_num": 1,
+      "service_action": "Monitor",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "16": {
+      "error_category": "Off-Package Link Errors",
+      "error_type": "WAFL",
+      "error_severity": "Fatal",
+      "fru": "OAM",
+      "status": "active",
+      "method": "CPER",
+      "threshold": 2,
+      "priority": 4,
+      "service_action_num": 7,
+      "service_action": "RMA the Failing UBB Assembly",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "17": {
+      "error_category": "Off-Package Link Errors",
+      "error_type": "XGMI",
+      "error_severity": "Corrected",
+      "fru": "OAM",
+      "status": "active",
+      "method": "CPER",
+      "threshold": 1,
+      "priority": 5,
+      "service_action_num": 1,
+      "service_action": "Monitor",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "18": {
+      "error_category": "Off-Package Link Errors",
+      "error_type": "XGMI",
+      "error_severity": "Fatal",
+      "fru": "OAM",
+      "status": "active",
+      "method": "CPER",
+      "threshold": 2,
+      "priority": 4,
+      "service_action_num": 7,
+      "service_action": "RMA the Failing UBB Assembly",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "19": {
+      "error_category": "HBM Errors",
+      "error_type": "Bad Page Retirement Threshold",
+      "error_severity": "Fatal",
+      "fru": "OAM",
+      "status": "active",
+      "method": "CPER",
+      "threshold": 1,
+      "priority": 3,
+      "service_action_num": 2,
+      "service_action": "RMA the Failing OAM",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "20": {
+      "error_category": "HBM Errors",
+      "error_type": "On-die ECC",
+      "error_severity": "Fatal",
+      "fru": "OAM",
+      "status": "active",
+      "method": "CPER",
+      "threshold": 1,
+      "priority": 3,
+      "service_action_num": 2,
+      "service_action": "RMA the Failing OAM",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "21": {
+      "error_category": "HBM Errors",
+      "error_type": "End-to-end CRC",
+      "error_severity": "Fatal",
+      "fru": "OAM",
+      "status": "active",
+      "method": "CPER",
+      "threshold": 1,
+      "priority": 3,
+      "service_action_num": 2,
+      "service_action": "RMA the Failing OAM",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "22": {
+      "error_category": "HBM Errors",
+      "error_type": "On-die ECC",
+      "error_severity": "Uncorrected Non-fatal",
+      "fru": "OAM",
+      "status": "active",
+      "method": "CPER",
+      "threshold": 1,
+      "priority": 5,
+      "service_action_num": 15,
+      "service_action": "Stress-test the System",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "23": {
+      "error_category": "HBM Errors",
+      "error_type": "End-to-end CRC",
+      "error_severity": "Uncorrected Non-fatal",
+      "fru": "OAM",
+      "status": "active",
+      "method": "CPER",
+      "threshold": 1,
+      "priority": 5,
+      "service_action_num": 15,
+      "service_action": "Stress-test the System",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "24": {
+      "error_category": "HBM Errors",
+      "error_type": "All",
+      "error_severity": "Corrected",
+      "fru": "OAM",
+      "status": "active",
+      "method": "CPER",
+      "threshold": 1,
+      "priority": 5,
+      "service_action_num": 1,
+      "service_action": "Monitor",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "25": {
+      "error_category": "HBM Errors",
+      "error_type": "All Others",
+      "error_severity": "Fatal",
+      "fru": "OAM",
+      "status": "active",
+      "method": "CPER",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 15,
+      "service_action": "Stress-test the System",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "26": {
+      "error_category": "Device Internal Errors",
+      "error_type": "Hardware Assertion (HWA)",
+      "error_severity": "Fatal",
+      "fru": "OAM",
+      "status": "active",
+      "method": "CPER",
+      "threshold": 2,
+      "priority": 4,
+      "service_action_num": 15,
+      "service_action": "Stress-test the System",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "27": {
+      "error_category": "Device Internal Errors",
+      "error_type": "Watchdog Timeout (WDT)",
+      "error_severity": "Fatal",
+      "fru": "OAM",
+      "status": "active",
+      "method": "CPER",
+      "threshold": 2,
+      "priority": 4,
+      "service_action_num": 15,
+      "service_action": "Stress-test the System",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "28": {
+      "error_category": "Device Internal Errors",
+      "error_type": "All Others",
+      "error_severity": "Uncorrected Non-fatal",
+      "fru": "OAM",
+      "status": "active",
+      "method": "CPER",
+      "threshold": 1,
+      "priority": 5,
+      "service_action_num": 15,
+      "service_action": "Stress-test the System",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "29": {
+      "error_category": "Device Internal Errors",
+      "error_type": "All Others",
+      "error_severity": "Corrected",
+      "fru": "OAM",
+      "status": "active",
+      "method": "CPER",
+      "threshold": 1,
+      "priority": 5,
+      "service_action_num": 1,
+      "service_action": "Monitor",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "30": {
+      "error_category": "Device Internal Errors",
+      "error_type": "All Others",
+      "error_severity": "Fatal",
+      "fru": "OAM",
+      "status": "active",
+      "method": "CPER",
+      "threshold": 2,
+      "priority": 3,
+      "service_action_num": 2,
+      "service_action": "RMA the Failing OAM",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "31": {
+      "error_category": "CPER Format",
+      "error_type": "Malformed CPER",
+      "error_severity": "ALL",
+      "fru": "OAM",
+      "status": "active",
+      "method": "CPER",
+      "threshold": 1,
+      "priority": 5,
+      "service_action_num": 32,
+      "service_action": "Contact AMD",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "32": {
+      "error_category": "CPER Format",
+      "error_type": "Incomplete ACA Data",
+      "error_severity": "ALL",
+      "fru": "OAM",
+      "status": "active",
+      "method": "CPER",
+      "threshold": 1,
+      "priority": 5,
+      "service_action_num": 1,
+      "service_action": "Monitor",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "33": {
+      "error_category": "CPER Format",
+      "error_type": "Invalid ACA Data",
+      "error_severity": "ALL",
+      "fru": "OAM",
+      "status": "active",
+      "method": "CPER",
+      "threshold": 1,
+      "priority": 5,
+      "service_action_num": 15,
+      "service_action": "Stress-test the System",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "34": {
+      "error_category": "Unidentified Errors",
+      "error_type": "Unidentified Error",
+      "error_severity": "ALL",
+      "fru": "OAM",
+      "status": "active",
+      "method": "ALL",
+      "threshold": 1,
+      "priority": 5,
+      "service_action_num": 99,
+      "service_action": "Unidentified Errors",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "35": {
+      "error_category": "In-Band Errors",
+      "error_type": "PCIe Link Speed Not Correct",
+      "error_severity": "Critical",
+      "fru": "OAM",
+      "status": "active",
+      "method": "AGFHC",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 16,
+      "service_action": "Check PCIe Links",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "36": {
+      "error_category": "In-Band Errors",
+      "error_type": "PCIe Link Width Not Correct",
+      "error_severity": "Critical",
+      "fru": "OAM",
+      "status": "active",
+      "method": "AGFHC",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 16,
+      "service_action": "Check PCIe Links",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "37": {
+      "error_category": "In-Band Errors",
+      "error_type": "Accuracy Check Failure (ACF)",
+      "error_severity": "Critical",
+      "fru": "OAM",
+      "status": "active",
+      "method": "AGFHC",
+      "threshold": 1,
+      "priority": 3,
+      "service_action_num": 2,
+      "service_action": "RMA the Failing OAM",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "38": {
+      "error_category": "In-Band Errors",
+      "error_type": "HPL Failure",
+      "error_severity": "Critical",
+      "fru": "OAM",
+      "status": "active",
+      "method": "AGFHC",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 29,
+      "service_action": "HPL Isolation",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "39": {
+      "error_category": "In-Band Errors",
+      "error_type": "PCIe Bandwidth Performance",
+      "error_severity": "Critical",
+      "fru": "OAM",
+      "status": "active",
+      "method": "AGFHC",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 16,
+      "service_action": "Check PCIe Links",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "40": {
+      "error_category": "In-Band Errors",
+      "error_type": "XGMI Bandwidth Performance",
+      "error_severity": "Critical",
+      "fru": "UBB",
+      "status": "active",
+      "method": "AGFHC",
+      "threshold": 1,
+      "priority": 3,
+      "service_action_num": 7,
+      "service_action": "RMA the Failing UBB Assembly",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "41": {
+      "error_category": "In-Band Errors",
+      "error_type": "GEMM Performance",
+      "error_severity": "Critical",
+      "fru": "OAM",
+      "status": "active",
+      "method": "AGFHC",
+      "threshold": 1,
+      "priority": 3,
+      "service_action_num": 2,
+      "service_action": "RMA the Failing OAM",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "42": {
+      "error_category": "In-Band Errors",
+      "error_type": "HBM Bandwidth Performance",
+      "error_severity": "Critical",
+      "fru": "OAM",
+      "status": "active",
+      "method": "AGFHC",
+      "threshold": 1,
+      "priority": 3,
+      "service_action_num": 2,
+      "service_action": "RMA the Failing OAM",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "43": {
+      "error_category": "In-Band Errors",
+      "error_type": "Program Fault Due To Hardware Error",
+      "error_severity": "Critical",
+      "fru": "OAM",
+      "status": "active",
+      "method": "AGFHC",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 15,
+      "service_action": "Stress-test the System",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "44": {
+      "error_category": "In-Band Errors",
+      "error_type": "General Application Fault",
+      "error_severity": "Critical",
+      "fru": "OAM",
+      "status": "active",
+      "method": "AGFHC",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 15,
+      "service_action": "Stress-test the System",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "45": {
+      "error_category": "In-Band Errors",
+      "error_type": "GPU Boot Failed",
+      "error_severity": "Critical",
+      "fru": "OAM",
+      "status": "active",
+      "method": "AGFHC",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 15,
+      "service_action": "Stress-test the System",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "46": {
+      "error_category": "In-Band Errors",
+      "error_type": "HWS Hang",
+      "error_severity": "Critical",
+      "fru": "OAM",
+      "status": "active",
+      "method": "AGFHC",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 15,
+      "service_action": "Stress-test the System",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "47": {
+      "error_category": "In-Band Errors",
+      "error_type": "GPU Throttle",
+      "error_severity": "Critical",
+      "fru": "OAM",
+      "status": "active",
+      "method": "AGFHC",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 11,
+      "service_action": "Check Thermal Solution",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "48": {
+      "error_category": "Device Internal Errors",
+      "error_type": "Reserved",
+      "error_severity": "Fatal",
+      "fru": "OAM",
+      "status": "active",
+      "method": "CPER",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 15,
+      "service_action": "Stress-test the System",
+      "supported_systems": [
+        "MI355X_DLC"
+      ]
+    },
+    "10001": {
+      "error_category": "ActivateFailed",
+      "error_type": "Activation of image (.*) on '(UBB.*|Retimer.*|SMC.*)' failed",
+      "error_severity": "Critical",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 10,
+      "service_action": "Check and Retry FW Bundle",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10002": {
+      "error_category": "ActivateFailed",
+      "error_type": "Activation of image (.*) on '(VR.*|RM.*|IFWI.*)' failed",
+      "error_severity": "Critical",
+      "fru": "OAM",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 10,
+      "service_action": "Check and Retry FW Bundle",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10003": {
+      "error_category": "ApplyFailed",
+      "error_type": "Installation of image (.*) to '(Bundle.*|ERoT.*|SMC.*|APCFG.*|UBB.*|Retimer.*|VR_UBB.*)' failed.",
+      "error_severity": "Critical",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 10,
+      "service_action": "Check and Retry FW Bundle",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10004": {
+      "error_category": "ApplyFailed",
+      "error_type": "Installation of image (.*) to '(VR_\\d|RM.*|IFWI.*)' failed.",
+      "error_severity": "Critical",
+      "fru": "OAM",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 10,
+      "service_action": "Check and Retry FW Bundle",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10005": {
+      "error_category": "AutoFWCopyFailure",
+      "error_type": "Automatic FW copy from (Active) to (Inactive) failed.",
+      "error_severity": "Critical",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 2,
+      "priority": 3,
+      "service_action_num": 7,
+      "service_action": "RMA the Failing UBB Assembly",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10006": {
+      "error_category": "AutomaticRecoveryFailureCritical",
+      "error_type": "Automatic Recovery mode unexpected failure.",
+      "error_severity": "Critical",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 10,
+      "service_action": "Check and Retry FW Bundle",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10007": {
+      "error_category": "AutomaticRecoveryTriggered",
+      "error_type": "(SMC_FPGA|UBB_FPGA|ERoT|Retimer.*) - Automatic Recovery triggered",
+      "error_severity": "Warning",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 5,
+      "service_action_num": 1,
+      "service_action": "Monitor",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10008": {
+      "error_category": "AutomaticRecoveryTriggered",
+      "error_type": "(RM|RM_.*|VR_.*|IFWI) - Automatic Recovery triggered",
+      "error_severity": "Warning",
+      "fru": "OAM",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 6,
+      "service_action_num": 1,
+      "service_action": "Monitor",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10009": {
+      "error_category": "BootFailure",
+      "error_type": "(RoT|Secure) boot failure.",
+      "error_severity": "Warning",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 10,
+      "service_action": "Check and Retry FW Bundle",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10010": {
+      "error_category": "BundleCheckFailure",
+      "error_type": "Bundle check failure .*",
+      "error_severity": "Warning",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 5,
+      "service_action_num": 10,
+      "service_action": "Check and Retry FW Bundle",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10011": {
+      "error_category": "FirmwareUpdateFailed",
+      "error_type": "((?i:erot)|VR config downgrade detected.*|Bundle.*|SMC|SMC_FPGA|APCFG|UBB_FPGA|Retimer|Retimer Secure) firmware update to version (.*) failed.",
+      "error_severity": "Warning",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 5,
+      "service_action_num": 10,
+      "service_action": "Check and Retry FW Bundle",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10012": {
+      "error_category": "FirmwareUpdateFailed",
+      "error_type": "((?i:erot)|VR_.*|RM|RM_.*|IFWI) firmware update to version (.*) failed.",
+      "error_severity": "Warning",
+      "fru": "OAM",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 5,
+      "service_action_num": 10,
+      "service_action": "Check and Retry FW Bundle",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10013": {
+      "error_category": "GPUTriggerCTF",
+      "error_type": "GPU triggers CTF.*",
+      "error_severity": "Critical",
+      "fru": "OAM",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 11,
+      "service_action": "Check Thermal Solution",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10014": {
+      "error_category": "LogAlmostFull",
+      "error_type": "Log is almost full .80\\/100.",
+      "error_severity": "Warning",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 5,
+      "service_action_num": 13,
+      "service_action": "Clear SMC Logs",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10015": {
+      "error_category": "LogFull",
+      "error_type": "Log full .100\\/100.",
+      "error_severity": "Critical",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 13,
+      "service_action": "Clear SMC Logs",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10016": {
+      "error_category": "OAMPowerStatusCritical",
+      "error_type": "OAM Power (Hotswap controller|Module) failure.",
+      "error_severity": "Critical",
+      "fru": "OAM",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 1,
+      "service_action": "Monitor",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10017": {
+      "error_category": "PowerSequenceUnexpected",
+      "error_type": "System power sequence not as expected",
+      "error_severity": "Warning",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 1,
+      "service_action": "Monitor",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10018": {
+      "error_category": "ReadingAboveUpperCautionThreshold",
+      "error_type": "Sensor '(GPU_.*_HBM_CE)' reading of (.*) .(CE). is above the (.*) upper caution threshold.",
+      "error_severity": "Warning",
+      "fru": "OAM",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 6,
+      "service_action_num": 1,
+      "service_action": "Monitor",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10019": {
+      "error_category": "ReadingAboveUpperCautionThresholdOEM",
+      "error_type": "Sensor '(UBB_TEMP_.*|(?!(OAM|GPU)).*_TEMP|OAM_\\d_\\d_.*_TEMP)' reading of (.*) .(C). is above the (.*) upper caution threshold.",
+      "error_severity": "Warning",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 6,
+      "service_action_num": 1,
+      "service_action": "Monitor",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10020": {
+      "error_category": "ReadingAboveUpperCautionThresholdOEM",
+      "error_type": "Sensor '(OAM_\\d_(?!\\d_).*_TEMP|GPU_.*_TEMP)' reading of (.*) .(C). is above the (.*) upper caution threshold.",
+      "error_severity": "Warning",
+      "fru": "OAM",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 6,
+      "service_action_num": 1,
+      "service_action": "Monitor",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10021": {
+      "error_category": "ReadingAboveUpperCautionThresholdOEM",
+      "error_type": "Sensor '((?!(OAM|GPU)).*_VOLTAGE|OAM_\\d_\\d_.*_VOLTAGE)' reading of (.*) .(V). is above the (.*) upper caution threshold.",
+      "error_severity": "Warning",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 6,
+      "service_action_num": 1,
+      "service_action": "Monitor",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10022": {
+      "error_category": "ReadingAboveUpperCautionThresholdOEM",
+      "error_type": "Sensor '(OAM_\\d_(?!\\d_).*_VOLTAGE|GPU_.*_VOLTAGE)' reading of (.*) .(V). is above the (.*) upper caution threshold.",
+      "error_severity": "Warning",
+      "fru": "OAM",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 6,
+      "service_action_num": 1,
+      "service_action": "Monitor",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10023": {
+      "error_category": "ReadingAboveUpperCautionThresholdOEM",
+      "error_type": "Sensor '((?!(OAM|GPU)).*_CURRENT|OAM_\\d_\\d_.*_CURRENT)' reading of (.*) .(A). is above the (.*) upper caution threshold.",
+      "error_severity": "Warning",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 6,
+      "service_action_num": 1,
+      "service_action": "Monitor",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10024": {
+      "error_category": "ReadingAboveUpperCautionThresholdOEM",
+      "error_type": "Sensor '(OAM_\\d_(?!\\d_).*_CURRENT|GPU_.*_CURRENT)' reading of (.*) .(A). is above the (.*) upper caution threshold.",
+      "error_severity": "Warning",
+      "fru": "OAM",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 6,
+      "service_action_num": 1,
+      "service_action": "Monitor",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10025": {
+      "error_category": "ReadingAboveUpperCriticalThresholdOEM",
+      "error_type": "Sensor '(UBB_TEMP_.*|(?!(OAM|GPU)).*_TEMP|OAM_\\d_\\d_.*_TEMP)' reading of (.*) .(C). is above the (.*) upper critical threshold.",
+      "error_severity": "Critical",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 11,
+      "service_action": "Check Thermal Solution",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10026": {
+      "error_category": "ReadingAboveUpperCriticalThresholdOEM",
+      "error_type": "Sensor '(OAM_\\d_(?!\\d_).*_TEMP|GPU_.*_TEMP)' reading of (.*) .(C). is above the (.*) upper critical threshold.",
+      "error_severity": "Critical",
+      "fru": "OAM",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 11,
+      "service_action": "Check Thermal Solution",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10027": {
+      "error_category": "ReadingAboveUpperCriticalThresholdOEM",
+      "error_type": "Sensor '((?!(OAM|GPU)).*_VOLTAGE|OAM_\\d_\\d_.*_VOLTAGE)' reading of (.*) .(V). is above the (.*) upper critical threshold.",
+      "error_severity": "Critical",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 1,
+      "service_action": "Monitor",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10028": {
+      "error_category": "ReadingAboveUpperCriticalThresholdOEM",
+      "error_type": "Sensor '(OAM_\\d_(?!\\d_).*_VOLTAGE|GPU_.*_VOLTAGE)' reading of (.*) .(V). is above the (.*) upper critical threshold.",
+      "error_severity": "Critical",
+      "fru": "OAM",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 1,
+      "service_action": "Monitor",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10029": {
+      "error_category": "ReadingAboveUpperCriticalThresholdOEM",
+      "error_type": "Sensor '((?!(OAM|GPU)).*_CURRENT|OAM_\\d_\\d_.*_CURRENT|.*LINK_RECOVERY_COUNT|UBB_POWER)' reading of (.*) .(A|Status|W). is above the (.*) upper critical threshold.",
+      "error_severity": "Critical",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 1,
+      "service_action": "Monitor",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10030": {
+      "error_category": "ReadingAboveUpperCriticalThresholdOEM",
+      "error_type": "Sensor '(OAM_\\d_(?!\\d_).*_CURRENT|GPU_.*_CURRENT)' reading of (.*) .(A). is above the (.*) upper critical threshold.",
+      "error_severity": "Critical",
+      "fru": "OAM",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 1,
+      "service_action": "Monitor",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10031": {
+      "error_category": "ReadingAboveUpperFatalThresholdOEM",
+      "error_type": "Sensor '(UBB_TEMP_.*|(?!(OAM|GPU)).*_TEMP|OAM_\\d_\\d_.*_TEMP)' reading of (.*) .(C). is above the (.*) upper fatal threshold.",
+      "error_severity": "Critical",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 11,
+      "service_action": "Check Thermal Solution",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10032": {
+      "error_category": "ReadingAboveUpperFatalThresholdOEM",
+      "error_type": "Sensor '(OAM_\\d_(?!\\d_).*_TEMP|GPU_.*_TEMP)' reading of (.*) .(C). is above the (.*) upper fatal threshold.",
+      "error_severity": "Critical",
+      "fru": "OAM",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 11,
+      "service_action": "Check Thermal Solution",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10033": {
+      "error_category": "ReadingAboveUpperFatalThresholdOEM",
+      "error_type": "Sensor '((?!(OAM|GPU)).*_VOLTAGE|OAM_\\d_\\d_.*_VOLTAGE)' reading of (.*) .(V). is above the (.*) upper fatal threshold.",
+      "error_severity": "Critical",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 3,
+      "service_action_num": 17,
+      "service_action": "Update FW",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10034": {
+      "error_category": "ReadingAboveUpperFatalThresholdOEM",
+      "error_type": "Sensor '(OAM_\\d_(?!\\d_).*_VOLTAGE|GPU_.*_VOLTAGE)' reading of (.*) .(V). is above the (.*) upper fatal threshold.",
+      "error_severity": "Critical",
+      "fru": "OAM",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 3,
+      "service_action_num": 17,
+      "service_action": "Update FW",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10035": {
+      "error_category": "ReadingAboveUpperFatalThresholdOEM",
+      "error_type": "Sensor '((?!(OAM|GPU)).*_CURRENT|OAM_\\d_\\d_.*_CURRENT)' reading of (.*) .(A). is above the (.*) upper fatal threshold.",
+      "error_severity": "Critical",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 3,
+      "service_action_num": 17,
+      "service_action": "Update FW",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10036": {
+      "error_category": "ReadingAboveUpperFatalThresholdOEM",
+      "error_type": "Sensor '(OAM_\\d_(?!\\d_).*_CURRENT|GPU_.*_CURRENT)' reading of (.*) .(A). is above the (.*) upper fatal threshold.",
+      "error_severity": "Critical",
+      "fru": "OAM",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 3,
+      "service_action_num": 17,
+      "service_action": "Update FW",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10037": {
+      "error_category": "ReadingBelowLowerCautionThresholdOEM",
+      "error_type": "Sensor '(UBB_TEMP_.*|(?!(OAM|GPU)).*_TEMP|OAM_\\d_\\d_.*_TEMP|.*LINK_MIN_FOM)' reading of (.*) .(C|Status). is below the (.*) lower caution threshold.",
+      "error_severity": "Warning",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 6,
+      "service_action_num": 1,
+      "service_action": "Monitor",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10038": {
+      "error_category": "ReadingBelowLowerCautionThresholdOEM",
+      "error_type": "Sensor '(OAM_\\d_(?!\\d_).*_TEMP|GPU_.*_TEMP)' reading of (.*) .(C). is below the (.*) lower caution threshold.",
+      "error_severity": "Warning",
+      "fru": "OAM",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 6,
+      "service_action_num": 1,
+      "service_action": "Monitor",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10039": {
+      "error_category": "ReadingBelowLowerFatalThresholdOEM",
+      "error_type": "Sensor '(UBB_TEMP_.*|(?!(OAM|GPU)).*_TEMP|OAM_\\d_\\d_.*_TEMP)' reading of (.*).(C). is below the (.*) lower fatal threshold.",
+      "error_severity": "Critical",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 5,
+      "service_action_num": 11,
+      "service_action": "Check Thermal Solution",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10040": {
+      "error_category": "ReadingBelowLowerFatalThresholdOEM",
+      "error_type": "Sensor '(OAM_\\d_(?!\\d_).*_TEMP|GPU_.*_TEMP)' reading of (.*).(C). is below the (.*) lower fatal threshold.",
+      "error_severity": "Critical",
+      "fru": "OAM",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 11,
+      "service_action": "Check Thermal Solution",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10041": {
+      "error_category": "ReadingBelowLowerFatalThresholdOEM",
+      "error_type": "Sensor '((?!(OAM|GPU)).*_VOLTAGE|OAM_\\d_\\d_.*_VOLTAGE)' reading of (.*).(V). is below the (.*) lower fatal threshold.",
+      "error_severity": "Critical",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 3,
+      "service_action_num": 17,
+      "service_action": "Update FW",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10042": {
+      "error_category": "ReadingBelowLowerFatalThresholdOEM",
+      "error_type": "Sensor '(OAM_\\d_(?!\\d_).*_VOLTAGE|GPU_.*_VOLTAGE)' reading of (.*).(V). is below the (.*) lower fatal threshold.",
+      "error_severity": "Critical",
+      "fru": "OAM",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 3,
+      "service_action_num": 17,
+      "service_action": "Update FW",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10043": {
+      "error_category": "ReadingBelowLowerFatalThresholdOEM",
+      "error_type": "Sensor '((?!(OAM|GPU)).*_CURRENT|OAM_\\d_\\d_.*_CURRENT)' reading of (.*).(A). is below the (.*) lower fatal threshold.",
+      "error_severity": "Critical",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 1,
+      "service_action": "Monitor",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10044": {
+      "error_category": "ReadingBelowLowerFatalThresholdOEM",
+      "error_type": "Sensor '(OAM_\\d_(?!\\d_).*_CURRENT|GPU_.*_CURRENT)' reading of (.*).(A). is below the (.*) lower fatal threshold.",
+      "error_severity": "Critical",
+      "fru": "OAM",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 1,
+      "service_action": "Monitor",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10045": {
+      "error_category": "ResourceEROTFatalErrorsOEM",
+      "error_type": "The resource property 'ERoT' has detected errors with severity level 3, identifier = (.*), LogArg1 = (.*), LogArg2 = (.*).",
+      "error_severity": "Critical",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 10,
+      "service_action": "Check and Retry FW Bundle",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10046": {
+      "error_category": "ResourceEROTNonFatalErrorsOEM",
+      "error_type": "The resource property 'ERoT' has detected errors with severity level 4, identifier = (.*), LogArg1 = (.*), LogArg2 = (.*).",
+      "error_severity": "Warning",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 5,
+      "service_action_num": 1,
+      "service_action": "Monitor",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10047": {
+      "error_category": "ResourceErrorsDetected",
+      "error_type": "The resource property (SPI bus.*) has detected errors of type (.*).",
+      "error_severity": "Warning",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 2,
+      "priority": 5,
+      "service_action_num": 7,
+      "service_action": "RMA the Failing UBB Assembly",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10048": {
+      "error_category": "ResourceErrorsDetected",
+      "error_type": "The resource property (SPI bus.*) has detected errors of type (.*).",
+      "error_severity": "Warning",
+      "fru": "OAM",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 2,
+      "priority": 5,
+      "service_action_num": 2,
+      "service_action": "RMA the Failing OAM",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10049": {
+      "error_category": "ResourceErrorsDetected",
+      "error_type": "The resource property (I2C bus .* at slave address 0x.*) has detected errors of type '(Open.*|Write.*|Read.*|Unexpected.*).",
+      "error_severity": "Warning",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 5,
+      "priority": 5,
+      "service_action_num": 7,
+      "service_action": "RMA the Failing UBB Assembly",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10050": {
+      "error_category": "ResourceErrorsDetected",
+      "error_type": "The resource property (I2C bus .* at slave address 0x.*) has detected errors of type '(Open.*|Write.*|Read.*|Unexpected.*).",
+      "error_severity": "Warning",
+      "fru": "OAM",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 2,
+      "priority": 5,
+      "service_action_num": 2,
+      "service_action": "RMA the Failing OAM",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10051": {
+      "error_category": "ResourceErrorsDetected",
+      "error_type": "The resource property (OAM_.*) has detected.*errors of type '(UnCorrected Non-Fatal)'.",
+      "error_severity": "Warning",
+      "fru": "OAM",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 5,
+      "service_action_num": 15,
+      "service_action": "Stress-test the System",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10052": {
+      "error_category": "ResourceErrorsDetectedOEM",
+      "error_type": "The resource property .?(GPU_.*_DIE_TEMP|GPU_.*_MEMORY_TEMP).? has detected.*errors of type '(TSI and RMI interfaces have failed)'.",
+      "error_severity": "Critical",
+      "fru": "OAM",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 1,
+      "service_action": "Monitor",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10053": {
+      "error_category": "ResourceErrorsDetectedOEM",
+      "error_type": "The resource property (SMC.*|UBB.*) has detected.*errors of type '(Timeout Error|Parity Error|LD Error).",
+      "error_severity": "Critical",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 10,
+      "service_action": "Check and Retry FW Bundle",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10054": {
+      "error_category": "ResourceErrorsDetectedOEM",
+      "error_type": "The resource property (OAM_.*) has detected.*errors of type '(Fatal Error|Fatal error)'.",
+      "error_severity": "Critical",
+      "fru": "OAM",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 15,
+      "service_action": "Stress-test the System",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10055": {
+      "error_category": "ResourceErrorsDetectedOEM",
+      "error_type": "The resource property (OAM_.*) has detected.*errors of type '(HBM bad page count limit exceeded)'.",
+      "error_severity": "Critical",
+      "fru": "OAM",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 2,
+      "service_action_num": 15,
+      "service_action": "Stress-test the System",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10056": {
+      "error_category": "ResourceErrorThresholdExceeded",
+      "error_type": "The resource property (.*) has exceeded error threshold of value (4000).",
+      "error_severity": "Critical",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 6,
+      "service_action_num": 13,
+      "service_action": "Clear SMC Logs",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10057": {
+      "error_category": "ResourceIncompatibleLocationOEM",
+      "error_type": "The resource (OAM_.*) with (.*) (.*) is.*incompatible (.*) (.*)",
+      "error_severity": "Critical",
+      "fru": "OAM",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 20,
+      "service_action": "Misplaced/Missing OAM",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10058": {
+      "error_category": "ResourceNotFound",
+      "error_type": "The requested resource of type (.*) named .?(OAM_.*).? was not found.",
+      "error_severity": "Critical",
+      "fru": "OAM",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 20,
+      "service_action": "Misplaced/Missing OAM",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10059": {
+      "error_category": "ResourcePerfChange",
+      "error_type": "The resource property (OAM_.* PCIe Link|RETIMER_.*_LINK_WIDTH) has detected (Link Width) deviated from (.*) to (.*)",
+      "error_severity": "Critical",
+      "fru": "OAM",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 16,
+      "service_action": "Check PCIe Links",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10060": {
+      "error_category": "ResourcePerfChange",
+      "error_type": "The resource property (OAM_.* PCIe Link|RETIMER_.*_LINK_RATE) has detected (Link Speed) deviated from (.*) to (.*)",
+      "error_severity": "Critical",
+      "fru": "OAM",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 16,
+      "service_action": "Check PCIe Links",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10061": {
+      "error_category": "ResourceRetryFailOEM",
+      "error_type": "The resource (.*Secure-Boot.* eRoT API). continous to fails.*(ErotBPRRead|ErotGetComponentInfo|ErotActiveFlashConfigRead) after (3 times).",
+      "error_severity": "Critical",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 10,
+      "service_action": "Check and Retry FW Bundle",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10062": {
+      "error_category": "ResourceSelfTestFailed",
+      "error_type": "A self-test has failed.\\s+The following message was returned: (.*Retry.*|.*Secure-Boot.*|.*systemhealth.*|.*software-manager.*)",
+      "error_severity": "Critical",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 10,
+      "service_action": "Check and Retry FW Bundle",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10063": {
+      "error_category": "ResourceSelfTestFailed",
+      "error_type": "A self-test has failed.\\s+The following message was returned: '(.*training.*|.*loading.*|Boot.*|Data Abort.*|.*memory test failed.*|.*bist test failed.*)'",
+      "error_severity": "Critical",
+      "fru": "OAM",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 15,
+      "service_action": "Stress-test the System",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10064": {
+      "error_category": "ResourceSelfTestFailed",
+      "error_type": "A self-test has failed.\\s+The following message was returned: '(UBB.FPGA secure boot failure|VR secure boot failure|Retimer secure boot failure|Remote Management Controller secure boot failure|IFWI secure boot failure|RM secure boot failure)'",
+      "error_severity": "Critical",
+      "fru": "OAM",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 10,
+      "service_action": "Check and Retry FW Bundle",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10065": {
+      "error_category": "ResourceSelfTestFailed",
+      "error_type": "A self-test has failed.\\s+The following message was returned: '(UBB.FPGA secure boot failure|VR secure boot failure|Retimer secure boot failure|Remote Management Controller secure boot failure|IFWI secure boot failure|RM secure boot failure)'",
+      "error_severity": "Critical",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 10,
+      "service_action": "Check and Retry FW Bundle",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10066": {
+      "error_category": "ResourceStatusChangedCritical",
+      "error_type": "The health of resource '(OAM_.*)' has changed(.*(Die Over Temp|VR Hot|HBM Over Temp|PWRBRK)).",
+      "error_severity": "Critical",
+      "fru": "OAM",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 11,
+      "service_action": "Check Thermal Solution",
+      "supported_systems": [
+        "MI325X_DLC"
+      ]
+    },
+    "10067": {
+      "error_category": "ResourceStatusChangedCriticalOEM",
+      "error_type": "The health of resource '((?!(OAM|GPU)).*_STATUS|OAM_\\d_\\d_.*_STATUS)' has changed to (Critical).",
+      "error_severity": "Critical",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 3,
+      "service_action_num": 17,
+      "service_action": "Update FW",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10068": {
+      "error_category": "ResourceStatusChangedCriticalOEM",
+      "error_type": "The health of resource '(OAM_\\d_(?!\\d_).*_STATUS)' has changed to (Critical).",
+      "error_severity": "Critical",
+      "fru": "OAM",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 3,
+      "service_action_num": 17,
+      "service_action": "Update FW",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10069": {
+      "error_category": "ResourceStatusChangedCriticalOEM",
+      "error_type": "The health of resource '(RETIMER_.*_LINK_STATE)' has changed to (Disabled)",
+      "error_severity": "Critical",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 6,
+      "service_action_num": 16,
+      "service_action": "Check PCIe Links",
+      "supported_systems": [
+        "MI325X_DLC"
+      ]
+    },
+    "10070": {
+      "error_category": "ResourceStatusChangedCriticalOEM",
+      "error_type": "The health of resource '(HSC power good|UBB power good)' has changed to (Critical Value 0x.*)",
+      "error_severity": "Critical",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 1,
+      "service_action_num": 7,
+      "service_action": "RMA the Failing UBB Assembly",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10071": {
+      "error_category": "ResourceStatusChangedCriticalOEM",
+      "error_type": "The health of resource '(OAM_.* module power good|OAM_.* eFuse state)' has changed to (Critical)",
+      "error_severity": "Critical",
+      "fru": "OAM",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 1,
+      "service_action_num": 2,
+      "service_action": "RMA the Failing OAM",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10072": {
+      "error_category": "ResourceStatusChangedWarning",
+      "error_type": "The health of resource '(OAM_.*)' has changed(.*(Die Over Temp|VR Hot|HBM Over Temp|PWRBRK)).",
+      "error_severity": "Warning",
+      "fru": "OAM",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 11,
+      "service_action": "Check Thermal Solution",
+      "supported_systems": [
+        "MI355X_DLC"
+      ]
+    },
+    "10073": {
+      "error_category": "ResourceUnrecognizedOEM",
+      "error_type": "The resource (OAM_.*) with (.*) (.*) is unrecognized.",
+      "error_severity": "Critical",
+      "fru": "OAM",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 10,
+      "service_action": "Check and Retry FW Bundle",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10074": {
+      "error_category": "ResourceWarningThresholdExceeded",
+      "error_type": "The resource property (.*) has exceeded its warning threshold of value (.*).",
+      "error_severity": "Warning",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 6,
+      "service_action_num": 13,
+      "service_action": "Clear SMC Logs",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10075": {
+      "error_category": "RevocationFailedOEM",
+      "error_type": "The resource (SMC|SMC_FPGA|APCFG|UBB_FPGA|Retimer|EROT) entity (.*) (.*) revocation failed.",
+      "error_severity": "Warning",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 5,
+      "service_action_num": 10,
+      "service_action": "Check and Retry FW Bundle",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10076": {
+      "error_category": "RevocationFailedOEM",
+      "error_type": "The resource (RM_.*|IFWI|RM) entity (.*) (.*) revocation failed.",
+      "error_severity": "Warning",
+      "fru": "OAM",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 5,
+      "service_action_num": 10,
+      "service_action": "Check and Retry FW Bundle",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10077": {
+      "error_category": "SecureFWUnexpectedRespWarning",
+      "error_type": "Secure (SMC FPGA) firmware unexpected response.",
+      "error_severity": "Warning",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 5,
+      "service_action_num": 10,
+      "service_action": "Check and Retry FW Bundle",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10078": {
+      "error_category": "TaskAborted",
+      "error_type": "The task with .d (.*) has been (aborted|cancelled).",
+      "error_severity": "Warning",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 5,
+      "service_action_num": 1,
+      "service_action": "Monitor",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10079": {
+      "error_category": "TemperatureAssertCriticalFaultOEM",
+      "error_type": "Resource '(OAM_.*)' asserted Critical Temperature Fault.",
+      "error_severity": "Critical",
+      "fru": "OAM",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 2,
+      "service_action_num": 11,
+      "service_action": "Check Thermal Solution",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10080": {
+      "error_category": "TransferFailed",
+      "error_type": "Transfer of image '(from Remote)' to (.*) failed.",
+      "error_severity": "Critical",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 10,
+      "service_action": "Check and Retry FW Bundle",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10081": {
+      "error_category": "UBBPowerStatusCritical",
+      "error_type": "UBB Power (.*) failure.",
+      "error_severity": "Critical",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 3,
+      "service_action_num": 7,
+      "service_action": "RMA the Failing UBB Assembly",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10082": {
+      "error_category": "VerificationFailed",
+      "error_type": "Verification of image .?(UBB_FPGA|Retimer|RETIMER_.*|VR.*).? at .?(erot|EROT|ERoT|ERot).? failed.",
+      "error_severity": "Critical",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 10,
+      "service_action": "Check and Retry FW Bundle",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10083": {
+      "error_category": "VerificationFailed",
+      "error_type": "Verification of image .?(OAM.*|RM.*|IFWI.*|rm.*|ifwi.*).? at .?(erot|EROT|ERoT|ERot).? failed.",
+      "error_severity": "Critical",
+      "fru": "OAM",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 10,
+      "service_action": "Check and Retry FW Bundle",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10084": {
+      "error_category": "VerificationFailedOEM",
+      "error_type": "Verification of image .?(SMC|SMC_FPGA|APCFG|UBB_FPGA|Retimer|Retimer Secure|RETIMER_.*).? at .?(erot|EROT|ERoT|ERot).? failed. Reason(.*)",
+      "error_severity": "Warning",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 5,
+      "service_action_num": 10,
+      "service_action": "Check and Retry FW Bundle",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10085": {
+      "error_category": "VerificationFailedOEM",
+      "error_type": "Verification of image .?(OAM.*|RM.*|IFWI.*|rm.*|ifwi.*).? at .?(erot|EROT|ERoT|ERot).? failed. Reason(.*)",
+      "error_severity": "Warning",
+      "fru": "OAM",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 5,
+      "service_action_num": 10,
+      "service_action": "Check and Retry FW Bundle",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10086": {
+      "error_category": "ResourceSelfTestFailed",
+      "error_type": "A self-test has failed.\\s+The following message was returned: .?(VR mismatch between the UBB and OAM_.* secure boot failure).?",
+      "error_severity": "Critical",
+      "fru": "OAM",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 20,
+      "service_action": "Misplaced/Missing OAM",
+      "supported_systems": [
+        "MI355X_DLC"
+      ]
+    },
+    "10087": {
+      "error_category": "ServiceFailure",
+      "error_type": "Service (.*) has exited unsuccessfully.",
+      "error_severity": "Warning",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 6,
+      "service_action_num": 1,
+      "service_action": "Monitor",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10088": {
+      "error_category": "TaskCompletedWarning",
+      "error_type": "The task with .d (.*) has completed with warnings",
+      "error_severity": "Warning",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 6,
+      "service_action_num": 1,
+      "service_action": "Monitor",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10089": {
+      "error_category": "ResourceRetryFailOEM",
+      "error_type": "The resource '(HSC power good)' continous to fails (.*) after (.*).",
+      "error_severity": "Critical",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 6,
+      "service_action_num": 1,
+      "service_action": "Monitor",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10090": {
+      "error_category": "ResourceRetryFailOEM",
+      "error_type": "The resource '(OAM.* module power good)' continous to fails (.*) after (.*).",
+      "error_severity": "Critical",
+      "fru": "OAM",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 6,
+      "service_action_num": 1,
+      "service_action": "Monitor",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10091": {
+      "error_category": "VNICResetByPLDM",
+      "error_type": "VNIC reset by PLDM",
+      "error_severity": "Warning",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 6,
+      "service_action_num": 1,
+      "service_action": "Monitor",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10092": {
+      "error_category": "FirmwareUpdateCancel",
+      "error_type": "Firmware update has been cancelled due to (.*).",
+      "error_severity": "Warning",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 5,
+      "service_action_num": 10,
+      "service_action": "Check and Retry FW Bundle",
+      "supported_systems": [
+        "MI325X_DLC",
+        "MI355X_DLC"
+      ]
+    },
+    "10999": {
+      "error_category": "UnidentifiedRedfishEvent",
+      "error_type": "Unidentified Event",
+      "error_severity": "Warning",
+      "fru": "UBB",
+      "status": "active",
+      "method": "Redfish",
+      "threshold": 1,
+      "priority": 4,
+      "service_action_num": 99,
+      "service_action": "Unidentified Errors",
+      "supported_systems": [
+        "MI355X_DLC"
+      ]
+    }
+  },
+  "service_actions": {
+    "1": {
+      "title": "Monitor",
+      "category": "Return to Service",
+      "steps": [
+        "Return to service.",
+        "If system stability issues continue, refer to SA99 - Unidentified Errors and contact AMD for assistance."
+      ]
+    },
+    "2": {
+      "title": "RMA the Failing OAM",
+      "category": "Replace",
+      "steps": [
+        "For DLC systems, if the event is accompanied with thermal events, warnings, or issues refer to SA11 first.",
+        "If the AFID event has not reached the number of failures specified in the threshold key, AC-cycle the system and return the node to service.",
+        "Take the node out of service.",
+        "Remove the failing OAM (see AMD Instinct [MI3xx] OAM Removal & Installation Guide) and return to AMD, along with the relevant AMD Instinct-generated logs and/or CPER indicating the failure event that maps to an RMA.",
+        "Install a new or known good OAM (see AMD Instinct [MI3xx] OAM Removal & Installation Guide).",
+        "Optional: Go to SA15 - Stress-test the System to validate the new OAM."
+      ]
+    },
+    "7": {
+      "title": "RMA the Failing UBB Assembly",
+      "category": "Replace",
+      "steps": [
+        "For DLC systems, if the event is accompanied with thermal events, warnings, or issues refer to SA11 first.",
+        "If the AFID event has not reached the number of failures specified in the threshold key, AC-cycle the system and return the node to service.",
+        "Take the node out of service.",
+        "Remove the failing UBB assembly and return to AMD, along with the relevant AMD Instinctgenerated logs and/or CPER indicating the failure event that maps to an RMA.",
+        "Install a new or known-good UBB assembly to the GPU tray.",
+        "Go to SA15 - Stress-test the System to validate the new OAM."
+      ]
+    },
+    "10": {
+      "title": "Check and Retry FW Bundle",
+      "category": "Retest",
+      "steps": [
+        "Verify the checksum of the bundle file to ensure that it is not corrupted. Re-download the FW update binary if needed.",
+        "AC-cycle the UBB. Alternatively, if the BMC implementation supports the Redfish or PLDM action to reset the SMC, that method can be used.",
+        "If the FW update binary is an older revision than the currently installed version, then this could be an indication that anti-rollback is being enforced for security reasons.",
+        "Re-attempt the FW update process by following the AMD Instinct MI300 Series Accelerators Firmware Update Guide.",
+        "If the update is successful, put the node back into service.",
+        "If the update fails, AC-cycle the UBB and re-attempt the FW update process again by following the AMD Instinct MI300 Series Accelerators Firmware Update Guide.",
+        "If the update is successful, put the node back into service.",
+        "If the update fails again, then RMA the UBB assembly (see SA7 - RMA the Failing UBB Assembly) or OAM (see SA2 - RMA the Failing OAM).",
+        "If the results are inconclusive and the issue persists, contact AMD."
+      ]
+    },
+    "11": {
+      "title": "Check Thermal Solution",
+      "category": "Retest",
+      "steps": [
+        "Ensure that all platform fans are operational. For DLC, ensure that all liquid pumps, heat exchangers, etc. are operational, and that there are no leaks.",
+        "Ensure that a static low fan speed has not been configured on the system. Ensure fan policy is being followed as designed for the chassis based on component. For DLC, ensure that a static low pump speed has not been configured on the system. Ensure pump policy is being followed as designed for the chassis based on component temperature.",
+        "Verify data center temperatures are within the acceptable range.",
+        "Run AGFHC performance tests using the following command (duration 20 minutes): /opt/amd/agfhc/agfhc -r thermal",
+        "If AGFHC runs successfully, put the node back into service.",
+        "If AGFHC fails, see In Band Errors for the appropriate Service Action.",
+        "If the system experiences a CTF and the system become unstable, RMA the failing OAM or UBB.",
+        "If the system passes thermal testing and continues to have stability issues once returned to service, contact AMD."
+      ]
+    },
+    "13": {
+      "title": "Clear SMC Logs",
+      "category": "Return to Service",
+      "steps": [
+        "It is recommended to collect and retain the SMC logs before clearing logs. UBB logs are FIFO and maintain new logs. Full logs don't affect functionality.",
+        "Please refer to the Redfish Schema for the latest instructions to clear logs."
+      ]
+    },
+    "15": {
+      "title": "Stress-test the System",
+      "category": "Retest",
+      "steps": [
+        "AC-cycle the system",
+        "Check the ROCm and AGFHC compatibility, and update if incorrect.",
+        "To ensure that there are no higher priority events to address first, refer to Redfish Schema on latest instruction on retreiving event entries and CPERs, or refer to publicly available ROCm documentation on amd-smi for collecting CPERs in-band.",
+        "Rerun the workload/test that caused the failure.",
+        "Run AGFHC using the following command (duration 1 hour): /opt/amd/agfhc/agfhc -r hbm_lvl4",
+        "Run AGFHC using the following command (duration 1 hour): /opt/amd/agfhc/agfhc -r all_lvl4",
+        "If the workload or AGFHC pass and there are no new instances of issues seen, return the system back to service.",
+        "If AGFHC or any additional diagnostics fail with additional errors return to step 1 above.",
+        "If the workload or AGFHC fails with the same error, RMA the failing OAM (see SA2 - RMA the Failing OAM) or UBB (see SA7 - RMA the Failing UBB Assembly).",
+        "If AGFHC test is inconclusive, contact AMD technical support."
+      ]
+    },
+    "16": {
+      "title": "Check PCIe Links",
+      "category": "Retest",
+      "steps": [
+        "If the AFID event has not reached the number of failures specified in the 'threshold' key, AC-cycle the system and return the node to service.",
+        "Validate the PCIe links by running the following AGFHC command. Note if PCIe Link Speed Not Correct, or PCIe Link Width Not Correct, or if there are reported AER: device recovery failed in dmesg. /opt/amd/agfhc/agfhc -t pcie_link_status",
+        "Verify upstream devices (switches, root port) are working properly, by checking for error messages on the host. (Refer to vendor diagnostics.) Resolve any host-related issues and return to step 1. If there are no host-related issues, continue to the next step.",
+        "Check the mechanical connection of upstream devices (switches, root port). If issues are found and corrected, return to step 1. If no issues are found, continue to the next step.",
+        "Take the node out of service.",
+        "Confirm that all four screws on all eight OAMs are torqued as described in the AMD Instinct [MI3xx] OAM Removal & Installation Guide.",
+        "Re-install the GPU tray into node.",
+        "If the problem still has not been resolved, then replace OAM (OAM location to be detected by OS/ System SEL-based monitoring). Send OS AER logs / System SEL event logs and dmesg with the RMA (refer to SA2 - RMA the Failing OAM).",
+        "Refer to SA15 - Stress-test the System."
+      ]
+    },
+    "17": {
+      "title": "Update FW",
+      "category": "Retest",
+      "steps": [
+        "AC-cycle the system",
+        "Check for higher priority AFIDs, CPERs, or other events",
+        "Update the BKC by following the AMD Instinct MI300 Series Accelerators Firmware Update Guide.",
+        "If a new event occurs while updating refer to SA10 - Check and Retry FW Bundle",
+        "If updating the system is not applicable, AC cycle the system and refer to SA1 - Monitor.",
+        "If the issue persists after a successful BKC update refer to SA32 - Contact AMD"
+      ]
+    },
+    "20": {
+      "title": "Misplaced/Missing OAM",
+      "category": "Return to Service",
+      "steps": [
+        "Install the proper SKU OAM into the location; refer to the AMD Instinct [MI3xx] OAM Removal & Installation Guide."
+      ]
+    },
+    "29": {
+      "title": "HPL Isolation",
+      "category": "Other",
+      "steps": [
+        "Take the node out of service.",
+        "If primary_action_subject is SYSTEM, then run AGFHC using the following command: /opt/amd/agfhc/agfhc -r rochpl_isolation",
+        "If AGFHC fails with another HPL Failure, then RMA the failing OAM (see SA2 - RMA the Failing OAM).",
+        "If AGFHC does NOT fail, then RMA the UBB assembly (see SA7 - RMA the Failing UBB Assembly). Note: In this case, the failure arises not from one faulty OAM, but from all eight OAMs running simultaneously."
+      ]
+    },
+    "32": {
+      "title": "Contact AMD",
+      "category": "Contact Support",
+      "steps": [
+        "Contact your AMD service provider."
+      ]
+    },
+    "33": {
+      "title": "xGMI WAFL Swap",
+      "category": "Other",
+      "steps": [
+        "For MI30XX, and MI32XX products, refer to SA6 - Retorque All OAMs",
+        "For MI35XX products, Retrieve the Redfish Event for the failure or collect the AllLogs as described in the Redfish Schema Instructions.",
+        "Find the ServiceableUnits from the Redfish Event",
+        "If the Redfish Event is not available, refer to Redfish Schema on latest instruction on retrieving event entries and CPERs",
+        "In the AllLogs bundle check the redfish-eventlog-entries.json files for AFID 9 or 10 to get the ServiceableUnits.",
+        "Retorque the OAMs listed in the ServiceableUnits list.",
+        "Return the node to service.",
+        "If the failure persists: Swap the affected OAM locations with the unaffected OAM locations, retest to determine the failing OAM. Refer to SA2 - RMA the failing the OAM"
+      ]
+    },
+    "98": {
+      "title": "Install JSON",
+      "category": "Other",
+      "steps": [
+        "Download the latest version of the AFID_SAG.json package and install."
+      ]
+    },
+    "99": {
+      "title": "Unidentified Errors",
+      "category": "Other",
+      "steps": [
+        "AC-cycle the node",
+        "Follow SA17 - Update FW.",
+        "Follow SA98 - Install JSON with the latest AFID_SAG.json available.",
+        "Validate the OAM operation by running the following AGFHC command (duration 1 hour): /opt/amd/agfhc/agfhc -r all_lvl4",
+        "If AGFHC runs successfully, put the node back into service.",
+        "If AGFHC fails with a different event or AFID, follow the corresponding Service Action.",
+        "If the event is still not identified, map the error_category, error_type, and error_severity to an AFID in the AFID_SAG.json to find the appropriate service action.",
+        "If the issue persists, refer to SA32 - Contact AMD."
+      ]
+    }
+  },
+  "serviceable_fru": [
+    {
+      "oam": 0
+    },
+    {
+      "ubb": 1
+    }
+  ]
+}

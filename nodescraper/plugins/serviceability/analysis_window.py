@@ -28,13 +28,14 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Optional
 
 from .afid_events import build_afid_events_from_data
 from .analyzer_args import ServiceabilityAnalyzerArgs
 from .cper_decode import CperDecodeError, decode_cper_raw_attachments
 from .se_models import AfidEvent, ServiceabilityBlock
-from .se_runner import SeRunError, run_service_hub
+from .se_runner import HubRunError, run_entry_point_hub, run_service_hub
 from .serviceability_data import ServiceabilityDataModel
 
 
@@ -85,6 +86,8 @@ def analyze_serviceability_window(
     data.afid_events = events
 
     if args.skip_hub:
+        if args.afid_sag_path and str(args.afid_sag_path).strip():
+            data.afid_sag_path = str(args.afid_sag_path).strip()
         block = ServiceabilityBlock(afid_events=events)
         data.serviceability = block
         return ServiceabilityWindowResult(
@@ -146,19 +149,47 @@ def analyze_serviceability_window(
             len(cper_data),
         )
 
-    try:
-        block = run_service_hub(
-            hub_python_module=args.hub_python_module,  # type: ignore[arg-type]
-            hub_display_name=args.hub_display_name,
+    if args.uses_entry_point_hub() and cper_data:
+        events = build_afid_events_from_data(data)
+        data.afid_events = events
+
+    if args.uses_entry_point_hub() and not events:
+        return ServiceabilityWindowResult(
+            ok=False,
+            message="No AFID events could be built from collected Redfish data",
             afid_events=events,
-            afid_sag_path=args.afid_sag_path,  # type: ignore[arg-type]
-            rf_events=data.rf_events,
-            cper_data=cper_data or None,
-            hub_options=args.resolved_hub_options(),
-            hub_analyze_method=args.hub_analyze_method,
-            hub_init_path_kwarg=args.hub_init_path_kwarg,
+            error="empty afid_events",
         )
-    except (SeRunError, ValueError) as exc:
+
+    sag_path = args.resolved_afid_sag_path()
+    data.afid_sag_path = sag_path
+    log.info(
+        "(%s) Using AFID_SAG file: %s",
+        parent,
+        Path(sag_path).expanduser().resolve(),
+    )
+    try:
+        if args.uses_module_hub():
+            block = run_service_hub(
+                hub_python_module=args.hub_python_module,  # type: ignore[arg-type]
+                hub_display_name=args.hub_display_name,
+                afid_events=events,
+                afid_sag_path=sag_path,
+                rf_events=data.rf_events,
+                cper_data=cper_data or None,
+                hub_options=args.resolved_hub_options(),
+                hub_analyze_method=args.hub_analyze_method,
+                hub_init_path_kwarg=args.hub_init_path_kwarg,
+            )
+        else:
+            block = run_entry_point_hub(
+                hub_entry_point=args.hub_entry_point,  # type: ignore[arg-type]
+                hub_display_name=args.hub_display_name,
+                afid_events=events,
+                afid_sag_path=sag_path,
+                rf_event_count=len(data.rf_events),
+            )
+    except (HubRunError, ValueError) as exc:
         return ServiceabilityWindowResult(
             ok=False,
             message=str(exc),
@@ -167,7 +198,7 @@ def analyze_serviceability_window(
         )
 
     data.serviceability = block
-    hub_label = args.hub_display_name or args.hub_python_module
+    hub_label = args.hub_display_name or args.hub_python_module or args.hub_entry_point
     cper_summary = ""
     if cper_data:
         cper_summary = f", {len(cper_data)} decoded CPER(s)"

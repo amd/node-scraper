@@ -59,8 +59,8 @@ def is_valid_iso_datetime(value: str) -> bool:
 def normalize_se_timestamp(value: str) -> str:
     """Normalize a timestamp to the Service Hub wire format.
 
-    Accepts ISO-8601 (``2026-05-07T12:50:42``) and SE-style strings with a space
-    separator (``2026-05-07 12:50:42.096-07:00``).
+    Accepts ISO-8601 (``2026-05-07T12:50:42``) and space-separated date-time strings
+    (``2026-05-07 12:50:42.096-07:00``).
     """
     text = str(value).strip()
     if not text:
@@ -79,10 +79,10 @@ def normalize_se_timestamp(value: str) -> str:
 
 
 def parse_iso_datetime(value: str) -> datetime:
-    """Parse an ISO-8601 or SE-style date-time string.
+    """Parse an ISO-8601 or space-separated date-time string.
 
     Args:
-        value: Date (e.g. 2026-05-17), ISO date-time, or SE format with a space separator.
+        value: Date (e.g. 2026-05-17), ISO date-time, or hub wire format with a space separator.
 
     Returns:
         Parsed datetime.

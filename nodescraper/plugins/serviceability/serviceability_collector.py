@@ -218,7 +218,15 @@ class ServiceabilityCollectorBase(
         )
         self.result.status = ExecutionStatus.OK
         self.result.message = f"Collected {len(members)} event log member(s)"
+        self._after_collect_data(data, svc_args)
         return self.result, data
+
+    def _after_collect_data(
+        self,
+        data: ServiceabilityDataModel,
+        args: TServiceabilityCollectArg,
+    ) -> None:
+        """Optional hook for subclasses after successful event log collection."""
 
     def _fetch_component_details(
         self, responses: dict[str, Any], args: TServiceabilityCollectArg

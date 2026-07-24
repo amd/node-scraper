@@ -23,29 +23,14 @@
 # SOFTWARE.
 #
 ###############################################################################
-from nodescraper.plugins.serviceability.analyzer_args import ServiceabilityAnalyzerArgs
-from nodescraper.plugins.serviceability.serviceability_data import (
-    ServiceabilityDataModel,
-)
-from nodescraper.plugins.serviceability.serviceability_plugin_base import (
-    ServiceabilityPluginBase,
-)
-from nodescraper.utils import register_log_dir_name
+from .mi4xx_analyzer_args import Mi4xxServiceabilityAnalyzerArgs
+from .mi4xx_collector import MI4XXCollector
+from .mi4xx_collector_args import MI4XXCollectorArgs
+from .serviceability_plugin_mi4xx import Mi4xxServiceabilityPlugin
 
-from .mi3xx_analyzer import MI3XXAnalyzer
-from .mi3xx_collector import MI3XXCollector
-from .mi3xx_collector_args import MI3XXCollectorArgs
-
-register_log_dir_name("ServiceabilityPluginMI3XX", "serviceability_plugin_MI3XX")
-register_log_dir_name("MI3XXCollector", "MI3XX_collector")
-register_log_dir_name("MI3XXAnalyzer", "MI3XX_analyzer")
-
-
-class ServiceabilityPluginMI3XX(ServiceabilityPluginBase):
-    """MI3XX OOB Redfish serviceability: BMC event log, CPER attachments, and service hub analysis."""
-
-    DATA_MODEL = ServiceabilityDataModel
-    COLLECTOR = MI3XXCollector  # type: ignore[assignment]
-    ANALYZER = MI3XXAnalyzer
-    COLLECTOR_ARGS = MI3XXCollectorArgs
-    ANALYZER_ARGS = ServiceabilityAnalyzerArgs
+__all__ = [
+    "MI4XXCollector",
+    "MI4XXCollectorArgs",
+    "Mi4xxServiceabilityAnalyzerArgs",
+    "Mi4xxServiceabilityPlugin",
+]

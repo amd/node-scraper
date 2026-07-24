@@ -27,8 +27,8 @@ import json
 from typing import Any, Optional
 
 import pytest
+from framework.common.serviceability_dummy_data import DUMMY_BMC_HOST, DUMMY_EVENT_URI
 from pydantic import ValidationError
-from serviceability_dummy_data import DUMMY_BMC_HOST, DUMMY_EVENT_URI
 
 from nodescraper.connection.redfish import (
     RF_MEMBERS,

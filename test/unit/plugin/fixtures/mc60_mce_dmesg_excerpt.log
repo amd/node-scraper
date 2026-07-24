@@ -1,0 +1,8 @@
+kern  :info  : 2038-01-19T00:00:00,511456+00:00 dummy: CPU 255 has invalid APIC ID ff. Aborting bringup
+kern  :warn  : 2038-01-19T00:00:01,647882+00:00 dummy pci 0000:78:05.3: EDR: Enable DPC _DSM failed to enable DPC
+kern  :info  : 2038-01-19T00:00:02,509869+00:00 mce: [Hardware Error]: Machine check events logged
+kern  :emerg : 2038-01-19T00:00:03,522734+00:00 [Hardware Error]: Corrected error, no action required.
+kern  :emerg : 2038-01-19T00:00:04,536361+00:00 [Hardware Error]: CPU:12 (00:00:0) MC60_STATUS[-|CE|MiscV|-|-|-|SyndV|-|-|-]: 0xaaa
+kern  :emerg : 2038-01-19T00:00:05,558044+00:00 [Hardware Error]: PPIN: 0xbbbbbbbbbbbbbbbb
+kern  :emerg : 2038-01-19T00:00:06,569369+00:00 [Hardware Error]: IPID: 0x0000000000000001, Syndrome: 0x0000000000000002
+kern  :emerg : 2038-01-19T00:00:07,589716+00:00 [Hardware Error]: cache level: L3/GEN, mem/io: IO, mem-tx: GEN, part-proc: SRC (no timeout)

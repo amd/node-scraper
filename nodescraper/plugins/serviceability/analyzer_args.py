@@ -27,17 +27,23 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, field_validator
 
 from nodescraper.models import AnalyzerArgs
 
+from .afid_sag_paths import resolve_configured_afid_sag_path
+
 
 class ServiceabilityAnalyzerArgs(AnalyzerArgs):
-    """Analyzer args for serviceability plugins that run a configurable Python hub."""
+    """Analyzer args for serviceability plugins that run a Python or entry-point service hub."""
 
     hub_python_module: Optional[str] = Field(
         default=None,
         description="Import path for the hub module (class implements hub_analyze_method); hub_options forwards kwargs.",
+    )
+    hub_entry_point: Optional[str] = Field(
+        default=None,
+        description="Registered hub entry point name when hub_python_module is omitted.",
     )
     hub_display_name: Optional[str] = Field(
         default=None,
@@ -45,7 +51,7 @@ class ServiceabilityAnalyzerArgs(AnalyzerArgs):
     )
     afid_sag_path: Optional[str] = Field(
         default=None,
-        description="Path to hub config (e.g. AFID_SAG.json); passed as hub_init_path_kwarg.",
+        description="Path to AFID_SAG.json. When omitted, uses /opt/amd/afid/AFID_SAG.json.",
     )
     hub_init_path_kwarg: str = Field(
         default="afid_sag",
@@ -130,6 +136,7 @@ class ServiceabilityAnalyzerArgs(AnalyzerArgs):
         "afid_sag_path",
         "hub_python_module",
         "hub_display_name",
+        "hub_entry_point",
         "cper_decode_module",
     )
     @classmethod
@@ -139,12 +146,14 @@ class ServiceabilityAnalyzerArgs(AnalyzerArgs):
         text = str(value).strip()
         return text or None
 
-    @model_validator(mode="after")
-    def _require_hub_config_when_running(self) -> ServiceabilityAnalyzerArgs:
-        if self.skip_hub:
-            return self
-        if not self.afid_sag_path:
-            raise ValueError("afid_sag_path is required when running the service hub.")
-        if not self.hub_python_module:
-            raise ValueError("hub_python_module is required when running the service hub.")
-        return self
+    def resolved_afid_sag_path(self) -> str:
+        """Return the AFID SAG path from analysis_args or the built-in default."""
+        return resolve_configured_afid_sag_path(self.afid_sag_path)
+
+    def uses_module_hub(self) -> bool:
+        """Return True when analysis_args selects a Python import-path hub."""
+        return bool(self.hub_python_module)
+
+    def uses_entry_point_hub(self) -> bool:
+        """Return True when analysis_args selects a registered entry-point hub."""
+        return bool(self.hub_entry_point)

@@ -66,6 +66,33 @@ DUMMY_CPER_EVENT_ID_SKIP = "dummy-cper-evt-skip"
 DUMMY_CPER_EVENT_ID_RF = "dummy-cper-evt-rf"
 DUMMY_CPER_BYTES_BASIC = b"\x01\x02dummy-cper"
 DUMMY_CPER_BYTES_RF = b"\xaa\xbb"
+DUMMY_NESTED_OEM_AFID = 9101
+DUMMY_UNIT_NESTED = "dummy_nested_unit_0"
+DUMMY_FRU_PRIMARY = "DUMMY-FRU-PRIMARY"
+DUMMY_FRU_SECONDARY = "DUMMY-FRU-SECONDARY"
+DUMMY_FRU_TERTIARY = "DUMMY-FRU-TERTIARY"
+DUMMY_FRU_PRIMARY_NORM = "DUMMY_FRU_PRIMARY"
+DUMMY_FRU_SECONDARY_NORM = "DUMMY_FRU_SECONDARY"
+DUMMY_SERIAL_PRIMARY = "DUMMY-SERIAL-001"
+DUMMY_SERIAL_RF_META = "DUMMY-SERIAL-RF-001"
+DUMMY_PART_PRIMARY = "DUMMY-PART-001"
+DUMMY_PART_RF_META = "DUMMY-PART-RF-001"
+DUMMY_UNIT_NAME_PRIMARY = "Dummy unit primary"
+DUMMY_UNIT_VERSION_PRIMARY = "0.0.1-dummy"
+DUMMY_ERROR_CATEGORY = "DummyErrorCategory"
+DUMMY_ERROR_TYPE = "DummyErrorType"
+DUMMY_ERROR_SEVERITY = "Critical"
+DUMMY_TIER_LABEL = "Secondary"
+DUMMY_TIER_CRITICAL = "Critical"
+DUMMY_SA_SEVERITY = 20
+DUMMY_PRIORITY = 20
+DUMMY_AFID_SUMMARY = "DummyErrorCategory / DummyErrorType"
+DUMMY_RF_EVENT_COUNT_SAMPLE = 99
+DUMMY_MESSAGE_ID = "DummyEvent.1.0.DummyThreshold"
+DUMMY_SERVICE_ACTION_NUM_ALT = 88
+DUMMY_HUB_VERSION_ENTRY = "0.0.0-dummy-entry"
+DUMMY_SERVICE_ACTION_CATEGORY = "DummyCategory"
+DUMMY_SERVICE_ACTION_STEP = "Dummy step."
 
 
 def dummy_chassis_uri(unit: str) -> str:
@@ -158,6 +185,110 @@ def dummy_openbmc_log_entry_serviceable_units_only() -> dict[str, Any]:
                     "ServiceableUnits": [{"@odata.id": dummy_chassis_uri(DUMMY_UNIT_B)}],
                 }
             ],
+        },
+    }
+
+
+def dummy_nested_oem_amd_log_entry() -> dict[str, Any]:
+    """LogEntry with Oem.AMD.AMDFieldIdentifiers and Links OOC (nested OEM layout)."""
+    return {
+        "Created": DUMMY_TIMESTAMP,
+        "Id": "dummy-nested-oem-1",
+        "Links": {
+            "OriginOfCondition": {"@odata.id": dummy_chassis_uri(DUMMY_UNIT_NESTED)},
+        },
+        "MessageId": DUMMY_MESSAGE_ID,
+        "Oem": {
+            "AMD": {
+                "@odata.type": "#Dummy_Message.v1_0_0.Dummy_Message",
+                "AMDFieldIdentifiers": [
+                    {
+                        "AFID": DUMMY_NESTED_OEM_AFID,
+                        "Description": "dummy nested OEM sensor error",
+                        "ServiceableUnits": [{"@odata.id": dummy_chassis_uri(DUMMY_UNIT_NESTED)}],
+                        "ServiceableUnits@odata.count": 1,
+                    }
+                ],
+                "AMDFieldIdentifiers@Members.count": 1,
+            }
+        },
+        "Severity": DUMMY_ERROR_SEVERITY,
+    }
+
+
+dummy_helios_sensor_log_entry = dummy_nested_oem_amd_log_entry
+
+
+def dummy_sag_for_fru_tests() -> dict[str, Any]:
+    """Minimal SAG with two FRUs and AFID mappings for FRU grouping tests."""
+    return {
+        "serviceable_fru": [
+            {DUMMY_FRU_PRIMARY.lower(): 1},
+            {DUMMY_FRU_SECONDARY.lower(): 5},
+        ],
+        "afid": {
+            str(DUMMY_AFID_A): {"fru": DUMMY_FRU_PRIMARY},
+            str(DUMMY_AFID_B): {"fru": DUMMY_FRU_SECONDARY},
+        },
+        "service_actions": {
+            str(DUMMY_SERVICE_ACTION_NUM): {
+                "title": DUMMY_SERVICE_ACTION_TITLE,
+                "category": DUMMY_SERVICE_ACTION_CATEGORY,
+                "severity": DUMMY_SA_SEVERITY,
+                "steps": [{"step_num": 0, "description": DUMMY_SERVICE_ACTION_STEP}],
+            }
+        },
+    }
+
+
+def dummy_sag_for_csv_tests() -> dict[str, Any]:
+    """SAG with three FRUs for CSV empty-row coverage."""
+    return {
+        "serviceable_fru": [
+            {DUMMY_FRU_PRIMARY: {}},
+            {DUMMY_FRU_SECONDARY: {}},
+            {DUMMY_FRU_TERTIARY: {}},
+        ],
+        "afid": {
+            str(DUMMY_AFID_A): {
+                "error_category": DUMMY_ERROR_CATEGORY,
+                "error_type": DUMMY_ERROR_TYPE,
+                "error_severity": DUMMY_ERROR_SEVERITY,
+                "fru": DUMMY_FRU_PRIMARY,
+                "priority": DUMMY_PRIORITY,
+                "service_action_num": DUMMY_SERVICE_ACTION_NUM,
+            }
+        },
+        "service_actions": {
+            str(DUMMY_SERVICE_ACTION_NUM): {
+                "title": DUMMY_SERVICE_ACTION_TITLE,
+                "severity": DUMMY_SA_SEVERITY,
+            },
+        },
+    }
+
+
+def dummy_nested_oem_rf_member(*, unit: str = DUMMY_UNIT_A) -> dict[str, Any]:
+    """Redfish member with nested Oem.AMD.AMDFieldIdentifiers for CSV identity tests."""
+    return {
+        "Created": DUMMY_TIMESTAMP,
+        "Oem": {
+            "AMD": {
+                "AMDFieldIdentifiers": [
+                    {
+                        "AFID": DUMMY_AFID_A,
+                        "ServiceableUnits": [{"@odata.id": dummy_chassis_uri(unit)}],
+                    }
+                ],
+                "ErrDataArr": [
+                    {
+                        "MetaData": {
+                            "SerialNumber": DUMMY_SERIAL_RF_META,
+                            "PartNumber": DUMMY_PART_RF_META,
+                        }
+                    }
+                ],
+            }
         },
     }
 

@@ -23,29 +23,47 @@
 # SOFTWARE.
 #
 ###############################################################################
-from nodescraper.plugins.serviceability.analyzer_args import ServiceabilityAnalyzerArgs
+from __future__ import annotations
+
+import json
+
+import pytest
+from framework.common.serviceability_dummy_data import dummy_helios_sensor_log_entry
+
 from nodescraper.plugins.serviceability.serviceability_data import (
+    ServiceabilityDataLoadError,
     ServiceabilityDataModel,
 )
-from nodescraper.plugins.serviceability.serviceability_plugin_base import (
-    ServiceabilityPluginBase,
-)
-from nodescraper.utils import register_log_dir_name
-
-from .mi3xx_analyzer import MI3XXAnalyzer
-from .mi3xx_collector import MI3XXCollector
-from .mi3xx_collector_args import MI3XXCollectorArgs
-
-register_log_dir_name("ServiceabilityPluginMI3XX", "serviceability_plugin_MI3XX")
-register_log_dir_name("MI3XXCollector", "MI3XX_collector")
-register_log_dir_name("MI3XXAnalyzer", "MI3XX_analyzer")
 
 
-class ServiceabilityPluginMI3XX(ServiceabilityPluginBase):
-    """MI3XX OOB Redfish serviceability: BMC event log, CPER attachments, and service hub analysis."""
+def test_import_model_from_redfish_entries_collection():
+    member = dummy_helios_sensor_log_entry()
+    payload = {
+        "@odata.id": "/redfish/v1/Systems/Instinct_Accelerators/LogServices/EventLog/Entries",
+        "Members": [member, {"Message": "no afid"}],
+    }
+    model = ServiceabilityDataModel.import_model(payload)
+    assert len(model.rf_events) == 2
+    assert model.responses[payload["@odata.id"]]["Members"] == payload["Members"]
 
-    DATA_MODEL = ServiceabilityDataModel
-    COLLECTOR = MI3XXCollector  # type: ignore[assignment]
-    ANALYZER = MI3XXAnalyzer
-    COLLECTOR_ARGS = MI3XXCollectorArgs
-    ANALYZER_ARGS = ServiceabilityAnalyzerArgs
+
+def test_import_model_from_redfish_entries_file(tmp_path):
+    member = dummy_helios_sensor_log_entry()
+    path = tmp_path / "entries.json"
+    path.write_text(
+        json.dumps(
+            {
+                "@odata.id": "/redfish/v1/Systems/Instinct_Accelerators/LogServices/EventLog/Entries",
+                "Members": [member],
+            }
+        ),
+        encoding="utf-8",
+    )
+    model = ServiceabilityDataModel.import_model(str(path))
+    assert len(model.rf_events) == 1
+    assert model.rf_events[0]["Id"] == member["Id"]
+
+
+def test_import_model_missing_file():
+    with pytest.raises(ServiceabilityDataLoadError, match="not found"):
+        ServiceabilityDataModel.import_model("/tmp/does-not-exist-serviceability-data.json")

@@ -24,7 +24,7 @@
 #
 ###############################################################################
 import pytest
-from serviceability_dummy_data import (
+from framework.common.serviceability_dummy_data import (
     DUMMY_AFID_BELOW_RF,
     DUMMY_AFID_FATAL_HBM,
     DUMMY_RF_CPER_AFID,

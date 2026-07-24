@@ -24,8 +24,7 @@
 #
 ###############################################################################
 import pytest
-from pydantic import ValidationError
-from serviceability_dummy_data import (
+from framework.common.serviceability_dummy_data import (
     DUMMY_BMC_HOST,
     DUMMY_CPER_BYTES_BASIC,
     DUMMY_CPER_BYTES_RF,
@@ -39,6 +38,7 @@ from serviceability_dummy_data import (
     dummy_cper_rf_member,
     dummy_cper_skip_member,
 )
+from pydantic import ValidationError
 
 from nodescraper.connection.redfish import RF_MEMBERS, RedfishGetResult
 from nodescraper.enums import ExecutionStatus

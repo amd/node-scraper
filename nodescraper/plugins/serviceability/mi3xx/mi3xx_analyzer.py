@@ -25,23 +25,13 @@
 ###############################################################################
 from __future__ import annotations
 
-from typing import Any, ClassVar, Optional
+from typing import Any, ClassVar
 
 from pydantic import BaseModel, Field
 
-from nodescraper.enums import ExecutionStatus
-from nodescraper.interfaces import DataAnalyzer
-from nodescraper.models import TaskResult
-from nodescraper.plugins.serviceability.analysis_window import (
-    analyze_serviceability_window,
-)
-from nodescraper.plugins.serviceability.analyzer_args import ServiceabilityAnalyzerArgs
-from nodescraper.plugins.serviceability.se_adapter import (
-    format_serviceability_solution_lines,
-)
 from nodescraper.plugins.serviceability.se_models import ServiceabilityBlock
-from nodescraper.plugins.serviceability.serviceability_data import (
-    ServiceabilityDataModel,
+from nodescraper.plugins.serviceability.serviceability_hub_analyzer import (
+    ServiceabilityHubAnalyzer,
 )
 
 
@@ -53,10 +43,8 @@ class AfidSagMetadataArtifact(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
-class MI3XXAnalyzer(DataAnalyzer[ServiceabilityDataModel, ServiceabilityAnalyzerArgs]):
-    """Build AFID events from collected data and run the configured service hub."""
-
-    DATA_MODEL = ServiceabilityDataModel
+class MI3XXAnalyzer(ServiceabilityHubAnalyzer):
+    """Build AFID events from collected data and run the configured Python service hub."""
 
     DOCUMENTATION_ANALYSIS_ITEMS: tuple[str, ...] = (
         "Builds AFID events from collected Redfish event log members (and optional assembly metadata).",
@@ -65,44 +53,9 @@ class MI3XXAnalyzer(DataAnalyzer[ServiceabilityDataModel, ServiceabilityAnalyzer
         "When analysis_args.skip_hub is true, only builds AFID events without running the hub.",
     )
 
-    def analyze_data(
-        self,
-        data: ServiceabilityDataModel,
-        args: Optional[ServiceabilityAnalyzerArgs] = None,
-    ) -> TaskResult:
-        if args is None:
-            self.result.status = ExecutionStatus.NOT_RAN
-            self.result.message = "ServiceabilityAnalyzerArgs are required"
-            return self.result
-
-        parent = self.parent or self.__class__.__name__
-        result = analyze_serviceability_window(
-            data,
-            args,
-            logger=self.logger,
-            parent=parent,
-        )
-        if not result.ok:
-            self.result.status = ExecutionStatus.ERROR
-            self.result.message = result.message
-            return self.result
-
-        if result.serviceability is not None:
-            self._append_afid_sag_metadata_artifact(result.serviceability)
-            self._log_serviceability_solutions(result.serviceability)
-
-        self.result.status = ExecutionStatus.OK
-        self.result.message = result.message
-        return self.result
-
-    def _append_afid_sag_metadata_artifact(self, block: ServiceabilityBlock) -> None:
+    def _append_hub_artifacts(self, block: ServiceabilityBlock) -> None:
         if block.afid_sag_metadata is None:
             return
         self.result.artifacts.append(
             AfidSagMetadataArtifact(metadata=dict(block.afid_sag_metadata))
         )
-
-    def _log_serviceability_solutions(self, block: ServiceabilityBlock) -> None:
-        parent = self.parent or self.__class__.__name__
-        for line in format_serviceability_solution_lines(block):
-            self.logger.info("(%s) %s", parent, line)

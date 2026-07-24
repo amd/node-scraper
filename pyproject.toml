@@ -94,6 +94,14 @@ mypy_path = ["test/unit"]
 explicit_package_bases = true
 
 [[tool.mypy.overrides]]
+module = "pydantic"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "pydantic.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
 module = "httpx"
 ignore_missing_imports = true
 

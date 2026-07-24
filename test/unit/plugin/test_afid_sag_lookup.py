@@ -23,38 +23,45 @@
 # SOFTWARE.
 #
 ###############################################################################
+from __future__ import annotations
+
 from framework.common.serviceability_dummy_data import (
     DUMMY_AFID_A,
+    DUMMY_FRU_PRIMARY_NORM,
+    DUMMY_FRU_SECONDARY_NORM,
+    DUMMY_RF_EVENT_COUNT_SAMPLE,
     DUMMY_TIMESTAMP,
+    DUMMY_TIMESTAMP_LATER,
     DUMMY_UNIT_A,
+    DUMMY_UNIT_B,
+    dummy_sag_for_fru_tests,
 )
 
-from nodescraper.plugins.serviceability.analysis_window import (
-    analyze_serviceability_window,
+from nodescraper.plugins.serviceability.afid_sag_lookup import (
+    format_collected_afid_fru_summary_lines,
+    group_afid_events_by_fru,
+    known_fru_names_from_sag,
 )
-from nodescraper.plugins.serviceability.analyzer_args import ServiceabilityAnalyzerArgs
-from nodescraper.plugins.serviceability.serviceability_data import (
-    ServiceabilityDataModel,
-)
+from nodescraper.plugins.serviceability.se_models import AfidEvent
 
 
-def test_analyze_serviceability_window_skip_hub():
-    data = ServiceabilityDataModel(
-        rf_events=[
-            {
-                "MessageId": "DummyEvent.1.0.DummyFailure",
-                "Message": "dummy failure",
-                "Severity": "Critical",
-                "Created": DUMMY_TIMESTAMP,
-                "Afid": DUMMY_AFID_A,
-                "serviceable_unit": DUMMY_UNIT_A,
-            }
-        ]
+def test_group_afid_events_by_fru_and_missing_fru_report():
+    sag_data = dummy_sag_for_fru_tests()
+    events = [
+        AfidEvent(afid=DUMMY_AFID_A, serviceable_unit=DUMMY_UNIT_A, time=DUMMY_TIMESTAMP),
+        AfidEvent(afid=DUMMY_AFID_A, serviceable_unit=DUMMY_UNIT_B, time=DUMMY_TIMESTAMP_LATER),
+    ]
+    grouped = group_afid_events_by_fru(events, sag_data)
+    assert DUMMY_FRU_PRIMARY_NORM in grouped
+    assert len(grouped[DUMMY_FRU_PRIMARY_NORM]) == 2
+    lines = format_collected_afid_fru_summary_lines(
+        events,
+        sag_data,
+        rf_event_count=DUMMY_RF_EVENT_COUNT_SAMPLE,
     )
-    result = analyze_serviceability_window(
-        data,
-        ServiceabilityAnalyzerArgs(skip_hub=True),
-    )
-    assert result.ok is True
-    assert result.serviceability is not None
-    assert len(result.afid_events) == 1
+    assert any(DUMMY_FRU_PRIMARY_NORM in line for line in lines)
+    assert any(DUMMY_FRU_SECONDARY_NORM in line for line in lines)
+    assert known_fru_names_from_sag(sag_data) == [
+        DUMMY_FRU_PRIMARY_NORM,
+        DUMMY_FRU_SECONDARY_NORM,
+    ]

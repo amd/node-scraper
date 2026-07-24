@@ -23,29 +23,35 @@
 # SOFTWARE.
 #
 ###############################################################################
+from __future__ import annotations
+
+from typing import Optional
+
+from pydantic import Field, field_validator
+
 from nodescraper.plugins.serviceability.analyzer_args import ServiceabilityAnalyzerArgs
-from nodescraper.plugins.serviceability.serviceability_data import (
-    ServiceabilityDataModel,
-)
-from nodescraper.plugins.serviceability.serviceability_plugin_base import (
-    ServiceabilityPluginBase,
-)
-from nodescraper.utils import register_log_dir_name
-
-from .mi3xx_analyzer import MI3XXAnalyzer
-from .mi3xx_collector import MI3XXCollector
-from .mi3xx_collector_args import MI3XXCollectorArgs
-
-register_log_dir_name("ServiceabilityPluginMI3XX", "serviceability_plugin_MI3XX")
-register_log_dir_name("MI3XXCollector", "MI3XX_collector")
-register_log_dir_name("MI3XXAnalyzer", "MI3XX_analyzer")
 
 
-class ServiceabilityPluginMI3XX(ServiceabilityPluginBase):
-    """MI3XX OOB Redfish serviceability: BMC event log, CPER attachments, and service hub analysis."""
+class Mi4xxServiceabilityAnalyzerArgs(ServiceabilityAnalyzerArgs):
+    """Analysis args for Mi4xxServiceabilityPlugin."""
 
-    DATA_MODEL = ServiceabilityDataModel
-    COLLECTOR = MI3XXCollector  # type: ignore[assignment]
-    ANALYZER = MI3XXAnalyzer
-    COLLECTOR_ARGS = MI3XXCollectorArgs
-    ANALYZER_ARGS = ServiceabilityAnalyzerArgs
+    rf_event_log_uri: str = Field(
+        default="/redfish/v1/Systems/Instinct_Accelerators/LogServices/EventLog/Entries",
+        description="Redfish URI for the Instinct accelerator event log Entries collection.",
+    )
+    hub_entry_point: Optional[str] = Field(
+        default="amdse",
+        description="Registered hub entry point name.",
+    )
+
+    @field_validator("rf_event_log_uri")
+    @classmethod
+    def _strip_rf_event_log_uri(cls, value: object) -> str:
+        text = str(value).strip()
+        if not text:
+            raise ValueError("rf_event_log_uri must be a non-empty Redfish URI")
+        return text
+
+    def resolved_rf_event_log_uri(self) -> str:
+        """Return the configured event log Entries URI."""
+        return str(self.rf_event_log_uri).strip()

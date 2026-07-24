@@ -23,29 +23,31 @@
 # SOFTWARE.
 #
 ###############################################################################
-from nodescraper.plugins.serviceability.analyzer_args import ServiceabilityAnalyzerArgs
-from nodescraper.plugins.serviceability.serviceability_data import (
-    ServiceabilityDataModel,
-)
-from nodescraper.plugins.serviceability.serviceability_plugin_base import (
-    ServiceabilityPluginBase,
-)
-from nodescraper.utils import register_log_dir_name
+from __future__ import annotations
 
-from .mi3xx_analyzer import MI3XXAnalyzer
-from .mi3xx_collector import MI3XXCollector
-from .mi3xx_collector_args import MI3XXCollectorArgs
+from pathlib import Path
+from typing import Optional
 
-register_log_dir_name("ServiceabilityPluginMI3XX", "serviceability_plugin_MI3XX")
-register_log_dir_name("MI3XXCollector", "MI3XX_collector")
-register_log_dir_name("MI3XXAnalyzer", "MI3XX_analyzer")
+DEFAULT_AFID_SAG_PATH = "/opt/amd/afid/AFID_SAG.json"
 
 
-class ServiceabilityPluginMI3XX(ServiceabilityPluginBase):
-    """MI3XX OOB Redfish serviceability: BMC event log, CPER attachments, and service hub analysis."""
+def default_afid_sag_path() -> str:
+    """Return the default AFID_SAG.json path when analysis_args does not override it."""
+    return DEFAULT_AFID_SAG_PATH
 
-    DATA_MODEL = ServiceabilityDataModel
-    COLLECTOR = MI3XXCollector  # type: ignore[assignment]
-    ANALYZER = MI3XXAnalyzer
-    COLLECTOR_ARGS = MI3XXCollectorArgs
-    ANALYZER_ARGS = ServiceabilityAnalyzerArgs
+
+def resolve_configured_afid_sag_path(configured_path: Optional[str]) -> str:
+    """Resolve AFID SAG path from analysis_args or the built-in default."""
+    if configured_path is not None and str(configured_path).strip():
+        return str(configured_path).strip()
+    return default_afid_sag_path()
+
+
+def validate_afid_sag_path(path: str) -> str:
+    """Return path when the AFID SAG file exists, otherwise raise HubRunError."""
+    from .se_runner import HubRunError
+
+    sag_path = Path(path)
+    if not sag_path.is_file():
+        raise HubRunError(f"AFID SAG file not found: {path}")
+    return path
