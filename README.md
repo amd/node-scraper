@@ -33,7 +33,7 @@ flowchart LR
 
 Collection writes raw artifacts to disk (command output, Redfish JSON, log files) even when no analyzer runs. Analysis adds events and may append more artifacts.
 
-Details, sequence diagrams, and source file map: [docs/architecture/overview.md](docs/architecture/overview.md).
+More detail: [docs/architecture/overview.md](docs/architecture/overview.md).
 
 ## Installation
 

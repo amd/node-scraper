@@ -2,68 +2,22 @@
 
 Node Scraper collects and analyzes system data through **plugins**. Each plugin runs a **collector** (gather raw data) and optionally an **analyzer** (check data and emit events). The CLI loads configs, builds a plugin queue, connects to the target system, runs plugins, and writes logs.
 
-## High-level flow
+## Architecture at a glance
 
 ```mermaid
-flowchart TB
-    subgraph CLI["CLI (node-scraper)"]
-        A[Parse args + subcommand]
-        B[Load plugin configs]
-        C[PluginRegistry]
-    end
-
-    subgraph Exec["PluginExecutor"]
-        D[Plugin queue]
-        E[Connection library]
-        F[Run each plugin.run]
-        G[Result collators]
-    end
-
-    subgraph Plugin["DataPlugin"]
-        H[collect → DataCollector]
-        I[analyze → DataAnalyzer]
-    end
-
-    subgraph Conn["Connection managers"]
-        J[InBandConnectionManager]
-        K[RedfishConnectionManager]
-        L[OobSshConnectionManager]
-    end
-
-    subgraph Target["Target system"]
-        M[Local shell / SSH host]
-        N[BMC Redfish REST]
-        O[BMC SSH shell]
-    end
-
-    subgraph Output["Run output (scraper_logs_.../)"]
-        P[events.json per task]
-        Q[Data model JSON]
-        S[Collector artifacts]
-        R[nodescraper.csv + TableSummary]
-    end
-
-    A --> B --> C --> D
-    D --> E
-    E --> J
-    E --> K
-    E --> L
-    D --> F
-    F --> H
-    F --> I
-    H --> J
-    H --> K
-    H --> L
-    J --> M
-    K --> N
-    L --> O
-    H --> S
-    H --> Q
-    H --> P
-    I --> P
-    I --> Q
-    F --> G --> R
+flowchart LR
+    CLI[node-scraper CLI] --> PE[PluginExecutor]
+    PE --> P[DataPlugin]
+    P --> C[Collector]
+    P --> A[Analyzer]
+    C --> IB[InBand SSH / local]
+    C --> RF[Redfish HTTPS]
+    C --> BS[BMC SSH]
+    C -->|artifacts, data model, events| DISK[scraper_logs_.../]
+    A -->|events, artifacts| DISK
 ```
+
+Collection writes raw artifacts to disk (command output, Redfish JSON, log files) even when no analyzer runs. Analysis adds events and may append more artifacts.
 
 ## Step-by-step
 
@@ -94,47 +48,6 @@ flowchart TB
 | OOB BMC SSH | `OOBSSHDataPlugin` | `OobSshConnectionManager` | Shell commands on the BMC |
 
 See [connections/overview.md](../connections/overview.md) for connection JSON and Redfish reachability details.
-
-## Key source files
-
-| Area | Path |
-| --- | --- |
-| CLI | `nodescraper/cli/cli.py`, `nodescraper/cli/invocation.py` |
-| Executor | `nodescraper/pluginexecutor.py` |
-| Plugin contract | `nodescraper/interfaces/dataplugin.py` |
-| In-band base | `nodescraper/base/inbandcollectortask.py` |
-| Redfish collector base | `nodescraper/base/redfishcollectortask.py` |
-| Redfish HTTP | `nodescraper/connection/redfish/redfish_connection.py` |
-| Events | `nodescraper/interfaces/task.py`, `nodescraper/models/event.py` |
-| Log hook | `nodescraper/taskresulthooks/filesystemloghook.py` |
-
-## How OOB plugins reach Redfish
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant CLI as node-scraper CLI
-    participant PE as PluginExecutor
-    participant RCM as RedfishConnectionManager
-    participant RC as RedfishConnection
-    participant BMC as BMC Redfish API
-    participant Col as RedfishDataCollector
-
-    User->>CLI: --connection-config redfish.json
-    User->>CLI: run-plugins RedfishEndpointPlugin
-    CLI->>PE: run_queue()
-    PE->>RCM: connect(host, credentials)
-    RCM->>RC: create session
-    RC->>BMC: GET /redfish/v1/
-    BMC-->>RC: service root
-    PE->>Col: collect_data(connection=RC)
-    Col->>RC: run_get("/redfish/v1/Systems/1")
-    RC->>BMC: HTTPS GET
-    BMC-->>RC: JSON response
-    Col-->>PE: DataModel + events
-```
-
-Redfish-only subcommands (for example `show-redfish-oem-allowable`) instantiate `RedfishConnection` directly in the CLI without running a full plugin.
 
 ## Related docs
 
