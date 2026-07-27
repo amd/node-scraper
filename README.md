@@ -1,677 +1,120 @@
 # Node Scraper
-Node Scraper is a tool which performs automated data collection and analysis for the purposes of
-system debug. For details on what data is collected and analyzed, see the [plugin reference table](docs/PLUGIN_DOC.md).
 
-## Table of Contents
-- [Installation](#installation)
-  - [Install from PyPI](#install-from-pypi)
-  - [Install from Source](#install-from-source)
-- [CLI Usage](#cli-usage)
-  - [Execution Methods](#execution-methods)
-    - [Example: Remote Execution](#example-remote-execution)
-    - [Example: connection_config.json](#example-connection_configjson)
-  - [Subcommands](#subcommands)
-    - ['describe' subcommand](#describe-subcommand)
-    - ['run-plugins' sub command](#run-plugins-sub-command)
-    - ['gen-plugin-config' sub command](#gen-plugin-config-sub-command)
-    - ['compare-runs' subcommand](#compare-runs-subcommand)
-    - ['summary' sub command](#summary-sub-command)
-- [Configs](#configs)
-  - [Global args](#global-args)
-  - [Plugin config: `--plugin-configs` command](#plugin-config---plugin-configs-command)
-  - [Reference config: `gen-reference-config` command](#reference-config-gen-reference-config-command)
-- **Extending Node Scraper (integration & external plugins)** → See [EXTENDING.md](EXTENDING.md)
-- **Full view of the plugins with the associated collectors & analyzers as well as the commands
-invoked by collectors** -> See [docs/PLUGIN_DOC.md](docs/PLUGIN_DOC.md)
+Node Scraper performs automated data collection and analysis for system debug. Plugins collect data from the host OS (in-band) or BMC (out-of-band via Redfish or SSH), run analyzers, and emit events and logs.
+
+## Quick links
+
+| Topic | Document |
+| --- | --- |
+| **Documentation index** | [docs/README.md](docs/README.md) |
+| **Architecture (CLI → plugins → connections → events)** | [docs/architecture/overview.md](docs/architecture/overview.md) |
+| **CLI subcommands** | [docs/cli/subcommands.md](docs/cli/subcommands.md) |
+| **Plugin & run configs** | [docs/cli/configs.md](docs/cli/configs.md) |
+| **In-band / OOB connections** | [docs/connections/overview.md](docs/connections/overview.md) |
+| **Connection config JSON** | [docs/connections/connection-config.md](docs/connections/connection-config.md) |
+| **All plugins (generated reference)** | [docs/PLUGIN_DOC.md](docs/PLUGIN_DOC.md) |
+| **Extending & external plugins** | [EXTENDING.md](EXTENDING.md) |
+| **Serviceability plugin** | [README_SERVICEABILITY.md](README_SERVICEABILITY.md) |
+
+## Architecture at a glance
+
+```mermaid
+flowchart LR
+    CLI[node-scraper CLI] --> PE[PluginExecutor]
+    PE --> P[DataPlugin]
+    P --> C[Collector]
+    P --> A[Analyzer]
+    C --> IB[InBand SSH / local]
+    C --> RF[Redfish HTTPS]
+    C --> BS[BMC SSH]
+    C --> E[events + data models]
+    A --> E
+    E --> LOG[scraper_logs_.../]
+```
+
+Details, sequence diagrams, and source file map: [docs/architecture/overview.md](docs/architecture/overview.md).
 
 ## Installation
-### Install from PyPI
-Node Scraper is published on [PyPI](https://pypi.org/project/amd-node-scraper/) as **amd-node-scraper**. Install it with Python 3.9 or newer:
+
+### PyPI
+
+Requires Python 3.9+.
 
 ```sh
 pip install amd-node-scraper
-```
-
-Use a virtual environment if you prefer. After installation, confirm the CLI is available:
-
-```sh
 node-scraper --help
 ```
 
-### Install from Source
-Node Scraper requires Python 3.9+ for installation. After cloning this repository,
-call dev-setup.sh script with 'source'. This script creates an editable install of Node Scraper in
-a python virtual environment and also configures the pre-commit hooks for the project.
+Published on [PyPI](https://pypi.org/project/amd-node-scraper/) as **amd-node-scraper**.
+
+### From source
 
 ```sh
 source dev-setup.sh
 ```
 
-Alternatively, follow these manual steps:
+Or manually:
 
-### 1. Virtual Environment (Optional)
 ```sh
 python3 -m venv venv
 source venv/bin/activate
-```
-On Debian/Ubuntu, you may need: `sudo apt install python3-venv`
-
-### 2. Install from Source (Required)
-```sh
 python3 -m pip install --editable .[dev] --upgrade
+pre-commit install   # optional
 ```
-This installs Node Scraper in editable mode with development dependencies. To verify: `node-scraper --help`
 
-### 3. Git Hooks (Optional)
+## Quick start
+
+**Local in-band plugin:**
+
 ```sh
-pre-commit install
+node-scraper run-plugins DmesgPlugin
 ```
-Sets up pre-commit hooks for code quality checks. On Debian/Ubuntu, you may need: `sudo apt install pre-commit`
 
-## CLI Usage
-The Node Scraper CLI can be used to run Node Scraper plugins on a target system. The following CLI
-options are available:
+**Remote host (SSH):**
+
+```sh
+node-scraper --sys-location REMOTE --connection-config connection_config.json \
+  run-plugins DmesgPlugin
+```
+
+**OOB Redfish plugin:**
+
+```sh
+node-scraper --connection-config connection-config.json \
+  run-plugins RedfishEndpointPlugin
+```
+
+Connection JSON examples: [docs/connections/connection-config.md](docs/connections/connection-config.md).
+
+## CLI help
 
 <!-- node-scraper -h start -->
 ```sh
 usage: cli.py [-h] [--version] [--sys-name STRING]
               [--sys-location {LOCAL,REMOTE}]
               [--sys-interaction-level {PASSIVE,INTERACTIVE,DISRUPTIVE}]
-              [--sys-sku STRING] [--sys-platform STRING]
-              [--plugin-configs LIST] [--system-config STRING]
-              [--connection-config STRING] [--log-path STRING]
-              [--log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}]
-              [--no-console-log] [--gen-reference-config] [--skip-sudo]
+              [--plugin-configs LIST] [--connection-config STRING]
+              [--log-path STRING] ...
               {summary,run-plugins,describe,gen-plugin-config,compare-runs,show-redfish-oem-allowable}
               ...
 
-node scraper CLI
-
-positional arguments:
-  {summary,run-plugins,describe,gen-plugin-config,compare-runs,show-redfish-oem-allowable}
-                        Subcommands
-    summary             Generates summary csv file
-    run-plugins         Run a series of plugins
-    describe            Display details on a built-in config or plugin
-    gen-plugin-config   Generate a config for a plugin or list of plugins
-    compare-runs        Compare datamodels from two run log directories
-    show-redfish-oem-allowable
-                        Fetch OEM diagnostic allowable types from Redfish
-                        LogService (for oem_diagnostic_types_allowable)
-
-options:
-  -h, --help            show this help message and exit
-  --version             show program's version number and exit
-  --sys-name STRING     System name (default: <current hostname>)
-  --sys-location {LOCAL,REMOTE}
-                        Location of target system (default: LOCAL)
-  --sys-interaction-level {PASSIVE,INTERACTIVE,DISRUPTIVE}
-                        Specify system interaction level, used to determine
-                        the type of actions that plugins can perform (default:
-                        INTERACTIVE)
-  --sys-sku STRING      Manually specify SKU of system (default: None)
-  --sys-platform STRING
-                        Specify system platform (default: None)
-  --plugin-configs LIST
-                        Comma-separated built-in names and/or plugin config
-                        JSON paths (e.g. --plugin-
-                        configs=NodeStatus,/path/c.json). Built-ins:
-                        AllPlugins, NodeStatus (default: None)
-  --system-config STRING
-                        Path to system config json (default: None)
-  --connection-config STRING
-                        Path to connection config json (default: None)
-  --log-path STRING     Specifies local path for node scraper logs, use 'None'
-                        to disable logging (default: .)
-  --log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}
-                        Change python log level (default: INFO)
-  --no-console-log      Write logs only to nodescraper.log under the run
-                        directory; do not print to stdout. If no run log
-                        directory would be created (e.g. --log-path None),
-                        uses ./scraper_logs_<host>_<timestamp>/ like the
-                        default layout. (default: False)
-  --gen-reference-config
-                        Generate reference config from system. Writes to
-                        ./reference_config.json. (default: False)
-  --skip-sudo           Skip plugins that require sudo permissions (default:
-                        False)
+Subcommands: summary | run-plugins | describe | gen-plugin-config | compare-runs | show-redfish-oem-allowable
 ```
 <!-- node-scraper -h end -->
 
-### Execution Methods
+Full subcommand reference: [docs/cli/subcommands.md](docs/cli/subcommands.md).
 
-Node Scraper can operate in two modes: LOCAL and REMOTE, determined by the `--sys-location` argument.
+## Execution modes
 
-- **LOCAL** (default): Node Scraper is installed and run directly on the target system. All data collection and plugin execution occur locally.
-- **REMOTE**: Node Scraper runs on your local machine but targets a remote system over SSH. In this mode, Node Scraper does not need to be installed on the remote system; all commands are executed remotely via SSH.
+| Mode | Flag | Description |
+| --- | --- | --- |
+| Local | `--sys-location LOCAL` (default) | Run on the machine where Node Scraper is installed |
+| Remote | `--sys-location REMOTE` | SSH to target host via `InBandConnectionManager` in `--connection-config` |
 
-To use remote execution, specify `--sys-location REMOTE` and provide a connection configuration file with `--connection-config`.
+OOB plugins use `RedfishConnectionManager` in `--connection-config` regardless of `sys-location`.
 
-#### Example: Remote Execution
+## Logs
 
-```sh
-node-scraper --sys-name <remote_host> --sys-location REMOTE --connection-config ./connection_config.json run-plugins DmesgPlugin
-```
+Default layout: `./scraper_logs_<host>_<timestamp>/` with per-plugin artifacts, `events.json`, and `nodescraper.csv`. Override with `--log-path`.
 
-##### Example: connection_config.json
-
-In-band (SSH) connection:
-
-```json
-{
-    "InBandConnectionManager": {
-        "hostname": "remote_host.example.com",
-        "port": 22,
-        "username": "myuser",
-        "password": "mypassword",
-        "key_filename": "/path/to/private/key"
-    }
-}
-```
-
-Redfish (BMC) connection for Redfish-only plugins:
-
-```json
-{
-    "RedfishConnectionManager": {
-        "host": "bmc.example.com",
-        "port": 443,
-        "username": "admin",
-        "password": "secret",
-        "use_https": true,
-        "verify_ssl": true,
-        "api_root": "redfish/v1"
-    }
-}
-```
-
-- `api_root` (optional): Redfish API path (e.g. `redfish/v1`). If omitted, the default `redfish/v1` is used. Override this when your BMC uses a different API version path.
-
-**Notes:**
-- If using SSH keys, specify `key_filename` instead of `password`.
-- The remote user must have permissions to run the requested plugins and access required files. If needed, use the `--skip-sudo` argument to skip plugins requiring sudo.
-
-### Subcommands
-
-Plugins to run can be specified in two ways, using a plugin JSON config file or using the
-'run-plugins' sub command. These two options are not mutually exclusive and can be used together.
-
-#### **'describe' subcommand**
-
-You can use the `describe` subcommand to display details about built-in configs or plugins.
-List all built-in configs:
-```sh
-node-scraper describe config
-```
-
-Show details for a specific built-in config
-```sh
-node-scraper describe config <config-name>
-```
-
-List all available plugins**
-```sh
-node-scraper describe plugin
-```
-
-Show details for a specific plugin
-```sh
-node-scraper describe plugin <plugin-name>
-```
-
-#### **'run-plugins' sub command**
-The plugins to run and their associated arguments can also be specified directly on the CLI using
-the 'run-plugins' sub-command. Using this sub-command you can specify a plugin name followed by
-the arguments for that particular plugin. Multiple plugins can be specified at once.
-
-You can view the available arguments for a particular plugin by running
-`node-scraper run-plugins <plugin-name> -h`:
-```sh
-usage: node-scraper run-plugins BiosPlugin [-h] [--collection {True,False}] [--analysis {True,False}] [--system-interaction-level STRING]
-                                            [--data STRING] [--exp-bios-version [STRING ...]] [--regex-match {True,False}]
-
-options:
-  -h, --help            show this help message and exit
-  --collection {True,False}
-  --analysis {True,False}
-  --system-interaction-level STRING
-  --data STRING
-  --exp-bios-version [STRING ...]
-  --regex-match {True,False}
-
-```
-
-Examples
-
-Run a single plugin
-```sh
-node-scraper run-plugins BiosPlugin --exp-bios-version TestBios123
-```
-
-Run multiple plugins
-```sh
-node-scraper run-plugins BiosPlugin --exp-bios-version TestBios123 RocmPlugin --exp-rocm TestRocm123
-```
-
-Run plugins without specifying args (plugin defaults will be used)
-
-```sh
-node-scraper run-plugins BiosPlugin RocmPlugin
-```
-
-Use plugin configs and 'run-plugins'
-
-```sh
-node-scraper run-plugins BiosPlugin
-```
-
-#### **'gen-plugin-config' sub command**
-The 'gen-plugin-config' sub command can be used to generate a plugin config JSON file for a plugin
-or list of plugins that can then be customized. Plugin arguments which have default values will be
-prepopulated in the JSON file, arguments without default values will have a value of 'null'.
-
-Examples
-
-Generate a config for the DmesgPlugin:
-```sh
-node-scraper gen-plugin-config --plugins DmesgPlugin
-```
-
-This would produce the following config:
-
-```json
-{
-  "global_args": {},
-  "plugins": {
-    "DmesgPlugin": {
-      "collection": true,
-      "analysis": true,
-      "system_interaction_level": "INTERACTIVE",
-      "data": null,
-      "analysis_args": {
-        "analysis_range_start": null,
-        "analysis_range_end": null,
-        "check_unknown_dmesg_errors": true,
-        "exclude_category": null,
-        "interval_to_collapse_event": 60,
-        "num_timestamps": 3
-      }
-    }
-  },
-  "result_collators": {}
-}
-```
-
-**Running DmesgPlugin with a dmesg log file:**
-
-Instead of collecting dmesg from the system, you can analyze a pre-existing dmesg log file using the `--data` argument:
-
-```sh
-node-scraper --run-plugins DmesgPlugin --data /path/to/dmesg.log --collection False
-```
-
-This will skip the collection phase and directly analyze the provided dmesg.log file.
-
-**Custom Error Regex Example:**
-
-You can extend the built-in error detection with custom regex patterns. Create a config file with custom error patterns:
-
-```json
-{
-  "global_args": {},
-  "plugins": {
-    "DmesgPlugin": {
-      "analysis_args": {
-        "check_unknown_dmesg_errors": false,
-        "interval_to_collapse_event": 60,
-        "num_timestamps": 3,
-        "error_regex": [
-          {
-            "regex": "MY_CUSTOM_ERROR.*",
-            "message": "My Custom Error Detected",
-            "event_category": "SW_DRIVER",
-            "event_priority": 3
-          },
-          {
-            "regex": "APPLICATION_CRASH: .*",
-            "message": "Application Crash",
-            "event_category": "SW_DRIVER",
-            "event_priority": 4
-          }
-        ],
-        "priority_override_rules": [
-          {
-            "message": "Application Crash",
-            "new_priority": "ERROR"
-          },
-          {
-            "event_category": "SW_DRIVER",
-            "new_priority": "WARNING"
-          }
-        ]
-      }
-    }
-  },
-  "result_collators": {}
-}
-```
-
-Save this to `dmesg_custom_config.json` and run:
-
-```sh
-node-scraper --plugin-configs=dmesg_custom_config.json run-plugins DmesgPlugin
-```
-
-#### **'compare-runs' subcommand**
-The `compare-runs` subcommand compares datamodels from two run log directories (e.g. two
-`nodescraper_log_*` folders). By default, all plugins with data in both runs are compared.
-
-**Basic usage:**
-```sh
-node-scraper compare-runs <path1> <path2>
-```
-
-**Exclude specific plugins from the comparison** with `--skip-plugins`:
-```sh
-node-scraper compare-runs path1 path2 --skip-plugins SomePlugin
-```
-
-**Compare only certain plugins** with `--include-plugins`:
-```sh
-node-scraper compare-runs path1 path2 --include-plugins DmesgPlugin
-```
-
-**Show full diff output** (no truncation of the Message column or limit on number of errors) with `--dont-truncate`:
-```sh
-node-scraper compare-runs path1 path2 --include-plugins DmesgPlugin --dont-truncate
-```
-
-You can pass multiple plugin names to `--skip-plugins` or `--include-plugins`.
-
-#### **'show-redfish-oem-allowable' subcommand**
-The `show-redfish-oem-allowable` subcommand fetches the list of OEM diagnostic types supported by your BMC (from the Redfish LogService `OEMDiagnosticDataType@Redfish.AllowableValues`). Use it to discover which types you can put in `oem_diagnostic_types_allowable` and `oem_diagnostic_types` in the Redfish OEM diag plugin config.
-
-**Requirements:** A Redfish connection config (same as for RedfishOemDiagPlugin).
-
-**Command:**
-```sh
-node-scraper --connection-config connection-config.json show-redfish-oem-allowable --log-service-path "redfish/v1/Systems/UBB/LogServices/DiagLogs"
-```
-
-Output is a JSON array of allowable type names (e.g. `["Dmesg", "JournalControl", "AllLogs", ...]`). Copy that list into your plugin config’s `oem_diagnostic_types_allowable` if you want to match your BMC.
-
-**Redfish OEM diag plugin config example**
-
-Use a plugin config that points at your LogService and lists the types to collect. Logs are written under the run log path (see `--log-path`).
-
-```json
-{
-  "name": "Redfish OEM diagnostic logs",
-  "desc": "Collect OEM diagnostic logs from Redfish LogService. Requires Redfish connection config.",
-  "global_args": {},
-  "plugins": {
-    "RedfishOemDiagPlugin": {
-      "collection_args": {
-        "log_service_path": "redfish/v1/Systems/UBB/LogServices/DiagLogs",
-        "oem_diagnostic_types_allowable": [
-          "JournalControl",
-            ...
-          "AllLogs",
-        ],
-        "oem_diagnostic_types": ["JournalControl", "AllLogs"],
-        "task_timeout_s": 600
-      },
-      "analysis_args": {
-        "require_all_success": false
-      }
-    }
-  },
-  "result_collators": {}
-}
-```
-
-- **`log_service_path`**: Redfish path to the LogService (e.g. DiagLogs). Must match your system (e.g. `UBB` vs. another system id).
-- **`oem_diagnostic_types_allowable`**: Full list of types the BMC supports (from `show-redfish-oem-allowable` or vendor docs).
-- **`oem_diagnostic_types`**: Subset of types to collect on each run (e.g. `["JournalControl", "AllLogs"]`).
-- **`task_timeout_s`**: Max seconds to wait per collection task.
-
-**How to use**
-
-1. **Discover allowable types** (optional): run `show-redfish-oem-allowable` and paste the output into `oem_diagnostic_types_allowable` in your plugin config.
-2. **Set `oem_diagnostic_types`** to the list you want to collect (e.g. `["JournalControl", "AllLogs"]`).
-3. **Run the plugin** with a Redfish connection config and your plugin config:
-   ```sh
-   node-scraper --connection-config connection-config.json --plugin-config plugin_config_redfish_oem_diag.json run-plugins RedfishOemDiagPlugin
-   ```
-4. Use **`--log-path`** to choose where run logs (and OEM diag archives) are written; archives go under `<log-path>/scraper_logs_<name>_<timestamp>/redfish_oem_diag_plugin/redfish_oem_diag_collector/`.
-
-#### **RedfishEndpointPlugin**
-
-The RedfishEndpointPlugin collects Redfish URIs (GET responses) and optionally runs checks on the returned JSON. It requires a Redfish connection config (same as RedfishOemDiagPlugin).
-
-**How to run**
-
-1. Create a connection config (e.g. `connection-config.json`) with `RedfishConnectionManager` and your BMC host, credentials, and API root.
-2. Create a plugin config with `uris` to collect and optional `checks` for analysis (see example below). For example save as `plugin_config_redfish_endpoint.json`.
-3. Run:
-   ```sh
-   node-scraper --connection-config connection-config.json --plugin-config plugin_config_redfish_endpoint.json run-plugins RedfishEndpointPlugin
-   ```
-
-**Sample plugin config** (`plugin_config_redfish_endpoint.json`):
-
-```json
-{
-  "name": "RedfishEndpointPlugin",
-  "desc": "Redfish endpoint: collect URIs and optional checks",
-  "global_args": {},
-  "plugins": {
-    "RedfishEndpointPlugin": {
-      "collection_args": {
-        "uris": [
-          "/redfish/v1/",
-          "/redfish/v1/Systems/1",
-          "/redfish/v1/Chassis/1/Power"
-        ]
-      },
-      "analysis_args": {
-        "checks": {
-          "/redfish/v1/Systems/1": {
-            "PowerState": "On",
-            "Status/Health": { "anyOf": ["OK", "Warning"] }
-          },
-          "/redfish/v1/Chassis/1/Power": {
-            "PowerControl/0/PowerConsumedWatts": { "max": 1000 }
-          }
-        }
-      }
-    }
-  },
-  "result_collators": {}
-}
-```
-
-**`collection_args`**
-- **`uris`**: List of Redfish paths (e.g. `/redfish/v1/`, `/redfish/v1/Systems/1`) to GET and store.
-- **`follow_next_link`**: Optional (default `false`). When `true`, the collector follows `Members@odata.nextLink` pagination for each URI and merges all pages into a single response.
-- **`max_pages`**: Optional (default `200`). Safety cap on the number of pages to follow per URI when `follow_next_link` is enabled.
-
-**`analysis_args`**
-- **`checks`**: Optional. Map of URI to expected values or constraints for analysis. Supports exact match (e.g. `"PowerState": "On"`), `anyOf`, `min`/`max`, etc.
-
-#### **'summary' sub command**
-The 'summary' subcommand can be used to combine results from multiple runs of node-scraper to a
-single summary.csv file. Sample run:
-```sh
-node-scraper summary --search-path /<path_to_node-scraper_logs>
-```
-This will generate a new file '/<path_to_node-scraper_logs>/summary.csv' file. This file will
-contain the results from all 'nodescraper.csv' files from '/<path_to_node-scarper_logs>'.
-
-### Configs
-A plugin JSON config should follow the structure of the plugin config model defined here.
-The globals field is a dictionary of global key-value pairs; values in globals will be passed to
-any plugin that supports the corresponding key. The plugins field should be a dictionary mapping
-plugin names to sub-dictionaries of plugin arguments. Lastly, the result_collators attribute is
-used to define result collator classes that will be run on the plugin results. By default, the CLI
-adds the TableSummary result collator, which prints a summary of each plugin’s results in a
-tabular format to the console.
-
-```json
-{
-    "globals_args": {},
-    "plugins": {
-        "BiosPlugin": {
-            "analysis_args": {
-                "exp_bios_version": "TestBios123"
-            }
-        },
-        "RocmPlugin": {
-            "analysis_args": {
-                "exp_rocm_version": "TestRocm123"
-            }
-        }
-    }
-}
-```
-
-#### Global args
-Global args can be used to skip sudo plugins or enable/disble either collection or analysis.
-Below is an example that skips sudo requiring plugins and disables analysis.
-
-```json
-  "global_args": {
-      "collection_args": {
-        "skip_sudo" : 1
-      },
-      "collection" : 1,
-      "analysis" : 0
-  },
-```
-
-#### Plugin config: **'--plugin-configs' command**
-A plugin config can be used to compare the system data against the config specifications.
-Built-in configs include **NodeStatus** (a subset of plugins) and **AllPlugins** (runs every
-registered plugin with default arguments—useful for generating a reference config from the full system).
-
-**NodeStatus plus additional plugins** — built-in configs merge with plugins named after `run-plugins`.
-Values are comma-separated; pass as **`--plugin-configs=…`** or **`--plugin-configs` …** (same as other
-optional flags), e.g. `--plugin-configs=NodeStatus,/path/extra.json`.
-Examples:
-```sh
-node-scraper --plugin-configs=NodeStatus run-plugins PciePlugin
-```
-
-```sh
-node-scraper --log-path ./logs --plugin-configs=NodeStatus run-plugins PciePlugin
-```
-
-Using a JSON file:
-```sh
-node-scraper --plugin-configs=plugin_config.json
-```
-Here is an example of a comprehensive plugin config that specifies analyzer args for each plugin:
-```json
-{
-  "global_args": {},
-  "plugins": {
-    "BiosPlugin": {
-      "analysis_args": {
-        "exp_bios_version": "3.5"
-      }
-    },
-    "CmdlinePlugin": {
-      "analysis_args": {
-        "cmdline": "imgurl=test NODE=nodename selinux=0 serial console=ttyS1,115200 console=tty0",
-        "required_cmdline" : "selinux=0"
-      }
-    },
-    "DkmsPlugin": {
-      "analysis_args": {
-        "dkms_status": "amdgpu/6.11",
-        "dkms_version" : "dkms-3.1",
-        "regex_match" : true
-      }
-    },
-    "KernelPlugin": {
-      "analysis_args": {
-        "exp_kernel": "5.11-generic"
-      }
-    },
-    "OsPlugin": {
-      "analysis_args": {
-        "exp_os": "Ubuntu 22.04.2 LTS"
-      }
-    },
-    "PackagePlugin": {
-          "analysis_args": {
-            "exp_package_ver": {
-              "gcc": "11.4.0"
-            },
-            "regex_match": false
-          }
-    },
-    "RocmPlugin": {
-      "analysis_args": {
-        "exp_rocm": "6.5"
-      }
-    }
-  },
-  "result_collators": {},
-  "name": "plugin_config",
-  "desc": "My golden config"
-}
-```
-
-#### Reference config: **'gen-reference-config' command**
-This command can be used to generate a reference config that is populated with current system
-configurations. Plugins that use analyzer args (where applicable) will be populated with system
-data.
-
-**Run all registered plugins (AllPlugins config):**
-```sh
-node-scraper --plugin-configs=AllPlugins
-
-```
-
-**Generate a reference config for specific plugins:**
-```sh
-node-scraper --gen-reference-config run-plugins BiosPlugin OsPlugin
-```
-This will generate the following config:
-```json
-{
-  "global_args": {},
-  "plugins": {
-    "BiosPlugin": {
-      "analysis_args": {
-        "exp_bios_version": [
-          "M17"
-        ],
-        "regex_match": false
-      }
-    },
-    "OsPlugin": {
-      "analysis_args": {
-        "exp_os": [
-          "8.10"
-        ],
-        "exact_match": true
-      }
-    }
-  },
-  "result_collators": {}
-```
-This config can later be used on a different platform for comparison, using the steps at #2:
-```sh
-node-scraper --plugin-configs=reference_config.json
-
-```
-
-An alternate way to generate a reference config is by using log files from a previous run. The
-example below uses log files from 'scraper_logs_<path>/':
-```sh
-node-scraper gen-plugin-config --gen-reference-config-from-logs scraper_logs_<path>/ --output-path custom_output_dir
-```
-This will generate a reference config that includes plugins with logged results in
-'scraper_log_<path>' and save the new config to 'custom_output_dir/reference_config.json'.
+See [docs/architecture/events-and-results.md](docs/architecture/events-and-results.md).
