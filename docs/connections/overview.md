@@ -57,7 +57,7 @@ OOB Redfish collectors inherit `RedfishDataCollector` (`nodescraper/base/redfish
 
 The collector receives a connected `RedfishConnection` from `RedfishConnectionManager.connect()`.
 
-Example plugins: `RedfishEndpointPlugin`, `RedfishOemDiagPlugin`, `ServiceabilityPluginMI3XX`, `Mi4xxServiceabilityPlugin`.
+Example plugins: `RedfishEndpointPlugin`, `RedfishOemDiagPlugin`, `ServiceabilityPluginMI3XX`.
 
 ## In-band from plugins
 

@@ -30,9 +30,9 @@ Documentation index for **amd-node-scraper**. Start with [architecture/overview.
 | [PLUGIN_DOC.md](PLUGIN_DOC.md) | Generated catalog of every built-in plugin, collector, analyzer, and command |
 | [plugins/inband.md](plugins/inband.md) | In-band plugin authoring patterns |
 | [plugins/oob.md](plugins/oob.md) | Out-of-band (Redfish / BMC SSH) plugin patterns |
+| [plugins/serviceability-mi3xx.md](plugins/serviceability-mi3xx.md) | ServiceabilityPluginMI3XX setup and run guide |
 | [node-scraper-external/README.md](node-scraper-external/README.md) | External plugin package example |
 | [../EXTENDING.md](../EXTENDING.md) | Programmatic integration and external plugins |
-| [../README_SERVICEABILITY.md](../README_SERVICEABILITY.md) | Serviceability plugin setup and run guide |
 
 ## Other
 

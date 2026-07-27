@@ -14,7 +14,7 @@ Node Scraper performs automated data collection and analysis for system debug. P
 | **Connection config JSON** | [docs/connections/connection-config.md](docs/connections/connection-config.md) |
 | **All plugins (generated reference)** | [docs/PLUGIN_DOC.md](docs/PLUGIN_DOC.md) |
 | **Extending & external plugins** | [EXTENDING.md](EXTENDING.md) |
-| **Serviceability plugin** | [README_SERVICEABILITY.md](README_SERVICEABILITY.md) |
+| **ServiceabilityPluginMI3XX** | [docs/plugins/serviceability-mi3xx.md](docs/plugins/serviceability-mi3xx.md) |
 
 ## Architecture at a glance
 
@@ -27,10 +27,11 @@ flowchart LR
     C --> IB[InBand SSH / local]
     C --> RF[Redfish HTTPS]
     C --> BS[BMC SSH]
-    C --> E[events + data models]
-    A --> E
-    E --> LOG[scraper_logs_.../]
+    C -->|artifacts, data model, events| DISK[scraper_logs_.../]
+    A -->|events, artifacts| DISK
 ```
+
+Collection writes raw artifacts to disk (command output, Redfish JSON, log files) even when no analyzer runs. Analysis adds events and may append more artifacts.
 
 Details, sequence diagrams, and source file map: [docs/architecture/overview.md](docs/architecture/overview.md).
 
@@ -93,12 +94,64 @@ Connection JSON examples: [docs/connections/connection-config.md](docs/connectio
 usage: cli.py [-h] [--version] [--sys-name STRING]
               [--sys-location {LOCAL,REMOTE}]
               [--sys-interaction-level {PASSIVE,INTERACTIVE,DISRUPTIVE}]
-              [--plugin-configs LIST] [--connection-config STRING]
-              [--log-path STRING] ...
+              [--sys-sku STRING] [--sys-platform STRING]
+              [--plugin-configs LIST] [--system-config STRING]
+              [--connection-config STRING] [--log-path STRING]
+              [--log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}]
+              [--no-console-log] [--gen-reference-config] [--skip-sudo]
               {summary,run-plugins,describe,gen-plugin-config,compare-runs,show-redfish-oem-allowable}
               ...
 
-Subcommands: summary | run-plugins | describe | gen-plugin-config | compare-runs | show-redfish-oem-allowable
+node scraper CLI
+
+positional arguments:
+  {summary,run-plugins,describe,gen-plugin-config,compare-runs,show-redfish-oem-allowable}
+                        Subcommands
+    summary             Generates summary csv file
+    run-plugins         Run a series of plugins
+    describe            Display details on a built-in config or plugin
+    gen-plugin-config   Generate a config for a plugin or list of plugins
+    compare-runs        Compare datamodels from two run log directories
+    show-redfish-oem-allowable
+                        Fetch OEM diagnostic allowable types from Redfish
+                        LogService (for oem_diagnostic_types_allowable)
+
+options:
+  -h, --help            show this help message and exit
+  --version             show program's version number and exit
+  --sys-name STRING     System name (default: <current hostname>)
+  --sys-location {LOCAL,REMOTE}
+                        Location of target system (default: LOCAL)
+  --sys-interaction-level {PASSIVE,INTERACTIVE,DISRUPTIVE}
+                        Specify system interaction level, used to determine
+                        the type of actions that plugins can perform (default:
+                        INTERACTIVE)
+  --sys-sku STRING      Manually specify SKU of system (default: None)
+  --sys-platform STRING
+                        Specify system platform (default: None)
+  --plugin-configs LIST
+                        Comma-separated built-in names and/or plugin config
+                        JSON paths (e.g. --plugin-
+                        configs=NodeStatus,/path/c.json). Built-ins:
+                        AllPlugins, NodeStatus (default: None)
+  --system-config STRING
+                        Path to system config json (default: None)
+  --connection-config STRING
+                        Path to connection config json (default: None)
+  --log-path STRING     Specifies local path for node scraper logs, use 'None'
+                        to disable logging (default: .)
+  --log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}
+                        Change python log level (default: INFO)
+  --no-console-log      Write logs only to nodescraper.log under the run
+                        directory; do not print to stdout. If no run log
+                        directory would be created (e.g. --log-path None),
+                        uses ./scraper_logs_<host>_<timestamp>/ like the
+                        default layout. (default: False)
+  --gen-reference-config
+                        Generate reference config from system. Writes to
+                        ./reference_config.json. (default: False)
+  --skip-sudo           Skip plugins that require sudo permissions (default:
+                        False)
 ```
 <!-- node-scraper -h end -->
 

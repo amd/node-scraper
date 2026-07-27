@@ -34,28 +34,33 @@ flowchart LR
     H[FileSystemLogHook]
     CSV[nodescraper.csv]
 
-    C -->|events| P
-    A -->|events| P
+    C -->|artifacts, data model, events| P
+    A -->|events, artifacts| P
     P --> H
-    H -->|events.json per task| LogDir[scraper_logs_.../]
+    H -->|artifacts, events.json, data model JSON| LogDir[scraper_logs_.../]
     P --> CSV
 ```
 
-1. **Collection** — `DataPlugin.collect()` runs `COLLECTOR.collect_data()`. Collector events append to `collection_result.events`.
+1. **Collection** — `DataPlugin.collect()` runs `COLLECTOR.collect_data()`. Collectors append **artifacts** (raw command output, Redfish responses, files) to `collection_result.artifacts`, plus optional events.
 
-2. **Analysis** — `DataPlugin.analyze()` runs `ANALYZER.analyze_data()`. Analyzer events append to `analysis_result.events`.
+2. **Analysis** — `DataPlugin.analyze()` runs `ANALYZER.analyze_data()`. Analyzer events append to `analysis_result.events`; analyzers may add more artifacts.
 
 3. **Plugin result** — `PluginResult` wraps collection and analysis `TaskResult`s plus status.
 
-4. **Persistence** — `FileSystemLogHook` writes per-task `events.json` and data model JSON under:
+4. **Persistence** — `FileSystemLogHook` writes per-task output under:
 
    ```
    scraper_logs_<host>_<timestamp>/
      <plugin_name>/
        <collector_or_analyzer>/
+         result.json
          events.json
+         command_artifacts.json   # or plugin-specific .log / .json files
+         <data_model>.json
          ...
    ```
+
+   Collect-only runs still produce collector artifacts and data model files on disk.
 
 5. **Summary** — `TableSummary` collator prints a table to the console; `nodescraper.csv` aggregates run status.
 

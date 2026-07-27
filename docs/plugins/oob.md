@@ -38,7 +38,6 @@ See [../connections/connection-config.md](../connections/connection-config.md).
 | `RedfishEndpointPlugin` | Collect arbitrary Redfish URIs + optional JSON checks |
 | `RedfishOemDiagPlugin` | OEM diagnostic log collection via LogService |
 | `ServiceabilityPluginMI3XX` | MI3XX BMC event log + service hub analysis |
-| `Mi4xxServiceabilityPlugin` | Mi4xx/Helios event log + hub entry point |
 | `OobBmcArchivePlugin` | BMC archive via SSH |
 | `OobGenericCollectionPlugin` | Generic BMC shell collection |
 
@@ -86,7 +85,7 @@ node-scraper --connection-config connection-config.json \
 
 ## Serviceability
 
-See [../../README_SERVICEABILITY.md](../../README_SERVICEABILITY.md) for MI3XX/Mi4xx setup, hub config, and artifacts.
+See [serviceability-mi3xx.md](serviceability-mi3xx.md) for MI3XX setup, hub config, and artifacts.
 
 ## Related
 

@@ -36,9 +36,10 @@ flowchart TB
         O[BMC SSH shell]
     end
 
-    subgraph Output["Run output"]
+    subgraph Output["Run output (scraper_logs_.../)"]
         P[events.json per task]
-        Q[Data model artifacts]
+        Q[Data model JSON]
+        S[Collector artifacts]
         R[nodescraper.csv + TableSummary]
     end
 
@@ -56,9 +57,10 @@ flowchart TB
     J --> M
     K --> N
     L --> O
+    H --> S
+    H --> Q
     H --> P
     I --> P
-    H --> Q
     I --> Q
     F --> G --> R
 ```
@@ -78,7 +80,10 @@ flowchart TB
 
 5. **Collect / analyze** — `DataPlugin.run()` calls `COLLECTOR.collect_data()` then `ANALYZER.analyze_data()`. Collectors receive the live connection object; analyzers work on the in-memory data model.
 
-6. **Events and logs** — Tasks build `Event` objects on failures or rule matches. `FileSystemLogHook` writes `events.json` and data model files under `scraper_logs_<host>_<timestamp>/`. Result collators (default: `TableSummary`) print a summary table.
+6. **Events and logs** — `FileSystemLogHook` persists each task under `scraper_logs_<host>_<timestamp>/`:
+   - **Collector** — raw artifacts (command output, Redfish JSON, `.log` files), data model JSON, and any collection events.
+   - **Analyzer** — `events.json` and optional extra artifacts from analysis.
+   Result collators (default: `TableSummary`) print a summary table.
 
 ## In-band vs out-of-band (at a glance)
 
