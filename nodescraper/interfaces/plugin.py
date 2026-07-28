@@ -115,6 +115,15 @@ class PluginInterface(abc.ABC, Generic[TConnectionManager, TConnectArg]):
             return False
         return True
 
+    @classmethod
+    def init_payoad(cls, 
+        """Initialize plugin payload
+
+        Returns:
+            dict: plugin payload
+        """
+        return kwargs
+
     def _update_queue(self, queue_item: tuple) -> None:
         """call queue_callback to add additional item to plugin queue if run using plugin executor
 

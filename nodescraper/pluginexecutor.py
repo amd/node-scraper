@@ -34,6 +34,7 @@ from collections.abc import Callable, Sequence
 from typing import Optional, Type, Union
 
 from pydantic import BaseModel
+from nodescraper.interfaces.dataplugin import ANALYSIS_ARGS_KEY, COLLECTION_ARGS_KEY, ANALYZER_ARGS_FIELD_NAME, COLLECTOR_ARGS_FIELD_NAME
 
 from nodescraper.base.oobsshdataplugin import OOBSSHDataPlugin
 from nodescraper.connection.oob_ssh import OobSshConnectionManager
@@ -133,7 +134,7 @@ class PluginExecutor:
         for k, v in incoming.items():
             if v is None:
                 continue
-            if k in ("collection_args", "analysis_args") and isinstance(v, dict):
+            if k in (COLLECTION_ARGS_KEY, ANALYSIS_ARGS_KEY) and isinstance(v, dict):
                 existing_sub = result.get(k)
                 if isinstance(existing_sub, dict) and v:
                     result[k] = {**existing_sub, **v}
@@ -255,7 +256,7 @@ class PluginExecutor:
                             plugin_inst, plugin_class, self.plugin_config.global_args
                         )
                         # Merge analysis_args and collection_args
-                        for args_key in ["analysis_args", "collection_args"]:
+                        for args_key in [ANALYSIS_ARGS_KEY, COLLECTION_ARGS_KEY]:
                             if args_key in global_run_args and args_key in run_payload:
                                 # Merge: global args override plugin-specific args keys specified in both global and plugin-specific args
                                 run_payload[args_key].update(global_run_args[args_key])
@@ -326,11 +327,11 @@ class PluginExecutor:
 
         run_args = {}
         for key in global_args:
-            if key in ("collection_args", "analysis_args"):
+            if key in (COLLECTION_ARGS_KEY, ANALYSIS_ARGS_KEY):
                 continue
             run_args[key] = global_args[key]
 
-        if "collection_args" in global_args and hasattr(plugin_class, "COLLECTOR_ARGS"):
+        if COLLECTION_ARGS_KEY in global_args and hasattr(plugin_class, COLLECTOR_ARGS_FIELD_NAME):
             collector_args = plugin_class.COLLECTOR_ARGS
             if (
                 isinstance(plugin_inst, DataPlugin)
@@ -345,34 +346,34 @@ class PluginExecutor:
                     plugin_fields = set(args_cls.model_fields.keys())
                     filtered = {
                         k: v
-                        for k, v in global_args["collection_args"].items()
+                        for k, v in global_args[COLLECTION_ARGS_KEY].items()
                         if k in plugin_fields
                     }
                     if filtered:
                         per_collector_args[collector_cls.__name__] = filtered
                 if per_collector_args:
-                    run_args["collection_args"] = per_collector_args
+                    run_args[COLLECTION_ARGS_KEY] = per_collector_args
             elif collector_args is not None and not isinstance(collector_args, dict):
                 args_cls = (
                     collector_args if isinstance(collector_args, type) else type(collector_args)
                 )
                 plugin_fields = set(args_cls.model_fields.keys())
                 filtered = {
-                    k: v for k, v in global_args["collection_args"].items() if k in plugin_fields
+                    k: v for k, v in global_args[COLLECTION_ARGS_KEY].items() if k in plugin_fields
                 }
                 if filtered:
-                    run_args["collection_args"] = filtered
+                    run_args[COLLECTION_ARGS_KEY] = filtered
 
         if (
-            "analysis_args" in global_args
-            and hasattr(plugin_class, "ANALYZER_ARGS")
+            ANALYSIS_ARGS_KEY in global_args
+            and hasattr(plugin_class, ANALYZER_ARGS_FIELD_NAME)
             and plugin_class.ANALYZER_ARGS is not None
         ):
             analyzer_args = plugin_class.ANALYZER_ARGS
             args_cls = analyzer_args if isinstance(analyzer_args, type) else type(analyzer_args)
             plugin_fields = set(args_cls.model_fields.keys())
-            filtered = {k: v for k, v in global_args["analysis_args"].items() if k in plugin_fields}
+            filtered = {k: v for k, v in global_args[ANALYSIS_ARGS_KEY].items() if k in plugin_fields}
             if filtered:
-                run_args["analysis_args"] = filtered
+                run_args[ANALYSIS_ARGS_KEY] = filtered
 
         return run_args

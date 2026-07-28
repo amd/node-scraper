@@ -34,7 +34,7 @@ from pathlib import Path
 from typing import Optional, Sequence, Tuple
 
 from pydantic import BaseModel
-
+from nodescraper.interfaces.dataplugin import ANALYSIS_ARGS_KEY, COLLECTION_ARGS_KEY, ANALYZER_ARGS_FIELD_NAME, COLLECTOR_ARGS_FIELD_NAME
 from nodescraper.cli.inputargtypes import ModelArgHandler
 from nodescraper.configbuilder import ConfigBuilder
 from nodescraper.configregistry import ConfigRegistry
@@ -350,7 +350,7 @@ def generate_reference_config(
 
     Returns:
         PluginConfig: Reference config with plugins dict containing
-        collection_args and analysis_args for each successful plugin.
+        COLLECTION_ARGS_KEY and analysis_args for each successful plugin.
     """
     plugin_config = PluginConfig()
     plugins = {}
@@ -376,12 +376,12 @@ def generate_reference_config(
             plugins[obj.source] = {}
 
         run_args = run_plugins.get(obj.source) or {}
-        if run_args.get("collection_args"):
-            plugins[obj.source]["collection_args"] = dict(run_args["collection_args"])
+        if run_args.get("COLLECTION_ARGS_KEY"):
+            plugins[obj.source]["COLLECTION_ARGS_KEY"] = dict(run_args["COLLECTION_ARGS_KEY"])
 
         a_args = extract_analyzer_args_from_model(plugin, data_model, logger)
         if a_args:
-            plugins[obj.source]["analysis_args"] = a_args.model_dump(exclude_none=True)
+            plugins[obj.source][] = a_args.model_dump(exclude_none=True)
 
     plugin_config.plugins = plugins
 
@@ -482,7 +482,7 @@ def generate_reference_config_from_logs(
         if not args:
             continue
 
-        plugins[task_res.parent] = {"analysis_args": args.model_dump(exclude_none=True)}
+        plugins[task_res.parent] = {ANALYSIS_ARGS_KEY: args.model_dump(exclude_none=True)}
 
     plugin_config.plugins = plugins
     return plugin_config

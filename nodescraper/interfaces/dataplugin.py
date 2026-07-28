@@ -63,6 +63,11 @@ CollectorArgsClasses = Union[
     dict[str, Type[CollectorArgs]],
 ]
 
+ANALYSIS_ARGS_KEY = "analysis_args"
+COLLECTION_ARGS_KEY = "collection_args"
+
+COLLECTOR_ARGS_FIELD_NAME = "COLLECTOR_ARGS"
+ANALYZER_ARGS_FIELD_NAME = "ANALYZER_ARGS"
 
 class DataPlugin(
     PluginInterface, Generic[TConnectionManager, TConnectArg, TDataModel, TCollectArg, TAnalyzeArg]
