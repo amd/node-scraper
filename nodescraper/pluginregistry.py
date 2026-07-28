@@ -76,6 +76,7 @@ class PluginRegistry:
     def __init__(
         self,
         plugin_pkg: Optional[list[types.ModuleType]] = None,
+        known_entry_points: Optional[list[str]] = None,
         load_internal_plugins: bool = True,
         load_entry_point_plugins: bool = True,
         load_entry_point_connection_managers: bool = True,
@@ -104,11 +105,11 @@ class PluginRegistry:
         self.plugins: dict[str, type[PluginInterface]] = PluginRegistry.load_plugins(
             PluginInterface, self.plugin_pkg
         )
-        self.connection_managers: dict[str, type[ConnectionManager]] = PluginRegistry.load_plugins(
-            ConnectionManager, self.plugin_pkg
+        self.connection_managers: dict[str, type[ConnectionManager]] = (
+            PluginRegistry.load_plugins(ConnectionManager, self.plugin_pkg)
         )
-        self.result_collators: dict[str, type[PluginResultCollator]] = PluginRegistry.load_plugins(
-            PluginResultCollator, self.plugin_pkg
+        self.result_collators: dict[str, type[PluginResultCollator]] = (
+            PluginRegistry.load_plugins(PluginResultCollator, self.plugin_pkg)
         )
 
         if load_entry_point_connection_managers:
@@ -119,7 +120,9 @@ class PluginRegistry:
                 self.connection_managers[name] = mgr_cls
 
         if load_entry_point_plugins:
-            entry_point_plugins = self.load_plugins_from_entry_points()
+            entry_point_plugins = self.load_plugins_from_entry_points(
+                known_entry_points
+            )
             self.plugins.update(entry_point_plugins)
 
     @staticmethod
@@ -139,7 +142,12 @@ class PluginRegistry:
         registry = {}
 
         def _recurse_pkg(pkg: types.ModuleType, base_class: type) -> None:
-            for _, module_name, ispkg in pkgutil.iter_modules(pkg.__path__, pkg.__name__ + "."):
+            for _, module_name, ispkg in pkgutil.iter_modules(
+                pkg.__path__, pkg.__name__ + "."
+            ):
+                # Ignore modules that are not called amd-error-scraper
+                if "scraper" not in module_name:
+                    continue
                 # Check module cache first with thread safety (if caching enabled)
                 if PluginRegistry._use_cache:
                     with PluginRegistry._cache_lock:
@@ -178,18 +186,19 @@ class PluginRegistry:
         Returns:
             bool: True if cls is a subclass of base_class, False otherwise.
         """
-        if not inspect.isclass(in_cls):
-            return False
-        try:
-            return issubclass(in_cls, base_class) and not inspect.isabstract(in_cls)
-        except TypeError:
-            return False
+        return (
+            inspect.isclass(in_cls)
+            and issubclass(in_cls, base_class)
+            and not inspect.isabstract(in_cls)
+        )
 
     @staticmethod
     def _load_connection_managers_uncached() -> dict[str, type]:
         """Internal: Load connection managers without caching logic."""
         managers: dict[str, type] = {}
-        eps: Iterable = PluginRegistry.load_entry_points(ENTRY_POINT_CONNECTION_MANAGERS)
+        eps: Iterable = PluginRegistry.load_entry_points(
+            ENTRY_POINT_CONNECTION_MANAGERS
+        )
 
         for entry_point in eps:
             loaded = entry_point.load()  # type: ignore[attr-defined, union-attr]
@@ -251,7 +260,10 @@ class PluginRegistry:
     @staticmethod
     def load_entry_points(entry_point: str) -> EntryPoints:
         # Return cached result if caching is enabled and cache exists
-        if PluginRegistry._use_cache and entry_point in PluginRegistry._entry_points_cache:
+        if (
+            PluginRegistry._use_cache
+            and entry_point in PluginRegistry._entry_points_cache
+        ):
             return PluginRegistry._entry_points_cache[entry_point]
 
         # If caching disabled, skip lock and always reload
@@ -270,12 +282,14 @@ class PluginRegistry:
             return eps
 
     @staticmethod
-    def _load_plugins_uncached() -> dict[str, type]:
+    def _load_plugins_uncached(known_entry_points: list[str] | None) -> dict[str, type]:
         """Internal: Load plugins without caching logic."""
         plugins = {}
         eps: Iterable = PluginRegistry.load_entry_points(ENTRY_POINT_PLUGINS)
 
         for entry_point in eps:
+            if known_entry_points and entry_point.name not in known_entry_points:
+                continue
             plugin_class = entry_point.load()  # type: ignore[attr-defined, union-attr]
 
             if not PluginRegistry._valid_sub_class_check(
@@ -289,26 +303,31 @@ class PluginRegistry:
         return plugins
 
     @staticmethod
-    def load_plugins_from_entry_points() -> dict[str, type]:
+    def load_plugins_from_entry_points(
+        known_entry_points: list[str] | None,
+    ) -> dict[str, type]:
         """Load plugins registered via entry points.
 
         Returns:
             dict[str, type]: A dictionary mapping plugin names to their classes.
         """
         # Return cached result if caching is enabled and cache exists
-        if PluginRegistry._use_cache and PluginRegistry._entry_point_plugins_cache is not None:
+        if (
+            PluginRegistry._use_cache
+            and PluginRegistry._entry_point_plugins_cache is not None
+        ):
             return PluginRegistry._entry_point_plugins_cache.copy()
 
         # If caching disabled, skip lock and always reload
         if not PluginRegistry._use_cache:
-            return PluginRegistry._load_plugins_uncached()
+            return PluginRegistry._load_plugins_uncached(known_entry_points)
 
         with PluginRegistry._cache_lock:
             # Check again inside the lock to prevent duplicate work
             if PluginRegistry._entry_point_plugins_cache is not None:
                 return PluginRegistry._entry_point_plugins_cache.copy()
 
-            plugins = PluginRegistry._load_plugins_uncached()
+            plugins = PluginRegistry._load_plugins_uncached(known_entry_points)
 
             # Cache the result - no need to copy before caching
             PluginRegistry._entry_point_plugins_cache = plugins
