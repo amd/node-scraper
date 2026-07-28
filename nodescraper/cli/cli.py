@@ -57,6 +57,10 @@ from nodescraper.cli.host_cli_embed import (
 )
 from nodescraper.cli.inputargtypes import ModelArgHandler, json_arg, log_path_arg
 from nodescraper.cli.invocation import run_plugin_queue_with_invocation
+from nodescraper.cli.multi_node import (
+    is_multi_target_connection_config,
+    run_multi_node_targets,
+)
 from nodescraper.configregistry import ConfigRegistry
 from nodescraper.connection.redfish import (
     RedfishConnection,
@@ -198,6 +202,14 @@ def _add_cli_root_globals(
         dest="skip_sudo",
         action="store_true",
         help="Skip plugins that require sudo permissions",
+    )
+
+    parser.add_argument(
+        "--max-node-workers",
+        type=int,
+        default=None,
+        help="Maximum parallel workers for multi-target connection configs (default: all targets)",
+        metavar="N",
     )
 
 
@@ -492,8 +504,9 @@ def main(
         system_info = get_system_info(parsed_args)
         sname = system_info.name.lower().replace("-", "_").replace(".", "_")
         timestamp = datetime.datetime.now().strftime("%Y_%m_%d-%I_%M_%S_%p")
+        multi_target_run = is_multi_target_connection_config(parsed_args.connection_config)
 
-        if parsed_args.log_path:
+        if parsed_args.log_path and not multi_target_run:
             log_path = os.path.join(
                 parsed_args.log_path,
                 f"scraper_logs_{sname}_{timestamp}",
@@ -548,6 +561,10 @@ def main(
             sys.exit(0)
 
         if parsed_args.subcmd == "show-redfish-oem-allowable":
+            if is_multi_target_connection_config(parsed_args.connection_config):
+                parser.error(
+                    "show-redfish-oem-allowable requires a single-target connection config"
+                )
             if not parsed_args.connection_config:
                 parser.error("show-redfish-oem-allowable requires --connection-config")
             raw = parsed_args.connection_config.get("RedfishConnectionManager")
@@ -632,6 +649,18 @@ def main(
             plugin_config_inst_list[-1].global_args.setdefault("collection_args", {})[
                 "skip_sudo"
             ] = True
+
+        if is_multi_target_connection_config(parsed_args.connection_config):
+            exit_code = run_multi_node_targets(
+                parsed_args=parsed_args,
+                plugin_config_inst_list=plugin_config_inst_list,
+                timestamp=timestamp,
+                logger=logger,
+                host_cli_args=host_cli_args,
+                plugin_run_result_hooks=plugin_run_result_hooks,
+                max_workers=getattr(parsed_args, "max_node_workers", None),
+            )
+            sys.exit(exit_code)
 
     except Exception as e:
         parser.error(str(e))

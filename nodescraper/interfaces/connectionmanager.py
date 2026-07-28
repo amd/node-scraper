@@ -118,7 +118,7 @@ class ConnectionManager(Task, Generic[TConnection, TConnectArg]):
             if not connection_arg_model:
                 raise ValueError("No model defined for connection args")
 
-            connection_args = connection_arg_model(**connection_args)
+            connection_args = connection_arg_model.model_validate(connection_args)
 
         self.connection_args = connection_args
         self.connection: Optional[TConnection] = None

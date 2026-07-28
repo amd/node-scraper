@@ -76,6 +76,41 @@ class RedfishConnectionError(Exception):
         self.response = response
 
 
+def _root_cause(exc: BaseException) -> BaseException:
+    """Return the deepest exception in the __cause__ / __context__ chain."""
+    seen: set[int] = set()
+    current = exc
+    while id(current) not in seen:
+        seen.add(id(current))
+        nxt = current.__cause__ or current.__context__
+        if nxt is None:
+            break
+        current = nxt
+    return current
+
+
+def summarize_transport_error(exc: BaseException) -> str:
+    """Return a short message for HTTP transport failures."""
+    root = _root_cause(exc)
+    if isinstance(root, ConnectionRefusedError):
+        return "connection refused (BMC unreachable or not listening on port)"
+    if isinstance(root, TimeoutError):
+        return "connection timed out"
+    if isinstance(exc, requests.exceptions.Timeout):
+        return "request timed out"
+    if isinstance(exc, requests.exceptions.SSLError):
+        return "SSL certificate verification failed"
+    if isinstance(exc, requests.exceptions.ConnectionError):
+        text = str(root).strip()
+        lowered = text.lower()
+        if "connection refused" in lowered:
+            return "connection refused (BMC unreachable or not listening on port)"
+        if "timed out" in lowered:
+            return "connection timed out"
+        return f"connection failed: {text}"
+    return str(exc)
+
+
 class RedfishConnection:
     """Redfish REST client for GET requests."""
 
@@ -100,12 +135,27 @@ class RedfishConnection:
         self._session_token: Optional[str] = None
         self._session_uri: Optional[str] = None  # For logout DELETE
 
+    def _request_kwargs(self) -> dict[str, Any]:
+        """Return kwargs for requests calls; verify must be explicit when verify_ssl is False."""
+        return {"timeout": self.timeout, "verify": self.verify_ssl}
+
+    def _send(self, method: str, url: str, **kwargs: Any) -> Response:
+        """Issue an HTTP request and map transport failures to RedfishConnectionError."""
+        assert self._session is not None
+        try:
+            return self._session.request(method, url, **kwargs)
+        except requests.RequestException as exc:
+            raise RedfishConnectionError(summarize_transport_error(exc)) from None
+
     def _ensure_session(self) -> requests.Session:
         if self._session is None:
             if not self.verify_ssl:
                 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
             self._session = requests.Session()
             self._session.verify = self.verify_ssl
+            if not self.verify_ssl:
+                # Per-request verify defaults to None; with trust_env=True, requests
+                self._session.trust_env = False
             self._session.headers["Content-Type"] = "application/json"
             self._session.headers["Accept"] = "application/json"
             if self.use_session_auth and self.password:
@@ -119,11 +169,7 @@ class RedfishConnection:
         assert self._session is not None
         sess_url = urljoin(self.base_url + "/", f"{self.api_root}/SessionService/Sessions")
         payload = {"UserName": self.username, "Password": self.password}
-        resp = self._session.post(
-            sess_url,
-            json=payload,
-            timeout=self.timeout,
-        )
+        resp = self._send("POST", sess_url, json=payload, **self._request_kwargs())
         if not resp.ok:
             raise RedfishConnectionError(
                 f"Session login failed: {resp.status_code} {resp.reason}", response=resp
@@ -155,18 +201,18 @@ class RedfishConnection:
     def get_response(self, path: Union[str, "RedfishPath"]) -> Response:
         """GET a Redfish path and return the raw Response. path may be a string or RedfishPath."""
         path = str(path)
-        session = self._ensure_session()
+        self._ensure_session()
         url = path if path.startswith("http") else urljoin(self.base_url + "/", path.lstrip("/"))
-        return session.get(url, timeout=self.timeout)
+        return self._send("GET", url, **self._request_kwargs())
 
     def post(
         self, path: Union[str, "RedfishPath"], json: Optional[dict[str, Any]] = None
     ) -> Response:
         """POST to a Redfish path and return the raw Response. path may be a string or RedfishPath."""
         path = str(path)
-        session = self._ensure_session()
+        self._ensure_session()
         url = path if path.startswith("http") else urljoin(self.base_url + "/", path.lstrip("/"))
-        return session.post(url, json=json or {}, timeout=self.timeout)
+        return self._send("POST", url, json=json or {}, **self._request_kwargs())
 
     def run_get(self, path: Union[str, RedfishPath]) -> RedfishGetResult:
         """Run a Redfish GET request and return a result object. path may be a string or RedfishPath."""
@@ -265,7 +311,7 @@ class RedfishConnection:
         """Release session and logout if session auth was used."""
         if self._session and self._session_uri:
             try:
-                self._session.delete(self._session_uri, timeout=self.timeout)
+                self._send("DELETE", self._session_uri, **self._request_kwargs())
             except Exception:
                 pass
         self._session = None

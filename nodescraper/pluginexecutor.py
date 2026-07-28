@@ -221,7 +221,8 @@ class PluginExecutor:
                                 connection_manager_class.__name__,
                             )
                             continue
-                        connection_args = None
+                        manager_key = connection_manager_class.__name__
+                        connection_args = self.connection_configs.get(manager_key)
 
                     if mgr_impl not in self.connection_library:
                         self.logger.info(

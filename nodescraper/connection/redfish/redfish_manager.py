@@ -32,7 +32,7 @@ from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
 from nodescraper.interfaces.connectionmanager import ConnectionManager
 from nodescraper.interfaces.taskresulthook import TaskResultHook
 from nodescraper.models import SystemInfo, TaskResult
-from nodescraper.utils import get_exception_traceback
+from nodescraper.utils import get_exception_details
 
 from .redfish_connection import RedfishConnection, RedfishConnectionError
 from .redfish_params import RedfishConnectionParams
@@ -117,7 +117,7 @@ class RedfishConnectionManager(ConnectionManager[RedfishConnection, RedfishConne
             self._log_event(
                 category=EventCategory.RUNTIME,
                 description=f"Redfish connection error: {exc}",
-                data=get_exception_traceback(exc) if exc.response is None else None,
+                data=get_exception_details(exc) if exc.response is not None else None,
                 priority=EventPriority.CRITICAL,
                 console_log=True,
             )
@@ -127,7 +127,7 @@ class RedfishConnectionManager(ConnectionManager[RedfishConnection, RedfishConne
             self._log_event(
                 category=EventCategory.RUNTIME,
                 description=f"Redfish connection failed: {exc}",
-                data=get_exception_traceback(exc),
+                data=get_exception_details(exc),
                 priority=EventPriority.CRITICAL,
                 console_log=True,
             )
