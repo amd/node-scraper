@@ -31,11 +31,11 @@ from nodescraper.models import CollectorArgs
 
 
 class NicCollectorArgs(CollectorArgs):
-    """Collector arguments for NicPlugin (niccli/nicctl)."""
+    """Collector arguments for NicPlugin (niccli/nicctl/bcmcli)."""
 
     commands: Optional[List[str]] = Field(
         default=None,
-        description="Optional list of niccli/nicctl commands to run. When None, default command set is used.",
+        description="Optional list of niccli/nicctl/bcmcli commands to run. When None, default command set is used.",
     )
     use_sudo_niccli: bool = Field(
         default=True,
@@ -44,4 +44,12 @@ class NicCollectorArgs(CollectorArgs):
     use_sudo_nicctl: bool = Field(
         default=True,
         description="If True, run nicctl commands with sudo when required.",
+    )
+    use_sudo_bcmcli: bool = Field(
+        default=True,
+        description="If True, run bcmcli commands with sudo when required.",
+    )
+    broadcom_cli_override: Optional[str] = Field(
+        default=None,
+        description="Force 'niccli' or 'bcmcli' instead of auto-detecting which Broadcom CLI is present.",
     )

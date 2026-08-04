@@ -392,6 +392,11 @@ class NicDataModel(DataModel):
     pensando_nic_version_host_software: Optional[PensandoNicVersionHostSoftware] = None
     pensando_nic_version_firmware: List[PensandoNicVersionFirmware] = Field(default_factory=list)
 
+    broadcom_cli_type: Optional[str] = Field(
+        default=None,
+        description="'niccli' or 'bcmcli', whichever Broadcom CLI was detected and used for collection.",
+    )
+
     # Raw nicctl card log output for regex-based error detection
     nicctl_card_logs: Optional[Dict[str, str]] = Field(
         default=None,
