@@ -71,8 +71,6 @@ from .nic_data import (
 NICCLI_VERSION_LEGACY_MAX = 233  # Commands use -dev/-getoption/getqos; for version > this use --dev/--getoption/qos --ets --show
 
 # Max lengths for fields included in the serialized datamodel (keeps nicclidatamodel.json small).
-MAX_COMMAND_LENGTH_IN_DATAMODEL = 256
-MAX_STDERR_LENGTH_IN_DATAMODEL = 512
 
 
 def _parse_niccli_version(stdout: str) -> Optional[int]:
@@ -327,7 +325,6 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
     CMD_NICCLI_VERIFY = "niccli verify"
     CMD_NICCLI_GLOBAL = [
         CMD_NICCLI_DEVID,
-        CMD_NICCLI_VERIFY,
     ]
     CMD_NICCLI_DISCOVERY_LEGACY = [
         CMD_NICCLI_LIST_DEVICES_LEGACY,
@@ -420,39 +417,25 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
         CMD_NICCLI_PCIE_RELAXED_ORDERING_TEMPLATE_NEW,
         CMD_NICCLI_QOS_TEMPLATE_NEW,
         # Show / device info
-        CMD_NICCLI_SHOW_TEMPLATE_NEW,
         CMD_NICCLI_SHOW_ALL_TEMPLATE_NEW,
         CMD_NICCLI_SHOW_HEALTH_TEMPLATE_NEW,
-        CMD_NICCLI_SHOW_DEVICE_INFO_TEMPLATE_NEW,
-        CMD_NICCLI_SHOW_DEVICE_PCI_IDS_TEMPLATE_NEW,
         CMD_NICCLI_SHOW_CERTIFICATE_TEMPLATE_NEW,
         CMD_NICCLI_SHOW_PKG_VER_TEMPLATE_NEW,
         # Link
         CMD_NICCLI_LINK_STATUS_TEMPLATE_NEW,
-        CMD_NICCLI_LINK_COUNTERS_TEMPLATE_NEW,
-        # Linkdiag (read-only)
+        # Linkdiag (read-only) — dscdump omitted (~5s per device)
         CMD_NICCLI_LINKDIAG_LOOPBACK_SHOW_TEMPLATE_NEW,
-        CMD_NICCLI_LINKDIAG_DSCDUMP_TEMPLATE_NEW,
         CMD_NICCLI_LINKDIAG_TXFIR_SHOW_TEMPLATE_NEW,
         # QoS additional show
         CMD_NICCLI_QOS_EGRESS_COSQ_TEMPLATE_NEW,
         CMD_NICCLI_QOS_INGRESS_COSQ_TEMPLATE_NEW,
         CMD_NICCLI_QOS_RX_RATE_LIMIT_TEMPLATE_NEW,
-        CMD_NICCLI_QOS_TX_EP_RATE_LIMIT_TEMPLATE_NEW,
-        CMD_NICCLI_QOS_DSCP2PRIO_TEMPLATE_NEW,
         CMD_NICCLI_QOS_LISTMAP_TEMPLATE_NEW,
-        # NVM read
-        CMD_NICCLI_NVM_LIST_TEMPLATE_NEW,
-        CMD_NICCLI_NVM_LISTOPTIONS_TEMPLATE_NEW,
-        CMD_NICCLI_NVM_VIEW_TEMPLATE_NEW,
-        CMD_NICCLI_NVM_VERIFY_TEMPLATE_NEW,
-        # Firmware read
-        CMD_NICCLI_FW_LIVEPATCH_SHOW_TEMPLATE_NEW,
+        # NVM read — list/listoptions/view/verify omitted (20-120s per device)
         # MSIX read
         CMD_NICCLI_MSIX_SHOW_TEMPLATE_NEW,
         # Timesync read
         CMD_NICCLI_TIMESYNC_PTP_TEMPLATE_NEW,
-        CMD_NICCLI_TIMESYNC_SYNCE_TEMPLATE_NEW,
         CMD_NICCLI_TIMESYNC_TSIO_TEMPLATE_NEW,
         # Tunnel read
         CMD_NICCLI_TUNNEL_RSS_TEMPLATE_NEW,
@@ -461,8 +444,6 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
         CMD_NICCLI_COUNTERS_PCIE_TEMPLATE_NEW,
         # Resource management
         CMD_NICCLI_RESMGMT_PROFILE_TEMPLATE_NEW,
-        # Cable / transceiver
-        CMD_NICCLI_CABLE_MODULE_INFO_TEMPLATE_NEW,
     ]
     # Backward compatibility: default to legacy templates
     CMD_NICCLI_SUPPORT_RDMA_TEMPLATE = CMD_NICCLI_SUPPORT_RDMA_TEMPLATE_LEGACY
@@ -569,15 +550,15 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
     CMD_BCMCLI_TIMESYNC_PTP_TEMPLATE = "bcmcli_timesync show ptp -d {device_id}"
     CMD_BCMCLI_TIMESYNC_SYNCE_TEMPLATE = "bcmcli_timesync show synce -d {device_id}"
     CMD_BCMCLI_TIMESYNC_TSIO_TEMPLATE = "bcmcli_timesync show tsio -d {device_id}"
+    CMD_BCMCLI_TIMESYNC_DLL_TEMPLATE = "bcmcli_timesync show dll -d {device_id}"
+    CMD_BCMCLI_TIMESYNC_DUTY_CYCLE_TEMPLATE = "bcmcli_timesync show duty-cycle -d {device_id}"
+    CMD_BCMCLI_TIMESYNC_TS_PIN_TEMPLATE = "bcmcli_timesync show ts-pin -d {device_id}"
     # MSIX / dump
     CMD_BCMCLI_MSIX_TEMPLATE = "bcmcli_config msixmv query --pf all -d {device_id}"
     CMD_BCMCLI_SNAPDUMP_TEMPLATE = "bcmcli_dump snap_dump -d {device_id}"
 
     CMD_BCMCLI_PER_DEVICE = [
         # NVM config queries
-        CMD_BCMCLI_SUPPORT_RDMA_TEMPLATE,
-        CMD_BCMCLI_PERFORMANCE_PROFILE_TEMPLATE,
-        CMD_BCMCLI_PCIE_RELAXED_ORDERING_TEMPLATE,
         CMD_BCMCLI_AN_PROTOCOL_TEMPLATE,
         CMD_BCMCLI_NVM_SHOW_CONFS_TEMPLATE,
         CMD_BCMCLI_NVM_SHOW_TEMPLATE,
@@ -614,9 +595,9 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
         CMD_BCMCLI_TUNNEL_VXLAN_IPV4_TEMPLATE,
         CMD_BCMCLI_TUNNEL_VXLAN_IPV6_TEMPLATE,
         # Timesync
-        CMD_BCMCLI_TIMESYNC_PTP_TEMPLATE,
-        CMD_BCMCLI_TIMESYNC_SYNCE_TEMPLATE,
-        CMD_BCMCLI_TIMESYNC_TSIO_TEMPLATE,
+        CMD_BCMCLI_TIMESYNC_DLL_TEMPLATE,
+        CMD_BCMCLI_TIMESYNC_DUTY_CYCLE_TEMPLATE,
+        CMD_BCMCLI_TIMESYNC_TS_PIN_TEMPLATE,
         # MSIX / dump
         CMD_BCMCLI_MSIX_TEMPLATE,
         CMD_BCMCLI_SNAPDUMP_TEMPLATE,
@@ -639,16 +620,31 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
 
         # --- bcmcli path (next-gen Broadcom, Thor Ultra) ---
         if broadcom_cli == "bcmcli":
+            bcmcli_bin_dir = self._resolve_bcmcli_bin_dir() if use_sudo_bcmcli else ""
+
+            def _bcmcli_cmd(cmd: str) -> str:
+                if not bcmcli_bin_dir:
+                    return cmd
+                parts = cmd.split()
+                if parts and parts[0].startswith("bcmcli_") and "/" not in parts[0]:
+                    parts[0] = f"{bcmcli_bin_dir}/{parts[0]}"
+                    return " ".join(parts)
+                return cmd
+
             device_ids: List[str] = []
-            res_list = self._run_sut_cmd(NicCollector.CMD_BCMCLI_LIST, sudo=use_sudo_bcmcli)
-            results[NicCollector.CMD_BCMCLI_LIST] = NicCommandResult(
-                command=NicCollector.CMD_BCMCLI_LIST,
-                stdout=res_list.stdout or "",
-                stderr=res_list.stderr or "",
-                exit_code=res_list.exit_code,
-            )
-            if res_list.exit_code == 0 and res_list.stdout:
-                device_ids = _parse_bcmcli_device_list(res_list.stdout)
+            # CMD_BCMCLI_LIST was already run (and stored) by _detect_broadcom_cli; reuse it.
+            existing_list = results.get(NicCollector.CMD_BCMCLI_LIST)
+            if existing_list is None:
+                res_list = self._run_sut_cmd(NicCollector.CMD_BCMCLI_LIST, sudo=use_sudo_bcmcli)
+                results[NicCollector.CMD_BCMCLI_LIST] = NicCommandResult(
+                    command=NicCollector.CMD_BCMCLI_LIST,
+                    stdout=res_list.stdout or "",
+                    stderr=res_list.stderr or "",
+                    exit_code=res_list.exit_code,
+                )
+                existing_list = results[NicCollector.CMD_BCMCLI_LIST]
+            if existing_list.exit_code == 0 and existing_list.stdout:
+                device_ids = _parse_bcmcli_device_list(existing_list.stdout)
 
             # Discovery: card IDs from nicctl (Pensando may still coexist)
             card_ids: List[str] = []
@@ -711,7 +707,8 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
                 is_bcmcli = cmd.strip().startswith("bcmcli_")
                 is_niccli_cmd = cmd.strip().startswith("niccli")
                 sudo = use_sudo_bcmcli if is_bcmcli else (use_sudo_niccli if is_niccli_cmd else use_sudo_nicctl)
-                res = self._run_sut_cmd(cmd, sudo=sudo)
+                run_cmd = _bcmcli_cmd(cmd) if is_bcmcli else cmd
+                res = self._run_sut_cmd(run_cmd, sudo=sudo)
                 has_error_output = has_command_error_output(res.stderr or "", res.stdout or "")
                 if _is_artifact_only_command(cmd):
                     if res.exit_code != 0:
@@ -756,18 +753,6 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
             broadcom_pcie_relaxed_ordering: Dict[int, str] = {}
             broadcom_qos_data: Dict[int, NicCliQos] = {}
             for idx, dev_id in enumerate(device_ids):
-                sr_cmd = NicCollector.CMD_BCMCLI_SUPPORT_RDMA_TEMPLATE.format(device_id=dev_id)
-                r_sr = results.get(sr_cmd)
-                if r_sr and r_sr.exit_code == 0 and (r_sr.stdout or "").strip():
-                    broadcom_support_rdma[idx] = r_sr.stdout.strip()
-                pp_cmd = NicCollector.CMD_BCMCLI_PERFORMANCE_PROFILE_TEMPLATE.format(device_id=dev_id)
-                r_pp = results.get(pp_cmd)
-                if r_pp and r_pp.exit_code == 0 and (r_pp.stdout or "").strip():
-                    broadcom_performance_profile[idx] = r_pp.stdout.strip()
-                ro_cmd = NicCollector.CMD_BCMCLI_PCIE_RELAXED_ORDERING_TEMPLATE.format(device_id=dev_id)
-                r_ro = results.get(ro_cmd)
-                if r_ro and r_ro.exit_code == 0 and (r_ro.stdout or "").strip():
-                    broadcom_pcie_relaxed_ordering[idx] = r_ro.stdout.strip()
                 qos_cmd = NicCollector.CMD_BCMCLI_QOS_TEMPLATE.format(device_id=dev_id)
                 r_qos = results.get(qos_cmd)
                 if r_qos and r_qos.exit_code == 0 and (r_qos.stdout or "").strip():
@@ -988,23 +973,6 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
                 pensando_version_firmware,
             ) = self._collect_pensando_nic_structured(results)
 
-        # Serialized datamodel: no stdout in results, truncated command/stderr (keeps file small).
-        # Command output lives on disk from _run_sut_cmd; model keeps only command identity and status.
-        def _truncate(s: str, max_len: int) -> str:
-            if not s or len(s) <= max_len:
-                return s or ""
-            return s[: max_len - 3] + "..."
-
-        results_for_model = {
-            cmd: NicCommandResult(
-                command=_truncate(r.command, MAX_COMMAND_LENGTH_IN_DATAMODEL),
-                stdout="",
-                stderr=_truncate(r.stderr or "", MAX_STDERR_LENGTH_IN_DATAMODEL),
-                exit_code=r.exit_code,
-            )
-            for cmd, r in results.items()
-        }
-
         cli_label = "bcmcli" if broadcom_cli == "bcmcli" else "niccli/nicctl"
         if not results or all(r.exit_code != 0 for r in results.values()):
             self.result.status = ExecutionStatus.EXECUTION_FAILURE
@@ -1022,7 +990,7 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
             }
 
         return self.result, NicDataModel(
-            results=results_for_model,
+            results=results,
             card_show=None,
             cards=[],
             nicctl_card_logs=nicctl_card_logs,
@@ -1051,15 +1019,22 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
             pensando_nic_version_firmware=pensando_version_firmware,
         )
 
+    def _resolve_bcmcli_bin_dir(self) -> str:
+        res = self._run_sut_cmd("which bcmcli_show", sudo=False, log_artifact=False)
+        if res.exit_code == 0 and (res.stdout or "").strip():
+            import os
+            return os.path.dirname(res.stdout.strip())
+        return ""
+
     def _detect_broadcom_cli(
         self,
         args: Optional[NicCollectorArgs],
         results: Dict[str, "NicCommandResult"],
     ) -> str:
-        """Return 'bcmcli' if bcmcli_show version exits 0, otherwise 'niccli'.
+        """Return 'bcmcli' if bcmcli_show version exits 0 and device_list finds devices, otherwise 'niccli'.
 
-        Respects args.broadcom_cli_override ('niccli' or 'bcmcli') when set.
-        Stores the bcmcli version probe result in results so it appears in the datamodel.
+        Respects args.broadcom_cli_override ('niccli' or 'bcmcli') to skip detection entirely.
+        Stores both probe results in results so they appear in the datamodel.
         """
         override = (
             args.broadcom_cli_override.strip().lower()
@@ -1077,7 +1052,17 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
             stderr=res.stderr or "",
             exit_code=res.exit_code,
         )
-        if res.exit_code == 0:
+        if res.exit_code != 0:
+            return "niccli"
+
+        res_list = self._run_sut_cmd(NicCollector.CMD_BCMCLI_LIST, sudo=use_sudo)
+        results[NicCollector.CMD_BCMCLI_LIST] = NicCommandResult(
+            command=NicCollector.CMD_BCMCLI_LIST,
+            stdout=res_list.stdout or "",
+            stderr=res_list.stderr or "",
+            exit_code=res_list.exit_code,
+        )
+        if res_list.exit_code == 0 and _parse_bcmcli_device_list(res_list.stdout or ""):
             return "bcmcli"
         return "niccli"
 
