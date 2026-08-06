@@ -496,7 +496,7 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
     ]
 
     # bcmcli (next-gen Broadcom, Thor Ultra): separate binaries, device targeted with -d <dev> suffix.
-    # Read-only show/query commands only — no fw/update/reset/set/loopback/coredump operations.
+    # Read-only show/query commands only; no fw/update/reset/set/loopback/coredump operations.
     CMD_BCMCLI_VERSION = "bcmcli_show version"
     CMD_BCMCLI_LIST = "bcmcli_show device_list"
 
@@ -505,7 +505,7 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
         "bcmcli_show device_list",
     ]
 
-    # Per-device templates — {device_id} expanded at runtime from bcmcli_show device_list output
+    # Per-device templates; {device_id} expanded at runtime from bcmcli_show device_list output
     # NVM config queries
     CMD_BCMCLI_SUPPORT_RDMA_TEMPLATE = "bcmcli_config query support_rdma -d {device_id}"
     CMD_BCMCLI_PERFORMANCE_PROFILE_TEMPLATE = "bcmcli_config query performance_profile -d {device_id}"
@@ -1696,30 +1696,13 @@ def _get_niccli_discovery_commands(version: Optional[int]) -> List[str]:
 def _parse_bcmcli_qos(device_id: str, stdout: str) -> NicCliQos:
     """Parse bcmcli_qos show qos output into NicCliQos.
 
-    Real Thor Ultra format:
-        ETS Configuration:
-        TC      TX_BW     RX_BW     TSA            RateLimit   Priority
-        -----------------------------------------------------------------------
-        0       50        0         ETS            100         0 1 2 4 5 6
-        1       50        0         ETS            100         3
-        2       0         0         Strict         100         7
-
-        PFC configuration:
-         priority    0   1   2   3   4   5   6   7
-         enabled     0   0   0   1   0   0   0   0
-
-        APP TLV Configuration:
-        Index  Selector     Priority   DSCP/Protocol
-        -----------------------------------------------------------------------
-        0      5            7          48
-
     Maps into NicCliQos fields:
-      prio_map      — priority→TC from the Priority column of the ETS table
-      tc_bandwidth  — TX_BW per TC
-      tsa_map       — TSA string per TC
-      tc_rate_limit — RateLimit per TC
-      pfc_enabled   — integer bitmask from the 'enabled' row (bit 0 = priority 0)
-      app_entries   — APP TLV rows as NicCliQosAppEntry
+      prio_map      - priority to TC from the Priority column of the ETS table
+      tc_bandwidth  - TX_BW per TC
+      tsa_map       - TSA string per TC
+      tc_rate_limit - RateLimit per TC
+      pfc_enabled   - integer bitmask from the 'enabled' row (bit 0 = priority 0)
+      app_entries   - APP TLV rows as NicCliQosAppEntry
     """
     prio_map: Dict[int, int] = {}
     tc_bandwidth: List[int] = []
@@ -1817,15 +1800,7 @@ def _parse_bcmcli_qos(device_id: str, stdout: str) -> NicCliQos:
 
 
 def _parse_bcmcli_device_list(stdout: str) -> List[str]:
-    """Parse bcmcli_show device_list output into a list of PCI address device identifiers.
-
-    Real Thor Ultra output is a columnar table where the PCI address is the second column:
-        Device Type    PCI Address    RDMA     NET          NUMA
-        ThorUltra(A0)  0000:81:00.0   bng_re0  enp129s0np0  0
-
-    Scans each non-header data line for a PCI address pattern anywhere in the line.
-    Also handles the unlikely integer-index format ('0) BCM...') for robustness.
-    """
+    """Parse bcmcli_show device_list output into a list of PCI address device identifiers."""
     device_ids: List[str] = []
     pci_re = re.compile(r"\b([0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-9a-fA-F])\b")
     for line in stdout.splitlines():
