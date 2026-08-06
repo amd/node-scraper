@@ -425,7 +425,7 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
         CMD_NICCLI_SHOW_PKG_VER_TEMPLATE_NEW,
         # Link
         CMD_NICCLI_LINK_STATUS_TEMPLATE_NEW,
-        # Linkdiag (read-only) — dscdump omitted (~5s per device)
+        # Linkdiag (read-only)
         CMD_NICCLI_LINKDIAG_LOOPBACK_SHOW_TEMPLATE_NEW,
         CMD_NICCLI_LINKDIAG_TXFIR_SHOW_TEMPLATE_NEW,
         # QoS additional show
@@ -433,7 +433,6 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
         CMD_NICCLI_QOS_INGRESS_COSQ_TEMPLATE_NEW,
         CMD_NICCLI_QOS_RX_RATE_LIMIT_TEMPLATE_NEW,
         CMD_NICCLI_QOS_LISTMAP_TEMPLATE_NEW,
-        # NVM read — list/listoptions/view/verify omitted (20-120s per device)
         # MSIX read
         CMD_NICCLI_MSIX_SHOW_TEMPLATE_NEW,
         # Timesync read
