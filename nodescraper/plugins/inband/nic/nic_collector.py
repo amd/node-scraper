@@ -71,6 +71,8 @@ from .nic_data import (
 NICCLI_VERSION_LEGACY_MAX = 233  # Commands use -dev/-getoption/getqos; for version > this use --dev/--getoption/qos --ets --show
 
 # Max lengths for fields included in the serialized datamodel (keeps nicclidatamodel.json small).
+MAX_COMMAND_LENGTH_IN_DATAMODEL = 256
+MAX_STDERR_LENGTH_IN_DATAMODEL = 512
 
 
 def _parse_niccli_version(stdout: str) -> Optional[int]:
@@ -973,6 +975,23 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
                 pensando_version_firmware,
             ) = self._collect_pensando_nic_structured(results)
 
+        # Serialized datamodel: no stdout in results, truncated command/stderr (keeps file small).
+        # Command output lives on disk from _run_sut_cmd; model keeps only command identity and status.
+        def _truncate(s: str, max_len: int) -> str:
+            if not s or len(s) <= max_len:
+                return s or ""
+            return s[: max_len - 3] + "..."
+
+        results_for_model = {
+            cmd: NicCommandResult(
+                command=_truncate(r.command, MAX_COMMAND_LENGTH_IN_DATAMODEL),
+                stdout="",
+                stderr=_truncate(r.stderr or "", MAX_STDERR_LENGTH_IN_DATAMODEL),
+                exit_code=r.exit_code,
+            )
+            for cmd, r in results.items()
+        }
+
         cli_label = "bcmcli" if broadcom_cli == "bcmcli" else "niccli/nicctl"
         if not results or all(r.exit_code != 0 for r in results.values()):
             self.result.status = ExecutionStatus.EXECUTION_FAILURE
@@ -990,7 +1009,7 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
             }
 
         return self.result, NicDataModel(
-            results=results,
+            results=results_for_model,
             card_show=None,
             cards=[],
             nicctl_card_logs=nicctl_card_logs,
