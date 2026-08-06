@@ -495,7 +495,7 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
         "nicctl show version host-software",
     ]
 
-    # bcmcli (next-gen Broadcom, Thor Ultra): separate binaries, device targeted with -d <dev> suffix.
+    # bcmcli (Thor Ultra, Thor3): separate binaries, device targeted with -d <dev> suffix.
     # Read-only show/query commands only; no fw/update/reset/set/loopback/coredump operations.
     CMD_BCMCLI_VERSION = "bcmcli_show version"
     CMD_BCMCLI_LIST = "bcmcli_show device_list"
@@ -619,7 +619,7 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
         # Detect which Broadcom CLI is present (bcmcli takes priority over niccli).
         broadcom_cli = self._detect_broadcom_cli(args, results)
 
-        # --- bcmcli path (next-gen Broadcom, Thor Ultra) ---
+        # --- bcmcli path (Thor Ultra, Thor3) ---
         if broadcom_cli == "bcmcli":
             bcmcli_bin_dir = self._resolve_bcmcli_bin_dir() if use_sudo_bcmcli else ""
 
