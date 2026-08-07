@@ -381,14 +381,26 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
     CMD_NICCLI_LINK_STATUS_TEMPLATE_NEW = "niccli --dev {device_num} link --status"
     CMD_NICCLI_LINK_COUNTERS_TEMPLATE_NEW = "niccli --dev {device_num} link --counters --show"
     # Linkdiag (read-only)
-    CMD_NICCLI_LINKDIAG_LOOPBACK_SHOW_TEMPLATE_NEW = "niccli --dev {device_num} linkdiag --loopback --show"
-    CMD_NICCLI_LINKDIAG_DSCDUMP_TEMPLATE_NEW = "niccli --dev {device_num} linkdiag --dscdump --lane 0"
-    CMD_NICCLI_LINKDIAG_TXFIR_SHOW_TEMPLATE_NEW = "niccli --dev {device_num} linkdiag --txfir --show --modulation_type NRZ --lane 0"
+    CMD_NICCLI_LINKDIAG_LOOPBACK_SHOW_TEMPLATE_NEW = (
+        "niccli --dev {device_num} linkdiag --loopback --show"
+    )
+    CMD_NICCLI_LINKDIAG_DSCDUMP_TEMPLATE_NEW = (
+        "niccli --dev {device_num} linkdiag --dscdump --lane 0"
+    )
+    CMD_NICCLI_LINKDIAG_TXFIR_SHOW_TEMPLATE_NEW = (
+        "niccli --dev {device_num} linkdiag --txfir --show --modulation_type NRZ --lane 0"
+    )
     # QoS additional show commands
     CMD_NICCLI_QOS_EGRESS_COSQ_TEMPLATE_NEW = "niccli --dev {device_num} qos --egress --cosq --show"
-    CMD_NICCLI_QOS_INGRESS_COSQ_TEMPLATE_NEW = "niccli --dev {device_num} qos --ingress --cosq --show"
-    CMD_NICCLI_QOS_RX_RATE_LIMIT_TEMPLATE_NEW = "niccli --dev {device_num} qos --rx_rate_limit --show"
-    CMD_NICCLI_QOS_TX_EP_RATE_LIMIT_TEMPLATE_NEW = "niccli --dev {device_num} qos --tx_ep_rate_limit --port 0 --show"
+    CMD_NICCLI_QOS_INGRESS_COSQ_TEMPLATE_NEW = (
+        "niccli --dev {device_num} qos --ingress --cosq --show"
+    )
+    CMD_NICCLI_QOS_RX_RATE_LIMIT_TEMPLATE_NEW = (
+        "niccli --dev {device_num} qos --rx_rate_limit --show"
+    )
+    CMD_NICCLI_QOS_TX_EP_RATE_LIMIT_TEMPLATE_NEW = (
+        "niccli --dev {device_num} qos --tx_ep_rate_limit --port 0 --show"
+    )
     CMD_NICCLI_QOS_DSCP2PRIO_TEMPLATE_NEW = "niccli --dev {device_num} qos --dscp2prio"
     CMD_NICCLI_QOS_LISTMAP_TEMPLATE_NEW = "niccli --dev {device_num} qos --listmap --pri2cos"
     # NVM read commands
@@ -406,13 +418,19 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
     CMD_NICCLI_TIMESYNC_TSIO_TEMPLATE_NEW = "niccli --dev {device_num} timesync --tsio --show"
     # Tunnel read
     CMD_NICCLI_TUNNEL_RSS_TEMPLATE_NEW = "niccli --dev {device_num} tunnel --cfg --rss --show"
-    CMD_NICCLI_TUNNEL_VXLAN_IPV4_TEMPLATE_NEW = "niccli --dev {device_num} tunnel --cfg --vxlan --type ipv4 --show"
+    CMD_NICCLI_TUNNEL_VXLAN_IPV4_TEMPLATE_NEW = (
+        "niccli --dev {device_num} tunnel --cfg --vxlan --type ipv4 --show"
+    )
     # PCIe counters
     CMD_NICCLI_COUNTERS_PCIE_TEMPLATE_NEW = "niccli --dev {device_num} counters --pcie"
     # Resource management
-    CMD_NICCLI_RESMGMT_PROFILE_TEMPLATE_NEW = "niccli --dev {device_num} resmgmt --all --profile --show"
+    CMD_NICCLI_RESMGMT_PROFILE_TEMPLATE_NEW = (
+        "niccli --dev {device_num} resmgmt --all --profile --show"
+    )
     # Cable / transceiver info
-    CMD_NICCLI_CABLE_MODULE_INFO_TEMPLATE_NEW = "niccli --dev {device_num} cable --module_info --show"
+    CMD_NICCLI_CABLE_MODULE_INFO_TEMPLATE_NEW = (
+        "niccli --dev {device_num} cable --module_info --show"
+    )
     CMD_NICCLI_PER_DEVICE_NEW = [
         CMD_NICCLI_SUPPORT_RDMA_TEMPLATE_NEW,
         CMD_NICCLI_PERFORMANCE_PROFILE_TEMPLATE_NEW,
@@ -508,8 +526,12 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
     # Per-device templates; {device_id} expanded at runtime from bcmcli_show device_list output
     # NVM config queries
     CMD_BCMCLI_SUPPORT_RDMA_TEMPLATE = "bcmcli_config query support_rdma -d {device_id}"
-    CMD_BCMCLI_PERFORMANCE_PROFILE_TEMPLATE = "bcmcli_config query performance_profile -d {device_id}"
-    CMD_BCMCLI_PCIE_RELAXED_ORDERING_TEMPLATE = "bcmcli_config query pcie_relaxed_ordering -d {device_id}"
+    CMD_BCMCLI_PERFORMANCE_PROFILE_TEMPLATE = (
+        "bcmcli_config query performance_profile -d {device_id}"
+    )
+    CMD_BCMCLI_PCIE_RELAXED_ORDERING_TEMPLATE = (
+        "bcmcli_config query pcie_relaxed_ordering -d {device_id}"
+    )
     CMD_BCMCLI_AN_PROTOCOL_TEMPLATE = "bcmcli_config query AN_PROTOCOL -d {device_id}"
     CMD_BCMCLI_NVM_SHOW_CONFS_TEMPLATE = "bcmcli_config show_confs -d {device_id}"
     CMD_BCMCLI_NVM_SHOW_TEMPLATE = "bcmcli_nvm show -d {device_id}"
@@ -517,7 +539,9 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
     CMD_BCMCLI_QOS_TEMPLATE = "bcmcli_qos show qos -d {device_id}"
     CMD_BCMCLI_QOS_HW_MAPS_TEMPLATE = "bcmcli_qos show hw-maps -d {device_id}"
     CMD_BCMCLI_QOS_RX_PORT_RATELIMIT_TEMPLATE = "bcmcli_qos show rx-port-ratelimit -d {device_id}"
-    CMD_BCMCLI_QOS_TX_EP_RATELIMIT_TEMPLATE = "bcmcli_qos show tx-ep-ratelimit --port 0 -d {device_id}"
+    CMD_BCMCLI_QOS_TX_EP_RATELIMIT_TEMPLATE = (
+        "bcmcli_qos show tx-ep-ratelimit --port 0 -d {device_id}"
+    )
     CMD_BCMCLI_QOS_INGRESS_COSQ_TEMPLATE = "bcmcli_qos show ingress --cosq -d {device_id}"
     CMD_BCMCLI_QOS_EGRESS_COSQ_TEMPLATE = "bcmcli_qos show egress --cosq -d {device_id}"
     # Device info / health
@@ -536,7 +560,9 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
     CMD_BCMCLI_VERIFY_TEMPLATE = "bcmcli_debug verify -d {device_id}"
     CMD_BCMCLI_LOOPBACK_SHOW_TEMPLATE = "bcmcli_debug loopback -d {device_id}"
     CMD_BCMCLI_DSCDUMP_TEMPLATE = "bcmcli_debug dscdump --lane 0 -d {device_id}"
-    CMD_BCMCLI_SERDES_TX_GET_TEMPLATE = "bcmcli_debug serdes_tx --get --modtype NRZ --lane 0 -d {device_id}"
+    CMD_BCMCLI_SERDES_TX_GET_TEMPLATE = (
+        "bcmcli_debug serdes_tx --get --modtype NRZ --lane 0 -d {device_id}"
+    )
     # Firmware
     CMD_BCMCLI_FW_VERSION_TEMPLATE = "bcmcli_fwmanager show fwpackage -d {device_id}"
     CMD_BCMCLI_FW_CERTIFICATE_TEMPLATE = "bcmcli_fwmanager show certificate -d {device_id}"
@@ -707,7 +733,11 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
                     continue
                 is_bcmcli = cmd.strip().startswith("bcmcli_")
                 is_niccli_cmd = cmd.strip().startswith("niccli")
-                sudo = use_sudo_bcmcli if is_bcmcli else (use_sudo_niccli if is_niccli_cmd else use_sudo_nicctl)
+                sudo = (
+                    use_sudo_bcmcli
+                    if is_bcmcli
+                    else (use_sudo_niccli if is_niccli_cmd else use_sudo_nicctl)
+                )
                 run_cmd = _bcmcli_cmd(cmd) if is_bcmcli else cmd
                 res = self._run_sut_cmd(run_cmd, sudo=sudo)
                 has_error_output = has_command_error_output(res.stderr or "", res.stdout or "")
@@ -1041,6 +1071,7 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
         res = self._run_sut_cmd("which bcmcli_show", sudo=False, log_artifact=False)
         if res.exit_code == 0 and (res.stdout or "").strip():
             import os
+
             return os.path.dirname(res.stdout.strip())
         return ""
 
@@ -1768,7 +1799,7 @@ def _parse_bcmcli_qos(device_id: str, stdout: str) -> NicCliQos:
                 mask = 0
                 for i, v in enumerate(vals):
                     if v and i < len(pfc_priority_order):
-                        mask |= (1 << pfc_priority_order[i])
+                        mask |= 1 << pfc_priority_order[i]
                 pfc_enabled = mask
 
         elif section == "app":

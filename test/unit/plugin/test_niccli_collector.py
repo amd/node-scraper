@@ -384,11 +384,14 @@ def test_collect_data_uses_bcmcli_when_detected(collector):
 
 def test_detect_broadcom_cli_falls_back_when_device_list_empty(collector):
     """bcmcli_show version exits 0 but device_list empty; falls back to niccli."""
+
     def side_effect(cmd, **kwargs):
         if "bcmcli_show version" in cmd:
             return MagicMock(exit_code=0, stdout="bcmcli v1.140", stderr="", command=cmd)
         if "bcmcli_show device_list" in cmd:
-            return MagicMock(exit_code=0, stdout="PCI Address      Device Type\n", stderr="", command=cmd)
+            return MagicMock(
+                exit_code=0, stdout="PCI Address      Device Type\n", stderr="", command=cmd
+            )
         if "niccli --version" in cmd:
             return MagicMock(exit_code=0, stdout="niccli v234", stderr="", command=cmd)
         if "--list_devices" in cmd or "--listdev" in cmd or "--list" in cmd:
