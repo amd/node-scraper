@@ -111,7 +111,7 @@ class PluginExecutor:
                 connection_manager = self.plugin_registry.connection_managers[connection]
 
                 self.connection_library[connection_manager] = connection_manager(
-                    system_info=self.system_info,
+                    system_info=self.system_info.model_copy(),
                     logger=self.logger,
                     connection_args=connection_args,
                     task_result_hooks=self.connection_result_hooks,
