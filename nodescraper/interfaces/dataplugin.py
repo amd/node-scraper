@@ -142,17 +142,13 @@ class DataPlugin(
             return
         if isinstance(collector_args, dict):
             for collector_name, args_cls in collector_args.items():
-                if not isinstance(args_cls, type) or not issubclass(
-                    args_cls, CollectorArgs
-                ):
+                if not isinstance(args_cls, type) or not issubclass(args_cls, CollectorArgs):
                     raise TypeError(
                         f"COLLECTOR_ARGS[{collector_name!r}] must be a CollectorArgs subclass, "
                         f"got {args_cls!r}"
                     )
             return
-        if not isinstance(collector_args, type) or not issubclass(
-            collector_args, CollectorArgs
-        ):
+        if not isinstance(collector_args, type) or not issubclass(collector_args, CollectorArgs):
             raise TypeError(
                 f"COLLECTOR_ARGS must be a CollectorArgs subclass or dict, got {collector_args!r}"
             )
@@ -172,9 +168,7 @@ class DataPlugin(
             raise TypeError("CONNECTION_TYPE must be defined for collector")
 
         for collector_cls in cls.get_collector_classes():
-            if not isinstance(collector_cls, type) or not issubclass(
-                collector_cls, DataCollector
-            ):
+            if not isinstance(collector_cls, type) or not issubclass(collector_cls, DataCollector):
                 raise TypeError(
                     f"COLLECTOR entries must be DataCollector subclasses, got {collector_cls!r}"
                 )
@@ -285,17 +279,13 @@ class DataPlugin(
         if isinstance(data, (str, dict)):
             self._data = self.DATA_MODEL.import_model(data)
         elif not isinstance(data, self.DATA_MODEL):
-            raise ValueError(
-                f"data is invalid type, expected {self.DATA_MODEL.__class__.__name__}"
-            )
+            raise ValueError(f"data is invalid type, expected {self.DATA_MODEL.__class__.__name__}")
         else:
             self._data = data
 
     def collect(
         self,
-        max_event_priority_level: Optional[
-            Union[EventPriority, str]
-        ] = EventPriority.CRITICAL,
+        max_event_priority_level: Optional[Union[EventPriority, str]] = EventPriority.CRITICAL,
         system_interaction_level: Optional[
             Union[SystemInteractionLevel, str]
         ] = SystemInteractionLevel.INTERACTIVE,
@@ -334,9 +324,7 @@ class DataPlugin(
                         message=f"No connection manager type provided for {self.__class__.__name__}",
                     )
                     return self.collection_result
-                self.logger.info(
-                    "No connection manager provide, initializing connection manager"
-                )
+                self.logger.info("No connection manager provide, initializing connection manager")
                 self.connection_manager = self.CONNECTION_TYPE(
                     system_info=self.system_info.model_copy(),
                     logger=self.logger,
@@ -368,9 +356,7 @@ class DataPlugin(
                 merged_data: Optional[TDataModel] = None
 
                 for collector_cls in collector_classes:
-                    collector_args = self._resolve_collector_args(
-                        collector_cls, collection_args
-                    )
+                    collector_args = self._resolve_collector_args(collector_cls, collection_args)
                     collection_task = collector_cls(
                         system_info=self.system_info.model_copy(),
                         logger=self.logger,
@@ -419,9 +405,7 @@ class DataPlugin(
 
     def analyze(
         self,
-        max_event_priority_level: Optional[
-            Union[EventPriority, str]
-        ] = EventPriority.CRITICAL,
+        max_event_priority_level: Optional[Union[EventPriority, str]] = EventPriority.CRITICAL,
         analysis_args: Optional[Union[TAnalyzeArg, dict]] = None,
         data: Optional[Union[str, dict, TDataModel]] = None,
     ) -> TaskResult:
@@ -636,9 +620,7 @@ class DataPlugin(
                 import_model = getattr(data_model_cls, "import_model", None)
                 if not callable(import_model):
                     return None
-                base_import = getattr(
-                    DataModel.import_model, "__func__", DataModel.import_model
-                )
+                base_import = getattr(DataModel.import_model, "__func__", DataModel.import_model)
                 if getattr(import_model, "__func__", import_model) is base_import:
                     return None
                 return import_model(dm_path)
@@ -692,11 +674,7 @@ class DataPlugin(
         run_path = os.path.abspath(run_path)
         if not os.path.exists(run_path):
             return None
-        dm_path = (
-            run_path
-            if os.path.isfile(run_path)
-            else cls.find_datamodel_path_in_run(run_path)
-        )
+        dm_path = run_path if os.path.isfile(run_path) else cls.find_datamodel_path_in_run(run_path)
         if not dm_path:
             return None
         data_model = cls.load_datamodel_from_path(dm_path)
