@@ -323,6 +323,11 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
     CMD_NICCLI_LIST = "niccli --list"
     CMD_NICCLI_LIST_DEVICES = "niccli --list_devices"  # new (> v233)
     CMD_NICCLI_LIST_DEVICES_LEGACY = "niccli --listdev"  # legacy (<= v233)
+    CMD_NICCLI_DEVID = "niccli devid"
+    CMD_NICCLI_VERIFY = "niccli verify"
+    CMD_NICCLI_GLOBAL = [
+        CMD_NICCLI_DEVID,
+    ]
     CMD_NICCLI_DISCOVERY_LEGACY = [
         CMD_NICCLI_LIST_DEVICES_LEGACY,
         CMD_NICCLI_LIST,
@@ -364,11 +369,100 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
         "niccli --dev {device_num} nvm --getoption pcie_relaxed_ordering"
     )
     CMD_NICCLI_QOS_TEMPLATE_NEW = "niccli --dev {device_num} qos --ets --show"
+    # Show / device info
+    CMD_NICCLI_SHOW_TEMPLATE_NEW = "niccli --dev {device_num} show"
+    CMD_NICCLI_SHOW_ALL_TEMPLATE_NEW = "niccli --dev {device_num} show --all"
+    CMD_NICCLI_SHOW_HEALTH_TEMPLATE_NEW = "niccli --dev {device_num} show --health"
+    CMD_NICCLI_SHOW_DEVICE_INFO_TEMPLATE_NEW = "niccli --dev {device_num} show --device_info"
+    CMD_NICCLI_SHOW_DEVICE_PCI_IDS_TEMPLATE_NEW = "niccli --dev {device_num} show --device_pci_ids"
+    CMD_NICCLI_SHOW_CERTIFICATE_TEMPLATE_NEW = "niccli --dev {device_num} show --certificate"
+    CMD_NICCLI_SHOW_PKG_VER_TEMPLATE_NEW = "niccli --dev {device_num} show --pkg_ver"
+    # Link
+    CMD_NICCLI_LINK_STATUS_TEMPLATE_NEW = "niccli --dev {device_num} link --status"
+    CMD_NICCLI_LINK_COUNTERS_TEMPLATE_NEW = "niccli --dev {device_num} link --counters --show"
+    # Linkdiag (read-only)
+    CMD_NICCLI_LINKDIAG_LOOPBACK_SHOW_TEMPLATE_NEW = (
+        "niccli --dev {device_num} linkdiag --loopback --show"
+    )
+    CMD_NICCLI_LINKDIAG_DSCDUMP_TEMPLATE_NEW = (
+        "niccli --dev {device_num} linkdiag --dscdump --lane 0"
+    )
+    CMD_NICCLI_LINKDIAG_TXFIR_SHOW_TEMPLATE_NEW = (
+        "niccli --dev {device_num} linkdiag --txfir --show --modulation_type NRZ --lane 0"
+    )
+    # QoS additional show commands
+    CMD_NICCLI_QOS_EGRESS_COSQ_TEMPLATE_NEW = "niccli --dev {device_num} qos --egress --cosq --show"
+    CMD_NICCLI_QOS_INGRESS_COSQ_TEMPLATE_NEW = (
+        "niccli --dev {device_num} qos --ingress --cosq --show"
+    )
+    CMD_NICCLI_QOS_RX_RATE_LIMIT_TEMPLATE_NEW = (
+        "niccli --dev {device_num} qos --rx_rate_limit --show"
+    )
+    CMD_NICCLI_QOS_TX_EP_RATE_LIMIT_TEMPLATE_NEW = (
+        "niccli --dev {device_num} qos --tx_ep_rate_limit --port 0 --show"
+    )
+    CMD_NICCLI_QOS_DSCP2PRIO_TEMPLATE_NEW = "niccli --dev {device_num} qos --dscp2prio"
+    CMD_NICCLI_QOS_LISTMAP_TEMPLATE_NEW = "niccli --dev {device_num} qos --listmap --pri2cos"
+    # NVM read commands
+    CMD_NICCLI_NVM_LIST_TEMPLATE_NEW = "niccli --dev {device_num} nvm --list"
+    CMD_NICCLI_NVM_LISTOPTIONS_TEMPLATE_NEW = "niccli --dev {device_num} nvm --listoptions"
+    CMD_NICCLI_NVM_VIEW_TEMPLATE_NEW = "niccli --dev {device_num} nvm --view"
+    CMD_NICCLI_NVM_VERIFY_TEMPLATE_NEW = "niccli --dev {device_num} nvm --verify"
+    # Firmware read
+    CMD_NICCLI_FW_LIVEPATCH_SHOW_TEMPLATE_NEW = "niccli --dev {device_num} fw --livepatch --show"
+    # MSIX read
+    CMD_NICCLI_MSIX_SHOW_TEMPLATE_NEW = "niccli --dev {device_num} msix --max_vectors --show --pf 0"
+    # Timesync read
+    CMD_NICCLI_TIMESYNC_PTP_TEMPLATE_NEW = "niccli --dev {device_num} timesync --ptp --show"
+    CMD_NICCLI_TIMESYNC_SYNCE_TEMPLATE_NEW = "niccli --dev {device_num} timesync --synce --show"
+    CMD_NICCLI_TIMESYNC_TSIO_TEMPLATE_NEW = "niccli --dev {device_num} timesync --tsio --show"
+    # Tunnel read
+    CMD_NICCLI_TUNNEL_RSS_TEMPLATE_NEW = "niccli --dev {device_num} tunnel --cfg --rss --show"
+    CMD_NICCLI_TUNNEL_VXLAN_IPV4_TEMPLATE_NEW = (
+        "niccli --dev {device_num} tunnel --cfg --vxlan --type ipv4 --show"
+    )
+    # PCIe counters
+    CMD_NICCLI_COUNTERS_PCIE_TEMPLATE_NEW = "niccli --dev {device_num} counters --pcie"
+    # Resource management
+    CMD_NICCLI_RESMGMT_PROFILE_TEMPLATE_NEW = (
+        "niccli --dev {device_num} resmgmt --all --profile --show"
+    )
+    # Cable / transceiver info
+    CMD_NICCLI_CABLE_MODULE_INFO_TEMPLATE_NEW = (
+        "niccli --dev {device_num} cable --module_info --show"
+    )
     CMD_NICCLI_PER_DEVICE_NEW = [
         CMD_NICCLI_SUPPORT_RDMA_TEMPLATE_NEW,
         CMD_NICCLI_PERFORMANCE_PROFILE_TEMPLATE_NEW,
         CMD_NICCLI_PCIE_RELAXED_ORDERING_TEMPLATE_NEW,
         CMD_NICCLI_QOS_TEMPLATE_NEW,
+        # Show / device info
+        CMD_NICCLI_SHOW_ALL_TEMPLATE_NEW,
+        CMD_NICCLI_SHOW_HEALTH_TEMPLATE_NEW,
+        CMD_NICCLI_SHOW_CERTIFICATE_TEMPLATE_NEW,
+        CMD_NICCLI_SHOW_PKG_VER_TEMPLATE_NEW,
+        # Link
+        CMD_NICCLI_LINK_STATUS_TEMPLATE_NEW,
+        # Linkdiag (read-only)
+        CMD_NICCLI_LINKDIAG_LOOPBACK_SHOW_TEMPLATE_NEW,
+        CMD_NICCLI_LINKDIAG_TXFIR_SHOW_TEMPLATE_NEW,
+        # QoS additional show
+        CMD_NICCLI_QOS_EGRESS_COSQ_TEMPLATE_NEW,
+        CMD_NICCLI_QOS_INGRESS_COSQ_TEMPLATE_NEW,
+        CMD_NICCLI_QOS_RX_RATE_LIMIT_TEMPLATE_NEW,
+        CMD_NICCLI_QOS_LISTMAP_TEMPLATE_NEW,
+        # MSIX read
+        CMD_NICCLI_MSIX_SHOW_TEMPLATE_NEW,
+        # Timesync read
+        CMD_NICCLI_TIMESYNC_PTP_TEMPLATE_NEW,
+        CMD_NICCLI_TIMESYNC_TSIO_TEMPLATE_NEW,
+        # Tunnel read
+        CMD_NICCLI_TUNNEL_RSS_TEMPLATE_NEW,
+        CMD_NICCLI_TUNNEL_VXLAN_IPV4_TEMPLATE_NEW,
+        # PCIe counters
+        CMD_NICCLI_COUNTERS_PCIE_TEMPLATE_NEW,
+        # Resource management
+        CMD_NICCLI_RESMGMT_PROFILE_TEMPLATE_NEW,
     ]
     # Backward compatibility: default to legacy templates
     CMD_NICCLI_SUPPORT_RDMA_TEMPLATE = CMD_NICCLI_SUPPORT_RDMA_TEMPLATE_LEGACY
@@ -419,111 +513,420 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
         "nicctl show version host-software",
     ]
 
+    # bcmcli (Thor Ultra, Thor3): separate binaries, device targeted with -d <dev> suffix.
+    # Read-only show/query commands only; no fw/update/reset/set/loopback/coredump operations.
+    CMD_BCMCLI_VERSION = "bcmcli_show version"
+    CMD_BCMCLI_LIST = "bcmcli_show device_list"
+
+    CMD_BCMCLI_GLOBAL = [
+        "bcmcli_show version",
+        "bcmcli_show device_list",
+    ]
+
+    # Per-device templates; {device_id} expanded at runtime from bcmcli_show device_list output
+    # NVM config queries
+    CMD_BCMCLI_SUPPORT_RDMA_TEMPLATE = "bcmcli_config query support_rdma -d {device_id}"
+    CMD_BCMCLI_PERFORMANCE_PROFILE_TEMPLATE = (
+        "bcmcli_config query performance_profile -d {device_id}"
+    )
+    CMD_BCMCLI_PCIE_RELAXED_ORDERING_TEMPLATE = (
+        "bcmcli_config query pcie_relaxed_ordering -d {device_id}"
+    )
+    CMD_BCMCLI_AN_PROTOCOL_TEMPLATE = "bcmcli_config query AN_PROTOCOL -d {device_id}"
+    CMD_BCMCLI_NVM_SHOW_CONFS_TEMPLATE = "bcmcli_config show_confs -d {device_id}"
+    CMD_BCMCLI_NVM_SHOW_TEMPLATE = "bcmcli_nvm show -d {device_id}"
+    # QoS show commands
+    CMD_BCMCLI_QOS_TEMPLATE = "bcmcli_qos show qos -d {device_id}"
+    CMD_BCMCLI_QOS_HW_MAPS_TEMPLATE = "bcmcli_qos show hw-maps -d {device_id}"
+    CMD_BCMCLI_QOS_RX_PORT_RATELIMIT_TEMPLATE = "bcmcli_qos show rx-port-ratelimit -d {device_id}"
+    CMD_BCMCLI_QOS_TX_EP_RATELIMIT_TEMPLATE = (
+        "bcmcli_qos show tx-ep-ratelimit --port 0 -d {device_id}"
+    )
+    CMD_BCMCLI_QOS_INGRESS_COSQ_TEMPLATE = "bcmcli_qos show ingress --cosq -d {device_id}"
+    CMD_BCMCLI_QOS_EGRESS_COSQ_TEMPLATE = "bcmcli_qos show egress --cosq -d {device_id}"
+    # Device info / health
+    CMD_BCMCLI_HEALTH_TEMPLATE = "bcmcli_show health -d {device_id}"
+    CMD_BCMCLI_STATUS_TEMPLATE = "bcmcli_show status -d {device_id}"
+    CMD_BCMCLI_TEMPERATURE_TEMPLATE = "bcmcli_show temperature -d {device_id}"
+    CMD_BCMCLI_PCI_TEMPLATE = "bcmcli_show pci -d {device_id}"
+    CMD_BCMCLI_PHY_TEMPLATE = "bcmcli_show phy -d {device_id}"
+    CMD_BCMCLI_RESOURCE_COUNTS_TEMPLATE = "bcmcli_show resource_counts -d {device_id}"
+    # Link
+    CMD_BCMCLI_LINK_STATUS_TEMPLATE = "bcmcli_link show -d {device_id}"
+    # Hardware debug / diagnostics (read-only)
+    CMD_BCMCLI_TX_COUNTERS_TEMPLATE = "bcmcli_hwdbg dump_tx_counters -d {device_id}"
+    CMD_BCMCLI_RX_COUNTERS_TEMPLATE = "bcmcli_hwdbg dump_rx_counters -d {device_id}"
+    CMD_BCMCLI_PCIE_COUNTERS_TEMPLATE = "bcmcli_debug pcie counters -d {device_id}"
+    CMD_BCMCLI_VERIFY_TEMPLATE = "bcmcli_debug verify -d {device_id}"
+    CMD_BCMCLI_LOOPBACK_SHOW_TEMPLATE = "bcmcli_debug loopback -d {device_id}"
+    CMD_BCMCLI_DSCDUMP_TEMPLATE = "bcmcli_debug dscdump --lane 0 -d {device_id}"
+    CMD_BCMCLI_SERDES_TX_GET_TEMPLATE = (
+        "bcmcli_debug serdes_tx --get --modtype NRZ --lane 0 -d {device_id}"
+    )
+    # Firmware
+    CMD_BCMCLI_FW_VERSION_TEMPLATE = "bcmcli_fwmanager show fwpackage -d {device_id}"
+    CMD_BCMCLI_FW_CERTIFICATE_TEMPLATE = "bcmcli_fwmanager show certificate -d {device_id}"
+    CMD_BCMCLI_LIVEPATCH_SHOW_TEMPLATE = "bcmcli_livepatch show -d {device_id}"
+    # Tunnel
+    CMD_BCMCLI_TUNNEL_RSS_TEMPLATE = "bcmcli_tunnel show rss -d {device_id}"
+    CMD_BCMCLI_TUNNEL_VXLAN_IPV4_TEMPLATE = "bcmcli_tunnel show vxlan --type ipv4 -d {device_id}"
+    CMD_BCMCLI_TUNNEL_VXLAN_IPV6_TEMPLATE = "bcmcli_tunnel show vxlan --type ipv6 -d {device_id}"
+    # Keep old name as alias for backward compat
+    CMD_BCMCLI_TUNNEL_VXLAN_TEMPLATE = CMD_BCMCLI_TUNNEL_VXLAN_IPV4_TEMPLATE
+    # Timesync
+    CMD_BCMCLI_TIMESYNC_PTP_TEMPLATE = "bcmcli_timesync show ptp -d {device_id}"
+    CMD_BCMCLI_TIMESYNC_SYNCE_TEMPLATE = "bcmcli_timesync show synce -d {device_id}"
+    CMD_BCMCLI_TIMESYNC_TSIO_TEMPLATE = "bcmcli_timesync show tsio -d {device_id}"
+    CMD_BCMCLI_TIMESYNC_DLL_TEMPLATE = "bcmcli_timesync show dll -d {device_id}"
+    CMD_BCMCLI_TIMESYNC_DUTY_CYCLE_TEMPLATE = "bcmcli_timesync show duty-cycle -d {device_id}"
+    CMD_BCMCLI_TIMESYNC_TS_PIN_TEMPLATE = "bcmcli_timesync show ts-pin -d {device_id}"
+    # MSIX / dump
+    CMD_BCMCLI_MSIX_TEMPLATE = "bcmcli_config msixmv query --pf all -d {device_id}"
+    CMD_BCMCLI_SNAPDUMP_TEMPLATE = "bcmcli_dump snap_dump -d {device_id}"
+
+    CMD_BCMCLI_PER_DEVICE = [
+        # NVM config queries
+        CMD_BCMCLI_AN_PROTOCOL_TEMPLATE,
+        CMD_BCMCLI_NVM_SHOW_CONFS_TEMPLATE,
+        CMD_BCMCLI_NVM_SHOW_TEMPLATE,
+        # QoS show
+        CMD_BCMCLI_QOS_TEMPLATE,
+        CMD_BCMCLI_QOS_HW_MAPS_TEMPLATE,
+        CMD_BCMCLI_QOS_RX_PORT_RATELIMIT_TEMPLATE,
+        CMD_BCMCLI_QOS_TX_EP_RATELIMIT_TEMPLATE,
+        CMD_BCMCLI_QOS_INGRESS_COSQ_TEMPLATE,
+        CMD_BCMCLI_QOS_EGRESS_COSQ_TEMPLATE,
+        # Device info / health
+        CMD_BCMCLI_HEALTH_TEMPLATE,
+        CMD_BCMCLI_STATUS_TEMPLATE,
+        CMD_BCMCLI_TEMPERATURE_TEMPLATE,
+        CMD_BCMCLI_PCI_TEMPLATE,
+        CMD_BCMCLI_PHY_TEMPLATE,
+        CMD_BCMCLI_RESOURCE_COUNTS_TEMPLATE,
+        # Link
+        CMD_BCMCLI_LINK_STATUS_TEMPLATE,
+        # Hardware debug / diagnostics
+        CMD_BCMCLI_TX_COUNTERS_TEMPLATE,
+        CMD_BCMCLI_RX_COUNTERS_TEMPLATE,
+        CMD_BCMCLI_PCIE_COUNTERS_TEMPLATE,
+        CMD_BCMCLI_VERIFY_TEMPLATE,
+        CMD_BCMCLI_LOOPBACK_SHOW_TEMPLATE,
+        CMD_BCMCLI_DSCDUMP_TEMPLATE,
+        CMD_BCMCLI_SERDES_TX_GET_TEMPLATE,
+        # Firmware
+        CMD_BCMCLI_FW_VERSION_TEMPLATE,
+        CMD_BCMCLI_FW_CERTIFICATE_TEMPLATE,
+        CMD_BCMCLI_LIVEPATCH_SHOW_TEMPLATE,
+        # Tunnel
+        CMD_BCMCLI_TUNNEL_RSS_TEMPLATE,
+        CMD_BCMCLI_TUNNEL_VXLAN_IPV4_TEMPLATE,
+        CMD_BCMCLI_TUNNEL_VXLAN_IPV6_TEMPLATE,
+        # Timesync
+        CMD_BCMCLI_TIMESYNC_DLL_TEMPLATE,
+        CMD_BCMCLI_TIMESYNC_DUTY_CYCLE_TEMPLATE,
+        CMD_BCMCLI_TIMESYNC_TS_PIN_TEMPLATE,
+        # MSIX / dump
+        CMD_BCMCLI_MSIX_TEMPLATE,
+        CMD_BCMCLI_SNAPDUMP_TEMPLATE,
+    ]
+
     def collect_data(
         self,
         args: Optional[NicCollectorArgs] = None,
     ) -> Tuple[TaskResult, Optional[NicDataModel]]:
-        """Run niccli/nicctl commands and store stdout/stderr/exit_code per command."""
+        """Run niccli/nicctl/bcmcli commands and store stdout/stderr/exit_code per command."""
         use_sudo_niccli = args.use_sudo_niccli if args else True
         use_sudo_nicctl = args.use_sudo_nicctl if args else True
+        use_sudo_bcmcli = args.use_sudo_bcmcli if args else True
         custom_commands = args.commands if args and args.commands else None
 
         results: dict[str, NicCommandResult] = {}
 
-        # Detect niccli version to choose command set (legacy <= v233 vs new > v233)
-        niccli_version: Optional[int] = None
-        res_version = self._run_sut_cmd(NicCollector.CMD_NICCLI_VERSION, sudo=use_sudo_niccli)
-        if res_version.exit_code == 0 and res_version.stdout:
-            niccli_version = _parse_niccli_version(res_version.stdout)
-        results[NicCollector.CMD_NICCLI_VERSION] = NicCommandResult(
-            command=NicCollector.CMD_NICCLI_VERSION,
-            stdout=res_version.stdout or "",
-            stderr=res_version.stderr or "",
-            exit_code=res_version.exit_code,
-        )
+        # Detect which Broadcom CLI is present (bcmcli takes priority over niccli).
+        broadcom_cli = self._detect_broadcom_cli(args, results)
 
-        # Discovery: device numbers from niccli
-        device_nums: List[int] = []
-        discovery_cmds = _get_niccli_discovery_commands(niccli_version)
-        for list_cmd in discovery_cmds:
-            res = self._run_sut_cmd(list_cmd, sudo=use_sudo_niccli)
-            results[list_cmd] = NicCommandResult(
-                command=list_cmd,
-                stdout=res.stdout or "",
-                stderr=res.stderr or "",
-                exit_code=res.exit_code,
+        # --- bcmcli path (Thor Ultra, Thor3) ---
+        if broadcom_cli == "bcmcli":
+            bcmcli_bin_dir = self._resolve_bcmcli_bin_dir() if use_sudo_bcmcli else ""
+
+            def _bcmcli_cmd(cmd: str) -> str:
+                if not bcmcli_bin_dir:
+                    return cmd
+                parts = cmd.split()
+                if parts and parts[0].startswith("bcmcli_") and "/" not in parts[0]:
+                    parts[0] = f"{bcmcli_bin_dir}/{parts[0]}"
+                    return " ".join(parts)
+                return cmd
+
+            device_ids: List[str] = []
+            # CMD_BCMCLI_LIST was already run (and stored) by _detect_broadcom_cli; reuse it.
+            existing_list = results.get(NicCollector.CMD_BCMCLI_LIST)
+            if existing_list is None:
+                res_list = self._run_sut_cmd(NicCollector.CMD_BCMCLI_LIST, sudo=use_sudo_bcmcli)
+                results[NicCollector.CMD_BCMCLI_LIST] = NicCommandResult(
+                    command=NicCollector.CMD_BCMCLI_LIST,
+                    stdout=res_list.stdout or "",
+                    stderr=res_list.stderr or "",
+                    exit_code=res_list.exit_code,
+                )
+                existing_list = results[NicCollector.CMD_BCMCLI_LIST]
+            if existing_list.exit_code == 0 and existing_list.stdout:
+                device_ids = _parse_bcmcli_device_list(existing_list.stdout)
+
+            # Discovery: card IDs from nicctl (Pensando may still coexist)
+            card_ids: List[str] = []
+            card_list_from_text: List[Dict[str, Any]] = []
+            res_card = self._run_sut_cmd(NicCollector.CMD_NICCTL_CARD_TEXT, sudo=use_sudo_nicctl)
+            results[NicCollector.CMD_NICCTL_CARD_TEXT] = NicCommandResult(
+                command=NicCollector.CMD_NICCTL_CARD_TEXT,
+                stdout=res_card.stdout or "",
+                stderr=res_card.stderr or "",
+                exit_code=res_card.exit_code,
             )
-            if res.exit_code == 0 and res.stdout:
-                device_nums = _parse_niccli_device_numbers(res.stdout)
-                if device_nums:
-                    break
+            if res_card.exit_code == 0 and res_card.stdout:
+                legacy_cards = self._parse_nicctl_card(res_card.stdout)
+                card_ids = [c.id for c in legacy_cards]
+                card_list_from_text = [c.model_dump() for c in legacy_cards]
 
-        # Discovery: card IDs from nicctl show card (text); same output used for pensando_nic_cards
-        card_ids: List[str] = []
-        card_list_from_text: List[Dict[str, Any]] = []
-        res_card = self._run_sut_cmd(NicCollector.CMD_NICCTL_CARD_TEXT, sudo=use_sudo_nicctl)
-        results[NicCollector.CMD_NICCTL_CARD_TEXT] = NicCommandResult(
-            command=NicCollector.CMD_NICCTL_CARD_TEXT,
-            stdout=res_card.stdout or "",
-            stderr=res_card.stderr or "",
-            exit_code=res_card.exit_code,
-        )
-        if res_card.exit_code == 0 and res_card.stdout:
-            legacy_cards = self._parse_nicctl_card(res_card.stdout)
-            card_ids = [c.id for c in legacy_cards]
-            card_list_from_text = [c.model_dump() for c in legacy_cards]
+            if custom_commands is None and not device_ids and not card_ids:
+                self._log_event(
+                    category=EventCategory.NETWORK,
+                    description="No bcmcli or Pensando (nicctl) NIC hardware detected",
+                    priority=EventPriority.INFO,
+                )
+                self.result.status = ExecutionStatus.NOT_RAN
+                self.result.message = (
+                    "No bcmcli or Pensando (nicctl) NIC hardware detected; NIC collection skipped"
+                )
+                return self.result, None
 
-        if custom_commands is None and not device_nums and not card_ids:
-            self._log_event(
-                category=EventCategory.NETWORK,
-                description="No Broadcom (niccli) or Pensando (nicctl) NIC hardware detected",
-                priority=EventPriority.INFO,
-            )
-            self.result.status = ExecutionStatus.NOT_RAN
-            self.result.message = (
-                "No Broadcom (niccli) or Pensando (nicctl) NIC hardware detected; "
-                "NIC collection skipped"
-            )
-            return self.result, None
+            # Build bcmcli command list
+            if custom_commands is not None:
+                commands_to_run: List[str] = []
+                for tpl in custom_commands:
+                    if "{device_id}" in tpl:
+                        for d in device_ids:
+                            commands_to_run.append(tpl.format(device_id=d))
+                    elif "{card_id}" in tpl:
+                        for c in card_ids:
+                            commands_to_run.append(tpl.format(card_id=c))
+                    else:
+                        commands_to_run.append(tpl)
+            else:
+                commands_to_run = []
+                if device_ids:
+                    for tpl in NicCollector.CMD_BCMCLI_PER_DEVICE:
+                        for d in device_ids:
+                            commands_to_run.append(tpl.format(device_id=d))
+                if card_ids:
+                    for c in NicCollector.CMD_NICCTL_GLOBAL:
+                        commands_to_run.append(c)
+                    for tpl in NicCollector.CMD_NICCTL_PER_CARD:
+                        for cid in card_ids:
+                            commands_to_run.append(tpl.format(card_id=cid))
+                    for cmd in NicCollector.CMD_NICCTL_LEGACY_TEXT:
+                        commands_to_run.append(cmd)
 
-        # Build full command list (expand placeholders)
-        if custom_commands is not None:
-            commands_to_run: List[str] = []
-            for tpl in custom_commands:
-                if "{device_num}" in tpl:
-                    for d in device_nums:
-                        commands_to_run.append(tpl.format(device_num=d))
-                elif "{card_id}" in tpl:
-                    for c in card_ids:
-                        commands_to_run.append(tpl.format(card_id=c))
-                else:
-                    commands_to_run.append(tpl)
+            # Run bcmcli commands
+            for cmd in commands_to_run:
+                if cmd in results:
+                    continue
+                is_bcmcli = cmd.strip().startswith("bcmcli_")
+                is_niccli_cmd = cmd.strip().startswith("niccli")
+                sudo = (
+                    use_sudo_bcmcli
+                    if is_bcmcli
+                    else (use_sudo_niccli if is_niccli_cmd else use_sudo_nicctl)
+                )
+                run_cmd = _bcmcli_cmd(cmd) if is_bcmcli else cmd
+                res = self._run_sut_cmd(run_cmd, sudo=sudo)
+                has_error_output = has_command_error_output(res.stderr or "", res.stdout or "")
+                if _is_artifact_only_command(cmd):
+                    if res.exit_code != 0:
+                        self._log_event(
+                            category=EventCategory.NETWORK,
+                            description=f"bcmcli/nicctl command failed: {cmd}",
+                            data=command_result_event_data(res),
+                            priority=EventPriority.WARNING,
+                        )
+                    elif has_error_output:
+                        self._log_event(
+                            category=EventCategory.NETWORK,
+                            description=f"bcmcli/nicctl reported errors (exit 0): {cmd}",
+                            data=command_result_event_data(res),
+                            priority=EventPriority.WARNING,
+                        )
+                    continue
+                results[cmd] = NicCommandResult(
+                    command=cmd,
+                    stdout=res.stdout or "",
+                    stderr=res.stderr or "",
+                    exit_code=res.exit_code,
+                )
+                if res.exit_code != 0:
+                    self._log_event(
+                        category=EventCategory.NETWORK,
+                        description=f"bcmcli/nicctl command failed: {cmd}",
+                        data=command_result_event_data(res),
+                        priority=EventPriority.WARNING,
+                    )
+                elif has_error_output:
+                    self._log_event(
+                        category=EventCategory.NETWORK,
+                        description=f"bcmcli/nicctl reported errors (exit 0): {cmd}",
+                        data=command_result_event_data(res),
+                        priority=EventPriority.WARNING,
+                    )
+
+            # Populate broadcom_nic_* fields from bcmcli results keyed by device_id
+            broadcom_support_rdma: Dict[int, str] = {}
+            broadcom_performance_profile: Dict[int, str] = {}
+            broadcom_pcie_relaxed_ordering: Dict[int, str] = {}
+            broadcom_qos_data: Dict[int, NicCliQos] = {}
+            for idx, dev_id in enumerate(device_ids):
+                qos_cmd = NicCollector.CMD_BCMCLI_QOS_TEMPLATE.format(device_id=dev_id)
+                r_qos = results.get(qos_cmd)
+                if r_qos and r_qos.exit_code == 0 and (r_qos.stdout or "").strip():
+                    broadcom_qos_data[idx] = _parse_bcmcli_qos(dev_id, r_qos.stdout)
+
+            broadcom_devices: List[NicCliDevice] = []
+
+            # Pensando structured data (if nicctl also present)
+            (
+                pensando_cards,
+                pensando_dcqcn,
+                pensando_environment,
+                pensando_lif,
+                pensando_pcie_ats,
+                pensando_ports,
+                pensando_qos,
+                pensando_rdma_statistics,
+                pensando_version_host_software,
+                pensando_version_firmware,
+            ) = self._collect_pensando_nic_structured(results)
+
+            # nicctl card_show (not applicable in bcmcli path)
+            card_show = None
+            cards: list = []
+            port = lif = qos = rdma = dcqcn = environment = version = None
+
         else:
-            commands_to_run = []
-            # niccli list already stored
-            if device_nums:
-                per_device_templates = _get_niccli_per_device_templates(niccli_version)
-                for tpl in per_device_templates:
-                    for d in device_nums:
-                        commands_to_run.append(tpl.format(device_num=d))
-            if card_ids:
-                for c in NicCollector.CMD_NICCTL_GLOBAL:
-                    commands_to_run.append(c)
-                for tpl in NicCollector.CMD_NICCTL_PER_CARD:
-                    for cid in card_ids:
-                        commands_to_run.append(tpl.format(card_id=cid))
-                for cmd in NicCollector.CMD_NICCTL_LEGACY_TEXT:
-                    commands_to_run.append(cmd)
+            # --- niccli path (current Broadcom, Thor2) ---
+            niccli_version: Optional[int] = None
+            res_version = self._run_sut_cmd(NicCollector.CMD_NICCLI_VERSION, sudo=use_sudo_niccli)
+            if res_version.exit_code == 0 and res_version.stdout:
+                niccli_version = _parse_niccli_version(res_version.stdout)
+            results[NicCollector.CMD_NICCLI_VERSION] = NicCommandResult(
+                command=NicCollector.CMD_NICCLI_VERSION,
+                stdout=res_version.stdout or "",
+                stderr=res_version.stderr or "",
+                exit_code=res_version.exit_code,
+            )
 
-        # Run each command and store (artifact-only commands are not added to results / data model).
-        for cmd in commands_to_run:
-            if cmd in results:
-                continue
-            is_niccli = cmd.strip().startswith("niccli")
-            sudo = use_sudo_niccli if is_niccli else use_sudo_nicctl
-            res = self._run_sut_cmd(cmd, sudo=sudo)
-            has_error_output = has_command_error_output(res.stderr or "", res.stdout or "")
-            if _is_artifact_only_command(cmd):
+            # Discovery: device numbers from niccli
+            device_nums: List[int] = []
+            discovery_cmds = _get_niccli_discovery_commands(niccli_version)
+            for list_cmd in discovery_cmds:
+                res = self._run_sut_cmd(list_cmd, sudo=use_sudo_niccli)
+                results[list_cmd] = NicCommandResult(
+                    command=list_cmd,
+                    stdout=res.stdout or "",
+                    stderr=res.stderr or "",
+                    exit_code=res.exit_code,
+                )
+                if res.exit_code == 0 and res.stdout:
+                    device_nums = _parse_niccli_device_numbers(res.stdout)
+                    if device_nums:
+                        break
+
+            # Discovery: card IDs from nicctl show card (text); same output used for pensando_nic_cards
+            card_ids = []
+            card_list_from_text = []
+            res_card = self._run_sut_cmd(NicCollector.CMD_NICCTL_CARD_TEXT, sudo=use_sudo_nicctl)
+            results[NicCollector.CMD_NICCTL_CARD_TEXT] = NicCommandResult(
+                command=NicCollector.CMD_NICCTL_CARD_TEXT,
+                stdout=res_card.stdout or "",
+                stderr=res_card.stderr or "",
+                exit_code=res_card.exit_code,
+            )
+            if res_card.exit_code == 0 and res_card.stdout:
+                legacy_cards = self._parse_nicctl_card(res_card.stdout)
+                card_ids = [c.id for c in legacy_cards]
+                card_list_from_text = [c.model_dump() for c in legacy_cards]
+
+            if custom_commands is None and not device_nums and not card_ids:
+                self._log_event(
+                    category=EventCategory.NETWORK,
+                    description="No Broadcom (niccli) or Pensando (nicctl) NIC hardware detected",
+                    priority=EventPriority.INFO,
+                )
+                self.result.status = ExecutionStatus.NOT_RAN
+                self.result.message = (
+                    "No Broadcom (niccli) or Pensando (nicctl) NIC hardware detected; "
+                    "NIC collection skipped"
+                )
+                return self.result, None
+
+            # Build full command list (expand placeholders)
+            if custom_commands is not None:
+                commands_to_run = []
+                for tpl in custom_commands:
+                    if "{device_num}" in tpl:
+                        for dev_num in device_nums:
+                            commands_to_run.append(tpl.format(device_num=dev_num))
+                    elif "{card_id}" in tpl:
+                        for c in card_ids:
+                            commands_to_run.append(tpl.format(card_id=c))
+                    else:
+                        commands_to_run.append(tpl)
+            else:
+                commands_to_run = []
+                for cmd in NicCollector.CMD_NICCLI_GLOBAL:
+                    commands_to_run.append(cmd)
+                if device_nums:
+                    per_device_templates = _get_niccli_per_device_templates(niccli_version)
+                    for tpl in per_device_templates:
+                        for dev_num in device_nums:
+                            commands_to_run.append(tpl.format(device_num=dev_num))
+                if card_ids:
+                    for c in NicCollector.CMD_NICCTL_GLOBAL:
+                        commands_to_run.append(c)
+                    for tpl in NicCollector.CMD_NICCTL_PER_CARD:
+                        for cid in card_ids:
+                            commands_to_run.append(tpl.format(card_id=cid))
+                    for cmd in NicCollector.CMD_NICCTL_LEGACY_TEXT:
+                        commands_to_run.append(cmd)
+
+            # Run each command and store (artifact-only commands are not added to results / data model).
+            for cmd in commands_to_run:
+                if cmd in results:
+                    continue
+                is_niccli_cmd = cmd.strip().startswith("niccli")
+                sudo = use_sudo_niccli if is_niccli_cmd else use_sudo_nicctl
+                res = self._run_sut_cmd(cmd, sudo=sudo)
+                has_error_output = has_command_error_output(res.stderr or "", res.stdout or "")
+                if _is_artifact_only_command(cmd):
+                    if res.exit_code != 0:
+                        self._log_event(
+                            category=EventCategory.NETWORK,
+                            description=f"niccli/nicctl command failed: {cmd}",
+                            data=command_result_event_data(res),
+                            priority=EventPriority.WARNING,
+                        )
+                    elif has_error_output:
+                        self._log_event(
+                            category=EventCategory.NETWORK,
+                            description=f"niccli/nicctl reported errors (exit 0): {cmd}",
+                            data=command_result_event_data(res),
+                            priority=EventPriority.WARNING,
+                        )
+                    continue
+                results[cmd] = NicCommandResult(
+                    command=cmd,
+                    stdout=res.stdout or "",
+                    stderr=res.stderr or "",
+                    exit_code=res.exit_code,
+                )
                 if res.exit_code != 0:
                     self._log_event(
                         category=EventCategory.NETWORK,
@@ -538,70 +941,70 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
                         data=command_result_event_data(res),
                         priority=EventPriority.WARNING,
                     )
-                continue
-            results[cmd] = NicCommandResult(
-                command=cmd,
-                stdout=res.stdout or "",
-                stderr=res.stderr or "",
-                exit_code=res.exit_code,
-            )
-            if res.exit_code != 0:
-                self._log_event(
-                    category=EventCategory.NETWORK,
-                    description=f"niccli/nicctl command failed: {cmd}",
-                    data=command_result_event_data(res),
-                    priority=EventPriority.WARNING,
-                )
-            elif has_error_output:
-                self._log_event(
-                    category=EventCategory.NETWORK,
-                    description=f"niccli/nicctl reported errors (exit 0): {cmd}",
-                    data=command_result_event_data(res),
-                    priority=EventPriority.WARNING,
-                )
 
-        # Parse JSON for building structured domain objects (artifact-only commands have no stdout, so not in parsed).
-        parsed: Dict[str, Any] = {}
-        for cmd, r in results.items():
-            if r.exit_code != 0 or not (r.stdout or "").strip():
-                continue
-            try:
-                parsed[cmd] = json.loads(r.stdout.strip())
-            except (ValueError, TypeError):
-                pass
+            # Parse JSON for building structured domain objects (artifact-only commands have no stdout, so not in parsed).
+            parsed: Dict[str, Any] = {}
+            for cmd, r in results.items():
+                if r.exit_code != 0 or not (r.stdout or "").strip():
+                    continue
+                try:
+                    parsed[cmd] = json.loads(r.stdout.strip())
+                except (ValueError, TypeError):
+                    pass
 
-        # Build structured domain objects from JSON/raw output (card_show/cards from text when present).
-        (
-            card_show,
-            cards,
-            port,
-            lif,
-            qos,
-            rdma,
-            dcqcn,
-            environment,
-            version,
-        ) = _build_structured(
-            results, parsed, card_ids, card_list_override=card_list_from_text or None
-        )
-
-        # card_show and cards (can be large) go to TextFileArtifacts; excluded from datamodel.
-        if card_show is not None:
-            self.result.artifacts.append(
-                TextFileArtifact(
-                    filename="niccli_card_show.json",
-                    contents=card_show.model_dump_json(indent=2),
-                )
-            )
-        if cards:
-            self.result.artifacts.append(
-                TextFileArtifact(
-                    filename="niccli_cards.json",
-                    contents=json.dumps([c.model_dump(mode="json") for c in cards], indent=2),
-                )
+            # Build structured domain objects from JSON/raw output (card_show/cards from text when present).
+            (
+                card_show,
+                cards,
+                port,
+                lif,
+                qos,
+                rdma,
+                dcqcn,
+                environment,
+                version,
+            ) = _build_structured(
+                results, parsed, card_ids, card_list_override=card_list_from_text or None
             )
 
-        # Serialized nicclidatamodel.json: no stdout in results, truncated command/stderr (keeps file small).
+            # card_show and cards (can be large) go to TextFileArtifacts; excluded from datamodel.
+            if card_show is not None:
+                self.result.artifacts.append(
+                    TextFileArtifact(
+                        filename="niccli_card_show.json",
+                        contents=card_show.model_dump_json(indent=2),
+                    )
+                )
+            if cards:
+                self.result.artifacts.append(
+                    TextFileArtifact(
+                        filename="niccli_cards.json",
+                        contents=json.dumps([c.model_dump(mode="json") for c in cards], indent=2),
+                    )
+                )
+
+            # Legacy text parsers: populate broadcom_nic_* and pensando_nic_* for the datamodel.
+            (
+                broadcom_devices,
+                broadcom_qos_data,
+                broadcom_support_rdma,
+                broadcom_performance_profile,
+                broadcom_pcie_relaxed_ordering,
+            ) = self._collect_broadcom_nic_structured(results, niccli_version=niccli_version)
+            (
+                pensando_cards,
+                pensando_dcqcn,
+                pensando_environment,
+                pensando_lif,
+                pensando_pcie_ats,
+                pensando_ports,
+                pensando_qos,
+                pensando_rdma_statistics,
+                pensando_version_host_software,
+                pensando_version_firmware,
+            ) = self._collect_pensando_nic_structured(results)
+
+        # Serialized datamodel: no stdout in results, truncated command/stderr (keeps file small).
         # Command output lives on disk from _run_sut_cmd; model keeps only command identity and status.
         def _truncate(s: str, max_len: int) -> str:
             if not s or len(s) <= max_len:
@@ -618,33 +1021,13 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
             for cmd, r in results.items()
         }
 
-        # Legacy text parsers: populate broadcom_nic_* and pensando_nic_* for the datamodel.
-        (
-            broadcom_devices,
-            broadcom_qos_data,
-            broadcom_support_rdma,
-            broadcom_performance_profile,
-            broadcom_pcie_relaxed_ordering,
-        ) = self._collect_broadcom_nic_structured(results, niccli_version=niccli_version)
-        (
-            pensando_cards,
-            pensando_dcqcn,
-            pensando_environment,
-            pensando_lif,
-            pensando_pcie_ats,
-            pensando_ports,
-            pensando_qos,
-            pensando_rdma_statistics,
-            pensando_version_host_software,
-            pensando_version_firmware,
-        ) = self._collect_pensando_nic_structured(results)
-
+        cli_label = "bcmcli" if broadcom_cli == "bcmcli" else "niccli/nicctl"
         if not results or all(r.exit_code != 0 for r in results.values()):
             self.result.status = ExecutionStatus.EXECUTION_FAILURE
-            self.result.message = "All niccli/nicctl commands failed or no commands were run"
+            self.result.message = f"All {cli_label} commands failed or no commands were run"
         else:
             self.result.status = ExecutionStatus.OK
-            self.result.message = f"Collected {len(results)} niccli/nicctl command results"
+            self.result.message = f"Collected {len(results)} {cli_label} command results"
 
         nicctl_card_logs = None
         if card_show is not None:
@@ -666,6 +1049,7 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
             dcqcn=dcqcn,
             environment=environment,
             version=version,
+            broadcom_cli_type=broadcom_cli,
             broadcom_nic_devices=broadcom_devices,
             broadcom_nic_qos=broadcom_qos_data,
             broadcom_nic_support_rdma=broadcom_support_rdma,
@@ -682,6 +1066,54 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
             pensando_nic_version_host_software=pensando_version_host_software,
             pensando_nic_version_firmware=pensando_version_firmware,
         )
+
+    def _resolve_bcmcli_bin_dir(self) -> str:
+        res = self._run_sut_cmd("which bcmcli_show", sudo=False, log_artifact=False)
+        if res.exit_code == 0 and (res.stdout or "").strip():
+            import os
+
+            return os.path.dirname(res.stdout.strip())
+        return ""
+
+    def _detect_broadcom_cli(
+        self,
+        args: Optional[NicCollectorArgs],
+        results: Dict[str, "NicCommandResult"],
+    ) -> str:
+        """Return 'bcmcli' if bcmcli_show version exits 0 and device_list finds devices, otherwise 'niccli'.
+
+        Respects args.broadcom_cli_override ('niccli' or 'bcmcli') to skip detection entirely.
+        Stores both probe results in results so they appear in the datamodel.
+        """
+        override = (
+            args.broadcom_cli_override.strip().lower()
+            if (args and args.broadcom_cli_override)
+            else None
+        )
+        if override in ("bcmcli", "niccli"):
+            return override
+
+        use_sudo = args.use_sudo_bcmcli if args else True
+        res = self._run_sut_cmd(NicCollector.CMD_BCMCLI_VERSION, sudo=use_sudo)
+        results[NicCollector.CMD_BCMCLI_VERSION] = NicCommandResult(
+            command=NicCollector.CMD_BCMCLI_VERSION,
+            stdout=res.stdout or "",
+            stderr=res.stderr or "",
+            exit_code=res.exit_code,
+        )
+        if res.exit_code != 0:
+            return "niccli"
+
+        res_list = self._run_sut_cmd(NicCollector.CMD_BCMCLI_LIST, sudo=use_sudo)
+        results[NicCollector.CMD_BCMCLI_LIST] = NicCommandResult(
+            command=NicCollector.CMD_BCMCLI_LIST,
+            stdout=res_list.stdout or "",
+            stderr=res_list.stderr or "",
+            exit_code=res_list.exit_code,
+        )
+        if res_list.exit_code == 0 and _parse_bcmcli_device_list(res_list.stdout or ""):
+            return "bcmcli"
+        return "niccli"
 
     def _collect_broadcom_nic_structured(
         self,
@@ -1290,6 +1722,139 @@ def _get_niccli_discovery_commands(version: Optional[int]) -> List[str]:
     if version is not None and version > NICCLI_VERSION_LEGACY_MAX:
         return NicCollector.CMD_NICCLI_DISCOVERY_NEW.copy()
     return NicCollector.CMD_NICCLI_DISCOVERY_LEGACY.copy()
+
+
+def _parse_bcmcli_qos(device_id: str, stdout: str) -> NicCliQos:
+    """Parse bcmcli_qos show qos output into NicCliQos.
+
+    Maps into NicCliQos fields:
+      prio_map      - priority to TC from the Priority column of the ETS table
+      tc_bandwidth  - TX_BW per TC
+      tsa_map       - TSA string per TC
+      tc_rate_limit - RateLimit per TC
+      pfc_enabled   - integer bitmask from the 'enabled' row (bit 0 = priority 0)
+      app_entries   - APP TLV rows as NicCliQosAppEntry
+    """
+    prio_map: Dict[int, int] = {}
+    tc_bandwidth: List[int] = []
+    tsa_map: Dict[int, str] = {}
+    tc_rate_limit: List[int] = []
+    pfc_enabled: Optional[int] = None
+    app_entries: List[NicCliQosAppEntry] = []
+
+    section = None
+    pfc_priority_order: List[int] = []
+
+    for line in stdout.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+
+        if stripped.startswith("ETS Configuration"):
+            section = "ets"
+            continue
+        if stripped.startswith("PFC configuration"):
+            section = "pfc"
+            continue
+        if stripped.startswith("APP TLV Configuration"):
+            section = "app"
+            continue
+
+        # Skip separator and column header lines
+        if re.match(r"^-{5,}", stripped):
+            continue
+
+        if section == "ets":
+            # Header line: TC TX_BW RX_BW TSA RateLimit Priority
+            if stripped.startswith("TC"):
+                continue
+            parts = stripped.split()
+            if not parts or not parts[0].isdigit():
+                continue
+            tc = int(parts[0])
+            # Ensure lists are long enough for this TC index
+            while len(tc_bandwidth) <= tc:
+                tc_bandwidth.append(0)
+            while len(tsa_map) <= tc:
+                tsa_map[len(tsa_map)] = ""
+            while len(tc_rate_limit) <= tc:
+                tc_rate_limit.append(0)
+            if len(parts) >= 2 and parts[1].isdigit():
+                tc_bandwidth[tc] = int(parts[1])
+            if len(parts) >= 4:
+                tsa_map[tc] = parts[3]
+            if len(parts) >= 5 and parts[4].isdigit():
+                tc_rate_limit[tc] = int(parts[4])
+            # Priority column: remaining tokens are space-separated priority values
+            for pri_str in parts[5:]:
+                if pri_str.isdigit():
+                    prio_map[int(pri_str)] = tc
+
+        elif section == "pfc":
+            if stripped.startswith("priority"):
+                # Header: "priority 0 1 2 3 4 5 6 7"
+                pfc_priority_order = [int(x) for x in stripped.split()[1:] if x.isdigit()]
+            elif stripped.startswith("enabled"):
+                vals = [int(x) for x in stripped.split()[1:] if x.isdigit()]
+                mask = 0
+                for i, v in enumerate(vals):
+                    if v and i < len(pfc_priority_order):
+                        mask |= 1 << pfc_priority_order[i]
+                pfc_enabled = mask
+
+        elif section == "app":
+            # Header: "Index Selector Priority DSCP/Protocol"
+            if stripped.startswith("Index") or stripped.startswith("DSCP"):
+                continue
+            parts = stripped.split()
+            if not parts or not parts[0].isdigit():
+                continue
+            entry = NicCliQosAppEntry()
+            if len(parts) >= 2 and parts[1].isdigit():
+                entry.sel = int(parts[1])
+            if len(parts) >= 3 and parts[2].isdigit():
+                entry.priority = int(parts[2])
+            if len(parts) >= 4 and parts[3].isdigit():
+                entry.port = int(parts[3])
+            app_entries.append(entry)
+
+    return NicCliQos(
+        device_num=0,
+        raw_output=stdout,
+        prio_map=prio_map,
+        tc_bandwidth=tc_bandwidth,
+        tsa_map=tsa_map,
+        pfc_enabled=pfc_enabled,
+        app_entries=app_entries,
+        tc_rate_limit=tc_rate_limit,
+    )
+
+
+def _parse_bcmcli_device_list(stdout: str) -> List[str]:
+    """Parse bcmcli_show device_list output into a list of PCI address device identifiers."""
+    device_ids: List[str] = []
+    pci_re = re.compile(r"\b([0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-9a-fA-F])\b")
+    for line in stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        # Skip header lines
+        if "PCI Address" in line or "Device Type" in line:
+            continue
+        # Integer index: lines like "0) BCM..." (fallback for alternate formats)
+        idx_match = re.match(r"^(\d+)\s*\)", line)
+        if idx_match:
+            device_ids.append(idx_match.group(1))
+            continue
+        # PCI address anywhere on the line (covers second-column table format)
+        pci_match = pci_re.search(line)
+        if pci_match:
+            device_ids.append(pci_match.group(1))
+    seen: List[str] = []
+    for d in device_ids:
+        if d not in seen:
+            seen.append(d)
+    return seen
 
 
 # Commands whose output is very long; store only as file artifacts, not in data model.
