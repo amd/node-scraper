@@ -872,8 +872,8 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
                 commands_to_run = []
                 for tpl in custom_commands:
                     if "{device_num}" in tpl:
-                        for d in device_nums:
-                            commands_to_run.append(tpl.format(device_num=d))
+                        for dev_num in device_nums:
+                            commands_to_run.append(tpl.format(device_num=dev_num))
                     elif "{card_id}" in tpl:
                         for c in card_ids:
                             commands_to_run.append(tpl.format(card_id=c))
@@ -886,8 +886,8 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
                 if device_nums:
                     per_device_templates = _get_niccli_per_device_templates(niccli_version)
                     for tpl in per_device_templates:
-                        for d in device_nums:
-                            commands_to_run.append(tpl.format(device_num=d))
+                        for dev_num in device_nums:
+                            commands_to_run.append(tpl.format(device_num=dev_num))
                 if card_ids:
                     for c in NicCollector.CMD_NICCTL_GLOBAL:
                         commands_to_run.append(c)
