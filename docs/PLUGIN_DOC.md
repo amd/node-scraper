@@ -18,7 +18,7 @@
 | KernelModulePlugin | cat /proc/modules<br>modinfo amdgpu<br>wmic os get Version /Value | **Analyzer Args:**<br>- `kernel_modules`: dict[str, dict] — Expected kernel module name -> {version, etc.}. Analyzer checks collected modules match.<br>- `regex_filter`: list[str] — List of regex patterns to filter which collected modules are checked (default: amd). | - | [KernelModuleDataModel](#KernelModuleDataModel-Model) | [KernelModuleCollector](#Collector-Class-KernelModuleCollector) | [KernelModuleAnalyzer](#Data-Analyzer-Class-KernelModuleAnalyzer) |
 | MemoryPlugin | free -b<br>lsmem<br>numactl -H<br>wmic OS get FreePhysicalMemory /Value; wmic ComputerSystem get TotalPhysicalMemory /Value | **Analyzer Args:**<br>- `ratio`: float — Required free-memory ratio (0-1). Analysis fails if free/total < ratio.<br>- `memory_threshold`: str — Minimum free memory required (e.g. '30Gi', '1T'). Used when ratio is not sufficient. | - | [MemoryDataModel](#MemoryDataModel-Model) | [MemoryCollector](#Collector-Class-MemoryCollector) | [MemoryAnalyzer](#Data-Analyzer-Class-MemoryAnalyzer) |
 | NetworkPlugin | ip addr show<br>curl<br>ethtool -i {interface}<br>ethtool -S {interface}<br>ethtool {interface}<br>lldpcli show neighbor<br>lldpctl<br>ip neighbor show<br>ping<br>ip route show<br>ip rule show<br>wget | - | **Collection Args:**<br>- `html_view`: bool — When true, include logged command artifacts in command_artifacts.html using human-readable output. Arista collectors...<br>- `url`: Optional[str] — Optional URL to probe for network connectivity (used with netprobe).<br>- `netprobe`: Optional[Literal['ping', 'wget', 'curl']] — Tool to use for network connectivity probe: ping, wget, or curl.<br>- `exclusion_regex`: Optional[list[str]] — Regex patterns matched (search) against netdev/interface names; any match is skipped (ethtool not run against it). | [NetworkDataModel](#NetworkDataModel-Model) | [NetworkCollector](#Collector-Class-NetworkCollector) | [NetworkAnalyzer](#Data-Analyzer-Class-NetworkAnalyzer) |
-| NicPlugin | niccli --listdev<br>niccli --list<br>niccli --list_devices<br>niccli -dev {device_num} nvm -getoption pcie_relaxed_ordering<br>niccli --dev {device_num} nvm --getoption pcie_relaxed_ordering<br>niccli -dev {device_num} nvm -getoption performance_profile<br>niccli --dev {device_num} nvm --getoption performance_profile<br>niccli -dev {device_num} nvm -getoption support_rdma -scope 0<br>niccli -dev {device_num} getqos<br>niccli --dev {device_num} nvm --getoption support_rdma --scope 0<br>niccli --dev {device_num} qos --ets --show<br>niccli --version<br>nicctl show card<br>nicctl --version<br>nicctl show card flash partition --json<br>nicctl show card interrupts --json<br>nicctl show card logs --non-persistent<br>nicctl show card logs --boot-fault<br>nicctl show card logs --persistent<br>nicctl show card profile --json<br>nicctl show card time --json<br>nicctl show card statistics packet-buffer summary --json<br>nicctl show lif statistics --json<br>nicctl show lif internal queue-to-ud-pinning<br>nicctl show pipeline internal anomalies<br>nicctl show pipeline internal rsq-ring<br>nicctl show pipeline internal statistics memory<br>nicctl show port fsm<br>nicctl show port transceiver --json<br>nicctl show port statistics --json<br>nicctl show port internal mac<br>nicctl show qos headroom --json<br>nicctl show rdma queue --json<br>nicctl show rdma queue-pair --detail --json<br>nicctl show version firmware<br>nicctl show dcqcn<br>nicctl show environment<br>nicctl show lif<br>nicctl show pcie ats<br>nicctl show port<br>nicctl show qos<br>nicctl show rdma statistics<br>nicctl show version host-software<br>nicctl show dcqcn --card {card_id} --json<br>nicctl show card hardware-config --card {card_id} | **Analyzer Args:**<br>- `expected_values`: Optional[Dict[str, Dict[str, Any]]] — Per-command expected checks keyed by canonical key (see command_to_canonical_key).<br>- `performance_profile_expected`: str — Expected Broadcom performance_profile value (case-insensitive). Default RoCE.<br>- `support_rdma_disabled_values`: List[str] — Values that indicate RDMA is not supported (case-insensitive).<br>- `pcie_relaxed_ordering_expected`: str — Expected Broadcom pcie_relaxed_ordering value (e.g. 'Relaxed ordering = enabled'); checked case-insensitively. Defaul...<br>- `expected_qos_prio_map`: Optional[Dict[Any, Any]] — Expected priority-to-TC map (e.g. {0: 0, 1: 1}; keys may be int or str in config). Checked per device when set.<br>- `expected_qos_pfc_enabled`: Optional[int] — Expected PFC enabled value (0/1 or bitmask). Checked per device when set.<br>- `expected_qos_tsa_map`: Optional[Dict[Any, Any]] — Expected TSA map for ETS (e.g. {0: 'ets', 1: 'strict'}; keys may be int or str in config). Checked per device when set.<br>- `expected_qos_tc_bandwidth`: Optional[List[int]] — Expected TC bandwidth percentages. Checked per device when set.<br>- `require_qos_consistent_across_adapters`: bool — When True and no expected_qos_\* are set, require all adapters to have the same prio_map, pfc_enabled, and tsa_map.<br>- `nicctl_log_error_regex`: Optional[List[Dict[str, Any]]] — Optional list of error patterns for nicctl show card logs. | **Collection Args:**<br>- `html_view`: bool — When true, include logged command artifacts in command_artifacts.html using human-readable output. Arista collectors...<br>- `commands`: Optional[List[str]] — Optional list of niccli/nicctl commands to run. When None, default command set is used.<br>- `use_sudo_niccli`: bool — If True, run niccli commands with sudo when required.<br>- `use_sudo_nicctl`: bool — If True, run nicctl commands with sudo when required. | [NicDataModel](#NicDataModel-Model) | [NicCollector](#Collector-Class-NicCollector) | [NicAnalyzer](#Data-Analyzer-Class-NicAnalyzer) |
+| NicPlugin | bcmcli_config query AN_PROTOCOL -d {device_id}<br>bcmcli_debug dscdump --lane 0 -d {device_id}<br>bcmcli_fwmanager show certificate -d {device_id}<br>bcmcli_fwmanager show fwpackage -d {device_id}<br>bcmcli_show version<br>bcmcli_show device_list<br>bcmcli_show health -d {device_id}<br>bcmcli_link show -d {device_id}<br>bcmcli_livepatch show -d {device_id}<br>bcmcli_debug loopback -d {device_id}<br>bcmcli_config msixmv query --pf all -d {device_id}<br>bcmcli_config show_confs -d {device_id}<br>bcmcli_nvm show -d {device_id}<br>bcmcli_debug pcie counters -d {device_id}<br>bcmcli_config query pcie_relaxed_ordering -d {device_id}<br>bcmcli_show pci -d {device_id}<br>bcmcli_config query performance_profile -d {device_id}<br>bcmcli_qos show qos -d {device_id}<br>bcmcli_qos show hw-maps -d {device_id}<br>bcmcli_qos show rx-port-ratelimit -d {device_id}<br>bcmcli_qos show tx-ep-ratelimit --port 0 -d {device_id}<br>bcmcli_qos show ingress --cosq -d {device_id}<br>bcmcli_qos show egress --cosq -d {device_id}<br>bcmcli_show status -d {device_id}<br>bcmcli_show temperature -d {device_id}<br>bcmcli_show phy -d {device_id}<br>bcmcli_show resource_counts -d {device_id}<br>bcmcli_hwdbg dump_tx_counters -d {device_id}<br>bcmcli_hwdbg dump_rx_counters -d {device_id}<br>bcmcli_debug verify -d {device_id}<br>bcmcli_debug serdes_tx --get --modtype NRZ --lane 0 -d {device_id}<br>bcmcli_tunnel show rss -d {device_id}<br>bcmcli_tunnel show vxlan --type ipv4 -d {device_id}<br>bcmcli_tunnel show vxlan --type ipv6 -d {device_id}<br>bcmcli_timesync show dll -d {device_id}<br>bcmcli_timesync show duty-cycle -d {device_id}<br>bcmcli_timesync show ts-pin -d {device_id}<br>bcmcli_dump snap_dump -d {device_id}<br>bcmcli_config query support_rdma -d {device_id}<br>bcmcli_timesync show ptp -d {device_id}<br>bcmcli_timesync show synce -d {device_id}<br>bcmcli_timesync show tsio -d {device_id}<br>niccli --dev {device_num} cable --module_info --show<br>niccli --dev {device_num} counters --pcie<br>niccli devid<br>niccli --listdev<br>niccli --list<br>niccli --list_devices<br>niccli --dev {device_num} fw --livepatch --show<br>niccli --dev {device_num} linkdiag --dscdump --lane 0<br>niccli --dev {device_num} linkdiag --loopback --show<br>niccli --dev {device_num} linkdiag --txfir --show --modulation_type NRZ --lane 0<br>niccli --dev {device_num} link --counters --show<br>niccli --dev {device_num} link --status<br>niccli --dev {device_num} msix --max_vectors --show --pf 0<br>niccli --dev {device_num} nvm --listoptions<br>niccli --dev {device_num} nvm --list<br>niccli --dev {device_num} nvm --verify<br>niccli --dev {device_num} nvm --view<br>niccli -dev {device_num} nvm -getoption pcie_relaxed_ordering<br>niccli --dev {device_num} nvm --getoption pcie_relaxed_ordering<br>niccli -dev {device_num} nvm -getoption performance_profile<br>niccli --dev {device_num} nvm --getoption performance_profile<br>niccli -dev {device_num} nvm -getoption support_rdma -scope 0<br>niccli -dev {device_num} getqos<br>niccli --dev {device_num} nvm --getoption support_rdma --scope 0<br>niccli --dev {device_num} qos --ets --show<br>niccli --dev {device_num} show --all<br>niccli --dev {device_num} show --health<br>niccli --dev {device_num} show --certificate<br>niccli --dev {device_num} show --pkg_ver<br>niccli --dev {device_num} qos --egress --cosq --show<br>niccli --dev {device_num} qos --ingress --cosq --show<br>niccli --dev {device_num} qos --rx_rate_limit --show<br>niccli --dev {device_num} qos --listmap --pri2cos<br>niccli --dev {device_num} timesync --ptp --show<br>niccli --dev {device_num} timesync --tsio --show<br>niccli --dev {device_num} tunnel --cfg --rss --show<br>niccli --dev {device_num} tunnel --cfg --vxlan --type ipv4 --show<br>niccli --dev {device_num} resmgmt --all --profile --show<br>niccli --dev {device_num} qos --dscp2prio<br>niccli --dev {device_num} qos --tx_ep_rate_limit --port 0 --show<br>niccli --dev {device_num} show --device_info<br>niccli --dev {device_num} show --device_pci_ids<br>niccli --dev {device_num} show<br>niccli --dev {device_num} timesync --synce --show<br>niccli verify<br>niccli --version<br>nicctl show card<br>nicctl --version<br>nicctl show card flash partition --json<br>nicctl show card interrupts --json<br>nicctl show card logs --non-persistent<br>nicctl show card logs --boot-fault<br>nicctl show card logs --persistent<br>nicctl show card profile --json<br>nicctl show card time --json<br>nicctl show card statistics packet-buffer summary --json<br>nicctl show lif statistics --json<br>nicctl show lif internal queue-to-ud-pinning<br>nicctl show pipeline internal anomalies<br>nicctl show pipeline internal rsq-ring<br>nicctl show pipeline internal statistics memory<br>nicctl show port fsm<br>nicctl show port transceiver --json<br>nicctl show port statistics --json<br>nicctl show port internal mac<br>nicctl show qos headroom --json<br>nicctl show rdma queue --json<br>nicctl show rdma queue-pair --detail --json<br>nicctl show version firmware<br>nicctl show dcqcn<br>nicctl show environment<br>nicctl show lif<br>nicctl show pcie ats<br>nicctl show port<br>nicctl show qos<br>nicctl show rdma statistics<br>nicctl show version host-software<br>nicctl show dcqcn --card {card_id} --json<br>nicctl show card hardware-config --card {card_id} | **Analyzer Args:**<br>- `expected_values`: Optional[Dict[str, Dict[str, Any]]] — Per-command expected checks keyed by canonical key (see command_to_canonical_key).<br>- `performance_profile_expected`: str — Expected Broadcom performance_profile value (case-insensitive). Default RoCE.<br>- `support_rdma_disabled_values`: List[str] — Values that indicate RDMA is not supported (case-insensitive).<br>- `pcie_relaxed_ordering_expected`: str — Expected Broadcom pcie_relaxed_ordering value (e.g. 'Relaxed ordering = enabled'); checked case-insensitively. Defaul...<br>- `expected_qos_prio_map`: Optional[Dict[Any, Any]] — Expected priority-to-TC map (e.g. {0: 0, 1: 1}; keys may be int or str in config). Checked per device when set.<br>- `expected_qos_pfc_enabled`: Optional[int] — Expected PFC enabled value (0/1 or bitmask). Checked per device when set.<br>- `expected_qos_tsa_map`: Optional[Dict[Any, Any]] — Expected TSA map for ETS (e.g. {0: 'ets', 1: 'strict'}; keys may be int or str in config). Checked per device when set.<br>- `expected_qos_tc_bandwidth`: Optional[List[int]] — Expected TC bandwidth percentages. Checked per device when set.<br>- `require_qos_consistent_across_adapters`: bool — When True and no expected_qos_\* are set, require all adapters to have the same prio_map, pfc_enabled, and tsa_map.<br>- `nicctl_log_error_regex`: Optional[List[Dict[str, Any]]] — Optional list of error patterns for nicctl show card logs. | **Collection Args:**<br>- `html_view`: bool — When true, include logged command artifacts in command_artifacts.html using human-readable output. Arista collectors...<br>- `commands`: Optional[List[str]] — Optional list of niccli/nicctl/bcmcli commands to run. When None, default command set is used.<br>- `use_sudo_niccli`: bool — If True, run niccli commands with sudo when required.<br>- `use_sudo_nicctl`: bool — If True, run nicctl commands with sudo when required.<br>- `use_sudo_bcmcli`: bool — If True, run bcmcli commands with sudo when required.<br>- `broadcom_cli_override`: Optional[str] — Force 'niccli' or 'bcmcli' instead of auto-detecting which Broadcom CLI is present. | [NicDataModel](#NicDataModel-Model) | [NicCollector](#Collector-Class-NicCollector) | [NicAnalyzer](#Data-Analyzer-Class-NicAnalyzer) |
 | NvmePlugin | nvme smart-log {dev}<br>nvme error-log {dev} --log-entries=256<br>nvme id-ctrl {dev}<br>nvme id-ns {dev}{ns}<br>nvme fw-log {dev}<br>nvme self-test-log {dev}<br>nvme get-log {dev} --log-id=6 --log-len=512<br>nvme telemetry-log {dev} --output-file={dev}_{f_name}<br>nvme list -o json | - | - | [NvmeDataModel](#NvmeDataModel-Model) | [NvmeCollector](#Collector-Class-NvmeCollector) | - |
 | OsPlugin | sh -c '( lsb_release -ds &#124;&#124; (cat /etc/\*release &#124; grep PRETTY_NAME) &#124;&#124; uname -om ) 2>/dev/null &#124; head -n1'<br>cat /etc/\*release &#124; grep VERSION_ID<br>wmic os get Version /value<br>wmic os get Caption /Value | **Analyzer Args:**<br>- `exp_os`: Union[str, list] — Expected OS name/version string(s) to match (e.g. from lsb_release or /etc/os-release).<br>- `exact_match`: bool — If True, require exact match for exp_os; otherwise substring match. | - | [OsDataModel](#OsDataModel-Model) | [OsCollector](#Collector-Class-OsCollector) | [OsAnalyzer](#Data-Analyzer-Class-OsAnalyzer) |
 | PackagePlugin | dnf list --installed<br>dpkg-query -W<br>pacman -Q<br>cat /etc/\*release<br>wmic product get name,version | **Analyzer Args:**<br>- `exp_package_ver`: Dict[str, Optional[str]] — Map package name -> expected version (None = any version). Checked against installed packages.<br>- `regex_match`: bool — If True, match package versions with regex; otherwise exact or prefix match.<br>- `rocm_regex`: Optional[str] — Optional regex to identify ROCm package version (used when enable_rocm_regex is True).<br>- `enable_rocm_regex`: bool — If True, use rocm_regex (or default pattern) to extract ROCm version for checks. | - | [PackageDataModel](#PackageDataModel-Model) | [PackageCollector](#Collector-Class-PackageCollector) | [PackageAnalyzer](#Data-Analyzer-Class-PackageAnalyzer) |
@@ -484,6 +484,9 @@ Collect raw output from niccli (Broadcom) and nicctl (Pensando) commands.
 - **CMD_NICCLI_LIST**: `niccli --list`
 - **CMD_NICCLI_LIST_DEVICES**: `niccli --list_devices`
 - **CMD_NICCLI_LIST_DEVICES_LEGACY**: `niccli --listdev`
+- **CMD_NICCLI_DEVID**: `niccli devid`
+- **CMD_NICCLI_VERIFY**: `niccli verify`
+- **CMD_NICCLI_GLOBAL**: `['niccli devid']`
 - **CMD_NICCLI_DISCOVERY_LEGACY**: `['niccli --listdev', 'niccli --list']`
 - **CMD_NICCLI_DISCOVERY_NEW**: `['niccli --list_devices', 'niccli --list']`
 - **CMD_NICCLI_DISCOVERY**: `['niccli --listdev', 'niccli --list']`
@@ -502,11 +505,61 @@ Collect raw output from niccli (Broadcom) and nicctl (Pensando) commands.
 - **CMD_NICCLI_PERFORMANCE_PROFILE_TEMPLATE_NEW**: `niccli --dev {device_num} nvm --getoption performance_profile`
 - **CMD_NICCLI_PCIE_RELAXED_ORDERING_TEMPLATE_NEW**: `niccli --dev {device_num} nvm --getoption pcie_relaxed_ordering`
 - **CMD_NICCLI_QOS_TEMPLATE_NEW**: `niccli --dev {device_num} qos --ets --show`
+- **CMD_NICCLI_SHOW_TEMPLATE_NEW**: `niccli --dev {device_num} show`
+- **CMD_NICCLI_SHOW_ALL_TEMPLATE_NEW**: `niccli --dev {device_num} show --all`
+- **CMD_NICCLI_SHOW_HEALTH_TEMPLATE_NEW**: `niccli --dev {device_num} show --health`
+- **CMD_NICCLI_SHOW_DEVICE_INFO_TEMPLATE_NEW**: `niccli --dev {device_num} show --device_info`
+- **CMD_NICCLI_SHOW_DEVICE_PCI_IDS_TEMPLATE_NEW**: `niccli --dev {device_num} show --device_pci_ids`
+- **CMD_NICCLI_SHOW_CERTIFICATE_TEMPLATE_NEW**: `niccli --dev {device_num} show --certificate`
+- **CMD_NICCLI_SHOW_PKG_VER_TEMPLATE_NEW**: `niccli --dev {device_num} show --pkg_ver`
+- **CMD_NICCLI_LINK_STATUS_TEMPLATE_NEW**: `niccli --dev {device_num} link --status`
+- **CMD_NICCLI_LINK_COUNTERS_TEMPLATE_NEW**: `niccli --dev {device_num} link --counters --show`
+- **CMD_NICCLI_LINKDIAG_LOOPBACK_SHOW_TEMPLATE_NEW**: `niccli --dev {device_num} linkdiag --loopback --show`
+- **CMD_NICCLI_LINKDIAG_DSCDUMP_TEMPLATE_NEW**: `niccli --dev {device_num} linkdiag --dscdump --lane 0`
+- **CMD_NICCLI_LINKDIAG_TXFIR_SHOW_TEMPLATE_NEW**: `niccli --dev {device_num} linkdiag --txfir --show --modulation_type NRZ --lane 0`
+- **CMD_NICCLI_QOS_EGRESS_COSQ_TEMPLATE_NEW**: `niccli --dev {device_num} qos --egress --cosq --show`
+- **CMD_NICCLI_QOS_INGRESS_COSQ_TEMPLATE_NEW**: `niccli --dev {device_num} qos --ingress --cosq --show`
+- **CMD_NICCLI_QOS_RX_RATE_LIMIT_TEMPLATE_NEW**: `niccli --dev {device_num} qos --rx_rate_limit --show`
+- **CMD_NICCLI_QOS_TX_EP_RATE_LIMIT_TEMPLATE_NEW**: `niccli --dev {device_num} qos --tx_ep_rate_limit --port 0 --show`
+- **CMD_NICCLI_QOS_DSCP2PRIO_TEMPLATE_NEW**: `niccli --dev {device_num} qos --dscp2prio`
+- **CMD_NICCLI_QOS_LISTMAP_TEMPLATE_NEW**: `niccli --dev {device_num} qos --listmap --pri2cos`
+- **CMD_NICCLI_NVM_LIST_TEMPLATE_NEW**: `niccli --dev {device_num} nvm --list`
+- **CMD_NICCLI_NVM_LISTOPTIONS_TEMPLATE_NEW**: `niccli --dev {device_num} nvm --listoptions`
+- **CMD_NICCLI_NVM_VIEW_TEMPLATE_NEW**: `niccli --dev {device_num} nvm --view`
+- **CMD_NICCLI_NVM_VERIFY_TEMPLATE_NEW**: `niccli --dev {device_num} nvm --verify`
+- **CMD_NICCLI_FW_LIVEPATCH_SHOW_TEMPLATE_NEW**: `niccli --dev {device_num} fw --livepatch --show`
+- **CMD_NICCLI_MSIX_SHOW_TEMPLATE_NEW**: `niccli --dev {device_num} msix --max_vectors --show --pf 0`
+- **CMD_NICCLI_TIMESYNC_PTP_TEMPLATE_NEW**: `niccli --dev {device_num} timesync --ptp --show`
+- **CMD_NICCLI_TIMESYNC_SYNCE_TEMPLATE_NEW**: `niccli --dev {device_num} timesync --synce --show`
+- **CMD_NICCLI_TIMESYNC_TSIO_TEMPLATE_NEW**: `niccli --dev {device_num} timesync --tsio --show`
+- **CMD_NICCLI_TUNNEL_RSS_TEMPLATE_NEW**: `niccli --dev {device_num} tunnel --cfg --rss --show`
+- **CMD_NICCLI_TUNNEL_VXLAN_IPV4_TEMPLATE_NEW**: `niccli --dev {device_num} tunnel --cfg --vxlan --type ipv4 --show`
+- **CMD_NICCLI_COUNTERS_PCIE_TEMPLATE_NEW**: `niccli --dev {device_num} counters --pcie`
+- **CMD_NICCLI_RESMGMT_PROFILE_TEMPLATE_NEW**: `niccli --dev {device_num} resmgmt --all --profile --show`
+- **CMD_NICCLI_CABLE_MODULE_INFO_TEMPLATE_NEW**: `niccli --dev {device_num} cable --module_info --show`
 - **CMD_NICCLI_PER_DEVICE_NEW**: `[
   niccli --dev {device_num} nvm --getoption support_rdma --scope 0,
   niccli --dev {device_num} nvm --getoption performance_profile,
   niccli --dev {device_num} nvm --getoption pcie_relaxed_ordering,
-  niccli --dev {device_num} qos --ets --show
+  niccli --dev {device_num} qos --ets --show,
+  niccli --dev {device_num} show --all,
+  niccli --dev {device_num} show --health,
+  niccli --dev {device_num} show --certificate,
+  niccli --dev {device_num} show --pkg_ver,
+  niccli --dev {device_num} link --status,
+  niccli --dev {device_num} linkdiag --loopback --show,
+  niccli --dev {device_num} linkdiag --txfir --show --modulation_type NRZ --lane 0,
+  niccli --dev {device_num} qos --egress --cosq --show,
+  niccli --dev {device_num} qos --ingress --cosq --show,
+  niccli --dev {device_num} qos --rx_rate_limit --show,
+  niccli --dev {device_num} qos --listmap --pri2cos,
+  niccli --dev {device_num} msix --max_vectors --show --pf 0,
+  niccli --dev {device_num} timesync --ptp --show,
+  niccli --dev {device_num} timesync --tsio --show,
+  niccli --dev {device_num} tunnel --cfg --rss --show,
+  niccli --dev {device_num} tunnel --cfg --vxlan --type ipv4 --show,
+  niccli --dev {device_num} counters --pcie,
+  niccli --dev {device_num} resmgmt --all --profile --show
 ]`
 - **CMD_NICCLI_SUPPORT_RDMA_TEMPLATE**: `niccli -dev {device_num} nvm -getoption support_rdma -scope 0`
 - **CMD_NICCLI_PERFORMANCE_PROFILE_TEMPLATE**: `niccli -dev {device_num} nvm -getoption performance_profile`
@@ -554,6 +607,86 @@ Collect raw output from niccli (Broadcom) and nicctl (Pensando) commands.
   nicctl show rdma statistics,
   nicctl show version host-software
 ]`
+- **CMD_BCMCLI_VERSION**: `bcmcli_show version`
+- **CMD_BCMCLI_LIST**: `bcmcli_show device_list`
+- **CMD_BCMCLI_GLOBAL**: `['bcmcli_show version', 'bcmcli_show device_list']`
+- **CMD_BCMCLI_SUPPORT_RDMA_TEMPLATE**: `bcmcli_config query support_rdma -d {device_id}`
+- **CMD_BCMCLI_PERFORMANCE_PROFILE_TEMPLATE**: `bcmcli_config query performance_profile -d {device_id}`
+- **CMD_BCMCLI_PCIE_RELAXED_ORDERING_TEMPLATE**: `bcmcli_config query pcie_relaxed_ordering -d {device_id}`
+- **CMD_BCMCLI_AN_PROTOCOL_TEMPLATE**: `bcmcli_config query AN_PROTOCOL -d {device_id}`
+- **CMD_BCMCLI_NVM_SHOW_CONFS_TEMPLATE**: `bcmcli_config show_confs -d {device_id}`
+- **CMD_BCMCLI_NVM_SHOW_TEMPLATE**: `bcmcli_nvm show -d {device_id}`
+- **CMD_BCMCLI_QOS_TEMPLATE**: `bcmcli_qos show qos -d {device_id}`
+- **CMD_BCMCLI_QOS_HW_MAPS_TEMPLATE**: `bcmcli_qos show hw-maps -d {device_id}`
+- **CMD_BCMCLI_QOS_RX_PORT_RATELIMIT_TEMPLATE**: `bcmcli_qos show rx-port-ratelimit -d {device_id}`
+- **CMD_BCMCLI_QOS_TX_EP_RATELIMIT_TEMPLATE**: `bcmcli_qos show tx-ep-ratelimit --port 0 -d {device_id}`
+- **CMD_BCMCLI_QOS_INGRESS_COSQ_TEMPLATE**: `bcmcli_qos show ingress --cosq -d {device_id}`
+- **CMD_BCMCLI_QOS_EGRESS_COSQ_TEMPLATE**: `bcmcli_qos show egress --cosq -d {device_id}`
+- **CMD_BCMCLI_HEALTH_TEMPLATE**: `bcmcli_show health -d {device_id}`
+- **CMD_BCMCLI_STATUS_TEMPLATE**: `bcmcli_show status -d {device_id}`
+- **CMD_BCMCLI_TEMPERATURE_TEMPLATE**: `bcmcli_show temperature -d {device_id}`
+- **CMD_BCMCLI_PCI_TEMPLATE**: `bcmcli_show pci -d {device_id}`
+- **CMD_BCMCLI_PHY_TEMPLATE**: `bcmcli_show phy -d {device_id}`
+- **CMD_BCMCLI_RESOURCE_COUNTS_TEMPLATE**: `bcmcli_show resource_counts -d {device_id}`
+- **CMD_BCMCLI_LINK_STATUS_TEMPLATE**: `bcmcli_link show -d {device_id}`
+- **CMD_BCMCLI_TX_COUNTERS_TEMPLATE**: `bcmcli_hwdbg dump_tx_counters -d {device_id}`
+- **CMD_BCMCLI_RX_COUNTERS_TEMPLATE**: `bcmcli_hwdbg dump_rx_counters -d {device_id}`
+- **CMD_BCMCLI_PCIE_COUNTERS_TEMPLATE**: `bcmcli_debug pcie counters -d {device_id}`
+- **CMD_BCMCLI_VERIFY_TEMPLATE**: `bcmcli_debug verify -d {device_id}`
+- **CMD_BCMCLI_LOOPBACK_SHOW_TEMPLATE**: `bcmcli_debug loopback -d {device_id}`
+- **CMD_BCMCLI_DSCDUMP_TEMPLATE**: `bcmcli_debug dscdump --lane 0 -d {device_id}`
+- **CMD_BCMCLI_SERDES_TX_GET_TEMPLATE**: `bcmcli_debug serdes_tx --get --modtype NRZ --lane 0 -d {device_id}`
+- **CMD_BCMCLI_FW_VERSION_TEMPLATE**: `bcmcli_fwmanager show fwpackage -d {device_id}`
+- **CMD_BCMCLI_FW_CERTIFICATE_TEMPLATE**: `bcmcli_fwmanager show certificate -d {device_id}`
+- **CMD_BCMCLI_LIVEPATCH_SHOW_TEMPLATE**: `bcmcli_livepatch show -d {device_id}`
+- **CMD_BCMCLI_TUNNEL_RSS_TEMPLATE**: `bcmcli_tunnel show rss -d {device_id}`
+- **CMD_BCMCLI_TUNNEL_VXLAN_IPV4_TEMPLATE**: `bcmcli_tunnel show vxlan --type ipv4 -d {device_id}`
+- **CMD_BCMCLI_TUNNEL_VXLAN_IPV6_TEMPLATE**: `bcmcli_tunnel show vxlan --type ipv6 -d {device_id}`
+- **CMD_BCMCLI_TUNNEL_VXLAN_TEMPLATE**: `bcmcli_tunnel show vxlan --type ipv4 -d {device_id}`
+- **CMD_BCMCLI_TIMESYNC_PTP_TEMPLATE**: `bcmcli_timesync show ptp -d {device_id}`
+- **CMD_BCMCLI_TIMESYNC_SYNCE_TEMPLATE**: `bcmcli_timesync show synce -d {device_id}`
+- **CMD_BCMCLI_TIMESYNC_TSIO_TEMPLATE**: `bcmcli_timesync show tsio -d {device_id}`
+- **CMD_BCMCLI_TIMESYNC_DLL_TEMPLATE**: `bcmcli_timesync show dll -d {device_id}`
+- **CMD_BCMCLI_TIMESYNC_DUTY_CYCLE_TEMPLATE**: `bcmcli_timesync show duty-cycle -d {device_id}`
+- **CMD_BCMCLI_TIMESYNC_TS_PIN_TEMPLATE**: `bcmcli_timesync show ts-pin -d {device_id}`
+- **CMD_BCMCLI_MSIX_TEMPLATE**: `bcmcli_config msixmv query --pf all -d {device_id}`
+- **CMD_BCMCLI_SNAPDUMP_TEMPLATE**: `bcmcli_dump snap_dump -d {device_id}`
+- **CMD_BCMCLI_PER_DEVICE**: `[
+  bcmcli_config query AN_PROTOCOL -d {device_id},
+  bcmcli_config show_confs -d {device_id},
+  bcmcli_nvm show -d {device_id},
+  bcmcli_qos show qos -d {device_id},
+  bcmcli_qos show hw-maps -d {device_id},
+  bcmcli_qos show rx-port-ratelimit -d {device_id},
+  bcmcli_qos show tx-ep-ratelimit --port 0 -d {device_id},
+  bcmcli_qos show ingress --cosq -d {device_id},
+  bcmcli_qos show egress --cosq -d {device_id},
+  bcmcli_show health -d {device_id},
+  bcmcli_show status -d {device_id},
+  bcmcli_show temperature -d {device_id},
+  bcmcli_show pci -d {device_id},
+  bcmcli_show phy -d {device_id},
+  bcmcli_show resource_counts -d {device_id},
+  bcmcli_link show -d {device_id},
+  bcmcli_hwdbg dump_tx_counters -d {device_id},
+  bcmcli_hwdbg dump_rx_counters -d {device_id},
+  bcmcli_debug pcie counters -d {device_id},
+  bcmcli_debug verify -d {device_id},
+  bcmcli_debug loopback -d {device_id},
+  bcmcli_debug dscdump --lane 0 -d {device_id},
+  bcmcli_debug serdes_tx --get --modtype NRZ --lane 0 -d {device_id},
+  bcmcli_fwmanager show fwpackage -d {device_id},
+  bcmcli_fwmanager show certificate -d {device_id},
+  bcmcli_livepatch show -d {device_id},
+  bcmcli_tunnel show rss -d {device_id},
+  bcmcli_tunnel show vxlan --type ipv4 -d {device_id},
+  bcmcli_tunnel show vxlan --type ipv6 -d {device_id},
+  bcmcli_timesync show dll -d {device_id},
+  bcmcli_timesync show duty-cycle -d {device_id},
+  bcmcli_timesync show ts-pin -d {device_id},
+  bcmcli_config msixmv query --pf all -d {device_id},
+  bcmcli_dump snap_dump -d {device_id}
+]`
 
 ### Provides Data
 
@@ -561,9 +694,65 @@ NicDataModel
 
 ### Commands
 
+- bcmcli_config query AN_PROTOCOL -d {device_id}
+- bcmcli_debug dscdump --lane 0 -d {device_id}
+- bcmcli_fwmanager show certificate -d {device_id}
+- bcmcli_fwmanager show fwpackage -d {device_id}
+- bcmcli_show version
+- bcmcli_show device_list
+- bcmcli_show health -d {device_id}
+- bcmcli_link show -d {device_id}
+- bcmcli_livepatch show -d {device_id}
+- bcmcli_debug loopback -d {device_id}
+- bcmcli_config msixmv query --pf all -d {device_id}
+- bcmcli_config show_confs -d {device_id}
+- bcmcli_nvm show -d {device_id}
+- bcmcli_debug pcie counters -d {device_id}
+- bcmcli_config query pcie_relaxed_ordering -d {device_id}
+- bcmcli_show pci -d {device_id}
+- bcmcli_config query performance_profile -d {device_id}
+- bcmcli_qos show qos -d {device_id}
+- bcmcli_qos show hw-maps -d {device_id}
+- bcmcli_qos show rx-port-ratelimit -d {device_id}
+- bcmcli_qos show tx-ep-ratelimit --port 0 -d {device_id}
+- bcmcli_qos show ingress --cosq -d {device_id}
+- bcmcli_qos show egress --cosq -d {device_id}
+- bcmcli_show status -d {device_id}
+- bcmcli_show temperature -d {device_id}
+- bcmcli_show phy -d {device_id}
+- bcmcli_show resource_counts -d {device_id}
+- bcmcli_hwdbg dump_tx_counters -d {device_id}
+- bcmcli_hwdbg dump_rx_counters -d {device_id}
+- bcmcli_debug verify -d {device_id}
+- bcmcli_debug serdes_tx --get --modtype NRZ --lane 0 -d {device_id}
+- bcmcli_tunnel show rss -d {device_id}
+- bcmcli_tunnel show vxlan --type ipv4 -d {device_id}
+- bcmcli_tunnel show vxlan --type ipv6 -d {device_id}
+- bcmcli_timesync show dll -d {device_id}
+- bcmcli_timesync show duty-cycle -d {device_id}
+- bcmcli_timesync show ts-pin -d {device_id}
+- bcmcli_dump snap_dump -d {device_id}
+- bcmcli_config query support_rdma -d {device_id}
+- bcmcli_timesync show ptp -d {device_id}
+- bcmcli_timesync show synce -d {device_id}
+- bcmcli_timesync show tsio -d {device_id}
+- niccli --dev {device_num} cable --module_info --show
+- niccli --dev {device_num} counters --pcie
+- niccli devid
 - niccli --listdev
 - niccli --list
 - niccli --list_devices
+- niccli --dev {device_num} fw --livepatch --show
+- niccli --dev {device_num} linkdiag --dscdump --lane 0
+- niccli --dev {device_num} linkdiag --loopback --show
+- niccli --dev {device_num} linkdiag --txfir --show --modulation_type NRZ --lane 0
+- niccli --dev {device_num} link --counters --show
+- niccli --dev {device_num} link --status
+- niccli --dev {device_num} msix --max_vectors --show --pf 0
+- niccli --dev {device_num} nvm --listoptions
+- niccli --dev {device_num} nvm --list
+- niccli --dev {device_num} nvm --verify
+- niccli --dev {device_num} nvm --view
 - niccli -dev {device_num} nvm -getoption pcie_relaxed_ordering
 - niccli --dev {device_num} nvm --getoption pcie_relaxed_ordering
 - niccli -dev {device_num} nvm -getoption performance_profile
@@ -572,6 +761,26 @@ NicDataModel
 - niccli -dev {device_num} getqos
 - niccli --dev {device_num} nvm --getoption support_rdma --scope 0
 - niccli --dev {device_num} qos --ets --show
+- niccli --dev {device_num} show --all
+- niccli --dev {device_num} show --health
+- niccli --dev {device_num} show --certificate
+- niccli --dev {device_num} show --pkg_ver
+- niccli --dev {device_num} qos --egress --cosq --show
+- niccli --dev {device_num} qos --ingress --cosq --show
+- niccli --dev {device_num} qos --rx_rate_limit --show
+- niccli --dev {device_num} qos --listmap --pri2cos
+- niccli --dev {device_num} timesync --ptp --show
+- niccli --dev {device_num} timesync --tsio --show
+- niccli --dev {device_num} tunnel --cfg --rss --show
+- niccli --dev {device_num} tunnel --cfg --vxlan --type ipv4 --show
+- niccli --dev {device_num} resmgmt --all --profile --show
+- niccli --dev {device_num} qos --dscp2prio
+- niccli --dev {device_num} qos --tx_ep_rate_limit --port 0 --show
+- niccli --dev {device_num} show --device_info
+- niccli --dev {device_num} show --device_pci_ids
+- niccli --dev {device_num} show
+- niccli --dev {device_num} timesync --synce --show
+- niccli verify
 - niccli --version
 - nicctl show card
 - nicctl --version
@@ -1574,6 +1783,7 @@ Collected output of niccli (Broadcom) and nicctl (Pensando) commands.
 - **pensando_nic_rdma_statistics**: `List[nodescraper.plugins.inband.nic.nic_data.PensandoNicRdmaStatistics]`
 - **pensando_nic_version_host_software**: `Optional[nodescraper.plugins.inband.nic.nic_data.PensandoNicVersionHostSoftware]`
 - **pensando_nic_version_firmware**: `List[nodescraper.plugins.inband.nic.nic_data.PensandoNicVersionFirmware]`
+- **broadcom_cli_type**: `Optional[str]`
 - **nicctl_card_logs**: `Optional[Dict[str, str]]`
 
 ## NvmeDataModel Model
