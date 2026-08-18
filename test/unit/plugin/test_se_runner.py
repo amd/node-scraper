@@ -61,6 +61,7 @@ from nodescraper.plugins.serviceability import (
     format_serviceability_solution_lines,
     normalize_se_timestamp,
     run_service_hub,
+    serviceability_block_from_entry_point_hub,
     serviceability_block_from_service_result,
 )
 from nodescraper.plugins.serviceability.se_models import ServiceabilitySolution
@@ -84,16 +85,114 @@ def test_normalize_se_timestamp_preserves_format_value():
     assert normalize_se_timestamp(sample) == sample
 
 
-def test_analyzer_args_require_hub_config():
-    with pytest.raises(ValidationError):
-        ServiceabilityAnalyzerArgs()
-    with pytest.raises(ValidationError, match="hub_python_module"):
-        ServiceabilityAnalyzerArgs(afid_sag_path=str(AFID_SAG))
-    args = ServiceabilityAnalyzerArgs(
+def test_analyzer_args_hub_config_fields():
+    args = ServiceabilityAnalyzerArgs()
+    assert args.hub_python_module is None
+    assert args.hub_entry_point is None
+    assert args.uses_entry_point_hub() is True
+    args_mod = ServiceabilityAnalyzerArgs(
         hub_python_module="dummy.test.module",
         afid_sag_path=str(AFID_SAG),
     )
-    assert args.hub_python_module == "dummy.test.module"
+    assert args_mod.hub_python_module == "dummy.test.module"
+    assert args_mod.uses_module_hub() is True
+    assert args_mod.uses_entry_point_hub() is False
+    args_ep = ServiceabilityAnalyzerArgs(hub_entry_point="hub")
+    assert args_ep.hub_entry_point == "hub"
+    assert args_ep.resolved_hub_entry_point() == "hub"
+    with pytest.raises(ValueError, match="hub_entry_point is required"):
+        ServiceabilityAnalyzerArgs().resolved_hub_entry_point()
+    assert args_ep.uses_entry_point_hub() is True
+
+
+def test_afid_events_to_entry_point_payload_matches_hub_contract():
+    from nodescraper.plugins.serviceability.se_runner import (
+        afid_events_to_entry_point_payload,
+    )
+
+    payload = afid_events_to_entry_point_payload(
+        [
+            AfidEvent(afid=DUMMY_AFID_A, serviceable_unit=DUMMY_UNIT_A, time=DUMMY_TIMESTAMP),
+            AfidEvent(afid=DUMMY_AFID_A, serviceable_unit=DUMMY_UNIT_A, time=DUMMY_TIMESTAMP),
+            AfidEvent(afid=DUMMY_AFID_B, serviceable_unit=DUMMY_UNIT_B, time=DUMMY_TIMESTAMP),
+        ]
+    )
+    assert payload == [
+        {
+            "afid": DUMMY_AFID_A,
+            "location": DUMMY_UNIT_A,
+            "count": 2,
+        },
+        {
+            "afid": DUMMY_AFID_B,
+            "location": DUMMY_UNIT_B,
+            "count": 1,
+        },
+    ]
+
+
+def test_entry_point_analyze_error_accepts_slim_hub_response():
+    from nodescraper.plugins.serviceability.se_runner import _entry_point_analyze_error
+
+    assert _entry_point_analyze_error({"results": []}) is None
+    assert (
+        _entry_point_analyze_error(
+            {
+                "engine": "ExampleHub",
+                "engine_version": "0.1.0",
+                "results": [{"afid_num": 100, "location": "GPU-1"}],
+                "tier_grouped": {},
+            }
+        )
+        is None
+    )
+    assert _entry_point_analyze_error({"status": "ok", "results": []}) is None
+    assert (
+        _entry_point_analyze_error({"status": "error", "error": {"message": "bad input"}})
+        == "bad input"
+    )
+
+
+def test_resolve_hub_events_payload_prefers_rf_events():
+    from nodescraper.plugins.serviceability.se_runner import (
+        resolve_hub_events_payload,
+    )
+
+    rf_events = [{"Oem": {"AMD": {"AMDFieldIdentifiers": []}}}]
+    payload = resolve_hub_events_payload(
+        afid_events=EXAMPLE_EVENTS,
+        rf_events=rf_events,
+        prefer_rf_events=True,
+    )
+    assert payload == rf_events
+
+
+def test_resolve_hub_events_payload_uses_afid_events_without_rf():
+    from nodescraper.plugins.serviceability.se_runner import (
+        resolve_hub_events_payload,
+    )
+
+    payload = resolve_hub_events_payload(
+        afid_events=EXAMPLE_EVENTS[:1],
+        rf_events=None,
+        prefer_rf_events=True,
+    )
+    assert payload[0]["afid"] == EXAMPLE_EVENTS[0].afid
+    assert payload[0]["location"] == EXAMPLE_EVENTS[0].serviceable_unit
+
+
+def test_resolve_hub_events_payload_honors_prefer_rf_events_false():
+    from nodescraper.plugins.serviceability.se_runner import (
+        resolve_hub_events_payload,
+    )
+
+    payload = resolve_hub_events_payload(
+        afid_events=EXAMPLE_EVENTS[:1],
+        rf_events=[{"Id": "event-1"}],
+        prefer_rf_events=False,
+    )
+    assert payload[0]["afid"] == EXAMPLE_EVENTS[0].afid
+    assert payload[0]["location"] == EXAMPLE_EVENTS[0].serviceable_unit
 
 
 def test_resolved_hub_options_explicit_fields_override_options_bag():
@@ -140,7 +239,77 @@ def test_format_serviceability_solution_lines():
     )
     assert f"AFID {DUMMY_AFID_A}" in lines[3]
     assert DUMMY_DESIGNATION_A in lines[3]
-    assert "service action 99 (RMA)" in lines[3]
+    assert 'service action 99: "RMA"' in lines[3]
+
+
+def test_serviceability_block_from_entry_point_hub_uses_sag_labels(tmp_path):
+    sag = tmp_path / "sag.json"
+    sag.write_text(
+        json.dumps(
+            {
+                "afid": {
+                    "11110": {
+                        "error_category": "ReadingAboveUpperFatalThreshold",
+                        "error_type": "DegreesC",
+                        "service_action_num": 111,
+                        "service_action": "Update FW",
+                    }
+                },
+                "service_actions": {
+                    "111": {
+                        "title": "Update FW",
+                        "category": "Reflash",
+                        "severity": 20,
+                        "steps": [
+                            {
+                                "step_num": 0,
+                                "description": "Check higher priority AFIDs first.",
+                            }
+                        ],
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    hub_result = {
+        "schema_version": "1.0",
+        "status": "ok",
+        "error": None,
+        "engine": "ExampleHub",
+        "engine_version": "0.1.0",
+        "results": [
+            {
+                "afid_num": 11110,
+                "location": "Instinct_EAM_0",
+                "service_action_num": 111,
+                "tier_label": "Secondary",
+                "tier": 2,
+                "fru": "EAM_AMC-COMPUTE",
+                "fru_rank": 1,
+                "priority": 20,
+                "sa_severity": 20,
+                "count": 1,
+            }
+        ],
+    }
+    block = serviceability_block_from_entry_point_hub(
+        EXAMPLE_EVENTS[:1],
+        hub_result,
+        afid_sag_path=str(sag),
+        rf_event_count=1,
+    )
+    assert block.solution[0].service_action_title == "Update FW"
+    assert block.solution[0].service_action_tier == "Secondary"
+    assert block.solution[0].afid_summary == "ReadingAboveUpperFatalThreshold / DegreesC"
+    assert len(block.hub_triage_results) == 1
+    triage = block.hub_triage_results[0]
+    assert triage.service_action_steps
+    assert triage.service_action_category == "Reflash"
+    lines = format_serviceability_solution_lines(block)
+    assert "Hub triage results:" in lines
+    assert "priority=" in "\n".join(lines)
+    assert "step 0:" in "\n".join(lines)
 
 
 def test_serviceability_block_from_service_result():
@@ -180,7 +349,10 @@ def test_serviceability_block_from_service_result():
     assert block.solution[0].afid == DUMMY_AFID_A
     assert block.solution[0].service_action_num == DUMMY_SERVICE_ACTION_NUM
     assert block.solution[0].service_action_title == "Dummy service action"
-    assert set(block.solution[0].serviceable_unit) == {DUMMY_DESIGNATION_A, DUMMY_DESIGNATION_B}
+    assert set(block.solution[0].serviceable_unit) == {
+        DUMMY_DESIGNATION_A,
+        DUMMY_DESIGNATION_B,
+    }
     assert block.hub_version == DUMMY_HUB_VERSION
     assert block.afid_sag_file_version == (
         f"PID {DUMMY_SAG_PID}, revision {DUMMY_SAG_REVISION}, variant {DUMMY_SAG_VARIANT}"
@@ -231,8 +403,16 @@ def test_resolve_hub_class_finds_package_export():
 
 def test_run_service_hub_with_mock_module():
     rf_events = [
-        {"Afid": DUMMY_AFID_A, "serviceable_unit": DUMMY_UNIT_A, "Created": DUMMY_TIMESTAMP},
-        {"Afid": DUMMY_AFID_C, "serviceable_unit": DUMMY_UNIT_C, "Created": DUMMY_TIMESTAMP},
+        {
+            "Afid": DUMMY_AFID_A,
+            "serviceable_unit": DUMMY_UNIT_A,
+            "Created": DUMMY_TIMESTAMP,
+        },
+        {
+            "Afid": DUMMY_AFID_C,
+            "serviceable_unit": DUMMY_UNIT_C,
+            "Created": DUMMY_TIMESTAMP,
+        },
     ]
     block = run_service_hub(
         hub_python_module="mock_python_engine",
@@ -285,7 +465,11 @@ def test_run_service_hub_custom_analyze_method_and_path_kwarg():
 
 def test_run_service_hub_accepts_hub_options():
     rf_events = [
-        {"Afid": DUMMY_AFID_A, "serviceable_unit": DUMMY_UNIT_A, "Created": DUMMY_TIMESTAMP},
+        {
+            "Afid": DUMMY_AFID_A,
+            "serviceable_unit": DUMMY_UNIT_A,
+            "Created": DUMMY_TIMESTAMP,
+        },
     ]
     block = run_service_hub(
         hub_python_module="mock_python_engine",
@@ -302,7 +486,11 @@ def test_run_service_hub_forwards_full_hub_options_kwargs():
 
     clear_last_call()
     rf_events = [
-        {"Afid": DUMMY_AFID_A, "serviceable_unit": DUMMY_UNIT_A, "Created": DUMMY_TIMESTAMP},
+        {
+            "Afid": DUMMY_AFID_A,
+            "serviceable_unit": DUMMY_UNIT_A,
+            "Created": DUMMY_TIMESTAMP,
+        },
     ]
     run_service_hub(
         hub_python_module="instinct_shaped_engine",
@@ -330,7 +518,11 @@ def test_run_service_hub_collected_cper_overrides_hub_options_cper_data():
 
     clear_last_call()
     rf_events = [
-        {"Afid": DUMMY_AFID_A, "serviceable_unit": DUMMY_UNIT_A, "Created": DUMMY_TIMESTAMP},
+        {
+            "Afid": DUMMY_AFID_A,
+            "serviceable_unit": DUMMY_UNIT_A,
+            "Created": DUMMY_TIMESTAMP,
+        },
     ]
     run_service_hub(
         hub_python_module="instinct_shaped_engine",

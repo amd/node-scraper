@@ -25,17 +25,27 @@
 ###############################################################################
 from __future__ import annotations
 
-from nodescraper.plugins.serviceability.serviceability_hub_analyzer import (
-    ServiceabilityHubAnalyzer,
-)
+from pydantic import Field, field_validator
+
+from nodescraper.plugins.serviceability.analyzer_args import ServiceabilityAnalyzerArgs
 
 
-class MI3XXAnalyzer(ServiceabilityHubAnalyzer):
-    """Build AFID events from collected data and run the configured Python service hub."""
+class Mi4xxServiceabilityAnalyzerArgs(ServiceabilityAnalyzerArgs):
+    """Analysis args for Mi4xxServiceabilityPlugin."""
 
-    DOCUMENTATION_ANALYSIS_ITEMS: tuple[str, ...] = (
-        "Builds AFID events from collected Redfish event log members (and optional assembly metadata).",
-        "Optionally decodes CPER attachments via analysis_args.cper_decode_module before hub analysis.",
-        "Runs the configured Python service hub (hub_python_module) to produce service recommendations.",
-        "When analysis_args.skip_hub is true, only builds AFID events without running the hub.",
+    rf_event_log_uri: str = Field(
+        default="/redfish/v1/Systems/Instinct_Accelerators/LogServices/EventLog/Entries",
+        description="Redfish URI for the Instinct accelerator event log Entries collection.",
     )
+
+    @field_validator("rf_event_log_uri")
+    @classmethod
+    def _strip_rf_event_log_uri(cls, value: object) -> str:
+        text = str(value).strip()
+        if not text:
+            raise ValueError("rf_event_log_uri must be a non-empty Redfish URI")
+        return text
+
+    def resolved_rf_event_log_uri(self) -> str:
+        """Return the configured event log Entries URI."""
+        return str(self.rf_event_log_uri).strip()

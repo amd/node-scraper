@@ -76,6 +76,21 @@ class RedfishConnectionError(Exception):
         self.response = response
 
 
+def summarize_transport_error(exc: BaseException) -> str:
+    """Summarize a requests transport failure into a short user-facing message."""
+    cause = exc.__cause__
+    if isinstance(cause, ConnectionRefusedError):
+        return "connection refused (BMC unreachable or not listening on port)"
+    if isinstance(exc, (requests.exceptions.ConnectTimeout, requests.exceptions.ReadTimeout)):
+        return "request timed out"
+    msg = str(exc).lower()
+    if "connection refused" in msg:
+        return "connection refused (BMC unreachable or not listening on port)"
+    if "timed out" in msg:
+        return "request timed out"
+    return str(exc)
+
+
 class RedfishConnection:
     """Redfish REST client for GET requests."""
 
@@ -106,6 +121,8 @@ class RedfishConnection:
                 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
             self._session = requests.Session()
             self._session.verify = self.verify_ssl
+            if not self.verify_ssl:
+                self._session.trust_env = False
             self._session.headers["Content-Type"] = "application/json"
             self._session.headers["Accept"] = "application/json"
             if self.use_session_auth and self.password:
@@ -119,11 +136,16 @@ class RedfishConnection:
         assert self._session is not None
         sess_url = urljoin(self.base_url + "/", f"{self.api_root}/SessionService/Sessions")
         payload = {"UserName": self.username, "Password": self.password}
-        resp = self._session.post(
-            sess_url,
-            json=payload,
-            timeout=self.timeout,
-        )
+        try:
+            resp = self._session.request(
+                "POST",
+                sess_url,
+                json=payload,
+                timeout=self.timeout,
+                verify=self.verify_ssl,
+            )
+        except requests.exceptions.RequestException as exc:
+            raise RedfishConnectionError(summarize_transport_error(exc)) from exc
         if not resp.ok:
             raise RedfishConnectionError(
                 f"Session login failed: {resp.status_code} {resp.reason}", response=resp

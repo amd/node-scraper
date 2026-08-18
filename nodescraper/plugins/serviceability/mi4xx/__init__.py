@@ -23,19 +23,16 @@
 # SOFTWARE.
 #
 ###############################################################################
-from __future__ import annotations
+from .mi4xx_analyzer import MI4XXAnalyzer
+from .mi4xx_analyzer_args import Mi4xxServiceabilityAnalyzerArgs
+from .mi4xx_collector import MI4XXCollector
+from .mi4xx_collector_args import MI4XXCollectorArgs
+from .serviceability_plugin_mi4xx import Mi4xxServiceabilityPlugin
 
-from nodescraper.plugins.serviceability.serviceability_hub_analyzer import (
-    ServiceabilityHubAnalyzer,
-)
-
-
-class MI3XXAnalyzer(ServiceabilityHubAnalyzer):
-    """Build AFID events from collected data and run the configured Python service hub."""
-
-    DOCUMENTATION_ANALYSIS_ITEMS: tuple[str, ...] = (
-        "Builds AFID events from collected Redfish event log members (and optional assembly metadata).",
-        "Optionally decodes CPER attachments via analysis_args.cper_decode_module before hub analysis.",
-        "Runs the configured Python service hub (hub_python_module) to produce service recommendations.",
-        "When analysis_args.skip_hub is true, only builds AFID events without running the hub.",
-    )
+__all__ = [
+    "MI4XXAnalyzer",
+    "MI4XXCollector",
+    "MI4XXCollectorArgs",
+    "Mi4xxServiceabilityAnalyzerArgs",
+    "Mi4xxServiceabilityPlugin",
+]

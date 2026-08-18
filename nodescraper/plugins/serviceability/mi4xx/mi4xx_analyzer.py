@@ -30,12 +30,12 @@ from nodescraper.plugins.serviceability.serviceability_hub_analyzer import (
 )
 
 
-class MI3XXAnalyzer(ServiceabilityHubAnalyzer):
-    """Build AFID events from collected data and run the configured Python service hub."""
+class MI4XXAnalyzer(ServiceabilityHubAnalyzer):
+    """Build AFID events from collected data and run the configured entry-point hub."""
 
     DOCUMENTATION_ANALYSIS_ITEMS: tuple[str, ...] = (
         "Builds AFID events from collected Redfish event log members (and optional assembly metadata).",
-        "Optionally decodes CPER attachments via analysis_args.cper_decode_module before hub analysis.",
-        "Runs the configured Python service hub (hub_python_module) to produce service recommendations.",
+        "Runs the configured entry-point service hub (hub_entry_point in analysis_args) to produce service recommendations.",
         "When analysis_args.skip_hub is true, only builds AFID events without running the hub.",
+        "Supports offline analysis from a prior collection via --data with --collection False.",
     )

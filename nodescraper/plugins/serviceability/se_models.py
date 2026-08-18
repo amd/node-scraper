@@ -38,7 +38,7 @@ class AfidEvent(BaseModel):
         description="Unit label (e.g. gpu02); standardized per platform.",
     )
     time: str = Field(
-        description="First-occurrence timestamp (SE format, e.g. 2026-05-07 12:50:42.096-07:00).",
+        description="First-occurrence timestamp (hub wire format, e.g. 2026-05-07 12:50:42.096-07:00).",
     )
 
     @field_validator("serviceable_unit")
@@ -62,12 +62,42 @@ class ServiceabilitySolution(BaseModel):
     )
     service_action_title: Optional[str] = Field(
         default=None,
-        description=("Short service action label from the hub."),
+        description=("Short service action label from the hub or AFID_SAG.json."),
+    )
+    service_action_tier: Optional[str] = Field(
+        default=None,
+        description="Service action tier label from the hub (e.g. Secondary).",
+    )
+    afid_summary: Optional[str] = Field(
+        default=None,
+        description="Human-readable AFID fault summary from AFID_SAG.json when available.",
     )
 
 
+class HubTriageResult(BaseModel):
+    """One service hub triage row with SAG-enriched action details."""
+
+    afid: int
+    location: str
+    count: int = 1
+    service_action_num: int
+    tier: Optional[int] = None
+    tier_label: Optional[str] = None
+    fru: Optional[str] = None
+    fru_rank: Optional[int] = None
+    priority: Optional[int] = None
+    sa_severity: Optional[int] = None
+    hub_sort_priority: Optional[int] = None
+    multi_mask: Optional[int] = None
+    service_action_title: Optional[str] = None
+    service_action_category: Optional[str] = None
+    service_action_severity: Optional[int] = None
+    service_action_steps: List[str] = Field(default_factory=list)
+    afid_summary: Optional[str] = None
+
+
 class ServiceabilityBlock(BaseModel):
-    """ANC-style serviceability section: SE input, output, and optional reasoning."""
+    """Serviceability section with hub input, output, and optional reasoning."""
 
     afid_events: List[AfidEvent] = Field(
         default_factory=list,
@@ -99,4 +129,8 @@ class ServiceabilityBlock(BaseModel):
             "Brief hub summary derived from short_service_info (human-readable lines; "
             "per-unit dict payloads are collapsed, identical messages merged with unit lists)."
         ),
+    )
+    hub_triage_results: List[HubTriageResult] = Field(
+        default_factory=list,
+        description="Full service hub triage rows with SAG-enriched action details.",
     )

@@ -25,17 +25,29 @@
 ###############################################################################
 from __future__ import annotations
 
-from nodescraper.plugins.serviceability.serviceability_hub_analyzer import (
-    ServiceabilityHubAnalyzer,
-)
+from pathlib import Path
+from typing import Optional
+
+DEFAULT_AFID_SAG_PATH = "/opt/amd/afid/AFID_SAG.json"
 
 
-class MI3XXAnalyzer(ServiceabilityHubAnalyzer):
-    """Build AFID events from collected data and run the configured Python service hub."""
+def default_afid_sag_path() -> str:
+    """Return the default AFID_SAG.json path when analysis_args does not override it."""
+    return DEFAULT_AFID_SAG_PATH
 
-    DOCUMENTATION_ANALYSIS_ITEMS: tuple[str, ...] = (
-        "Builds AFID events from collected Redfish event log members (and optional assembly metadata).",
-        "Optionally decodes CPER attachments via analysis_args.cper_decode_module before hub analysis.",
-        "Runs the configured Python service hub (hub_python_module) to produce service recommendations.",
-        "When analysis_args.skip_hub is true, only builds AFID events without running the hub.",
-    )
+
+def resolve_configured_afid_sag_path(configured_path: Optional[str]) -> str:
+    """Resolve AFID SAG path from analysis_args or the built-in default."""
+    if configured_path is not None and str(configured_path).strip():
+        return str(configured_path).strip()
+    return default_afid_sag_path()
+
+
+def validate_afid_sag_path(path: str) -> str:
+    """Return path when the AFID SAG file exists, otherwise raise HubRunError."""
+    from .se_runner import HubRunError
+
+    sag_path = Path(path)
+    if not sag_path.is_file():
+        raise HubRunError(f"AFID SAG file not found: {path}")
+    return path
