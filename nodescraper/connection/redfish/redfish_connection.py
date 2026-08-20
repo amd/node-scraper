@@ -26,8 +26,9 @@
 from __future__ import annotations
 
 import json
-from typing import Any, ClassVar, Optional, Union
-from urllib.parse import urljoin
+import socket
+from typing import Any, Callable, ClassVar, Optional, TypeVar, Union
+from urllib.parse import urljoin, urlparse
 
 import requests
 import urllib3  # type: ignore[import-untyped]
@@ -39,6 +40,8 @@ from .redfish_constants import RF_MEMBERS, RF_MEMBERS_COUNT, RF_MEMBERS_NEXT_LIN
 from .redfish_path import RedfishPath
 
 DEFAULT_REDFISH_API_ROOT = "redfish/v1"
+
+_T = TypeVar("_T")
 
 
 class RedfishGetResult(BaseModel):
@@ -76,21 +79,6 @@ class RedfishConnectionError(Exception):
         self.response = response
 
 
-def summarize_transport_error(exc: BaseException) -> str:
-    """Summarize a requests transport failure into a short user-facing message."""
-    cause = exc.__cause__
-    if isinstance(cause, ConnectionRefusedError):
-        return "connection refused (BMC unreachable or not listening on port)"
-    if isinstance(exc, (requests.exceptions.ConnectTimeout, requests.exceptions.ReadTimeout)):
-        return "request timed out"
-    msg = str(exc).lower()
-    if "connection refused" in msg:
-        return "connection refused (BMC unreachable or not listening on port)"
-    if "timed out" in msg:
-        return "request timed out"
-    return str(exc)
-
-
 class RedfishConnection:
     """Redfish REST client for GET requests."""
 
@@ -115,6 +103,41 @@ class RedfishConnection:
         self._session_token: Optional[str] = None
         self._session_uri: Optional[str] = None  # For logout DELETE
 
+    def _host_label(self) -> str:
+        return urlparse(self.base_url).hostname or self.base_url
+
+    @staticmethod
+    def _is_name_resolution_error(exc: BaseException) -> bool:
+        current: Optional[BaseException] = exc
+        seen: set[int] = set()
+        while current is not None and id(current) not in seen:
+            if isinstance(current, socket.gaierror):
+                return True
+            if type(current).__name__ == "NameResolutionError":
+                return True
+            seen.add(id(current))
+            current = current.__cause__ or current.__context__
+        message = str(exc)
+        return "Failed to resolve" in message or "No address associated with hostname" in message
+
+    def _transport_error_message(self, exc: Exception) -> str:
+        host = self._host_label()
+        if isinstance(exc, socket.gaierror) or self._is_name_resolution_error(exc):
+            return f"Redfish hostname could not be resolved: {host}"
+        if isinstance(exc, requests.exceptions.Timeout):
+            return f"Redfish connection timed out: {host}"
+        if isinstance(exc, requests.exceptions.ConnectionError):
+            return f"Redfish connection failed: {host}"
+        return f"Redfish connection failed: {exc}"
+
+    def _execute_request(self, request_fn: Callable[[], _T]) -> _T:
+        try:
+            return request_fn()
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as exc:
+            raise RedfishConnectionError(self._transport_error_message(exc)) from exc
+        except socket.gaierror as exc:
+            raise RedfishConnectionError(self._transport_error_message(exc)) from exc
+
     def _ensure_session(self) -> requests.Session:
         if self._session is None:
             if not self.verify_ssl:
@@ -133,19 +156,17 @@ class RedfishConnection:
 
     def _login_session(self) -> None:
         """Create a Redfish session and set X-Auth-Token."""
-        assert self._session is not None
+        session = self._session
+        assert session is not None
         sess_url = urljoin(self.base_url + "/", f"{self.api_root}/SessionService/Sessions")
         payload = {"UserName": self.username, "Password": self.password}
-        try:
-            resp = self._session.request(
-                "POST",
+        resp = self._execute_request(
+            lambda: session.post(
                 sess_url,
                 json=payload,
                 timeout=self.timeout,
-                verify=self.verify_ssl,
             )
-        except requests.exceptions.RequestException as exc:
-            raise RedfishConnectionError(summarize_transport_error(exc)) from exc
+        )
         if not resp.ok:
             raise RedfishConnectionError(
                 f"Session login failed: {resp.status_code} {resp.reason}", response=resp
@@ -159,9 +180,9 @@ class RedfishConnection:
                 else urljoin(self.base_url + "/", location.lstrip("/"))
             )
         if self._session_token:
-            self._session.headers["X-Auth-Token"] = self._session_token
+            session.headers["X-Auth-Token"] = self._session_token
         else:
-            self._session.auth = HTTPBasicAuth(self.username, self.password)
+            session.auth = HTTPBasicAuth(self.username, self.password)
 
     def get(self, path: RedfishPath) -> dict[str, Any]:
         """GET a Redfish path and return the JSON body. path must be a RedfishPath."""
@@ -179,7 +200,7 @@ class RedfishConnection:
         path = str(path)
         session = self._ensure_session()
         url = path if path.startswith("http") else urljoin(self.base_url + "/", path.lstrip("/"))
-        return session.get(url, timeout=self.timeout)
+        return self._execute_request(lambda: session.get(url, timeout=self.timeout))
 
     def post(
         self, path: Union[str, "RedfishPath"], json: Optional[dict[str, Any]] = None
@@ -188,7 +209,9 @@ class RedfishConnection:
         path = str(path)
         session = self._ensure_session()
         url = path if path.startswith("http") else urljoin(self.base_url + "/", path.lstrip("/"))
-        return session.post(url, json=json or {}, timeout=self.timeout)
+        return self._execute_request(
+            lambda: session.post(url, json=json or {}, timeout=self.timeout)
+        )
 
     def run_get(self, path: Union[str, RedfishPath]) -> RedfishGetResult:
         """Run a Redfish GET request and return a result object. path may be a string or RedfishPath."""
