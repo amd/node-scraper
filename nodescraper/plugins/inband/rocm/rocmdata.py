@@ -31,6 +31,7 @@ from pydantic import computed_field, field_validator
 from nodescraper.models import DataModel
 
 _ROCM_VERSION_RE = re.compile(r"^(\d+(?:\.\d+){0,3})(?:-(\d+)(?:-gfx\w+(?:;gfx\w+)*)?)?$")
+_ROCK_PKGMGR_RE = re.compile(r"^((\d+\.\d+\.\d+)(\.)?[a-zA-Z]+\d+(\+[a-fA-F0-9]+)?)$")
 
 
 class RocmDataModel(DataModel):
@@ -49,7 +50,7 @@ class RocmDataModel(DataModel):
 
     @staticmethod
     def _validate_version_string(version: str) -> str:
-        if not _ROCM_VERSION_RE.match(version):
+        if not _ROCM_VERSION_RE.match(version) and not _ROCK_PKGMGR_RE.match(version):
             raise ValueError(f"ROCm version has invalid format: {version}")
         return version
 

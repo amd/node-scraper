@@ -23,9 +23,10 @@
 # SOFTWARE.
 #
 ###############################################################################
+import json
+import re
+from enum import Enum
 from typing import Optional
-
-from pydantic import ValidationError
 
 from nodescraper.base import InBandDataCollector
 from nodescraper.connection.inband import TextFileArtifact
@@ -34,7 +35,12 @@ from nodescraper.models import TaskResult
 from nodescraper.utils import shell_quote, strip_ansi_codes
 
 from .collector_args import RocmCollectorArgs
-from .rocmdata import RocmDataModel
+from .rocmdata import _ROCK_PKGMGR_RE, RocmDataModel
+
+
+class InstallationType(Enum):
+    ROCm_CI = "ROCm_CI"
+    TheRock_PkgMgr = "TheRock_PkgMgr"
 
 
 class RocmCollector(InBandDataCollector[RocmDataModel, RocmCollectorArgs]):
@@ -43,6 +49,7 @@ class RocmCollector(InBandDataCollector[RocmDataModel, RocmCollectorArgs]):
     SUPPORTED_OS_FAMILY: set[OSFamily] = {OSFamily.LINUX}
 
     DATA_MODEL = RocmDataModel
+    ROCM_VERSION_SPECIAL = "version"
     CMD_ROCM_SUB_VERSIONS_TMPL = "grep . -H -r -i {rocm_path}/.info/*"
     CMD_ROCMINFO_TMPL = "{rocm_path}/bin/rocminfo"
     CMD_ROCM_LATEST_TMPL = "ls -v -d {rocm_path}-[3-7]* | tail -1"
@@ -52,6 +59,8 @@ class RocmCollector(InBandDataCollector[RocmDataModel, RocmCollectorArgs]):
     CMD_ENV_VARS = "env | grep -Ei 'rocm|hsa|hip|mpi|openmp|ucx|miopen'"
     CMD_CLINFO_TMPL = "{rocm_path}/opencl/bin/*/clinfo"
     CMD_KFD_PROC = "ls /sys/class/kfd/kfd/proc/"
+    CMD_THEROCK_MANIFEST_TMPL = "{rocm_path}/share/therock/therock_manifest.json"
+    CMD_THEROCK_CORE_VERSION_TMPL = "{rocm_path}/core/.info/version"
 
     def collect_data(
         self, args: Optional[RocmCollectorArgs] = None
@@ -64,62 +73,149 @@ class RocmCollector(InBandDataCollector[RocmDataModel, RocmCollectorArgs]):
         if args is None:
             args = RocmCollectorArgs()
         rocm_path_q = shell_quote(args.rocm_path)
-        version_paths = [
-            f"{args.rocm_path}/.info/version-rocm",
-            f"{args.rocm_path}/.info/version",
-        ]
 
-        rocm_data = None
-        rocm_sub_versions = {}
-
-        # First, try to collect all sub-versions
-        sub_versions_res = self._run_sut_cmd(
-            self.CMD_ROCM_SUB_VERSIONS_TMPL.format(rocm_path=rocm_path_q)
-        )
-        if sub_versions_res.exit_code == 0:
-            for line in sub_versions_res.stdout.splitlines():
-                if ":" in line:
-                    # Split the line into key and value (format: /path/to/file:version)
-                    key, value = line.split(":", 1)
-                    # Extract just the filename from the path
-                    key = key.split("/")[-1]
-                    rocm_sub_versions[key.strip()] = value.strip()
-
-        # Determine the main ROCm version
-        for path in version_paths:
-            res = self._run_sut_cmd(f"grep . {shell_quote(path)}")
-            if res.exit_code == 0:
-                try:
-                    rocm_data = RocmDataModel(
-                        rocm_version=res.stdout, rocm_sub_versions=rocm_sub_versions
-                    )
-                    self._log_event(
-                        category="ROCM_VERSION_READ",
-                        description="ROCm version data collected",
-                        data=rocm_data.model_dump(include={"rocm_version"}),
-                        priority=EventPriority.INFO,
-                    )
-                    self.result.message = f"ROCm version: {rocm_data.rocm_version}"
-                    self.result.status = ExecutionStatus.OK
-                    break
-                except (ValueError, ValidationError) as e:
-                    self._log_event(
-                        category=EventCategory.OS,
-                        description=f"Invalid ROCm version format: {res.stdout}",
-                        data={"version": res.stdout, "error": str(e)},
-                        priority=EventPriority.ERROR,
-                        console_log=True,
-                    )
-                    self.result.message = f"Invalid ROCm version format: {res.stdout}"
-                    self.result.status = ExecutionStatus.ERROR
-                    return self.result, None
+        install_type = None
+        # Check if legacy or TheRock install
+        res_legacy_check = self._run_sut_cmd(f"test -f {rocm_path_q}/.info/version")
+        if res_legacy_check.exit_code == 0:
+            install_type = InstallationType.ROCm_CI
         else:
+            res_rock_check = self._run_sut_cmd(
+                f"test -f {rocm_path_q}/share/therock/therock_manifest.json"
+            )
+            if res_rock_check.exit_code == 0:
+                install_type = InstallationType.TheRock_PkgMgr
+
+        error = None
+        rocm_data = None
+        if install_type == InstallationType.TheRock_PkgMgr:
+            res = self._run_sut_cmd(f"cat {rocm_path_q}/share/therock/therock_manifest.json")
+            try:
+                json_data = json.loads(res.stdout)
+            except json.JSONDecodeError as e:
+                error = {
+                    "description": "Invalid JSON in therock_manifest.json",
+                    "data": {
+                        "message": f"Parse error at line {e.lineno}, col {e.colno}",
+                        "exception": str(e),
+                        "raw_content": res.stdout[:500] if res.stdout else None,
+                    },
+                }
+                json_data = None
+            if json_data is not None:
+                # ROCm package version
+                rocm_package_version = json_data.get("rocm_package_version", "")
+                # ROCm version
+                if "rocm_version" in json_data:
+                    rocm_version = json_data["rocm_version"]
+                else:
+                    if not isinstance(rocm_package_version, str):
+                        rocm_version = None
+                    else:
+                        match = re.search(
+                            _ROCK_PKGMGR_RE,
+                            rocm_package_version,
+                        )
+                        rocm_version = match.group(2) if match else None
+                if rocm_version is None:
+                    res = self._run_sut_cmd(f"cat {rocm_path_q}/core/.info/version")
+                    if res.stdout:
+                        rocm_version = res.stdout.strip()
+                # Build number
+                raw_build_number = json_data.get("github_run_id")
+                try:
+                    build_number = int(raw_build_number)
+                except (ValueError, TypeError):
+                    build_number = None
+                if build_number is None and raw_build_number is not None:
+                    error = {
+                        "description": "Invalid github_run_id in therock_manifest.json",
+                        "data": {
+                            "message": f"Cannot convert {type(raw_build_number).__name__} to int",
+                            "rocm_version": rocm_version,
+                            "build_number": raw_build_number,
+                        },
+                    }
+                elif rocm_version is None or build_number is None:
+                    error = {
+                        "description": "Missing ROCm version or build number",
+                        "data": {
+                            "message": "Required fields not found in therock_manifest.json",
+                            "rocm_version": rocm_version,
+                            "build_number": build_number,
+                        },
+                    }
+                else:
+                    sub_versions = {
+                        "version": rocm_version,
+                        "version-rocm": f"{rocm_version}-{build_number}",
+                    }
+                    if rocm_package_version:
+                        sub_versions.update({"version-rocm-package": rocm_package_version})
+                    rocm_data = RocmDataModel(
+                        rocm_version=rocm_version,
+                        rocm_sub_versions=sub_versions,
+                    )
+            elif error is None:
+                error = {
+                    "description": "Failed to read therock_manifest.json",
+                    "data": {
+                        "message": "JSON parsed as None",
+                    },
+                }
+        elif install_type == InstallationType.ROCm_CI:
+            res = self._run_sut_cmd(f"grep . -H -r -i {rocm_path_q}/.info/*")
+            if res.exit_code == 0:
+                rocm_sub_versions = {}
+                for line in res.stdout.splitlines():
+                    if ":" in line:
+                        # Split the line into key and value
+                        key, value = line.split(":", 1)
+                        key = key.removeprefix(f"{args.rocm_path}/.info/")
+                        # Remove leading and trailing whitespace
+                        rocm_sub_versions[key.strip()] = value.strip()
+                if self.ROCM_VERSION_SPECIAL in rocm_sub_versions:
+                    # If the special key is found, use its value
+                    rocm_version = rocm_sub_versions[self.ROCM_VERSION_SPECIAL]
+                else:
+                    rocm_version = None
+                rocm_data = RocmDataModel(
+                    rocm_version=rocm_version, rocm_sub_versions=rocm_sub_versions
+                )
+            else:
+                error = {
+                    "description": "Failed to read ROCm .info files",
+                    "data": {
+                        "command": res.command,
+                        "exit_code": res.exit_code,
+                        "stderr": res.stderr,
+                    },
+                }
+        else:
+            error = {
+                "description": "No ROCm installation detected",
+                "data": {"message": f"No ROCm files found in {args.rocm_path}"},
+            }
+
+        if error:
             self._log_event(
                 category=EventCategory.OS,
-                description=f"Unable to read ROCm version from {version_paths}",
-                data={"raw_output": res.stdout},
+                description=error.get("description", ""),
+                data=error.get("data", {}),
                 priority=EventPriority.ERROR,
+                console_log=True,
             )
+            self.result.message = "ROCm version not found"
+            self.result.status = ExecutionStatus.ERROR
+        else:
+            self._log_event(
+                category="ROCM_VERSION_READ",
+                description="ROCm version data collected",
+                data=rocm_data.model_dump(exclude="rocm_sub_versions"),
+                priority=EventPriority.INFO,
+            )
+            self.result.message = f"ROCm: {rocm_data.model_dump(exclude='rocm_sub_versions')}"
+            self.result.status = ExecutionStatus.OK
 
         # Collect additional ROCm data if version was found
         if rocm_data:
@@ -213,20 +309,5 @@ class RocmCollector(InBandDataCollector[RocmDataModel, RocmCollectorArgs]):
                 rocm_data.kfd_proc = [
                     proc.strip() for proc in kfd_proc_res.stdout.strip().split("\n") if proc.strip()
                 ]
-
-        if not rocm_data:
-            self._log_event(
-                category=EventCategory.OS,
-                description="Error checking ROCm version",
-                data={
-                    "command": res.command,
-                    "exit_code": res.exit_code,
-                    "stderr": res.stderr,
-                },
-                priority=EventPriority.ERROR,
-                console_log=True,
-            )
-            self.result.message = "ROCm version not found"
-            self.result.status = ExecutionStatus.ERROR
 
         return self.result, rocm_data

@@ -23,6 +23,8 @@
 # SOFTWARE.
 #
 ###############################################################################
+
+import re
 from typing import Optional
 
 from nodescraper.base import InBandDataCollector
@@ -36,29 +38,29 @@ class BiosCollector(InBandDataCollector[BiosDataModel, None]):
     """Collect BIOS details"""
 
     DATA_MODEL = BiosDataModel
-    CMD_WINDOWS = "wmic bios get SMBIOSBIOSVersion /Value"
-    CMD = "sh -c 'cat /sys/devices/virtual/dmi/id/bios_version'"
 
     def collect_data(
         self,
-        args=None,
-    ) -> tuple[TaskResult, Optional[BiosDataModel]]:
-        """Collect BIOS version information from the system.
-
-        Returns:
-            tuple[TaskResult, Optional[BiosDataModel]]: tuple containing the task result and an instance of BiosDataModel
-            or None if the BIOS version could not be determined.
-        """
+        args: Optional[None] = None,
+    ) -> tuple[TaskResult, BiosDataModel | None]:
+        """read bios data"""
         bios = None
 
         if self.system_info.os_family == OSFamily.WINDOWS:
-            res = self._run_sut_cmd(self.CMD_WINDOWS)
+            res = self._run_sut_cmd("wmic bios get SMBIOSBIOSVersion /Value")
             if res.exit_code == 0:
                 bios = [line for line in res.stdout.splitlines() if "SMBIOSBIOSVersion=" in line][
                     0
                 ].split("=")[1]
+        elif self.system_info.os_family == OSFamily.ESXI:
+            res = self._run_sut_cmd(
+                "smbiosDump | grep -A5 'BIOS Info (Type 0)' | grep 'Version:' | head -1"
+            )
+            if res.exit_code == 0:
+                match = re.search(r'Version:\s*"?([^"]+)"?', res.stdout)
+                bios = match.group(1).strip() if match else res.stdout.strip()
         else:
-            res = self._run_sut_cmd(self.CMD)
+            res = self._run_sut_cmd("sh -c 'dmidecode -s bios-version'", sudo=True)
             if res.exit_code == 0:
                 bios = res.stdout
 
