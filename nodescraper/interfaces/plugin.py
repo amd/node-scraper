@@ -95,7 +95,7 @@ class PluginInterface(abc.ABC, Generic[TConnectionManager, TConnectArg]):
 
         if connection_args and self.CONNECTION_TYPE and not self.connection_manager:
             self.connection_manager = self.CONNECTION_TYPE(
-                system_info=self.system_info,
+                system_info=self.system_info.model_copy(),
                 logger=logger,
                 connection_args=connection_args,
                 parent=self.__class__.__name__,

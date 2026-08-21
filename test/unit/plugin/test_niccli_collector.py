@@ -12,7 +12,12 @@ import pytest
 from nodescraper.enums.executionstatus import ExecutionStatus
 from nodescraper.enums.systeminteraction import SystemInteractionLevel
 from nodescraper.models.systeminfo import OSFamily
-from nodescraper.plugins.inband.nic.nic_collector import NicCollector
+from nodescraper.plugins.inband.nic.nic_collector import (
+    NicCollector,
+    _parse_bcmcli_device_list,
+    _parse_bcmcli_qos,
+    _parse_niccli_version,
+)
 from nodescraper.plugins.inband.nic.nic_data import (
     NicCliDevice,
     NicCliQos,
@@ -254,7 +259,7 @@ def test_collect_data_not_ran_when_no_nic_hardware(collector, conn_mock):
     assert result.status == ExecutionStatus.NOT_RAN
     assert data is None
     assert "skipped" in result.message.lower()
-    assert collector._run_sut_cmd.call_count <= 4
+    assert collector._run_sut_cmd.call_count <= 6
 
 
 def test_collect_data_skips_nicctl_commands_when_no_pensando_cards(collector, conn_mock):
@@ -306,3 +311,140 @@ def test_collect_data_success(collector, conn_mock):
     assert data is not None
     assert isinstance(data, NicDataModel)
     assert len(data.results) >= 1
+
+
+BCMCLI_DEVICE_LIST_OUTPUT = """\
+PCI Address      Device Type      Firmware Version
+--------         -----------      ----------------
+0000:03:00.0     BCM957608        1.140.0
+0000:04:00.0     BCM957608        1.140.0
+"""
+
+BCMCLI_QOS_OUTPUT = """\
+ETS Configuration
+-----------------
+TC TX_BW RX_BW TSA      RateLimit Priority
+0  50    50    ETS       0         0 1 2
+1  50    50    ETS       0         3 4
+2  0     0     strict    0         5 6 7
+PFC configuration
+-----------------
+priority 0 1 2 3 4 5 6 7
+enabled  0 0 0 1 0 0 0 0
+APP TLV Configuration
+---------------------
+Index Selector Priority DSCP/Protocol
+0     5        7        48
+"""
+
+
+def test_parse_niccli_version():
+    assert _parse_niccli_version("niccli v234") == 234
+    assert _parse_niccli_version("") is None
+
+
+def test_parse_bcmcli_device_list():
+    """PCI addresses parsed from table; empty input returns empty list."""
+    ids = _parse_bcmcli_device_list(BCMCLI_DEVICE_LIST_OUTPUT)
+    assert ids == ["0000:03:00.0", "0000:04:00.0"]
+    assert _parse_bcmcli_device_list("") == []
+
+
+def test_parse_bcmcli_qos():
+    """ETS rows, PFC bitmask, and APP entries all parsed correctly."""
+    qos = _parse_bcmcli_qos("0000:03:00.0", BCMCLI_QOS_OUTPUT)
+    assert qos.prio_map[0] == 0 and qos.prio_map[3] == 1 and qos.prio_map[5] == 2
+    assert qos.tc_bandwidth == [50, 50, 0]
+    assert qos.tsa_map[0] == "ETS" and qos.tsa_map[2] == "strict"
+    assert qos.pfc_enabled == 8  # only priority 3 set (1 << 3)
+    assert len(qos.app_entries) == 1 and qos.app_entries[0].priority == 7
+
+
+def test_collect_data_uses_bcmcli_when_detected(collector):
+    """Both bcmcli probes succeed; bcmcli path used, broadcom_cli_type='bcmcli'."""
+    commands_run: list[str] = []
+
+    def side_effect(cmd, **kwargs):
+        commands_run.append(cmd)
+        if "bcmcli_show version" in cmd or "which bcmcli_show" in cmd:
+            return MagicMock(exit_code=0, stdout="bcmcli v1.140", stderr="", command=cmd)
+        if "bcmcli_show device_list" in cmd:
+            return MagicMock(exit_code=0, stdout=BCMCLI_DEVICE_LIST_OUTPUT, stderr="", command=cmd)
+        if "nicctl show card" in cmd:
+            return MagicMock(exit_code=1, stdout="", stderr="", command=cmd)
+        return MagicMock(exit_code=0, stdout="", stderr="", command=cmd)
+
+    collector._run_sut_cmd = MagicMock(side_effect=side_effect)
+    result, data = collector.collect_data()
+
+    assert result.status == ExecutionStatus.OK
+    assert data.broadcom_cli_type == "bcmcli"
+    assert any("bcmcli_" in c for c in commands_run)
+
+
+def test_detect_broadcom_cli_falls_back_when_device_list_empty(collector):
+    """bcmcli_show version exits 0 but device_list empty; falls back to niccli."""
+
+    def side_effect(cmd, **kwargs):
+        if "bcmcli_show version" in cmd:
+            return MagicMock(exit_code=0, stdout="bcmcli v1.140", stderr="", command=cmd)
+        if "bcmcli_show device_list" in cmd:
+            return MagicMock(
+                exit_code=0, stdout="PCI Address      Device Type\n", stderr="", command=cmd
+            )
+        if "niccli --version" in cmd:
+            return MagicMock(exit_code=0, stdout="niccli v234", stderr="", command=cmd)
+        if "--list_devices" in cmd or "--listdev" in cmd or "--list" in cmd:
+            return MagicMock(exit_code=0, stdout=NICCLI_LISTDEV_OUTPUT, stderr="", command=cmd)
+        if "nicctl show card" in cmd:
+            return MagicMock(exit_code=1, stdout="", stderr="", command=cmd)
+        return MagicMock(exit_code=0, stdout="", stderr="", command=cmd)
+
+    collector._run_sut_cmd = MagicMock(side_effect=side_effect)
+    _, data = collector.collect_data()
+
+    assert data.broadcom_cli_type == "niccli"
+
+
+def test_broadcom_cli_override_skips_detection(collector):
+    """broadcom_cli_override='niccli' bypasses bcmcli probes entirely."""
+    from nodescraper.plugins.inband.nic.collector_args import NicCollectorArgs
+
+    commands_run: list[str] = []
+
+    def side_effect(cmd, **kwargs):
+        commands_run.append(cmd)
+        if "niccli --version" in cmd:
+            return MagicMock(exit_code=0, stdout="niccli v234", stderr="", command=cmd)
+        if "--list_devices" in cmd or "--listdev" in cmd or "--list" in cmd:
+            return MagicMock(exit_code=0, stdout=NICCLI_LISTDEV_OUTPUT, stderr="", command=cmd)
+        if "nicctl show card" in cmd:
+            return MagicMock(exit_code=1, stdout="", stderr="", command=cmd)
+        return MagicMock(exit_code=0, stdout="", stderr="", command=cmd)
+
+    collector._run_sut_cmd = MagicMock(side_effect=side_effect)
+    _, data = collector.collect_data(args=NicCollectorArgs(broadcom_cli_override="niccli"))
+
+    assert data.broadcom_cli_type == "niccli"
+    assert not any("bcmcli_show version" in c for c in commands_run)
+
+
+def test_collect_data_niccli_version_routing(collector):
+    """niccli v234 uses --dev/--getoption syntax; legacy -dev/-getoption not run."""
+    commands_run: list[str] = []
+
+    def side_effect(cmd, **kwargs):
+        commands_run.append(cmd)
+        if cmd == "niccli --version":
+            return MagicMock(exit_code=0, stdout="niccli v234", stderr="", command=cmd)
+        if "--list_devices" in cmd or "--listdev" in cmd or "--list" in cmd:
+            return MagicMock(exit_code=0, stdout=NICCLI_LISTDEV_OUTPUT, stderr="", command=cmd)
+        if "nicctl show card" in cmd:
+            return MagicMock(exit_code=1, stdout="", stderr="", command=cmd)
+        return MagicMock(exit_code=0, stdout="", stderr="", command=cmd)
+
+    collector._run_sut_cmd = MagicMock(side_effect=side_effect)
+    collector.collect_data()
+
+    assert any("--dev" in c and "--getoption" in c for c in commands_run)
+    assert not any(" -dev " in c for c in commands_run)

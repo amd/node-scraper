@@ -65,7 +65,8 @@ CollectorArgsClasses = Union[
 
 
 class DataPlugin(
-    PluginInterface, Generic[TConnectionManager, TConnectArg, TDataModel, TCollectArg, TAnalyzeArg]
+    PluginInterface,
+    Generic[TConnectionManager, TConnectArg, TDataModel, TCollectArg, TAnalyzeArg],
 ):
     """Plugin used to collect and analyze data"""
 
@@ -325,7 +326,7 @@ class DataPlugin(
                     return self.collection_result
                 self.logger.info("No connection manager provide, initializing connection manager")
                 self.connection_manager = self.CONNECTION_TYPE(
-                    system_info=self.system_info,
+                    system_info=self.system_info.model_copy(),
                     logger=self.logger,
                     parent=self.__class__.__name__,
                     task_result_hooks=self.task_result_hooks,
@@ -357,7 +358,7 @@ class DataPlugin(
                 for collector_cls in collector_classes:
                     collector_args = self._resolve_collector_args(collector_cls, collection_args)
                     collection_task = collector_cls(
-                        system_info=self.system_info,
+                        system_info=self.system_info.model_copy(),
                         logger=self.logger,
                         system_interaction_level=system_interaction_level,
                         connection=self.connection_manager.connection,
@@ -448,7 +449,7 @@ class DataPlugin(
             analysis_args = self.ANALYZER_ARGS.model_validate(analysis_args)
 
         analyzer_task = self.ANALYZER(
-            self.system_info,
+            system_info=self.system_info.model_copy(),
             logger=self.logger,
             max_event_priority_level=max_event_priority_level,
             parent=self.__class__.__name__,

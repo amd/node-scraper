@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# Copyright (c) 2025 Advanced Micro Devices, Inc.
+# Copyright (c) 2026 Advanced Micro Devices, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,16 +23,16 @@
 # SOFTWARE.
 #
 ###############################################################################
-from pydantic import BaseModel, Field
+from .mi4xx_analyzer import MI4XXAnalyzer
+from .mi4xx_analyzer_args import Mi4xxServiceabilityAnalyzerArgs
+from .mi4xx_collector import MI4XXCollector
+from .mi4xx_collector_args import MI4XXCollectorArgs
+from .serviceability_plugin_mi4xx import Mi4xxServiceabilityPlugin
 
-
-class CollectorArgs(BaseModel):
-    html_view: bool = Field(
-        default=False,
-        description=(
-            "When true, include logged command artifacts in command_artifacts.html "
-            "using human-readable output."
-        ),
-    )
-
-    model_config = {"extra": "forbid", "exclude_none": True}
+__all__ = [
+    "MI4XXAnalyzer",
+    "MI4XXCollector",
+    "MI4XXCollectorArgs",
+    "Mi4xxServiceabilityAnalyzerArgs",
+    "Mi4xxServiceabilityPlugin",
+]

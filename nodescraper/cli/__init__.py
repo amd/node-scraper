@@ -26,7 +26,7 @@
 
 from .cli import get_cli_top_level_subcommands
 from .cli import main as cli_entry
-from .embed import CLI_TOP_LEVEL_SUBCOMMANDS, run_cli_return_code, run_main_return_code
+from .embed import run_cli_return_code, run_main_return_code
 from .invocation import (
     PluginRunInvocation,
     get_plugin_run_invocation,
@@ -35,7 +35,6 @@ from .invocation import (
 )
 
 __all__ = [
-    "CLI_TOP_LEVEL_SUBCOMMANDS",
     "cli_entry",
     "get_cli_top_level_subcommands",
     "run_cli_return_code",

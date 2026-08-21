@@ -55,7 +55,10 @@ def analyze_decorator(func: Callable[..., TaskResult]) -> Callable[..., TaskResu
             analyzer._log_event(
                 category=EventCategory.RUNTIME,
                 description="Analyzer passed invalid data",
-                data={"data_type": type(data), "expected": analyzer.DATA_MODEL.__name__},
+                data={
+                    "data_type": type(data),
+                    "expected": analyzer.DATA_MODEL.__name__,
+                },
                 priority=EventPriority.CRITICAL,
                 console_log=True,
             )
@@ -118,7 +121,7 @@ class DataAnalyzer(Task, abc.ABC, Generic[TDataModel, TAnalyzeArg]):
         if not inspect.isabstract(cls) and cls.DATA_MODEL is None:
             raise TypeError(f"No data model set for {cls.__name__}")
 
-        if hasattr(cls, "analyze_data"):
+        if "analyze_data" in vars(cls):
             setattr(cls, "analyze_data", analyze_decorator(cls.analyze_data))  # noqa
 
     @abc.abstractmethod
