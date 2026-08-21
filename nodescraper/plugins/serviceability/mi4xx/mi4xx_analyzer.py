@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# Copyright (c) 2025 Advanced Micro Devices, Inc.
+# Copyright (c) 2026 Advanced Micro Devices, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,6 +23,19 @@
 # SOFTWARE.
 #
 ###############################################################################
-META_VAR_MAP = {int: "INT", bool: "BOOL", dict: "JSON_STRING", float: "FLOAT", str: "STRING"}
-DEFAULT_CONFIG = "NodeStatus"
-KEYBOARD_INTERRUPT_EXIT_CODE = 130
+from __future__ import annotations
+
+from nodescraper.plugins.serviceability.serviceability_hub_analyzer import (
+    ServiceabilityHubAnalyzer,
+)
+
+
+class MI4XXAnalyzer(ServiceabilityHubAnalyzer):
+    """Build AFID events from collected data and run the configured entry-point hub."""
+
+    DOCUMENTATION_ANALYSIS_ITEMS: tuple[str, ...] = (
+        "Builds AFID events from collected Redfish event log members (and optional assembly metadata).",
+        "Runs the configured entry-point service hub (hub_entry_point in analysis_args) to produce service recommendations.",
+        "When analysis_args.skip_hub is true, only builds AFID events without running the hub.",
+        "Supports offline analysis from a prior collection via --data with --collection False.",
+    )
