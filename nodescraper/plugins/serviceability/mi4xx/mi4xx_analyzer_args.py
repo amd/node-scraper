@@ -25,14 +25,28 @@
 ###############################################################################
 from __future__ import annotations
 
-from pydantic import Field, field_validator
+from typing import Optional
+
+from pydantic import Field, field_validator, model_validator
 
 from nodescraper.plugins.serviceability.analyzer_args import ServiceabilityAnalyzerArgs
 
 
 class Mi4xxServiceabilityAnalyzerArgs(ServiceabilityAnalyzerArgs):
-    """Analysis args for Mi4xxServiceabilityPlugin."""
+    """Analysis args for Mi4xxServiceabilityPlugin (AFSE entry point)."""
 
+    hub_entry_point: str = Field(
+        default="afse",
+        description="Registered AFSE entry point name (MI4XX service hub).",
+    )
+    hub_display_name: Optional[str] = Field(
+        default="AFSE",
+        description="Label for analyzer status messages.",
+    )
+    hub_python_module: Optional[str] = Field(
+        default=None,
+        description="Not used for MI4XX; AFSE is selected via hub_entry_point afse.",
+    )
     rf_event_log_uri: str = Field(
         default="/redfish/v1/Systems/Instinct_Accelerators/LogServices/EventLog/Entries",
         description="Redfish URI for the Instinct accelerator event log Entries collection.",
@@ -49,3 +63,14 @@ class Mi4xxServiceabilityAnalyzerArgs(ServiceabilityAnalyzerArgs):
     def resolved_rf_event_log_uri(self) -> str:
         """Return the configured event log Entries URI."""
         return str(self.rf_event_log_uri).strip()
+
+    @model_validator(mode="after")
+    def _mi4xx_uses_afse(self) -> "Mi4xxServiceabilityAnalyzerArgs":
+        if self.hub_python_module:
+            raise ValueError(
+                "Mi4xxServiceabilityPlugin uses AFSE via hub_entry_point; "
+                "hub_python_module is not supported"
+            )
+        if str(self.hub_entry_point).strip().lower() != "afse":
+            raise ValueError("Mi4xxServiceabilityPlugin supports hub_entry_point 'afse' only")
+        return self

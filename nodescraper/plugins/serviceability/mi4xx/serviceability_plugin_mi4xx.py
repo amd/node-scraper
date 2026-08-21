@@ -58,7 +58,7 @@ class Mi4xxServiceabilityPlugin(ServiceabilityPluginBase):
     COLLECTOR = MI4XXCollector  # type: ignore[assignment]
     ANALYZER = MI4XXAnalyzer
     COLLECTOR_ARGS = MI4XXCollectorArgs
-    ANALYZER_ARGS = Mi4xxServiceabilityAnalyzerArgs
+    ANALYZER_ARGS = Mi4xxServiceabilityAnalyzerArgs  # type: ignore[assignment]
 
     @staticmethod
     def _resolved_afid_sag_path(

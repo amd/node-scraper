@@ -149,12 +149,12 @@ def test_mi4xx_plugin_merge_afid_sag_path_overrides_analysis_args(tmp_path):
     _, analysis_args = Mi4xxServiceabilityPlugin._merge_afid_sag_path(
         str(sag),
         None,
-        {"afid_sag_path": "/tmp/old_sag.json", "hub_entry_point": "hub"},
+        {"afid_sag_path": "/tmp/old_sag.json", "hub_entry_point": "afse"},
     )
 
     assert analysis_args == {
         "afid_sag_path": str(sag),
-        "hub_entry_point": "hub",
+        "hub_entry_point": "afse",
     }
 
 
@@ -180,23 +180,31 @@ def test_mi4xx_serviceability_plugin_wiring():
     assert Mi4xxServiceabilityPlugin.ANALYZER is MI4XXAnalyzer
 
 
-def test_mi4xx_analyzer_args_requires_hub_entry_point_in_config():
+def test_mi4xx_analyzer_args_defaults_to_afse():
     args = Mi4xxServiceabilityAnalyzerArgs()
-    assert args.hub_entry_point is None
-    with pytest.raises(ValueError, match="hub_entry_point is required"):
-        args.resolved_hub_entry_point()
-    configured = Mi4xxServiceabilityAnalyzerArgs(hub_entry_point="hub")
-    assert configured.resolved_hub_entry_point() == "hub"
-    assert configured.skip_hub is False
+    assert args.hub_entry_point == "afse"
+    assert args.hub_display_name == "AFSE"
+    assert args.resolved_hub_entry_point() == "afse"
+    assert args.skip_hub is False
+
+
+def test_mi4xx_analyzer_args_rejects_hub_python_module():
+    with pytest.raises(ValueError, match="hub_python_module is not supported"):
+        Mi4xxServiceabilityAnalyzerArgs(hub_python_module="instinct_service_assistant")
+
+
+def test_mi4xx_analyzer_args_rejects_non_afse_entry_point():
+    with pytest.raises(ValueError, match="hub_entry_point 'afse' only"):
+        Mi4xxServiceabilityAnalyzerArgs(hub_entry_point="hub")
 
 
 def test_load_hub_from_entry_point():
-    fake_ep = SimpleNamespace(name="hub", load=lambda: _FakeHub)
+    fake_ep = SimpleNamespace(name="afse", load=lambda: _FakeHub)
     with patch(
         "nodescraper.plugins.serviceability.se_runner._entry_points_for_group",
         return_value=[fake_ep],
     ):
-        hub = load_hub_from_entry_point("hub")
+        hub = load_hub_from_entry_point("afse")
     assert hub.name == "ExampleHub"
 
 
@@ -227,14 +235,14 @@ def test_validate_afid_sag_path_validates_file(tmp_path):
 def test_run_entry_point_hub(tmp_path):
     sag = tmp_path / "afid_sag.json"
     sag.write_text("{}", encoding="utf-8")
-    fake_ep = SimpleNamespace(name="hub", load=lambda: _FakeHub)
+    fake_ep = SimpleNamespace(name="afse", load=lambda: _FakeHub)
     events = [AfidEvent(afid=DUMMY_AFID_A, serviceable_unit=DUMMY_UNIT_A, time=DUMMY_TIMESTAMP)]
     with patch(
         "nodescraper.plugins.serviceability.se_runner._entry_points_for_group",
         return_value=[fake_ep],
     ):
         block = run_entry_point_hub(
-            hub_entry_point="hub",
+            hub_entry_point="afse",
             afid_events=events,
             afid_sag_path=str(sag),
             rf_event_count=1,
@@ -299,7 +307,7 @@ def test_serviceability_hub_analyzer_runs_entry_point_hub(system_info, tmp_path)
             }
         ]
     )
-    fake_ep = SimpleNamespace(name="hub", load=lambda: _FakeHub)
+    fake_ep = SimpleNamespace(name="afse", load=lambda: _FakeHub)
     analyzer = MI4XXAnalyzer(system_info=system_info)
     with patch(
         "nodescraper.plugins.serviceability.se_runner._entry_points_for_group",
@@ -307,10 +315,10 @@ def test_serviceability_hub_analyzer_runs_entry_point_hub(system_info, tmp_path)
     ):
         task = analyzer.analyze_data(
             data,
-            Mi4xxServiceabilityAnalyzerArgs(afid_sag_path=str(sag), hub_entry_point="hub"),
+            Mi4xxServiceabilityAnalyzerArgs(afid_sag_path=str(sag)),
         )
     assert task.status == ExecutionStatus.OK
-    assert "hub" in task.message.lower()
+    assert "afse" in task.message.lower()
 
 
 def test_mi4xx_analyzer_appends_afid_sag_metadata_artifact(system_info, tmp_path):
@@ -325,7 +333,7 @@ def test_mi4xx_analyzer_appends_afid_sag_metadata_artifact(system_info, tmp_path
             }
         ]
     )
-    fake_ep = SimpleNamespace(name="hub", load=lambda: _FakeHub)
+    fake_ep = SimpleNamespace(name="afse", load=lambda: _FakeHub)
     analyzer = MI4XXAnalyzer(system_info=system_info)
     with patch(
         "nodescraper.plugins.serviceability.se_runner._entry_points_for_group",
@@ -333,7 +341,7 @@ def test_mi4xx_analyzer_appends_afid_sag_metadata_artifact(system_info, tmp_path
     ):
         task = analyzer.analyze_data(
             data,
-            Mi4xxServiceabilityAnalyzerArgs(afid_sag_path=str(sag), hub_entry_point="hub"),
+            Mi4xxServiceabilityAnalyzerArgs(afid_sag_path=str(sag)),
         )
     assert task.status == ExecutionStatus.OK
     assert any(isinstance(artifact, AfidSagMetadataArtifact) for artifact in task.artifacts)
@@ -353,7 +361,7 @@ def test_mi4xx_plugin_analyzes_offline_data_without_collection(system_info, tmp_
         ]
     )
     data_path.write_text(data.model_dump_json(), encoding="utf-8")
-    fake_ep = SimpleNamespace(name="hub", load=lambda: _FakeHub)
+    fake_ep = SimpleNamespace(name="afse", load=lambda: _FakeHub)
     plugin = Mi4xxServiceabilityPlugin(system_info=system_info)
     with patch(
         "nodescraper.plugins.serviceability.se_runner._entry_points_for_group",
@@ -363,9 +371,7 @@ def test_mi4xx_plugin_analyzes_offline_data_without_collection(system_info, tmp_
             collection=False,
             analysis=True,
             data=str(data_path),
-            analysis_args=Mi4xxServiceabilityAnalyzerArgs(
-                afid_sag_path=str(sag), hub_entry_point="hub"
-            ),
+            analysis_args=Mi4xxServiceabilityAnalyzerArgs(afid_sag_path=str(sag)),
         )
     assert result.status == ExecutionStatus.OK
     assert result.result_data.analysis_result.status == ExecutionStatus.OK

@@ -30,14 +30,9 @@ import argparse
 from collections.abc import Callable, Sequence
 from typing import Optional
 
-from nodescraper.cli.cli import get_cli_top_level_subcommands
 from nodescraper.models.pluginresult import PluginResult
 
-CLI_TOP_LEVEL_SUBCOMMANDS = get_cli_top_level_subcommands()
-
 __all__ = [
-    "CLI_TOP_LEVEL_SUBCOMMANDS",
-    "get_cli_top_level_subcommands",
     "run_cli_return_code",
     "run_main_return_code",
 ]

@@ -29,11 +29,8 @@ from __future__ import annotations
 import pytest
 
 from nodescraper.cli.cli import get_cli_top_level_subcommands
-from nodescraper.cli.embed import (
-    CLI_TOP_LEVEL_SUBCOMMANDS,
-    run_cli_return_code,
-    run_main_return_code,
-)
+from nodescraper.cli.constants import KEYBOARD_INTERRUPT_EXIT_CODE
+from nodescraper.cli.embed import run_cli_return_code, run_main_return_code
 
 
 def test_get_cli_top_level_subcommands_matches_argparse_subparsers() -> None:
@@ -42,10 +39,6 @@ def test_get_cli_top_level_subcommands_matches_argparse_subparsers() -> None:
     assert "run-plugins" in subs
     assert "summary" in subs
     assert all(isinstance(s, str) for s in subs)
-
-
-def test_cli_top_level_subcommands_lazy_alias_matches_getter() -> None:
-    assert CLI_TOP_LEVEL_SUBCOMMANDS == get_cli_top_level_subcommands()
 
 
 def test_run_cli_return_code_and_run_main_return_code_delegate(
@@ -66,3 +59,19 @@ def test_run_cli_return_code_and_run_main_return_code_delegate(
     assert run_cli_return_code(["describe", "plugin", "X"]) == 7
     assert run_main_return_code(["a", "b"]) == 7
     assert calls == [["describe", "plugin", "X"], ["a", "b"]]
+
+
+def test_main_exits_cleanly_on_keyboard_interrupt(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    import nodescraper.cli.cli as cli_mod
+
+    def _raise_keyboard_interrupt(*_args, **_kwargs):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(cli_mod, "PluginRegistry", _raise_keyboard_interrupt)
+    with pytest.raises(SystemExit) as exc_info:
+        cli_mod.main([])
+    assert exc_info.value.code == KEYBOARD_INTERRUPT_EXIT_CODE
+    assert capsys.readouterr().err == "Interrupted.\n"
