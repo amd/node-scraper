@@ -18,6 +18,9 @@ jobs:
         with:
           fetch-depth: 0  # Fetch all history for pre-commit to work
 
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
       # python:3.9 image has no git; pre-commit requires it.
       - name: Install git
         run: |
