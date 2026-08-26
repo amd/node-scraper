@@ -23,6 +23,8 @@
 # SOFTWARE.
 #
 ###############################################################################
+import logging
+
 import pytest
 from framework.common.shared_utils import DummyDataModel, MockConnectionManager
 from pydantic import BaseModel
@@ -32,6 +34,8 @@ from nodescraper.enums.eventpriority import EventPriority
 from nodescraper.enums.systeminteraction import SystemInteractionLevel
 from nodescraper.interfaces import PluginInterface
 from nodescraper.models import PluginConfig, PluginResult
+from nodescraper.models.postactioncondition import PostActionCondition
+from nodescraper.models.postactionpluginconfig import PostActionPluginConfig
 from nodescraper.pluginexecutor import PluginExecutor
 from nodescraper.pluginregistry import PluginRegistry
 
@@ -67,10 +71,23 @@ class TestPluginB(PluginInterface[MockConnectionManager, None]):
         )
 
 
+class PostActionPlugin(PluginInterface[MockConnectionManager, None]):
+    """Minimal plugin used as a post-action target in tests."""
+
+    CONNECTION_TYPE = MockConnectionManager
+
+    def run(self, **kwargs):
+        return PluginResult(source="PostActionPlugin", status=ExecutionStatus.OK)
+
+
 @pytest.fixture
 def plugin_registry():
     registry = PluginRegistry()
-    registry.plugins = {"TestPluginA": TestPluginA, "TestPluginB": TestPluginB}
+    registry.plugins = {
+        "TestPluginA": TestPluginA,
+        "TestPluginB": TestPluginB,
+        "PostActionPlugin": PostActionPlugin,
+    }
     registry.connection_managers = {"MockConnectionManager": MockConnectionManager}
     return registry
 
@@ -201,3 +218,235 @@ def test_plugin_run_result_hooks_called_after_each_plugin(plugin_registry):
     )
     executor.run_queue()
     assert seen == ["testB"]
+
+
+# ---------------------------------------------------------------------------
+# merge_configs: post_action_plugins concatenation
+# ---------------------------------------------------------------------------
+
+
+def test_merge_configs_concatenates_post_action_plugins():
+    """post_action_plugins lists from multiple configs are concatenated."""
+    pa1 = PostActionPluginConfig(
+        plugin="PostActionPlugin",
+        conditions=[PostActionCondition(status="ERROR")],
+    )
+    pa2 = PostActionPluginConfig(
+        plugin="PostActionPlugin",
+        conditions=[PostActionCondition(status="WARNING")],
+    )
+    configs = [
+        PluginConfig(post_action_plugins=[pa1]),
+        PluginConfig(post_action_plugins=[pa2]),
+    ]
+    merged = PluginExecutor.merge_configs(configs)
+    assert len(merged.post_action_plugins) == 2
+    assert merged.post_action_plugins[0] is pa1
+    assert merged.post_action_plugins[1] is pa2
+
+
+def test_merge_configs_empty_post_action_plugins():
+    """Merging configs with no post_action_plugins yields an empty list."""
+    configs = [PluginConfig(plugins={"TestPluginB": {}})]
+    merged = PluginExecutor.merge_configs(configs)
+    assert merged.post_action_plugins == []
+
+
+# ---------------------------------------------------------------------------
+# run_queue: post-action execution
+# ---------------------------------------------------------------------------
+
+
+def test_post_action_runs_when_condition_met(plugin_registry):
+    """Post-action plugin fires when primary result meets the condition.
+
+    TestPluginA returns ERROR and also queues TestPluginB via _update_queue,
+    so the primary run produces two results (testA + testB).  The post-action
+    fires on the ERROR status, giving a total of 3 results.
+    """
+    executor = PluginExecutor(
+        plugin_configs=[
+            PluginConfig(
+                plugins={"TestPluginA": {}},  # TestPluginA always returns ERROR
+                post_action_plugins=[
+                    PostActionPluginConfig(
+                        plugin="PostActionPlugin",
+                        conditions=[PostActionCondition(status="ERROR")],
+                    )
+                ],
+            )
+        ],
+        plugin_registry=plugin_registry,
+    )
+    results = executor.run_queue()
+
+    sources = [r.source for r in results]
+    assert "testA" in sources
+    assert "testB" in sources  # queued by TestPluginA via _update_queue
+    assert "PostActionPlugin" in sources
+    assert len(results) == 3
+
+
+def test_post_action_does_not_run_when_condition_not_met(plugin_registry):
+    """Post-action plugin is skipped when no primary result meets the condition."""
+    executor = PluginExecutor(
+        plugin_configs=[
+            PluginConfig(
+                plugins={"TestPluginB": {}},  # TestPluginB always returns OK
+                post_action_plugins=[
+                    PostActionPluginConfig(
+                        plugin="PostActionPlugin",
+                        conditions=[PostActionCondition(status="ERROR")],
+                    )
+                ],
+            )
+        ],
+        plugin_registry=plugin_registry,
+    )
+    results = executor.run_queue()
+
+    assert len(results) == 1
+    assert results[0].source == "testB"
+
+
+def test_post_action_result_appended_to_run_queue_return(plugin_registry):
+    """The post-action PluginResult is present in the list returned by run_queue()."""
+    executor = PluginExecutor(
+        plugin_configs=[
+            PluginConfig(
+                plugins={"TestPluginA": {}},
+                post_action_plugins=[
+                    PostActionPluginConfig(
+                        plugin="PostActionPlugin",
+                        conditions=[PostActionCondition(status="ERROR")],
+                    )
+                ],
+            )
+        ],
+        plugin_registry=plugin_registry,
+    )
+    results = executor.run_queue()
+
+    post_action_results = [r for r in results if r.source == "PostActionPlugin"]
+    assert len(post_action_results) == 1
+    assert post_action_results[0].status == ExecutionStatus.OK
+
+
+def test_post_action_result_hooks_called(plugin_registry):
+    """plugin_run_result_hooks are invoked for post-action results too."""
+    seen: list[str] = []
+
+    def hook(res: PluginResult) -> None:
+        seen.append(res.source)
+
+    executor = PluginExecutor(
+        plugin_configs=[
+            PluginConfig(
+                plugins={"TestPluginA": {}},
+                post_action_plugins=[
+                    PostActionPluginConfig(
+                        plugin="PostActionPlugin",
+                        conditions=[PostActionCondition(status="ERROR")],
+                    )
+                ],
+            )
+        ],
+        plugin_registry=plugin_registry,
+        plugin_run_result_hooks=[hook],
+    )
+    executor.run_queue()
+
+    assert "testA" in seen
+    assert "PostActionPlugin" in seen
+
+
+def test_multiple_post_actions_selective_firing(plugin_registry):
+    """With two post-actions, only the one whose condition is met runs.
+
+    testA returns ERROR (value=40).  The first condition requires ERROR (40 >= 40) → fires.
+    The second condition requires EXECUTION_FAILURE (50); ERROR (40) < 50 → does not fire.
+    """
+    executor = PluginExecutor(
+        plugin_configs=[
+            PluginConfig(
+                plugins={"TestPluginA": {}},  # returns ERROR
+                post_action_plugins=[
+                    PostActionPluginConfig(
+                        plugin="PostActionPlugin",
+                        conditions=[PostActionCondition(status="ERROR")],  # fires: ERROR >= ERROR
+                    ),
+                    PostActionPluginConfig(
+                        plugin="PostActionPlugin",
+                        # does not fire: testA is ERROR (40) < EXECUTION_FAILURE (50)
+                        conditions=[
+                            PostActionCondition(plugin="testA", status="EXECUTION_FAILURE")
+                        ],
+                    ),
+                ],
+            )
+        ],
+        plugin_registry=plugin_registry,
+    )
+    results = executor.run_queue()
+
+    post_action_results = [r for r in results if r.source == "PostActionPlugin"]
+    assert len(post_action_results) == 1  # only first post-action fired
+
+
+def test_post_action_invalid_plugin_name_logs_error_and_continues(plugin_registry, caplog):
+    """An unregistered post-action plugin name is logged as an error; run completes."""
+    with caplog.at_level(logging.ERROR):
+        executor = PluginExecutor(
+            plugin_configs=[
+                PluginConfig(
+                    plugins={"TestPluginA": {}},
+                    post_action_plugins=[
+                        PostActionPluginConfig(
+                            plugin="NonExistentPlugin",
+                            conditions=[PostActionCondition(status="ERROR")],
+                        )
+                    ],
+                )
+            ],
+            plugin_registry=plugin_registry,
+        )
+        results = executor.run_queue()
+
+    # Primary result still returned; no exception raised
+    assert any(r.source == "testA" for r in results)
+    assert any("NonExistentPlugin" in record.message for record in caplog.records)
+
+
+def test_closing_connections_logged_after_post_actions(plugin_registry, caplog):
+    """'Closing connections' log appears after the post-action run log, not before."""
+    with caplog.at_level(logging.INFO):
+        executor = PluginExecutor(
+            plugin_configs=[
+                PluginConfig(
+                    plugins={"TestPluginA": {}},
+                    post_action_plugins=[
+                        PostActionPluginConfig(
+                            plugin="PostActionPlugin",
+                            conditions=[PostActionCondition(status="ERROR")],
+                        )
+                    ],
+                )
+            ],
+            plugin_registry=plugin_registry,
+        )
+        executor.run_queue()
+
+    messages = [r.message for r in caplog.records]
+
+    post_action_idx = next(
+        (i for i, m in enumerate(messages) if "post-action plugin" in m.lower()), None
+    )
+    closing_idx = next(
+        (i for i, m in enumerate(messages) if "closing connections" in m.lower()), None
+    )
+
+    assert post_action_idx is not None, "Expected a post-action log message"
+    assert closing_idx is not None, "Expected a 'Closing connections' log message"
+    assert (
+        post_action_idx < closing_idx
+    ), "'Closing connections' must be logged after the post-action plugin runs"

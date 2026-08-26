@@ -158,8 +158,71 @@ class PluginExecutor:
                 else:
                     merged_config.plugins[plugin_name] = dict(plugin_args)
             merged_config.result_collators.update(config.result_collators)
+            merged_config.post_action_plugins.extend(config.post_action_plugins)
 
         return merged_config
+
+    def _get_connection_manager_for_plugin(
+        self,
+        plugin_class: type,
+        plugin_name: str,
+    ) -> Optional[ConnectionManager]:
+        """Resolve and (if needed) initialise the connection manager for *plugin_class*.
+
+        Returns the :class:`~nodescraper.interfaces.ConnectionManager` instance to
+        use, or ``None`` if one cannot be obtained (errors are logged and the caller
+        should skip the plugin).
+
+        The resolved manager is stored in ``self.connection_library`` so that it can
+        be shared across plugins that require the same type.
+        """
+        if not plugin_class.CONNECTION_TYPE:
+            return None
+
+        if issubclass(plugin_class, OOBSSHDataPlugin):
+            mgr_impl = OobSshConnectionManager
+            connection_args = self.connection_configs.get("RedfishConnectionManager")
+            if connection_args is None:
+                self.logger.error(
+                    "%s requires RedfishConnectionManager in the connection config",
+                    plugin_name,
+                )
+                return None
+        else:
+            connection_manager_class: Type[ConnectionManager] = plugin_class.CONNECTION_TYPE
+            if connection_manager_class.__name__ in self.plugin_registry.connection_managers:
+                mgr_impl = self.plugin_registry.connection_managers[
+                    connection_manager_class.__name__
+                ]
+            elif (
+                inspect.isclass(connection_manager_class)
+                and issubclass(connection_manager_class, ConnectionManager)
+                and not inspect.isabstract(connection_manager_class)
+            ):
+                # External packages set CONNECTION_TYPE on the plugin; use it when
+                # not listed under nodescraper.connection_managers entry points.
+                mgr_impl = connection_manager_class
+            else:
+                self.logger.error(
+                    "Unable to find registered connection manager class for %s that is required by",
+                    connection_manager_class.__name__,
+                )
+                return None
+            connection_args = None
+
+        if mgr_impl not in self.connection_library:
+            self.logger.info("Initializing connection manager for %s", mgr_impl.__name__)
+            init_kwargs = {
+                "system_info": self.system_info,
+                "logger": self.logger,
+                "task_result_hooks": self.connection_result_hooks,
+                "session_id": self.session_id,
+            }
+            if connection_args is not None:
+                init_kwargs["connection_args"] = connection_args
+            self.connection_library[mgr_impl] = mgr_impl(**init_kwargs)
+
+        return self.connection_library[mgr_impl]
 
     def run_queue(self) -> list[PluginResult]:
         """Run the plugin queue and return results
@@ -187,58 +250,10 @@ class PluginExecutor:
                 }
 
                 if plugin_class.CONNECTION_TYPE:
-                    if issubclass(plugin_class, OOBSSHDataPlugin):
-                        mgr_impl = OobSshConnectionManager
-                        connection_args = self.connection_configs.get("RedfishConnectionManager")
-                        if connection_args is None:
-                            self.logger.error(
-                                "%s requires RedfishConnectionManager in the connection config",
-                                plugin_name,
-                            )
-                            continue
-                    else:
-                        connection_manager_class: Type[ConnectionManager] = (
-                            plugin_class.CONNECTION_TYPE
-                        )
-                        if (
-                            connection_manager_class.__name__
-                            in self.plugin_registry.connection_managers
-                        ):
-                            mgr_impl = self.plugin_registry.connection_managers[
-                                connection_manager_class.__name__
-                            ]
-                        elif (
-                            inspect.isclass(connection_manager_class)
-                            and issubclass(connection_manager_class, ConnectionManager)
-                            and not inspect.isabstract(connection_manager_class)
-                        ):
-                            # External packages set CONNECTION_TYPE on the plugin;
-                            # use it when not listed under nodescraper.connection_managers entry points.
-                            mgr_impl = connection_manager_class
-                        else:
-                            self.logger.error(
-                                "Unable to find registered connection manager class for %s that is required by",
-                                connection_manager_class.__name__,
-                            )
-                            continue
-                        connection_args = None
-
-                    if mgr_impl not in self.connection_library:
-                        self.logger.info(
-                            "Initializing connection manager for %s",
-                            mgr_impl.__name__,
-                        )
-                        init_kwargs = {
-                            "system_info": self.system_info,
-                            "logger": self.logger,
-                            "task_result_hooks": self.connection_result_hooks,
-                            "session_id": self.session_id,
-                        }
-                        if connection_args is not None:
-                            init_kwargs["connection_args"] = connection_args
-                        self.connection_library[mgr_impl] = mgr_impl(**init_kwargs)
-
-                    init_payload["connection_manager"] = self.connection_library[mgr_impl]
+                    conn_mgr = self._get_connection_manager_for_plugin(plugin_class, plugin_name)
+                    if conn_mgr is None:
+                        continue
+                    init_payload["connection_manager"] = conn_mgr
 
                 try:
                     plugin_inst = plugin_class(**init_payload)
@@ -281,7 +296,10 @@ class PluginExecutor:
         except Exception as e:
             self.logger.exception("Unexpected exception running plugin queue: %s", str(e))
         finally:
-            self.logger.info("Closing connections")
+            # Run post-action plugins before tearing down connections or collating
+            # results so that post-actions still have access to live connections
+            # and their results are included in the collator output.
+            self._run_post_actions(plugin_results)
 
             if self.plugin_config.result_collators:
                 self.logger.info("Running result collators")
@@ -303,10 +321,106 @@ class PluginExecutor:
                         ],
                         **collator_args,
                     )
+
+            self.logger.info("Closing connections")
             for connection_manager in self.connection_library.values():
                 connection_manager.disconnect()
 
         return plugin_results
+
+    def _run_post_actions(self, plugin_results: list[PluginResult]) -> None:
+        """Evaluate post-action conditions and run qualifying plugins.
+
+        Post-action plugins are run after all primary plugins have finished but
+        *before* connections are closed, so they have full access to the same
+        connection managers.  Their :class:`~nodescraper.models.PluginResult`
+        objects are appended to *plugin_results* in-place, making them visible
+        to result collators and any ``plugin_run_result_hooks``.
+
+        Each :class:`~nodescraper.models.PostActionPluginConfig` entry in
+        ``self.plugin_config.post_action_plugins`` is evaluated independently;
+        those whose conditions are satisfied (OR semantics within each entry's
+        ``conditions`` list) are run in order.
+
+        Args:
+            plugin_results: Accumulated primary plugin results.  Mutated in-place
+                with results from post-action plugins that fire.
+        """
+        if not self.plugin_config.post_action_plugins:
+            return
+
+        self.logger.info("Evaluating post-action plugin conditions")
+
+        for post_action in self.plugin_config.post_action_plugins:
+            plugin_name = post_action.plugin
+
+            if not post_action.should_run(plugin_results):
+                self.logger.info("Post-action plugin %s: conditions not met, skipping", plugin_name)
+                continue
+
+            self.logger.info("=" * 50)
+            self.logger.info("Running post-action plugin: %s", plugin_name)
+
+            if plugin_name not in self.plugin_registry.plugins:
+                self.logger.error(
+                    "Unable to find registered plugin for post-action name %s", plugin_name
+                )
+                continue
+
+            plugin_class = self.plugin_registry.plugins[plugin_name]
+
+            init_payload = {
+                "system_info": self.system_info,
+                "logger": self.logger,
+                # Post-action plugins cannot enqueue further plugins into the
+                # primary queue; pass None so _update_queue is a no-op.
+                "queue_callback": None,
+                "log_path": self.log_path,
+                "session_id": self.session_id,
+            }
+
+            if plugin_class.CONNECTION_TYPE:
+                conn_mgr = self._get_connection_manager_for_plugin(plugin_class, plugin_name)
+                if conn_mgr is None:
+                    continue
+                init_payload["connection_manager"] = conn_mgr
+
+            try:
+                plugin_inst = plugin_class(**init_payload)
+
+                run_payload = copy.deepcopy(post_action.plugin_args)
+                run_args = TypeUtils.get_func_arg_types(plugin_class.run, plugin_class)
+
+                for arg in run_args.keys():
+                    if arg == "preserve_connection" and issubclass(plugin_class, DataPlugin):
+                        run_payload[arg] = True
+
+                try:
+                    global_run_args = self.apply_global_args_to_plugin(
+                        plugin_inst, plugin_class, self.plugin_config.global_args
+                    )
+                    for args_key in ["analysis_args", "collection_args"]:
+                        if args_key in global_run_args and args_key in run_payload:
+                            run_payload[args_key].update(global_run_args[args_key])
+                            del global_run_args[args_key]
+                    run_payload.update(global_run_args)
+                except ValueError as ve:
+                    self.logger.error(
+                        "Invalid global_args for post-action plugin %s: %s. Skipping.",
+                        plugin_name,
+                        str(ve),
+                    )
+                    continue
+
+                plugin_result = plugin_inst.run(**run_payload)
+                plugin_results.append(plugin_result)
+                for hook in self.plugin_run_result_hooks:
+                    hook(plugin_result)
+
+            except Exception as e:
+                self.logger.exception(
+                    "Unexpected exception when running post-action plugin %s: %s", plugin_name, e
+                )
 
     def apply_global_args_to_plugin(
         self,

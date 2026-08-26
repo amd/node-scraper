@@ -29,6 +29,8 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
+from nodescraper.models.postactionpluginconfig import PostActionPluginConfig
+
 
 class PluginConfig(BaseModel):
     """Model for preset configuration of plugins and result collators"""
@@ -36,6 +38,7 @@ class PluginConfig(BaseModel):
     global_args: dict = Field(default_factory=dict)
     plugins: dict[str, dict] = Field(default_factory=dict)
     result_collators: dict[str, dict] = Field(default_factory=dict)
+    post_action_plugins: list[PostActionPluginConfig] = Field(default_factory=list)
     name: Optional[str] = None
     desc: Optional[str] = None
 
