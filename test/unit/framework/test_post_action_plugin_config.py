@@ -24,6 +24,7 @@
 #
 ###############################################################################
 """Unit tests for PostActionPluginConfig.should_run OR semantics."""
+from typing import Union
 
 from nodescraper.enums import ExecutionStatus
 from nodescraper.models import PluginResult
@@ -39,7 +40,7 @@ def _make_result(source: str, status: ExecutionStatus) -> PluginResult:
     return PluginResult(status=status, source=source)
 
 
-def _cond(status: str, plugin: str | None = None) -> PostActionCondition:
+def _cond(status: str, plugin: Union[str, None] = None) -> PostActionCondition:
     """Shorthand: a condition that fires when *source* has at least *status*."""
     return PostActionCondition(plugin=plugin, status=status)
 

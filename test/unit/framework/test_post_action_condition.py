@@ -24,6 +24,8 @@
 #
 ###############################################################################
 """Unit tests for PostActionCondition matching logic."""
+from typing import Union
+
 import pytest
 
 from nodescraper.enums import EventPriority, ExecutionStatus
@@ -51,8 +53,8 @@ def _make_event(
 def _make_result(
     source: str = "SomePlugin",
     status: ExecutionStatus = ExecutionStatus.OK,
-    analysis_events: list[Event] | None = None,
-    collection_events: list[Event] | None = None,
+    analysis_events: Union[list[Event], None] = None,
+    collection_events: Union[list[Event], None] = None,
 ) -> PluginResult:
     """Build a PluginResult with optional events in analysis and/or collection results."""
     return PluginResult(

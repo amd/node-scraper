@@ -99,10 +99,10 @@ class PostActionCondition(BaseModel):
         # --- status check ---
         if self.status is not None:
             try:
-                threshold = ExecutionStatus[self.status.upper()]
+                status_threshold = ExecutionStatus[self.status.upper()]
             except KeyError:
                 return False
-            if result.status < threshold:
+            if result.status < status_threshold:
                 return False
 
         # Remaining checks all operate on events; collect them once.
@@ -117,10 +117,10 @@ class PostActionCondition(BaseModel):
         # --- event_priority check ---
         if self.event_priority is not None:
             try:
-                threshold = EventPriority[self.event_priority.upper()]
+                priority_threshold = EventPriority[self.event_priority.upper()]
             except KeyError:
                 return False
-            if not any(e.priority >= threshold for e in events):
+            if not any(e.priority >= priority_threshold for e in events):
                 return False
 
         # --- event_description_contains check ---
