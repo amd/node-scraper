@@ -35,12 +35,12 @@ from typing import Optional, Type, Union
 
 from pydantic import BaseModel
 
-from build.lib.nodescraper.enums import ExecutionStatus
 from nodescraper.base.oobsshdataplugin import OOBSSHDataPlugin
 from nodescraper.connection.inband import InBandConnectionManager
 from nodescraper.connection.inband.osdetection import discover_and_write_os_family
 from nodescraper.connection.oob_ssh import OobSshConnectionManager
 from nodescraper.constants import DEFAULT_LOGGER
+from nodescraper.enums import ExecutionStatus
 from nodescraper.interfaces import ConnectionManager, DataPlugin, PluginInterface
 from nodescraper.interfaces.taskresulthook import TaskResultHook
 from nodescraper.models import PluginConfig, SystemInfo
