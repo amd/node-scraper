@@ -279,9 +279,51 @@ def _optional_int(value: Any) -> Optional[int]:
 
 
 def _entry_point_result_rows(hub_result: dict[str, Any]) -> list[Any]:
-    """Extract triage rows from the entry-point hub analyze response."""
+    """Extract triage.results rows from the entry-point hub analyze response."""
+    triage = hub_result.get("triage")
+    if isinstance(triage, dict):
+        nested = triage.get("results")
+        if isinstance(nested, list):
+            return nested
     results = hub_result.get("results")
     return results if isinstance(results, list) else []
+
+
+def _entry_point_top_rows(hub_result: dict[str, Any]) -> list[Any]:
+    """Extract triage.top rows from the entry-point hub analyze response."""
+    top = hub_result.get("top")
+    if isinstance(top, list):
+        return top
+    triage = hub_result.get("triage")
+    if isinstance(triage, dict):
+        nested = triage.get("top")
+        if isinstance(nested, list):
+            return nested
+    return []
+
+
+def _service_action_steps_from_row(
+    row: dict[str, Any],
+    san: int,
+    sag: Optional[dict[str, Any]],
+) -> list[str]:
+    sa = row.get("service_action")
+    if isinstance(sa, dict):
+        steps = sa.get("steps")
+        if isinstance(steps, list):
+            descriptions: list[str] = []
+            for step in steps:
+                if not isinstance(step, dict):
+                    continue
+                description = step.get("description")
+                if description is None:
+                    continue
+                text = str(description).strip()
+                if text:
+                    descriptions.append(text)
+            if descriptions:
+                return descriptions
+    return service_action_step_descriptions_from_sag(san, sag)
 
 
 def _service_action_title_from_row(row: dict[str, Any]) -> Optional[str]:
@@ -358,7 +400,7 @@ def _hub_triage_result_from_row(
         service_action_title=title,
         service_action_category=category,
         service_action_severity=sa_severity,
-        service_action_steps=service_action_step_descriptions_from_sag(san, sag),
+        service_action_steps=_service_action_steps_from_row(row, san, sag),
         afid_summary=_afid_summary_from_sag(afid, sag),
     )
 
@@ -424,9 +466,10 @@ def format_serviceability_solution_lines(block: ServiceabilityBlock) -> list[str
     if block.afid_sag_file_version:
         lines.append(f"AFID_SAG file: {block.afid_sag_file_version}")
     if block.hub_triage_results:
-        lines.append("Hub triage results:")
-        for index, row in enumerate(block.hub_triage_results, start=1):
-            lines.extend(_format_hub_triage_result_lines(index, row))
+        lines.append(
+            f"{len(block.hub_triage_results)} prioritized recommendation(s); "
+            "see recommendation tables below"
+        )
         return lines
     if block.short_service_info:
         lines.append("short_service_info:")
@@ -530,6 +573,7 @@ def serviceability_block_from_entry_point_hub(
     hub_label: str = "Service hub",
     rf_event_count: int = 0,
     afid_sag_path: Optional[str] = None,
+    hub_analyze_response: Optional[dict[str, Any]] = None,
 ) -> ServiceabilityBlock:
     """Build a ServiceabilityBlock from a registered entry-point hub analyze() response."""
     hub_name = str(hub_result.get("engine") or hub_label)
@@ -606,6 +650,14 @@ def serviceability_block_from_entry_point_hub(
         parsed = _hub_triage_result_from_row(row, sag)
         if parsed is not None:
             triage_results.append(parsed)
+
+    top_results: list[HubTriageResult] = []
+    for row in _entry_point_top_rows(hub_result):
+        if not isinstance(row, dict):
+            continue
+        parsed = _hub_triage_result_from_row(row, sag)
+        if parsed is not None:
+            top_results.append(parsed)
     sag_metadata = None
     afid_sag_file_version = None
     if sag:
@@ -629,5 +681,7 @@ def serviceability_block_from_entry_point_hub(
         hub_version=hub_version,
         afid_sag_file_version=afid_sag_file_version,
         afid_sag_metadata=sag_metadata,
+        hub_analyze_response=hub_analyze_response,
+        hub_top_results=top_results,
         hub_triage_results=triage_results,
     )

@@ -183,7 +183,7 @@ def test_mi4xx_serviceability_plugin_wiring():
 def test_mi4xx_analyzer_args_defaults_to_afse():
     args = Mi4xxServiceabilityAnalyzerArgs()
     assert args.hub_entry_point == "afse"
-    assert args.hub_display_name == "AFSE"
+    assert args.hub_display_name == "Hub"
     assert args.resolved_hub_entry_point() == "afse"
     assert args.skip_hub is False
 

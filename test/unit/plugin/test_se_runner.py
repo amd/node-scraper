@@ -307,9 +307,8 @@ def test_serviceability_block_from_entry_point_hub_uses_sag_labels(tmp_path):
     assert triage.service_action_steps
     assert triage.service_action_category == "Reflash"
     lines = format_serviceability_solution_lines(block)
-    assert "Hub triage results:" in lines
-    assert "priority=" in "\n".join(lines)
-    assert "step 0:" in "\n".join(lines)
+    assert "prioritized recommendation(s); see recommendation tables below" in lines
+    assert "Hub triage results:" not in lines
 
 
 def test_serviceability_block_from_service_result():
