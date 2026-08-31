@@ -626,6 +626,7 @@ def main(
             built_in_configs=config_reg.configs,
             parsed_plugin_args=parsed_plugin_args,
             plugin_subparser_map=plugin_subparser_map,
+            connection_config=parsed_args.connection_config,
         )
 
         if parsed_args.skip_sudo:

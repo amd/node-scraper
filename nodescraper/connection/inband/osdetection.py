@@ -24,11 +24,14 @@
 #
 ###############################################################################
 import json
+import logging
 import re
 from dataclasses import dataclass
 from typing import Optional
 
+from nodescraper.connection.inband import InBandConnectionManager
 from nodescraper.enums import OSFamily
+from nodescraper.models import SystemInfo
 
 from .inband import InBandConnection
 
@@ -150,3 +153,55 @@ def detect_network_os(connection: InBandConnection) -> Optional[NetworkOsDetecti
             return detection
 
     return None
+
+
+def apply_network_os_detection(
+    system_info: SystemInfo,
+    detection: NetworkOsDetection,
+) -> None:
+    """Apply network OS probe results to system info."""
+    system_info.os_family = detection.os_family
+    system_info.platform = detection.platform
+    if system_info.metadata is None:
+        system_info.metadata = {}
+    system_info.metadata.update(detection.metadata)
+
+
+def discover_and_write_os_family(
+    connection_manager: InBandConnectionManager,
+    system_info: SystemInfo,
+    logger: logging.Logger,
+) -> None:
+    """Check
+
+    Args:
+        connection_manager (InBandConnectionManager): _description_
+        system_info (SystemInfo): _description_
+        logger (logging.Logger): _description_
+    """
+    if connection_manager.connection is None:
+        logger.error("Connection is not initialized, OS family check cannot be performed.")
+        return
+    logger.info("Checking OS family")
+    res = connection_manager.connection.run_command("uname -s")
+    if "not recognized as an internal or external command" in res.stdout + res.stderr:
+        system_info.os_family = OSFamily.WINDOWS
+    elif res.exit_code == 0:
+        system_info.os_family = OSFamily.LINUX
+    else:
+        detection = detect_network_os(connection_manager.connection)
+        if detection is not None:
+            apply_network_os_detection(system_info, detection)
+        else:
+            logger.warning(
+                "Unable to determine OS family. uname failed and no supported network OS detected."
+            )
+
+    if system_info.platform:
+        logger.info(
+            "OS Family: %s (%s)",
+            system_info.os_family.name,
+            system_info.platform,
+        )
+    else:
+        logger.info("OS Family: %s", system_info.os_family.name)

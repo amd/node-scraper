@@ -102,7 +102,7 @@ class EthtoolInfo(BaseModel):
     advertised_link_modes: List[str] = Field(default_factory=list)  # Advertised link modes
     speed: Optional[str] = None  # Link speed (e.g., "10000Mb/s")
     duplex: Optional[str] = None  # Duplex mode (e.g., "Full")
-    port: Optional[str] = None  # Port type (e.g., "Twisted Pair")
+    port: Optional[str] = None  # Port type (e_get_netdev_driver.g., "Twisted Pair")
     auto_negotiation: Optional[str] = None  # Auto-negotiation status (e.g., "on", "off")
     link_detected: Optional[str] = None  # Link detection status (e.g., "yes", "no")
 

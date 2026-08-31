@@ -35,7 +35,10 @@ from typing import Optional, Type, Union
 
 from pydantic import BaseModel
 
+from build.lib.nodescraper.enums import ExecutionStatus
 from nodescraper.base.oobsshdataplugin import OOBSSHDataPlugin
+from nodescraper.connection.inband import InBandConnectionManager
+from nodescraper.connection.inband.osdetection import discover_and_write_os_family
 from nodescraper.connection.oob_ssh import OobSshConnectionManager
 from nodescraper.constants import DEFAULT_LOGGER
 from nodescraper.interfaces import ConnectionManager, DataPlugin, PluginInterface
@@ -104,7 +107,8 @@ class PluginExecutor:
             for connection, connection_args in connections.items():
                 if connection not in self.plugin_registry.connection_managers:
                     self.logger.error(
-                        "Unable to find registered connection manager class for %s", connection
+                        "Unable to find registered connection manager class for %s",
+                        connection,
                     )
                     continue
 
@@ -161,6 +165,20 @@ class PluginExecutor:
 
         return merged_config
 
+    def discover_os_info(self) -> None:
+        """If the connection library has an InBandConnectionManager, use it to discover OS info and update system_info
+        self.system_info will be updated with the discovered OS info.
+        """
+        inband_connection = self.connection_library.get(InBandConnectionManager)
+        result = inband_connection.connect() if inband_connection else None
+        if (not inband_connection) or (not result) or (result.status != ExecutionStatus.OK):
+            self.logger.info(
+                "InBandConnectionManager not available or failed to connect for OS discovery. Skipping OS discovery."
+            )
+            return
+        discover_and_write_os_family(inband_connection, self.system_info, self.logger)
+        inband_connection.disconnect()
+
     def run_queue(self) -> list[PluginResult]:
         """Run the plugin queue and return results
 
@@ -168,6 +186,8 @@ class PluginExecutor:
             list[PluginResult]: List of results from running the plugins in the queue
         """
         plugin_results = []
+        # For Plugins discover OS Family
+        self.discover_os_info()
         plugin_queue = deque(self.plugin_config.plugins.items())
         try:
             while len(plugin_queue) > 0:
@@ -276,7 +296,9 @@ class PluginExecutor:
                         hook(plugin_result)
                 except Exception as e:
                     self.logger.exception(
-                        "Unexpected exception when running plugin %s: %s", plugin_name, e
+                        "Unexpected exception when running plugin %s: %s",
+                        plugin_name,
+                        e,
                     )
         except Exception as e:
             self.logger.exception("Unexpected exception running plugin queue: %s", str(e))
@@ -285,11 +307,15 @@ class PluginExecutor:
 
             if self.plugin_config.result_collators:
                 self.logger.info("Running result collators")
-                for collator, collator_args in self.plugin_config.result_collators.items():
+                for (
+                    collator,
+                    collator_args,
+                ) in self.plugin_config.result_collators.items():
                     collator_class = self.plugin_registry.result_collators.get(collator)
                     if collator_class is None:
                         self.logger.warning(
-                            "No result collator found in registry for name: %s", collator
+                            "No result collator found in registry for name: %s",
+                            collator,
                         )
                         continue
 
