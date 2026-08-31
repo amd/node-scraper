@@ -94,6 +94,8 @@ class InBandConnectionManager(ConnectionManager[InBandConnection, SSHConnectionP
         res = self.connection.run_command("uname -s")
         if "not recognized as an internal or external command" in res.stdout + res.stderr:
             self.system_info.os_family = OSFamily.WINDOWS
+        elif res.exit_code == 0 and "VMkernel" in res.stdout:
+            self.system_info.os_family = OSFamily.ESXI
         elif res.exit_code == 0:
             self.system_info.os_family = OSFamily.LINUX
         else:
