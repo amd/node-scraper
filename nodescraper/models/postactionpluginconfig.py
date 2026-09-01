@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# Copyright (c) 2025 Advanced Micro Devices, Inc.
+# Copyright (c) 2026 Advanced Micro Devices, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -27,7 +27,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from nodescraper.models.postactioncondition import PostActionCondition
 
@@ -59,7 +59,16 @@ class PostActionPluginConfig(BaseModel):
     """
 
     plugin: str
-    """Name of the plugin to run — must be registered in the plugin registry."""
+    """Name of the plugin to run — must be registered in the plugin registry.
+    Must be a non-empty, non-whitespace-only string."""
+
+    @field_validator("plugin")
+    @classmethod
+    def validate_plugin(cls, v: str) -> str:
+        """Reject empty or whitespace-only plugin names at construction time."""
+        if not v or not v.strip():
+            raise ValueError("plugin name must not be empty or whitespace-only")
+        return v
 
     plugin_args: dict = Field(default_factory=dict)
     """Arguments forwarded verbatim to ``plugin.run()``.  Same shape as entries

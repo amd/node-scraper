@@ -26,9 +26,9 @@
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from nodescraper.enums import EventPriority, ExecutionStatus
 
@@ -50,24 +50,54 @@ class PostActionCondition(BaseModel):
     """If set, only inspect the PluginResult whose ``source`` matches this name.
     If None, all results are candidates."""
 
-    status: Optional[str] = None
+    status: Optional[ExecutionStatus] = None
     """If set, the result's ExecutionStatus must be >= this value.
-    Accepts any :class:`~nodescraper.enums.ExecutionStatus` name
-    (e.g. ``"WARNING"``, ``"ERROR"``, ``"EXECUTION_FAILURE"``)."""
+    Accepts an :class:`~nodescraper.enums.ExecutionStatus` member or its name as
+    a string (e.g. ``"WARNING"``, ``"ERROR"``, ``"EXECUTION_FAILURE"``)."""
 
     event_category: Optional[str] = None
     """If set, at least one event from analysis_result or collection_result must
     have a category equal to this value (matched after the same normalisation
     applied to event categories: strip, upper, spaces/hyphens → underscores)."""
 
-    event_priority: Optional[str] = None
+    event_priority: Optional[EventPriority] = None
     """If set, at least one event's priority must be >= this value.
-    Accepts any :class:`~nodescraper.enums.EventPriority` name
-    (e.g. ``"WARNING"``, ``"ERROR"``, ``"CRITICAL"``)."""
+    Accepts an :class:`~nodescraper.enums.EventPriority` member or its name as
+    a string (e.g. ``"WARNING"``, ``"ERROR"``, ``"CRITICAL"``)."""
 
     event_description_contains: Optional[str] = None
     """If set, at least one event's description must contain this substring
     (case-sensitive)."""
+
+    # ------------------------------------------------------------------
+    # Field validators — allow string names from JSON configs
+    # ------------------------------------------------------------------
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def validate_status(cls, v: Any) -> Optional[ExecutionStatus]:
+        """Accept an ExecutionStatus member or its name string."""
+        if v is None or isinstance(v, ExecutionStatus):
+            return v
+        if isinstance(v, str):
+            try:
+                return ExecutionStatus[v.upper()]
+            except KeyError as e:
+                raise ValueError(f"Unknown ExecutionStatus name: {v!r}") from e
+        return v
+
+    @field_validator("event_priority", mode="before")
+    @classmethod
+    def validate_event_priority(cls, v: Any) -> Optional[EventPriority]:
+        """Accept an EventPriority member or its name string."""
+        if v is None or isinstance(v, EventPriority):
+            return v
+        if isinstance(v, str):
+            try:
+                return EventPriority[v.upper()]
+            except KeyError as e:
+                raise ValueError(f"Unknown EventPriority name: {v!r}") from e
+        return v
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -98,11 +128,7 @@ class PostActionCondition(BaseModel):
         """
         # --- status check ---
         if self.status is not None:
-            try:
-                status_threshold = ExecutionStatus[self.status.upper()]
-            except KeyError:
-                return False
-            if result.status < status_threshold:
+            if result.status < self.status:
                 return False
 
         # Remaining checks all operate on events; collect them once.
@@ -116,11 +142,7 @@ class PostActionCondition(BaseModel):
 
         # --- event_priority check ---
         if self.event_priority is not None:
-            try:
-                priority_threshold = EventPriority[self.event_priority.upper()]
-            except KeyError:
-                return False
-            if not any(e.priority >= priority_threshold for e in events):
+            if not any(e.priority >= self.event_priority for e in events):
                 return False
 
         # --- event_description_contains check ---

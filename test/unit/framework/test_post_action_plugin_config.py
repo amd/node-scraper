@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# Copyright (c) 2025 Advanced Micro Devices, Inc.
+# Copyright (c) 2026 Advanced Micro Devices, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -26,6 +26,8 @@
 """Unit tests for PostActionPluginConfig.should_run OR semantics."""
 from typing import Union
 
+import pytest
+
 from nodescraper.enums import ExecutionStatus
 from nodescraper.models import PluginResult
 from nodescraper.models.postactioncondition import PostActionCondition
@@ -40,7 +42,7 @@ def _make_result(source: str, status: ExecutionStatus) -> PluginResult:
     return PluginResult(status=status, source=source)
 
 
-def _cond(status: str, plugin: Union[str, None] = None) -> PostActionCondition:
+def _cond(status, plugin: Union[str, None] = None) -> PostActionCondition:
     """Shorthand: a condition that fires when *source* has at least *status*."""
     return PostActionCondition(plugin=plugin, status=status)
 
@@ -164,6 +166,27 @@ def test_conditions_present_empty_results_returns_false():
 
 
 # ---------------------------------------------------------------------------
+# plugin field validation
+# ---------------------------------------------------------------------------
+
+
+def test_empty_plugin_name_raises():
+    """An empty string plugin name raises ValidationError at construction time."""
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError, match="must not be empty or whitespace"):
+        PostActionPluginConfig(plugin="", conditions=[_cond("ERROR")])
+
+
+def test_whitespace_only_plugin_name_raises():
+    """A whitespace-only plugin name raises ValidationError at construction time."""
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError, match="must not be empty or whitespace"):
+        PostActionPluginConfig(plugin="   ", conditions=[_cond("ERROR")])
+
+
+# ---------------------------------------------------------------------------
 # plugin_args field validation
 # ---------------------------------------------------------------------------
 
@@ -189,6 +212,8 @@ def test_plugin_args_passed_through():
 
 def test_model_validate_from_dict():
     """PostActionPluginConfig can be constructed from a plain dict (as from JSON config)."""
+    from nodescraper.enums import EventPriority, ExecutionStatus
+
     raw = {
         "plugin": "RemediationPlugin",
         "plugin_args": {"collection": True},
@@ -202,6 +227,6 @@ def test_model_validate_from_dict():
     assert cfg.plugin_args == {"collection": True}
     assert len(cfg.conditions) == 2
     assert cfg.conditions[0].plugin == "PrimaryPlugin"
-    assert cfg.conditions[0].status == "ERROR"
-    assert cfg.conditions[1].event_priority == "CRITICAL"
+    assert cfg.conditions[0].status == ExecutionStatus.ERROR
+    assert cfg.conditions[1].event_priority == EventPriority.CRITICAL
     assert cfg.conditions[1].event_description_contains == "widget fault"

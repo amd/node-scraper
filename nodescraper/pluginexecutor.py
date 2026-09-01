@@ -342,6 +342,14 @@ class PluginExecutor:
         those whose conditions are satisfied (OR semantics within each entry's
         ``conditions`` list) are run in order.
 
+        .. note::
+            The same plugin name may appear in multiple entries with different
+            ``conditions`` or ``plugin_args``.  Each entry is an independent
+            trigger — if both entries' conditions are met the plugin runs once
+            per matching entry.  To trigger a single run on condition A **or**
+            condition B, place both conditions inside the same entry's
+            ``conditions`` list rather than using two entries.
+
         Args:
             plugin_results: Accumulated primary plugin results.  Mutated in-place
                 with results from post-action plugins that fire.

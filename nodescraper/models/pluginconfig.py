@@ -54,13 +54,16 @@ class PluginConfig(BaseModel):
         """Merge recipe plugin configs.
 
         Plugin entries from later configs overwrite earlier ones with the same name.
+        ``post_action_plugins`` are concatenated from all configs in order.
         ``name``, ``desc``, ``global_args``, and ``result_collators`` come from the first
         config.
         """
         normalized = [cls.coerce(config) for config in configs]
         merged_plugins: dict[str, dict[str, Any]] = {}
+        merged_post_actions = []
         for config in normalized:
             merged_plugins.update(config.plugins)
+            merged_post_actions.extend(config.post_action_plugins)
         first = normalized[0] if normalized else cls()
         return cls(
             name=first.name,
@@ -68,4 +71,5 @@ class PluginConfig(BaseModel):
             global_args=first.global_args,
             plugins=merged_plugins,
             result_collators=first.result_collators,
+            post_action_plugins=merged_post_actions,
         )

@@ -252,6 +252,38 @@ def test_merge_configs_empty_post_action_plugins():
     assert merged.post_action_plugins == []
 
 
+def test_plugin_config_merge_concatenates_post_action_plugins():
+    """PluginConfig.merge() (recipe merge) also concatenates post_action_plugins."""
+    pa1 = PostActionPluginConfig(
+        plugin="PostActionPlugin",
+        conditions=[PostActionCondition(status="ERROR")],
+    )
+    pa2 = PostActionPluginConfig(
+        plugin="PostActionPlugin",
+        conditions=[PostActionCondition(status="WARNING")],
+    )
+    merged = PluginConfig.merge(
+        PluginConfig(plugins={"TestPluginA": {}}, post_action_plugins=[pa1]),
+        PluginConfig(plugins={"TestPluginB": {}}, post_action_plugins=[pa2]),
+    )
+    # Plugins from both configs are present
+    assert "TestPluginA" in merged.plugins
+    assert "TestPluginB" in merged.plugins
+    # Post-action plugins from both configs are concatenated
+    assert len(merged.post_action_plugins) == 2
+    assert merged.post_action_plugins[0] is pa1
+    assert merged.post_action_plugins[1] is pa2
+
+
+def test_plugin_config_merge_empty_post_action_plugins():
+    """PluginConfig.merge() with no post_action_plugins yields an empty list."""
+    merged = PluginConfig.merge(
+        PluginConfig(plugins={"TestPluginA": {}}),
+        PluginConfig(plugins={"TestPluginB": {}}),
+    )
+    assert merged.post_action_plugins == []
+
+
 # ---------------------------------------------------------------------------
 # run_queue: post-action execution
 # ---------------------------------------------------------------------------

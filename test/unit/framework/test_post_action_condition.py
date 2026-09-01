@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# Copyright (c) 2025 Advanced Micro Devices, Inc.
+# Copyright (c) 2026 Advanced Micro Devices, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -116,11 +116,12 @@ def test_status_threshold(condition_status, result_status, expected):
     assert condition.is_met([result]) is expected
 
 
-def test_status_invalid_name_returns_false():
-    """An unrecognised status name never matches (doesn't raise)."""
-    condition = PostActionCondition(status="NONEXISTENT_STATUS")
-    result = _make_result(status=ExecutionStatus.ERROR)
-    assert condition.is_met([result]) is False
+def test_status_invalid_name_raises():
+    """An unrecognised status name raises ValidationError at construction time."""
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        PostActionCondition(status="NONEXISTENT_STATUS")
 
 
 # ---------------------------------------------------------------------------
@@ -199,13 +200,12 @@ def test_event_priority_threshold(condition_priority, event_priority, expected):
     assert condition.is_met([result]) is expected
 
 
-def test_event_priority_invalid_name_returns_false():
-    condition = PostActionCondition(event_priority="SUPER_CRITICAL")
-    result = _make_result(
-        status=ExecutionStatus.ERROR,
-        analysis_events=[_make_event("CAT", "desc", EventPriority.CRITICAL)],
-    )
-    assert condition.is_met([result]) is False
+def test_event_priority_invalid_name_raises():
+    """An unrecognised event_priority name raises ValidationError at construction time."""
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        PostActionCondition(event_priority="SUPER_CRITICAL")
 
 
 def test_event_priority_no_events_returns_false():
