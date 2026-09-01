@@ -27,7 +27,9 @@ from __future__ import annotations
 
 import sys
 from textwrap import wrap
-from typing import Optional
+from typing import Any, Optional
+
+from nodescraper.models import PluginResult
 
 from .se_models import PrioritizedServiceAction, ServiceabilityBlock
 from .serviceability_api import split_recommendation_actions
@@ -146,6 +148,52 @@ def render_recommendations_section(
         lines.append(note)
     lines.append(render_recommendations_table(actions))
     return "\n".join(lines)
+
+
+def _serviceability_block_from_plugin_result(
+    plugin_result: PluginResult,
+) -> Optional[ServiceabilityBlock]:
+    """Return a ServiceabilityBlock when a plugin result includes hub recommendation data."""
+    result_data = plugin_result.result_data
+    if result_data is None:
+        return None
+
+    system_data: Any
+    if isinstance(result_data, dict):
+        system_data = result_data.get("system_data")
+    else:
+        system_data = getattr(result_data, "system_data", None)
+    if system_data is None:
+        return None
+
+    serviceability: Any
+    if isinstance(system_data, dict):
+        serviceability = system_data.get("serviceability")
+    else:
+        serviceability = getattr(system_data, "serviceability", None)
+    if serviceability is None:
+        return None
+
+    if isinstance(serviceability, dict):
+        serviceability = ServiceabilityBlock.model_validate(serviceability)
+    if not (serviceability.hub_triage_results or serviceability.hub_top_results):
+        return None
+    return serviceability
+
+
+def render_serviceability_recommendation_tables_for_plugin_results(
+    plugin_results: list[PluginResult],
+) -> str:
+    """Render Hub recommendation tables for all plugins that produced serviceability output."""
+    sections: list[str] = []
+    for plugin_result in plugin_results:
+        block = _serviceability_block_from_plugin_result(plugin_result)
+        if block is None:
+            continue
+        rendered = render_serviceability_recommendation_tables(block)
+        if rendered:
+            sections.append(rendered)
+    return "\n\n".join(sections)
 
 
 def render_serviceability_recommendation_tables(block: ServiceabilityBlock) -> str:

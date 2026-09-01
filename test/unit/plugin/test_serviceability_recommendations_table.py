@@ -33,6 +33,8 @@ from serviceability_dummy_data import (
     DUMMY_UNIT_B,
 )
 
+from nodescraper.enums import ExecutionStatus
+from nodescraper.models import DataPluginResult, PluginResult
 from nodescraper.plugins.serviceability.se_models import (
     HubTriageResult,
     ServiceabilityBlock,
@@ -41,9 +43,13 @@ from nodescraper.plugins.serviceability.serviceability_api import (
     build_top_service_actions,
     split_recommendation_actions,
 )
+from nodescraper.plugins.serviceability.serviceability_data import (
+    ServiceabilityDataModel,
+)
 from nodescraper.plugins.serviceability.serviceability_recommendations_table import (
     emit_serviceability_recommendation_tables,
     render_serviceability_recommendation_tables,
+    render_serviceability_recommendation_tables_for_plugin_results,
 )
 
 
@@ -182,6 +188,44 @@ def test_build_top_service_actions_includes_tied_entries():
 
     assert len(top) == 2
     assert {action.afid for action in top} == {DUMMY_AFID_A, DUMMY_AFID_B}
+
+
+def test_render_serviceability_recommendation_tables_for_plugin_results():
+    block = ServiceabilityBlock(
+        hub_top_results=[
+            _row(
+                afid=DUMMY_AFID_A,
+                location=DUMMY_UNIT_A,
+                sort_priority=1000,
+                priority=1,
+                title="Contact Support",
+            )
+        ],
+        hub_triage_results=[
+            _row(
+                afid=DUMMY_AFID_A,
+                location=DUMMY_UNIT_A,
+                sort_priority=1000,
+                priority=1,
+                title="Contact Support",
+            ),
+        ],
+    )
+    plugin_results = [
+        PluginResult(
+            status=ExecutionStatus.OK,
+            source="Mi4xxServiceabilityPlugin",
+            message="ok",
+            result_data=DataPluginResult(
+                system_data=ServiceabilityDataModel(serviceability=block),
+            ),
+        )
+    ]
+
+    output = render_serviceability_recommendation_tables_for_plugin_results(plugin_results)
+
+    assert "Top Hub service action" in output
+    assert "Contact Support" in output
 
 
 def test_emit_serviceability_recommendation_tables_writes_stdout(capsys):

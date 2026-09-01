@@ -38,9 +38,6 @@ from .analyzer_args import ServiceabilityAnalyzerArgs
 from .se_adapter import format_serviceability_solution_lines
 from .se_models import ServiceabilityBlock
 from .serviceability_data import ServiceabilityDataModel
-from .serviceability_recommendations_table import (
-    emit_serviceability_recommendation_tables,
-)
 
 
 class AfidSagMetadataArtifact(BaseModel):
@@ -106,5 +103,3 @@ class ServiceabilityHubAnalyzer(
         parent = self.parent or self.__class__.__name__
         for line in format_serviceability_solution_lines(block):
             self.logger.info("(%s) %s", parent, line)
-        if block.hub_triage_results or block.hub_top_results:
-            emit_serviceability_recommendation_tables(block)
