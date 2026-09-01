@@ -7,7 +7,7 @@
 ###############################################################################
 from nodescraper.models import PluginConfig
 
-from .all_plugins import AllPlugins
+from .all_ib_plugins import AllIbPlugins
 from .node_status import NodeStatus
 from .pluginrecipe import (
     ANALYZE_ONLY,
@@ -24,7 +24,7 @@ __all__ = [
     "ANALYZE_ONLY",
     "COLLECT_AND_ANALYZE",
     "COLLECT_ONLY",
-    "AllPlugins",
+    "AllIbPlugins",
     "AnalyzerOnlyPluginRecipe",
     "CollectorOnlyPluginRecipe",
     "NodeStatus",
