@@ -139,7 +139,7 @@ options:
                         Comma-separated built-in names and/or plugin config
                         JSON paths (e.g. --plugin-
                         configs=NodeStatus,/path/c.json). Built-ins:
-                        AllPlugins, NodeStatus (default: None)
+                        AllIbPlugins, NodeStatus (default: None)
   --system-config STRING
                         Path to system config json (default: None)
   --connection-config STRING
@@ -574,8 +574,8 @@ Below is an example that skips sudo requiring plugins and disables analysis.
 
 #### Plugin config: **'--plugin-configs' command**
 A plugin config can be used to compare the system data against the config specifications.
-Built-in configs include **NodeStatus** (a subset of plugins) and **AllPlugins** (runs every
-registered plugin with default arguments—useful for generating a reference config from the full system).
+Built-in configs include **NodeStatus** (a subset of plugins) and **AllIbPlugins** (runs every
+registered in-band plugin with default arguments—useful for generating a reference config from the full system).
 
 **NodeStatus plus additional plugins** — built-in configs merge with plugins named after `run-plugins`.
 Values are comma-separated; pass as **`--plugin-configs=…`** or **`--plugin-configs` …** (same as other
@@ -743,9 +743,9 @@ This command can be used to generate a reference config that is populated with c
 configurations. Plugins that use analyzer args (where applicable) will be populated with system
 data.
 
-**Run all registered plugins (AllPlugins config):**
+**Run all registered in-band plugins (AllIbPlugins config):**
 ```sh
-node-scraper --plugin-configs=AllPlugins
+node-scraper --plugin-configs=AllIbPlugins
 
 ```
 
