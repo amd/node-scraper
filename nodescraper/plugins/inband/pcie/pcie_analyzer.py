@@ -50,6 +50,11 @@ from .pcie_data import (
     UncorrErrSevReg,
     UncorrErrStatReg,
 )
+from .pcie_inventory import (
+    get_profile_fields,
+    inventory_field_value,
+    normalize_inventory_value,
+)
 
 T_CAP = TypeVar("T_CAP", bound=PcieCapStructure)
 
@@ -887,6 +892,99 @@ class PcieAnalyzer(DataAnalyzer):
             return False
         return True
 
+    def check_inventory_expected(self, pcie_data: PcieDataModel, args: PcieAnalyzerArgs) -> None:
+        """Compare collected inventory against sparse expected values in analysis_args.
+        Args:
+            pcie_data: Collected PCIe data model.
+            args: Analyzer arguments containing expected inventory fields.
+        """
+        has_expected = args.expected_total_count is not None or bool(args.expected_devices)
+        if not has_expected:
+            return
+
+        inventory = pcie_data.inventory
+        if inventory is None:
+            self._log_event(
+                category=EventCategory.IO,
+                description="Inventory expected checks requested but no inventory was collected",
+                priority=EventPriority.ERROR,
+            )
+            return
+
+        allowlist = get_profile_fields(args.profile)
+
+        if (
+            args.expected_total_count is not None
+            and inventory.total_count != args.expected_total_count
+        ):
+            self._log_event(
+                category=EventCategory.IO,
+                description="PCI inventory total_count mismatch",
+                priority=EventPriority.ERROR,
+                data={
+                    "actual_total_count": inventory.total_count,
+                    "expected_total_count": args.expected_total_count,
+                },
+            )
+
+        expected_bdfs = set(args.expected_devices.keys())
+        if args.fail_on_extra_devices and expected_bdfs:
+            extra_bdfs = sorted(set(inventory.devices.keys()) - expected_bdfs)
+            if extra_bdfs:
+                self._log_event(
+                    category=EventCategory.IO,
+                    description="Unexpected PCI devices found in inventory",
+                    priority=EventPriority.ERROR,
+                    data={"extra_devices": extra_bdfs},
+                )
+
+        for bdf, expected_fields in args.expected_devices.items():
+            device = inventory.devices.get(bdf)
+            if device is None:
+                self._log_event(
+                    category=EventCategory.IO,
+                    description="Expected PCI device missing from inventory",
+                    priority=EventPriority.ERROR,
+                    data={"bdf": bdf},
+                )
+                continue
+
+            for field, expected_value in expected_fields.items():
+                if allowlist is not None and field not in allowlist:
+                    continue
+                actual_value = inventory_field_value(device, field)
+                expected_norm = normalize_inventory_value(field, expected_value)
+                if actual_value != expected_norm:
+                    self._log_event(
+                        category=EventCategory.IO,
+                        description="PCI inventory field mismatch",
+                        priority=EventPriority.ERROR,
+                        data={
+                            "bdf": bdf,
+                            "field": field,
+                            "actual": actual_value,
+                            "expected": expected_norm,
+                        },
+                    )
+
+    def check_sriov_count(self, pcie_data: PcieDataModel, expected_sriov_count: int) -> None:
+        """Validate collected SR-IOV VF count against the expected value.
+        Args:
+            pcie_data: Collected PCIe data model.
+            expected_sriov_count: Expected number of SR-IOV virtual functions.
+        """
+        actual_count = len(pcie_data.vf_pcie_cfg_space or {})
+        if actual_count != expected_sriov_count:
+            self._log_event(
+                category=EventCategory.IO,
+                description="SR-IOV VF count mismatch",
+                priority=EventPriority.ERROR,
+                data={
+                    "actual_sriov_count": actual_count,
+                    "expected_sriov_count": expected_sriov_count,
+                },
+            )
+
     def check_gpu_count(
         self,
         pcie_data: PcieDataModel,
@@ -1006,6 +1104,8 @@ class PcieAnalyzer(DataAnalyzer):
 
         pcie_data: PcieDataModel = data
 
+        self.check_inventory_expected(pcie_data, args)
+
         if pcie_data.pcie_cfg_space == {} and pcie_data.vf_pcie_cfg_space == {}:
             # If both of the PCIe Configuration spaces are
             self._log_event(
@@ -1101,5 +1201,7 @@ class PcieAnalyzer(DataAnalyzer):
             )
 
         self.check_gpu_count(pcie_data, exp_gpu_count_override)
+        if exp_sriov_count is not None:
+            self.check_sriov_count(pcie_data, exp_sriov_count)
 
         return self.result

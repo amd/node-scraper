@@ -49,9 +49,11 @@ from .pcie_data import (
     PcieCapStructure,
     PcieCfgSpace,
     PcieDataModel,
+    PcieInventory,
     Type0Configuration,
     Type1Configuration,
 )
+from .pcie_inventory import apply_driver_versions, parse_lspci_inventory
 
 
 class PcieCollector(InBandDataCollector[PcieDataModel, None]):
@@ -93,6 +95,8 @@ class PcieCollector(InBandDataCollector[PcieDataModel, None]):
     CMD_LSPCI_AMD_DEVICES = "lspci -d {vendor_id}: -nn"
     CMD_LSPCI_PATH_DEVICE = "lspci -PP -d {vendor_id}:{dev_id}"
     CMD_LSPCI_PATH_DEVICE_DOMAIN = "lspci -PP -D -d {vendor_id}:{dev_id}"
+    CMD_LSPCI_INVENTORY = "lspci -D -xx -vv"
+    CMD_MODINFO = "modinfo -F version {driver}"
 
     def _detect_amd_device_ids(self) -> dict[str, list[str]]:
         """Detect AMD GPU device IDs from the system using lspci.
@@ -575,6 +579,43 @@ class PcieCollector(InBandDataCollector[PcieDataModel, None]):
             ecap_structure=ecap,  # type: ignore[arg-type]
         )
 
+    def show_lspci_inventory(self, sudo: bool = True) -> Optional[str]:
+        """Show lspci with -D -xx -vv for BOM-style inventory parsing."""
+        return self._run_os_cmd(self.CMD_LSPCI_INVENTORY, sudo=sudo)
+
+    def _collect_driver_versions(self, inventory: PcieInventory) -> Dict[str, str]:
+        """Collect modinfo driver_version for each unique bound driver in inventory.
+        Args:
+            inventory: Parsed PCI inventory.
+        Returns:
+            Mapping of driver name to version string.
+        """
+        driver_versions: Dict[str, str] = {}
+        drivers = {
+            device.driver
+            for device in inventory.devices.values()
+            if device.driver and device.driver not in driver_versions
+        }
+        for driver in sorted(drivers):
+            version = self._run_os_cmd(
+                self.CMD_MODINFO.format(driver=driver),
+                sudo=False,
+                ignore_error=True,
+            )
+            if version:
+                driver_versions[driver] = version.strip()
+        return driver_versions
+
+    def _build_inventory(self, lspci_output: str) -> PcieInventory:
+        """Parse lspci output and attach modinfo driver versions.
+        Args:
+            lspci_output: Raw lspci -D -xx -vv text.
+        Returns:
+            Parsed inventory with driver_version populated when available.
+        """
+        inventory = parse_lspci_inventory(lspci_output)
+        return apply_driver_versions(inventory, self._collect_driver_versions(inventory))
+
     def _log_pcie_artifacts(
         self,
         lspci_pp: Optional[str],
@@ -582,6 +623,7 @@ class PcieCollector(InBandDataCollector[PcieDataModel, None]):
         lspci_hex: Optional[str],
         lspci_verbose_tree: Optional[str],
         lspci_verbose: Optional[str],
+        lspci_inventory: Optional[str] = None,
     ):
         """Log the file artifacts for the PCIe data collector."""
         name_log_map = {
@@ -590,6 +632,7 @@ class PcieCollector(InBandDataCollector[PcieDataModel, None]):
             "lspci_verbose.txt": lspci_verbose,
             "lspci_pp.txt": lspci_pp,
             "lspci_pp_d.txt": lspci_pp_d,
+            "lspci_output.txt": lspci_inventory,
         }
         for name, data in name_log_map.items():
             if data is not None:
@@ -660,14 +703,26 @@ class PcieCollector(InBandDataCollector[PcieDataModel, None]):
             lspci_verbose_tree = self.show_lspci_verbose_tree(sudo=use_sudo)
             lspci_path = self.show_lspci_path(sudo=use_sudo)
             lspci_path_domain = self.show_lspci_path_domain(sudo=use_sudo)
+            lspci_inventory_output = self.show_lspci_inventory(sudo=use_sudo)
+            inventory = None
+            if lspci_inventory_output:
+                inventory = self._build_inventory(lspci_inventory_output)
+            else:
+                self._log_event(
+                    category=EventCategory.IO,
+                    description="Failed to collect PCI inventory via lspci",
+                    priority=EventPriority.WARNING,
+                )
             self._log_pcie_artifacts(
                 lspci_pp=lspci_path,
                 lspci_pp_d=lspci_path_domain,
                 lspci_hex=lspci_hex,
                 lspci_verbose_tree=lspci_verbose_tree,
                 lspci_verbose=lspci_verbose,
+                lspci_inventory=lspci_inventory_output,
             )
             pcie_data = PcieDataModel(
+                inventory=inventory,
                 pcie_cfg_space=pcie_cfg_dict,
                 vf_pcie_cfg_space=vf_pcie_cfg_data,
             )

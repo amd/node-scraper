@@ -23,6 +23,9 @@
 # SOFTWARE.
 #
 ###############################################################################
+import os
+from typing import Any, Optional
+
 from nodescraper.base import InBandDataPlugin
 
 from .analyzer_args import PcieAnalyzerArgs
@@ -41,3 +44,22 @@ class PciePlugin(InBandDataPlugin[PcieDataModel, None, PcieAnalyzerArgs]):
     ANALYZER = PcieAnalyzer
 
     ANALYZER_ARGS = PcieAnalyzerArgs
+
+    @classmethod
+    def load_run_data(cls, run_path: str) -> Optional[dict[str, Any]]:
+        """Load inventory compare snapshot for compare-runs diffs.
+        Args:
+            run_path: Path to a scraper log run directory or datamodel file.
+        Returns:
+            Inventory snapshot dict, or None when the datamodel is unavailable.
+        """
+        run_path = os.path.abspath(run_path)
+        if not os.path.exists(run_path):
+            return None
+        dm_path = run_path if os.path.isfile(run_path) else cls.find_datamodel_path_in_run(run_path)
+        if not dm_path:
+            return None
+        data_model = cls.load_datamodel_from_path(dm_path)
+        if not isinstance(data_model, PcieDataModel):
+            return None
+        return data_model.get_compare_snapshot()

@@ -23,17 +23,25 @@
 # SOFTWARE.
 #
 ###############################################################################
-from typing import Dict, Optional, Union
+from typing import Dict, Literal, Optional, Union
 
 from pydantic import Field
 
 from nodescraper.models import AnalyzerArgs
+
+from .pcie_data import BdfStr
+
+PcieInventoryProfile = Literal["full_bom", "pcie_link", "custom"]
 
 
 class PcieAnalyzerArgs(AnalyzerArgs):
     """Arguments for PCIe analyzer
 
     Attributes:
+        profile: Inventory field allowlist preset for expected value checks.
+        expected_total_count: Expected PCI device count from inventory collection.
+        expected_devices: Sparse per-BDF expected inventory field values.
+        fail_on_extra_devices: Fail when inventory contains BDFs not listed in expected_devices.
         exp_speed: Expected PCIe speed (generation 1-5)
         exp_width: Expected PCIe width (1-16 lanes)
         exp_sriov_count: Expected SR-IOV VF count
@@ -43,9 +51,27 @@ class PcieAnalyzerArgs(AnalyzerArgs):
         exp_ten_bit_tag_req_en: Expected 10-bit tag request enable (int for all devices, dict for specific device IDs)
     """
 
+    profile: PcieInventoryProfile = Field(
+        default="full_bom",
+        description="Inventory field allowlist: full_bom, pcie_link, or custom.",
+    )
+    expected_total_count: Optional[int] = Field(
+        default=None,
+        description="Expected PCI device count from inventory collection.",
+    )
+    expected_devices: Dict[BdfStr, Dict[str, str]] = Field(
+        default_factory=dict,
+        description="Sparse per-BDF expected inventory values; only set keys are validated.",
+    )
+    fail_on_extra_devices: bool = Field(
+        default=True,
+        description="Fail when inventory contains BDFs not listed in expected_devices.",
+    )
     exp_speed: int = Field(default=5, description="Expected PCIe link speed (generation 1–5).")
     exp_width: int = Field(default=16, description="Expected PCIe link width in lanes (1–16).")
-    exp_sriov_count: int = Field(default=0, description="Expected SR-IOV virtual function count.")
+    exp_sriov_count: Optional[int] = Field(
+        default=None, description="Expected SR-IOV virtual function count."
+    )
     exp_gpu_count_override: Optional[int] = Field(
         default=None, description="Override expected GPU count for validation."
     )

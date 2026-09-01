@@ -1997,6 +1997,39 @@ class PcieCfgSpace(BaseModel):
         return cap_out
 
 
+class PcieInventoryDevice(BaseModel):
+    """BOM-style PCI device record parsed from lspci text output."""
+
+    address: BdfStr
+    type: Optional[str] = None
+    description: Optional[str] = None
+    vendor: Optional[str] = None
+    device: Optional[str] = None
+    subvendor: Optional[str] = None
+    subdevice: Optional[str] = None
+    revision: Optional[str] = None
+    driver: Optional[str] = None
+    driver_version: Optional[str] = None
+    speed: Optional[str] = None
+    width: Optional[str] = None
+    link_training: Optional[str] = None
+    slot: Optional[str] = None
+    lnkctl: Optional[str] = None
+    lnksta: Optional[str] = None
+    lnkctl2: Optional[str] = None
+    lnksta2: Optional[str] = None
+    irq: Optional[str] = None
+    control: Optional[str] = None
+    status: Optional[str] = None
+
+
+class PcieInventory(BaseModel):
+    """All PCI devices from one lspci inventory collection pass."""
+
+    total_count: int
+    devices: Dict[BdfStr, PcieInventoryDevice]
+
+
 class PcieDataModel(DataModel):
     """class for collection of PCIe data.
 
@@ -2006,14 +2039,46 @@ class PcieDataModel(DataModel):
     required for the analyzer then they should not be set to
     default.
 
+    - inventory: BOM-style inventory parsed from lspci -D -xx -vv
     - pcie_cfg_space: A dictionary of PCIe cfg space for the GPUs obtained with setpci command
-    - lspci_verbose: Verbose collection of PCIe data
-    - lspci_verbose_tree: Tree view of PCIe data
-    - lspci_path: Path view of PCIe data for the GPUs
-    - lspci_path_domain: Path view of PCIe data for the GPUs (with domain prefix)
-    - lspci_hex: Hex view of PCIe data for the GPUs
+    - vf_pcie_cfg_space: Optional VF config space keyed by BDF
 
     """
 
+    inventory: Optional[PcieInventory] = None
     pcie_cfg_space: Dict[BdfStr, PcieCfgSpace]
     vf_pcie_cfg_space: Optional[Dict[BdfStr, PcieCfgSpace]] = None
+
+    def get_compare_snapshot(self, profile: str = "full_bom") -> dict:
+        """Return inventory-only data for compare-runs diffs.
+        Args:
+            profile: full_bom, pcie_link, or custom for all populated fields.
+        Returns:
+            Dict containing the inventory slice suitable for run comparison.
+        """
+        if self.inventory is None:
+            return {"inventory": None}
+
+        from .pcie_inventory import filter_inventory_fields, get_profile_fields
+
+        allowlist = get_profile_fields(profile)
+        devices: Dict[str, dict] = {}
+        for bdf, device in self.inventory.devices.items():
+            if allowlist is None:
+                fields = [
+                    name
+                    for name, value in device.model_dump(mode="json").items()
+                    if name != "address" and value is not None and value != ""
+                ]
+            else:
+                fields = allowlist
+            filtered = filter_inventory_fields(device, fields)
+            if filtered:
+                devices[bdf] = filtered
+
+        return {
+            "inventory": {
+                "total_count": self.inventory.total_count,
+                "devices": devices,
+            }
+        }
