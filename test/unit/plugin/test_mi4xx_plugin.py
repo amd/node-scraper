@@ -318,7 +318,8 @@ def test_serviceability_hub_analyzer_runs_entry_point_hub(system_info, tmp_path)
             Mi4xxServiceabilityAnalyzerArgs(afid_sag_path=str(sag)),
         )
     assert task.status == ExecutionStatus.OK
-    assert "afse" in task.message.lower()
+    assert task.message.startswith("Hub:")
+    assert DUMMY_HUB_VERSION_ENTRY in task.message
 
 
 def test_mi4xx_analyzer_appends_afid_sag_metadata_artifact(system_info, tmp_path):

@@ -159,4 +159,7 @@ def prepare_serviceability_block_for_export(
 def export_serviceability_json(block: ServiceabilityBlock) -> dict[str, Any]:
     """Serialize serviceability.json with raw Hub output and no duplicate triage rows."""
     exported = prepare_serviceability_block_for_export(block)
-    return exported.model_dump(mode="json")
+    return exported.model_dump(
+        mode="json",
+        exclude={"hub_triage_results", "hub_top_results"},
+    )
