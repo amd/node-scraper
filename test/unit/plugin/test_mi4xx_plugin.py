@@ -183,7 +183,7 @@ def test_mi4xx_serviceability_plugin_wiring():
 def test_mi4xx_analyzer_args_defaults_to_afse():
     args = Mi4xxServiceabilityAnalyzerArgs()
     assert args.hub_entry_point == "afse"
-    assert args.hub_display_name == "AFSE"
+    assert args.hub_display_name == "Hub"
     assert args.resolved_hub_entry_point() == "afse"
     assert args.skip_hub is False
 
@@ -318,7 +318,8 @@ def test_serviceability_hub_analyzer_runs_entry_point_hub(system_info, tmp_path)
             Mi4xxServiceabilityAnalyzerArgs(afid_sag_path=str(sag)),
         )
     assert task.status == ExecutionStatus.OK
-    assert "afse" in task.message.lower()
+    assert task.message.startswith("Hub:")
+    assert DUMMY_HUB_VERSION_ENTRY in task.message
 
 
 def test_mi4xx_analyzer_appends_afid_sag_metadata_artifact(system_info, tmp_path):
