@@ -224,6 +224,86 @@ class PluginExecutor:
 
         return self.connection_library[mgr_impl]
 
+    def _run_single_plugin(
+        self,
+        plugin_name: str,
+        plugin_args: dict,
+        plugin_results: list[PluginResult],
+        *,
+        queue_callback: Optional[Callable],
+    ) -> bool:
+        """Instantiate and run one plugin, appending its result to *plugin_results*.
+
+        Args:
+            plugin_name:     Registry key for the plugin to run.
+            plugin_args:     Arguments forwarded to ``plugin_inst.run()``.
+            plugin_results:  Accumulated results list; mutated in-place on success.
+            queue_callback:  Passed to the plugin constructor so it can enqueue
+                             additional plugins.  Pass ``None`` for post-action
+                             plugins that must not extend the primary queue.
+
+        Returns:
+            ``True`` if the plugin ran (or raised an unexpected exception that was
+            logged), ``False`` if it was skipped due to a registry miss, missing
+            connection manager, or invalid global args.
+        """
+        if plugin_name not in self.plugin_registry.plugins:
+            self.logger.error("Unable to find registered plugin for name %s", plugin_name)
+            return False
+
+        plugin_class = self.plugin_registry.plugins[plugin_name]
+
+        init_payload = {
+            "system_info": self.system_info,
+            "logger": self.logger,
+            "queue_callback": queue_callback,
+            "log_path": self.log_path,
+            "session_id": self.session_id,
+        }
+
+        if plugin_class.CONNECTION_TYPE:
+            conn_mgr = self._get_connection_manager_for_plugin(plugin_class, plugin_name)
+            if conn_mgr is None:
+                return False
+            init_payload["connection_manager"] = conn_mgr
+
+        try:
+            plugin_inst = plugin_class(**init_payload)
+
+            run_payload = copy.deepcopy(plugin_args)
+            run_args = TypeUtils.get_func_arg_types(plugin_class.run, plugin_class)
+
+            for arg in run_args.keys():
+                if arg == "preserve_connection" and issubclass(plugin_class, DataPlugin):
+                    run_payload[arg] = True
+
+            try:
+                global_run_args = self.apply_global_args_to_plugin(
+                    plugin_inst, plugin_class, self.plugin_config.global_args
+                )
+                for args_key in ["analysis_args", "collection_args"]:
+                    if args_key in global_run_args and args_key in run_payload:
+                        run_payload[args_key].update(global_run_args[args_key])
+                        del global_run_args[args_key]
+                run_payload.update(global_run_args)
+            except ValueError as ve:
+                self.logger.error(
+                    "Invalid global_args for plugin %s: %s. Skipping plugin.",
+                    plugin_name,
+                    str(ve),
+                )
+                return False
+
+            plugin_result = plugin_inst.run(**run_payload)
+            plugin_results.append(plugin_result)
+            for hook in self.plugin_run_result_hooks:
+                hook(plugin_result)
+
+        except Exception as e:
+            self.logger.exception("Unexpected exception when running plugin %s: %s", plugin_name, e)
+
+        return True
+
     def run_queue(self) -> list[PluginResult]:
         """Run the plugin queue and return results
 
@@ -235,64 +315,13 @@ class PluginExecutor:
         try:
             while len(plugin_queue) > 0:
                 plugin_name, plugin_args = plugin_queue.popleft()
-                if plugin_name not in self.plugin_registry.plugins:
-                    self.logger.error("Unable to find registered plugin for name %s", plugin_name)
-                    continue
-
-                plugin_class = self.plugin_registry.plugins[plugin_name]
-
-                init_payload = {
-                    "system_info": self.system_info,
-                    "logger": self.logger,
-                    "queue_callback": plugin_queue.append,
-                    "log_path": self.log_path,
-                    "session_id": self.session_id,
-                }
-
-                if plugin_class.CONNECTION_TYPE:
-                    conn_mgr = self._get_connection_manager_for_plugin(plugin_class, plugin_name)
-                    if conn_mgr is None:
-                        continue
-                    init_payload["connection_manager"] = conn_mgr
-
-                try:
-                    plugin_inst = plugin_class(**init_payload)
-
-                    run_payload = copy.deepcopy(plugin_args)
-                    run_args = TypeUtils.get_func_arg_types(plugin_class.run, plugin_class)
-
-                    for arg in run_args.keys():
-                        if arg == "preserve_connection" and issubclass(plugin_class, DataPlugin):
-                            run_payload[arg] = True
-
-                    try:
-                        global_run_args = self.apply_global_args_to_plugin(
-                            plugin_inst, plugin_class, self.plugin_config.global_args
-                        )
-                        # Merge analysis_args and collection_args
-                        for args_key in ["analysis_args", "collection_args"]:
-                            if args_key in global_run_args and args_key in run_payload:
-                                # Merge: global args override plugin-specific args keys specified in both global and plugin-specific args
-                                run_payload[args_key].update(global_run_args[args_key])
-                                del global_run_args[args_key]
-                        run_payload.update(global_run_args)
-                    except ValueError as ve:
-                        self.logger.error(
-                            "Invalid global_args for plugin %s: %s. Skipping plugin.",
-                            plugin_name,
-                            str(ve),
-                        )
-                        continue
-
-                    self.logger.info("-" * 50)
-                    plugin_result = plugin_inst.run(**run_payload)
-                    plugin_results.append(plugin_result)
-                    for hook in self.plugin_run_result_hooks:
-                        hook(plugin_result)
-                except Exception as e:
-                    self.logger.exception(
-                        "Unexpected exception when running plugin %s: %s", plugin_name, e
-                    )
+                self.logger.info("-" * 50)
+                self._run_single_plugin(
+                    plugin_name,
+                    plugin_args,
+                    plugin_results,
+                    queue_callback=plugin_queue.append,
+                )
         except Exception as e:
             self.logger.exception("Unexpected exception running plugin queue: %s", str(e))
         finally:
@@ -369,66 +398,12 @@ class PluginExecutor:
             self.logger.info("=" * 50)
             self.logger.info("Running post-action plugin: %s", plugin_name)
 
-            if plugin_name not in self.plugin_registry.plugins:
-                self.logger.error(
-                    "Unable to find registered plugin for post-action name %s", plugin_name
-                )
-                continue
-
-            plugin_class = self.plugin_registry.plugins[plugin_name]
-
-            init_payload = {
-                "system_info": self.system_info,
-                "logger": self.logger,
-                # Post-action plugins cannot enqueue further plugins into the
-                # primary queue; pass None so _update_queue is a no-op.
-                "queue_callback": None,
-                "log_path": self.log_path,
-                "session_id": self.session_id,
-            }
-
-            if plugin_class.CONNECTION_TYPE:
-                conn_mgr = self._get_connection_manager_for_plugin(plugin_class, plugin_name)
-                if conn_mgr is None:
-                    continue
-                init_payload["connection_manager"] = conn_mgr
-
-            try:
-                plugin_inst = plugin_class(**init_payload)
-
-                run_payload = copy.deepcopy(post_action.plugin_args)
-                run_args = TypeUtils.get_func_arg_types(plugin_class.run, plugin_class)
-
-                for arg in run_args.keys():
-                    if arg == "preserve_connection" and issubclass(plugin_class, DataPlugin):
-                        run_payload[arg] = True
-
-                try:
-                    global_run_args = self.apply_global_args_to_plugin(
-                        plugin_inst, plugin_class, self.plugin_config.global_args
-                    )
-                    for args_key in ["analysis_args", "collection_args"]:
-                        if args_key in global_run_args and args_key in run_payload:
-                            run_payload[args_key].update(global_run_args[args_key])
-                            del global_run_args[args_key]
-                    run_payload.update(global_run_args)
-                except ValueError as ve:
-                    self.logger.error(
-                        "Invalid global_args for post-action plugin %s: %s. Skipping.",
-                        plugin_name,
-                        str(ve),
-                    )
-                    continue
-
-                plugin_result = plugin_inst.run(**run_payload)
-                plugin_results.append(plugin_result)
-                for hook in self.plugin_run_result_hooks:
-                    hook(plugin_result)
-
-            except Exception as e:
-                self.logger.exception(
-                    "Unexpected exception when running post-action plugin %s: %s", plugin_name, e
-                )
+            self._run_single_plugin(
+                plugin_name,
+                post_action.plugin_args,
+                plugin_results,
+                queue_callback=None,
+            )
 
     def apply_global_args_to_plugin(
         self,
