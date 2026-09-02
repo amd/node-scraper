@@ -1112,7 +1112,7 @@ Collect Arista switch data.
 
 ### Class Variables
 
-- **SUPPORTED_OS_FAMILY**: `{<OSFamily.EOS: 4>, <OSFamily.LINUX: 3>, <OSFamily.UNKNOWN: 2>}`
+- **SUPPORTED_OS_FAMILY**: `{<OSFamily.EOS: 5>, <OSFamily.LINUX: 3>, <OSFamily.UNKNOWN: 2>}`
 - **CMD_VERSION**: `show version | json | no-more`
 - **CMD_LLDP_NEIGHBORS**: `show lldp neighbors | json | no-more`
 - **CMD_SYSTEM_ENV**: `show system environment cooling | json | no-more`
@@ -1210,7 +1210,7 @@ Collect Dell SONiC switch data.
 
 ### Class Variables
 
-- **SUPPORTED_OS_FAMILY**: `{<OSFamily.LINUX: 3>, <OSFamily.SONIC: 5>, <OSFamily.UNKNOWN: 2>}`
+- **SUPPORTED_OS_FAMILY**: `{<OSFamily.LINUX: 3>, <OSFamily.SONIC: 6>, <OSFamily.UNKNOWN: 2>}`
 - **CMD_VERSION**: `show version | no-more`
 - **CMD_INTERFACE_STATUS**: `show interface status | no-more`
 - **CMD_INTERFACE_COUNTERS**: `show interface counters | no-more`
