@@ -33,19 +33,19 @@ from nodescraper.plugins.serviceability.analyzer_args import ServiceabilityAnaly
 
 
 class Mi4xxServiceabilityAnalyzerArgs(ServiceabilityAnalyzerArgs):
-    """Analysis args for Mi4xxServiceabilityPlugin (AFSE entry point)."""
+    """Analysis args for Mi4xxServiceabilityPlugin (Hub entry point afse)."""
 
     hub_entry_point: str = Field(
         default="afse",
-        description="Registered AFSE entry point name (MI4XX service hub).",
+        description="Registered Hub entry point name (default afse).",
     )
     hub_display_name: Optional[str] = Field(
-        default="AFSE",
+        default="Hub",
         description="Label for analyzer status messages.",
     )
     hub_python_module: Optional[str] = Field(
         default=None,
-        description="Not used for MI4XX; AFSE is selected via hub_entry_point afse.",
+        description="Not used for MI4XX; Hub is selected via hub_entry_point afse.",
     )
     rf_event_log_uri: str = Field(
         default="/redfish/v1/Systems/Instinct_Accelerators/LogServices/EventLog/Entries",
@@ -65,10 +65,10 @@ class Mi4xxServiceabilityAnalyzerArgs(ServiceabilityAnalyzerArgs):
         return str(self.rf_event_log_uri).strip()
 
     @model_validator(mode="after")
-    def _mi4xx_uses_afse(self) -> "Mi4xxServiceabilityAnalyzerArgs":
+    def _mi4xx_uses_afse_entry_point(self) -> "Mi4xxServiceabilityAnalyzerArgs":
         if self.hub_python_module:
             raise ValueError(
-                "Mi4xxServiceabilityPlugin uses AFSE via hub_entry_point; "
+                "Mi4xxServiceabilityPlugin uses Hub via hub_entry_point afse; "
                 "hub_python_module is not supported"
             )
         if str(self.hub_entry_point).strip().lower() != "afse":

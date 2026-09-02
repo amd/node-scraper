@@ -371,6 +371,7 @@ def entry_point_hub_result_from_triage(
             "status": "error",
             "error": {"message": error_message or "Service hub analyze failed"},
             "results": [],
+            "top": [],
             "tier_grouped": {},
         }
 
@@ -378,9 +379,15 @@ def entry_point_hub_result_from_triage(
     result_entries = (
         getattr(triage_section, "results", None) if triage_section is not None else None
     )
+    top_entries = getattr(triage_section, "top", None) if triage_section is not None else None
     results = (
         [_resolved_entry_to_hub_row(entry) for entry in result_entries]
         if isinstance(result_entries, list)
+        else []
+    )
+    top = (
+        [_resolved_entry_to_hub_row(entry) for entry in top_entries]
+        if isinstance(top_entries, list)
         else []
     )
     return {
@@ -388,6 +395,7 @@ def entry_point_hub_result_from_triage(
         "status": "ok",
         "error": None,
         "results": results,
+        "top": top,
         "tier_grouped": _tier_grouped_from_rows(results),
     }
 
@@ -405,6 +413,7 @@ def _synthetic_error_hub_result(
         "engine": engine_name,
         "engine_version": engine_version,
         "results": [],
+        "top": [],
         "tier_grouped": {},
     }
 
@@ -426,6 +435,13 @@ def _entry_point_analyze_error(hub_result: dict[str, Any]) -> Optional[str]:
     if status not in (None, "ok"):
         return f"Service hub analyze failed (status={status!r})"
     return "Service hub analyze failed"
+
+
+def _hub_analyze_response_from_raw(raw_result: Any) -> dict[str, Any]:
+    """Return the unmodified Hub analyze JSON payload."""
+    if isinstance(raw_result, dict):
+        return dict(raw_result)
+    return dataclasses.asdict(raw_result)
 
 
 def run_entry_point_hub(
@@ -466,7 +482,9 @@ def run_entry_point_hub(
 
     if isinstance(raw_result, dict):
         hub_result = raw_result
+        hub_analyze_response = _hub_analyze_response_from_raw(raw_result)
     else:
+        hub_analyze_response = _hub_analyze_response_from_raw(raw_result)
         hub_result = entry_point_hub_result_from_triage(
             raw_result,
             engine_name=hub_label,
@@ -484,6 +502,7 @@ def run_entry_point_hub(
         hub_label=label,
         rf_event_count=event_count,
         afid_sag_path=afid_sag_path,
+        hub_analyze_response=hub_analyze_response,
     )
 
 
