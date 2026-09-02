@@ -40,7 +40,6 @@ from nodescraper.connection.oob_ssh import OobSshConnectionManager
 from nodescraper.constants import DEFAULT_LOGGER
 from nodescraper.helpers.plugin_execution_target import (
     format_in_band_target_summary,
-    format_plugin_execution_target,
 )
 from nodescraper.interfaces import ConnectionManager, DataPlugin, PluginInterface
 from nodescraper.interfaces.taskresulthook import TaskResultHook
