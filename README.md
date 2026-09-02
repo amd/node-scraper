@@ -27,6 +27,7 @@ system debug. For details on what data is collected and analyzed, see the [plugi
     - [Configs](#configs)
       - [Global args](#global-args)
       - [Plugin config: **'--plugin-configs' command**](#plugin-config---plugin-configs-command)
+      - [Post-action plugins](#post-action-plugins)
       - [Reference config: **'gen-reference-config' command**](#reference-config-gen-reference-config-command)
 
 ## Installation
@@ -644,6 +645,98 @@ Here is an example of a comprehensive plugin config that specifies analyzer args
   "desc": "My golden config"
 }
 ```
+
+#### Post-action plugins
+
+Post-action plugins run automatically **after all primary plugins have completed**, but only when
+one or more configurable conditions are met. They are defined in the same plugin config JSON as
+the primary plugins, under the `post_action_plugins` key.
+
+**Use cases:**
+- Run a follow-up data-collection plugin only when a primary plugin detects errors
+- Trigger remediation or additional diagnostic steps based on specific event categories or severities
+
+##### Config structure
+
+```json
+{
+  "plugins": { ... },
+  "post_action_plugins": [
+    {
+      "plugin": "<PluginName>",
+      "plugin_args": { ... },
+      "conditions": [
+        { "<field>": "<value>", ... },
+        { "<field>": "<value>", ... }
+      ]
+    }
+  ]
+}
+```
+
+- **`plugin`** — the name of the plugin to run (same registry name used in the `plugins` dict).
+- **`plugin_args`** — arguments forwarded to the plugin's `run()` method (same shape as a normal
+  `plugins` entry, e.g. `collection`, `analysis`, `collection_args`, `analysis_args`).
+- **`conditions`** — a list of condition objects. The post-action fires if **any** condition in the
+  list is satisfied (**OR** semantics). Within a single condition all specified fields must match
+  (**AND** semantics); unspecified fields are ignored.
+
+##### Condition fields
+
+All fields are optional. A condition with no fields specified matches any result.
+
+| Field | Type | Description |
+|---|---|---|
+| `plugin` | string | If set, only the result whose `source` matches this name is inspected. If omitted, all primary results are candidates. |
+| `status` | string | The primary plugin's `ExecutionStatus` must be **≥** this value. Accepted values (in ascending order): `OK`, `WARNING`, `ERROR`, `EXECUTION_FAILURE`. |
+| `event_category` | string | At least one event (from analysis or collection) must have this category. Normalised to uppercase with spaces/hyphens converted to underscores before comparison. |
+| `event_priority` | string | At least one event's priority must be **≥** this value. Accepted values: `INFO`, `WARNING`, `ERROR`, `CRITICAL`. |
+| `event_description_contains` | string | At least one event's description must contain this substring (case-sensitive). |
+
+##### Example: run OsPlugin if DmesgPlugin finds error-level events
+
+```json
+{
+  "name": "DmesgWithOsPostAction",
+  "desc": "Run DmesgPlugin; if any error-level event is found, run OsPlugin to capture OS state.",
+  "global_args": {},
+  "plugins": {
+    "DmesgPlugin": {
+      "collection": true,
+      "analysis": true
+    }
+  },
+  "result_collators": {},
+  "post_action_plugins": [
+    {
+      "plugin": "OsPlugin",
+      "plugin_args": {
+        "collection": true,
+        "analysis": true
+      },
+      "conditions": [
+        {
+          "plugin": "DmesgPlugin",
+          "event_priority": "ERROR"
+        }
+      ]
+    }
+  ]
+}
+```
+
+Save to a file and pass it with `--plugin-configs`:
+
+```sh
+node-scraper --plugin-configs=plugin_config_dmesg_os_post_action.json
+```
+
+Post-action plugin results are included in the same result list as primary plugins — they appear
+in the console summary table, the `nodescraper.csv` output, and any result hooks.
+
+> **Note:** Post-action plugins run before connections are closed, so they have access to the same
+> live connection managers as primary plugins. Post-action plugins cannot enqueue additional
+> plugins into the primary queue.
 
 #### Reference config: **'gen-reference-config' command**
 This command can be used to generate a reference config that is populated with current system

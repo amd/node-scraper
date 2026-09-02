@@ -40,7 +40,6 @@ from nodescraper.connection.oob_ssh import OobSshConnectionManager
 from nodescraper.constants import DEFAULT_LOGGER
 from nodescraper.helpers.plugin_execution_target import (
     format_in_band_target_summary,
-    format_plugin_execution_target,
 )
 from nodescraper.interfaces import ConnectionManager, DataPlugin, PluginInterface
 from nodescraper.interfaces.taskresulthook import TaskResultHook
@@ -115,7 +114,7 @@ class PluginExecutor:
                 connection_manager = self.plugin_registry.connection_managers[connection]
 
                 self.connection_library[connection_manager] = connection_manager(
-                    system_info=self.system_info.model_copy(),
+                    system_info=self.system_info,
                     logger=self.logger,
                     connection_args=connection_args,
                     task_result_hooks=self.connection_result_hooks,
@@ -165,8 +164,151 @@ class PluginExecutor:
                 else:
                     merged_config.plugins[plugin_name] = dict(plugin_args)
             merged_config.result_collators.update(config.result_collators)
+            merged_config.post_action_plugins.extend(config.post_action_plugins)
 
         return merged_config
+
+    def _get_connection_manager_for_plugin(
+        self,
+        plugin_class: type,
+        plugin_name: str,
+    ) -> Optional[ConnectionManager]:
+        """Resolve and (if needed) initialise the connection manager for *plugin_class*.
+
+        Returns the :class:`~nodescraper.interfaces.ConnectionManager` instance to
+        use, or ``None`` if one cannot be obtained (errors are logged and the caller
+        should skip the plugin).
+
+        The resolved manager is stored in ``self.connection_library`` so that it can
+        be shared across plugins that require the same type.
+        """
+        if not plugin_class.CONNECTION_TYPE:
+            return None
+
+        if issubclass(plugin_class, OOBSSHDataPlugin):
+            mgr_impl = OobSshConnectionManager
+            connection_args = self.connection_configs.get("RedfishConnectionManager")
+            if connection_args is None:
+                self.logger.error(
+                    "%s requires RedfishConnectionManager in the connection config",
+                    plugin_name,
+                )
+                return None
+        else:
+            connection_manager_class: Type[ConnectionManager] = plugin_class.CONNECTION_TYPE
+            if connection_manager_class.__name__ in self.plugin_registry.connection_managers:
+                mgr_impl = self.plugin_registry.connection_managers[
+                    connection_manager_class.__name__
+                ]
+            elif (
+                inspect.isclass(connection_manager_class)
+                and issubclass(connection_manager_class, ConnectionManager)
+                and not inspect.isabstract(connection_manager_class)
+            ):
+                # External packages set CONNECTION_TYPE on the plugin; use it when
+                # not listed under nodescraper.connection_managers entry points.
+                mgr_impl = connection_manager_class
+            else:
+                self.logger.error(
+                    "Unable to find registered connection manager class for %s that is required by",
+                    connection_manager_class.__name__,
+                )
+                return None
+            connection_args = None
+
+        if mgr_impl not in self.connection_library:
+            self.logger.info("Initializing connection manager for %s", mgr_impl.__name__)
+            init_kwargs = {
+                "system_info": self.system_info,
+                "logger": self.logger,
+                "task_result_hooks": self.connection_result_hooks,
+                "session_id": self.session_id,
+            }
+            if connection_args is not None:
+                init_kwargs["connection_args"] = connection_args
+            self.connection_library[mgr_impl] = mgr_impl(**init_kwargs)
+
+        return self.connection_library[mgr_impl]
+
+    def _run_single_plugin(
+        self,
+        plugin_name: str,
+        plugin_args: dict,
+        plugin_results: list[PluginResult],
+        *,
+        queue_callback: Optional[Callable],
+    ) -> bool:
+        """Instantiate and run one plugin, appending its result to *plugin_results*.
+
+        Args:
+            plugin_name:     Registry key for the plugin to run.
+            plugin_args:     Arguments forwarded to ``plugin_inst.run()``.
+            plugin_results:  Accumulated results list; mutated in-place on success.
+            queue_callback:  Passed to the plugin constructor so it can enqueue
+                             additional plugins.  Pass ``None`` for post-action
+                             plugins that must not extend the primary queue.
+
+        Returns:
+            ``True`` if the plugin ran (or raised an unexpected exception that was
+            logged), ``False`` if it was skipped due to a registry miss, missing
+            connection manager, or invalid global args.
+        """
+        if plugin_name not in self.plugin_registry.plugins:
+            self.logger.error("Unable to find registered plugin for name %s", plugin_name)
+            return False
+
+        plugin_class = self.plugin_registry.plugins[plugin_name]
+
+        init_payload = {
+            "system_info": self.system_info,
+            "logger": self.logger,
+            "queue_callback": queue_callback,
+            "log_path": self.log_path,
+            "session_id": self.session_id,
+        }
+
+        if plugin_class.CONNECTION_TYPE:
+            conn_mgr = self._get_connection_manager_for_plugin(plugin_class, plugin_name)
+            if conn_mgr is None:
+                return False
+            init_payload["connection_manager"] = conn_mgr
+
+        try:
+            plugin_inst = plugin_class(**init_payload)
+
+            run_payload = copy.deepcopy(plugin_args)
+            run_args = TypeUtils.get_func_arg_types(plugin_class.run, plugin_class)
+
+            for arg in run_args.keys():
+                if arg == "preserve_connection" and issubclass(plugin_class, DataPlugin):
+                    run_payload[arg] = True
+
+            try:
+                global_run_args = self.apply_global_args_to_plugin(
+                    plugin_inst, plugin_class, self.plugin_config.global_args
+                )
+                for args_key in ["analysis_args", "collection_args"]:
+                    if args_key in global_run_args and args_key in run_payload:
+                        run_payload[args_key].update(global_run_args[args_key])
+                        del global_run_args[args_key]
+                run_payload.update(global_run_args)
+            except ValueError as ve:
+                self.logger.error(
+                    "Invalid global_args for plugin %s: %s. Skipping plugin.",
+                    plugin_name,
+                    str(ve),
+                )
+                return False
+
+            plugin_result = plugin_inst.run(**run_payload)
+            plugin_results.append(plugin_result)
+            for hook in self.plugin_run_result_hooks:
+                hook(plugin_result)
+
+        except Exception as e:
+            self.logger.exception("Unexpected exception when running plugin %s: %s", plugin_name, e)
+
+        return True
 
     def run_queue(self) -> list[PluginResult]:
         """Run the plugin queue and return results
@@ -179,124 +321,20 @@ class PluginExecutor:
         try:
             while len(plugin_queue) > 0:
                 plugin_name, plugin_args = plugin_queue.popleft()
-                if plugin_name not in self.plugin_registry.plugins:
-                    self.logger.error("Unable to find registered plugin for name %s", plugin_name)
-                    continue
-
-                plugin_class = self.plugin_registry.plugins[plugin_name]
-
-                init_payload = {
-                    "system_info": self.system_info,
-                    "logger": self.logger,
-                    "queue_callback": plugin_queue.append,
-                    "log_path": self.log_path,
-                    "session_id": self.session_id,
-                }
-
-                if plugin_class.CONNECTION_TYPE:
-                    if issubclass(plugin_class, OOBSSHDataPlugin):
-                        mgr_impl = OobSshConnectionManager
-                        connection_args = self.connection_configs.get("RedfishConnectionManager")
-                        if connection_args is None:
-                            self.logger.error(
-                                "%s requires RedfishConnectionManager in the connection config",
-                                plugin_name,
-                            )
-                            continue
-                    else:
-                        connection_manager_class: Type[ConnectionManager] = (
-                            plugin_class.CONNECTION_TYPE
-                        )
-                        if (
-                            connection_manager_class.__name__
-                            in self.plugin_registry.connection_managers
-                        ):
-                            mgr_impl = self.plugin_registry.connection_managers[
-                                connection_manager_class.__name__
-                            ]
-                        elif (
-                            inspect.isclass(connection_manager_class)
-                            and issubclass(connection_manager_class, ConnectionManager)
-                            and not inspect.isabstract(connection_manager_class)
-                        ):
-                            # External packages set CONNECTION_TYPE on the plugin;
-                            # use it when not listed under nodescraper.connection_managers entry points.
-                            mgr_impl = connection_manager_class
-                        else:
-                            self.logger.error(
-                                "Unable to find registered connection manager class for %s that is required by",
-                                connection_manager_class.__name__,
-                            )
-                            continue
-                        connection_args = None
-
-                    if mgr_impl not in self.connection_library:
-                        self.logger.info(
-                            "Initializing connection manager for %s",
-                            mgr_impl.__name__,
-                        )
-                        init_kwargs = {
-                            "system_info": self.system_info,
-                            "logger": self.logger,
-                            "task_result_hooks": self.connection_result_hooks,
-                            "session_id": self.session_id,
-                        }
-                        if connection_args is not None:
-                            init_kwargs["connection_args"] = connection_args
-                        self.connection_library[mgr_impl] = mgr_impl(**init_kwargs)
-
-                    init_payload["connection_manager"] = self.connection_library[mgr_impl]
-
-                try:
-                    plugin_inst = plugin_class(**init_payload)
-
-                    run_payload = copy.deepcopy(plugin_args)
-                    run_args = TypeUtils.get_func_arg_types(plugin_class.run, plugin_class)
-
-                    for arg in run_args.keys():
-                        if arg == "preserve_connection" and issubclass(plugin_class, DataPlugin):
-                            run_payload[arg] = True
-
-                    try:
-                        global_run_args = self.apply_global_args_to_plugin(
-                            plugin_inst, plugin_class, self.plugin_config.global_args
-                        )
-                        # Merge analysis_args and collection_args
-                        for args_key in ["analysis_args", "collection_args"]:
-                            if args_key in global_run_args and args_key in run_payload:
-                                # Merge: global args override plugin-specific args keys specified in both global and plugin-specific args
-                                run_payload[args_key].update(global_run_args[args_key])
-                                del global_run_args[args_key]
-                        run_payload.update(global_run_args)
-                    except ValueError as ve:
-                        self.logger.error(
-                            "Invalid global_args for plugin %s: %s. Skipping plugin.",
-                            plugin_name,
-                            str(ve),
-                        )
-                        continue
-
-                    self.logger.info("-" * 50)
-                    execution_target = format_plugin_execution_target(
-                        plugin_class,
-                        system_info=self.system_info,
-                        connection_manager=init_payload.get("connection_manager"),
-                        connection_configs=self.connection_configs,
-                    )
-                    if execution_target:
-                        self.logger.info("(%s) %s", plugin_name, execution_target)
-                    plugin_result = plugin_inst.run(**run_payload)
-                    plugin_results.append(plugin_result)
-                    for hook in self.plugin_run_result_hooks:
-                        hook(plugin_result)
-                except Exception as e:
-                    self.logger.exception(
-                        "Unexpected exception when running plugin %s: %s", plugin_name, e
-                    )
+                self.logger.info("-" * 50)
+                self._run_single_plugin(
+                    plugin_name,
+                    plugin_args,
+                    plugin_results,
+                    queue_callback=plugin_queue.append,
+                )
         except Exception as e:
             self.logger.exception("Unexpected exception running plugin queue: %s", str(e))
         finally:
-            self.logger.info("Closing connections")
+            # Run post-action plugins before tearing down connections or collating
+            # results so that post-actions still have access to live connections
+            # and their results are included in the collator output.
+            self._run_post_actions(plugin_results)
 
             if self.plugin_config.result_collators:
                 self.logger.info("Running result collators")
@@ -318,10 +356,60 @@ class PluginExecutor:
                         ],
                         **collator_args,
                     )
+
+            self.logger.info("Closing connections")
             for connection_manager in self.connection_library.values():
                 connection_manager.disconnect()
 
         return plugin_results
+
+    def _run_post_actions(self, plugin_results: list[PluginResult]) -> None:
+        """Evaluate post-action conditions and run qualifying plugins.
+
+        Post-action plugins are run after all primary plugins have finished but
+        *before* connections are closed, so they have full access to the same
+        connection managers.  Their :class:`~nodescraper.models.PluginResult`
+        objects are appended to *plugin_results* in-place, making them visible
+        to result collators and any ``plugin_run_result_hooks``.
+
+        Each :class:`~nodescraper.models.PostActionPluginConfig` entry in
+        ``self.plugin_config.post_action_plugins`` is evaluated independently;
+        those whose conditions are satisfied (OR semantics within each entry's
+        ``conditions`` list) are run in order.
+
+        .. note::
+            The same plugin name may appear in multiple entries with different
+            ``conditions`` or ``plugin_args``.  Each entry is an independent
+            trigger — if both entries' conditions are met the plugin runs once
+            per matching entry.  To trigger a single run on condition A **or**
+            condition B, place both conditions inside the same entry's
+            ``conditions`` list rather than using two entries.
+
+        Args:
+            plugin_results: Accumulated primary plugin results.  Mutated in-place
+                with results from post-action plugins that fire.
+        """
+        if not self.plugin_config.post_action_plugins:
+            return
+
+        self.logger.info("Evaluating post-action plugin conditions")
+
+        for post_action in self.plugin_config.post_action_plugins:
+            plugin_name = post_action.plugin
+
+            if not post_action.should_run(plugin_results):
+                self.logger.info("Post-action plugin %s: conditions not met, skipping", plugin_name)
+                continue
+
+            self.logger.info("=" * 50)
+            self.logger.info("Running post-action plugin: %s", plugin_name)
+
+            self._run_single_plugin(
+                plugin_name,
+                post_action.plugin_args,
+                plugin_results,
+                queue_callback=None,
+            )
 
     def apply_global_args_to_plugin(
         self,
