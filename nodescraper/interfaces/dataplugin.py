@@ -32,7 +32,12 @@ from typing import Annotated, Any, Generic, Optional, Type, Union
 from pydantic import Field
 
 from nodescraper.constants import DEFAULT_EVENT_REPORTER
-from nodescraper.enums import EventPriority, ExecutionStatus, SystemInteractionLevel
+from nodescraper.enums import (
+    EventPriority,
+    ExecutionStatus,
+    OSFamily,
+    SystemInteractionLevel,
+)
 from nodescraper.generictypes import TAnalyzeArg, TCollectArg, TDataModel
 from nodescraper.interfaces.dataanalyzertask import DataAnalyzer
 from nodescraper.interfaces.datacollectortask import DataCollector
@@ -251,6 +256,21 @@ class DataPlugin(
             return args_cls.model_validate(raw_args)
         return raw_args
 
+    def _sync_system_info_from_connection_manager(self) -> None:
+        """Copy SUT details detected during connect onto the plugin system info."""
+        if not self.connection_manager:
+            return
+
+        sut_info = self.connection_manager.system_info
+        if sut_info.os_family != OSFamily.UNKNOWN:
+            self.system_info.os_family = sut_info.os_family
+        if sut_info.platform:
+            self.system_info.platform = sut_info.platform
+        if sut_info.metadata:
+            if self.system_info.metadata is None:
+                self.system_info.metadata = {}
+            self.system_info.metadata.update(sut_info.metadata)
+
     @classmethod
     def is_valid(cls) -> bool:
         """Check that all required class variables are set
@@ -339,6 +359,8 @@ class DataPlugin(
                 and self.connection_manager.result.status == ExecutionStatus.UNSET
             ):
                 self.connection_manager.connect()
+
+            self._sync_system_info_from_connection_manager()
 
             # Proceed as long as a connection was established.
             if (

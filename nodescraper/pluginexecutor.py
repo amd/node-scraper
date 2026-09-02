@@ -101,11 +101,9 @@ class PluginExecutor:
             self.connection_result_hooks.append(FileSystemLogHook(log_base_path=log_path))
 
         if connections:
+            manager_names = set(self.plugin_registry.connection_managers.keys())
             for connection, connection_args in connections.items():
-                if connection not in self.plugin_registry.connection_managers:
-                    self.logger.error(
-                        "Unable to find registered connection manager class for %s", connection
-                    )
+                if connection not in manager_names:
                     continue
 
                 connection_manager = self.plugin_registry.connection_managers[connection]

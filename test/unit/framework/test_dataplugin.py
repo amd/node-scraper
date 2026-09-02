@@ -31,7 +31,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 from framework.common.shared_utils import MockConnectionManager
 
-from nodescraper.enums import EventPriority, ExecutionStatus, SystemInteractionLevel
+from nodescraper.enums import (
+    EventPriority,
+    ExecutionStatus,
+    OSFamily,
+    SystemInteractionLevel,
+)
 from nodescraper.interfaces.dataanalyzertask import DataAnalyzer
 from nodescraper.interfaces.datacollectortask import DataCollector
 from nodescraper.interfaces.dataplugin import DataPlugin
@@ -167,6 +172,19 @@ class TestDataPluginCore:
 
             mock_collect.assert_called_once()
             assert result.status == ExecutionStatus.OK
+
+    def test_collect_syncs_os_family_from_connection_manager(self, plugin_with_conn, system_info):
+        plugin_with_conn.system_info.os_family = OSFamily.UNKNOWN
+        plugin_with_conn.connection_manager.system_info.os_family = OSFamily.LINUX
+        plugin_with_conn.connection_manager.system_info.platform = "remote-host"
+
+        with patch.object(BaseDataCollector, "collect_data") as mock_collect:
+            mock_collect.return_value = (TaskResult(status=ExecutionStatus.OK), StandardDataModel())
+            plugin_with_conn.collect()
+
+        assert plugin_with_conn.system_info.os_family == OSFamily.LINUX
+        assert plugin_with_conn.system_info.platform == "remote-host"
+        assert system_info.os_family == OSFamily.LINUX
 
     def test_analyze(self, plugin_with_conn):
         plugin_with_conn.data = StandardDataModel(value="test_data")

@@ -72,13 +72,13 @@ def get_system_info(args: argparse.Namespace) -> SystemInfo:
     if args.sys_platform:
         system_info.platform = args.sys_platform
 
-    if args.sys_location:
+    conn = getattr(args, "connection_config", None) or {}
+    location_name = args.sys_location or conn.get("sys_location")
+    if location_name:
         try:
-            location = getattr(SystemLocation, args.sys_location)
+            system_info.location = getattr(SystemLocation, str(location_name).upper())
         except Exception as e:
             raise argparse.ArgumentTypeError("Invalid input for system location") from e
-
-        system_info.location = location
 
     return system_info
 
