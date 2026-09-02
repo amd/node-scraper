@@ -38,6 +38,10 @@ from pydantic import BaseModel
 from nodescraper.base.oobsshdataplugin import OOBSSHDataPlugin
 from nodescraper.connection.oob_ssh import OobSshConnectionManager
 from nodescraper.constants import DEFAULT_LOGGER
+from nodescraper.helpers.plugin_execution_target import (
+    format_in_band_target_summary,
+    format_plugin_execution_target,
+)
 from nodescraper.interfaces import ConnectionManager, DataPlugin, PluginInterface
 from nodescraper.interfaces.taskresulthook import TaskResultHook
 from nodescraper.models import PluginConfig, SystemInfo
@@ -121,7 +125,10 @@ class PluginExecutor:
             self.logger.info("System SKU: %s", self.system_info.sku)
         if self.system_info.platform:
             self.logger.info("System Platform: %s", self.system_info.platform)
-        self.logger.info("System location: %s", self.system_info.location)
+        self.logger.info(
+            "%s",
+            format_in_band_target_summary(self.system_info, self.connection_configs),
+        )
 
     @staticmethod
     def _deep_merge_plugin_args(existing: dict, incoming: dict) -> dict:
@@ -268,6 +275,14 @@ class PluginExecutor:
                         continue
 
                     self.logger.info("-" * 50)
+                    execution_target = format_plugin_execution_target(
+                        plugin_class,
+                        system_info=self.system_info,
+                        connection_manager=init_payload.get("connection_manager"),
+                        connection_configs=self.connection_configs,
+                    )
+                    if execution_target:
+                        self.logger.info("(%s) %s", plugin_name, execution_target)
                     plugin_result = plugin_inst.run(**run_payload)
                     plugin_results.append(plugin_result)
                     for hook in self.plugin_run_result_hooks:

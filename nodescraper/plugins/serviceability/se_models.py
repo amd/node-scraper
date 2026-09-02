@@ -74,6 +74,29 @@ class ServiceabilitySolution(BaseModel):
     )
 
 
+class PrioritizedServiceAction(BaseModel):
+    """One hub-ranked service action row for tables and API-style consumers."""
+
+    rank: int
+    afid: int
+    location: str
+    count: int = 1
+    service_action_num: int
+    service_action_title: Optional[str] = None
+    service_action_category: Optional[str] = None
+    priority: Optional[int] = None
+    sa_severity: Optional[int] = None
+    tier: Optional[int] = None
+    tier_label: Optional[str] = None
+    fru: Optional[str] = None
+    fru_rank: Optional[int] = None
+    hub_sort_priority: Optional[int] = None
+    multi_mask: Optional[int] = None
+    afid_summary: Optional[str] = None
+    service_action_steps: List[str] = Field(default_factory=list)
+    serviceable_units: Optional[List[str]] = None
+
+
 class HubTriageResult(BaseModel):
     """One service hub triage row with SAG-enriched action details."""
 
@@ -129,6 +152,14 @@ class ServiceabilityBlock(BaseModel):
             "Brief hub summary derived from short_service_info (human-readable lines; "
             "per-unit dict payloads are collapsed, identical messages merged with unit lists)."
         ),
+    )
+    hub_analyze_response: Optional[dict[str, Any]] = Field(
+        default=None,
+        description="Unmodified Hub analyze() JSON (triage.top, triage.results, status, pid, revision).",
+    )
+    hub_top_results: List[HubTriageResult] = Field(
+        default_factory=list,
+        description="Hub triage.top rows (highest se_sort_priority).",
     )
     hub_triage_results: List[HubTriageResult] = Field(
         default_factory=list,

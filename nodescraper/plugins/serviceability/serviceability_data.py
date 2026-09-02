@@ -152,9 +152,11 @@ class ServiceabilityDataModel(DataModel):
                 json.dump(self.cper_data, f, indent=2)
         if self.serviceability is not None:
             serviceability_path = os.path.join(log_path, "serviceability.json")
+            from .serviceability_api import export_serviceability_json
+
             with open(serviceability_path, "w", encoding="utf-8") as f:
                 json.dump(
-                    self.serviceability.model_dump(mode="json"),
+                    export_serviceability_json(self.serviceability),
                     f,
                     indent=2,
                 )
