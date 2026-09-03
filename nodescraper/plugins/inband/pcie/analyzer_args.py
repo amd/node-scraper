@@ -29,7 +29,8 @@ from pydantic import Field
 
 from nodescraper.models import AnalyzerArgs
 
-from .pcie_data import BdfStr
+from .pcie_data import BdfStr, PcieDataModel, PcieDeviceSnapshot
+from .pcie_inventory import PROFILE_FULL_BOM, filter_inventory_fields
 
 PcieInventoryProfile = Literal["full_bom", "pcie_link", "custom"]
 
@@ -41,6 +42,7 @@ class PcieAnalyzerArgs(AnalyzerArgs):
         profile: Inventory field allowlist preset for expected value checks.
         expected_total_count: Expected PCI device count from inventory collection.
         expected_devices: Sparse per-BDF expected inventory field values.
+        expected_pcie_snapshot: Sparse per-BDF expected register snapshot values.
         fail_on_extra_devices: Fail when inventory contains BDFs not listed in expected_devices.
         exp_speed: Expected PCIe speed (generation 1-5)
         exp_width: Expected PCIe width (1-16 lanes)
@@ -62,6 +64,10 @@ class PcieAnalyzerArgs(AnalyzerArgs):
     expected_devices: Dict[BdfStr, Dict[str, str]] = Field(
         default_factory=dict,
         description="Sparse per-BDF expected inventory values; only set keys are validated.",
+    )
+    expected_pcie_snapshot: Optional[Dict[BdfStr, PcieDeviceSnapshot]] = Field(
+        default=None,
+        description="Sparse per-BDF expected register snapshot; only set fields are validated.",
     )
     fail_on_extra_devices: bool = Field(
         default=True,
@@ -87,6 +93,25 @@ class PcieAnalyzerArgs(AnalyzerArgs):
         default=None,
         description="Expected 10-bit tag request enable: int for all devices, or dict keyed by device ID.",
     )
+
+    @classmethod
+    def build_from_model(cls, datamodel: PcieDataModel) -> "PcieAnalyzerArgs":
+        """Build analyzer args from a collected PCIe data model for reference config generation."""
+        expected_devices: Dict[BdfStr, Dict[str, str]] = {}
+        expected_total_count: Optional[int] = None
+        if datamodel.inventory is not None:
+            expected_total_count = datamodel.inventory.total_count
+            for bdf, device in datamodel.inventory.devices.items():
+                fields = filter_inventory_fields(device, PROFILE_FULL_BOM)
+                if fields:
+                    expected_devices[bdf] = fields
+
+        expected_pcie_snapshot = datamodel.pcie_snapshot or None
+        return cls(
+            expected_total_count=expected_total_count,
+            expected_devices=expected_devices,
+            expected_pcie_snapshot=expected_pcie_snapshot,
+        )
 
 
 def normalize_to_dict(

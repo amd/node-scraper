@@ -42,6 +42,7 @@ from pydantic import (
     SerializeAsAny,
     field_serializer,
     field_validator,
+    model_validator,
 )
 
 from nodescraper.models import DataModel
@@ -70,9 +71,11 @@ def field_hex_val_serializer(self, value: Optional[int], _info) -> Optional[str]
     return str(hex(value))
 
 
-def field_hex_val_validator(value: Optional[str]) -> Optional[int]:
+def field_hex_val_validator(value: Optional[Union[str, int]]) -> Optional[int]:
     if value is None:
         return None
+    if isinstance(value, int):
+        return value
     return int(value, 16)
 
 
@@ -789,6 +792,67 @@ class DevCtrl2Register(PcieRegister):
     )
 
 
+class DevCap2Register(PcieRegister):
+    offset: int = 0x24
+    width: int = 32
+    desc: str = "7.5.3.15 Device Capabilities 2 Register (Offset 24h)"
+    cpl_timeout_ranges_supported: PcieBitField = PcieBitField(
+        bit_mask=(0xF << 0), desc="Completion Timeout Ranges Supported"
+    )
+    ltr_mechanism_supported: PcieBitField = PcieBitField(
+        bit_mask=(1 << 4), desc="LTR Mechanism Supported"
+    )
+    obff_supported: PcieBitField = PcieBitField(bit_mask=(0x3 << 5), desc="OBFF Supported")
+    ext_fmt_field_supported: PcieBitField = PcieBitField(
+        bit_mask=(1 << 7), desc="ExtendedFmtField Supported"
+    )
+    end_end_tlp_prefix_supported: PcieBitField = PcieBitField(
+        bit_mask=(1 << 16), desc="End-End TLP Prefix Supported"
+    )
+
+
+class LinkCtl2Register(PcieRegister):
+    offset: int = 0x30
+    width: int = 16
+    desc: str = "7.5.3.19 Link Control 2 Register (Offset 30h)"
+    target_lnk_speed: PcieBitField = PcieBitField(bit_mask=(0xF << 0), desc="Target Link Speed")
+    enter_compliance: PcieBitField = PcieBitField(bit_mask=(1 << 4), desc="Enter Compliance")
+    hw_autonomous_speed_dis: PcieBitField = PcieBitField(
+        bit_mask=(1 << 5), desc="Hardware Autonomous Speed Disable"
+    )
+    selectable_deemphasis: PcieBitField = PcieBitField(
+        bit_mask=(1 << 6), desc="Selectable De-emphasis"
+    )
+    drs_messaging_ctl: PcieBitField = PcieBitField(bit_mask=(1 << 14), desc="DRS Messaging Control")
+
+
+class LinkStat2Register(PcieRegister):
+    offset: int = 0x32
+    width: int = 16
+    desc: str = "7.5.3.20 Link Status 2 Register (Offset 32h)"
+    curr_deemphasis: PcieBitField = PcieBitField(
+        bit_mask=(0xF << 0), desc="Current De-emphasis Level"
+    )
+    eq_8gt_cpl: PcieBitField = PcieBitField(
+        bit_mask=(1 << 4), desc="Equalization 8.0 GT/s Complete"
+    )
+    eq_8gt_ph1_success: PcieBitField = PcieBitField(
+        bit_mask=(1 << 5), desc="Equalization 8.0 GT/s Phase 1 Successful"
+    )
+    eq_8gt_ph2_success: PcieBitField = PcieBitField(
+        bit_mask=(1 << 6), desc="Equalization 8.0 GT/s Phase 2 Successful"
+    )
+    eq_8gt_ph3_success: PcieBitField = PcieBitField(
+        bit_mask=(1 << 7), desc="Equalization 8.0 GT/s Phase 3 Successful"
+    )
+    lnk_eq_req_8gt: PcieBitField = PcieBitField(
+        bit_mask=(1 << 8), desc="Link Equalization Request 8.0 GT/s"
+    )
+    crosslink_resolution: PcieBitField = PcieBitField(
+        bit_mask=(1 << 15), desc="Crosslink Resolution"
+    )
+
+
 class LinkCap2Register(PcieRegister):
     """Link cap 2 for Type 1"""
 
@@ -839,8 +903,11 @@ class PcieExp(PcieCapStructure):
         offset=0x10, width=16, desc="7.5.3.7 Link Control Register (Offset 10h)"
     )
     lnk_stat_reg: LinkStatRegister = LinkStatRegister()
+    dev_cap_2_reg: DevCap2Register = DevCap2Register()
     dev_ctrl_2_reg: DevCtrl2Register = DevCtrl2Register()
     lnk_cap_2_reg: LinkCap2Register = LinkCap2Register()
+    lnk_ctl_2_reg: LinkCtl2Register = LinkCtl2Register()
+    lnk_sta_2_reg: LinkStat2Register = LinkStat2Register()
 
 
 class CapMSIX(PcieCapStructure):
@@ -1429,12 +1496,62 @@ class ECapLnr(PcieCapStructure):
     desc: str = "7.9.14 LN Requester Extended Capability (LNR Capability)"
 
 
+class DpcEcapHdr(PcieRegister):
+    offset: int = 0x00
+    width: int = 32
+    desc: str = "7.9.15.1 DPC Extended Capability Header (Offset 00h)"
+    pcie_ecap_id: PcieBitField = PcieBitField(
+        bit_mask=0x0000FFFF, desc="PCI Express Extended Capability ID"
+    )
+    cap_ver: PcieBitField = PcieBitField(bit_mask=0x000F0000, desc="Capability Version")
+    nxt_cap_offset: PcieBitField = PcieBitField(bit_mask=0xFFF00000, desc="Next Capability Offset")
+
+
+class DpcCapReg(PcieRegister):
+    offset: int = 0x04
+    width: int = 16
+    desc: str = "7.9.15.2 DPC Capability Register (Offset 04h)"
+    int_msg_num: PcieBitField = PcieBitField(bit_mask=(0x1F << 0), desc="Interrupt Message Number")
+    rp_ext_for_dpc: PcieBitField = PcieBitField(bit_mask=(1 << 5), desc="RP Extensions for DPC")
+    dpc_sw_trigger_supported: PcieBitField = PcieBitField(
+        bit_mask=(1 << 8), desc="DPC Software Triggering Supported"
+    )
+
+
+class DpcCtlReg(PcieRegister):
+    offset: int = 0x06
+    width: int = 16
+    desc: str = "7.9.15.3 DPC Control Register (Offset 06h)"
+    dpc_trigger_en: PcieBitField = PcieBitField(bit_mask=(1 << 0), desc="DPC Trigger Enable")
+    dpc_cpl_ctl: PcieBitField = PcieBitField(bit_mask=(1 << 1), desc="DPC Completion Control")
+    dpc_int_en: PcieBitField = PcieBitField(bit_mask=(1 << 2), desc="DPC Interrupt Enable")
+    dpc_err_cor_en: PcieBitField = PcieBitField(bit_mask=(1 << 3), desc="DPC ERR_COR Enable")
+    poisoned_tlp_egress_blk_en: PcieBitField = PcieBitField(
+        bit_mask=(1 << 4), desc="Poisoned TLP Egress Blocking Enable"
+    )
+    sw_trigger: PcieBitField = PcieBitField(bit_mask=(1 << 5), desc="Software Trigger")
+
+
+class DpcStatReg(PcieRegister):
+    offset: int = 0x08
+    width: int = 16
+    desc: str = "7.9.15.4 DPC Status Register (Offset 08h)"
+    trigger_status: PcieBitField = PcieBitField(bit_mask=(1 << 0), desc="Trigger Status")
+    trigger_reason: PcieBitField = PcieBitField(bit_mask=(0x3 << 1), desc="Trigger Reason")
+    int_status: PcieBitField = PcieBitField(bit_mask=(1 << 3), desc="Interrupt Status")
+    rp_busy: PcieBitField = PcieBitField(bit_mask=(1 << 4), desc="RP Busy")
+
+
 class ECapDpc(PcieCapStructure):
     """Extended Capability for DPC"""
 
     cap_id: ClassVar[Enum] = ExtendedCapabilityEnum.DPC
     offset: int = 0x00
     desc: str = "7.9.15 DPC Extended Capability"
+    header: DpcEcapHdr = DpcEcapHdr()
+    dpc_cap_reg: DpcCapReg = DpcCapReg()
+    dpc_ctl_reg: DpcCtlReg = DpcCtlReg()
+    dpc_stat_reg: DpcStatReg = DpcStatReg()
 
 
 class ECapL1pm(PcieCapStructure):
@@ -1997,6 +2114,68 @@ class PcieCfgSpace(BaseModel):
         return cap_out
 
 
+class PcieDeviceSnapshot(BaseModel):
+    """Flattened PCIe register fields from cfg space for compare-runs and expected-value checks."""
+
+    err_cor_src_id: Optional[int] = None
+    ur_det: Optional[int] = None
+    ur_report_en: Optional[int] = None
+    lane_err_stat: Optional[int] = None
+    lnk_ctl2_drs: Optional[int] = None
+    lnk_sta2: Optional[int] = None
+    curr_lnk_speed: Optional[int] = None
+    neg_lnk_width: Optional[int] = None
+    dpc_status: Optional[int] = None
+
+    serialize_err_cor_src_id = field_serializer("err_cor_src_id")(field_hex_val_serializer)
+    serialize_lane_err_stat = field_serializer("lane_err_stat")(field_hex_val_serializer)
+    serialize_lnk_sta2 = field_serializer("lnk_sta2")(field_hex_val_serializer)
+    serialize_dpc_status = field_serializer("dpc_status")(field_hex_val_serializer)
+
+    validate_err_cor_src_id = field_validator("err_cor_src_id", mode="before")(
+        field_hex_val_validator
+    )
+    validate_lane_err_stat = field_validator("lane_err_stat", mode="before")(
+        field_hex_val_validator
+    )
+    validate_lnk_sta2 = field_validator("lnk_sta2", mode="before")(field_hex_val_validator)
+    validate_dpc_status = field_validator("dpc_status", mode="before")(field_hex_val_validator)
+
+
+def build_pcie_device_snapshot(cfg_space: PcieCfgSpace) -> PcieDeviceSnapshot:
+    """Extract register fields from a parsed PCIe configuration space."""
+    snapshot = PcieDeviceSnapshot()
+    pcie_exp = cfg_space.get_struct(PcieExp)
+    if pcie_exp is not None:
+        snapshot.ur_det = pcie_exp.dev_stat_reg.ur_det.get_val()
+        snapshot.ur_report_en = pcie_exp.dev_ctrl_reg.ur_report_en.get_val()
+        snapshot.curr_lnk_speed = pcie_exp.lnk_stat_reg.curr_lnk_speed.get_val()
+        snapshot.neg_lnk_width = pcie_exp.lnk_stat_reg.neg_lnk_width.get_val()
+        snapshot.lnk_ctl2_drs = pcie_exp.lnk_ctl_2_reg.drs_messaging_ctl.get_val()
+        snapshot.lnk_sta2 = pcie_exp.lnk_sta_2_reg.val
+
+    ecap_aer = cfg_space.get_struct(ECapAer)
+    if ecap_aer is not None:
+        snapshot.err_cor_src_id = ecap_aer.err_src_id.err_cor_src_id.get_val()
+
+    ecap_sec_pci = cfg_space.get_struct(ECapSecpci)
+    if ecap_sec_pci is not None:
+        snapshot.lane_err_stat = ecap_sec_pci.lane_err_stat.val
+
+    ecap_dpc = cfg_space.get_struct(ECapDpc)
+    if ecap_dpc is not None:
+        snapshot.dpc_status = ecap_dpc.dpc_stat_reg.val
+
+    return snapshot
+
+
+def build_pcie_snapshots(
+    cfg_spaces: Dict[BdfStr, PcieCfgSpace],
+) -> Dict[BdfStr, PcieDeviceSnapshot]:
+    """Build per-BDF register snapshots from configuration space dictionaries."""
+    return {bdf: build_pcie_device_snapshot(cfg_space) for bdf, cfg_space in cfg_spaces.items()}
+
+
 class PcieInventoryDevice(BaseModel):
     """BOM-style PCI device record parsed from lspci text output."""
 
@@ -2048,6 +2227,19 @@ class PcieDataModel(DataModel):
     inventory: Optional[PcieInventory] = None
     pcie_cfg_space: Dict[BdfStr, PcieCfgSpace]
     vf_pcie_cfg_space: Optional[Dict[BdfStr, PcieCfgSpace]] = None
+    pcie_snapshot: Optional[Dict[BdfStr, PcieDeviceSnapshot]] = None
+
+    @model_validator(mode="after")
+    def ensure_pcie_snapshot(self) -> "PcieDataModel":
+        """Backfill pcie_snapshot from cfg space when loading older run logs."""
+        if self.pcie_snapshot:
+            return self
+        merged_cfg: Dict[BdfStr, PcieCfgSpace] = dict(self.pcie_cfg_space)
+        if self.vf_pcie_cfg_space:
+            merged_cfg.update(self.vf_pcie_cfg_space)
+        if merged_cfg:
+            self.pcie_snapshot = build_pcie_snapshots(merged_cfg)
+        return self
 
     def get_compare_snapshot(self, profile: str = "full_bom") -> dict:
         """Return inventory-only data for compare-runs diffs.
@@ -2057,7 +2249,14 @@ class PcieDataModel(DataModel):
             Dict containing the inventory slice suitable for run comparison.
         """
         if self.inventory is None:
-            return {"inventory": None}
+            return {
+                "inventory": None,
+                "pcie_snapshot": (
+                    {bdf: snap.model_dump(mode="json") for bdf, snap in self.pcie_snapshot.items()}
+                    if self.pcie_snapshot
+                    else None
+                ),
+            }
 
         from .pcie_inventory import filter_inventory_fields, get_profile_fields
 
@@ -2080,5 +2279,10 @@ class PcieDataModel(DataModel):
             "inventory": {
                 "total_count": self.inventory.total_count,
                 "devices": devices,
-            }
+            },
+            "pcie_snapshot": (
+                {bdf: snap.model_dump(mode="json") for bdf, snap in self.pcie_snapshot.items()}
+                if self.pcie_snapshot
+                else None
+            ),
         }

@@ -44,6 +44,7 @@ from .pcie_data import (
     PcieCapStructure,
     PcieCfgSpace,
     PcieDataModel,
+    PcieDeviceSnapshot,
     PcieExp,
     PcieRegister,
     UncorrErrMaskReg,
@@ -1204,4 +1205,58 @@ class PcieAnalyzer(DataAnalyzer):
         if exp_sriov_count is not None:
             self.check_sriov_count(pcie_data, exp_sriov_count)
 
+        if args.expected_pcie_snapshot:
+            self.check_expected_pcie_snapshot(
+                pcie_data=pcie_data,
+                args=args,
+            )
+
         return self.result
+
+    def check_expected_pcie_snapshot(
+        self,
+        pcie_data: PcieDataModel,
+        args: PcieAnalyzerArgs,
+    ) -> None:
+        """Compare collected register snapshots against expected values in analysis_args."""
+        if not args.expected_pcie_snapshot:
+            return
+
+        current_snapshot = pcie_data.pcie_snapshot
+        if current_snapshot is None:
+            self._log_event(
+                category=EventCategory.IO,
+                description="Expected register snapshot checks requested but none was collected",
+                priority=EventPriority.ERROR,
+            )
+            return
+
+        snapshot_fields = list(PcieDeviceSnapshot.model_fields.keys())
+        for bdf, expected in args.expected_pcie_snapshot.items():
+            actual = current_snapshot.get(bdf)
+            if actual is None:
+                self._log_event(
+                    category=EventCategory.IO,
+                    description="Expected PCIe BDF missing from register snapshot",
+                    priority=EventPriority.ERROR,
+                    data={"bdf": bdf},
+                )
+                continue
+
+            for field_name in snapshot_fields:
+                expected_val = getattr(expected, field_name)
+                if expected_val is None:
+                    continue
+                actual_val = getattr(actual, field_name)
+                if actual_val != expected_val:
+                    self._log_event(
+                        category=EventCategory.IO,
+                        description="PCIe register snapshot field mismatch",
+                        priority=EventPriority.ERROR,
+                        data={
+                            "bdf": bdf,
+                            "field": field_name,
+                            "actual": actual_val,
+                            "expected": expected_val,
+                        },
+                    )

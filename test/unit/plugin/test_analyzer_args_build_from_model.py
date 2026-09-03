@@ -54,6 +54,18 @@ from nodescraper.plugins.inband.os.analyzer_args import OsAnalyzerArgs
 from nodescraper.plugins.inband.os.osdata import OsDataModel
 from nodescraper.plugins.inband.package.analyzer_args import PackageAnalyzerArgs
 from nodescraper.plugins.inband.package.packagedata import PackageDataModel
+from nodescraper.plugins.inband.pcie.analyzer_args import PcieAnalyzerArgs
+from nodescraper.plugins.inband.pcie.pcie_data import (
+    CapabilityEnum,
+    ECapAer,
+    ExtendedCapabilityEnum,
+    PcieCfgSpace,
+    PcieDataModel,
+    PcieExp,
+    PcieInventory,
+    PcieInventoryDevice,
+    build_pcie_snapshots,
+)
 from nodescraper.plugins.inband.process.analyzer_args import ProcessAnalyzerArgs
 from nodescraper.plugins.inband.process.processdata import ProcessDataModel
 from nodescraper.plugins.inband.rocm.analyzer_args import RocmAnalyzerArgs
@@ -218,3 +230,35 @@ def test_memory_analyzer_args_build_from_model():
 
     assert isinstance(args, MemoryAnalyzerArgs)
     assert args.memory_threshold == "256Gi"
+
+
+def test_pcie_analyzer_args_build_from_model():
+    """Test PcieAnalyzerArgs.build_from_model includes inventory and register snapshot."""
+    pcie_exp = PcieExp()
+    ecap_aer = ECapAer()
+    ecap_aer.err_src_id.val = 0x00C0
+    cfg = PcieCfgSpace(
+        cap_structure={CapabilityEnum.PCIE_EXP: pcie_exp},
+        ecap_structure={ExtendedCapabilityEnum.AER: ecap_aer},
+    )
+    inventory = PcieInventory(
+        total_count=1,
+        devices={
+            "0000:01:00.0": PcieInventoryDevice(
+                address="0000:01:00.0",
+                vendor="1002",
+                device="abcd",
+            )
+        },
+    )
+    datamodel = PcieDataModel(
+        inventory=inventory,
+        pcie_cfg_space={"0000:01:00.0": cfg},
+        pcie_snapshot=build_pcie_snapshots({"0000:01:00.0": cfg}),
+    )
+    args = PcieAnalyzerArgs.build_from_model(datamodel)
+
+    assert isinstance(args, PcieAnalyzerArgs)
+    assert args.expected_total_count == 1
+    assert "0000:01:00.0" in args.expected_devices
+    assert args.expected_pcie_snapshot is not None

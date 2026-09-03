@@ -52,6 +52,7 @@ from .pcie_data import (
     PcieInventory,
     Type0Configuration,
     Type1Configuration,
+    build_pcie_snapshots,
 )
 from .pcie_inventory import apply_driver_versions, parse_lspci_inventory
 
@@ -721,10 +722,15 @@ class PcieCollector(InBandDataCollector[PcieDataModel, None]):
                 lspci_verbose=lspci_verbose,
                 lspci_inventory=lspci_inventory_output,
             )
+            merged_cfg = dict(pcie_cfg_dict)
+            if vf_pcie_cfg_data:
+                merged_cfg.update(vf_pcie_cfg_data)
+            pcie_snapshot = build_pcie_snapshots(merged_cfg) if merged_cfg else None
             pcie_data = PcieDataModel(
                 inventory=inventory,
                 pcie_cfg_space=pcie_cfg_dict,
                 vf_pcie_cfg_space=vf_pcie_cfg_data,
+                pcie_snapshot=pcie_snapshot,
             )
         except ValidationError as e:
             self._log_event(

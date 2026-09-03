@@ -31,9 +31,18 @@ from nodescraper.enums import EventPriority
 from nodescraper.plugins.inband.pcie.analyzer_args import PcieAnalyzerArgs
 from nodescraper.plugins.inband.pcie.pcie_analyzer import PcieAnalyzer
 from nodescraper.plugins.inband.pcie.pcie_data import (
+    CapabilityEnum,
+    ECapAer,
+    ECapSecpci,
+    ExtendedCapabilityEnum,
+    PcieCfgSpace,
     PcieDataModel,
+    PcieDeviceSnapshot,
+    PcieExp,
     PcieInventory,
     PcieInventoryDevice,
+    build_pcie_device_snapshot,
+    build_pcie_snapshots,
 )
 from nodescraper.plugins.inband.pcie.pcie_inventory import parse_lspci_inventory
 from nodescraper.plugins.inband.pcie.pcie_plugin import PciePlugin
@@ -184,3 +193,89 @@ def test_pcie_analyzer_args_defaults():
     assert args.fail_on_extra_devices is True
     assert args.expected_devices == {}
     assert args.exp_sriov_count is None
+    assert args.expected_pcie_snapshot is None
+
+
+def _dummy_cfg_space(
+    err_cor_src_id: int = 0x0019,
+    lane_err_stat: int = 0,
+    lnk_ctl2_drs: int = 1,
+) -> PcieCfgSpace:
+    pcie_exp = PcieExp()
+    pcie_exp.lnk_ctl_2_reg.val = lnk_ctl2_drs << 14
+    ecap_aer = ECapAer()
+    ecap_aer.err_src_id.val = err_cor_src_id
+    ecap_sec_pci = ECapSecpci()
+    ecap_sec_pci.lane_err_stat.val = lane_err_stat
+    return PcieCfgSpace(
+        cap_structure={CapabilityEnum.PCIE_EXP: pcie_exp},
+        ecap_structure={
+            ExtendedCapabilityEnum.AER: ecap_aer,
+            ExtendedCapabilityEnum.SPCI: ecap_sec_pci,
+        },
+    )
+
+
+def test_build_pcie_device_snapshot_extracts_register_fields():
+    cfg = _dummy_cfg_space(err_cor_src_id=0x0019, lnk_ctl2_drs=1, lane_err_stat=0x200)
+    snapshot = build_pcie_device_snapshot(cfg)
+    assert snapshot.err_cor_src_id == 0x0019
+    assert snapshot.lnk_ctl2_drs == 1
+    assert snapshot.lane_err_stat == 0x200
+
+
+def test_pcie_analyzer_args_build_from_model(sample_inventory):
+    cfg = _dummy_cfg_space()
+    model = PcieDataModel(
+        inventory=sample_inventory,
+        pcie_cfg_space={"0000:aa:00.0": cfg},
+        pcie_snapshot=build_pcie_snapshots({"0000:aa:00.0": cfg}),
+    )
+    args = PcieAnalyzerArgs.build_from_model(model)
+    assert args.expected_total_count == 2
+    assert "0000:03:00.0" in args.expected_devices
+    assert args.expected_pcie_snapshot is not None
+
+
+def test_get_compare_snapshot_includes_pcie_snapshot(sample_inventory):
+    cfg = _dummy_cfg_space()
+    model = PcieDataModel(
+        inventory=sample_inventory,
+        pcie_cfg_space={"0000:aa:00.0": cfg},
+        pcie_snapshot=build_pcie_snapshots({"0000:aa:00.0": cfg}),
+    )
+    snapshot = model.get_compare_snapshot("full_bom")
+    assert snapshot["pcie_snapshot"]["0000:aa:00.0"]["err_cor_src_id"] == "0x19"
+
+
+def test_expected_pcie_snapshot_mismatch(system_info):
+    analyzer = PcieAnalyzer(system_info=system_info, logger=MagicMock())
+    analyzer.result.events = []
+    pcie_data = PcieDataModel(
+        pcie_cfg_space={},
+        pcie_snapshot={"0000:aa:00.0": PcieDeviceSnapshot(lane_err_stat=0x200)},
+    )
+    args = PcieAnalyzerArgs(
+        expected_pcie_snapshot={"0000:aa:00.0": PcieDeviceSnapshot(lane_err_stat=0)},
+    )
+    analyzer.check_expected_pcie_snapshot(pcie_data=pcie_data, args=args)
+    assert any(
+        e.description == "PCIe register snapshot field mismatch"
+        and e.data.get("field") == "lane_err_stat"
+        and e.priority == EventPriority.ERROR
+        for e in analyzer.result.events
+    )
+
+
+def test_expected_pcie_snapshot_match(system_info):
+    analyzer = PcieAnalyzer(system_info=system_info, logger=MagicMock())
+    analyzer.result.events = []
+    pcie_data = PcieDataModel(
+        pcie_cfg_space={},
+        pcie_snapshot={"0000:aa:00.0": PcieDeviceSnapshot(err_cor_src_id=0x0019)},
+    )
+    args = PcieAnalyzerArgs(
+        expected_pcie_snapshot={"0000:aa:00.0": PcieDeviceSnapshot(err_cor_src_id=0x0019)},
+    )
+    analyzer.check_expected_pcie_snapshot(pcie_data=pcie_data, args=args)
+    assert not analyzer.result.events
