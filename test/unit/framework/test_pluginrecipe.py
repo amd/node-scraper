@@ -13,7 +13,7 @@ from unittest.mock import patch
 import pytest
 
 from nodescraper.models import PluginConfig
-from nodescraper.pluginrecipe.all_plugins import AllPlugins
+from nodescraper.pluginrecipe.all_ib_plugins import AllIbPlugins
 from nodescraper.pluginrecipe.discovery import PluginDiscovery
 from nodescraper.pluginrecipe.node_status import NodeStatus
 from nodescraper.pluginrecipe.pluginrecipe import (
@@ -77,9 +77,9 @@ def test_node_status_recipe_matches_registered_plugins() -> None:
     assert set(NodeStatus.plugin_names()) == expected & available
 
 
-def test_all_plugins_recipe_matches_registry() -> None:
+def test_all_ib_plugins_recipe_matches_registry() -> None:
     plugin_reg = PluginRegistry()
-    assert set(AllPlugins.plugin_names()) == set(plugin_reg.plugins)
+    assert set(AllIbPlugins.plugin_names()) == set(plugin_reg.plugins)
 
 
 def test_node_status_plugin_config_shape() -> None:
@@ -90,10 +90,10 @@ def test_node_status_plugin_config_shape() -> None:
     assert config.plugins["DmesgPlugin"] == COLLECT_AND_ANALYZE.as_config()
 
 
-def test_all_plugins_plugin_config_shape() -> None:
-    config = AllPlugins.plugin_config()
-    assert config.name == "AllPlugins"
-    assert config.desc == "Run all registered plugins with default arguments."
+def test_all_ib_plugins_plugin_config_shape() -> None:
+    config = AllIbPlugins.plugin_config()
+    assert config.name == "AllIbPlugins"
+    assert config.desc == "Run all registered in-band plugins with default arguments."
     assert len(config.plugins) == len(PluginRegistry().plugins)
 
 

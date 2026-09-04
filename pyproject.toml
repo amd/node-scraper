@@ -71,7 +71,7 @@ node-scraper = "nodescraper.cli:cli_entry"
 
 [project.entry-points."nodescraper.plugin_configs"]
 NodeStatus = "nodescraper.pluginrecipe.node_status:NodeStatus"
-AllPlugins = "nodescraper.pluginrecipe.all_plugins:AllPlugins"
+AllIbPlugins = "nodescraper.pluginrecipe.all_ib_plugins:AllIbPlugins"
 
 [tool.black]
 line-length = 100
