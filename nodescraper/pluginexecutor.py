@@ -40,7 +40,7 @@ from nodescraper.connection.inband import InBandConnectionManager
 from nodescraper.connection.inband.osdetection import discover_and_write_os_family
 from nodescraper.connection.oob_ssh import OobSshConnectionManager
 from nodescraper.constants import DEFAULT_LOGGER
-from nodescraper.enums import ExecutionStatus
+from nodescraper.enums import ExecutionStatus, OSFamily
 from nodescraper.interfaces import ConnectionManager, DataPlugin, PluginInterface
 from nodescraper.interfaces.taskresulthook import TaskResultHook
 from nodescraper.models import PluginConfig, SystemInfo
@@ -187,7 +187,8 @@ class PluginExecutor:
         """
         plugin_results = []
         # For Plugins discover OS Family
-        self.discover_os_info()
+        if self.system_info.os_family is None or self.system_info.os_family == OSFamily.UNKNOWN:
+            self.discover_os_info()
         plugin_queue = deque(self.plugin_config.plugins.items())
         try:
             while len(plugin_queue) > 0:

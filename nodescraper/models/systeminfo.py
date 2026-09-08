@@ -27,13 +27,15 @@
 import platform
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from nodescraper.enums import OSFamily, SystemLocation
 
 
 class SystemInfo(BaseModel):
     """System object used to store data about System"""
+
+    config_dict = ConfigDict(extra="allow")
 
     name: str = platform.node()
     os_family: OSFamily = OSFamily.UNKNOWN
