@@ -7,6 +7,8 @@
 ###############################################################################
 from __future__ import annotations
 
+from nodescraper.connection.inband import InBandConnectionManager
+
 from .discovery import PluginDiscovery
 from .pluginrecipe import PluginRecipe
 
@@ -21,4 +23,12 @@ class AllIbPlugins(PluginRecipe):
         Returns:
             tuple[str, ...]: Sorted names of all in-band plugins in the plugin registry.
         """
-        return PluginDiscovery().registered_plugin_names()
+        discovery = PluginDiscovery()
+        return tuple(
+            sorted(
+                name
+                for name in discovery.registered_plugin_names()
+                if getattr(discovery.load_plugin_class(name), "CONNECTION_TYPE", None)
+                is InBandConnectionManager
+            )
+        )
