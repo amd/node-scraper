@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 import pytest
 
+from nodescraper.connection.inband import InBandConnectionManager
 from nodescraper.models import PluginConfig
 from nodescraper.pluginrecipe.all_ib_plugins import AllIbPlugins
 from nodescraper.pluginrecipe.discovery import PluginDiscovery
@@ -77,9 +78,21 @@ def test_node_status_recipe_matches_registered_plugins() -> None:
     assert set(NodeStatus.plugin_names()) == expected & available
 
 
-def test_all_ib_plugins_recipe_matches_registry() -> None:
-    plugin_reg = PluginRegistry()
-    assert set(AllIbPlugins.plugin_names()) == set(plugin_reg.plugins)
+def test_all_ib_plugins_recipe_returns_only_ib_plugins() -> None:
+    discovery = PluginDiscovery()
+    for name in AllIbPlugins.plugin_names():
+        plugin_class = discovery.load_plugin_class(name)
+        assert getattr(plugin_class, "CONNECTION_TYPE", None) is InBandConnectionManager
+
+
+def test_all_ib_plugins_recipe_excludes_oob_plugins() -> None:
+    all_names = set(PluginRegistry().plugins)
+    ib_names = set(AllIbPlugins.plugin_names())
+    discovery = PluginDiscovery()
+    non_ib = all_names - ib_names
+    for name in non_ib:
+        plugin_class = discovery.load_plugin_class(name)
+        assert getattr(plugin_class, "CONNECTION_TYPE", None) is not InBandConnectionManager
 
 
 def test_node_status_plugin_config_shape() -> None:
@@ -94,7 +107,7 @@ def test_all_ib_plugins_plugin_config_shape() -> None:
     config = AllIbPlugins.plugin_config()
     assert config.name == "AllIbPlugins"
     assert config.desc == "Run all registered in-band plugins with default arguments."
-    assert len(config.plugins) == len(PluginRegistry().plugins)
+    assert len(config.plugins) == len(AllIbPlugins.plugin_names())
 
 
 def test_collector_only_recipe_sets_analysis_false() -> None:
