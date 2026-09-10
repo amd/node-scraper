@@ -23,6 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
+import re
 from typing import Optional
 
 from nodescraper.base import InBandDataCollector
@@ -35,9 +36,11 @@ from .biosdata import BiosDataModel
 class BiosCollector(InBandDataCollector[BiosDataModel, None]):
     """Collect BIOS details"""
 
+    SUPPORTED_OS_FAMILY: set[OSFamily] = {OSFamily.WINDOWS, OSFamily.LINUX, OSFamily.ESXI}
     DATA_MODEL = BiosDataModel
     CMD_WINDOWS = "wmic bios get SMBIOSBIOSVersion /Value"
     CMD = "sh -c 'cat /sys/devices/virtual/dmi/id/bios_version'"
+    CMD_ESXI = "smbiosDump | grep -A5 'BIOS Info (Type 0)' | grep 'Version:' | head -1"
 
     def collect_data(
         self,
@@ -57,6 +60,11 @@ class BiosCollector(InBandDataCollector[BiosDataModel, None]):
                 bios = [line for line in res.stdout.splitlines() if "SMBIOSBIOSVersion=" in line][
                     0
                 ].split("=")[1]
+        elif self.system_info.os_family == OSFamily.ESXI:
+            res = self._run_sut_cmd(self.CMD_ESXI)
+            if res.exit_code == 0:
+                match = re.search(r'Version:\s*"?([^"]+)"?', res.stdout)
+                bios = match.group(1).strip() if match else res.stdout.strip()
         else:
             res = self._run_sut_cmd(self.CMD)
             if res.exit_code == 0:

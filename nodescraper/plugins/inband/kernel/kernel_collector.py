@@ -36,6 +36,7 @@ from .kerneldata import KernelDataModel
 class KernelCollector(InBandDataCollector[KernelDataModel, None]):
     """Read kernel version"""
 
+    SUPPORTED_OS_FAMILY: set[OSFamily] = {OSFamily.WINDOWS, OSFamily.LINUX, OSFamily.ESXI}
     DATA_MODEL = KernelDataModel
     CMD_WINDOWS = "wmic os get Version /Value"
     CMD = "sh -c 'uname -a'"
@@ -88,6 +89,9 @@ class KernelCollector(InBandDataCollector[KernelDataModel, None]):
                     "="
                 )[1]
         else:
+            # Non-Windows (Linux and ESXi). ESXi `uname -a` yields the release in the
+            # same field the Linux parser reads (verified: "9.1.0"); numa_balancing has
+            # no ESXi equivalent and its command fails gracefully, leaving None.
             res = self._run_sut_cmd(self.CMD)
             if res.exit_code == 0:
                 kernel_info = res.stdout

@@ -44,3 +44,5 @@ class SystemInfo(BaseModel):
     metadata: Optional[dict] = Field(default_factory=dict)
     location: Optional[SystemLocation] = SystemLocation.LOCAL
     vendorid_ep: int = 0x1002
+    devid_ep: Optional[int] = None
+    devid_ep_vf: Optional[int] = None
