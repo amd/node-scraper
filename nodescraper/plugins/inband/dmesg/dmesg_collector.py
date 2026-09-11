@@ -62,9 +62,13 @@ class DmesgCollector(InBandDataCollector[DmesgData, DmesgCollectorArgs]):
         list_res = self._run_sut_cmd(cmd_logs, sudo=True)
         paths = [p.strip() for p in (list_res.stdout or "").splitlines() if p.strip()]
         if not paths:
+            if is_esxi:
+                description = "No /var/log/vmkernel.log files found (including rotations)."
+            else:
+                description = "No /var/log/dmesg files found (including rotations)."
             self._log_event(
                 category=EventCategory.OS,
-                description=f"No rotated {log_label} log files found.",
+                description=description,
                 data={"list_exit_code": list_res.exit_code},
                 priority=EventPriority.WARNING,
             )

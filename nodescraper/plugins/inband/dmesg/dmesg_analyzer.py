@@ -503,8 +503,18 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
         ),
     ]
 
+    # Date-range filtering must recognize both Linux dmesg comma-form timestamps
+    # (2024-10-01T05:00:00,000000-05:00) and ESXi vmkernel.log dot-ms/Z timestamps
+    # (2026-08-20T09:35:58.380Z). filter_dmesg stays a classmethod (public API), so it
+    # carries its own combined pattern rather than the instance TIMESTAMP_PATTERN.
+    _FILTER_TIMESTAMP_PATTERN: re.Pattern = re.compile(
+        r"(\d{4}-\d+-\d+T\d+:\d+:\d+),(\d+[+-]\d+:\d+)"
+        r"|(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z)"
+    )
+
+    @classmethod
     def filter_dmesg(
-        self,
+        cls,
         dmesg_content: str,
         analysis_range_start: Optional[datetime.datetime] = None,
         analysis_range_end: Optional[datetime.datetime] = None,
@@ -521,16 +531,16 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
         filtered_dmesg = ""
         found_start = False if analysis_range_start else True
         for line in dmesg_content.splitlines():
-            # Reuse the base extractor so the active TIMESTAMP_PATTERN (ESXi dot-Z form
-            # when on ESXi, else Linux comma-form) is honored in exactly one place.
-            date_str = self._extract_timestamp_from_match_position(line, 0)
-            if date_str is not None:
-                # Linux uses a comma before fractional seconds; normalize to "." so
-                # fromisoformat() accepts it (no-op for the ESXi "...Z" form).
-                try:
-                    date = datetime.datetime.fromisoformat(date_str.replace(",", "."))
-                except ValueError:
-                    continue
+            match = cls._FILTER_TIMESTAMP_PATTERN.search(line)
+            if match is not None:
+                if match.group(1) is not None:
+                    # Linux comma-form: swap the comma for a dot so fromisoformat accepts it
+                    iso = f"{match.group(1)}.{match.group(2)}"
+                else:
+                    # ESXi dot-Z form: normalize the trailing Z so fromisoformat accepts it
+                    # on Python < 3.11 as well
+                    iso = match.group(3).replace("Z", "+00:00")
+                date = datetime.datetime.fromisoformat(iso)
                 # show date in UTC now
                 date = date.astimezone(datetime.timezone.utc)
                 if analysis_range_start and not found_start and date >= analysis_range_start:
