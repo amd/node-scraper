@@ -105,3 +105,23 @@ def test_analyzer_unknown_path(analyzer, sample_data):
     assert result.status == ExecutionStatus.ERROR
     assert "mismatch" in result.message.lower()
     assert "unknown" in result.message
+
+
+def test_analyzer_gpu_vbios_match(analyzer):
+    path = "/sys/class/drm/card*/device/vbios_version"
+    data = SysSettingsDataModel(readings={path: "113-M355-01-1K1-040C"})
+    args = SysSettingsAnalyzerArgs(
+        checks=[SysfsCheck(path=path, expected=["113-M355-01-1K1-040C"], name="gpu_vbios")]
+    )
+    result = analyzer.analyze_data(data, args)
+    assert result.status == ExecutionStatus.OK
+
+
+def test_analyzer_gpu_vbios_mismatch(analyzer):
+    path = "/sys/class/drm/card*/device/vbios_version"
+    data = SysSettingsDataModel(readings={path: "wrong"})
+    args = SysSettingsAnalyzerArgs(
+        checks=[SysfsCheck(path=path, expected=["113-M355-01-1K1-040C"], name="gpu_vbios")]
+    )
+    result = analyzer.analyze_data(data, args)
+    assert result.status == ExecutionStatus.ERROR

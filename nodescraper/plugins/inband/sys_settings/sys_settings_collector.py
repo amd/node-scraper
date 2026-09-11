@@ -94,6 +94,17 @@ def _sysfs_full_path(suffix: str) -> str:
     return f"/sys/{suffix}"
 
 
+def _collapse_glob_cat(stdout: str) -> str:
+    """Keep unique non-empty lines; store a single value when every match is identical."""
+    lines = [line.strip() for line in (stdout or "").splitlines() if line.strip()]
+    unique = list(dict.fromkeys(lines))
+    if not unique:
+        return ""
+    if len(unique) == 1:
+        return unique[0]
+    return "\n".join(unique)
+
+
 class SysSettingsCollector(InBandDataCollector[SysSettingsDataModel, SysSettingsCollectorArgs]):
     """Collect sysfs settings from user-specified paths."""
 
@@ -108,6 +119,9 @@ class SysSettingsCollector(InBandDataCollector[SysSettingsDataModel, SysSettings
         self, args: Optional[SysSettingsCollectorArgs] = None
     ) -> tuple[TaskResult, Optional[SysSettingsDataModel]]:
         """Collect sysfs values for each path in args.paths.
+
+        Glob paths (containing '*') are read with ``bash -c 'cat /sys/...'`` first.
+        Identical cat lines are collapsed to one value. If cat fails, ``ls -l`` is used.
 
         Args:
             args: Collector args with paths to read; if None or empty paths, returns NOT_RAN.
@@ -153,6 +167,14 @@ class SysSettingsCollector(InBandDataCollector[SysSettingsDataModel, SysSettings
                 continue
             full_path = _sysfs_full_path(suffix)
             if "*" in suffix:
+                cat_cmd = self.CMD.format(suffix)
+                res = self._run_sut_cmd(f"bash -c {cat_cmd!r}", sudo=False)
+                if res.exit_code == 0 and res.stdout and res.stdout.strip():
+                    value = _collapse_glob_cat(res.stdout)
+                    if "\n" not in value:
+                        value = _parse_bracketed_setting(value) or value
+                    readings[full_path] = value
+                    continue
                 cmd = self.CMD_LS_LONG.format(suffix)
                 res = self._run_sut_cmd(f"bash -c {cmd!r}", sudo=False)
                 if res.exit_code == 0:
@@ -160,7 +182,7 @@ class SysSettingsCollector(InBandDataCollector[SysSettingsDataModel, SysSettings
                 else:
                     self._log_event(
                         category=EventCategory.OS,
-                        description=f"Failed to run ls -l for sysfs path: {full_path}",
+                        description=f"Failed to read sysfs path: {full_path}",
                         data={"exit_code": res.exit_code},
                         priority=EventPriority.WARNING,
                         console_log=True,
