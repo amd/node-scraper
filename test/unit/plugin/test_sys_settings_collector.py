@@ -165,7 +165,7 @@ def test_collect_data_skips_path_with_dotdot(linux_sys_settings_collector):
     assert "/etc" not in str(seen_commands)
 
 
-def test_collect_data_glob_path_uses_ls_long(linux_sys_settings_collector):
+def test_collect_data_glob_path_falls_back_to_ls_long(linux_sys_settings_collector):
     seen_commands = []
 
     def run_cmd(cmd, **kwargs):
@@ -174,7 +174,7 @@ def test_collect_data_glob_path_uses_ls_long(linux_sys_settings_collector):
             return make_artifact(
                 0, "lrwxrwxrwx 1 root root 0 Jan  1 00:00 device -> ../../pci0000:00/0000:00:01.0"
             )
-        return make_artifact(0, "[always] madvise never")
+        return make_artifact(1, "")
 
     linux_sys_settings_collector._run_sut_cmd = run_cmd
     args = {"paths": ["class/net/*/device"]}
@@ -182,9 +182,8 @@ def test_collect_data_glob_path_uses_ls_long(linux_sys_settings_collector):
 
     assert result.status == ExecutionStatus.OK
     assert data is not None
-    assert len(seen_commands) == 1
-    assert "ls -l /sys/class/net/*/device" in seen_commands[0]
-    assert "bash -c" in seen_commands[0]
+    assert any("cat /sys/class/net/*/device" in cmd for cmd in seen_commands)
+    assert any("ls -l /sys/class/net/*/device" in cmd for cmd in seen_commands)
     assert data.readings.get("/sys/class/net/*/device") == (
         "lrwxrwxrwx 1 root root 0 Jan  1 00:00 device -> ../../pci0000:00/0000:00:01.0"
     )
@@ -195,6 +194,8 @@ def test_collect_data_mixed_paths_cat_and_glob(linux_sys_settings_collector):
     def run_cmd(cmd, **kwargs):
         if "ls -l" in cmd:
             return make_artifact(0, "lrwx 1 root root 0 device -> ../../device")
+        if "net/*" in cmd:
+            return make_artifact(1, "")
         if "enabled" in cmd:
             return make_artifact(0, "[always] madvise never")
         return make_artifact(0, "[madvise] always never defer")
@@ -213,3 +214,36 @@ def test_collect_data_mixed_paths_cat_and_glob(linux_sys_settings_collector):
         data.readings.get("/sys/class/net/*/device") == "lrwx 1 root root 0 device -> ../../device"
     )
     assert "Sysfs collected 3 path(s)" in result.message
+
+
+VBIOS_PATH = "/sys/class/drm/card*/device/vbios_version"
+VBIOS_VALUE = "113-M355-01-1K1-040C"
+
+
+def test_collect_data_glob_cat_vbios_collapses_identical_lines(linux_sys_settings_collector):
+    seen_commands = []
+
+    def run_cmd(cmd, **kwargs):
+        seen_commands.append(cmd)
+        if "cat /sys/class/drm/card*/device/vbios_version" in cmd:
+            return make_artifact(0, f"{VBIOS_VALUE}\n{VBIOS_VALUE}\n{VBIOS_VALUE}\n")
+        return make_artifact(1, "")
+
+    linux_sys_settings_collector._run_sut_cmd = run_cmd
+    result, data = linux_sys_settings_collector.collect_data({"paths": [VBIOS_PATH]})
+
+    assert result.status == ExecutionStatus.OK
+    assert data.readings.get(VBIOS_PATH) == VBIOS_VALUE
+    assert any("cat /sys/class/drm/card*/device/vbios_version" in cmd for cmd in seen_commands)
+    assert not any("ls -l" in cmd for cmd in seen_commands)
+
+
+def test_collect_data_glob_cat_vbios_keeps_mixed_versions(linux_sys_settings_collector):
+    def run_cmd(cmd, **kwargs):
+        return make_artifact(0, f"{VBIOS_VALUE}\n113-OTHER-0000\n")
+
+    linux_sys_settings_collector._run_sut_cmd = run_cmd
+    result, data = linux_sys_settings_collector.collect_data({"paths": [VBIOS_PATH]})
+
+    assert result.status == ExecutionStatus.OK
+    assert data.readings.get(VBIOS_PATH) == f"{VBIOS_VALUE}\n113-OTHER-0000"
