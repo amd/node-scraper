@@ -76,14 +76,14 @@ class StorageCollector(InBandDataCollector[StorageDataModel, None]):
                         free_bytes = int(fields[6])
                         used_bytes = total_bytes - free_bytes
                         if total_bytes:
-                            percent = round(used_bytes / total_bytes * 100, 2)
+                            usage_percent = round(used_bytes / total_bytes * 100, 2)
                         else:
-                            percent = 0.0
+                            usage_percent = 0.0
                         storage_data[device_id] = DeviceStorageData(
                             total=total_bytes,
                             free=free_bytes,
                             used=used_bytes,
-                            percent=percent,
+                            percent=usage_percent,
                         )
         else:
             if args.skip_sudo:
