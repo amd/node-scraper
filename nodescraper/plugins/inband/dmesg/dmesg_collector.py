@@ -38,24 +38,39 @@ from .dmesgdata import DmesgData
 class DmesgCollector(InBandDataCollector[DmesgData, DmesgCollectorArgs]):
     """Read dmesg log"""
 
-    SUPPORTED_OS_FAMILY = {OSFamily.LINUX}
+    SUPPORTED_OS_FAMILY = {OSFamily.LINUX, OSFamily.ESXI}
 
     DATA_MODEL = DmesgData
 
     CMD = "dmesg --time-format iso -x"
+    # ESXi has no dmesg ring buffer; the kernel log is the vmkernel.log file.
+    CMD_ESXI = "cat /var/log/vmkernel.log"
 
     CMD_LOGS = (
         r"ls -1 /var/log/dmesg* 2>/dev/null | grep -E '^/var/log/dmesg(\.[0-9]+(\.gz)?)?$' || true"
     )
+    # ESXi rotates vmkernel.log to vmkernel.<n> / vmkernel.<n>.gz.
+    CMD_LOGS_ESXI = r"ls -1 /var/log/vmkernel.* 2>/dev/null | grep -E '^/var/log/vmkernel\.[0-9]+(\.gz)?$' || true"
 
     def _collect_dmesg_rotations(self):
-        """Collect dmesg logs"""
-        list_res = self._run_sut_cmd(self.CMD_LOGS, sudo=True)
+        """Collect dmesg (Linux) / vmkernel.log (ESXi) rotated logs"""
+        is_esxi = self.system_info.os_family == OSFamily.ESXI
+        if is_esxi:
+            log_label = "vmkernel"
+            cmd_logs = self.CMD_LOGS_ESXI
+        else:
+            log_label = "dmesg"
+            cmd_logs = self.CMD_LOGS
+        list_res = self._run_sut_cmd(cmd_logs, sudo=True)
         paths = [p.strip() for p in (list_res.stdout or "").splitlines() if p.strip()]
         if not paths:
+            if is_esxi:
+                description = "No /var/log/vmkernel.log files found (including rotations)."
+            else:
+                description = "No /var/log/dmesg files found (including rotations)."
             self._log_event(
                 category=EventCategory.OS,
-                description="No /var/log/dmesg files found (including rotations).",
+                description=description,
                 data={"list_exit_code": list_res.exit_code},
                 priority=EventPriority.WARNING,
             )
@@ -68,7 +83,7 @@ class DmesgCollector(InBandDataCollector[DmesgData, DmesgCollectorArgs]):
                 cmd = f"gzip -dc {qp} 2>/dev/null || zcat {qp} 2>/dev/null"
                 res = self._run_sut_cmd(cmd, sudo=True, log_artifact=False)
                 if res.exit_code == 0 and res.stdout is not None:
-                    fname = nice_rotated_name(p, "dmesg")
+                    fname = nice_rotated_name(p, log_label)
                     self.logger.info("Collected dmesg log: %s", fname)
                     self.result.artifacts.append(
                         TextFileArtifact(filename=fname, contents=res.stdout)
@@ -84,7 +99,7 @@ class DmesgCollector(InBandDataCollector[DmesgData, DmesgCollectorArgs]):
                 cmd = f"cat {qp}"
                 res = self._run_sut_cmd(cmd, sudo=True, log_artifact=False)
                 if res.exit_code == 0 and res.stdout is not None:
-                    fname = nice_rotated_name(p, "dmesg")
+                    fname = nice_rotated_name(p, log_label)
                     self.logger.info("Collected dmesg log: %s", fname)
                     self.result.artifacts.append(
                         TextFileArtifact(filename=fname, contents=res.stdout)
@@ -121,8 +136,13 @@ class DmesgCollector(InBandDataCollector[DmesgData, DmesgCollectorArgs]):
             str: dmesg output
         """
 
-        self.logger.info("Running dmesg command on system")
-        res = self._run_sut_cmd(self.CMD, sudo=True, log_artifact=False)
+        is_esxi = self.system_info.os_family == OSFamily.ESXI
+        if is_esxi:
+            cmd = self.CMD_ESXI
+        else:
+            cmd = self.CMD
+        self.logger.info("Reading kernel log from system")
+        res = self._run_sut_cmd(cmd, sudo=True, log_artifact=False)
         if res.exit_code != 0:
             self._log_event(
                 category=EventCategory.OS,

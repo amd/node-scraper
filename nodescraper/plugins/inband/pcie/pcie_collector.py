@@ -80,7 +80,10 @@ class PcieCollector(InBandDataCollector[PcieDataModel, None]):
 
     """
 
-    SUPPORTED_OS_FAMILY: Set[OSFamily] = {OSFamily.LINUX}
+    SUPPORTED_OS_FAMILY: Set[OSFamily] = {OSFamily.LINUX, OSFamily.ESXI}
+
+    # A bare BDF line that begins an esxcli/lspci device block, e.g. "0000:05:00.0".
+    _BDF_LINE = re.compile(r"^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.[0-9a-f]+", re.IGNORECASE)
 
     DATA_MODEL = PcieDataModel
 
@@ -518,17 +521,8 @@ class PcieCollector(InBandDataCollector[PcieDataModel, None]):
 
         return cap_structure  # type: ignore[return-value]
 
-    def get_cfg_by_bdf(self, bdf: str, sudo=True) -> PcieCfgSpace:
-        """Will fill out a PcieCfgSpace object with the PCIe configuration space for a given BDF"""
-        hex_data_raw = self.show_lspci_hex(bdf, sudo=sudo)
-        if hex_data_raw is None:
-            self._log_event(
-                category=EventCategory.IO,
-                description="Failed to get hex data for BDF.",
-                data={"bdf": bdf},
-                priority=EventPriority.ERROR,
-            )
-            return PcieCfgSpace()
+    def _cfg_space_from_hex(self, hex_data_raw: str, bdf: str) -> PcieCfgSpace:
+        """Parse a raw lspci hex dump (Linux ``-xxxx`` or ESXi ``-e``) into a PcieCfgSpace."""
         hex_data: List[int] = self.parse_hex_dump(hex_data_raw)
         if len(hex_data) < 64:
             # Expect at least 256 bytes of data, for the first 256 bytes of the PCIe config space
@@ -541,6 +535,19 @@ class PcieCollector(InBandDataCollector[PcieDataModel, None]):
             return PcieCfgSpace()
         cap_data, ecap_data = self.discover_capability_structure(hex_data)
         return self.get_pcie_cfg(hex_data, cap_data, ecap_data)
+
+    def get_cfg_by_bdf(self, bdf: str, sudo=True) -> PcieCfgSpace:
+        """Will fill out a PcieCfgSpace object with the PCIe configuration space for a given BDF"""
+        hex_data_raw = self.show_lspci_hex(bdf, sudo=sudo)
+        if hex_data_raw is None:
+            self._log_event(
+                category=EventCategory.IO,
+                description="Failed to get hex data for BDF.",
+                data={"bdf": bdf},
+                priority=EventPriority.ERROR,
+            )
+            return PcieCfgSpace()
+        return self._cfg_space_from_hex(hex_data_raw, bdf)
 
     def get_pcie_cfg(
         self,
@@ -595,6 +602,127 @@ class PcieCollector(InBandDataCollector[PcieDataModel, None]):
             if data is not None:
                 self.result.artifacts.append(TextFileArtifact(filename=name, contents=data))
 
+    def _get_gpu_vf_bdfs_esxi(self) -> Tuple[List[str], List[str]]:
+        """Return (pf_bdfs, vf_bdfs) for the GPUs on an ESXi host via esxcli.
+
+        ESXi busybox lspci has no device filter, so GPU/VF BDFs are resolved from
+        ``esxcli hardware pci list`` by matching the SKU's PF/VF device IDs
+        (system_info.devid_ep / devid_ep_vf). Each device block starts with a bare
+        BDF line followed by indented fields incl. "Device ID".
+        """
+        pf_bdfs: List[str] = []
+        vf_bdfs: List[str] = []
+        if self.system_info.devid_ep is not None:
+            pf_devid = format(self.system_info.devid_ep, "x")
+        else:
+            pf_devid = ""
+        if self.system_info.devid_ep_vf is not None:
+            vf_devid = format(self.system_info.devid_ep_vf, "x")
+        else:
+            vf_devid = ""
+        if not pf_devid and not vf_devid:
+            return pf_bdfs, vf_bdfs
+
+        out = self._run_os_cmd("esxcli hardware pci list", sudo=False)
+        if not out:
+            return pf_bdfs, vf_bdfs
+
+        current_bdf: Optional[str] = None
+        for line in out.splitlines():
+            stripped = line.strip()
+            if self._BDF_LINE.match(stripped) and ":" in stripped and " " not in stripped:
+                # Bare BDF header line (anchors the block).
+                current_bdf = stripped
+            elif current_bdf and stripped.lower().startswith("device id:"):
+                devid = stripped.split(":", 1)[1].strip().lower().removeprefix("0x")
+                if pf_devid and devid == pf_devid:
+                    pf_bdfs.append(current_bdf)
+                elif vf_devid and devid == vf_devid:
+                    vf_bdfs.append(current_bdf)
+        return pf_bdfs, vf_bdfs
+
+    def _get_all_cfg_space_esxi(self) -> Dict[str, str]:
+        """Return {bdf: hex_dump_text} for every device from a single ``lspci -e``.
+
+        ESXi has no per-device dump; ``lspci -e`` emits the full extended (4096-byte)
+        config space for all devices in one blob. Each device section starts with a
+        header line "<bdf> <description>" followed by "NN: .." hex lines.
+        """
+        blob = self._run_os_cmd("lspci -e", sudo=False)
+        if not blob:
+            return {}
+        self.result.artifacts.append(TextFileArtifact(filename="lspci_e.txt", contents=blob))
+        sections: Dict[str, List[str]] = {}
+        current_bdf: Optional[str] = None
+        for line in blob.splitlines():
+            header = self._BDF_LINE.match(line)
+            if header and " " in line:
+                # Device header line: "<bdf> <description>".
+                current_bdf = line.split(" ", 1)[0]
+                sections[current_bdf] = []
+            elif current_bdf is not None:
+                sections[current_bdf].append(line)
+        return {bdf: "\n".join(lines) for bdf, lines in sections.items()}
+
+    def _get_pcie_data_esxi(self) -> Optional[PcieDataModel]:
+        """Collect GPU + VF PCIe config space on ESXi.
+
+        ESXi busybox lspci lacks ``-s`` (per-device) and ``-PP`` (bus-path), so dump
+        all extended config space once via ``lspci -e``, split it by BDF, and select the
+        GPU/VF BDFs resolved from esxcli. Upstream-bridge traversal is not available on
+        ESXi and is intentionally skipped (GPU + VF only).
+        """
+        pf_bdfs, vf_bdfs = self._get_gpu_vf_bdfs_esxi()
+        if not pf_bdfs and not vf_bdfs:
+            self._log_event(
+                category=EventCategory.IO,
+                description="No GPU/VF BDFs found on ESXi host for this SKU.",
+                data={
+                    "devid_ep": self.system_info.devid_ep,
+                    "devid_ep_vf": self.system_info.devid_ep_vf,
+                },
+                priority=EventPriority.WARNING,
+            )
+            return None
+
+        cfg_by_bdf = self._get_all_cfg_space_esxi()
+        if not cfg_by_bdf:
+            self.result.status = ExecutionStatus.ERROR
+            return None
+
+        self._log_event(
+            category=EventCategory.IO,
+            description=(
+                "Upstream-bridge PCIe collection is not supported on ESXi; "
+                "collecting GPU + VF only."
+            ),
+            priority=EventPriority.INFO,
+        )
+
+        try:
+            pcie_cfg_dict: Dict[str, PcieCfgSpace] = {}
+            for bdf in pf_bdfs:
+                if bdf in cfg_by_bdf:
+                    pcie_cfg_dict[bdf] = self._cfg_space_from_hex(cfg_by_bdf[bdf], bdf)
+            vf_pcie_cfg_data: Dict[str, PcieCfgSpace] = {}
+            for bdf in vf_bdfs:
+                if bdf in cfg_by_bdf:
+                    vf_pcie_cfg_data[bdf] = self._cfg_space_from_hex(cfg_by_bdf[bdf], bdf)
+            pcie_data = PcieDataModel(
+                pcie_cfg_space=pcie_cfg_dict,
+                vf_pcie_cfg_space=vf_pcie_cfg_data,
+            )
+        except ValidationError as e:
+            self._log_event(
+                category=EventCategory.OS,
+                description="Failed to build model for PCIe data",
+                data=get_exception_details(e),
+                priority=EventPriority.ERROR,
+            )
+            self.result.status = ExecutionStatus.ERROR
+            return None
+        return pcie_data
+
     def _get_pcie_data(
         self, upstream_steps_to_collect: Optional[int] = None
     ) -> Optional[PcieDataModel]:
@@ -605,6 +733,9 @@ class PcieCollector(InBandDataCollector[PcieDataModel, None]):
         Optional[PcieDataModel]
             The data in a PcieDataModel object or None on failure
         """
+        if self.system_info.os_family == OSFamily.ESXI:
+            return self._get_pcie_data_esxi()
+
         minimum_system_interaction_level_required_for_sudo = SystemInteractionLevel.INTERACTIVE
 
         try:

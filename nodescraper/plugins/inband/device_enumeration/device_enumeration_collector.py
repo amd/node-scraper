@@ -36,6 +36,7 @@ from .deviceenumdata import DeviceEnumerationDataModel
 class DeviceEnumerationCollector(InBandDataCollector[DeviceEnumerationDataModel, None]):
     """Collect CPU and GPU count"""
 
+    SUPPORTED_OS_FAMILY: set[OSFamily] = {OSFamily.WINDOWS, OSFamily.LINUX, OSFamily.ESXI}
     DATA_MODEL = DeviceEnumerationDataModel
 
     CMD_GPU_COUNT_LINUX = (
@@ -55,6 +56,12 @@ class DeviceEnumerationCollector(InBandDataCollector[DeviceEnumerationDataModel,
         'powershell -Command "(Get-VMHostPartitionableGpu | Measure-Object).Count"'
     )
 
+    # ESXi busybox `lspci -d` dumps hex instead of filtering, so use esxcli. GPUs are
+    # counted by exact device ID (PF vs VF), anchored on "Device ID:" to avoid also
+    # matching "SubDevice ID:".
+    CMD_CPU_COUNT_ESXI = "esxcli hardware cpu global get | awk '/CPU Packages:/ {print $NF}'"
+    CMD_PCI_COUNT_ESXI = "esxcli hardware pci list | grep -E '^ *Device ID: 0x{device_id}' | wc -l"
+
     def _warning(
         self,
         description: str,
@@ -72,10 +79,20 @@ class DeviceEnumerationCollector(InBandDataCollector[DeviceEnumerationDataModel,
             priority=EventPriority.WARNING,
         )
 
+    def _esxi_device_count(self, device_id: Optional[int]) -> CommandArtifact:
+        """Count PCI devices on ESXi whose Device ID matches ``device_id`` (as hex).
+
+        A None id produces an unmatched pattern (count 0) so the caller still gets a
+        valid CommandArtifact to parse.
+        """
+        hex_id = format(device_id, "x") if device_id is not None else "__unset__"
+        return self._run_sut_cmd(self.CMD_PCI_COUNT_ESXI.format(device_id=hex_id))
+
     def collect_data(self, args=None) -> tuple[TaskResult, Optional[DeviceEnumerationDataModel]]:
         """
         Read CPU and GPU count
         On Linux, use lscpu and lspci
+        On ESXi, use esxcli
         On Windows, use WMI and hyper-v cmdlets
         """
         if self.system_info.os_family == OSFamily.LINUX:
@@ -92,6 +109,17 @@ class DeviceEnumerationCollector(InBandDataCollector[DeviceEnumerationDataModel,
 
             # Collect lshw output
             lshw_res = self._run_sut_cmd(self.CMD_LSHW_LINUX, sudo=True, log_artifact=False)
+        elif self.system_info.os_family == OSFamily.ESXI:
+            cpu_count_res = self._run_sut_cmd(self.CMD_CPU_COUNT_ESXI)
+            if self.system_info.devid_ep is None:
+                self._log_event(
+                    category=EventCategory.PLATFORM,
+                    description="devid_ep not set; cannot count GPUs/VFs on ESXi by device ID",
+                    priority=EventPriority.WARNING,
+                )
+            # PFs and (SR-IOV) VFs are distinguished by device ID on ESXi.
+            gpu_count_res = self._esxi_device_count(self.system_info.devid_ep)
+            vf_count_res = self._esxi_device_count(self.system_info.devid_ep_vf)
         else:
             cpu_count_res = self._run_sut_cmd(self.CMD_CPU_COUNT_WINDOWS)
             gpu_count_res = self._run_sut_cmd(self.CMD_GPU_COUNT_WINDOWS)
