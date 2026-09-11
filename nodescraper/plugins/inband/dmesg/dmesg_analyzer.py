@@ -30,7 +30,7 @@ from typing import Optional
 from nodescraper.base.match_ignore import parse_ignore_match_rules
 from nodescraper.base.regexanalyzer import ErrorRegex, RegexAnalyzer
 from nodescraper.connection.inband import TextFileArtifact
-from nodescraper.enums import EventCategory, EventPriority
+from nodescraper.enums import EventCategory, EventPriority, OSFamily
 from nodescraper.models import Event, TaskResult
 
 from .analyzer_args import DmesgAnalyzerArgs
@@ -47,9 +47,25 @@ from .mce_utils import (
 
 
 class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
-    """Check dmesg for errors"""
+    """Check dmesg (Linux) or vmkernel.log (ESXi) for errors"""
 
     DATA_MODEL = DmesgData
+
+    # ESXi vmkernel.log timestamp, e.g. "2026-08-05T19:53:35.178Z" (ISO8601 dot-ms + Z).
+    # Linux uses the base RegexAnalyzer.TIMESTAMP_PATTERN (comma-form).
+    ESXI_TIMESTAMP_PATTERN: re.Pattern = re.compile(
+        r"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z)"
+    )
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        # On ESXi, extract vmkernel.log timestamps so event grouping and date-range
+        # filtering both work; Linux keeps the base comma-form pattern.
+        if self._is_esxi():
+            self.TIMESTAMP_PATTERN = self.ESXI_TIMESTAMP_PATTERN
+
+    def _is_esxi(self) -> bool:
+        return self.system_info.os_family == OSFamily.ESXI
 
     ERROR_REGEX: list[ErrorRegex] = [
         ErrorRegex(
@@ -273,6 +289,30 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
             message="RAS Deferred Error",
             event_category=EventCategory.RAS,
         ),
+        # ESXi mxGPU (gim/amdgpuv) RAS phrasing differs from Linux: the block name is
+        # capitalized ("... detected in MMHUB Block."), there is no "in total", and no
+        # "kern  :err:" prefix. These match the ESXi host-driver forms and are inert on
+        # Linux logs (which use the lowercase "in total in <block> block" phrasing above).
+        ErrorRegex(
+            regex=re.compile(r"(\d+ new uncorrectable hardware errors detected in \w+ Block.*)"),
+            message="RAS Uncorrectable Error",
+            event_category=EventCategory.RAS,
+        ),
+        ErrorRegex(
+            regex=re.compile(r"(\d+ new correctable hardware errors detected in \w+ Block.*)"),
+            message="RAS Correctable Error",
+            event_category=EventCategory.RAS,
+        ),
+        ErrorRegex(
+            regex=re.compile(r"(GPU detected ECC Fatal Error\.)"),
+            message="RAS ECC Fatal Error",
+            event_category=EventCategory.RAS,
+        ),
+        ErrorRegex(
+            regex=re.compile(r"(Issuing Whole GPU reset\.)"),
+            message="GPU Reset",
+            event_category=EventCategory.RAS,
+        ),
         ErrorRegex(
             regex=re.compile(
                 r"((?:\[Hardware Error\]:\s+)?event severity: corrected.*)"
@@ -463,14 +503,13 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
         ),
     ]
 
-    @classmethod
     def filter_dmesg(
-        cls,
+        self,
         dmesg_content: str,
         analysis_range_start: Optional[datetime.datetime] = None,
         analysis_range_end: Optional[datetime.datetime] = None,
     ) -> str:
-        """Filter a dmesg log by date
+        """Filter a dmesg (Linux) or vmkernel.log (ESXi) log by date
 
         Args:
             dmesg_content (str): unfiltered dmesg log
@@ -482,9 +521,16 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
         filtered_dmesg = ""
         found_start = False if analysis_range_start else True
         for line in dmesg_content.splitlines():
-            date = re.search(r"(\d{4}-\d+-\d+T\d+:\d+:\d+),(\d+[+-]\d+:\d+)", line)
-            if date is not None:
-                date = datetime.datetime.fromisoformat(f"{date.group(1)}.{date.group(2)}")
+            # Reuse the base extractor so the active TIMESTAMP_PATTERN (ESXi dot-Z form
+            # when on ESXi, else Linux comma-form) is honored in exactly one place.
+            date_str = self._extract_timestamp_from_match_position(line, 0)
+            if date_str is not None:
+                # Linux uses a comma before fractional seconds; normalize to "." so
+                # fromisoformat() accepts it (no-op for the ESXi "...Z" form).
+                try:
+                    date = datetime.datetime.fromisoformat(date_str.replace(",", "."))
+                except ValueError:
+                    continue
                 # show date in UTC now
                 date = date.astimezone(datetime.timezone.utc)
                 if analysis_range_start and not found_start and date >= analysis_range_start:
@@ -743,11 +789,22 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
         self.result.events += known_err_events
 
         if args.check_unknown_dmesg_errors:
+            if self._is_esxi():
+                # ESXi vmkernel severity tokens are unreliable (-ALERT is used for benign
+                # boot notices; -ERROR/-CRIT are never emitted). The reliable error signal
+                # is the driver-internal severity in the message body: "gim error/warning",
+                # "amdgpuv error/warning", or the bracket form "[amdgpuv warn]".
+                unknown_error_regex = re.compile(
+                    r"(?:gim|amdgpuv|amdgpu) (?:err|error|warn|warning) [^:]*:\s*(.*)"
+                    r"|\[(?:gim|amdgpuv|amdgpu) (?:err|error|warn|warning)\]:?\s*(.*)"
+                )
+            else:
+                unknown_error_regex = re.compile(
+                    r"kern  :(?:err|crit|alert|emerg)\s+: \d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+ (.*)"
+                )
             unknown_dmesg_error_regexes = [
                 ErrorRegex(
-                    regex=re.compile(
-                        r"kern  :(?:err|crit|alert|emerg)\s+: \d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+ (.*)"
-                    ),
+                    regex=unknown_error_regex,
                     message="Unknown dmesg error",
                     event_category=EventCategory.UNKNOWN,
                     event_priority=EventPriority.WARNING,
