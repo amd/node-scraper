@@ -50,15 +50,17 @@ class DmesgCollector(InBandDataCollector[DmesgData, DmesgCollectorArgs]):
         r"ls -1 /var/log/dmesg* 2>/dev/null | grep -E '^/var/log/dmesg(\.[0-9]+(\.gz)?)?$' || true"
     )
     # ESXi rotates vmkernel.log to vmkernel.<n> / vmkernel.<n>.gz.
-    CMD_LOGS_ESXI = (
-        r"ls -1 /var/log/vmkernel.* 2>/dev/null | grep -E '^/var/log/vmkernel\.[0-9]+(\.gz)?$' || true"
-    )
+    CMD_LOGS_ESXI = r"ls -1 /var/log/vmkernel.* 2>/dev/null | grep -E '^/var/log/vmkernel\.[0-9]+(\.gz)?$' || true"
 
     def _collect_dmesg_rotations(self):
         """Collect dmesg (Linux) / vmkernel.log (ESXi) rotated logs"""
         is_esxi = self.system_info.os_family == OSFamily.ESXI
-        log_label = "vmkernel" if is_esxi else "dmesg"
-        cmd_logs = self.CMD_LOGS_ESXI if is_esxi else self.CMD_LOGS
+        if is_esxi:
+            log_label = "vmkernel"
+            cmd_logs = self.CMD_LOGS_ESXI
+        else:
+            log_label = "dmesg"
+            cmd_logs = self.CMD_LOGS
         list_res = self._run_sut_cmd(cmd_logs, sudo=True)
         paths = [p.strip() for p in (list_res.stdout or "").splitlines() if p.strip()]
         if not paths:
@@ -135,7 +137,10 @@ class DmesgCollector(InBandDataCollector[DmesgData, DmesgCollectorArgs]):
         """
 
         is_esxi = self.system_info.os_family == OSFamily.ESXI
-        cmd = self.CMD_ESXI if is_esxi else self.CMD
+        if is_esxi:
+            cmd = self.CMD_ESXI
+        else:
+            cmd = self.CMD
         self.logger.info("Reading kernel log from system")
         res = self._run_sut_cmd(cmd, sudo=True, log_artifact=False)
         if res.exit_code != 0:

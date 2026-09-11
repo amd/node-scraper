@@ -612,16 +612,14 @@ class PcieCollector(InBandDataCollector[PcieDataModel, None]):
         """
         pf_bdfs: List[str] = []
         vf_bdfs: List[str] = []
-        pf_devid = (
-            format(self.system_info.devid_ep, "x")
-            if self.system_info.devid_ep is not None
-            else ""
-        )
-        vf_devid = (
-            format(self.system_info.devid_ep_vf, "x")
-            if self.system_info.devid_ep_vf is not None
-            else ""
-        )
+        if self.system_info.devid_ep is not None:
+            pf_devid = format(self.system_info.devid_ep, "x")
+        else:
+            pf_devid = ""
+        if self.system_info.devid_ep_vf is not None:
+            vf_devid = format(self.system_info.devid_ep_vf, "x")
+        else:
+            vf_devid = ""
         if not pf_devid and not vf_devid:
             return pf_bdfs, vf_bdfs
 

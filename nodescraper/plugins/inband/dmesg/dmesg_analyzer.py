@@ -53,9 +53,7 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
 
     # ESXi vmkernel.log timestamp, e.g. "2026-08-05T19:53:35.178Z" (ISO8601 dot-ms + Z).
     # Linux uses the base RegexAnalyzer.TIMESTAMP_PATTERN (comma-form).
-    ESXI_TIMESTAMP_PATTERN: re.Pattern = re.compile(
-        r"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z)"
-    )
+    ESXI_TIMESTAMP_PATTERN: re.Pattern = re.compile(r"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z)")
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
