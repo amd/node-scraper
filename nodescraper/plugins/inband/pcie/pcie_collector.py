@@ -612,15 +612,9 @@ class PcieCollector(InBandDataCollector[PcieDataModel, None]):
         """
         pf_bdfs: List[str] = []
         vf_bdfs: List[str] = []
-        if self.system_info.devid_ep is not None:
-            pf_devid = format(self.system_info.devid_ep, "x")
-        else:
-            pf_devid = ""
-        if self.system_info.devid_ep_vf is not None:
-            vf_devid = format(self.system_info.devid_ep_vf, "x")
-        else:
-            vf_devid = ""
-        if not pf_devid and not vf_devid:
+        pf_devid = self.system_info.devid_ep
+        vf_devid = self.system_info.devid_ep_vf
+        if pf_devid is None and vf_devid is None:
             return pf_bdfs, vf_bdfs
 
         out = self._run_os_cmd("esxcli hardware pci list", sudo=False)
@@ -634,10 +628,16 @@ class PcieCollector(InBandDataCollector[PcieDataModel, None]):
                 # Bare BDF header line (anchors the block).
                 current_bdf = stripped
             elif current_bdf and stripped.lower().startswith("device id:"):
-                devid = stripped.split(":", 1)[1].strip().lower().removeprefix("0x")
-                if pf_devid and devid == pf_devid:
+                # Compare by integer value so case ("0x744C") and zero-padding
+                # ("0x0000744c") both match the expected device ID.
+                raw = stripped.split(":", 1)[1].strip()
+                try:
+                    devid = int(raw, 16)
+                except ValueError:
+                    continue
+                if pf_devid is not None and devid == pf_devid:
                     pf_bdfs.append(current_bdf)
-                elif vf_devid and devid == vf_devid:
+                elif vf_devid is not None and devid == vf_devid:
                     vf_bdfs.append(current_bdf)
         return pf_bdfs, vf_bdfs
 
