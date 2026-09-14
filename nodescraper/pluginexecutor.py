@@ -31,7 +31,7 @@ import logging
 import uuid
 from collections import deque
 from collections.abc import Callable, Sequence
-from typing import Optional, Type, Union
+from typing import Any, Optional, Type, Union
 
 from pydantic import BaseModel
 
@@ -106,24 +106,7 @@ class PluginExecutor:
         if log_path:
             self.connection_result_hooks.append(FileSystemLogHook(log_base_path=log_path))
 
-        if connections:
-            for connection, connection_args in connections.items():
-                if connection not in self.plugin_registry.connection_managers:
-                    self.logger.error(
-                        "Unable to find registered connection manager class for %s",
-                        connection,
-                    )
-                    continue
-
-                connection_manager = self.plugin_registry.connection_managers[connection]
-
-                self.connection_library[connection_manager] = connection_manager(
-                    system_info=self.system_info,
-                    logger=self.logger,
-                    connection_args=connection_args,
-                    task_result_hooks=self.connection_result_hooks,
-                    session_id=self.session_id,
-                )
+        self._populate_connection_library(connections)
 
         self.logger.info("System Name: %s", self.system_info.name)
         if self.system_info.sku:
@@ -134,6 +117,35 @@ class PluginExecutor:
             "%s",
             format_in_band_target_summary(self.system_info, self.connection_configs),
         )
+
+    def _populate_connection_library(
+        self, connections: dict[str, dict[str, Any] | BaseModel] | None
+    ) -> None:
+        """Init the connection library with the provided connections.
+
+        Args:
+            connections (dict[str, dict[str, Any]]): A dictionary mapping connection names to their arguments.
+            where the first level of the dict is always a name of the connection class and then its arguments.
+        """
+        if connections is None:
+            return
+        for connection, connection_args in connections.items():
+            if connection not in self.plugin_registry.connection_managers:
+                self.logger.error(
+                    "Unable to find registered connection manager class for %s",
+                    connection,
+                )
+                continue
+
+            connection_manager = self.plugin_registry.connection_managers[connection]
+
+            self.connection_library[connection_manager] = connection_manager(
+                system_info=self.system_info,
+                logger=self.logger,
+                connection_args=connection_args,
+                task_result_hooks=self.connection_result_hooks,
+                session_id=self.session_id,
+            )
 
     @staticmethod
     def _deep_merge_plugin_args(existing: dict, incoming: dict) -> dict:
@@ -177,6 +189,16 @@ class PluginExecutor:
         self.system_info will be updated with the discovered OS info.
         """
         inband_connection = self.connection_library.get(InBandConnectionManager)
+        if inband_connection is None:
+            # Init use and discard after
+            inband_connection = InBandConnectionManager(
+                system_info=self.system_info,
+                logger=self.logger,
+                connection_args=self.connection_configs.get(InBandConnectionManager.__name__),
+                task_result_hooks=self.connection_result_hooks,
+                session_id=self.session_id,
+            )
+
         result = inband_connection.connect() if inband_connection else None
         if (not inband_connection) or (not result) or (result.status != ExecutionStatus.OK):
             self.logger.info(
