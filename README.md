@@ -3,26 +3,32 @@ Node Scraper is a tool which performs automated data collection and analysis for
 system debug. For details on what data is collected and analyzed, see the [plugin reference table](docs/PLUGIN_DOC.md).
 
 ## Table of Contents
-- [Installation](#installation)
-  - [Install from PyPI](#install-from-pypi)
-  - [Install from Source](#install-from-source)
-- [CLI Usage](#cli-usage)
-  - [Execution Methods](#execution-methods)
-    - [Example: Remote Execution](#example-remote-execution)
-    - [Example: connection_config.json](#example-connection_configjson)
-  - [Subcommands](#subcommands)
-    - ['describe' subcommand](#describe-subcommand)
-    - ['run-plugins' sub command](#run-plugins-sub-command)
-    - ['gen-plugin-config' sub command](#gen-plugin-config-sub-command)
-    - ['compare-runs' subcommand](#compare-runs-subcommand)
-    - ['summary' sub command](#summary-sub-command)
-- [Configs](#configs)
-  - [Global args](#global-args)
-  - [Plugin config: `--plugin-configs` command](#plugin-config---plugin-configs-command)
-  - [Reference config: `gen-reference-config` command](#reference-config-gen-reference-config-command)
-- **Extending Node Scraper (integration & external plugins)** → See [EXTENDING.md](EXTENDING.md)
-- **Full view of the plugins with the associated collectors & analyzers as well as the commands
-invoked by collectors** -> See [docs/PLUGIN_DOC.md](docs/PLUGIN_DOC.md)
+- [Node Scraper](#node-scraper)
+  - [Table of Contents](#table-of-contents)
+  - [Installation](#installation)
+    - [Install from PyPI](#install-from-pypi)
+    - [Install from Source](#install-from-source)
+    - [1. Install uv](#1-install-uv)
+    - [2. Virtual Environment (Optional)](#2-virtual-environment-optional)
+    - [3. Install from Source (Required)](#3-install-from-source-required)
+    - [4. Git Hooks (Optional)](#4-git-hooks-optional)
+  - [CLI Usage](#cli-usage)
+    - [Execution Methods](#execution-methods)
+      - [Example: Remote Execution](#example-remote-execution)
+        - [Example: connection\_config.json](#example-connection_configjson)
+    - [Subcommands](#subcommands)
+      - [**'describe' subcommand**](#describe-subcommand)
+      - [**'run-plugins' sub command**](#run-plugins-sub-command)
+      - [**'gen-plugin-config' sub command**](#gen-plugin-config-sub-command)
+      - [**'compare-runs' subcommand**](#compare-runs-subcommand)
+      - [**'show-redfish-oem-allowable' subcommand**](#show-redfish-oem-allowable-subcommand)
+      - [**RedfishEndpointPlugin**](#redfishendpointplugin)
+      - [**'summary' sub command**](#summary-sub-command)
+    - [Configs](#configs)
+      - [Global args](#global-args)
+      - [Plugin config: **'--plugin-configs' command**](#plugin-config---plugin-configs-command)
+      - [Post-action plugins](#post-action-plugins)
+      - [Reference config: **'gen-reference-config' command**](#reference-config-gen-reference-config-command)
 
 ## Installation
 ### Install from PyPI
@@ -30,6 +36,12 @@ Node Scraper is published on [PyPI](https://pypi.org/project/amd-node-scraper/) 
 
 ```sh
 pip install amd-node-scraper
+```
+
+With [uv](https://docs.astral.sh/uv/):
+
+```sh
+uv pip install amd-node-scraper
 ```
 
 Use a virtual environment if you prefer. After installation, confirm the CLI is available:
@@ -40,8 +52,8 @@ node-scraper --help
 
 ### Install from Source
 Node Scraper requires Python 3.9+ for installation. After cloning this repository,
-call dev-setup.sh script with 'source'. This script creates an editable install of Node Scraper in
-a python virtual environment and also configures the pre-commit hooks for the project.
+run `dev-setup.sh` with `source`. This script uses [uv](https://docs.astral.sh/uv/) to create a
+Python 3.9+ virtual environment, perform an editable install, and configure pre-commit hooks.
 
 ```sh
 source dev-setup.sh
@@ -49,20 +61,31 @@ source dev-setup.sh
 
 Alternatively, follow these manual steps:
 
-### 1. Virtual Environment (Optional)
+### 1. Install uv
 ```sh
-python3 -m venv venv
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+### 2. Virtual Environment (Optional)
+```sh
+uv venv venv --python 3.9
 source venv/bin/activate
 ```
-On Debian/Ubuntu, you may need: `sudo apt install python3-venv`
+On Debian/Ubuntu without uv, you can use `python3.9 -m venv venv` instead.
 
-### 2. Install from Source (Required)
+### 3. Install from Source (Required)
 ```sh
-python3 -m pip install --editable .[dev] --upgrade
+uv pip install -e ".[dev]"
 ```
 This installs Node Scraper in editable mode with development dependencies. To verify: `node-scraper --help`
 
-### 3. Git Hooks (Optional)
+Equivalent using pip:
+
+```sh
+python3 -m pip install --editable .[dev] --upgrade
+```
+
+### 4. Git Hooks (Optional)
 ```sh
 pre-commit install
 ```
@@ -116,7 +139,7 @@ options:
                         Comma-separated built-in names and/or plugin config
                         JSON paths (e.g. --plugin-
                         configs=NodeStatus,/path/c.json). Built-ins:
-                        AllPlugins, NodeStatus (default: None)
+                        AllIbPlugins, NodeStatus (default: None)
   --system-config STRING
                         Path to system config json (default: None)
   --connection-config STRING
@@ -551,8 +574,8 @@ Below is an example that skips sudo requiring plugins and disables analysis.
 
 #### Plugin config: **'--plugin-configs' command**
 A plugin config can be used to compare the system data against the config specifications.
-Built-in configs include **NodeStatus** (a subset of plugins) and **AllPlugins** (runs every
-registered plugin with default arguments—useful for generating a reference config from the full system).
+Built-in configs include **NodeStatus** (a subset of plugins) and **AllIbPlugins** (runs every
+registered in-band plugin with default arguments—useful for generating a reference config from the full system).
 
 **NodeStatus plus additional plugins** — built-in configs merge with plugins named after `run-plugins`.
 Values are comma-separated; pass as **`--plugin-configs=…`** or **`--plugin-configs` …** (same as other
@@ -623,14 +646,106 @@ Here is an example of a comprehensive plugin config that specifies analyzer args
 }
 ```
 
+#### Post-action plugins
+
+Post-action plugins run automatically **after all primary plugins have completed**, but only when
+one or more configurable conditions are met. They are defined in the same plugin config JSON as
+the primary plugins, under the `post_action_plugins` key.
+
+**Use cases:**
+- Run a follow-up data-collection plugin only when a primary plugin detects errors
+- Trigger remediation or additional diagnostic steps based on specific event categories or severities
+
+##### Config structure
+
+```json
+{
+  "plugins": { ... },
+  "post_action_plugins": [
+    {
+      "plugin": "<PluginName>",
+      "plugin_args": { ... },
+      "conditions": [
+        { "<field>": "<value>", ... },
+        { "<field>": "<value>", ... }
+      ]
+    }
+  ]
+}
+```
+
+- **`plugin`** — the name of the plugin to run (same registry name used in the `plugins` dict).
+- **`plugin_args`** — arguments forwarded to the plugin's `run()` method (same shape as a normal
+  `plugins` entry, e.g. `collection`, `analysis`, `collection_args`, `analysis_args`).
+- **`conditions`** — a list of condition objects. The post-action fires if **any** condition in the
+  list is satisfied (**OR** semantics). Within a single condition all specified fields must match
+  (**AND** semantics); unspecified fields are ignored.
+
+##### Condition fields
+
+All fields are optional. A condition with no fields specified matches any result.
+
+| Field | Type | Description |
+|---|---|---|
+| `plugin` | string | If set, only the result whose `source` matches this name is inspected. If omitted, all primary results are candidates. |
+| `status` | string | The primary plugin's `ExecutionStatus` must be **≥** this value. Accepted values (in ascending order): `OK`, `WARNING`, `ERROR`, `EXECUTION_FAILURE`. |
+| `event_category` | string | At least one event (from analysis or collection) must have this category. Normalised to uppercase with spaces/hyphens converted to underscores before comparison. |
+| `event_priority` | string | At least one event's priority must be **≥** this value. Accepted values: `INFO`, `WARNING`, `ERROR`, `CRITICAL`. |
+| `event_description_contains` | string | At least one event's description must contain this substring (case-sensitive). |
+
+##### Example: run OsPlugin if DmesgPlugin finds error-level events
+
+```json
+{
+  "name": "DmesgWithOsPostAction",
+  "desc": "Run DmesgPlugin; if any error-level event is found, run OsPlugin to capture OS state.",
+  "global_args": {},
+  "plugins": {
+    "DmesgPlugin": {
+      "collection": true,
+      "analysis": true
+    }
+  },
+  "result_collators": {},
+  "post_action_plugins": [
+    {
+      "plugin": "OsPlugin",
+      "plugin_args": {
+        "collection": true,
+        "analysis": true
+      },
+      "conditions": [
+        {
+          "plugin": "DmesgPlugin",
+          "event_priority": "ERROR"
+        }
+      ]
+    }
+  ]
+}
+```
+
+Save to a file and pass it with `--plugin-configs`:
+
+```sh
+node-scraper --plugin-configs=plugin_config_dmesg_os_post_action.json
+```
+
+Post-action plugin results are included in the same result list as primary plugins — they appear
+in the console summary table, the `nodescraper.csv` output, and any result hooks.
+
+> **Note:** Post-action plugins run before connections are closed, so they have access to the same
+> live connection managers as primary plugins. Post-action plugins cannot enqueue additional
+> plugins into the primary queue.
+
 #### Reference config: **'gen-reference-config' command**
 This command can be used to generate a reference config that is populated with current system
 configurations. Plugins that use analyzer args (where applicable) will be populated with system
 data.
 
-**Run all registered plugins (AllPlugins config):**
+**Run all registered in-band plugins (AllIbPlugins config):**
 ```sh
-node-scraper --plugin-configs=AllPlugins
+node-scraper --plugin-configs=AllIbPlugins
 
 ```
 

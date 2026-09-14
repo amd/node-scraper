@@ -30,6 +30,8 @@ from .datapluginresult import DataPluginResult
 from .event import Event
 from .pluginconfig import PluginConfig
 from .pluginresult import PluginResult
+from .postactioncondition import PostActionCondition
+from .postactionpluginconfig import PostActionPluginConfig
 from .priority_override import (
     NO_CHANGE,
     PriorityOverrideRule,
@@ -51,6 +53,8 @@ __all__ = [
     "PluginResult",
     "DataPluginResult",
     "PluginConfig",
+    "PostActionCondition",
+    "PostActionPluginConfig",
     "NO_CHANGE",
     "PriorityOverrideRule",
     "apply_priority_override_rules",

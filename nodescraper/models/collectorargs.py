@@ -31,9 +31,7 @@ class CollectorArgs(BaseModel):
         default=False,
         description=(
             "When true, include logged command artifacts in command_artifacts.html "
-            "using human-readable output. Arista collectors re-run successful "
-            "'| json' commands without '| json' so HTML shows native EOS text "
-            "instead of raw JSON."
+            "using human-readable output."
         ),
     )
 

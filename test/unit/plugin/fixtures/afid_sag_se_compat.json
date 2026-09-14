@@ -1,0 +1,57 @@
+{
+  "pid": "dummy-sag-pid",
+  "revision": "dummy-rev-0",
+  "variant": "dummy-variant-0",
+  "schema_version": "1.0.0",
+  "serviceable_fru": [
+    {"dummy_fru_primary": 1},
+    {"dummy_fru_secondary": 5}
+  ],
+  "afid": {
+    "9001": {
+      "error_category": "DummyErrorCategory",
+      "error_type": "DummyErrorType",
+      "error_severity": "Critical",
+      "fru": "dummy_fru_primary",
+      "status": "active",
+      "method": "CPER",
+      "threshold": 1,
+      "priority": 20,
+      "service_action_num": 99,
+      "service_action": "Dummy service action",
+      "supported_systems": ["DUMMY_SYSTEM"]
+    },
+    "9002": {
+      "error_category": "DummyErrorCategory",
+      "error_type": "DummyErrorTypeAlt",
+      "error_severity": "Warning",
+      "fru": "dummy_fru_secondary",
+      "status": "active",
+      "method": "CPER",
+      "threshold": 1,
+      "priority": 30,
+      "service_action_num": 88,
+      "service_action": "Dummy service action alt",
+      "supported_systems": ["DUMMY_SYSTEM"]
+    }
+  },
+  "service_actions": {
+    "99": {
+      "title": "Dummy service action",
+      "category": "DummyCategory",
+      "severity": 20,
+      "steps": [
+        {
+          "step_num": 0,
+          "description": "Dummy step."
+        }
+      ]
+    },
+    "88": {
+      "title": "Dummy service action alt",
+      "category": "DummyCategory",
+      "severity": 10,
+      "steps": []
+    }
+  }
+}

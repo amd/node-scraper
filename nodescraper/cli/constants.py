@@ -25,3 +25,4 @@
 ###############################################################################
 META_VAR_MAP = {int: "INT", bool: "BOOL", dict: "JSON_STRING", float: "FLOAT", str: "STRING"}
 DEFAULT_CONFIG = "NodeStatus"
+KEYBOARD_INTERRUPT_EXIT_CODE = 130

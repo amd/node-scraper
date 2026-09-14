@@ -97,6 +97,9 @@ class InBandDataCollector(
         Returns:
             CommandArtifact: The result of the command execution, which includes stdout, stderr, and exit code.
         """
+        if self.system_info.os_family == OSFamily.ESXI:
+            # ESXi runs as root and has no sudo binary; prefixing sudo would fail.
+            sudo = False
         command_res = self.connection.run_command(
             command=command, sudo=sudo, timeout=timeout, strip=strip
         )

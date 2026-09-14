@@ -28,6 +28,9 @@ from typing import Optional
 
 from nodescraper.interfaces import PluginResultCollator
 from nodescraper.models import PluginResult, TaskResult
+from nodescraper.plugins.serviceability.serviceability_recommendations_table import (
+    render_serviceability_recommendation_tables_for_plugin_results,
+)
 
 
 class TableSummary(PluginResultCollator):
@@ -119,7 +122,8 @@ class TableSummary(PluginResultCollator):
             table_lines.append(border)
             return "\n".join(table_lines)
 
-        tables = ""
+        table_sections: list[str] = []
+
         if connection_results:
             conn_rows: list[list[Optional[str]]] = []
             for connection_result in connection_results:
@@ -136,7 +140,13 @@ class TableSummary(PluginResultCollator):
                 conn_rows,
                 max_widths={"Connection": 32, "Status": 20, "Message": 80},
             )
-            tables += f"\n\n{table}"
+            table_sections.append(table)
+
+        serviceability_tables = render_serviceability_recommendation_tables_for_plugin_results(
+            plugin_results
+        )
+        if serviceability_tables:
+            table_sections.append(serviceability_tables)
 
         if plugin_results:
             plug_rows: list[list[Optional[str]]] = []
@@ -153,7 +163,8 @@ class TableSummary(PluginResultCollator):
                 plug_rows,
                 max_widths={"Plugin": 32, "Status": 20, "Message": 80},
             )
-            tables += f"\n\n{table}"
+            table_sections.append(table)
 
-        if tables:
+        if table_sections:
+            tables = "\n\n".join(f"\n{section}" for section in table_sections)
             self.logger.info("%s\n", tables)
