@@ -26,6 +26,7 @@
 import pytest
 
 from nodescraper.enums import EventPriority, ExecutionStatus
+from nodescraper.plugins.inband.network.analyzer_args import NetworkAnalyzerArgs
 from nodescraper.plugins.inband.network.ethtool_vendor import (
     EthtoolStatistics,
     Thor2EthtoolStatistics,
@@ -75,6 +76,64 @@ def test_empty_ethtool_info(network_analyzer):
     result = network_analyzer.analyze_data(model)
     assert result.status == ExecutionStatus.WARNING
     assert result.message == "No network devices found"
+
+
+def test_ethtool_firmware_exact_match(network_analyzer):
+    model = NetworkDataModel(
+        ethtool_info={
+            "eth0": EthtoolInfo(
+                interface="eth0",
+                raw_output="",
+                driver="bnxt_en",
+                bus_info="0000:01:00.0",
+                firmware_version="238.1.169.0",
+            )
+        }
+    )
+    args = NetworkAnalyzerArgs(expected_nic_firmware="238.1.169.0")
+
+    result = network_analyzer.analyze_data(model, args)
+
+    assert result.status == ExecutionStatus.OK
+    assert not result.events
+
+
+def test_ethtool_firmware_mismatch_is_reported(network_analyzer):
+    model = NetworkDataModel(
+        ethtool_info={
+            "eth0": EthtoolInfo(
+                interface="eth0",
+                raw_output="",
+                driver="bnxt_en",
+                firmware_version="238.1.168.0",
+            )
+        }
+    )
+    args = NetworkAnalyzerArgs(expected_nic_firmware="238.1.169.0")
+
+    result = network_analyzer.analyze_data(model, args)
+
+    assert result.status == ExecutionStatus.WARNING
+    assert any("firmware" in event.description.lower() for event in result.events)
+
+
+def test_ethtool_unsupported_driver_is_non_blocking(network_analyzer):
+    model = NetworkDataModel(
+        ethtool_info={
+            "eth0": EthtoolInfo(
+                interface="eth0",
+                raw_output="",
+                driver="i40e",
+                firmware_version="1.3534.0",
+            )
+        }
+    )
+    result = network_analyzer.analyze_data(
+        model, NetworkAnalyzerArgs(expected_nic_firmware="238.1.168.0")
+    )
+
+    assert result.status == ExecutionStatus.OK
+    assert not result.events
 
 
 def test_rdma_ethtool_vendor_error_only(network_analyzer):

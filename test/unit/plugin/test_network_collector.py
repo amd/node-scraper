@@ -464,6 +464,22 @@ def test_parse_ethtool_basic(collector):
     assert ethtool_info.raw_output == ETHTOOL_OUTPUT
 
 
+def test_parse_ethtool_driver_info_normalizes_package_firmware(collector):
+    """Keep the device firmware version when ethtool reports package metadata too."""
+    info = EthtoolInfo(interface="ethmock123", raw_output="")
+
+    collector._parse_ethtool_driver_info(
+        info,
+        "driver: bnxt_en\n"
+        "firmware-version: 238.1.168.0/pkg 238.1.169.0\n"
+        "bus-info: 0000:01:00.0\n",
+    )
+
+    assert info.driver == "bnxt_en"
+    assert info.firmware_version == "238.1.168.0"
+    assert info.bus_info == "0000:01:00.0"
+
+
 def test_parse_ethtool_supported_link_modes(collector):
     """Test parsing supported link modes from ethtool output"""
     ethtool_info = collector._parse_ethtool("ethmock123", ETHTOOL_OUTPUT)

@@ -37,6 +37,7 @@ from nodescraper.plugins.inband.rdma.rdmadata import (
     Cx7RdmaStatistics,
     PollaraRdmaStatistics,
     RdmaDataModel,
+    RdmaDevice,
     RdmaLink,
     RdmaStatistics,
     RdmaVendorStatistics,
@@ -158,6 +159,48 @@ def test_empty_statistics(rdma_analyzer):
     result = rdma_analyzer.analyze_data(model)
     assert result.status == ExecutionStatus.WARNING
     assert result.message == "No RDMA devices found"
+
+
+def test_roce_firmware_exact_match(rdma_analyzer):
+    model = RdmaDataModel(
+        dev_list=[
+            RdmaDevice(
+                device="bnxt_re0",
+                transport="RoCE",
+                firmware_version="238.1.169.0",
+            )
+        ]
+    )
+    args = RdmaAnalyzerArgs(expected_nic_firmware="238.1.169.0")
+
+    result = rdma_analyzer.analyze_data(model, args)
+
+    assert result.status == ExecutionStatus.OK
+    assert not result.events
+
+
+def test_infini_band_firmware_mismatch_is_reported(rdma_analyzer):
+    model = RdmaDataModel(
+        dev_list=[
+            RdmaDevice(
+                device="mlx5_0",
+                node_type="CA",
+                transport="InfiniBand",
+                firmware_version="32.40.1000",
+            )
+        ]
+    )
+    args = RdmaAnalyzerArgs(expected_nic_firmware="32.50.1000")
+
+    result = rdma_analyzer.analyze_data(model, args)
+
+    assert result.status == ExecutionStatus.WARNING
+    assert any("firmware" in event.description.lower() for event in result.events)
+    firmware_event = next(
+        event for event in result.events if "firmware" in event.description.lower()
+    )
+    assert firmware_event.data["policy"] == {"expected_nic_firmware": "32.50.1000"}
+    assert "expected_nic_firmware" in firmware_event.data["reason"]
 
 
 def test_multiple_interfaces_with_errors(rdma_analyzer, example_stat_dicts):
