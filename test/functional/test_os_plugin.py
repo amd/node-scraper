@@ -26,7 +26,7 @@
 """Functional tests for OsPlugin with --plugin-configs."""
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Union
 
 import pytest
 
@@ -44,7 +44,7 @@ def os_config_file(fixtures_dir):
 
 
 @pytest.fixture
-def plugin_executor(plugin_reg: Any | None = None):
+def plugin_executor(plugin_reg: Union[Any, None] = None):
     """Fixture that creates a PluginExecutor instance for programmatic testing."""
     from nodescraper.models.pluginconfig import PluginConfig
     from nodescraper.pluginexecutor import PluginExecutor
