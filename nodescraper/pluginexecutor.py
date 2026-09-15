@@ -276,22 +276,14 @@ class PluginExecutor:
         try:
             plugin_inst = plugin_class(**init_payload)
 
-            run_payload = copy.deepcopy(plugin_args)
+            plugin_run_args = copy.deepcopy(plugin_args)
             run_args = TypeUtils.get_func_arg_types(plugin_class.run, plugin_class)
-
-            for arg in run_args.keys():
-                if arg == "preserve_connection" and issubclass(plugin_class, DataPlugin):
-                    run_payload[arg] = True
 
             try:
                 global_run_args = self.apply_global_args_to_plugin(
                     plugin_inst, plugin_class, self.plugin_config.global_args
                 )
-                for args_key in ["analysis_args", "collection_args"]:
-                    if args_key in global_run_args and args_key in run_payload:
-                        run_payload[args_key].update(global_run_args[args_key])
-                        del global_run_args[args_key]
-                run_payload.update(global_run_args)
+                run_payload = self.merge_plugin_run_args(plugin_run_args, global_run_args)
             except ValueError as ve:
                 self.logger.error(
                     "Invalid global_args for plugin %s: %s. Skipping plugin.",
@@ -299,6 +291,10 @@ class PluginExecutor:
                     str(ve),
                 )
                 return False
+
+            for arg in run_args.keys():
+                if arg == "preserve_connection" and issubclass(plugin_class, DataPlugin):
+                    run_payload[arg] = True
 
             plugin_result = plugin_inst.run(**run_payload)
             plugin_results.append(plugin_result)
@@ -410,6 +406,23 @@ class PluginExecutor:
                 plugin_results,
                 queue_callback=None,
             )
+
+    @staticmethod
+    def merge_plugin_run_args(plugin_args: dict, global_run_args: dict) -> dict:
+        """Apply per-plugin run() overrides on top of global defaults."""
+        run_payload = copy.deepcopy(global_run_args)
+        plugin_overrides = copy.deepcopy(plugin_args)
+        for args_key in ("analysis_args", "collection_args"):
+            plugin_nested = plugin_overrides.pop(args_key, None)
+            if plugin_nested is None:
+                continue
+            global_nested = run_payload.get(args_key)
+            if isinstance(global_nested, dict) and isinstance(plugin_nested, dict):
+                run_payload[args_key] = {**global_nested, **plugin_nested}
+            else:
+                run_payload[args_key] = plugin_nested
+        run_payload.update(plugin_overrides)
+        return run_payload
 
     def apply_global_args_to_plugin(
         self,

@@ -456,7 +456,8 @@ def setup_logger(
         encoding="utf-8",
     )
     logging.root.setLevel(log_level_no)
-    logging.getLogger("paramiko").setLevel(logging.ERROR)
+    # Paramiko logs full tracebacks at ERROR; nodescraper surfaces SSH failures itself.
+    logging.getLogger("paramiko").setLevel(logging.CRITICAL)
 
     logger = logging.getLogger(DEFAULT_LOGGER)
 
