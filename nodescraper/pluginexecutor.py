@@ -198,15 +198,21 @@ class PluginExecutor:
                 task_result_hooks=self.connection_result_hooks,
                 session_id=self.session_id,
             )
-
-        result = inband_connection.connect() if inband_connection else None
-        if (not inband_connection) or (not result) or (result.status != ExecutionStatus.OK):
-            self.logger.info(
-                "InBandConnectionManager not available or failed to connect for OS discovery. Skipping OS discovery."
+        try:
+            result = inband_connection.connect() if inband_connection else None
+            if (not inband_connection) or (not result) or (result.status != ExecutionStatus.OK):
+                self.logger.info(
+                    "InBandConnectionManager not available or failed to connect for OS discovery. Skipping OS discovery."
+                )
+                return
+            discover_and_write_os_family(inband_connection, self.system_info, self.logger)
+        except Exception as e:
+            self.logger.error(
+                "Error occurred during OS discovery with InBandConnectionManager: %s",
+                str(e),
             )
-            return
-        discover_and_write_os_family(inband_connection, self.system_info, self.logger)
-        inband_connection.disconnect()
+        finally:
+            inband_connection.disconnect()
 
     def _get_connection_manager_for_plugin(
         self,

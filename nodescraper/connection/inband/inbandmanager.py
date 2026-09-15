@@ -26,7 +26,7 @@
 from __future__ import annotations
 
 from logging import Logger
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 from nodescraper.enums import (
     EventCategory,
@@ -46,7 +46,6 @@ from .sshparams import SSHConnectionParams
 
 
 class InBandConnectionManager(ConnectionManager[InBandConnection, SSHConnectionParams]):
-
     def __init__(
         self,
         system_info: SystemInfo,
@@ -54,7 +53,7 @@ class InBandConnectionManager(ConnectionManager[InBandConnection, SSHConnectionP
         max_event_priority_level: Union[EventPriority, str] = EventPriority.CRITICAL,
         parent: Optional[str] = None,
         task_result_hooks: Optional[list[TaskResultHook]] = None,
-        connection_args: Optional[SSHConnectionParams] = None,
+        connection_args: Optional[SSHConnectionParams | dict[str, Any]] = None,
         **kwargs,
     ):
         super().__init__(
@@ -97,7 +96,8 @@ class InBandConnectionManager(ConnectionManager[InBandConnection, SSHConnectionP
 
         try:
             self.logger.info(
-                "Initializing SSH connection to system '%s'", self.connection_args.hostname
+                "Initializing SSH connection to system '%s'",
+                self.connection_args.hostname,
             )
             self.connection = RemoteShell(self.connection_args)
             self.connection.connect_ssh()
