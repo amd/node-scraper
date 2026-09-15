@@ -26,17 +26,20 @@
 from nodescraper.base import InBandDataPlugin
 
 from .analyzer_args import PcieAnalyzerArgs
+from .collector_args import PcieCollectorArgs
 from .pcie_analyzer import PcieAnalyzer
 from .pcie_collector import PcieCollector
 from .pcie_data import PcieDataModel
 
 
-class PciePlugin(InBandDataPlugin[PcieDataModel, None, PcieAnalyzerArgs]):
+class PciePlugin(InBandDataPlugin[PcieDataModel, PcieCollectorArgs, PcieAnalyzerArgs]):
     """Plugin for collection and analysis of PCIe data"""
 
     DATA_MODEL = PcieDataModel
 
     COLLECTOR = PcieCollector
+
+    COLLECTOR_ARGS = PcieCollectorArgs
 
     ANALYZER = PcieAnalyzer
 

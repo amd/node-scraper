@@ -30,10 +30,13 @@ from nodescraper.connection.inband.inband import CommandArtifact, TextFileArtifa
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.models import TaskResult
 
+from .collector_args import DeviceEnumerationCollectorArgs
 from .deviceenumdata import DeviceEnumerationDataModel
 
 
-class DeviceEnumerationCollector(InBandDataCollector[DeviceEnumerationDataModel, None]):
+class DeviceEnumerationCollector(
+    InBandDataCollector[DeviceEnumerationDataModel, DeviceEnumerationCollectorArgs]
+):
     """Collect CPU and GPU count"""
 
     SUPPORTED_OS_FAMILY: set[OSFamily] = {OSFamily.WINDOWS, OSFamily.LINUX, OSFamily.ESXI}
@@ -114,13 +117,17 @@ class DeviceEnumerationCollector(InBandDataCollector[DeviceEnumerationDataModel,
         hex_id = format(device_id, "x") if device_id is not None else "__unset__"
         return self._run_sut_cmd(self.CMD_PCI_COUNT_ESXI.format(device_id=hex_id))
 
-    def collect_data(self, args=None) -> tuple[TaskResult, Optional[DeviceEnumerationDataModel]]:
+    def collect_data(
+        self, args: Optional[DeviceEnumerationCollectorArgs] = None
+    ) -> tuple[TaskResult, Optional[DeviceEnumerationDataModel]]:
         """
         Read CPU and GPU count
         On Linux, use lscpu and lspci
-        On ESXi, use esxcli
+        On ESXi, use esxcli (GPU/VF counts need args.devid_ep / devid_ep_vf)
         On Windows, use WMI and hyper-v cmdlets
         """
+        if args is None:
+            args = DeviceEnumerationCollectorArgs()
         if self.system_info.os_family == OSFamily.LINUX:
             lscpu_res = self._run_sut_cmd(self.CMD_LSCPU_LINUX, log_artifact=False)
 
@@ -137,15 +144,15 @@ class DeviceEnumerationCollector(InBandDataCollector[DeviceEnumerationDataModel,
             lshw_res = self._run_sut_cmd(self.CMD_LSHW_LINUX, sudo=True, log_artifact=False)
         elif self.system_info.os_family == OSFamily.ESXI:
             cpu_count_res = self._run_sut_cmd(self.CMD_CPU_COUNT_ESXI)
-            if self.system_info.devid_ep is None:
+            if args.devid_ep is None:
                 self._log_event(
                     category=EventCategory.PLATFORM,
                     description="devid_ep not set; cannot count GPUs/VFs on ESXi by device ID",
                     priority=EventPriority.WARNING,
                 )
             # PFs and (SR-IOV) VFs are distinguished by device ID on ESXi.
-            gpu_count_res = self._esxi_device_count(self.system_info.devid_ep)
-            vf_count_res = self._esxi_device_count(self.system_info.devid_ep_vf)
+            gpu_count_res = self._esxi_device_count(args.devid_ep)
+            vf_count_res = self._esxi_device_count(args.devid_ep_vf)
         else:
             cpu_count_res = self._run_sut_cmd(self.CMD_CPU_COUNT_WINDOWS)
             gpu_count_res = self._run_sut_cmd(self.CMD_GPU_COUNT_WINDOWS)
