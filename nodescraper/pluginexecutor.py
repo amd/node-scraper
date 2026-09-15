@@ -212,7 +212,8 @@ class PluginExecutor:
                 str(e),
             )
         finally:
-            inband_connection.disconnect()
+            if inband_connection is not None:
+                inband_connection.disconnect()
 
     def _get_connection_manager_for_plugin(
         self,
