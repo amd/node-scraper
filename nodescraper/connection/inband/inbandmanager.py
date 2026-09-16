@@ -26,13 +26,12 @@
 from __future__ import annotations
 
 from logging import Logger
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 from nodescraper.enums import (
     EventCategory,
     EventPriority,
     ExecutionStatus,
-    OSFamily,
     SystemLocation,
 )
 from nodescraper.interfaces.connectionmanager import ConnectionManager
@@ -43,12 +42,10 @@ from nodescraper.utils import get_exception_traceback
 from .inband import InBandConnection
 from .inbandlocal import LocalShell
 from .inbandremote import RemoteShell, SSHConnectionError
-from .osdetection import NetworkOsDetection, detect_network_os
 from .sshparams import SSHConnectionParams
 
 
 class InBandConnectionManager(ConnectionManager[InBandConnection, SSHConnectionParams]):
-
     def __init__(
         self,
         system_info: SystemInfo,
@@ -56,7 +53,7 @@ class InBandConnectionManager(ConnectionManager[InBandConnection, SSHConnectionP
         max_event_priority_level: Union[EventPriority, str] = EventPriority.CRITICAL,
         parent: Optional[str] = None,
         task_result_hooks: Optional[list[TaskResultHook]] = None,
-        connection_args: Optional[SSHConnectionParams] = None,
+        connection_args: Optional[SSHConnectionParams | dict[str, Any]] = None,
         **kwargs,
     ):
         super().__init__(
@@ -69,54 +66,6 @@ class InBandConnectionManager(ConnectionManager[InBandConnection, SSHConnectionP
             **kwargs,
         )
 
-    @staticmethod
-    def _apply_network_os_detection(
-        system_info: SystemInfo,
-        detection: NetworkOsDetection,
-    ) -> None:
-        """Apply network OS probe results to system info."""
-        system_info.os_family = detection.os_family
-        system_info.platform = detection.platform
-        if system_info.metadata is None:
-            system_info.metadata = {}
-        system_info.metadata.update(detection.metadata)
-
-    def _check_os_family(self):
-        """Check the OS family of the system under test (SUT)
-
-        Raises:
-            RuntimeError: If the connection is not initialized
-        """
-        if not self.connection:
-            raise RuntimeError("Connection not initialized")
-
-        self.logger.info("Checking OS family")
-        res = self.connection.run_command("uname -s")
-        if "not recognized as an internal or external command" in res.stdout + res.stderr:
-            self.system_info.os_family = OSFamily.WINDOWS
-        elif res.exit_code == 0 and "VMkernel" in res.stdout:
-            self.system_info.os_family = OSFamily.ESXI
-        elif res.exit_code == 0:
-            self.system_info.os_family = OSFamily.LINUX
-        else:
-            detection = detect_network_os(self.connection)
-            if detection is not None:
-                self._apply_network_os_detection(self.system_info, detection)
-            else:
-                self._log_event(
-                    category=EventCategory.UNKNOWN,
-                    description="Unable to determine SUT OS",
-                    priority=EventPriority.WARNING,
-                )
-        if self.system_info.platform:
-            self.logger.info(
-                "OS Family: %s (%s)",
-                self.system_info.os_family.name,
-                self.system_info.platform,
-            )
-        else:
-            self.logger.info("OS Family: %s", self.system_info.os_family.name)
-
     def connect(
         self,
     ) -> TaskResult:
@@ -128,7 +77,6 @@ class InBandConnectionManager(ConnectionManager[InBandConnection, SSHConnectionP
         if self.system_info.location == SystemLocation.LOCAL:
             self.logger.info("Using local shell")
             self.connection = LocalShell()
-            self._check_os_family()
             return self.result
 
         if not self.connection_args or not isinstance(self.connection_args, SSHConnectionParams):
@@ -148,11 +96,11 @@ class InBandConnectionManager(ConnectionManager[InBandConnection, SSHConnectionP
 
         try:
             self.logger.info(
-                "Initializing SSH connection to system '%s'", self.connection_args.hostname
+                "Initializing SSH connection to system '%s'",
+                self.connection_args.hostname,
             )
             self.connection = RemoteShell(self.connection_args)
             self.connection.connect_ssh()
-            self._check_os_family()
         except SSHConnectionError as exception:
             self._log_event(
                 category=EventCategory.SSH,
