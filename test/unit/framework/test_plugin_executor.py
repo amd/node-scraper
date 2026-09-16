@@ -24,6 +24,7 @@
 #
 ###############################################################################
 import logging
+from typing import Optional
 
 import pytest
 from framework.common.shared_utils import DummyDataModel, MockConnectionManager
@@ -78,6 +79,17 @@ class PostActionPlugin(PluginInterface[MockConnectionManager, None]):
 
     def run(self, **kwargs):
         return PluginResult(source="PostActionPlugin", status=ExecutionStatus.OK)
+
+
+class TestPluginCapture(PluginInterface[MockConnectionManager, None]):
+    """Records kwargs passed to run() for merge-order regression tests."""
+
+    CONNECTION_TYPE = MockConnectionManager
+    last_run_kwargs: Optional[dict] = None
+
+    def run(self, **kwargs):
+        TestPluginCapture.last_run_kwargs = kwargs
+        return PluginResult(source="TestPluginCapture", status=ExecutionStatus.OK)
 
 
 @pytest.fixture
@@ -152,6 +164,101 @@ def test_queue_callback(plugin_registry):
     assert results[0].status == ExecutionStatus.ERROR
     assert results[1].source == "testB"
     assert results[1].status == ExecutionStatus.OK
+
+
+def test_merge_plugin_run_args_plugin_overrides_global():
+    global_run_args = {
+        "system_interaction_level": "INTERACTIVE",
+        "collection_args": {"foo": "global", "shared": "global"},
+        "analysis_args": {"bar": "global"},
+    }
+    plugin_args = {
+        "system_interaction_level": "PASSIVE",
+        "collection_args": {"foo": "plugin"},
+    }
+
+    merged = PluginExecutor.merge_plugin_run_args(plugin_args, global_run_args)
+
+    assert merged["system_interaction_level"] == "PASSIVE"
+    assert merged["collection_args"] == {"foo": "plugin", "shared": "global"}
+    assert merged["analysis_args"] == {"bar": "global"}
+
+
+@pytest.mark.parametrize(
+    "plugin_args,global_run_args,expected_key,expected_value",
+    [
+        (
+            {"system_interaction_level": SystemInteractionLevel.PASSIVE},
+            {"system_interaction_level": SystemInteractionLevel.INTERACTIVE},
+            "system_interaction_level",
+            SystemInteractionLevel.PASSIVE,
+        ),
+        (
+            {"system_interaction_level": "PASSIVE"},
+            {"system_interaction_level": "INTERACTIVE"},
+            "system_interaction_level",
+            "PASSIVE",
+        ),
+        (
+            {"analysis": False, "collection": True},
+            {"analysis": True, "collection": True},
+            "analysis",
+            False,
+        ),
+        (
+            {},
+            {"system_interaction_level": SystemInteractionLevel.INTERACTIVE},
+            "system_interaction_level",
+            SystemInteractionLevel.INTERACTIVE,
+        ),
+    ],
+)
+def test_merge_plugin_run_args_plugin_wins_on_conflict(
+    plugin_args, global_run_args, expected_key, expected_value
+):
+    merged = PluginExecutor.merge_plugin_run_args(plugin_args, global_run_args)
+    assert merged[expected_key] == expected_value
+
+
+def test_merge_plugin_run_args_analysis_args_plugin_overrides_global():
+    merged = PluginExecutor.merge_plugin_run_args(
+        {"analysis_args": {"exp_speed": 4, "shared": "plugin"}},
+        {"analysis_args": {"exp_speed": 5, "shared": "global", "exp_width": 16}},
+    )
+    assert merged["analysis_args"] == {
+        "exp_speed": 4,
+        "shared": "plugin",
+        "exp_width": 16,
+    }
+
+
+def test_run_queue_plugin_system_interaction_level_overrides_global(plugin_registry):
+    """Per-plugin run() kwargs must win over global_args (PciePlugin PASSIVE case)."""
+    plugin_registry.plugins["TestPluginCapture"] = TestPluginCapture
+    TestPluginCapture.last_run_kwargs = None
+
+    executor = PluginExecutor(
+        plugin_configs=[
+            PluginConfig(
+                global_args={"system_interaction_level": SystemInteractionLevel.INTERACTIVE},
+                plugins={
+                    "TestPluginCapture": {
+                        "system_interaction_level": SystemInteractionLevel.PASSIVE,
+                    }
+                },
+            )
+        ],
+        plugin_registry=plugin_registry,
+    )
+    results = executor.run_queue()
+
+    assert len(results) == 1
+    assert results[0].source == "TestPluginCapture"
+    assert TestPluginCapture.last_run_kwargs is not None
+    assert (
+        TestPluginCapture.last_run_kwargs["system_interaction_level"]
+        == SystemInteractionLevel.PASSIVE
+    )
 
 
 def test_apply_global_args_to_plugin():
