@@ -101,6 +101,23 @@ class ConnectionManager(Task, Generic[TConnection, TConnectArg]):
         session_id: Optional[str] = None,
         **kwargs,
     ):
+        """Creates a Connection Manager Task instance.
+
+        Args:
+            system_info (SystemInfo): System information for the connection manager task.
+            logger (Optional[logging.Logger], optional): Logger instance for the connection manager task. Defaults to None.
+            max_event_priority_level (Union[EventPriority, str], optional): Maximum priority level for events. Defaults to EventPriority.CRITICAL.
+            parent (Optional[str], optional): Parent task identifier. Defaults to None.
+            task_result_hooks (Optional[list[TaskResultHook], None], optional): List of task result hooks to be executed. Defaults to None.
+            connection_args (Optional[Union[TConnectArg, dict]], optional): Connection arguments for the connection manager.
+                If a dictionary is provided, it will be transformed into a BaseModel instance of the expected type. Defaults to None.
+                When it is None then connection args will be None and it will not be built into the default connection model.
+            event_reporter (str, optional): Event reporter identifier. Defaults to DEFAULT_EVENT_REPORTER.
+            session_id (Optional[str], optional): Session identifier for the connection manager task. Defaults to None.
+
+        Raises:
+            ValueError: Will raise a ValueError when the connection_args cannot be mapped to the expected model.
+        """
         super().__init__(
             system_info=system_info,
             logger=logger,

@@ -25,6 +25,7 @@
 ###############################################################################
 import abc
 import logging
+from logging import Logger
 from typing import Optional
 
 from nodescraper.constants import DEFAULT_LOGGER
@@ -39,14 +40,23 @@ class PluginResultCollator(abc.ABC):
         logger: Optional[logging.Logger] = None,
         log_path: Optional[str] = None,
     ):
+        """Creates a PluginResultCollator instance.
+
+        Args:
+            logger (Optional[logging.Logger], optional): logger instance for the collator. Defaults to None.
+            log_path (Optional[str], optional): path to the log file. Defaults to None.
+        """
         if logger is None:
             logger = logging.getLogger(DEFAULT_LOGGER)
-        self.logger = logger
-        self.log_path = log_path
+        self.logger: Logger = logger
+        self.log_path: str | None = log_path
 
     @abc.abstractmethod
     def collate_results(
-        self, plugin_results: list[PluginResult], connection_results: list[TaskResult], **kwargs
+        self,
+        plugin_results: list[PluginResult],
+        connection_results: list[TaskResult],
+        **kwargs,
     ):
         """Function to process the result of a plugin executor run
 

@@ -64,7 +64,35 @@ class PluginExecutor:
         session_id: Optional[str] = None,
         plugin_run_result_hooks: Optional[Sequence[Callable[[PluginResult], None]]] = None,
     ):
+        """Initialize the PluginExecutor instance.
 
+        Args:
+            plugin_configs (list[PluginConfig]): This is a list of the PluginConfig Object, when this list is greater than a single PluginConfig
+                then the plugin_configs will be merged into a single PluginConfig. The single PluginConfig post merge will be used to control
+                all of the execution that is done by this executor. It will run all `plugins` defined in the merged PluginConfig.
+            connections (Optional[dict[str, Union[dict, BaseModel]]], optional): Connections is a dictionary where the
+                keys represent connection names and the values are either dictionaries or BaseModel instances containing the connection details
+                Optionally the user can provide just the dict[str, dict[Any,Any]] In this case the dictionary attributed to that connection name
+                will be transformed into a BaseModel instance and it will raise an error when this model fails to validate.
+                Any key in this dict will be promptly built using the args during `__init__` even if the connection is not used by any of the tasks
+                defined in the plugin_configs. If the connection isn't defined for a particular Plugin but that plugin requires the connection then
+                that connection will be built anyway but the arguments will not be provided which may lead to connection to not being properly established.
+                It is recommended that in-band connection arg should always be provided for remote connections. Defaults to None.
+            system_info (Optional[SystemInfo], optional): System information for the plugin executor, this is passed to the connection, and plugins, The executor will
+                only give out copies to other components. If the original system_info passed here is OSFamily.UNKOWN then the executor will attempt to detect the correct OS family
+                by starting a in-band connection and then determining the correct OS family. Defaults to None.
+            logger (Optional[logging.Logger], optional): Logger instance for the plugin executor. Defaults to None.
+            plugin_registry (Optional[PluginRegistry], optional): Plugin registry instance for the plugin executor, when this is None then the PluginRegistry will be
+            assigned a default `PluginRegistry()`. Defaults to None.
+            log_path (Optional[str], optional): Path to the log file for the plugin executor. When this is defined then the FileSystemLogHook will be automatically
+                added to the connection results hooks resulting in it logging to the defined folder. Defaults to None.
+            session_id (Optional[str], optional): Session identifier for the plugin executor. Defaults to None.
+            plugin_run_result_hooks (Optional[Sequence[Callable[[PluginResult], None]]], optional): Sequence of callables to be executed with the result of each plugin run. When this is
+            None then then this will be made empty list [] . Defaults to None.
+
+        Raises:
+            ValueError: If the provided session_id is not a valid UUID string.
+        """
         if logger is None:
             logger = logging.getLogger(DEFAULT_LOGGER)
         self.logger = logger
@@ -107,7 +135,8 @@ class PluginExecutor:
             for connection, connection_args in connections.items():
                 if connection not in self.plugin_registry.connection_managers:
                     self.logger.error(
-                        "Unable to find registered connection manager class for %s", connection
+                        "Unable to find registered connection manager class for %s",
+                        connection,
                     )
                     continue
 
@@ -151,6 +180,14 @@ class PluginExecutor:
 
     @staticmethod
     def merge_configs(plugin_configs: list[PluginConfig]) -> PluginConfig:
+        """Merge multiple PluginConfig instances into a single PluginConfig.
+
+        Args:
+            plugin_configs (list[PluginConfig]): A list of PluginConfig instances to merge.
+
+        Returns:
+            PluginConfig: A single PluginConfig instance containing the merged configurations.
+        """
         merged_config = PluginConfig()
         for config in plugin_configs:
             merged_config.global_args.update(config.global_args)
@@ -334,11 +371,15 @@ class PluginExecutor:
 
             if self.plugin_config.result_collators:
                 self.logger.info("Running result collators")
-                for collator, collator_args in self.plugin_config.result_collators.items():
+                for (
+                    collator,
+                    collator_args,
+                ) in self.plugin_config.result_collators.items():
                     collator_class = self.plugin_registry.result_collators.get(collator)
                     if collator_class is None:
                         self.logger.warning(
-                            "No result collator found in registry for name: %s", collator
+                            "No result collator found in registry for name: %s",
+                            collator,
                         )
                         continue
 

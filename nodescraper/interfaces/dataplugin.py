@@ -46,7 +46,7 @@ from nodescraper.models import (
     SystemInfo,
     TaskResult,
 )
-from nodescraper.utils import pascal_to_snake
+from nodescraper.utils import pascal_to_snake, resolve_log_dir_name
 
 from .connectionmanager import TConnectArg, TConnectionManager
 from .task import SystemCompatibilityError
@@ -94,6 +94,19 @@ class DataPlugin(
         session_id: Optional[str] = None,
         **kwargs,
     ):
+        """_summary_
+
+        Args:
+            system_info (Optional[SystemInfo], optional): system info object. Defaults to None.
+            logger (Optional[logging.Logger], optional): python logger instance. Defaults to None.
+            connection_manager (Optional[TConnectionManager], optional): connection manager instance. Defaults to None.
+            connection_args (Optional[Union[TConnectArg  , dict]], optional): connection args. Defaults to None.
+            task_result_hooks (Optional[list[TaskResultHook]], optional): list of task result hooks. Defaults to None.
+            log_path (Optional[str], optional): path for file system logs. Defaults to None.
+            event_reporter (str, optional): Reporter string stored on emitted events. Defaults to DEFAULT_EVENT_REPORTER.
+            session_id (Optional[str], optional): session identifier. Defaults to None.
+            kwargs (optional): additional keyword arguments. These given to the baseclass as well.
+        """
         super().__init__(
             system_info,
             logger,
@@ -357,7 +370,16 @@ class DataPlugin(
 
                 for collector_cls in collector_classes:
                     collector_args = self._resolve_collector_args(collector_cls, collection_args)
-                    collection_task = collector_cls(
+                    collector_log_path = None
+                    if self.log_path:
+                        _log_path = (
+                            Path(self.log_path)
+                            / resolve_log_dir_name(self.__class__.__name__)
+                            / resolve_log_dir_name(collector_cls.__name__)
+                        )
+                        _log_path.mkdir(parents=True, exist_ok=True)
+                        collector_log_path = str(_log_path)
+                    collection_task: DataCollector[Any, Any, Any] = collector_cls(
                         system_info=self.system_info.model_copy(),
                         logger=self.logger,
                         system_interaction_level=system_interaction_level,
@@ -365,7 +387,7 @@ class DataPlugin(
                         max_event_priority_level=max_event_priority_level,
                         parent=self.__class__.__name__,
                         task_result_hooks=self.task_result_hooks,
-                        log_path=self.log_path,
+                        log_path=collector_log_path,
                         event_reporter=self.event_reporter,
                         session_id=self.session_id,
                     )
