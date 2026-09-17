@@ -32,8 +32,13 @@ from nodescraper.utils import resolve_log_dir_name
 
 
 class FileSystemLogHook(TaskResultHook):
-
     def __init__(self, log_base_path=None, **kwargs) -> None:
+        """Create a FileSystemLogHook Instance
+
+        Args:
+            log_base_path (Optional[str], optional): The base path where logs will be stored. Defaults to the current working directory.
+            **kwargs: Additional keyword arguments, which are not used.
+        """
         if log_base_path is None:
             log_base_path = os.getcwd()
 
