@@ -56,6 +56,17 @@ class InBandConnectionManager(ConnectionManager[InBandConnection, SSHConnectionP
         connection_args: Optional[SSHConnectionParams | dict[str, Any]] = None,
         **kwargs,
     ):
+        """Initialize a new InBandConnectionManager instance.
+
+        Args:
+            system_info (SystemInfo): System info for the targeted system
+            logger (Optional[Logger], optional): Logger for the connection manager. Defaults to None.
+            max_event_priority_level (Union[EventPriority, str], optional): Maximum event priority level for logging. Defaults to EventPriority.CRITICAL.
+            parent (Optional[str], optional): Parent task identifier. Defaults to None.
+            task_result_hooks (Optional[list[TaskResultHook]], optional): List of task result hooks. Defaults to None.
+            connection_args (Optional[SSHConnectionParams], optional): SSH connection parameters
+                These connections args will be used to establish the SSH connection to the targeted system. Defaults to None.
+        """
         super().__init__(
             system_info,
             logger,
