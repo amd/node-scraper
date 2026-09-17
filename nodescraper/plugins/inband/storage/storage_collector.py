@@ -98,7 +98,6 @@ class StorageCollector(InBandDataCollector[StorageDataModel, None]):
             self._log_event(
                 category="STORAGE_READ",
                 description="Available storage read",
-                data=storage_model.model_dump(),
                 priority=EventPriority.INFO,
             )
             self.result.message = f"{len(storage_model.storage_data)} storage devices collected"
