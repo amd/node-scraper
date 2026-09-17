@@ -87,12 +87,6 @@ class DimmCollector(InBandDataCollector[DimmDataModel, DimmCollectorArgs]):
             return self.result, None
 
         dimm_data = DimmDataModel(dimms=dimms)
-        self._log_event(
-            category=EventCategory.IO,
-            description="Installed DIMM check",
-            data=dimm_data.model_dump(),
-            priority=EventPriority.INFO,
-        )
         self.result.message = f"DIMM: {dimm_data}"
 
         return self.result, dimm_data
@@ -173,11 +167,6 @@ class DimmCollector(InBandDataCollector[DimmDataModel, DimmCollectorArgs]):
         self._log_event(
             category=EventCategory.OS,
             description="Error checking dimms",
-            data={
-                "command": res.command,
-                "exit_code": res.exit_code,
-                "stderr": res.stderr,
-            },
             priority=EventPriority.ERROR,
             console_log=True,
         )
