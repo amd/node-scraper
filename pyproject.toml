@@ -91,3 +91,20 @@ explicit_package_bases = true
 
 [tool.setuptools_scm]
 version_scheme = "post-release"
+
+[dependency-groups]
+dev = [
+    "build",
+    "black",
+    "pylint",
+    "coverage",
+    "twine",
+    "ruff",
+    "pre-commit",
+    "pytest",
+    "pytest-cov",
+    "mypy",
+    "types-paramiko",
+    "types-requests",
+    "types-setuptools",
+]

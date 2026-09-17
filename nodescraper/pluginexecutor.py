@@ -31,13 +31,16 @@ import logging
 import uuid
 from collections import deque
 from collections.abc import Callable, Sequence
-from typing import Optional, Type, Union
+from typing import Any, Optional, Type, Union
 
 from pydantic import BaseModel
 
 from nodescraper.base.oobsshdataplugin import OOBSSHDataPlugin
+from nodescraper.connection.inband import InBandConnectionManager
+from nodescraper.connection.inband.osdetection import discover_and_write_os_family
 from nodescraper.connection.oob_ssh import OobSshConnectionManager
 from nodescraper.constants import DEFAULT_LOGGER
+from nodescraper.enums import ExecutionStatus, OSFamily
 from nodescraper.helpers.plugin_execution_target import (
     format_in_band_target_summary,
 )
@@ -103,23 +106,7 @@ class PluginExecutor:
         if log_path:
             self.connection_result_hooks.append(FileSystemLogHook(log_base_path=log_path))
 
-        if connections:
-            for connection, connection_args in connections.items():
-                if connection not in self.plugin_registry.connection_managers:
-                    self.logger.error(
-                        "Unable to find registered connection manager class for %s", connection
-                    )
-                    continue
-
-                connection_manager = self.plugin_registry.connection_managers[connection]
-
-                self.connection_library[connection_manager] = connection_manager(
-                    system_info=self.system_info,
-                    logger=self.logger,
-                    connection_args=connection_args,
-                    task_result_hooks=self.connection_result_hooks,
-                    session_id=self.session_id,
-                )
+        self._populate_connection_library(connections)
 
         self.logger.info("System Name: %s", self.system_info.name)
         if self.system_info.sku:
@@ -130,6 +117,35 @@ class PluginExecutor:
             "%s",
             format_in_band_target_summary(self.system_info, self.connection_configs),
         )
+
+    def _populate_connection_library(
+        self, connections: dict[str, dict[str, Any] | BaseModel] | None
+    ) -> None:
+        """Init the connection library with the provided connections.
+
+        Args:
+            connections (dict[str, dict[str, Any]]): A dictionary mapping connection names to their arguments.
+            where the first level of the dict is always a name of the connection class and then its arguments.
+        """
+        if connections is None:
+            return
+        for connection, connection_args in connections.items():
+            if connection not in self.plugin_registry.connection_managers:
+                self.logger.error(
+                    "Unable to find registered connection manager class for %s",
+                    connection,
+                )
+                continue
+
+            connection_manager = self.plugin_registry.connection_managers[connection]
+
+            self.connection_library[connection_manager] = connection_manager(
+                system_info=self.system_info,
+                logger=self.logger,
+                connection_args=connection_args,
+                task_result_hooks=self.connection_result_hooks,
+                session_id=self.session_id,
+            )
 
     @staticmethod
     def _deep_merge_plugin_args(existing: dict, incoming: dict) -> dict:
@@ -167,6 +183,37 @@ class PluginExecutor:
             merged_config.post_action_plugins.extend(config.post_action_plugins)
 
         return merged_config
+
+    def discover_os_info(self) -> None:
+        """If the connection library has an InBandConnectionManager, use it to discover OS info and update system_info
+        self.system_info will be updated with the discovered OS info.
+        """
+        inband_connection = self.connection_library.get(InBandConnectionManager)
+        if inband_connection is None:
+            # Init use and discard after
+            inband_connection = InBandConnectionManager(
+                system_info=self.system_info,
+                logger=self.logger,
+                connection_args=self.connection_configs.get(InBandConnectionManager.__name__),
+                task_result_hooks=self.connection_result_hooks,
+                session_id=self.session_id,
+            )
+        try:
+            result = inband_connection.connect() if inband_connection else None
+            if (not inband_connection) or (not result) or (result.status != ExecutionStatus.OK):
+                self.logger.info(
+                    "InBandConnectionManager not available or failed to connect for OS discovery. Skipping OS discovery."
+                )
+                return
+            discover_and_write_os_family(inband_connection, self.system_info, self.logger)
+        except Exception as e:
+            self.logger.error(
+                "Error occurred during OS discovery with InBandConnectionManager: %s",
+                str(e),
+            )
+        finally:
+            if inband_connection is not None:
+                inband_connection.disconnect()
 
     def _get_connection_manager_for_plugin(
         self,
@@ -313,6 +360,9 @@ class PluginExecutor:
             list[PluginResult]: List of results from running the plugins in the queue
         """
         plugin_results = []
+        # For Plugins discover OS Family
+        if self.system_info.os_family is None or self.system_info.os_family == OSFamily.UNKNOWN:
+            self.discover_os_info()
         plugin_queue = deque(self.plugin_config.plugins.items())
         try:
             while len(plugin_queue) > 0:
@@ -334,11 +384,15 @@ class PluginExecutor:
 
             if self.plugin_config.result_collators:
                 self.logger.info("Running result collators")
-                for collator, collator_args in self.plugin_config.result_collators.items():
+                for (
+                    collator,
+                    collator_args,
+                ) in self.plugin_config.result_collators.items():
                     collator_class = self.plugin_registry.result_collators.get(collator)
                     if collator_class is None:
                         self.logger.warning(
-                            "No result collator found in registry for name: %s", collator
+                            "No result collator found in registry for name: %s",
+                            collator,
                         )
                         continue
 

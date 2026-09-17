@@ -274,10 +274,8 @@ class PluginRegistry:
         """Internal: Load plugins without caching logic."""
         plugins = {}
         eps: Iterable = PluginRegistry.load_entry_points(ENTRY_POINT_PLUGINS)
-
         for entry_point in eps:
             plugin_class = entry_point.load()  # type: ignore[attr-defined, union-attr]
-
             if not PluginRegistry._valid_sub_class_check(
                 in_cls=plugin_class, base_class=PluginInterface
             ):
