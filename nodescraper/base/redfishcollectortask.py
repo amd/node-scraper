@@ -52,6 +52,18 @@ class RedfishDataCollector(
         session_id: Optional[str] = None,
         **kwargs,
     ):
+        """Creates a RedfishDataCollector instance.
+
+        Args:
+            system_info (SystemInfo): system info object for target system for data collection
+            connection (TConnection): connection object for the data collector
+            logger (Optional[logging.Logger], optional): python logger object. Defaults to None.
+            max_event_priority_level (Union[EventPriority, str], optional): priority limit for events. Defaults to EventPriority.CRITICAL.
+            parent (Optional[str], optional): parent task identifier. Defaults to None.
+            task_result_hooks (Optional[list[TaskResultHook]], optional): list of task result hooks. Defaults to None.
+            event_reporter (str, optional): Reporter string stored on emitted events. Defaults to DEFAULT_EVENT_REPORTER.
+            session_id (Optional[str], optional): session identifier. Defaults to None.
+        """
         super().__init__(
             system_info=system_info,
             connection=connection,

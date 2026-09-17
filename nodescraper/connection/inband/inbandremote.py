@@ -55,6 +55,11 @@ class RemoteShell(InBandConnection):
         self,
         ssh_params: SSHConnectionParams,
     ) -> None:
+        """Creates a RemoteShell Instance.
+
+        Args:
+            ssh_params (SSHConnectionParams): The parameters used to initiate the SSH connection username/password/ect.
+        """
         self.ssh_params = ssh_params
         self.client = paramiko.SSHClient()
         self.client.load_system_host_keys()
