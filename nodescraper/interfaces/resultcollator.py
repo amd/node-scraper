@@ -26,7 +26,7 @@
 import abc
 import logging
 from logging import Logger
-from typing import Optional
+from typing import Optional, Union
 
 from nodescraper.constants import DEFAULT_LOGGER
 from nodescraper.models import PluginResult, TaskResult
@@ -49,7 +49,7 @@ class PluginResultCollator(abc.ABC):
         if logger is None:
             logger = logging.getLogger(DEFAULT_LOGGER)
         self.logger: Logger = logger
-        self.log_path: str | None = log_path
+        self.log_path: Union[str, None] = log_path
 
     @abc.abstractmethod
     def collate_results(
