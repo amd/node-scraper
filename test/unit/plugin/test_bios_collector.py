@@ -78,6 +78,22 @@ def test_task_body_linux(system_info, bios_collector):
     assert data == exp_data
 
 
+def test_task_body_esxi(system_info, bios_collector):
+    """ESXi: BIOS version is parsed from the smbiosDump 'Version:' line."""
+    system_info.os_family = OSFamily.ESXI
+
+    bios_collector._run_sut_cmd = MagicMock(
+        return_value=MagicMock(
+            exit_code=0,
+            stdout='        Version: "1.8"',
+        )
+    )
+
+    res, data = bios_collector.collect_data()
+    assert res.status == ExecutionStatus.OK
+    assert data == BiosDataModel(bios_version="1.8")
+
+
 def test_task_body_error(system_info, bios_collector):
     """Test the _task_body method when an error occurs."""
     system_info.os_family = OSFamily.LINUX
