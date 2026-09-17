@@ -589,3 +589,163 @@ def test_closing_connections_logged_after_post_actions(plugin_registry, caplog):
     assert (
         post_action_idx < closing_idx
     ), "'Closing connections' must be logged after the post-action plugin runs"
+
+
+def test_discover_os_info_detects_linux(system_info):
+    """discover_os_info() should detect Linux OS when uname succeeds."""
+    from unittest.mock import MagicMock, Mock
+
+    from nodescraper.connection.inband import CommandArtifact
+    from nodescraper.connection.inband.inbandmanager import InBandConnectionManager
+    from nodescraper.enums import OSFamily
+    from nodescraper.models.taskresult import TaskResult
+
+    # Mock the connection to return Linux
+    mock_conn = MagicMock()
+    mock_conn.run_command.return_value = CommandArtifact(
+        command="uname -s",
+        stdout="Linux",
+        stderr="",
+        exit_code=0,
+    )
+
+    # Mock InBandConnectionManager instance
+    mock_manager = MagicMock(spec=InBandConnectionManager)
+    mock_manager.connection = mock_conn
+    mock_manager.connect.return_value = TaskResult(status=ExecutionStatus.OK)
+    mock_manager.disconnect.return_value = None
+
+    # Create a mock class that returns our mock manager instance
+    mock_class = Mock(return_value=mock_manager)
+    mock_class.__name__ = "InBandConnectionManager"
+
+    # Store original and patch
+    import nodescraper.pluginexecutor
+
+    original = nodescraper.pluginexecutor.InBandConnectionManager
+    nodescraper.pluginexecutor.InBandConnectionManager = mock_class
+
+    try:
+        # Create executor
+        executor = PluginExecutor(
+            plugin_configs=[PluginConfig(plugins={})],
+            system_info=system_info,
+        )
+
+        # Run OS discovery
+        executor.discover_os_info()
+    finally:
+        # Restore original
+        nodescraper.pluginexecutor.InBandConnectionManager = original
+
+    # Verify Linux was detected
+    assert system_info.os_family == OSFamily.LINUX
+    mock_conn.run_command.assert_called_once_with("uname -s")
+
+
+def test_discover_os_info_detects_arista_eos(system_info):
+    """discover_os_info() should detect Arista EOS when uname fails but Arista command succeeds."""
+    import json
+    from unittest.mock import MagicMock, Mock
+
+    from nodescraper.connection.inband import CommandArtifact
+    from nodescraper.connection.inband.inbandmanager import InBandConnectionManager
+    from nodescraper.enums import OSFamily
+    from nodescraper.models.taskresult import TaskResult
+
+    arista_version = {
+        "mfgName": "Arista Networks",
+        "version": "4.32.1F",
+        "modelName": "DCS-7280CR3-32P4",
+    }
+
+    # Mock the connection to fail uname but succeed with Arista command
+    mock_conn = MagicMock()
+    mock_conn.run_command.side_effect = [
+        CommandArtifact(command="uname -s", stdout="", stderr="invalid", exit_code=1),
+        CommandArtifact(
+            command="show version | json | no-more",
+            stdout=json.dumps(arista_version),
+            stderr="",
+            exit_code=0,
+        ),
+    ]
+
+    # Mock InBandConnectionManager instance
+    mock_manager = MagicMock(spec=InBandConnectionManager)
+    mock_manager.connection = mock_conn
+    mock_manager.connect.return_value = TaskResult(status=ExecutionStatus.OK)
+    mock_manager.disconnect.return_value = None
+
+    # Create a mock class that returns our mock manager instance
+    mock_class = Mock(return_value=mock_manager)
+    mock_class.__name__ = "InBandConnectionManager"
+
+    # Store original and patch
+    import nodescraper.pluginexecutor
+
+    original = nodescraper.pluginexecutor.InBandConnectionManager
+    nodescraper.pluginexecutor.InBandConnectionManager = mock_class
+
+    try:
+        # Create executor
+        executor = PluginExecutor(
+            plugin_configs=[PluginConfig(plugins={})],
+            system_info=system_info,
+        )
+
+        # Run OS discovery
+        executor.discover_os_info()
+    finally:
+        # Restore original
+        nodescraper.pluginexecutor.InBandConnectionManager = original
+
+    # Verify Arista EOS was detected
+    assert system_info.os_family == OSFamily.EOS
+    assert system_info.platform == "Arista EOS"
+    assert system_info.metadata["os_version"] == "4.32.1F"
+    assert system_info.metadata["device_model"] == "DCS-7280CR3-32P4"
+
+
+def test_discover_os_info_skips_when_connection_fails(system_info, caplog):
+    """discover_os_info() should skip detection and log when InBandConnectionManager fails to connect."""
+    from unittest.mock import MagicMock, Mock
+
+    from nodescraper.connection.inband.inbandmanager import InBandConnectionManager
+    from nodescraper.enums import OSFamily
+    from nodescraper.models.taskresult import TaskResult
+
+    # Mock InBandConnectionManager instance to fail connection
+    mock_manager = MagicMock(spec=InBandConnectionManager)
+    mock_manager.connect.return_value = TaskResult(
+        status=ExecutionStatus.ERROR, message="Connection failed"
+    )
+    mock_manager.disconnect.return_value = None
+
+    # Create a mock class that returns our mock manager instance
+    mock_class = Mock(return_value=mock_manager)
+    mock_class.__name__ = "InBandConnectionManager"
+
+    # Store original and patch
+    import nodescraper.pluginexecutor
+
+    original = nodescraper.pluginexecutor.InBandConnectionManager
+    nodescraper.pluginexecutor.InBandConnectionManager = mock_class
+
+    try:
+        # Create executor
+        executor = PluginExecutor(
+            plugin_configs=[PluginConfig(plugins={})],
+            system_info=system_info,
+        )
+
+        # Run OS discovery
+        with caplog.at_level(logging.INFO):
+            executor.discover_os_info()
+    finally:
+        # Restore original
+        nodescraper.pluginexecutor.InBandConnectionManager = original
+
+    # Verify OS detection was skipped
+    assert system_info.os_family == OSFamily.LINUX  # Default from fixture
+    assert any("Skipping OS discovery" in record.message for record in caplog.records)

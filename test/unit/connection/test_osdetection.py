@@ -31,6 +31,7 @@ from nodescraper.connection.inband.osdetection import (
     ARISTA_VERSION_CMD,
     DELL_VERSION_CMD,
     detect_network_os,
+    discover_and_write_os_family,
     parse_arista_version_output,
     parse_dell_sonic_version_output,
 )
@@ -177,7 +178,7 @@ def test_detect_network_os_falls_back_to_dell(conn_mock):
     assert conn_mock.run_command.call_count == 2
 
 
-def test_check_os_family_detects_arista_eos(system_info, conn_mock):
+def test_discover_and_write_os_family_detects_arista_eos(system_info, conn_mock, logger):
     manager = InBandConnectionManager(system_info=system_info)
     manager.connection = conn_mock
     conn_mock.run_command.side_effect = [
@@ -185,18 +186,15 @@ def test_check_os_family_detects_arista_eos(system_info, conn_mock):
         DUMMY_ARISTA_VERSION_CMD_OK,
     ]
 
-    manager._check_os_family()
+    discover_and_write_os_family(manager, system_info, logger)
 
     assert system_info.os_family == OSFamily.EOS
     assert system_info.platform == "Arista EOS"
     assert system_info.metadata["os_version"] == DUMMY_ARISTA_VERSION["version"]
     assert system_info.metadata["device_model"] == DUMMY_ARISTA_VERSION["modelName"]
-    assert not any(
-        event.description == "Unable to determine SUT OS" for event in manager.result.events
-    )
 
 
-def test_check_os_family_detects_dell_sonic(system_info, conn_mock):
+def test_discover_and_write_os_family_detects_dell_sonic(system_info, conn_mock, logger):
     system_info.os_family = OSFamily.UNKNOWN
     manager = InBandConnectionManager(system_info=system_info)
     manager.connection = conn_mock
@@ -206,18 +204,17 @@ def test_check_os_family_detects_dell_sonic(system_info, conn_mock):
         DUMMY_DELL_VERSION_CMD_OK,
     ]
 
-    manager._check_os_family()
+    discover_and_write_os_family(manager, system_info, logger)
 
     assert system_info.os_family == OSFamily.SONIC
     assert system_info.platform == "Dell SONiC"
     assert system_info.metadata["os_version"] == "4.1.0-Enterprise"
     assert system_info.metadata["device_model"] == "DellEMC-S5248F-ON"
-    assert not any(
-        event.description == "Unable to determine SUT OS" for event in manager.result.events
-    )
 
 
-def test_check_os_family_still_warns_when_unknown(system_info, conn_mock):
+def test_discover_and_write_os_family_leaves_unknown_when_undetected(
+    system_info, conn_mock, logger
+):
     system_info.os_family = OSFamily.UNKNOWN
     manager = InBandConnectionManager(system_info=system_info)
     manager.connection = conn_mock
@@ -227,21 +224,17 @@ def test_check_os_family_still_warns_when_unknown(system_info, conn_mock):
         DUMMY_DELL_VERSION_CMD_NON_DELL,
     ]
 
-    manager._check_os_family()
+    discover_and_write_os_family(manager, system_info, logger)
 
     assert system_info.os_family == OSFamily.UNKNOWN
-    assert any(
-        event.description == "Unable to determine SUT OS" and event.category == "UNKNOWN"
-        for event in manager.result.events
-    )
 
 
-def test_check_os_family_linux_skips_network_probes(system_info, conn_mock):
+def test_discover_and_write_os_family_linux_skips_network_probes(system_info, conn_mock, logger):
     manager = InBandConnectionManager(system_info=system_info)
     manager.connection = conn_mock
     conn_mock.run_command.return_value = DUMMY_UNAME_LINUX
 
-    manager._check_os_family()
+    discover_and_write_os_family(manager, system_info, logger)
 
     assert system_info.os_family == OSFamily.LINUX
     conn_mock.run_command.assert_called_once_with("uname -s")

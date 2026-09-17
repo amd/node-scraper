@@ -29,7 +29,7 @@ import abc
 import logging
 import types
 from functools import wraps
-from typing import Callable, Generic, Optional, TypeVar, Union
+from typing import Any, Callable, Generic, Optional, TypeVar, Union
 
 from pydantic import BaseModel
 
@@ -96,7 +96,7 @@ class ConnectionManager(Task, Generic[TConnection, TConnectArg]):
         max_event_priority_level: Union[EventPriority, str] = EventPriority.CRITICAL,
         parent: Optional[str] = None,
         task_result_hooks: Optional[list[TaskResultHook], None] = None,
-        connection_args: Optional[Union[TConnectArg, dict]] = None,
+        connection_args: Optional[Union[TConnectArg, dict[str, Any]]] = None,
         event_reporter: str = DEFAULT_EVENT_REPORTER,
         session_id: Optional[str] = None,
         **kwargs,

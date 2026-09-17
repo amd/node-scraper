@@ -74,7 +74,7 @@ class PluginInterface(abc.ABC, Generic[TConnectionManager, TConnectArg]):
 
         if system_info is None:
             system_info = SystemInfo()
-        self.system_info = system_info
+        self.system_info: SystemInfo = system_info
 
         if not task_result_hooks:
             task_result_hooks = []
