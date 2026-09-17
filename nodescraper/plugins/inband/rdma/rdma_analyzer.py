@@ -53,7 +53,7 @@ def _validate_firmware_policy(records: list[Dict[str, Any]], policies: Any) -> l
         expected = _normalize_firmware_version(policy.get("expected_nic_firmware"))
         if not actual:
             reason = "firmware version is unavailable"
-        elif expected and actual != expected:
+        elif expected and not _firmware_matches(actual, expected):
             reason = (
                 f"actual {record.get('version')} != expected_nic_firmware "
                 f"{policy.get('expected_nic_firmware')}"
@@ -87,6 +87,13 @@ def _normalize_firmware_version(value: Any) -> Optional[str]:
         return None
     normalized = str(value).strip().strip("'\"").lower()
     return normalized or None
+
+
+def _firmware_matches(actual: str, expected_pattern: str) -> bool:
+    try:
+        return re.fullmatch(expected_pattern, actual, flags=re.IGNORECASE) is not None
+    except re.error:
+        return False
 
 
 class RdmaAnalyzer(DataAnalyzer[RdmaDataModel, RdmaAnalyzerArgs]):

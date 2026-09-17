@@ -179,6 +179,28 @@ def test_roce_firmware_exact_match(rdma_analyzer):
     assert not result.events
 
 
+def test_roce_firmware_regex_matches_supported_formats(rdma_analyzer):
+    pattern = r"^[0-9]+(?:\.[0-9]+){2,}(?:-[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*)?$"
+    for firmware_version in ("1.117.5-a-77", "28.35.1012", "238.1.168.0"):
+        model = RdmaDataModel(
+            dev_list=[
+                RdmaDevice(
+                    device="bnxt_re0",
+                    transport="RoCE",
+                    firmware_version=firmware_version,
+                )
+            ]
+        )
+
+        result = rdma_analyzer.analyze_data(
+            model,
+            RdmaAnalyzerArgs(expected_nic_firmware=pattern),
+        )
+
+        assert result.status == ExecutionStatus.OK
+        assert not result.events
+
+
 def test_infini_band_firmware_mismatch_is_reported(rdma_analyzer):
     model = RdmaDataModel(
         dev_list=[

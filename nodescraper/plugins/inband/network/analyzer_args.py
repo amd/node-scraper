@@ -3,7 +3,7 @@
 # MIT License
 #
 ###############################################################################
-from typing import List, Optional
+from typing import Optional
 
 from pydantic import Field
 
@@ -16,8 +16,4 @@ class NetworkAnalyzerArgs(AnalyzerArgs):
     expected_nic_firmware: Optional[str] = Field(
         default=None,
         description="Exact firmware version expected from each collected NIC.",
-    )
-    exclusion_regex: Optional[List[str]] = Field(
-        default=None,
-        description="Regex patterns matched against interface names before analysis.",
     )

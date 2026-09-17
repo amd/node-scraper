@@ -98,6 +98,31 @@ def test_ethtool_firmware_exact_match(network_analyzer):
     assert not result.events
 
 
+@pytest.mark.parametrize(
+    "firmware_version",
+    ["1.117.5-a-77", "28.35.1012", "238.1.168.0"],
+)
+def test_ethtool_firmware_regex_matches_supported_formats(network_analyzer, firmware_version):
+    model = NetworkDataModel(
+        ethtool_info={
+            "eth0": EthtoolInfo(
+                interface="eth0",
+                raw_output="",
+                driver="bnxt_en",
+                firmware_version=firmware_version,
+            )
+        }
+    )
+    args = NetworkAnalyzerArgs(
+        expected_nic_firmware=(r"^[0-9]+(?:\.[0-9]+){2,}(?:-[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*)?$")
+    )
+
+    result = network_analyzer.analyze_data(model, args)
+
+    assert result.status == ExecutionStatus.OK
+    assert not result.events
+
+
 def test_ethtool_firmware_mismatch_is_reported(network_analyzer):
     model = NetworkDataModel(
         ethtool_info={
