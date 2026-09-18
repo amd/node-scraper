@@ -64,6 +64,9 @@ class PluginInterface(abc.ABC, Generic[TConnectionManager, TConnectArg]):
             task_result_hooks (Optional[list[TaskResultHook]], optional): list of task result hooks. Defaults to None.
             log_path (Optional[str], optional): path for file system logs. Defaults to None.
             queue_callback (Optional[Callable], optional): function to add additional plugins to plugin executor queue. Defaults to None.
+            event_reporter (str, optional): Reporter string stored on emitted events. Defaults to DEFAULT_EVENT_REPORTER.
+            session_id (Optional[str], optional): session identifier. Defaults to None.
+            kwargs (optional): additional keyword arguments. These are currently not used by the base plugin interface.
         """
         if logger is None:
             logger = logging.getLogger(DEFAULT_LOGGER)

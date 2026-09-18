@@ -682,3 +682,85 @@ class TestMultiCollectorDataPlugin:
         found = MultiCollectorPlugin.find_datamodel_path_in_run(str(tmp_path))
         assert found is not None
         assert found.endswith("multipartdatamodel.json")
+
+    def test_log_path_creates_collector_subdirectories(self, plugin_with_conn, tmp_path):
+        """Test that log_path creates subdirectories for each collector."""
+        log_path = tmp_path / "test_logs"
+
+        # Create plugin with log_path
+        multi_plugin = MultiCollectorPlugin(
+            system_info=plugin_with_conn.system_info,
+            logger=plugin_with_conn.logger,
+            connection_manager=plugin_with_conn.connection_manager,
+            log_path=str(log_path),
+        )
+
+        with (
+            patch.object(AlphaCollector, "__init__", return_value=None) as alpha_init,
+            patch.object(BetaCollector, "__init__", return_value=None) as beta_init,
+            patch.object(AlphaCollector, "collect_data") as alpha_collect,
+            patch.object(BetaCollector, "collect_data") as beta_collect,
+        ):
+            alpha_collect.return_value = (
+                TaskResult(status=ExecutionStatus.OK, task="AlphaCollector"),
+                MultiPartDataModel(alpha="alpha-value"),
+            )
+            beta_collect.return_value = (
+                TaskResult(status=ExecutionStatus.OK, task="BetaCollector"),
+                MultiPartDataModel(beta="beta-value"),
+            )
+
+            multi_plugin.collect()
+
+            # Verify that AlphaCollector was initialized with correct log_path
+            alpha_call_kwargs = alpha_init.call_args[1]
+            assert "log_path" in alpha_call_kwargs
+            alpha_log_path = Path(alpha_call_kwargs["log_path"])
+            assert alpha_log_path.parent.parent == log_path
+            assert alpha_log_path.parent.name == "multi_collector_plugin"
+            assert alpha_log_path.name == "alpha_collector"
+
+            # Verify that BetaCollector was initialized with correct log_path
+            beta_call_kwargs = beta_init.call_args[1]
+            assert "log_path" in beta_call_kwargs
+            beta_log_path = Path(beta_call_kwargs["log_path"])
+            assert beta_log_path.parent.parent == log_path
+            assert beta_log_path.parent.name == "multi_collector_plugin"
+            assert beta_log_path.name == "beta_collector"
+
+            # Verify directories were created
+            assert alpha_log_path.exists()
+            assert beta_log_path.exists()
+
+    def test_log_path_none_does_not_create_directories(self, plugin_with_conn):
+        """Test that when log_path is None, no directories are created."""
+        multi_plugin = MultiCollectorPlugin(
+            system_info=plugin_with_conn.system_info,
+            logger=plugin_with_conn.logger,
+            connection_manager=plugin_with_conn.connection_manager,
+            log_path=None,
+        )
+
+        with (
+            patch.object(AlphaCollector, "__init__", return_value=None) as alpha_init,
+            patch.object(BetaCollector, "__init__", return_value=None) as beta_init,
+            patch.object(AlphaCollector, "collect_data") as alpha_collect,
+            patch.object(BetaCollector, "collect_data") as beta_collect,
+        ):
+            alpha_collect.return_value = (
+                TaskResult(status=ExecutionStatus.OK, task="AlphaCollector"),
+                MultiPartDataModel(alpha="alpha-value"),
+            )
+            beta_collect.return_value = (
+                TaskResult(status=ExecutionStatus.OK, task="BetaCollector"),
+                MultiPartDataModel(beta="beta-value"),
+            )
+
+            multi_plugin.collect()
+
+            # Verify that collectors were initialized with log_path=None
+            alpha_call_kwargs = alpha_init.call_args[1]
+            assert alpha_call_kwargs["log_path"] is None
+
+            beta_call_kwargs = beta_init.call_args[1]
+            assert beta_call_kwargs["log_path"] is None
