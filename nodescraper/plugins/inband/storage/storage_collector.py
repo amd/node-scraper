@@ -37,9 +37,11 @@ from .storagedata import DeviceStorageData, StorageDataModel
 class StorageCollector(InBandDataCollector[StorageDataModel, None]):
     """Collect disk usage details"""
 
+    SUPPORTED_OS_FAMILY: set[OSFamily] = {OSFamily.WINDOWS, OSFamily.LINUX, OSFamily.ESXI}
     DATA_MODEL = StorageDataModel
     CMD_WINDOWS = """wmic LogicalDisk Where DriveType="3" Get DeviceId,Size,FreeSpace"""
     CMD = """sh -c 'df -lH -B1 | grep -v 'boot''"""
+    CMD_ESXI = "esxcli storage filesystem list"
 
     def collect_data(
         self, args: Optional[StorageCollectorArgs] = None
@@ -60,6 +62,28 @@ class StorageCollector(InBandDataCollector[StorageDataModel, None]):
                             free=int(free_space),
                             used=int(size) - int(free_space),
                             percent=round((int(size) - int(free_space)) / int(size) * 100, 2),
+                        )
+        elif self.system_info.os_family == OSFamily.ESXI:
+            res = self._run_sut_cmd(self.CMD_ESXI)
+            if res.exit_code == 0:
+                for line in res.stdout.splitlines():
+                    # esxcli columns (fixed order): [0] Mount Point  [1] Volume Name
+                    # [2] UUID  [3] Mounted  [4] Type  [5] Size  [6] Free
+                    fields = re.split(r"\s{2,}", line.strip())
+                    if len(fields) >= 7 and fields[5].isdigit() and fields[6].isdigit():
+                        device_id = fields[0]
+                        total_bytes = int(fields[5])
+                        free_bytes = int(fields[6])
+                        used_bytes = total_bytes - free_bytes
+                        if total_bytes:
+                            usage_percent = round(used_bytes / total_bytes * 100, 2)
+                        else:
+                            usage_percent = 0.0
+                        storage_data[device_id] = DeviceStorageData(
+                            total=total_bytes,
+                            free=free_bytes,
+                            used=used_bytes,
+                            percent=usage_percent,
                         )
         else:
             if args.skip_sudo:
