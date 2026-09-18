@@ -327,6 +327,9 @@ class RedfishConnection:
                 self._session.delete(self._session_uri, timeout=self.timeout)
             except Exception:
                 pass
+
+        if self._session:
+            self._session.close()
         self._session = None
         self._session_token = None
         self._session_uri = None
