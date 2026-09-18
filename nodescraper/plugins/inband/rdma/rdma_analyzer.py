@@ -24,7 +24,7 @@
 #
 ###############################################################################
 import re
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
 from nodescraper.interfaces import DataAnalyzer
@@ -32,6 +32,68 @@ from nodescraper.models import TaskResult
 
 from .analyzer_args import RdmaAnalyzerArgs
 from .rdmadata import RdmaDataModel
+
+
+def _validate_firmware_policy(records: list[Dict[str, Any]], policies: Any) -> list[Dict[str, Any]]:
+    """Validate RDMA firmware locally against this analyzer's policies."""
+    policy_list = [policies] if isinstance(policies, dict) else policies or []
+    issues = []
+    for record in records:
+        policy = next(
+            (
+                item
+                for item in policy_list
+                if isinstance(item, dict) and _policy_matches(record, item)
+            ),
+            None,
+        )
+        if policy is None:
+            continue
+        actual = _normalize_firmware_version(record.get("version"))
+        expected = _normalize_firmware_version(policy.get("expected_nic_firmware"))
+        if not actual:
+            reason = "firmware version is unavailable"
+        elif expected and not _firmware_matches(actual, expected):
+            reason = (
+                f"actual {record.get('version')} != expected_nic_firmware "
+                f"{policy.get('expected_nic_firmware')}"
+            )
+        else:
+            continue
+        issues.append({"reason": reason, "record": record, "policy": dict(policy)})
+    return issues
+
+
+def _policy_matches(record: Dict[str, Any], policy: Dict[str, Any]) -> bool:
+    match = policy.get("match", {})
+    if not isinstance(match, dict):
+        return False
+    if not match:
+        match = {field: policy[field] for field in record if field in policy}
+    for field, expected in match.items():
+        actual = record.get(str(field))
+        if actual is None:
+            return False
+        expected_values = expected if isinstance(expected, list) else [expected]
+        if not any(
+            str(actual).strip().lower() == str(value).strip().lower() for value in expected_values
+        ):
+            return False
+    return True
+
+
+def _normalize_firmware_version(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    normalized = str(value).strip().strip("'\"").lower()
+    return normalized or None
+
+
+def _firmware_matches(actual: str, expected_pattern: str) -> bool:
+    try:
+        return re.fullmatch(expected_pattern, actual, flags=re.IGNORECASE) is not None
+    except re.error:
+        return False
 
 
 class RdmaAnalyzer(DataAnalyzer[RdmaDataModel, RdmaAnalyzerArgs]):
@@ -54,13 +116,40 @@ class RdmaAnalyzer(DataAnalyzer[RdmaDataModel, RdmaAnalyzerArgs]):
         Returns:
             TaskResult with status OK if no errors, ERROR if any error counter > 0.
         """
-        if not data.statistic_list:
+        if not args:
+            args = RdmaAnalyzerArgs()
+
+        firmware_records = [
+            {
+                "identity": device.device,
+                "version": device.firmware_version,
+                "source": "rdma",
+                "vendor": _vendor_for_rdma_device(device.device),
+                "driver": device.device,
+            }
+            for device in data.dev_list
+        ]
+        firmware_policy_issues = _validate_firmware_policy(
+            firmware_records,
+            (
+                {"expected_nic_firmware": args.expected_nic_firmware}
+                if args.expected_nic_firmware
+                else None
+            ),
+        )
+        for issue in firmware_policy_issues:
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description="RDMA adapter firmware policy mismatch",
+                data=issue,
+                priority=EventPriority.WARNING,
+                console_log=True,
+            )
+
+        if not data.statistic_list and not data.dev_list:
             self.result.message = "No RDMA devices found"
             self.result.status = ExecutionStatus.WARNING
             return self.result
-
-        if not args:
-            args = RdmaAnalyzerArgs()
 
         compiled_exclusions = [re.compile(pattern) for pattern in (args.exclusion_regex or [])]
 
@@ -124,6 +213,9 @@ class RdmaAnalyzer(DataAnalyzer[RdmaDataModel, RdmaAnalyzerArgs]):
         if error_detected or critical_detected:
             self.result.message = "RDMA errors detected in statistics"
             self.result.status = ExecutionStatus.ERROR
+        elif firmware_policy_issues:
+            self.result.message = "RDMA adapter firmware policy mismatch"
+            self.result.status = ExecutionStatus.WARNING
         else:
             self.result.message = "No RDMA errors detected in statistics"
             self.result.status = ExecutionStatus.OK
@@ -132,3 +224,14 @@ class RdmaAnalyzer(DataAnalyzer[RdmaDataModel, RdmaAnalyzerArgs]):
             self.result.message += f" ({skipped_count} skipped)"
 
         return self.result
+
+
+def _vendor_for_rdma_device(device: str) -> Optional[str]:
+    normalized = device.lower()
+    if normalized.startswith(("mlx", "ib_")):
+        return "Mellanox"
+    if normalized.startswith(("bnxt", "bnx2")):
+        return "Broadcom"
+    if normalized.startswith("ionic"):
+        return "Pensando"
+    return None

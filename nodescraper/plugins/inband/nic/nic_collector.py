@@ -67,6 +67,21 @@ from .nic_data import (
     command_to_canonical_key,
 )
 
+_FIRMWARE_VERSION_RE = re.compile(r"\b\d+(?:\.\d+){2,}\b")
+
+
+def _extract_firmware_version(output: str) -> Optional[str]:
+    """Extract the version from a firmware/package-version command response."""
+    for line in output.splitlines():
+        lowered = line.lower()
+        if not any(token in lowered for token in ("firmware", "fwpackage", "pkg_ver", "package")):
+            continue
+        matches = _FIRMWARE_VERSION_RE.findall(line)
+        if matches:
+            return matches[-1]
+    return None
+
+
 # niccli version threshold: legacy (<=233) vs new (>233) command syntax.
 NICCLI_VERSION_LEGACY_MAX = 233  # Commands use -dev/-getoption/getqos; for version > this use --dev/--getoption/qos --ets --show
 
@@ -641,6 +656,7 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
         custom_commands = args.commands if args and args.commands else None
 
         results: dict[str, NicCommandResult] = {}
+        broadcom_firmware: Dict[int, str] = {}
 
         # Detect which Broadcom CLI is present (bcmcli takes priority over niccli).
         broadcom_cli = self._detect_broadcom_cli(args, results)
@@ -779,6 +795,7 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
                     )
 
             # Populate broadcom_nic_* fields from bcmcli results keyed by device_id
+            broadcom_firmware = self._collect_broadcom_nic_firmware(results)
             broadcom_support_rdma: Dict[int, str] = {}
             broadcom_performance_profile: Dict[int, str] = {}
             broadcom_pcie_relaxed_ordering: Dict[int, str] = {}
@@ -991,6 +1008,7 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
                 broadcom_performance_profile,
                 broadcom_pcie_relaxed_ordering,
             ) = self._collect_broadcom_nic_structured(results, niccli_version=niccli_version)
+            broadcom_firmware = self._collect_broadcom_nic_firmware(results)
             (
                 pensando_cards,
                 pensando_dcqcn,
@@ -1055,6 +1073,7 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
             broadcom_nic_support_rdma=broadcom_support_rdma,
             broadcom_nic_performance_profile=broadcom_performance_profile,
             broadcom_nic_pcie_relaxed_ordering=broadcom_pcie_relaxed_ordering,
+            broadcom_nic_firmware=broadcom_firmware,
             pensando_nic_cards=pensando_cards,
             pensando_nic_dcqcn=pensando_dcqcn,
             pensando_nic_environment=pensando_environment,
@@ -1066,6 +1085,27 @@ class NicCollector(InBandDataCollector[NicDataModel, NicCollectorArgs]):
             pensando_nic_version_host_software=pensando_version_host_software,
             pensando_nic_version_firmware=pensando_version_firmware,
         )
+
+    def _collect_broadcom_nic_firmware(
+        self, results: Dict[str, NicCommandResult]
+    ) -> Dict[int, str]:
+        """Parse Broadcom bcmcli/niccli firmware commands into device records."""
+        firmware: Dict[int, str] = {}
+        for command, result in results.items():
+            lowered = command.lower()
+            if not (
+                "fwmanager show fwpackage" in lowered
+                or "show --pkg_ver" in lowered
+                or "show -pkg_ver" in lowered
+            ):
+                continue
+            if not result.succeeded:
+                continue
+            device_match = re.search(r"(?:-d|--dev|-dev)\s+(\d+)", command)
+            version = _extract_firmware_version(result.stdout)
+            if device_match and version:
+                firmware[int(device_match.group(1))] = version
+        return firmware
 
     def _resolve_bcmcli_bin_dir(self) -> str:
         res = self._run_sut_cmd("which bcmcli_show", sudo=False, log_artifact=False)

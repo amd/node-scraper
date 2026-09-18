@@ -24,20 +24,86 @@
 #
 ###############################################################################
 import re
+from typing import Any, Dict, Optional
 
 from nodescraper.base.regexanalyzer import RegexAnalyzer
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
 from nodescraper.models import TaskResult
 
+from .analyzer_args import NetworkAnalyzerArgs
 from .networkdata import NetworkDataModel
 
 
-class NetworkAnalyzer(RegexAnalyzer[NetworkDataModel, None]):
+def _validate_firmware_policy(records: list[Dict[str, Any]], policies: Any) -> list[Dict[str, Any]]:
+    """Validate ethtool firmware locally against this analyzer's policies."""
+    policy_list = [policies] if isinstance(policies, dict) else policies or []
+    issues = []
+    for record in records:
+        policy = next(
+            (
+                item
+                for item in policy_list
+                if isinstance(item, dict) and _policy_matches(record, item)
+            ),
+            None,
+        )
+        if policy is None:
+            continue
+        actual = _normalize_firmware_version(record.get("version"))
+        expected = _normalize_firmware_version(policy.get("expected_nic_firmware"))
+        if not actual:
+            reason = "firmware version is unavailable"
+        elif expected and not _firmware_matches(actual, expected):
+            reason = (
+                f"actual {record.get('version')} != expected_nic_firmware "
+                f"{policy.get('expected_nic_firmware')}"
+            )
+        else:
+            continue
+        issues.append({"reason": reason, "record": record, "policy": dict(policy)})
+    return issues
+
+
+def _policy_matches(record: Dict[str, Any], policy: Dict[str, Any]) -> bool:
+    match = policy.get("match", {})
+    if not isinstance(match, dict):
+        return False
+    if not match:
+        match = {field: policy[field] for field in record if field in policy}
+    for field, expected in match.items():
+        actual = record.get(str(field))
+        if actual is None:
+            return False
+        expected_values = expected if isinstance(expected, list) else [expected]
+        if not any(
+            str(actual).strip().lower() == str(value).strip().lower() for value in expected_values
+        ):
+            return False
+    return True
+
+
+def _normalize_firmware_version(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    normalized = str(value).strip().strip("'\"").lower()
+    return normalized or None
+
+
+def _firmware_matches(actual: str, expected_pattern: str) -> bool:
+    try:
+        return re.fullmatch(expected_pattern, actual, flags=re.IGNORECASE) is not None
+    except re.error:
+        return False
+
+
+class NetworkAnalyzer(RegexAnalyzer[NetworkDataModel, NetworkAnalyzerArgs]):
     """Check network statistics for errors."""
 
     DATA_MODEL = NetworkDataModel
 
-    def analyze_data(self, data: NetworkDataModel, args=None) -> TaskResult:
+    def analyze_data(
+        self, data: NetworkDataModel, args: Optional[NetworkAnalyzerArgs] = None
+    ) -> TaskResult:
         """Analyze ethtool -S statistics via RDMA-scoped vendor models.
 
         Args:
@@ -47,6 +113,40 @@ class NetworkAnalyzer(RegexAnalyzer[NetworkDataModel, None]):
         Returns:
             TaskResult with OK, WARNING (no devices, or only warning-tier counters), or ERROR.
         """
+        args = args or NetworkAnalyzerArgs()
+        firmware_records = []
+        for interface, info in data.ethtool_info.items():
+            vendor = _vendor_for_driver(info.driver)
+            if vendor is None:
+                continue
+            firmware_records.append(
+                {
+                    "identity": interface,
+                    "version": info.firmware_version,
+                    "source": "ethtool",
+                    "vendor": vendor,
+                    "driver": info.driver,
+                    "interface": interface,
+                    "pci_bdf": info.bus_info,
+                }
+            )
+        firmware_policy_issues = _validate_firmware_policy(
+            firmware_records,
+            (
+                {"expected_nic_firmware": args.expected_nic_firmware}
+                if args.expected_nic_firmware
+                else None
+            ),
+        )
+        for issue in firmware_policy_issues:
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description="Network adapter firmware policy mismatch",
+                data=issue,
+                priority=EventPriority.WARNING,
+                console_log=True,
+            )
+
         if not data.ethtool_info and not data.ethtool_statistics:
             self.result.message = "No network devices found"
             self.result.status = ExecutionStatus.WARNING
@@ -165,8 +265,25 @@ class NetworkAnalyzer(RegexAnalyzer[NetworkDataModel, None]):
         elif vendor_warning:
             self.result.message = "Network warning counters non-zero in statistics"
             self.result.status = ExecutionStatus.WARNING
+        elif firmware_policy_issues:
+            self.result.message = "Network adapter firmware policy mismatch"
+            self.result.status = ExecutionStatus.WARNING
         else:
             self.result.message = "No network errors detected in statistics"
             self.result.status = ExecutionStatus.OK
 
         return self.result
+
+
+def _vendor_for_driver(driver: Optional[str]) -> Optional[str]:
+    """Return a stable vendor label for common ethtool driver families."""
+    if not driver:
+        return None
+    normalized = driver.lower()
+    if normalized.startswith(("bnxt", "bnx2")):
+        return "Broadcom"
+    if normalized.startswith(("mlx", "ib_")):
+        return "Mellanox"
+    if normalized.startswith(("ionic",)):
+        return "Pensando"
+    return None

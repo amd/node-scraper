@@ -381,6 +381,10 @@ class NicDataModel(DataModel):
         default_factory=dict,
         description="Per-device output of 'niccli -dev X nvm -getoption pcie_relaxed_ordering' (device_num -> raw stdout).",
     )
+    broadcom_nic_firmware: Dict[int, str] = Field(
+        default_factory=dict,
+        description="Per-device firmware version parsed from bcmcli fwpackage or niccli pkg_ver output.",
+    )
     pensando_nic_cards: List[PensandoNicCard] = Field(default_factory=list)
     pensando_nic_dcqcn: List[PensandoNicDcqcn] = Field(default_factory=list)
     pensando_nic_environment: List[PensandoNicEnvironment] = Field(default_factory=list)

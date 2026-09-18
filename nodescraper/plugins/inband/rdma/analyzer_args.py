@@ -33,6 +33,10 @@ from nodescraper.models import AnalyzerArgs
 class RdmaAnalyzerArgs(AnalyzerArgs):
     """Arguments for the RDMA analyzer."""
 
+    expected_nic_firmware: Optional[str] = Field(
+        default=None,
+        description="Exact firmware version expected from each collected RDMA NIC.",
+    )
     exclusion_regex: Optional[list[str]] = Field(
         default=None,
         description="Regex patterns matched against an interface netdev; matching interfaces are skipped.",

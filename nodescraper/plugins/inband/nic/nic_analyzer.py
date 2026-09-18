@@ -103,6 +103,111 @@ def _normalize_tsa_map(d: Optional[Dict[Any, Any]]) -> Optional[Dict[int, str]]:
     return {int(k): str(v) for k, v in d.items()}
 
 
+def _firmware_records(data: NicDataModel) -> list[Dict[str, Any]]:
+    """Build normalized records for Broadcom and Pensando NIC output."""
+    records: list[Dict[str, Any]] = []
+    devices = {device.device_num: device for device in data.broadcom_nic_devices}
+    for device_num, version in data.broadcom_nic_firmware.items():
+        device = devices.get(device_num)
+        records.append(
+            {
+                "identity": str(device_num),
+                "version": version,
+                "source": data.broadcom_cli_type or "broadcom",
+                "vendor": "Broadcom",
+                "model": device.model if device else None,
+                "interface": device.interface_name if device else None,
+                "pci_bdf": device.pci_address if device else None,
+            }
+        )
+    for device in data.broadcom_nic_devices:
+        if device.device_num not in data.broadcom_nic_firmware:
+            records.append(
+                {
+                    "identity": str(device.device_num),
+                    "version": None,
+                    "source": data.broadcom_cli_type or "broadcom",
+                    "vendor": "Broadcom",
+                    "model": device.model,
+                    "interface": device.interface_name,
+                    "pci_bdf": device.pci_address,
+                }
+            )
+    for firmware in data.pensando_nic_version_firmware:
+        records.append(
+            {
+                "identity": firmware.nic_id,
+                "version": firmware.firmware_a,
+                "source": "nicctl",
+                "vendor": "Pensando",
+                "pci_bdf": firmware.pcie_bdf,
+            }
+        )
+    return records
+
+
+def _validate_firmware_policy(records: list[Dict[str, Any]], policies: Any) -> list[Dict[str, Any]]:
+    """Validate NIC firmware locally against this analyzer's policies."""
+    policy_list = [policies] if isinstance(policies, dict) else policies or []
+    issues = []
+    for record in records:
+        policy = next(
+            (
+                item
+                for item in policy_list
+                if isinstance(item, dict) and _policy_matches(record, item)
+            ),
+            None,
+        )
+        if policy is None:
+            continue
+        actual = _normalize_firmware_version(record.get("version"))
+        expected = _normalize_firmware_version(policy.get("expected_nic_firmware"))
+        if not actual:
+            reason = "firmware version is unavailable"
+        elif expected and not _firmware_matches(actual, expected):
+            reason = (
+                f"actual {record.get('version')} != expected_nic_firmware "
+                f"{policy.get('expected_nic_firmware')}"
+            )
+        else:
+            continue
+        issues.append({"reason": reason, "record": record, "policy": dict(policy)})
+    return issues
+
+
+def _policy_matches(record: Dict[str, Any], policy: Dict[str, Any]) -> bool:
+    match = policy.get("match", {})
+    if not isinstance(match, dict):
+        return False
+    if not match:
+        match = {field: policy[field] for field in record if field in policy}
+    for field, expected in match.items():
+        actual = record.get(str(field))
+        if actual is None:
+            return False
+        expected_values = expected if isinstance(expected, list) else [expected]
+        if not any(
+            str(actual).strip().lower() == str(value).strip().lower() for value in expected_values
+        ):
+            return False
+    return True
+
+
+def _normalize_firmware_version(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    normalized = str(value).strip().strip("'\"").lower()
+    return normalized or None
+
+
+def _firmware_matches(actual: str, expected_pattern: str) -> bool:
+    try:
+        return re.fullmatch(expected_pattern, actual, flags=re.IGNORECASE) is not None
+    except re.error:
+        return False
+
+
 class NicAnalyzer(DataAnalyzer[NicDataModel, NicAnalyzerArgs]):
     """Analyze niccli/nicctl data; checks Broadcom support_rdma, performance_profile (RoCE), pcie_relaxed_ordering (enabled), and getqos (expected QoS across adapters)."""
 
@@ -115,11 +220,33 @@ class NicAnalyzer(DataAnalyzer[NicDataModel, NicAnalyzerArgs]):
         if args is None:
             args = NicAnalyzerArgs()
 
+        firmware_policy_issues = _validate_firmware_policy(
+            _firmware_records(data),
+            (
+                {"expected_nic_firmware": args.expected_nic_firmware}
+                if args.expected_nic_firmware
+                else None
+            ),
+        )
+        for issue in firmware_policy_issues:
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description="Network adapter firmware policy mismatch",
+                data=issue,
+                priority=EventPriority.WARNING,
+                console_log=True,
+            )
+        has_firmware_data = bool(
+            data.broadcom_nic_devices
+            or data.broadcom_nic_firmware
+            or data.pensando_nic_version_firmware
+        )
+
         has_broadcom = bool(data.broadcom_nic_support_rdma)
         has_nicctl_logs = bool(
             data.nicctl_card_logs and any((c or "").strip() for c in data.nicctl_card_logs.values())
         )
-        if not has_broadcom and not has_nicctl_logs:
+        if not has_broadcom and not has_nicctl_logs and not has_firmware_data:
             self.result.message = "No Broadcom support_rdma or nicctl card log data to check"
             self.result.status = ExecutionStatus.OK
             return self.result
@@ -296,12 +423,14 @@ class NicAnalyzer(DataAnalyzer[NicDataModel, NicAnalyzerArgs]):
                             console_log=True,
                         )
 
+        any_firmware_mismatch = bool(firmware_policy_issues)
         if (
             any_disabled
             or any_non_roce
             or any_relaxed_ordering_bad
             or any_qos_mismatch
             or any_nicctl_log_errors
+            or any_firmware_mismatch
         ):
             self.result.status = ExecutionStatus.WARNING
             parts = []
@@ -315,6 +444,8 @@ class NicAnalyzer(DataAnalyzer[NicDataModel, NicAnalyzerArgs]):
                 parts.append("getqos")
             if any_nicctl_log_errors:
                 parts.append("nicctl_card_logs")
+            if any_firmware_mismatch:
+                parts.append("firmware")
             self.result.message = f"Broadcom/nic check(s) failed: {' and/or '.join(parts)}"
         else:
             self.result.status = ExecutionStatus.OK

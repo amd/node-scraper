@@ -125,6 +125,9 @@ class RdmaCollector(InBandDataCollector[RdmaDataModel, CollectorArgs]):
                     device.node_type = parts[i + 1]
                     i += 2
                 elif parts[i] == "fw" and i + 1 < len(parts):
+                    device.firmware_version = parts[i + 1]
+                    # Keep the legacy attribute for consumers of older
+                    # serialized RDMA data models.
                     device.attributes["fw_version"] = parts[i + 1]
                     i += 2
                 elif parts[i] == "node_guid" and i + 1 < len(parts):
