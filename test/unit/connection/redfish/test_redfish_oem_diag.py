@@ -24,7 +24,7 @@
 #
 ###############################################################################
 import logging
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from requests.status_codes import codes
 
@@ -35,6 +35,8 @@ from nodescraper.connection.redfish.redfish_oem_diag import (
     _download_log_and_save,
     _get_task_monitor_uri,
     _strip_port_from_url,
+    _task_resource_path,
+    collect_oem_diagnostic_data,
     get_oem_diagnostic_allowable_values,
 )
 
@@ -184,3 +186,105 @@ class TestDownloadLogAndSave:
         assert (tmp_path / "AllLogs.tar.xz").read_bytes() == b"log bytes"
         metadata = (tmp_path / "AllLogs_log_entry.json").read_text(encoding="utf-8")
         assert "Id" in metadata and "1" in metadata
+
+
+def test_collect_manager_diagnostic_payload():
+    conn = MagicMock()
+    resp = MagicMock()
+    resp.status_code = 500
+    resp.text = "fail"
+    conn.post.return_value = resp
+    collect_oem_diagnostic_data(
+        conn,
+        "redfish/v1/Managers/dummy-amc/LogServices/Dump",
+        diagnostic_data_type="Manager",
+    )
+    payload = conn.post.call_args.kwargs["json"]
+    assert payload == {"DiagnosticDataType": "Manager"}
+
+
+def test_task_resource_path_accepts_tasks_not_monitors():
+    assert (
+        _task_resource_path("/redfish/v1/TaskService/Tasks/dummy-1")
+        == "redfish/v1/TaskService/Tasks/dummy-1"
+    )
+    assert _task_resource_path("redfish/v1/TaskService/TaskMonitors/1") is None
+
+
+def test_collect_polls_task_resource_until_completed():
+    conn = MagicMock()
+    conn.base_url = "https://bmc.example.test"
+    post_resp = MagicMock()
+    post_resp.status_code = codes.accepted
+    post_resp.headers = {"Location": "/redfish/v1/TaskService/TaskMonitors/1"}
+    post_resp.text = ""
+    post_resp.json.return_value = {
+        "@odata.id": "/redfish/v1/TaskService/Tasks/dummy-1",
+        "TaskState": "Running",
+    }
+    conn.post.return_value = post_resp
+
+    running = MagicMock()
+    running.status_code = codes.ok
+    running.json.return_value = {"TaskState": "Running"}
+    done = MagicMock()
+    done.status_code = codes.ok
+    done.json.return_value = {
+        "TaskState": "Completed",
+        "Payload": {
+            "HttpHeaders": [
+                "Location: /redfish/v1/Systems/dummy-system/LogServices/DiagLogs/Entries/1"
+            ]
+        },
+    }
+    entry = MagicMock()
+    entry.status_code = codes.ok
+    entry.json.return_value = {
+        "Id": "1",
+        "AdditionalDataURI": (
+            "/redfish/v1/Systems/dummy-system/LogServices/DiagLogs/Entries/1/attachment"
+        ),
+    }
+    attachment = MagicMock()
+    attachment.status_code = codes.ok
+    attachment.content = b"archive"
+    conn.get_response.side_effect = [running, done, entry, attachment]
+
+    with patch("nodescraper.connection.redfish.redfish_oem_diag.time.sleep"):
+        log_bytes, metadata, err = collect_oem_diagnostic_data(
+            conn,
+            "redfish/v1/Systems/dummy-system/LogServices/DiagLogs",
+            oem_diagnostic_type="AllLogs",
+            task_timeout_s=30,
+        )
+    assert err is None
+    assert log_bytes == b"archive"
+    assert metadata is not None
+    assert metadata["Id"] == "1"
+    polled = [c.args[0] for c in conn.get_response.call_args_list]
+    assert polled[0] == "redfish/v1/TaskService/Tasks/dummy-1"
+    assert polled[1] == "redfish/v1/TaskService/Tasks/dummy-1"
+
+
+def test_collect_taskmonitor_404_does_not_spin():
+    conn = MagicMock()
+    conn.base_url = "https://bmc.example.test"
+    post_resp = MagicMock()
+    post_resp.status_code = codes.accepted
+    post_resp.headers = {"Location": "/redfish/v1/TaskService/TaskMonitors/1"}
+    post_resp.text = ""
+    post_resp.json.return_value = {}
+    conn.post.return_value = post_resp
+    missing = MagicMock()
+    missing.status_code = codes.not_found
+    conn.get_response.return_value = missing
+
+    _log_bytes, _metadata, err = collect_oem_diagnostic_data(
+        conn,
+        "redfish/v1/Systems/dummy-system/LogServices/DiagLogs",
+        oem_diagnostic_type="AllLogs",
+        task_timeout_s=30,
+    )
+    assert err is not None
+    assert "404" in err
+    assert conn.get_response.call_count == 1
