@@ -76,13 +76,13 @@ class PluginInterface(abc.ABC, Generic[TConnectionManager, TConnectArg]):
             system_info = SystemInfo()
         self.system_info: SystemInfo = system_info
 
-        if not task_result_hooks:
-            task_result_hooks = []
-        self.task_result_hooks = task_result_hooks
+        # copy the hook list so that hooks added here are not leaked back to the caller
+        # If the copy is not performed then any modifications to the hook list here would affect the caller's list as well.
+        self.task_result_hooks = list(task_result_hooks) if task_result_hooks else []
 
         if log_path:
             for hook in self.task_result_hooks:
-                if isinstance(hook, FileSystemLogHook):
+                if isinstance(hook, FileSystemLogHook) and hook.log_base_path == log_path:
                     break
             else:
                 self.task_result_hooks.append(FileSystemLogHook(log_base_path=log_path))

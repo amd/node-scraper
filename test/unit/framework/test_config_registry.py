@@ -32,7 +32,7 @@ from nodescraper.models import PluginConfig
 
 def test_config_registry():
     config_registry = ConfigRegistry(
-        config_path=os.path.join(os.path.dirname(__file__), "fixtures"),
+        config_path=os.path.join(os.path.dirname(__file__), "fixtures", "valid_configs"),
         load_entry_point_configs=False,
     )
 

@@ -163,7 +163,7 @@ def test_config_builder(plugin_registry):
 
     config = build_config(
         config_reg=ConfigRegistry(
-            config_path=os.path.join(os.path.dirname(__file__), "fixtures"),
+            config_path=os.path.join(os.path.dirname(__file__), "fixtures", "valid_configs"),
             load_entry_point_configs=False,
         ),
         plugin_reg=plugin_registry,

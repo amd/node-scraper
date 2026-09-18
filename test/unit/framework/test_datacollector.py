@@ -49,6 +49,9 @@ class DummyResult(TaskResult):
         pass
 
 
+DUMMY_GIVES_THIS = DummyDataModel(foo=0xC0FFEE)
+
+
 class DummyCollector(DataCollector[None, DummyDataModel, None]):
     SUPPORTED_SKUS = {"GOOD"}
     SUPPORTED_PLATFORMS = {"X"}
@@ -67,7 +70,7 @@ class DummyCollector(DataCollector[None, DummyDataModel, None]):
 
     def collect_data(self, args=None) -> Tuple[TaskResult, Optional[DummyDataModel]]:
         self.result.status = ExecutionStatus.OK
-        return self.result, None
+        return self.result, DUMMY_GIVES_THIS
 
 
 def test_ok(system_info, conn_mock):
@@ -82,7 +85,8 @@ def test_ok(system_info, conn_mock):
     result, data = dc.collect_data()
 
     assert result.status == ExecutionStatus.OK
-    assert ("hook", result, None) in calls
+    assert data == DUMMY_GIVES_THIS
+    assert ("hook", result, DUMMY_GIVES_THIS) in calls
 
 
 def test_exception(system_info, conn_mock):
@@ -241,6 +245,14 @@ class UnsetStatusNoDataCollector(DataCollector[None, DummyDataModel, None]):
         return self.result, None
 
 
+class OkStatusNoDataCollector(DataCollector[None, DummyDataModel, None]):
+    DATA_MODEL = DummyDataModel
+
+    def collect_data(self, args=None) -> Tuple[TaskResult, Optional[DummyDataModel]]:
+        self.result.status = ExecutionStatus.OK
+        return self.result, None
+
+
 def test_collector_returning_data_with_unset_status_is_ok(system_info, conn_mock):
     """Baseline: data collected with an unset status finalizes to OK."""
     collector = UnsetStatusWithDataCollector(system_info, conn_mock)
@@ -252,6 +264,16 @@ def test_collector_returning_data_with_unset_status_is_ok(system_info, conn_mock
 
 
 def test_collector_returning_no_data_with_unset_status_is_execution_failure(system_info, conn_mock):
+    """A collector that returns no data and never sets a status must not be reported as OK."""
+    collector = UnsetStatusNoDataCollector(system_info, conn_mock)
+
+    result, data = collector.collect_data()
+
+    assert data is None
+    assert result.status == ExecutionStatus.EXECUTION_FAILURE
+
+
+def test_collector_returning_no_data_with_ok_status_is_execution_failure(system_info, conn_mock):
     """A collector that returns no data and never sets a status must not be reported as OK."""
     collector = UnsetStatusNoDataCollector(system_info, conn_mock)
 

@@ -113,18 +113,18 @@ class DataModel(BaseModel):
             return cls(**model_input)
 
         if isinstance(model_input, str):
-            # Build from tarfile if supported
-            if tarfile.is_tarfile(model_input):
-                return cls.build_from_tar(model_input)
             # Build from folder if supported
             if os.path.isdir(model_input):
                 return cls.build_from_folder(model_input)
-
+            # Build from tarfile if supported
+            elif tarfile.is_tarfile(model_input):
+                return cls.build_from_tar(model_input)
             # Build from json file
-            with open(model_input, "r", encoding="utf-8") as input_file:
-                data = json.load(input_file)
-
-            return cls(**data)
+            else:
+                with open(model_input, "r", encoding="utf-8") as input_file:
+                    data = json.load(input_file)
+                return cls(**data)
+            return cls()
 
         raise ValueError("Invalid input for model data")
 
