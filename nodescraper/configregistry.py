@@ -79,16 +79,19 @@ class ConfigRegistry:
         config_path = Path(config_path)
 
         for config_file in config_path.glob("*.json"):
-            with open(config_file, "r", encoding="utf-8") as in_file:
-                try:
-                    file_data = json.load(in_file)
-                    config_model = PluginConfig(**file_data)
-                    if config_model.name:
-                        self.configs[config_model.name] = config_model
-                    else:
-                        self.configs[config_file.name] = config_model
-                except (ValidationError, json.JSONDecodeError):
-                    pass
+            try:
+                with open(config_file, "r", encoding="utf-8") as in_file:
+                    try:
+                        file_data = json.load(in_file)
+                        config_model = PluginConfig(**file_data)
+                        if config_model.name:
+                            self.configs[config_model.name] = config_model
+                        else:
+                            self.configs[config_file.name] = config_model
+                    except (ValidationError, json.JSONDecodeError, TypeError) as e:
+                        raise RuntimeError(f"Failed to load config from {config_file}: {e}")
+            except (OSError, IOError, FileNotFoundError):
+                raise RuntimeError(f"Failed to open config file {config_file}")
 
     @staticmethod
     def _entry_points_for_group(group: str):

@@ -105,3 +105,21 @@ def test_model_types():
     assert res["optional_attr"] == TypeData(
         type_classes=[TypeClass(type_class=str, inner_type=None)], required=False
     )
+
+
+def test_process_type_strips_annotated():
+    """Baseline: a top level Annotated type is unwrapped to its underlying type."""
+    from typing import Annotated
+
+    assert TypeUtils.process_type(Annotated[int, "meta"]) == [
+        TypeClass(type_class=int, inner_type=None)
+    ]
+
+
+def test_process_type_strips_annotated_inside_optional():
+    """An Annotated type nested in a Union must still resolve to its underlying type."""
+    from typing import Annotated
+
+    assert TypeUtils.process_type(Optional[Annotated[int, "meta"]]) == [
+        TypeClass(type_class=int, inner_type=None)
+    ]

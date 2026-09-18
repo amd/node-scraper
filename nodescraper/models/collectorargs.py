@@ -23,10 +23,14 @@
 # SOFTWARE.
 #
 ###############################################################################
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class CollectorArgs(BaseModel):
+    """The base for all collector args in node-scraper. By default disallow extra args, they will raise Validation Error."""
+
+    model_config = ConfigDict(extra="forbid")
+
     html_view: bool = Field(
         default=False,
         description=(
@@ -34,5 +38,3 @@ class CollectorArgs(BaseModel):
             "using human-readable output."
         ),
     )
-
-    model_config = {"extra": "forbid", "exclude_none": True}

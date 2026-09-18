@@ -86,6 +86,13 @@ class ModelArgHandler(Generic[TModelType]):
     def __init__(self, model: Type[TModelType]) -> None:
         self.model = model
 
+    def arg_check(self, json_arg_input_data: dict):
+        """Check the validity of the JSON argument input data.
+        It must be a dict which can be ** into a pydantic model of the specified type.
+        """
+        if not isinstance(json_arg_input_data, dict):
+            raise argparse.ArgumentTypeError("Input data must be a dictionary.")
+
     def process_file_arg(self, file_path: str) -> TModelType:
         """load a json file into a pydantic model
 
@@ -99,6 +106,7 @@ class ModelArgHandler(Generic[TModelType]):
             TModelType: model instance
         """
         data = json_arg(file_path)
+        self.arg_check(data)
         try:
             return self.model(**data)
         except ValidationError as e:

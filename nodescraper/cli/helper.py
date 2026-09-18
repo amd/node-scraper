@@ -30,6 +30,7 @@ import json
 import logging
 import os
 import sys
+from copy import deepcopy
 from pathlib import Path
 from typing import Optional, Sequence, Tuple
 
@@ -115,14 +116,15 @@ def get_plugin_configs(
 
     base_config.global_args["system_interaction_level"] = system_interaction_level
 
-    plugin_configs = [base_config]
+    # Copy each until we are done
+    plugin_configs = [deepcopy(c) for c in [base_config]]
 
     if plugin_config_input:
         for config in plugin_config_input:
             if os.path.exists(config):
                 plugin_configs.append(ModelArgHandler(PluginConfig).process_file_arg(config))
             elif config in built_in_configs:
-                plugin_configs.append(built_in_configs[config])
+                plugin_configs.append(deepcopy(built_in_configs[config]))
             else:
                 raise argparse.ArgumentTypeError(f"No plugin config found for: {config}")
 
@@ -269,7 +271,11 @@ def parse_gen_plugin_config(
     """
     try:
         config = build_config(
-            config_reg, plugin_reg, logger, parsed_args.plugins, parsed_args.built_in_configs
+            config_reg,
+            plugin_reg,
+            logger,
+            parsed_args.plugins,
+            parsed_args.built_in_configs,
         )
 
         config.name = parsed_args.config_name.split(".")[0]
@@ -367,7 +373,7 @@ def generate_reference_config(
 
         data_model = obj.result_data.system_data
         if data_model is None:
-            logger.warning("Plugin: %s data model not found: %s, skipping", obj.source)
+            logger.warning("Plugin: %s data model not found: %s, skipping", obj.source, data_model)
             continue
 
         plugin = plugin_reg.plugins.get(obj.source)
@@ -585,15 +591,20 @@ def dump_to_csv(all_rows: list, filename: str, fieldnames: list[str], logger: lo
         fieldnames (list[str]): header for csv file
         logger (logging.Logger): isntance of logger
     """
+    DEFAULT_ERR_MSG_PREFIX = "Could not dump data to csv file"
     try:
         with open(filename, "w", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
             for row in all_rows:
                 writer.writerow(row)
+        logger.info("Data written to csv file: %s", filename)
+    except FileNotFoundError as fnf_exp:
+        logger.error("%s, File not found: %s", DEFAULT_ERR_MSG_PREFIX, fnf_exp)
+    except ValueError as val_exp:
+        logger.error("%s, Value error: %s", DEFAULT_ERR_MSG_PREFIX, val_exp)
     except Exception as exp:
-        logger.error("Could not dump data to csv file: %s", exp)
-    logger.info("Data written to csv file: %s", filename)
+        logger.error("%s, Exception: %s", DEFAULT_ERR_MSG_PREFIX, exp)
 
 
 def generate_summary(

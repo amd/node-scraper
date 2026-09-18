@@ -48,3 +48,16 @@ def test_config_registry():
             global_args={}, plugins={}, result_collators={}, name=None, desc=None
         ),
     }
+
+
+def test_config_registry_raises_on_invalid_json(tmp_path):
+    """A JSON file whose top level is not an object must be skipped, not crash the registry."""
+    (tmp_path / "list.json").write_text("[1, 2, 3]", encoding="utf-8")
+    (tmp_path / "good.json").write_text('{"name": "GoodConfig", "plugins": {}}', encoding="utf-8")
+    import pytest
+
+    with pytest.raises(RuntimeError, match="Failed to load config from"):
+        ConfigRegistry(
+            config_path=str(tmp_path),
+            load_entry_point_configs=False,
+        )

@@ -23,11 +23,13 @@
 # SOFTWARE.
 #
 ###############################################################################
+import json
 import logging
 
 from nodescraper.cli.compare_runs import (
     _diff_value,
     _format_value,
+    _load_plugin_data_from_run,
     run_compare_runs,
 )
 from nodescraper.pluginregistry import PluginRegistry
@@ -169,3 +171,38 @@ def test_run_compare_runs_one_run_missing_plugin(caplog, framework_fixtures_path
     assert "Loading run 1" in caplog.text
     assert "Loading run 2" in caplog.text
     assert "not found in run 2" in caplog.text or "NOT_RAN" in caplog.text
+
+
+def test_load_plugin_data_skips_result_json_failing_model_validation(
+    caplog, framework_fixtures_path, tmp_path
+):
+    """An unparsable result.json must be skipped, not abort the whole run load."""
+    caplog.set_level(logging.WARNING)
+    logger = logging.getLogger()
+
+    fixture_collector = framework_fixtures_path / "log_dir" / "collector"
+    run = tmp_path / "run"
+
+    # A collector dir whose result.json fails TaskResult validation (bad status name)
+    bad_collector = run / "bad_collector"
+    bad_collector.mkdir(parents=True)
+    (bad_collector / "result.json").write_text(
+        json.dumps({"status": "BOGUS", "task": "BiosCollector", "parent": "BiosPlugin"}),
+        encoding="utf-8",
+    )
+    (bad_collector / "biosdatamodel.json").write_text(
+        (fixture_collector / "biosdatamodel.json").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    # A valid collector dir that should still be loaded
+    good_collector = run / "zz_collector"
+    good_collector.mkdir(parents=True)
+    for name in ("result.json", "biosdatamodel.json"):
+        (good_collector / name).write_text(
+            (fixture_collector / name).read_text(encoding="utf-8"), encoding="utf-8"
+        )
+
+    data = _load_plugin_data_from_run(str(run), PluginRegistry(), logger)
+
+    assert "BiosPlugin" in data

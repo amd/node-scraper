@@ -118,8 +118,12 @@ class DataAnalyzer(Task, abc.ABC, Generic[TDataModel, TAnalyzeArg]):
 
     def __init_subclass__(cls, **kwargs: dict[str, Any]) -> None:
         super().__init_subclass__(**kwargs)
-        if not inspect.isabstract(cls) and cls.DATA_MODEL is None:
+        if (not inspect.isabstract(cls) and not getattr(cls, "DATA_MODEL", None)) or (
+            not inspect.isabstract(cls) and cls.DATA_MODEL is None
+        ):
             raise TypeError(f"No data model set for {cls.__name__}")
+        if not hasattr(cls, "analyze_data") or not callable(cls.analyze_data):
+            raise TypeError(f"No analyze_data method defined for {cls.__name__}")
 
         if "analyze_data" in vars(cls):
             setattr(cls, "analyze_data", analyze_decorator(cls.analyze_data))  # noqa

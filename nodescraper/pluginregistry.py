@@ -221,11 +221,11 @@ class PluginRegistry:
             PluginRegistry._use_cache
             and PluginRegistry._entry_point_connection_managers_cache is not None
         ):
-            return PluginRegistry._entry_point_connection_managers_cache
+            return PluginRegistry._entry_point_connection_managers_cache.copy()
 
         # If caching disabled, skip lock and always reload
         if not PluginRegistry._use_cache:
-            return PluginRegistry._load_connection_managers_uncached()
+            return PluginRegistry._load_connection_managers_uncached().copy()
 
         with PluginRegistry._cache_lock:
             # Check again inside the lock to prevent duplicate work

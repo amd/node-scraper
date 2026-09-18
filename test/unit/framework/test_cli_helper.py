@@ -80,6 +80,33 @@ def test_generate_reference_config(plugin_registry):
     assert dump["plugins"] == {"TestPluginA": {"analysis_args": {"model_attr": 17}}}
 
 
+def test_generate_reference_config_missing_data_model_warning(plugin_registry, caplog):
+    """The 'data model not found' warning must be formattable."""
+    caplog.set_level(logging.WARNING)
+    results = [
+        PluginResult(
+            status=ExecutionStatus.OK,
+            source="TestPluginA",
+            message="Plugin tasks completed successfully",
+            result_data=DataPluginResult(
+                system_data=None,
+                collection_result=TaskResult(
+                    status=ExecutionStatus.OK,
+                    task="BiosCollector",
+                    parent="TestPluginA",
+                    artifacts=[],
+                ),
+            ),
+        )
+    ]
+
+    generate_reference_config(results, plugin_registry, logging.getLogger())
+
+    records = [r for r in caplog.records if "data model not found" in r.msg]
+    assert len(records) == 1
+    assert "TestPluginA" in records[0].getMessage()
+
+
 def test_get_plugin_configs():
     with pytest.raises(argparse.ArgumentTypeError):
         get_plugin_configs(
@@ -299,3 +326,50 @@ def test_generate_summary(tmp_path):
         rows = list(csv.DictReader(f))
         assert len(rows) == 1
         assert rows[0]["plugin"] == "PluginA"
+
+
+def test_get_plugin_configs_must_copy_to_build_its_configs_to_avoid_mutation():
+    """cli --skip-sudo mutates the returned config in place; it must not corrupt the built-in."""
+    built_in_configs = {"MyConfig": PluginConfig(name="MyConfig")}
+
+    plugin_configs = get_plugin_configs(
+        system_interaction_level="INTERACTIVE",
+        plugin_config_input=["MyConfig"],
+        built_in_configs=built_in_configs,
+        parsed_plugin_args={},
+        plugin_subparser_map={},
+    )
+
+    # this is exactly what nodescraper/cli/cli.py does for --skip-sudo
+    plugin_configs[-1].global_args.setdefault("collection_args", {})["skip_sudo"] = True
+    # Ensure that skip_sudo is there
+    assert plugin_configs[-1].global_args["collection_args"]["skip_sudo"] is True
+
+    assert built_in_configs["MyConfig"].global_args == {}
+
+
+def test_dump_to_csv_logs_success_when_written(tmp_path: Path):
+    """Baseline: a successful write reports the output file."""
+    from unittest.mock import MagicMock
+
+    mock_logger = MagicMock()
+    out_file = str(tmp_path / "out.csv")
+
+    dump_to_csv([{"a": "1"}], out_file, ["a"], mock_logger)
+
+    mock_logger.error.assert_not_called()
+    mock_logger.info.assert_called_once()
+
+
+def test_dump_to_csv_does_not_log_success_when_write_fails(tmp_path: Path):
+    """A failed write must not be reported as data written to the csv file."""
+    from unittest.mock import MagicMock
+
+    mock_logger = MagicMock()
+    # parent dir does not exist, so open() fails
+    out_file = str(tmp_path / "missing_dir" / "out.csv")
+
+    dump_to_csv([{"a": "1"}], out_file, ["a"], mock_logger)
+
+    mock_logger.error.assert_called_once()
+    mock_logger.info.assert_not_called()
