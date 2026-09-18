@@ -131,6 +131,6 @@ class InBandConnectionManager(ConnectionManager[InBandConnection, SSHConnectionP
 
     def disconnect(self):
         """Disconnect in-band connection"""
-        super().disconnect()
         if isinstance(self.connection, RemoteShell):
             self.connection.client.close()
+        super().disconnect()
