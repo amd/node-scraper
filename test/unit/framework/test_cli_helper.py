@@ -76,7 +76,7 @@ def test_generate_reference_config(plugin_registry):
     ]
 
     ref_config = generate_reference_config(results, plugin_registry, logging.getLogger())
-    dump = ref_config.dict()
+    dump = ref_config.model_dump()
     assert dump["plugins"] == {"TestPluginA": {"analysis_args": {"model_attr": 17}}}
 
 

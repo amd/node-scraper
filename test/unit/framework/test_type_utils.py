@@ -33,6 +33,7 @@ T = TypeVar("T")
 
 
 class TestGenericBase(Generic[T]):
+    __test__ = False  # Tells pytest to ignore this class
 
     def __init__(self, generic_type: T):
         self.generic_type = generic_type
@@ -42,6 +43,8 @@ class TestGenericBase(Generic[T]):
 
 
 class TestGenericImpl(TestGenericBase[str]):
+    __test__ = False  # Tells pytest to ignore this class
+
     pass
 
 
@@ -50,10 +53,14 @@ class WiringMixin:
 
 
 class TestMixinFirstImpl(WiringMixin, TestGenericBase[str]):
+    __test__ = False  # Tells pytest to ignore this class
+
     pass
 
 
 class TestModel(BaseModel):
+    __test__ = False  # Tells pytest to ignore this class
+
     str_attr: str
     int_attr: int
     list_attr: list[str]

@@ -43,6 +43,8 @@ class DummyArgs(BaseModel):
 
 
 class TestRegexAnalyzer(RegexAnalyzer[DummyData, DummyArgs]):
+    __test__ = False  # Tells pytest to ignore this class
+
     DATA_MODEL = DummyData
 
     ERROR_REGEX = [

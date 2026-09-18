@@ -78,7 +78,7 @@ class DataModel(BaseModel):
         )
 
         exlude_fields = set()
-        for key in self.model_fields:
+        for key in self.__class__.model_fields:
             data = getattr(self, key)
             if isinstance(data, FileModel):
                 data.log_model(log_path)
