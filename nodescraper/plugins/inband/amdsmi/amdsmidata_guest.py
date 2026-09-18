@@ -14,6 +14,8 @@ so the base ``AmdSmi*`` models had implicitly assumed bare-metal amdgpu.
 
 from __future__ import annotations
 
+from typing import Optional, Union
+
 from pydantic import ConfigDict
 
 from nodescraper.plugins.inband.amdsmi.amdsmidata import (
@@ -47,14 +49,14 @@ class GuestAmdSmiStatic(AmdSmiStatic):
 
     # Base bus (StaticBus) forbids extras; the guest build adds pcie_levels.
     bus: GuestStaticBus  # type: ignore[assignment]
-    soc_pstate: StaticSocPstate | None = None
-    xgmi_plpd: StaticXgmiPlpd | None = None
-    numa: StaticNuma | None = None  # type: ignore[assignment]
-    limit: StaticLimit | None = None
+    soc_pstate: Optional[StaticSocPstate] = None
+    xgmi_plpd: Optional[StaticXgmiPlpd] = None
+    numa: Optional[StaticNuma] = None  # type: ignore[assignment]
+    limit: Optional[StaticLimit] = None
     # A guest VF's static payload carries an ``ifwi`` firmware block (name,
     # build_date, part_number, version) that the bare-metal schema omits; its
     # shape matches StaticVbios.
-    ifwi: StaticVbios | None = None
+    ifwi: Optional[StaticVbios] = None
 
 
 class GuestAmdSmiMetric(AmdSmiMetric):
@@ -62,10 +64,10 @@ class GuestAmdSmiMetric(AmdSmiMetric):
 
     # These physical fields are required on the bare-metal base model; a guest VF
     # omits them, so relax to Optional (intentional LSP-widening override).
-    fan: MetricFan | None = None  # type: ignore[assignment]
-    voltage_curve: MetricVoltageCurve | None = None
-    perf_level: str | dict | None = None
-    xgmi_err: str | dict | None = None
-    energy: MetricEnergy | None = None
-    throttle: MetricThrottle | None = None  # type: ignore[assignment]
-    mem_usage: MetricMemUsage | None = None  # type: ignore[assignment]
+    fan: Optional[MetricFan] = None  # type: ignore[assignment]
+    voltage_curve: Optional[MetricVoltageCurve] = None
+    perf_level: Optional[Union[str, dict]] = None
+    xgmi_err: Optional[Union[str, dict]] = None
+    energy: Optional[MetricEnergy] = None
+    throttle: Optional[MetricThrottle] = None  # type: ignore[assignment]
+    mem_usage: Optional[MetricMemUsage] = None  # type: ignore[assignment]
