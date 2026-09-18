@@ -233,7 +233,6 @@ class NicAnalyzer(DataAnalyzer[NicDataModel, NicAnalyzerArgs]):
                         description=f"Broadcom device {device_num}: getqos does not match expected QoS: {'; '.join(mismatches)}",
                         data={
                             "device_num": device_num,
-                            "qos": qos.model_dump(),
                             "mismatches": mismatches,
                         },
                         priority=EventPriority.WARNING,
