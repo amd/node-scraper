@@ -119,6 +119,8 @@ class InBandConnectionManager(ConnectionManager[InBandConnection, SSHConnectionP
                 priority=EventPriority.CRITICAL,
                 console_log=True,
             )
+            self.connection = None  # Nullify the connection since its not usable
+            self.result.status = ExecutionStatus.EXECUTION_FAILURE
         except Exception as exception:
             self._log_event(
                 category=EventCategory.SSH,
@@ -127,10 +129,12 @@ class InBandConnectionManager(ConnectionManager[InBandConnection, SSHConnectionP
                 priority=EventPriority.CRITICAL,
                 console_log=True,
             )
+            self.connection = None  # Nullify the connection since its not usable
+            self.result.status = ExecutionStatus.EXECUTION_FAILURE
         return self.result
 
     def disconnect(self):
         """Disconnect in-band connection"""
-        super().disconnect()
         if isinstance(self.connection, RemoteShell):
             self.connection.client.close()
+        super().disconnect()

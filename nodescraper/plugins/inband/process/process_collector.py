@@ -99,7 +99,6 @@ class ProcessCollector(InBandDataCollector[ProcessDataModel, ProcessCollectorArg
             self._log_event(
                 category="PROCESS_READ",
                 description="Process data collected",
-                data=process_data.model_dump(),
                 priority=EventPriority.INFO,
             )
             self.result.message = "Process data collected"
