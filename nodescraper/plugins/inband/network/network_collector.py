@@ -540,6 +540,9 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
                     priority=EventPriority.WARNING,
                 )
 
+            if iface.name == "lo" or any(flag.upper() == "LOOPBACK" for flag in iface.flags):
+                continue
+
             # ``ethtool <interface>`` does not include firmware identity on all
             # drivers, so always retain the separate ``ethtool -i`` response.
             res_driver = self._run_sut_cmd(
@@ -551,6 +554,26 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
                 )
                 self._parse_ethtool_driver_info(ethtool_info, res_driver.stdout)
                 ethtool_data[iface.name] = ethtool_info
+                self._log_event(
+                    category=EventCategory.NETWORK,
+                    description=(
+                        f"Collected ethtool -i driver info for interface: " f"{iface.name}"
+                    ),
+                    priority=EventPriority.INFO,
+                )
+            else:
+                self._log_event(
+                    category=EventCategory.NETWORK,
+                    description=(
+                        f"Error collecting ethtool -i driver info for interface: " f"{iface.name}"
+                    ),
+                    data={
+                        "command": res_driver.command,
+                        "exit_code": res_driver.exit_code,
+                        "stderr": res_driver.stderr,
+                    },
+                    priority=EventPriority.WARNING,
+                )
 
         return ethtool_data, skipped
 

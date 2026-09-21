@@ -31,6 +31,7 @@ from nodescraper.base.regexanalyzer import ErrorRegex
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
 from nodescraper.interfaces import DataAnalyzer
 from nodescraper.models import TaskResult
+from nodescraper.utils import _validate_firmware_policy
 
 from .analyzer_args import NicAnalyzerArgs
 from .nic_data import NicDataModel
@@ -144,68 +145,6 @@ def _firmware_records(data: NicDataModel) -> list[Dict[str, Any]]:
             }
         )
     return records
-
-
-def _validate_firmware_policy(records: list[Dict[str, Any]], policies: Any) -> list[Dict[str, Any]]:
-    """Validate NIC firmware locally against this analyzer's policies."""
-    policy_list = [policies] if isinstance(policies, dict) else policies or []
-    issues = []
-    for record in records:
-        policy = next(
-            (
-                item
-                for item in policy_list
-                if isinstance(item, dict) and _policy_matches(record, item)
-            ),
-            None,
-        )
-        if policy is None:
-            continue
-        actual = _normalize_firmware_version(record.get("version"))
-        expected = _normalize_firmware_version(policy.get("expected_nic_firmware"))
-        if not actual:
-            reason = "firmware version is unavailable"
-        elif expected and not _firmware_matches(actual, expected):
-            reason = (
-                f"actual {record.get('version')} != expected_nic_firmware "
-                f"{policy.get('expected_nic_firmware')}"
-            )
-        else:
-            continue
-        issues.append({"reason": reason, "record": record, "policy": dict(policy)})
-    return issues
-
-
-def _policy_matches(record: Dict[str, Any], policy: Dict[str, Any]) -> bool:
-    match = policy.get("match", {})
-    if not isinstance(match, dict):
-        return False
-    if not match:
-        match = {field: policy[field] for field in record if field in policy}
-    for field, expected in match.items():
-        actual = record.get(str(field))
-        if actual is None:
-            return False
-        expected_values = expected if isinstance(expected, list) else [expected]
-        if not any(
-            str(actual).strip().lower() == str(value).strip().lower() for value in expected_values
-        ):
-            return False
-    return True
-
-
-def _normalize_firmware_version(value: Any) -> Optional[str]:
-    if value is None:
-        return None
-    normalized = str(value).strip().strip("'\"").lower()
-    return normalized or None
-
-
-def _firmware_matches(actual: str, expected_pattern: str) -> bool:
-    try:
-        return re.fullmatch(expected_pattern, actual, flags=re.IGNORECASE) is not None
-    except re.error:
-        return False
 
 
 class NicAnalyzer(DataAnalyzer[NicDataModel, NicAnalyzerArgs]):
