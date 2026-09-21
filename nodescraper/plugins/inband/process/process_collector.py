@@ -48,7 +48,8 @@ def _parse_aggregate_cpu_from_proc_stat(proc_stat: str) -> Optional[tuple[int, i
         except ValueError:
             return None
 
-        return sum(values), values[3] + values[4]
+        # guest and guest_nice are already included in user and nice.
+        return sum(values[:8]), values[3] + values[4]
     return None
 
 
@@ -70,7 +71,9 @@ def _parse_proc_pid_stat(stat_line: str) -> Optional[tuple[int, int]]:
         return None
 
     try:
-        paren_end = stat_line.index(") ")
+        paren_end = stat_line.rfind(") ")
+        if paren_end < 0:
+            return None
         pid = int(stat_line[:paren_end].split(maxsplit=1)[0])
         fields = stat_line[paren_end + 2 :].split()
         if len(fields) < 13:
@@ -124,7 +127,7 @@ def _top_process_cpu_shares(
         return []
 
     rows: list[tuple[int, float, int]] = []
-    for pid in set(sample1) | set(sample2):
+    for pid in sample2:
         if pid in exclude_pids:
             continue
         delta = max(0, sample2.get(pid, 0) - sample1.get(pid, 0))
@@ -231,7 +234,8 @@ class ProcessCollector(InBandDataCollector[ProcessDataModel, ProcessCollectorArg
         process_names = self._run_sut_cmd(self.CMD_PROCESS_NAMES.format(pids=pids))
         names = _parse_comm_dump(process_names.stdout) if process_names.exit_code == 0 else {}
         processes = [
-            (names.get(pid, f"pid_{pid}"), f"{percentage:.1f}") for pid, percentage in top_processes
+            (names.get(pid) or f"pid_{pid}", f"{percentage:.1f}")
+            for pid, percentage in top_processes
         ]
         return cpu_usage, processes
 

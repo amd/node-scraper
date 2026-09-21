@@ -70,6 +70,12 @@ def test_parse_aggregate_cpu_from_proc_stat():
     assert process_collector_module._parse_aggregate_cpu_from_proc_stat(proc_stat) == (1010, 910)
 
 
+def test_parse_aggregate_cpu_excludes_guest_fields():
+    proc_stat = "cpu 100 20 30 800 10 5 4 1 40 10\n"
+
+    assert process_collector_module._parse_aggregate_cpu_from_proc_stat(proc_stat) == (970, 810)
+
+
 def test_collector_args_reject_nonpositive_sample_interval():
     with pytest.raises(ValidationError):
         ProcessCollectorArgs(sample_interval_seconds=0)
@@ -81,6 +87,12 @@ def test_global_non_idle_percent_uses_jiffy_deltas():
 
 def test_parse_proc_pid_stat_handles_process_names_with_spaces():
     stat_line = "1000 (worker process) S 0 0 0 0 -1 0 0 0 0 0 5000 6000"
+
+    assert process_collector_module._parse_proc_pid_stat(stat_line) == (1000, 11000)
+
+
+def test_parse_proc_pid_stat_handles_closing_parenthesis_in_process_name():
+    stat_line = "1000 (worker) process) S 0 0 0 0 -1 0 0 0 0 0 5000 6000"
 
     assert process_collector_module._parse_proc_pid_stat(stat_line) == (1000, 11000)
 
@@ -108,6 +120,16 @@ def test_top_process_cpu_shares_ranks_deltas_and_excludes_sampler():
     ) == [(2, 20.0), (1, 5.0)]
 
 
+def test_top_process_cpu_shares_excludes_processes_missing_from_current_sample():
+    assert process_collector_module._top_process_cpu_shares(
+        sample1={1: 100, 2: 200},
+        sample2={2: 400},
+        total_delta=1000,
+        top_n=2,
+        exclude_pids=set(),
+    ) == [(2, 20.0)]
+
+
 def test_parse_comm_dump_maps_process_names_by_pid():
     assert process_collector_module._parse_comm_dump("1000:worker\n1:systemd\ninvalid\n") == {
         1000: "worker",
@@ -128,7 +150,7 @@ def test_run_linux_collects_cpu_and_processes_from_procfs(collector, conn_mock, 
             proc_dump_calls += 1
             stdout = PROC_DUMP_1 if proc_dump_calls == 1 else PROC_DUMP_2
         elif "cat /proc/$p/comm" in command:
-            stdout = "1000:worker\n1:systemd\n"
+            stdout = "1000:\n1:systemd\n"
         else:
             raise AssertionError(f"unexpected command: {command}")
         return MagicMock(exit_code=0, stdout=stdout, stderr="", command=command)
@@ -143,7 +165,7 @@ def test_run_linux_collects_cpu_and_processes_from_procfs(collector, conn_mock, 
     assert result.status == ExecutionStatus.OK
     assert data == ProcessDataModel(
         cpu_usage=10.0,
-        processes=[("worker", "10.0"), ("systemd", "0.0")],
+        processes=[("pid_1000", "10.0"), ("systemd", "0.0")],
     )
 
 
