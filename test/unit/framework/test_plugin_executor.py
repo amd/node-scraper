@@ -24,6 +24,7 @@
 #
 ###############################################################################
 import logging
+from typing import Optional
 
 import pytest
 from framework.common.shared_utils import DummyDataModel, MockConnectionManager
@@ -78,6 +79,17 @@ class PostActionPlugin(PluginInterface[MockConnectionManager, None]):
 
     def run(self, **kwargs):
         return PluginResult(source="PostActionPlugin", status=ExecutionStatus.OK)
+
+
+class TestPluginCapture(PluginInterface[MockConnectionManager, None]):
+    """Records kwargs passed to run() for merge-order regression tests."""
+
+    CONNECTION_TYPE = MockConnectionManager
+    last_run_kwargs: Optional[dict] = None
+
+    def run(self, **kwargs):
+        TestPluginCapture.last_run_kwargs = kwargs
+        return PluginResult(source="TestPluginCapture", status=ExecutionStatus.OK)
 
 
 @pytest.fixture
@@ -152,6 +164,101 @@ def test_queue_callback(plugin_registry):
     assert results[0].status == ExecutionStatus.ERROR
     assert results[1].source == "testB"
     assert results[1].status == ExecutionStatus.OK
+
+
+def test_merge_plugin_run_args_plugin_overrides_global():
+    global_run_args = {
+        "system_interaction_level": "INTERACTIVE",
+        "collection_args": {"foo": "global", "shared": "global"},
+        "analysis_args": {"bar": "global"},
+    }
+    plugin_args = {
+        "system_interaction_level": "PASSIVE",
+        "collection_args": {"foo": "plugin"},
+    }
+
+    merged = PluginExecutor.merge_plugin_run_args(plugin_args, global_run_args)
+
+    assert merged["system_interaction_level"] == "PASSIVE"
+    assert merged["collection_args"] == {"foo": "plugin", "shared": "global"}
+    assert merged["analysis_args"] == {"bar": "global"}
+
+
+@pytest.mark.parametrize(
+    "plugin_args,global_run_args,expected_key,expected_value",
+    [
+        (
+            {"system_interaction_level": SystemInteractionLevel.PASSIVE},
+            {"system_interaction_level": SystemInteractionLevel.INTERACTIVE},
+            "system_interaction_level",
+            SystemInteractionLevel.PASSIVE,
+        ),
+        (
+            {"system_interaction_level": "PASSIVE"},
+            {"system_interaction_level": "INTERACTIVE"},
+            "system_interaction_level",
+            "PASSIVE",
+        ),
+        (
+            {"analysis": False, "collection": True},
+            {"analysis": True, "collection": True},
+            "analysis",
+            False,
+        ),
+        (
+            {},
+            {"system_interaction_level": SystemInteractionLevel.INTERACTIVE},
+            "system_interaction_level",
+            SystemInteractionLevel.INTERACTIVE,
+        ),
+    ],
+)
+def test_merge_plugin_run_args_plugin_wins_on_conflict(
+    plugin_args, global_run_args, expected_key, expected_value
+):
+    merged = PluginExecutor.merge_plugin_run_args(plugin_args, global_run_args)
+    assert merged[expected_key] == expected_value
+
+
+def test_merge_plugin_run_args_analysis_args_plugin_overrides_global():
+    merged = PluginExecutor.merge_plugin_run_args(
+        {"analysis_args": {"exp_speed": 4, "shared": "plugin"}},
+        {"analysis_args": {"exp_speed": 5, "shared": "global", "exp_width": 16}},
+    )
+    assert merged["analysis_args"] == {
+        "exp_speed": 4,
+        "shared": "plugin",
+        "exp_width": 16,
+    }
+
+
+def test_run_queue_plugin_system_interaction_level_overrides_global(plugin_registry):
+    """Per-plugin run() kwargs must win over global_args (PciePlugin PASSIVE case)."""
+    plugin_registry.plugins["TestPluginCapture"] = TestPluginCapture
+    TestPluginCapture.last_run_kwargs = None
+
+    executor = PluginExecutor(
+        plugin_configs=[
+            PluginConfig(
+                global_args={"system_interaction_level": SystemInteractionLevel.INTERACTIVE},
+                plugins={
+                    "TestPluginCapture": {
+                        "system_interaction_level": SystemInteractionLevel.PASSIVE,
+                    }
+                },
+            )
+        ],
+        plugin_registry=plugin_registry,
+    )
+    results = executor.run_queue()
+
+    assert len(results) == 1
+    assert results[0].source == "TestPluginCapture"
+    assert TestPluginCapture.last_run_kwargs is not None
+    assert (
+        TestPluginCapture.last_run_kwargs["system_interaction_level"]
+        == SystemInteractionLevel.PASSIVE
+    )
 
 
 def test_apply_global_args_to_plugin():
@@ -482,3 +589,163 @@ def test_closing_connections_logged_after_post_actions(plugin_registry, caplog):
     assert (
         post_action_idx < closing_idx
     ), "'Closing connections' must be logged after the post-action plugin runs"
+
+
+def test_discover_os_info_detects_linux(system_info):
+    """discover_os_info() should detect Linux OS when uname succeeds."""
+    from unittest.mock import MagicMock, Mock
+
+    from nodescraper.connection.inband import CommandArtifact
+    from nodescraper.connection.inband.inbandmanager import InBandConnectionManager
+    from nodescraper.enums import OSFamily
+    from nodescraper.models.taskresult import TaskResult
+
+    # Mock the connection to return Linux
+    mock_conn = MagicMock()
+    mock_conn.run_command.return_value = CommandArtifact(
+        command="uname -s",
+        stdout="Linux",
+        stderr="",
+        exit_code=0,
+    )
+
+    # Mock InBandConnectionManager instance
+    mock_manager = MagicMock(spec=InBandConnectionManager)
+    mock_manager.connection = mock_conn
+    mock_manager.connect.return_value = TaskResult(status=ExecutionStatus.OK)
+    mock_manager.disconnect.return_value = None
+
+    # Create a mock class that returns our mock manager instance
+    mock_class = Mock(return_value=mock_manager)
+    mock_class.__name__ = "InBandConnectionManager"
+
+    # Store original and patch
+    import nodescraper.pluginexecutor
+
+    original = nodescraper.pluginexecutor.InBandConnectionManager
+    nodescraper.pluginexecutor.InBandConnectionManager = mock_class
+
+    try:
+        # Create executor
+        executor = PluginExecutor(
+            plugin_configs=[PluginConfig(plugins={})],
+            system_info=system_info,
+        )
+
+        # Run OS discovery
+        executor.discover_os_info()
+    finally:
+        # Restore original
+        nodescraper.pluginexecutor.InBandConnectionManager = original
+
+    # Verify Linux was detected
+    assert system_info.os_family == OSFamily.LINUX
+    mock_conn.run_command.assert_called_once_with("uname -s")
+
+
+def test_discover_os_info_detects_arista_eos(system_info):
+    """discover_os_info() should detect Arista EOS when uname fails but Arista command succeeds."""
+    import json
+    from unittest.mock import MagicMock, Mock
+
+    from nodescraper.connection.inband import CommandArtifact
+    from nodescraper.connection.inband.inbandmanager import InBandConnectionManager
+    from nodescraper.enums import OSFamily
+    from nodescraper.models.taskresult import TaskResult
+
+    arista_version = {
+        "mfgName": "Arista Networks",
+        "version": "4.32.1F",
+        "modelName": "DCS-7280CR3-32P4",
+    }
+
+    # Mock the connection to fail uname but succeed with Arista command
+    mock_conn = MagicMock()
+    mock_conn.run_command.side_effect = [
+        CommandArtifact(command="uname -s", stdout="", stderr="invalid", exit_code=1),
+        CommandArtifact(
+            command="show version | json | no-more",
+            stdout=json.dumps(arista_version),
+            stderr="",
+            exit_code=0,
+        ),
+    ]
+
+    # Mock InBandConnectionManager instance
+    mock_manager = MagicMock(spec=InBandConnectionManager)
+    mock_manager.connection = mock_conn
+    mock_manager.connect.return_value = TaskResult(status=ExecutionStatus.OK)
+    mock_manager.disconnect.return_value = None
+
+    # Create a mock class that returns our mock manager instance
+    mock_class = Mock(return_value=mock_manager)
+    mock_class.__name__ = "InBandConnectionManager"
+
+    # Store original and patch
+    import nodescraper.pluginexecutor
+
+    original = nodescraper.pluginexecutor.InBandConnectionManager
+    nodescraper.pluginexecutor.InBandConnectionManager = mock_class
+
+    try:
+        # Create executor
+        executor = PluginExecutor(
+            plugin_configs=[PluginConfig(plugins={})],
+            system_info=system_info,
+        )
+
+        # Run OS discovery
+        executor.discover_os_info()
+    finally:
+        # Restore original
+        nodescraper.pluginexecutor.InBandConnectionManager = original
+
+    # Verify Arista EOS was detected
+    assert system_info.os_family == OSFamily.EOS
+    assert system_info.platform == "Arista EOS"
+    assert system_info.metadata["os_version"] == "4.32.1F"
+    assert system_info.metadata["device_model"] == "DCS-7280CR3-32P4"
+
+
+def test_discover_os_info_skips_when_connection_fails(system_info, caplog):
+    """discover_os_info() should skip detection and log when InBandConnectionManager fails to connect."""
+    from unittest.mock import MagicMock, Mock
+
+    from nodescraper.connection.inband.inbandmanager import InBandConnectionManager
+    from nodescraper.enums import OSFamily
+    from nodescraper.models.taskresult import TaskResult
+
+    # Mock InBandConnectionManager instance to fail connection
+    mock_manager = MagicMock(spec=InBandConnectionManager)
+    mock_manager.connect.return_value = TaskResult(
+        status=ExecutionStatus.ERROR, message="Connection failed"
+    )
+    mock_manager.disconnect.return_value = None
+
+    # Create a mock class that returns our mock manager instance
+    mock_class = Mock(return_value=mock_manager)
+    mock_class.__name__ = "InBandConnectionManager"
+
+    # Store original and patch
+    import nodescraper.pluginexecutor
+
+    original = nodescraper.pluginexecutor.InBandConnectionManager
+    nodescraper.pluginexecutor.InBandConnectionManager = mock_class
+
+    try:
+        # Create executor
+        executor = PluginExecutor(
+            plugin_configs=[PluginConfig(plugins={})],
+            system_info=system_info,
+        )
+
+        # Run OS discovery
+        with caplog.at_level(logging.INFO):
+            executor.discover_os_info()
+    finally:
+        # Restore original
+        nodescraper.pluginexecutor.InBandConnectionManager = original
+
+    # Verify OS detection was skipped
+    assert system_info.os_family == OSFamily.LINUX  # Default from fixture
+    assert any("Skipping OS discovery" in record.message for record in caplog.records)

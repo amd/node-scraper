@@ -59,6 +59,20 @@ class Task(abc.ABC):
         session_id: Optional[str] = None,
         **kwargs: dict[str, Any],
     ):
+        """Creates a Task instance.
+
+        Args:
+            system_info (SystemInfo): system info object for target system for data collection
+            logger (Optional[logging.Logger], optional): python logger object. Defaults to None.
+            max_event_priority_level (Union[EventPriority, str], optional): priority limit for events. Defaults to EventPriority.CRITICAL.
+            parent (Optional[str], optional): parent task identifier. Defaults to None.
+            task_result_hooks (Optional[list[TaskResultHook]], optional): list of task result hooks. Defaults to None.
+            event_reporter (str, optional): Reporter string stored on emitted events. Defaults to DEFAULT_EVENT_REPORTER.
+            session_id (Optional[str], optional): session identifier. Defaults to None.
+
+        Raises:
+            ValueError: Will raise a ValueError when the session_id is not a Valid UUID string.
+        """
         if logger is None:
             logger = logging.getLogger(DEFAULT_LOGGER)
         self.system_info = system_info
@@ -106,6 +120,7 @@ class Task(abc.ABC):
         self._max_event_priority_level = value
 
     def __init_subclass__(cls, **kwargs) -> None:
+        """Validates that the subclass contains a TASK_TYPE attribute which is not None."""
         super().__init_subclass__(**kwargs)
         if cls.TASK_TYPE is None:
             raise TypeError(f"No value provided for TASK_TYPE in task class {cls.__name__}")
@@ -118,13 +133,27 @@ class Task(abc.ABC):
         data: Optional[dict] = None,
         timestamp: Optional[datetime.datetime] = None,
     ) -> Event:
+        """This will build an event
 
+        Args:
+            category (Union[EventCategory, str]): The category of the event.
+            description (str): The description of the event, typically a human-readable message.
+            priority (EventPriority): The priority level of the event.
+            data (Optional[dict], optional): Additional data associated with the event. Defaults to None.
+            timestamp (Optional[datetime.datetime], optional): The timestamp of the event. Defaults to None.
+
+        Returns:
+            Event: The constructed event object.
+        """
         if data is None:
-            data = {"task_name": self.__class__.__name__, "task_type": self.TASK_TYPE}
+            data: dict[Any, Any] = {
+                "task_name": self.__class__.__name__,
+                "task_type": self.TASK_TYPE,
+            }
 
         else:
             # Copy to avoid mutating the caller's dict
-            data = copy.copy(data)
+            data: dict[Any, Any] = copy.copy(data)
             data["task_name"] = self.__class__.__name__
             data["task_type"] = self.TASK_TYPE
 
@@ -162,6 +191,16 @@ class Task(abc.ABC):
         timestamp: Optional[datetime.datetime] = None,
         console_log: bool = False,
     ):
+        """Log an Event
+
+        Args:
+            category (Union[EventCategory, str]): The category of the event.
+            description (str): The description of the event, typically a human-readable message.
+            priority (EventPriority): The priority level of the event.
+            data (Optional[dict], optional): Additional data associated with the event. Defaults to None.
+            timestamp (Optional[datetime.datetime], optional): The timestamp of the event. Defaults to None.
+            console_log (bool, optional): Whether to also log the event to the console. Defaults to False.
+        """
         event = self._build_event(
             category=category,
             description=description,

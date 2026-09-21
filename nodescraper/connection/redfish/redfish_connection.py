@@ -92,13 +92,24 @@ class RedfishConnection:
         verify_ssl: bool = True,
         api_root: Optional[str] = None,
     ):
-        self.base_url = base_url.rstrip("/")
-        self.api_root = (api_root or DEFAULT_REDFISH_API_ROOT).strip("/")
-        self.username = username
-        self.password = password or ""
-        self.timeout = timeout
-        self.use_session_auth = use_session_auth
-        self.verify_ssl = verify_ssl
+        """Creates a RedfishConnection instance.
+
+        Args:
+            base_url (str): The base url for the redfish service typically this is /redfish/v1
+            username (str): The username for the redfish service.
+            password (Optional[str], optional): The password for the redfish service. Defaults to None.
+            timeout (float, optional): The timeout for redfish requests in seconds. Defaults to 10.0.
+            use_session_auth (bool, optional): Whether to use session-based authentication. Defaults to True.
+            verify_ssl (bool, optional): Whether to verify the SSL certificate. Defaults to True.
+            api_root (Optional[str], optional): The API root for the redfish services. Defaults to None.
+        """
+        self.base_url: str = base_url.rstrip("/")
+        self.api_root: str = (api_root or DEFAULT_REDFISH_API_ROOT).strip("/")
+        self.username: str = username
+        self.password: str = password or ""
+        self.timeout: float = timeout
+        self.use_session_auth: bool = use_session_auth
+        self.verify_ssl: bool = verify_ssl
         self._session: Optional[requests.Session] = None
         self._session_token: Optional[str] = None
         self._session_uri: Optional[str] = None  # For logout DELETE
@@ -133,7 +144,10 @@ class RedfishConnection:
     def _execute_request(self, request_fn: Callable[[], _T]) -> _T:
         try:
             return request_fn()
-        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as exc:
+        except (
+            requests.exceptions.Timeout,
+            requests.exceptions.ConnectionError,
+        ) as exc:
             raise RedfishConnectionError(self._transport_error_message(exc)) from exc
         except socket.gaierror as exc:
             raise RedfishConnectionError(self._transport_error_message(exc)) from exc
@@ -313,6 +327,9 @@ class RedfishConnection:
                 self._session.delete(self._session_uri, timeout=self.timeout)
             except Exception:
                 pass
+
+        if self._session:
+            self._session.close()
         self._session = None
         self._session_token = None
         self._session_uri = None

@@ -49,7 +49,9 @@ from .connectionmanager import TConnection
 from .taskresulthook import TaskResultHook
 
 
-def _supported_sku_name_set(supported: Optional[set[Union[str, Enum]]]) -> Optional[set[str]]:
+def _supported_sku_name_set(
+    supported: Optional[set[Union[str, Enum]]],
+) -> Optional[set[str]]:
     """Map ``SUPPORTED_SKUS`` to string names for comparison with ``SystemInfo.sku``."""
     if not supported:
         return None
@@ -156,15 +158,22 @@ class DataCollector(Task, abc.ABC, Generic[TConnection, TDataModel, TCollectArg]
         task_result_hooks: Optional[list[TaskResultHook]] = None,
         event_reporter: str = DEFAULT_EVENT_REPORTER,
         session_id: Optional[str] = None,
+        log_path: Optional[str] = None,
         **kwargs,
     ):
         """data collector init function
 
         Args:
             system_info (SystemInfo): system info object for target system for data collection
-            system_interaction (SystemInteraction): enum to indicate the type of actions that can be performed when interacting with the system
-            event_reporter (str, optional): Reporter string stored on emitted events. Defaults to DEFAULT_EVENT_REPORTER.
+            connection (TConnection): connection object for the data collector
             logger (Optional[logging.Logger], optional): python logger object. Defaults to None.
+            system_interaction_level (SystemInteractionLevel | str): The interaction level which the collector will use
+                determine which commands it can run and how invasive the interactions can be when running those commands.Defaults to SystemInteractionLevel.INTERACTIVE.
+            max_event_priority_level (Union[EventPriority, str], optional): priority limit for events. Defaults to EventPriority.CRITICAL.
+            parent (Optional[str], optional): parent task identifier. Defaults to None.
+            task_result_hooks (Optional[list[TaskResultHook]], optional): list of task result hooks. Defaults to None.
+            event_reporter (str, optional): Reporter string stored on emitted events. Defaults to DEFAULT_EVENT_REPORTER.
+            session_id (Optional[str], optional): session identifier. Defaults to None.
             log_path (Optional[str], optional): file system log path. Defaults to None.
         """
         super().__init__(
@@ -176,13 +185,13 @@ class DataCollector(Task, abc.ABC, Generic[TConnection, TDataModel, TCollectArg]
             event_reporter=event_reporter,
             session_id=session_id,
         )
-
         if isinstance(system_interaction_level, str):
             system_interaction_level = getattr(SystemInteractionLevel, system_interaction_level)
 
-        self.system_interaction_level = system_interaction_level
-        self.connection = connection
-        self._html_view = False
+        self.log_path: str | None = log_path
+        self.system_interaction_level: SystemInteractionLevel = system_interaction_level
+        self.connection: TConnection = connection
+        self._html_view: bool = False
 
         allowed_skus = _supported_sku_name_set(self.SUPPORTED_SKUS)
         if (
@@ -230,6 +239,10 @@ class DataCollector(Task, abc.ABC, Generic[TConnection, TDataModel, TCollectArg]
     ) -> tuple[TaskResult, Optional[TDataModel]]:
         """Collect data from a target system
 
+        Args:
+            args (Optional[TCollectArg], optional): collection arguments for this data collection run. Defaults to None.
+
         Returns:
-            tuple[TaskResult, DataModel]: tuple containing result and data model
+            tuple[TaskResult, Optional[TDataModel]]: tuple containing result and data model. No DataModel for collection failure cases therefore
+            it is optional.
         """
