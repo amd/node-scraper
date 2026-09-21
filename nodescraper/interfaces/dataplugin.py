@@ -435,7 +435,7 @@ class DataPlugin(
 
         Args:
             max_event_priority_level (Union[EventPriority, str], optional): priority limit for events. Defaults to EventPriority.CRITICAL.
-            analReaysis_args (Optional[Union[TAnalyzeArg  , dict]], optional): args for data analysis. Defaults to None.
+            analysis_args (Optional[Union[TAnalyzeArg  , dict]], optional): args for data analysis. Defaults to None.
             data (Optional[Union[str, dict, TDataModel]], optional): data to analyze. Defaults to None.
 
         Returns:

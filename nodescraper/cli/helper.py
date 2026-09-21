@@ -117,7 +117,7 @@ def get_plugin_configs(
     base_config.global_args["system_interaction_level"] = system_interaction_level
 
     # Copy each until we are done
-    plugin_configs = [deepcopy(c) for c in [base_config]]
+    plugin_configs = [deepcopy(base_config)]
 
     if plugin_config_input:
         for config in plugin_config_input:

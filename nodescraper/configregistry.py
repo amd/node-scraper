@@ -89,9 +89,9 @@ class ConfigRegistry:
                         else:
                             self.configs[config_file.name] = config_model
                     except (ValidationError, json.JSONDecodeError, TypeError) as e:
-                        raise RuntimeError(f"Failed to load config from {config_file}: {e}")
-            except (OSError, IOError, FileNotFoundError):
-                raise RuntimeError(f"Failed to open config file {config_file}")
+                        raise RuntimeError(f"Failed to load config from {config_file}: {e}") from e
+            except (OSError, IOError, FileNotFoundError) as e:
+                raise RuntimeError(f"Failed to open config file {config_file}") from e
 
     @staticmethod
     def _entry_points_for_group(group: str):
@@ -110,7 +110,9 @@ class ConfigRegistry:
             return all_eps.get(group, [])  # type: ignore[assignment, attr-defined, arg-type]
 
     @staticmethod
-    def _resolve_entry_point_config(loaded: Any) -> PluginConfig | dict[str, Any] | None:
+    def _resolve_entry_point_config(
+        loaded: Any,
+    ) -> PluginConfig | dict[str, Any] | None:
         """Resolve a loaded entry point object into a plugin config.
 
         Args:

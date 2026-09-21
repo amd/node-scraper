@@ -230,7 +230,7 @@ class PluginRegistry:
         with PluginRegistry._cache_lock:
             # Check again inside the lock to prevent duplicate work
             if PluginRegistry._entry_point_connection_managers_cache is not None:
-                return PluginRegistry._entry_point_connection_managers_cache
+                return PluginRegistry._entry_point_connection_managers_cache.copy()
 
             managers = PluginRegistry._load_connection_managers_uncached()
 
