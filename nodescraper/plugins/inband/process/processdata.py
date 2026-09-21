@@ -29,6 +29,7 @@ from nodescraper.models import DataModel
 
 
 class ProcessDataModel(DataModel):
-    kfd_process: Optional[int] = None
+    """Aggregate CPU usage and top processes collected from procfs."""
+
     cpu_usage: Optional[float] = None
     processes: Optional[list[tuple[str, str]]] = None
