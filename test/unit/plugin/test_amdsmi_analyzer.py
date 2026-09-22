@@ -882,10 +882,24 @@ def _minimal_amdsmi_metric(
     ecc: Optional[MetricEccTotals] = None,
     ecc_blocks: Optional[dict] = None,
     power_management: Optional[str] = None,
+    mem_usage: Optional[dict] = None,
 ) -> AmdSmiMetric:
     """Build minimal AmdSmiMetric for PCIe/ECC tests with all required fields present."""
     pcie_dict = pcie.model_dump() if pcie is not None else {k: None for k in _PCIE_KEYS}
     ecc_dict = ecc.model_dump() if ecc is not None else {k: None for k in _ECC_TOTALS_KEYS}
+    mem_usage_dict = {
+        "total_vram": None,
+        "used_vram": None,
+        "free_vram": None,
+        "total_visible_vram": None,
+        "used_visible_vram": None,
+        "free_visible_vram": None,
+        "total_gtt": None,
+        "used_gtt": None,
+        "free_gtt": None,
+    }
+    if mem_usage is not None:
+        mem_usage_dict.update(mem_usage)
     return AmdSmiMetric.model_validate(
         {
             "gpu": gpu,
@@ -917,17 +931,7 @@ def _minimal_amdsmi_metric(
             "perf_level": None,
             "xgmi_err": None,
             "energy": None,
-            "mem_usage": {
-                "total_vram": None,
-                "used_vram": None,
-                "free_vram": None,
-                "total_visible_vram": None,
-                "used_visible_vram": None,
-                "free_visible_vram": None,
-                "total_gtt": None,
-                "used_gtt": None,
-                "free_gtt": None,
-            },
+            "mem_usage": mem_usage_dict,
             "throttle": {},
         }
     )
@@ -1002,9 +1006,54 @@ def test_analyze_data_expected_power_management(mock_analyzer):
     assert not any("power_management mismatch" in e.description for e in result.events)
 
 
+def test_check_gpu_memory_meets_minimum(mock_analyzer):
+    """GPU VRAM availability at the configured minimum passes."""
+    analyzer = mock_analyzer
+    metrics = [
+        _minimal_amdsmi_metric(
+            0,
+            mem_usage={
+                "total_vram": {"value": 100, "unit": "B"},
+                "free_vram": {"value": 95, "unit": "B"},
+            },
+        )
+    ]
+
+    analyzer.check_gpu_memory(metrics, 95)
+
+    assert not analyzer.result.events
+
+
+def test_check_gpu_memory_below_minimum_logs_warning(mock_analyzer):
+    """GPU VRAM availability below the configured minimum logs a warning."""
+    analyzer = mock_analyzer
+    metrics = [
+        _minimal_amdsmi_metric(
+            1,
+            mem_usage={
+                "total_vram": {"value": 100, "unit": "B"},
+                "free_vram": {"value": 90, "unit": "B"},
+            },
+        )
+    ]
+
+    analyzer.check_gpu_memory(metrics, 95)
+
+    assert len(analyzer.result.events) == 1
+    event = analyzer.result.events[0]
+    assert event.priority == EventPriority.WARNING
+    assert "GPU 1 free VRAM is 90.00%" in event.description
+    assert event.data["available_percent"] == 90.0
+    assert event.data["minimum_available_percent"] == 95
+
+
 def test_amdsmi_analyzer_args_rejects_unknown_fields():
     """Plugin config must only use declared AmdSmiAnalyzerArgs fields."""
     from pydantic import ValidationError
+
+    args = AmdSmiAnalyzerArgs.model_validate({"gpu_memory": {"minimum_available_percent": 95}})
+    assert args.gpu_memory is not None
+    assert args.gpu_memory.minimum_available_percent == 95
 
     with pytest.raises(ValidationError):
         AmdSmiAnalyzerArgs.model_validate(
