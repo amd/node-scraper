@@ -33,7 +33,10 @@ from nodescraper.plugins.inband.process.processdata import ProcessDataModel
 class ProcessAnalyzerArgs(AnalyzerArgs):
     max_cpu_usage: float = Field(
         default=20.0,
-        description="Maximum allowed CPU usage (percent) for process checks.",
+        description=(
+            "Maximum allowed aggregate CPU execution percentage; idle and I/O-wait time "
+            "are excluded."
+        ),
     )
 
     @classmethod

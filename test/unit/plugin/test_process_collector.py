@@ -23,6 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
+import logging
 import time
 from unittest.mock import MagicMock
 
@@ -62,6 +63,10 @@ def collector(system_info, conn_mock):
         system_interaction_level=SystemInteractionLevel.PASSIVE,
         connection=conn_mock,
     )
+
+
+def test_process_read_event_uses_shared_category():
+    assert EventCategory.PROCESS_READ.value == "PROCESS_READ"
 
 
 def test_parse_aggregate_cpu_from_proc_stat():
@@ -167,6 +172,7 @@ def test_run_linux_collects_cpu_and_processes_from_procfs(collector, conn_mock, 
         cpu_usage=10.0,
         processes=[("pid_1000", "10.0"), ("systemd", "0.0")],
     )
+    assert all("__SAMPLER__" not in artifact.command for artifact in result.artifacts)
 
 
 def test_unsupported_platform(system_info, conn_mock):
@@ -190,6 +196,36 @@ def test_exit_failure(collector, conn_mock):
     result, data = collector.collect_data()
     assert result.status == ExecutionStatus.EXECUTION_FAILURE
     assert data is None
+
+
+@pytest.mark.parametrize(
+    ("failure_index", "expected_warning"),
+    [
+        (0, "first aggregate CPU sample"),
+        (1, "first process CPU sample"),
+        (2, "second aggregate CPU sample"),
+        (3, "second process CPU sample"),
+    ],
+)
+def test_procfs_command_failure_logs_warning(
+    collector, conn_mock, monkeypatch, caplog, failure_index, expected_warning
+):
+    responses = [
+        MagicMock(exit_code=0, stdout=PROC_STAT_1, stderr=""),
+        MagicMock(exit_code=0, stdout=PROC_DUMP_1, stderr=""),
+        MagicMock(exit_code=0, stdout=PROC_STAT_2, stderr=""),
+        MagicMock(exit_code=0, stdout=PROC_DUMP_2, stderr=""),
+    ]
+    responses[failure_index].exit_code = 1
+    conn_mock.run_command.side_effect = responses
+    monkeypatch.setattr(time, "sleep", lambda _seconds: None)
+
+    with caplog.at_level(logging.WARNING):
+        result, data = collector.collect_data()
+
+    assert result.status == ExecutionStatus.EXECUTION_FAILURE
+    assert data is None
+    assert expected_warning in caplog.text
 
 
 def test_invalid_proc_stat_returns_failure_and_logs_os_event(collector, conn_mock, monkeypatch):

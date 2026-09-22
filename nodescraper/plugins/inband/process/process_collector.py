@@ -35,7 +35,11 @@ from .processdata import ProcessDataModel
 
 
 def _parse_aggregate_cpu_from_proc_stat(proc_stat: str) -> Optional[tuple[int, int]]:
-    """Return aggregate total and idle jiffies from ``/proc/stat``."""
+    """Return total and idle-plus-I/O-wait jiffies from ``/proc/stat``.
+
+    Guest fields are excluded from the total because Linux includes them in
+    the user and nice fields.
+    """
     for line in proc_stat.splitlines():
         if not line.startswith("cpu "):
             continue
@@ -185,18 +189,30 @@ class ProcessCollector(InBandDataCollector[ProcessDataModel, ProcessCollectorArg
         """Collect aggregate CPU usage and top process CPU shares."""
         stat1 = self._run_sut_cmd(self.CMD_PROC_STAT)
         if stat1.exit_code != 0:
+            self.logger.warning(
+                "Unable to read first aggregate CPU sample (exit code %s)", stat1.exit_code
+            )
             return None, []
-        dump1 = self._run_sut_cmd(self.CMD_PROCESS_STAT)
+        dump1 = self._run_sut_cmd(self.CMD_PROCESS_STAT, log_artifact=False)
         if dump1.exit_code != 0:
+            self.logger.warning(
+                "Unable to read first process CPU sample (exit code %s)", dump1.exit_code
+            )
             return None, []
 
         time.sleep(sample_interval_seconds)
 
         stat2 = self._run_sut_cmd(self.CMD_PROC_STAT)
         if stat2.exit_code != 0:
+            self.logger.warning(
+                "Unable to read second aggregate CPU sample (exit code %s)", stat2.exit_code
+            )
             return None, []
-        dump2 = self._run_sut_cmd(self.CMD_PROCESS_STAT)
+        dump2 = self._run_sut_cmd(self.CMD_PROCESS_STAT, log_artifact=False)
         if dump2.exit_code != 0:
+            self.logger.warning(
+                "Unable to read second process CPU sample (exit code %s)", dump2.exit_code
+            )
             return None, []
 
         aggregate1 = _parse_aggregate_cpu_from_proc_stat(stat1.stdout)
@@ -261,7 +277,7 @@ class ProcessCollector(InBandDataCollector[ProcessDataModel, ProcessCollectorArg
             process_data.cpu_usage = cpu_usage
             process_data.processes = processes
             self._log_event(
-                category="PROCESS_READ",
+                category=EventCategory.PROCESS_READ,
                 description="Process data collected",
                 priority=EventPriority.INFO,
             )

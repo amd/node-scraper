@@ -25,11 +25,16 @@
 ###############################################################################
 from typing import Optional
 
+from pydantic import Field
+
 from nodescraper.models import DataModel
 
 
 class ProcessDataModel(DataModel):
-    """Aggregate CPU usage and top processes collected from procfs."""
+    """CPU execution usage (excluding idle and I/O-wait) and top processes from procfs."""
 
-    cpu_usage: Optional[float] = None
+    cpu_usage: Optional[float] = Field(
+        default=None,
+        description="Aggregate CPU execution percentage; idle and I/O-wait time are excluded.",
+    )
     processes: Optional[list[tuple[str, str]]] = None
