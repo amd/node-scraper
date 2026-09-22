@@ -296,7 +296,14 @@ def bytes_to_human_readable(input_bytes: int) -> str:
         return "0B"
     if input_bytes == 0:
         return "0B"
-    units = [(10**12, "TB"), (10**9, "GB"), (10**6, "MB"), (10**3, "KB"), (1, "B")]
+    units = [
+        (10**15, "PB"),
+        (10**12, "TB"),
+        (10**9, "GB"),
+        (10**6, "MB"),
+        (10**3, "KB"),
+        (1, "B"),
+    ]
     for scale, label in units:
         if input_bytes >= scale:
             return f"{round(float(input_bytes) / scale, 2)}{label}"
@@ -341,6 +348,9 @@ def find_annotation_in_container(
                 if result:
                     containers.append(origin)
                     return result, containers
+            # Check if it is not a type cause if you put an origin in its anything
+            if not isinstance(item, type):
+                item = type(item)
             if len(get_args(item)) == 0 and issubclass(item, target_type):
                 containers.append(origin)
                 return item, containers

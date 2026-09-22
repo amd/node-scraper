@@ -25,7 +25,17 @@
 ###############################################################################
 import inspect
 import types
-from typing import Annotated, Any, Callable, Optional, Type, Union, get_args, get_origin
+from typing import (
+    Annotated,
+    Any,
+    Callable,
+    Literal,
+    Optional,
+    Type,
+    Union,
+    get_args,
+    get_origin,
+)
 
 from pydantic import BaseModel, Field
 
@@ -34,6 +44,7 @@ class TypeClass(BaseModel):
     """Class to hold type class information"""
 
     type_class: Any
+    # for a Literal type class this holds the full list of allowed values
     inner_type: Optional[Any] = None
 
 
@@ -111,6 +122,26 @@ class TypeUtils:
         return type_map
 
     @classmethod
+    def build_type_class(cls, input_type: Any, origin: Any) -> TypeClass:
+        """Build a TypeClass for a parameterized type
+
+        Args:
+            input_type (Any): parameterized type, e.g. list[str] or Literal["a", "b"]
+            origin (Any): origin of the type
+
+        Returns:
+            TypeClass: type class with inner type details
+        """
+        if origin is Literal:
+            # args of a Literal are values rather than types, so keep all of them
+            return TypeClass(type_class=Literal, inner_type=list(get_args(input_type)))
+
+        return TypeClass(
+            type_class=origin,
+            inner_type=next((arg for arg in get_args(input_type) if arg is not type(None)), None),
+        )
+
+    @classmethod
     def process_type(cls, input_type: type[Any]) -> list[TypeClass]:
         """Process a type to extract its class and any inner types
 
@@ -131,28 +162,17 @@ class TypeUtils:
             input_types = [arg for arg in input_type.__args__ if arg is not type(None)]
             for type_item in input_types:
                 origin = get_origin(type_item)
+                if origin is Annotated:
+                    type_item = get_args(type_item)[0]
+                    origin = get_origin(type_item)
                 if origin is None:
                     type_classes.append(TypeClass(type_class=type_item))
                 else:
-                    type_classes.append(
-                        TypeClass(
-                            type_class=origin,
-                            inner_type=next(
-                                (arg for arg in get_args(type_item) if arg is not type(None)), None
-                            ),
-                        )
-                    )
+                    type_classes.append(cls.build_type_class(type_item, origin))
 
             return type_classes
         else:
-            return [
-                TypeClass(
-                    type_class=origin,
-                    inner_type=next(
-                        (arg for arg in get_args(input_type) if arg is not type(None)), None
-                    ),
-                )
-            ]
+            return [cls.build_type_class(input_type, origin)]
 
     @classmethod
     def get_model_types(cls, model: type[BaseModel]) -> dict[str, TypeData]:

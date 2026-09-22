@@ -55,6 +55,7 @@ class InBandDataCollector(
         task_result_hooks: Optional[list[TaskResultHook]] = None,
         event_reporter: str = DEFAULT_EVENT_REPORTER,
         session_id: Optional[str] = None,
+        log_path: Optional[str] = None,
         **kwargs,
     ):
         """Creates a InBandDataCollector Class
@@ -83,6 +84,7 @@ class InBandDataCollector(
             task_result_hooks=task_result_hooks,
             event_reporter=event_reporter,
             session_id=session_id,
+            log_path=log_path,
         )
         if self.system_info.os_family not in self.SUPPORTED_OS_FAMILY:
             raise SystemCompatibilityError(
