@@ -41,12 +41,18 @@ from .redfish_oem_diag import (
 )
 from .redfish_params import RedfishConnectionParams, redfish_params_to_ssh
 from .redfish_path import RedfishPath
+from .ssh_proxy_connection import SshProxyRedfishConnection
+from .ssh_proxy_manager import RedfishSshProxyConnectionManager
+from .ssh_proxy_params import RedfishSshProxyConnectionParams
 
 __all__ = [
     "RedfishConnection",
     "RedfishConnectionError",
     "RedfishGetResult",
     "RedfishConnectionManager",
+    "RedfishSshProxyConnectionManager",
+    "RedfishSshProxyConnectionParams",
+    "SshProxyRedfishConnection",
     "RedfishConnectionParams",
     "redfish_params_to_ssh",
     "RedfishPath",

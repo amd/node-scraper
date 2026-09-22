@@ -27,13 +27,12 @@ from __future__ import annotations
 
 import json
 import socket
-from typing import Any, Callable, ClassVar, Optional, TypeVar, Union
+from typing import Any, Callable, ClassVar, Optional, Protocol, TypeVar, Union
 from urllib.parse import urljoin, urlparse
 
 import requests
 import urllib3  # type: ignore[import-untyped]
 from pydantic import BaseModel
-from requests import Response
 from requests.auth import HTTPBasicAuth
 
 from .redfish_constants import RF_MEMBERS, RF_MEMBERS_COUNT, RF_MEMBERS_NEXT_LINK
@@ -71,10 +70,31 @@ class RedfishGetResult(BaseModel):
         }
 
 
+class RedfishHttpResponse(Protocol):
+    """Status, headers, and body from a Redfish GET or POST."""
+
+    status_code: int
+    headers: Any
+
+    @property
+    def content(self) -> bytes: ...
+
+    @property
+    def ok(self) -> bool: ...
+
+    @property
+    def reason(self) -> str: ...
+
+    @property
+    def text(self) -> str: ...
+
+    def json(self) -> Any: ...
+
+
 class RedfishConnectionError(Exception):
     """Raised when a Redfish API request fails."""
 
-    def __init__(self, message: str, response: Optional[Response] = None):
+    def __init__(self, message: str, response: Optional[RedfishHttpResponse] = None):
         super().__init__(message)
         self.response = response
 
@@ -209,7 +229,7 @@ class RedfishConnection:
             )
         return resp.json()
 
-    def get_response(self, path: Union[str, "RedfishPath"]) -> Response:
+    def get_response(self, path: Union[str, "RedfishPath"]) -> RedfishHttpResponse:
         """GET a Redfish path and return the raw Response. path may be a string or RedfishPath."""
         path = str(path)
         session = self._ensure_session()
@@ -218,7 +238,7 @@ class RedfishConnection:
 
     def post(
         self, path: Union[str, "RedfishPath"], json: Optional[dict[str, Any]] = None
-    ) -> Response:
+    ) -> RedfishHttpResponse:
         """POST to a Redfish path and return the raw Response. path may be a string or RedfishPath."""
         path = str(path)
         session = self._ensure_session()
