@@ -37,8 +37,10 @@ from .amdsmidata import (
     AmdSmiStatic,
     EccData,
     Fw,
+    LinkStatusTable,
     Partition,
     Processes,
+    XgmiLinks,
     XgmiMetrics,
 )
 from .analyzer_args import AmdSmiAnalyzerArgs
@@ -1000,6 +1002,71 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                     console_log=True,
                 )
 
+    def check_xgmi_or_peer_links_status(self, xgmi_links: Optional[list[XgmiLinks]]) -> None:
+        """Check XGMI or peer-link status: U passes, SELF is ignored, D/X warn."""
+        if not xgmi_links:
+            self._log_event(
+                category=EventCategory.IO,
+                description="XGMI/peer link data is not available and cannot be checked",
+                priority=EventPriority.WARNING,
+                data={"xgmi_links": xgmi_links},
+                console_log=True,
+            )
+            return
+
+        down_links: list[dict[str, Any]] = []
+        degraded_links: list[dict[str, Any]] = []
+        healthy_link_count = 0
+        for gpu_links in xgmi_links:
+            for link_index, status in enumerate(gpu_links.link_status):
+                if status == LinkStatusTable.SELF:
+                    continue
+                link_data = {
+                    "gpu": gpu_links.gpu,
+                    "link_index": link_index,
+                    "status": status.value,
+                }
+                if status == LinkStatusTable.DOWN:
+                    down_links.append(link_data)
+                elif status == LinkStatusTable.DISABLED:
+                    degraded_links.append(link_data)
+                elif status == LinkStatusTable.UP:
+                    healthy_link_count += 1
+
+        if not down_links and not degraded_links:
+            self._log_event(
+                category=EventCategory.IO,
+                description="All XGMI/peer GPU links are working fine",
+                priority=EventPriority.INFO,
+                data={"healthy_link_count": healthy_link_count},
+                console_log=True,
+            )
+
+        if down_links:
+            self._log_event(
+                category=EventCategory.IO,
+                description=(f"XGMI/peer links contain {len(down_links)} down/error links"),
+                priority=EventPriority.WARNING,
+                data={
+                    "down_links": down_links,
+                    "link_error_count": len(down_links),
+                },
+                console_log=True,
+            )
+
+        if degraded_links:
+            self._log_event(
+                category=EventCategory.IO,
+                description=(
+                    f"XGMI/peer links contain {len(degraded_links)} " "disabled/degraded links"
+                ),
+                priority=EventPriority.WARNING,
+                data={
+                    "degraded_links": degraded_links,
+                },
+                console_log=True,
+            )
+
     def analyze_data(
         self, data: AmdSmiDataModel, args: Optional[AmdSmiAnalyzerArgs] = None
     ) -> TaskResult:
@@ -1091,5 +1158,8 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
             self.check_expected_xgmi_link_speed(
                 data.xgmi_metric, expected_xgmi_speed=args.expected_xgmi_speed
             )
+
+        if args.check_xgmi_or_peer_links_status:
+            self.check_xgmi_or_peer_links_status(data.xgmi_link)
 
         return self.result
