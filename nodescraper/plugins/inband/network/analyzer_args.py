@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# Copyright (c) 2026 Advanced Micro Devices, Inc.
+# Copyright (c) 2025 Advanced Micro Devices, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -30,14 +30,10 @@ from pydantic import Field
 from nodescraper.models import AnalyzerArgs
 
 
-class RdmaAnalyzerArgs(AnalyzerArgs):
-    """Arguments for the RDMA analyzer."""
+class NetworkAnalyzerArgs(AnalyzerArgs):
+    """Arguments for network and ethtool analysis."""
 
     expected_nic_firmware: Optional[str] = Field(
         default=None,
-        description="Exact firmware version expected from each collected RDMA NIC.",
-    )
-    exclusion_regex: Optional[list[str]] = Field(
-        default=None,
-        description="Regex patterns matched against an interface netdev; matching interfaces are skipped.",
+        description="Exact firmware version expected from each collected NIC.",
     )

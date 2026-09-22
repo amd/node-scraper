@@ -29,6 +29,7 @@ from typing import Optional
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
 from nodescraper.interfaces import DataAnalyzer
 from nodescraper.models import TaskResult
+from nodescraper.utils import _validate_firmware_policy
 
 from .analyzer_args import RdmaAnalyzerArgs
 from .rdmadata import RdmaDataModel
@@ -54,13 +55,40 @@ class RdmaAnalyzer(DataAnalyzer[RdmaDataModel, RdmaAnalyzerArgs]):
         Returns:
             TaskResult with status OK if no errors, ERROR if any error counter > 0.
         """
-        if not data.statistic_list:
+        if not args:
+            args = RdmaAnalyzerArgs()
+
+        firmware_records = [
+            {
+                "identity": device.device,
+                "version": device.firmware_version,
+                "source": "rdma",
+                "vendor": _vendor_for_rdma_device(device.device),
+                "driver": device.device,
+            }
+            for device in data.dev_list
+        ]
+        firmware_policy_issues = _validate_firmware_policy(
+            firmware_records,
+            (
+                {"expected_nic_firmware": args.expected_nic_firmware}
+                if args.expected_nic_firmware
+                else None
+            ),
+        )
+        for issue in firmware_policy_issues:
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description="RDMA adapter firmware policy mismatch",
+                data=issue,
+                priority=EventPriority.WARNING,
+                console_log=True,
+            )
+
+        if not data.statistic_list and not data.dev_list:
             self.result.message = "No RDMA devices found"
             self.result.status = ExecutionStatus.WARNING
             return self.result
-
-        if not args:
-            args = RdmaAnalyzerArgs()
 
         compiled_exclusions = [re.compile(pattern) for pattern in (args.exclusion_regex or [])]
 
@@ -124,6 +152,9 @@ class RdmaAnalyzer(DataAnalyzer[RdmaDataModel, RdmaAnalyzerArgs]):
         if error_detected or critical_detected:
             self.result.message = "RDMA errors detected in statistics"
             self.result.status = ExecutionStatus.ERROR
+        elif firmware_policy_issues:
+            self.result.message = "RDMA adapter firmware policy mismatch"
+            self.result.status = ExecutionStatus.WARNING
         else:
             self.result.message = "No RDMA errors detected in statistics"
             self.result.status = ExecutionStatus.OK
@@ -132,3 +163,14 @@ class RdmaAnalyzer(DataAnalyzer[RdmaDataModel, RdmaAnalyzerArgs]):
             self.result.message += f" ({skipped_count} skipped)"
 
         return self.result
+
+
+def _vendor_for_rdma_device(device: str) -> Optional[str]:
+    normalized = device.lower()
+    if normalized.startswith(("mlx", "ib_")):
+        return "Mellanox"
+    if normalized.startswith(("bnxt", "bnx2")):
+        return "Broadcom"
+    if normalized.startswith("ionic"):
+        return "Pensando"
+    return None
