@@ -24,6 +24,7 @@
 #
 ###############################################################################
 from .analyzer_args import PcieAnalyzerArgs
+from .collector_args import PcieCollectorArgs
 from .pcie_plugin import PciePlugin
 
-__all__ = ["PciePlugin", "PcieAnalyzerArgs"]
+__all__ = ["PciePlugin", "PcieAnalyzerArgs", "PcieCollectorArgs"]
