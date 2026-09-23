@@ -41,6 +41,8 @@ class EventCategory(AutoNameStrEnum):
     - OS
         Generic Operating System events.
         Does not include specific events from OS which point to another category
+    - PROCESS_READ
+        Successful CPU process collection events.
     - PLATFORM
         Generic Platform Errors e.g. topo enumeration
         Platform-specific errors which do not fall under other categories (e.g. BMC, SMC, UBB)
@@ -79,6 +81,7 @@ class EventCategory(AutoNameStrEnum):
     RAS = auto()
     IO = auto()
     OS = auto()
+    PROCESS_READ = auto()
     PLATFORM = auto()
     APPLICATION = auto()
     MEMORY = auto()
