@@ -23,7 +23,10 @@
 # SOFTWARE.
 #
 ###############################################################################
+from typing import Optional
+
 from nodescraper.base import InBandDataPlugin
+from nodescraper.interfaces.dataplugin import CollectorArgsClasses, CollectorClasses
 
 from .collector_args import DimmCollectorArgs
 from .dimm_collector import DimmCollector
@@ -33,8 +36,8 @@ from .dimmdata import DimmDataModel
 class DimmPlugin(InBandDataPlugin[DimmDataModel, DimmCollectorArgs, None]):
     """Plugin for collection and analysis of DIMM data"""
 
-    DATA_MODEL = DimmDataModel
+    DATA_MODEL: type[DimmDataModel] = DimmDataModel
 
-    COLLECTOR = DimmCollector
+    COLLECTOR: Optional[CollectorClasses] = DimmCollector
 
-    COLLECTOR_ARGS = DimmCollectorArgs
+    COLLECTOR_ARGS: Optional[CollectorArgsClasses] = DimmCollectorArgs
