@@ -30,12 +30,16 @@ from nodescraper.connection.inband.inband import CommandArtifact, TextFileArtifa
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.models import TaskResult
 
+from .collector_args import DeviceEnumerationCollectorArgs
 from .deviceenumdata import DeviceEnumerationDataModel
 
 
-class DeviceEnumerationCollector(InBandDataCollector[DeviceEnumerationDataModel, None]):
+class DeviceEnumerationCollector(
+    InBandDataCollector[DeviceEnumerationDataModel, DeviceEnumerationCollectorArgs]
+):
     """Collect CPU and GPU count"""
 
+    SUPPORTED_OS_FAMILY: set[OSFamily] = {OSFamily.WINDOWS, OSFamily.LINUX, OSFamily.ESXI}
     DATA_MODEL = DeviceEnumerationDataModel
 
     CMD_GPU_COUNT_LINUX = (
@@ -55,6 +59,17 @@ class DeviceEnumerationCollector(InBandDataCollector[DeviceEnumerationDataModel,
         'powershell -Command "(Get-VMHostPartitionableGpu | Measure-Object).Count"'
     )
 
+    # ESXi busybox `lspci -d` dumps hex instead of filtering, so use esxcli. GPUs are
+    # counted by device ID (PF vs VF), anchored on "Device ID:" to avoid also matching
+    # "SubDevice ID:". The match is case-insensitive and tolerates zero-padding
+    # ("0x744C" / "0x0000744c"); the trailing [^0-9a-f]/$ guard stops a shorter ID from
+    # matching a longer one (e.g. 744c vs 744cd).
+    CMD_CPU_COUNT_ESXI = "esxcli hardware cpu global get | awk '/CPU Packages:/ {print $NF}'"
+    CMD_PCI_COUNT_ESXI = (
+        "esxcli hardware pci list | "
+        "grep -iE '^ *Device ID: 0x0*{device_id}([^0-9a-f]|$)' | wc -l"
+    )
+
     def _warning(
         self,
         description: str,
@@ -72,12 +87,47 @@ class DeviceEnumerationCollector(InBandDataCollector[DeviceEnumerationDataModel,
             priority=EventPriority.WARNING,
         )
 
-    def collect_data(self, args=None) -> tuple[TaskResult, Optional[DeviceEnumerationDataModel]]:
+    def _parse_count(
+        self,
+        res: CommandArtifact,
+        description: str,
+        category: EventCategory = EventCategory.PLATFORM,
+    ) -> Optional[int]:
+        """Parse a numeric count from command stdout, warning (not raising) on a
+        non-zero exit or non-numeric output (e.g. an unexpected esxcli/awk result)."""
+        if res.exit_code != 0:
+            self._warning(description=description, command=res, category=category)
+            return None
+        text = (res.stdout or "").strip()
+        if not text.isdigit():
+            self._warning(
+                description=f"{description} (non-numeric output: {text!r})",
+                command=res,
+                category=category,
+            )
+            return None
+        return int(text)
+
+    def _esxi_device_count(self, device_id: Optional[int]) -> CommandArtifact:
+        """Count PCI devices on ESXi whose Device ID matches ``device_id`` (as hex).
+
+        A None id produces an unmatched pattern (count 0) so the caller still gets a
+        valid CommandArtifact to parse.
+        """
+        hex_id = format(device_id, "x") if device_id is not None else "__unset__"
+        return self._run_sut_cmd(self.CMD_PCI_COUNT_ESXI.format(device_id=hex_id))
+
+    def collect_data(
+        self, args: Optional[DeviceEnumerationCollectorArgs] = None
+    ) -> tuple[TaskResult, Optional[DeviceEnumerationDataModel]]:
         """
         Read CPU and GPU count
         On Linux, use lscpu and lspci
+        On ESXi, use esxcli (GPU/VF counts need args.devid_ep / devid_ep_vf)
         On Windows, use WMI and hyper-v cmdlets
         """
+        if args is None:
+            args = DeviceEnumerationCollectorArgs()
         if self.system_info.os_family == OSFamily.LINUX:
             lscpu_res = self._run_sut_cmd(self.CMD_LSCPU_LINUX, log_artifact=False)
 
@@ -92,6 +142,17 @@ class DeviceEnumerationCollector(InBandDataCollector[DeviceEnumerationDataModel,
 
             # Collect lshw output
             lshw_res = self._run_sut_cmd(self.CMD_LSHW_LINUX, sudo=True, log_artifact=False)
+        elif self.system_info.os_family == OSFamily.ESXI:
+            cpu_count_res = self._run_sut_cmd(self.CMD_CPU_COUNT_ESXI)
+            if args.devid_ep is None:
+                self._log_event(
+                    category=EventCategory.PLATFORM,
+                    description="devid_ep not set; cannot count GPUs/VFs on ESXi by device ID",
+                    priority=EventPriority.WARNING,
+                )
+            # PFs and (SR-IOV) VFs are distinguished by device ID on ESXi.
+            gpu_count_res = self._esxi_device_count(args.devid_ep)
+            vf_count_res = self._esxi_device_count(args.devid_ep_vf)
         else:
             cpu_count_res = self._run_sut_cmd(self.CMD_CPU_COUNT_WINDOWS)
             gpu_count_res = self._run_sut_cmd(self.CMD_GPU_COUNT_WINDOWS)
@@ -121,24 +182,19 @@ class DeviceEnumerationCollector(InBandDataCollector[DeviceEnumerationDataModel,
             else:
                 self._warning(description="Cannot collect lscpu output", command=lscpu_res)
         else:
-            if cpu_count_res.exit_code == 0:
-                device_enum.cpu_count = int(cpu_count_res.stdout)
-            else:
-                self._warning(description="Cannot determine CPU count", command=cpu_count_res)
+            cpu_count = self._parse_count(cpu_count_res, "Cannot determine CPU count")
+            if cpu_count is not None:
+                device_enum.cpu_count = cpu_count
 
-        if gpu_count_res.exit_code == 0:
-            device_enum.gpu_count = int(gpu_count_res.stdout)
-        else:
-            self._warning(description="Cannot determine GPU count", command=gpu_count_res)
+        gpu_count = self._parse_count(gpu_count_res, "Cannot determine GPU count")
+        if gpu_count is not None:
+            device_enum.gpu_count = gpu_count
 
-        if vf_count_res.exit_code == 0:
-            device_enum.vf_count = int(vf_count_res.stdout)
-        else:
-            self._warning(
-                description="Cannot determine VF count",
-                command=vf_count_res,
-                category=EventCategory.SW_DRIVER,
-            )
+        vf_count = self._parse_count(
+            vf_count_res, "Cannot determine VF count", category=EventCategory.SW_DRIVER
+        )
+        if vf_count is not None:
+            device_enum.vf_count = vf_count
 
         # Collect lshw output on Linux
         if self.system_info.os_family == OSFamily.LINUX:

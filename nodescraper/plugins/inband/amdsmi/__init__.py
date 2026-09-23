@@ -23,6 +23,14 @@
 # SOFTWARE.
 #
 ###############################################################################
+from .amdsmi_flavor_collector import AmdSmiFlavorCollector
+from .amdsmi_flavor_plugin import AmdSmiFlavorPlugin
 from .amdsmi_plugin import AmdSmiPlugin
+from .amdsmidata_flavor import AmdSmiFlavorDataModel
 
-__all__ = ["AmdSmiPlugin"]
+__all__ = [
+    "AmdSmiPlugin",
+    "AmdSmiFlavorPlugin",
+    "AmdSmiFlavorCollector",
+    "AmdSmiFlavorDataModel",
+]

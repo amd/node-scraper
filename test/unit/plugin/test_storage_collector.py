@@ -76,6 +76,29 @@ def test_run_linux(collector, conn_mock):
     )
 
 
+def test_run_esxi(collector, conn_mock):
+    """ESXi parses fixed esxcli filesystem-list columns (Size/Free by position)."""
+    collector.system_info.os_family = OSFamily.ESXI
+    conn_mock.run_command.return_value = CommandArtifact(
+        exit_code=0,
+        stdout=(
+            "Mount Point          Volume Name   UUID      Mounted  Type    Size  Free\n"
+            "-------------------  -----------   --------  -------  ------  ----  ----\n"
+            "/vmfs/volumes/abc    datastore1    uuid-1    true     VMFS-6  2000  500"
+        ),
+        stderr="",
+        command="esxcli storage filesystem list",
+    )
+
+    result, data = collector.collect_data()
+    assert result.status == ExecutionStatus.OK
+    assert data == StorageDataModel(
+        storage_data={
+            "/vmfs/volumes/abc": DeviceStorageData(total=2000, free=500, used=1500, percent=75.0)
+        }
+    )
+
+
 def test_run_windows(system_info, conn_mock):
     system_info.os_family = OSFamily.WINDOWS
     collector = StorageCollector(
