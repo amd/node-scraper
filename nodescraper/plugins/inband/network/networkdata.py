@@ -97,6 +97,9 @@ class EthtoolInfo(BaseModel):
 
     interface: str  # Interface name this info belongs to
     raw_output: str  # Raw ethtool command output
+    driver: Optional[str] = None  # Kernel driver from ethtool -i
+    bus_info: Optional[str] = None  # PCI bus identity from ethtool -i
+    firmware_version: Optional[str] = None  # Firmware version from ethtool -i
     settings: Dict[str, str] = Field(default_factory=dict)  # Parsed key-value settings
     supported_link_modes: List[str] = Field(default_factory=list)  # Supported link modes
     advertised_link_modes: List[str] = Field(default_factory=list)  # Advertised link modes

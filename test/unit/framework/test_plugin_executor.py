@@ -47,6 +47,8 @@ class DummyArgs(BaseModel):
 
 
 class TestPluginA(PluginInterface[MockConnectionManager, None]):
+    __test__ = False  # Tells pytest to ignore this class
+
     CONNECTION_TYPE = MockConnectionManager
     COLLECTOR_ARGS = DummyArgs(foo="initial")
     ANALYZER_ARGS = DummyArgs(foo="initial")
@@ -64,6 +66,8 @@ class TestPluginA(PluginInterface[MockConnectionManager, None]):
 
 
 class TestPluginB(PluginInterface[MockConnectionManager, None]):
+    __test__ = False  # Tells pytest to ignore this class
+
     CONNECTION_TYPE = MockConnectionManager
 
     def run(self, test_arg=None):
@@ -75,6 +79,8 @@ class TestPluginB(PluginInterface[MockConnectionManager, None]):
 class PostActionPlugin(PluginInterface[MockConnectionManager, None]):
     """Minimal plugin used as a post-action target in tests."""
 
+    __test__ = False  # Tells pytest to ignore this class
+
     CONNECTION_TYPE = MockConnectionManager
 
     def run(self, **kwargs):
@@ -83,6 +89,8 @@ class PostActionPlugin(PluginInterface[MockConnectionManager, None]):
 
 class TestPluginCapture(PluginInterface[MockConnectionManager, None]):
     """Records kwargs passed to run() for merge-order regression tests."""
+
+    __test__ = False  # Tells pytest to ignore this class
 
     CONNECTION_TYPE = MockConnectionManager
     last_run_kwargs: Optional[dict] = None

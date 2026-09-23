@@ -44,6 +44,69 @@ from typing import (
 T = TypeVar("T")
 
 
+def _validate_firmware_policy(records: list[Dict[str, Any]], policies: Any) -> list[Dict[str, Any]]:
+    """Validate firmware records against analyzer policies."""
+    policy_list = [policies] if isinstance(policies, dict) else policies or []
+    issues = []
+    for record in records:
+        policy = next(
+            (
+                item
+                for item in policy_list
+                if isinstance(item, dict) and _policy_matches(record, item)
+            ),
+            None,
+        )
+        if policy is None:
+            continue
+        actual = _normalize_firmware_version(record.get("version"))
+        expected = _normalize_firmware_version(policy.get("expected_nic_firmware"))
+        if not actual:
+            reason = "firmware version is unavailable"
+        elif expected and not _firmware_matches(actual, expected):
+            reason = (
+                f"actual {record.get('version')} != expected_nic_firmware "
+                f"{policy.get('expected_nic_firmware')}"
+            )
+        else:
+            continue
+        issues.append({"reason": reason, "record": record, "policy": dict(policy)})
+    return issues
+
+
+def _policy_matches(record: Dict[str, Any], policy: Dict[str, Any]) -> bool:
+    match = policy.get("match", {})
+    if not isinstance(match, dict):
+        return False
+    if not match:
+        match = {field: policy[field] for field in record if field in policy}
+    for field, expected in match.items():
+        actual = record.get(str(field))
+        if actual is None:
+            return False
+        expected_values = expected if isinstance(expected, list) else [expected]
+        if not any(
+            str(actual).strip().lower() == str(value).strip().lower() for value in expected_values
+        ):
+            return False
+    return True
+
+
+def _normalize_firmware_version(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    normalized = str(value).strip().strip("'\"").lower()
+    return normalized or None
+
+
+def _firmware_matches(actual: str, expected_pattern: str) -> bool:
+    try:
+        firmware_regex = re.compile(expected_pattern, re.IGNORECASE)
+    except re.error:
+        return False
+    return firmware_regex.match(actual) is not None
+
+
 class AutoNameStrEnum(Enum):
     """For enums where the value is the same as the name of the attribute"""
 
@@ -233,7 +296,14 @@ def bytes_to_human_readable(input_bytes: int) -> str:
         return "0B"
     if input_bytes == 0:
         return "0B"
-    units = [(10**12, "TB"), (10**9, "GB"), (10**6, "MB"), (10**3, "KB"), (1, "B")]
+    units = [
+        (10**15, "PB"),
+        (10**12, "TB"),
+        (10**9, "GB"),
+        (10**6, "MB"),
+        (10**3, "KB"),
+        (1, "B"),
+    ]
     for scale, label in units:
         if input_bytes >= scale:
             return f"{round(float(input_bytes) / scale, 2)}{label}"
@@ -278,6 +348,9 @@ def find_annotation_in_container(
                 if result:
                     containers.append(origin)
                     return result, containers
+            # Check if it is not a type cause if you put an origin in its anything
+            if not isinstance(item, type):
+                item = type(item)
             if len(get_args(item)) == 0 and issubclass(item, target_type):
                 containers.append(origin)
                 return item, containers
