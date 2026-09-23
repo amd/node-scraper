@@ -186,6 +186,8 @@ def discover_and_write_os_family(
     res = connection_manager.connection.run_command("uname -s")
     if "not recognized as an internal or external command" in res.stdout + res.stderr:
         system_info.os_family = OSFamily.WINDOWS
+    elif res.exit_code == 0 and "VMkernel" in res.stdout:
+        system_info.os_family = OSFamily.ESXI
     elif res.exit_code == 0:
         system_info.os_family = OSFamily.LINUX
     else:
