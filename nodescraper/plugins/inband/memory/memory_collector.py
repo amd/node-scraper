@@ -173,7 +173,11 @@ class MemoryCollector(InBandDataCollector[MemoryDataModel, None]):
             self._log_event(
                 category=EventCategory.OS,
                 description="Free and total memory read",
-                data=mem_data.model_dump(),
+                data={
+                    "mem_total": mem_total,
+                    "mem_available": mem_available,
+                    "mem_free": mem_free,
+                },
                 priority=EventPriority.INFO,
             )
             if mem_available:

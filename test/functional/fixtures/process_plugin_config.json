@@ -3,7 +3,6 @@
   "plugins": {
     "ProcessPlugin": {
       "analysis_args": {
-        "max_kfd_processes": 0,
         "max_cpu_usage": 20.0
       }
     }

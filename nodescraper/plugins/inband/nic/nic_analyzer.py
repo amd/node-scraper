@@ -31,6 +31,7 @@ from nodescraper.base.regexanalyzer import ErrorRegex
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
 from nodescraper.interfaces import DataAnalyzer
 from nodescraper.models import TaskResult
+from nodescraper.utils import _validate_firmware_policy
 
 from .analyzer_args import NicAnalyzerArgs
 from .nic_data import NicDataModel
@@ -103,6 +104,49 @@ def _normalize_tsa_map(d: Optional[Dict[Any, Any]]) -> Optional[Dict[int, str]]:
     return {int(k): str(v) for k, v in d.items()}
 
 
+def _firmware_records(data: NicDataModel) -> list[Dict[str, Any]]:
+    """Build normalized records for Broadcom and Pensando NIC output."""
+    records: list[Dict[str, Any]] = []
+    devices = {device.device_num: device for device in data.broadcom_nic_devices}
+    for device_num, version in data.broadcom_nic_firmware.items():
+        device = devices.get(device_num)
+        records.append(
+            {
+                "identity": str(device_num),
+                "version": version,
+                "source": data.broadcom_cli_type or "broadcom",
+                "vendor": "Broadcom",
+                "model": device.model if device else None,
+                "interface": device.interface_name if device else None,
+                "pci_bdf": device.pci_address if device else None,
+            }
+        )
+    for device in data.broadcom_nic_devices:
+        if device.device_num not in data.broadcom_nic_firmware:
+            records.append(
+                {
+                    "identity": str(device.device_num),
+                    "version": None,
+                    "source": data.broadcom_cli_type or "broadcom",
+                    "vendor": "Broadcom",
+                    "model": device.model,
+                    "interface": device.interface_name,
+                    "pci_bdf": device.pci_address,
+                }
+            )
+    for firmware in data.pensando_nic_version_firmware:
+        records.append(
+            {
+                "identity": firmware.nic_id,
+                "version": firmware.firmware_a,
+                "source": "nicctl",
+                "vendor": "Pensando",
+                "pci_bdf": firmware.pcie_bdf,
+            }
+        )
+    return records
+
+
 class NicAnalyzer(DataAnalyzer[NicDataModel, NicAnalyzerArgs]):
     """Analyze niccli/nicctl data; checks Broadcom support_rdma, performance_profile (RoCE), pcie_relaxed_ordering (enabled), and getqos (expected QoS across adapters)."""
 
@@ -115,11 +159,33 @@ class NicAnalyzer(DataAnalyzer[NicDataModel, NicAnalyzerArgs]):
         if args is None:
             args = NicAnalyzerArgs()
 
+        firmware_policy_issues = _validate_firmware_policy(
+            _firmware_records(data),
+            (
+                {"expected_nic_firmware": args.expected_nic_firmware}
+                if args.expected_nic_firmware
+                else None
+            ),
+        )
+        for issue in firmware_policy_issues:
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description="Network adapter firmware policy mismatch",
+                data=issue,
+                priority=EventPriority.WARNING,
+                console_log=True,
+            )
+        has_firmware_data = bool(
+            data.broadcom_nic_devices
+            or data.broadcom_nic_firmware
+            or data.pensando_nic_version_firmware
+        )
+
         has_broadcom = bool(data.broadcom_nic_support_rdma)
         has_nicctl_logs = bool(
             data.nicctl_card_logs and any((c or "").strip() for c in data.nicctl_card_logs.values())
         )
-        if not has_broadcom and not has_nicctl_logs:
+        if not has_broadcom and not has_nicctl_logs and not has_firmware_data:
             self.result.message = "No Broadcom support_rdma or nicctl card log data to check"
             self.result.status = ExecutionStatus.OK
             return self.result
@@ -233,7 +299,6 @@ class NicAnalyzer(DataAnalyzer[NicDataModel, NicAnalyzerArgs]):
                         description=f"Broadcom device {device_num}: getqos does not match expected QoS: {'; '.join(mismatches)}",
                         data={
                             "device_num": device_num,
-                            "qos": qos.model_dump(),
                             "mismatches": mismatches,
                         },
                         priority=EventPriority.WARNING,
@@ -296,12 +361,14 @@ class NicAnalyzer(DataAnalyzer[NicDataModel, NicAnalyzerArgs]):
                             console_log=True,
                         )
 
+        any_firmware_mismatch = bool(firmware_policy_issues)
         if (
             any_disabled
             or any_non_roce
             or any_relaxed_ordering_bad
             or any_qos_mismatch
             or any_nicctl_log_errors
+            or any_firmware_mismatch
         ):
             self.result.status = ExecutionStatus.WARNING
             parts = []
@@ -315,6 +382,8 @@ class NicAnalyzer(DataAnalyzer[NicDataModel, NicAnalyzerArgs]):
                 parts.append("getqos")
             if any_nicctl_log_errors:
                 parts.append("nicctl_card_logs")
+            if any_firmware_mismatch:
+                parts.append("firmware")
             self.result.message = f"Broadcom/nic check(s) failed: {' and/or '.join(parts)}"
         else:
             self.result.status = ExecutionStatus.OK
