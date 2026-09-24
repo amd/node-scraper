@@ -32,6 +32,8 @@ import pytest
 from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     AmdSmiDataModel,
     AmdSmiMetric,
+    Fabric,
+    FabricInfo,
     MetricClockData,
     MetricPcie,
     MetricPower,
@@ -542,3 +544,146 @@ def test_metric_clock_per_aid_na_maps():
     assert metric.clock["uclk_aid"]["AID_0"] == "N/A"
     assert isinstance(metric.clock["GFX_0"], MetricClockData)
     assert metric.pcie.lc_perf_other_end_recovery_count == 0
+
+
+# FABRIC
+
+
+def dummy_fabric_entry(gpu: int = 0, **overrides: Any) -> dict[str, Any]:
+    """Build one ``amd-smi fabric --json`` entry as emitted by the tool."""
+    fabric_info: dict[str, Any] = {
+        "bdf": f"{gpu + 1:04d}:01:00.1",
+        "version": 4294967295,
+        "accelerator_id": 7 - gpu,
+        "fabric_type": "UALOE",
+        "bandwidth": {"value": 0, "unit": "Mb/s"},
+        "latency": {"value": 0, "unit": "ns"},
+        "ppod_id": "4c8fab1c-fb8b-42aa-92ae-ea17ca953bdb",
+        "ppod_size": 72,
+        "vpod_id": 0,
+        "vpod_size": 0,
+        "local_accelerators": "0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0",
+        "local_active_accelerators": [
+            "0, 0, 0, 0, 0, 0, 0, 0",
+            "0, 0, 0, 0, 0, 0, 0, 0",
+            "0, 0, 0, 0, 0, 0, 0, 0",
+            "0, 0, 0, 0, 0, 0, 0, 0",
+        ],
+        "addr_mode": "UNKNOWN",
+        "accel_state": "UNKNOWN",
+    }
+    fabric_info.update(overrides)
+    return {
+        "gpu": gpu,
+        "fabric": {
+            "gpu": gpu,
+            "bdf": f"{gpu + 1:04d}:01:00.0",
+            "fabric_info": fabric_info,
+            "fabric_telemetry": "N/A",
+        },
+    }
+
+
+def test_fabric_model_from_amd_smi_output():
+    """Fabric parses the nested ``fabric`` payload from amd-smi fabric --json."""
+    fabric = Fabric.model_validate(dummy_fabric_entry(gpu=0)["fabric"])
+
+    assert fabric.gpu == 0
+    assert fabric.bdf == "0001:01:00.0"
+    info = fabric.fabric_info
+    assert info is not None
+    assert info.bdf == "0001:01:00.1"
+    assert info.version == 4294967295
+    assert info.accelerator_id == 7
+    assert info.fabric_type == "UALOE"
+    assert info.ppod_id == "4c8fab1c-fb8b-42aa-92ae-ea17ca953bdb"
+    assert info.ppod_size == 72
+    assert info.vpod_id == 0
+    assert info.vpod_size == 0
+    assert info.addr_mode == "UNKNOWN"
+    assert info.accel_state == "UNKNOWN"
+    assert len(info.local_active_accelerators) == 4
+
+
+def test_fabric_ignores_fabric_telemetry():
+    """fabric_telemetry is not modelled and must not cause a validation error."""
+    entry = dummy_fabric_entry(gpu=1)["fabric"]
+    entry["fabric_telemetry"] = {"huge": [1, 2, 3]}
+
+    fabric = Fabric.model_validate(entry)
+
+    assert fabric.gpu == 1
+    assert not hasattr(fabric, "fabric_telemetry")
+
+
+def test_fabric_info_value_unit_coercion():
+    """bandwidth/latency accept dicts, bare numbers and number+unit strings."""
+    info = FabricInfo.model_validate(
+        {
+            "bandwidth": {"value": 0, "unit": "Mb/s"},
+            "latency": "150 ns",
+        }
+    )
+
+    assert info.bandwidth == ValueUnit(value=0, unit="Mb/s")
+    assert info.latency is not None
+    assert info.latency.value == 150
+    assert info.latency.unit == "ns"
+
+
+def test_fabric_na_fields_map_to_none():
+    """'N/A' values from amd-smi are normalized to None."""
+    fabric = Fabric.model_validate(
+        {
+            "gpu": 2,
+            "bdf": "N/A",
+            "fabric_info": {
+                "bdf": "N/A",
+                "fabric_type": "N/A",
+                "ppod_id": "N/A",
+                "ppod_size": "N/A",
+                "accel_state": "N/A",
+                "bandwidth": "N/A",
+                "latency": None,
+            },
+        }
+    )
+
+    assert fabric.bdf is None
+    info = fabric.fabric_info
+    assert info is not None
+    assert info.bdf is None
+    assert info.fabric_type is None
+    assert info.ppod_id is None
+    assert info.ppod_size is None
+    assert info.accel_state is None
+    assert info.bandwidth is None
+    assert info.latency is None
+
+
+def test_fabric_info_na_maps_to_none():
+    """A whole fabric_info block reported as 'N/A' becomes None."""
+    fabric = Fabric.model_validate({"gpu": 3, "bdf": "0004:01:00.0", "fabric_info": "N/A"})
+
+    assert fabric.fabric_info is None
+
+
+def test_data_model_get_fabric():
+    """AmdSmiDataModel.get_fabric returns the entry for the requested gpu."""
+    data = AmdSmiDataModel(
+        fabric=[
+            Fabric.model_validate(dummy_fabric_entry(gpu=0)["fabric"]),
+            Fabric.model_validate(dummy_fabric_entry(gpu=1)["fabric"]),
+        ]
+    )
+
+    fabric = data.get_fabric(1)
+    assert fabric is not None
+    assert fabric.gpu == 1
+    assert fabric.bdf == "0002:01:00.0"
+    assert data.get_fabric(9) is None
+
+
+def test_data_model_fabric_defaults_to_empty_list():
+    """fabric defaults to an empty list when amd-smi fabric is unavailable."""
+    assert AmdSmiDataModel().fabric == []

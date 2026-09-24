@@ -40,6 +40,8 @@ from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     AmdSmiStatic,
     AmdSmiVersion,
     EccState,
+    Fabric,
+    FabricInfo,
     Fw,
     FwListItem,
     MetricEccTotals,
@@ -1162,3 +1164,147 @@ def test_check_amdsmi_metric_ecc_blocks(mock_analyzer):
     assert any("GFX" in d and "correctable" in d for d in desc)
     assert any("MMHUB" in d for d in desc)
     assert any("HDP" in d for d in desc)
+
+
+def create_fabric(
+    gpu: int = 0,
+    fabric_type: str = "UALOE",
+    accel_state: str = "ACTIVE",
+    ppod_id: str = "4c8fab1c-fb8b-42aa-92ae-ea17ca953bdb",
+) -> Fabric:
+    """Helper function to create a healthy mock Fabric object for testing."""
+    return Fabric(
+        gpu=gpu,
+        bdf=f"{gpu + 1:04d}:01:00.0",
+        fabric_info=FabricInfo(
+            bdf=f"{gpu + 1:04d}:01:00.1",
+            version=4294967295,
+            accelerator_id=7 - gpu,
+            fabric_type=fabric_type,
+            bandwidth=ValueUnit(value=400000, unit="Mb/s"),
+            latency=ValueUnit(value=150, unit="ns"),
+            ppod_id=ppod_id,
+            ppod_size=72,
+            vpod_id=1,
+            vpod_size=8,
+            local_accelerators="1, 2, 3, 4, 5, 6, 7, 8",
+            local_active_accelerators=["1, 2, 3, 4, 5, 6, 7, 8"],
+            addr_mode="DIRECT",
+            accel_state=accel_state,
+        ),
+    )
+
+
+def test_check_fabric_success(mock_analyzer):
+    """Healthy fabric data on all GPUs generates no events."""
+    analyzer = mock_analyzer
+
+    analyzer.check_fabric([create_fabric(gpu) for gpu in range(4)])
+
+    assert len(analyzer.result.events) == 0
+
+
+def test_check_fabric_no_data(mock_analyzer):
+    """Missing fabric data logs a warning rather than an error."""
+    analyzer = mock_analyzer
+
+    analyzer.check_fabric([])
+
+    assert len(analyzer.result.events) == 1
+    assert analyzer.result.events[0].priority == EventPriority.WARNING
+    assert "Fabric data is not available" in analyzer.result.events[0].description
+
+
+def test_check_fabric_inactive_output(mock_analyzer):
+    """Real amd-smi fabric output from an inactive fabric reports every mismatch."""
+    analyzer = mock_analyzer
+
+    fabric_data = [
+        Fabric.model_validate(
+            {
+                "gpu": gpu,
+                "bdf": f"{gpu + 1:04d}:01:00.0",
+                "fabric_info": {
+                    "bdf": f"{gpu + 1:04d}:01:00.1",
+                    "version": 4294967295,
+                    "accelerator_id": 7 - gpu,
+                    "fabric_type": "UALOE",
+                    "bandwidth": {"value": 0, "unit": "Mb/s"},
+                    "latency": {"value": 0, "unit": "ns"},
+                    "ppod_id": "4c8fab1c-fb8b-42aa-92ae-ea17ca953bdb",
+                    "ppod_size": 72,
+                    "vpod_id": 0,
+                    "vpod_size": 0,
+                    "local_accelerators": "0, 0, 0, 0, 0, 0, 0, 0",
+                    "local_active_accelerators": ["0, 0, 0, 0, 0, 0, 0, 0"],
+                    "addr_mode": "UNKNOWN",
+                    "accel_state": "UNKNOWN",
+                },
+            }
+        )
+        for gpu in range(4)
+    ]
+
+    analyzer.check_fabric(fabric_data)
+
+    assert len(analyzer.result.events) == 1
+    event = analyzer.result.events[0]
+    assert event.priority == EventPriority.ERROR
+    assert event.category == "NETWORK"
+    mismatched_fields = {m["field"] for m in event.data["mismatches"]}
+    assert mismatched_fields == {
+        "accel_state",
+        "local_accelerators",
+        "local_active_accelerators",
+        "vpod_size",
+    }
+    assert {m["gpu"] for m in event.data["mismatches"]} == {0, 1, 2, 3}
+    assert "Fabric data mismatch on 4 GPU(s)" in event.description
+
+
+def test_check_fabric_unexpected_fabric_type(mock_analyzer):
+    """A fabric_type other than the expected one is reported."""
+    analyzer = mock_analyzer
+
+    analyzer.check_fabric([create_fabric(0, fabric_type="XGMI")])
+
+    assert len(analyzer.result.events) == 1
+    mismatches = analyzer.result.events[0].data["mismatches"]
+    assert mismatches == [{"gpu": 0, "field": "fabric_type", "expected": "UALOE", "actual": "XGMI"}]
+
+
+def test_check_fabric_custom_expected_values(mock_analyzer):
+    """Expected accel_state/fabric_type are configurable and case insensitive."""
+    analyzer = mock_analyzer
+
+    analyzer.check_fabric(
+        [create_fabric(0, fabric_type="xgmi", accel_state="up")],
+        expected_accel_state="UP",
+        expected_fabric_type="XGMI",
+    )
+
+    assert len(analyzer.result.events) == 0
+
+
+def test_check_fabric_missing_fabric_info(mock_analyzer):
+    """A GPU with no fabric_info reports all fields as N/A."""
+    analyzer = mock_analyzer
+
+    analyzer.check_fabric([Fabric(gpu=0, bdf="0001:01:00.0", fabric_info=None)])
+
+    assert len(analyzer.result.events) == 1
+    mismatches = analyzer.result.events[0].data["mismatches"]
+    assert len(mismatches) == 7
+    assert all(m["actual"] == "N/A" and m["gpu"] == 0 for m in mismatches)
+
+
+def test_check_fabric_zero_ppod_id(mock_analyzer):
+    """An all-zero ppod_id is treated as a mismatch."""
+    analyzer = mock_analyzer
+
+    analyzer.check_fabric([create_fabric(0, ppod_id="00000000-0000-0000-0000-000000000000")])
+
+    assert len(analyzer.result.events) == 1
+    mismatches = analyzer.result.events[0].data["mismatches"]
+    assert [m["field"] for m in mismatches] == ["ppod_id"]
+    assert mismatches[0]["expected"] == "non-zero"

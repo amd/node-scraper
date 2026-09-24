@@ -832,3 +832,127 @@ def test_collect_data_with_both_auto_and_custom_cper(conn_mock, system_info, mon
     assert data.cper_afids["auto1.cper"] == 11111
     assert "/home/user/custom.cper" in data.cper_afids
     assert data.cper_afids["/home/user/custom.cper"] == 99999
+
+
+def fabric_json_entry(gpu: int) -> dict[str, Any]:
+    """Build one `amd-smi fabric --json` entry as emitted by the tool."""
+    return {
+        "gpu": gpu,
+        "fabric": {
+            "gpu": gpu,
+            "bdf": f"{gpu + 1:04d}:01:00.0",
+            "fabric_info": {
+                "bdf": f"{gpu + 1:04d}:01:00.1",
+                "version": 4294967295,
+                "accelerator_id": 7 - gpu,
+                "fabric_type": "UALOE",
+                "bandwidth": {"value": 0, "unit": "Mb/s"},
+                "latency": {"value": 0, "unit": "ns"},
+                "ppod_id": "4c8fab1c-fb8b-42aa-92ae-ea17ca953bdb",
+                "ppod_size": 72,
+                "vpod_id": 0,
+                "vpod_size": 0,
+                "local_accelerators": "0, 0, 0, 0, 0, 0, 0, 0",
+                "local_active_accelerators": ["0, 0, 0, 0, 0, 0, 0, 0"],
+                "addr_mode": "UNKNOWN",
+                "accel_state": "UNKNOWN",
+            },
+            "fabric_telemetry": "N/A",
+        },
+    }
+
+
+def make_fabric_collector(conn_mock, system_info, monkeypatch, fabric_payload) -> AmdSmiCollector:
+    """Create a collector whose only mocked amd-smi command is `fabric`."""
+
+    def mock_run_sut_cmd(cmd: str, sudo: bool = False) -> MagicMock:
+        if "which amd-smi" in cmd:
+            return make_cmd_result("/usr/bin/amd-smi")
+        if "fabric --json" in cmd:
+            if fabric_payload is None:
+                return make_cmd_result("", "fabric not supported", 1)
+            return make_cmd_result(make_json_response(fabric_payload))
+        return make_cmd_result("")
+
+    c = AmdSmiCollector(
+        system_info=system_info,
+        system_interaction_level=SystemInteractionLevel.PASSIVE,
+        connection=conn_mock,
+    )
+    monkeypatch.setattr(c, "_run_sut_cmd", mock_run_sut_cmd)
+    return c
+
+
+def test_get_fabric(conn_mock, system_info, monkeypatch):
+    """Test fabric parsing from the nested {'gpu': n, 'fabric': {...}} output"""
+    payload = [fabric_json_entry(0), fabric_json_entry(1)]
+    c = make_fabric_collector(conn_mock, system_info, monkeypatch, payload)
+
+    fabric = c.get_fabric()
+
+    assert len(fabric) == 2
+    assert [f.gpu for f in fabric] == [0, 1]
+    assert fabric[0].bdf == "0001:01:00.0"
+    info = fabric[0].fabric_info
+    assert info is not None
+    assert info.fabric_type == "UALOE"
+    assert info.accelerator_id == 7
+    assert info.ppod_id == "4c8fab1c-fb8b-42aa-92ae-ea17ca953bdb"
+    assert info.ppod_size == 72
+    assert info.bandwidth is not None and info.bandwidth.unit == "Mb/s"
+    assert info.latency is not None and info.latency.unit == "ns"
+
+
+def test_get_fabric_drops_fabric_telemetry(conn_mock, system_info, monkeypatch):
+    """Test that the large fabric_telemetry payload is not collected"""
+    entry = fabric_json_entry(0)
+    entry["fabric"]["fabric_telemetry"] = {"links": [{"id": i} for i in range(64)]}
+    c = make_fabric_collector(conn_mock, system_info, monkeypatch, [entry])
+
+    fabric = c.get_fabric()
+
+    assert len(fabric) == 1
+    assert "fabric_telemetry" not in fabric[0].model_dump()
+
+
+def test_get_fabric_gpu_data_wrapper(conn_mock, system_info, monkeypatch):
+    """Test fabric parsing when output is wrapped in a gpu_data key"""
+    payload = {"gpu_data": [fabric_json_entry(0), fabric_json_entry(1), fabric_json_entry(2)]}
+    c = make_fabric_collector(conn_mock, system_info, monkeypatch, payload)
+
+    fabric = c.get_fabric()
+
+    assert [f.gpu for f in fabric] == [0, 1, 2]
+
+
+def test_get_fabric_flat_entry(conn_mock, system_info, monkeypatch):
+    """Test fabric parsing when entries are not nested under a fabric key"""
+    payload = [fabric_json_entry(0)["fabric"]]
+    c = make_fabric_collector(conn_mock, system_info, monkeypatch, payload)
+
+    fabric = c.get_fabric()
+
+    assert len(fabric) == 1
+    assert fabric[0].gpu == 0
+    assert fabric[0].fabric_info is not None
+
+
+def test_get_fabric_command_failure(conn_mock, system_info, monkeypatch):
+    """Test fabric returns an empty list when amd-smi fabric fails"""
+    c = make_fabric_collector(conn_mock, system_info, monkeypatch, None)
+
+    assert c.get_fabric() == []
+
+
+def test_get_fabric_na_values(conn_mock, system_info, monkeypatch):
+    """Test fabric handles N/A values reported by amd-smi"""
+    entry = fabric_json_entry(0)
+    entry["fabric"]["bdf"] = "N/A"
+    entry["fabric"]["fabric_info"] = "N/A"
+    c = make_fabric_collector(conn_mock, system_info, monkeypatch, [entry])
+
+    fabric = c.get_fabric()
+
+    assert len(fabric) == 1
+    assert fabric[0].bdf is None
+    assert fabric[0].fabric_info is None
