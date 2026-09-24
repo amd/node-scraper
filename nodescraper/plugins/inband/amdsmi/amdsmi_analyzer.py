@@ -24,6 +24,7 @@
 #
 ###############################################################################
 import io
+import re
 from collections import defaultdict
 from typing import Any, Mapping, Optional, Union
 
@@ -36,6 +37,7 @@ from .amdsmidata import (
     AmdSmiMetric,
     AmdSmiStatic,
     EccData,
+    Fabric,
     Fw,
     Partition,
     Processes,
@@ -77,6 +79,15 @@ def _gpu_unavailable_description(
     else:
         description = f"{check_name} not available on {gpu_text}"
     return description, description
+
+
+def _is_all_zeros(value: Union[str, list[str]]) -> bool:
+    """Return True if every numeric/hex token in the value is zero."""
+    values = value if isinstance(value, list) else [value]
+    tokens = [tok for item in values for tok in re.split(r"[^0-9A-Za-z]+", str(item)) if tok]
+    if not tokens:
+        return False
+    return all(set(tok) == {"0"} for tok in tokens)
 
 
 def _static_mismatch_description(payload: dict[str, Any]) -> tuple[str, str]:
@@ -933,6 +944,82 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                     console_log=True,
                 )
 
+    def check_fabric(
+        self,
+        fabric_data: Optional[list[Fabric]],
+        expected_accel_state: str = "ACTIVE",
+        expected_fabric_type: str = "UALOE",
+    ) -> None:
+        """Check fabric state, type, pod IDs and accelerator maps for all GPUs
+
+        Args:
+            fabric_data (Optional[list[Fabric]]): fabric data from amd-smi fabric
+            expected_accel_state (str): expected accel_state value
+            expected_fabric_type (str): expected fabric_type value
+        """
+        if not fabric_data:
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description="Fabric data is not available and cannot be checked",
+                priority=EventPriority.WARNING,
+                data={"fabric": fabric_data},
+            )
+            return
+
+        expected_state = expected_accel_state.strip().upper()
+        expected_type = expected_fabric_type.strip().upper()
+        issues: list[dict[str, Any]] = []
+
+        def _add(gpu: int, field: str, expected: object, actual: object) -> None:
+            issues.append(
+                {"gpu": gpu, "field": field, "expected": str(expected), "actual": str(actual)}
+            )
+
+        for entry in fabric_data:
+            info = entry.fabric_info
+            gpu = entry.gpu
+
+            accel_state = info.accel_state if info else None
+            if accel_state is None or accel_state.strip().upper() != expected_state:
+                _add(gpu, "accel_state", expected_state, accel_state or "N/A")
+
+            fabric_type = info.fabric_type if info else None
+            if fabric_type is None or fabric_type.strip().upper() != expected_type:
+                _add(gpu, "fabric_type", expected_type, fabric_type or "N/A")
+
+            ppod_id = info.ppod_id if info else None
+            if ppod_id is None or _is_all_zeros(ppod_id):
+                _add(gpu, "ppod_id", "non-zero", ppod_id or "N/A")
+
+            for field in ("local_accelerators", "local_active_accelerators"):
+                value = getattr(info, field) if info else None
+                if value is None or _is_all_zeros(value):
+                    _add(gpu, field, "non-zero", value if value is not None else "N/A")
+
+            for field in ("ppod_size", "vpod_size"):
+                value = getattr(info, field) if info else None
+                if not value:
+                    _add(gpu, field, "non-zero", value if value is not None else "N/A")
+
+        if issues:
+            details = "; ".join(
+                f"GPU {i['gpu']} {i['field']}: expected {i['expected']}, actual {i['actual']}"
+                for i in issues
+            )
+            gpus_affected = len({i["gpu"] for i in issues})
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description=f"Fabric data mismatch on {gpus_affected} GPU(s): {details}",
+                priority=EventPriority.ERROR,
+                data={
+                    "expected_accel_state": expected_state,
+                    "expected_fabric_type": expected_type,
+                    "mismatches": issues,
+                    "details": details,
+                },
+                console_log=True,
+            )
+
     def analyze_data(
         self, data: AmdSmiDataModel, args: Optional[AmdSmiAnalyzerArgs] = None
     ) -> TaskResult:
@@ -1019,5 +1106,8 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
             self.check_expected_xgmi_link_speed(
                 data.xgmi_metric, expected_xgmi_speed=args.expected_xgmi_speed
             )
+
+        if data.fabric:
+            self.check_fabric(data.fabric)
 
         return self.result
