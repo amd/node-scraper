@@ -24,7 +24,6 @@
 #
 ###############################################################################
 import io
-import re
 from collections import defaultdict
 from typing import Any, Mapping, Optional, Union
 
@@ -82,9 +81,9 @@ def _gpu_unavailable_description(
 
 
 def _is_all_zeros(value: Union[str, list[str]]) -> bool:
-    """Return True if every numeric/hex token in the value is zero."""
+    """Return True if every comma or space separated entry is zero."""
     values = value if isinstance(value, list) else [value]
-    tokens = [tok for item in values for tok in re.split(r"[^0-9A-Za-z]+", str(item)) if tok]
+    tokens = [tok for item in values for tok in str(item).replace(",", " ").split()]
     if not tokens:
         return False
     return all(set(tok) == {"0"} for tok in tokens)
@@ -988,7 +987,7 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                 _add(gpu, "fabric_type", expected_type, fabric_type or "N/A")
 
             ppod_id = info.ppod_id if info else None
-            if ppod_id is None or _is_all_zeros(ppod_id):
+            if ppod_id is None or set(ppod_id) <= {"0", "-"}:
                 _add(gpu, "ppod_id", "non-zero", ppod_id or "N/A")
 
             for field in ("local_accelerators", "local_active_accelerators"):
