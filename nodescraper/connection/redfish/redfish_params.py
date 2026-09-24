@@ -27,7 +27,10 @@ from __future__ import annotations
 
 from typing import Optional, Union
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
+
+# RedfishTargetParams is an alias kept for callers that import it by name.
+# Internally, both the top-level config and per-target entries use the same model.
 from pydantic.networks import IPvAnyAddress
 
 from nodescraper.connection.inband.sshparams import SSHConnectionParams
@@ -36,12 +39,33 @@ from .redfish_connection import DEFAULT_REDFISH_API_ROOT
 
 
 class RedfishConnectionParams(BaseModel):
-    """Connection parameters for a Redfish (BMC) API endpoint."""
+    """Connection parameters for a Redfish (BMC) API endpoint.
+
+    Single-target mode: supply ``host`` (and optionally ``username``, ``password``, etc.).
+    Multi-target mode:  supply ``targets`` — a list of ``RedfishConnectionParams`` entries,
+    each with ``host`` set and an optional ``target_key`` identifier.
+    """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    host: Union[IPvAnyAddress, str]
-    username: str
+    target_key: Optional[str] = Field(
+        default=None,
+        description="Identifier used when this entry appears inside a 'targets' list.",
+    )
+    name: Optional[str] = Field(default=None)
+    targets: Optional[list[RedfishConnectionParams]] = Field(
+        default=None, description="List of OOB Redfish targets (multi-target mode)."
+    )
+    max_workers: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description=(
+            "Max concurrent threads for multi-target collection. "
+            "Defaults to min(len(targets), 32) when not set."
+        ),
+    )
+    host: Optional[Union[IPvAnyAddress, str]] = None
+    username: Optional[str] = None
     password: Optional[SecretStr] = None
     port: Optional[int] = Field(default=None, ge=1, le=65535)
     use_https: bool = True
@@ -55,6 +79,25 @@ class RedfishConnectionParams(BaseModel):
         default=DEFAULT_REDFISH_API_ROOT,
         description="Redfish API path (e.g. 'redfish/v1'). Override for a different API version.",
     )
+
+    @model_validator(mode="after")
+    def _validate_target_config(self) -> "RedfishConnectionParams":
+        if not self.targets and self.host is None:
+            raise ValueError(
+                "Either 'targets' (multi-target mode) or 'host' (single-target mode) must be provided."
+            )
+        return self
+
+    @property
+    def is_multi_target(self) -> bool:
+        """True when one or more targets are configured via the ``targets`` list."""
+        return bool(self.targets)
+
+
+RedfishConnectionParams.model_rebuild()
+
+# Backward-compatible alias so existing callers of RedfishTargetParams still work.
+RedfishTargetParams = RedfishConnectionParams
 
 
 def redfish_params_to_ssh(

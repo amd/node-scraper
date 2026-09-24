@@ -39,7 +39,11 @@ from .redfish_oem_diag import (
     collect_oem_diagnostic_data,
     get_oem_diagnostic_allowable_values,
 )
-from .redfish_params import RedfishConnectionParams, redfish_params_to_ssh
+from .redfish_params import (
+    RedfishConnectionParams,
+    RedfishTargetParams,
+    redfish_params_to_ssh,
+)
 from .redfish_path import RedfishPath
 
 __all__ = [
@@ -48,6 +52,7 @@ __all__ = [
     "RedfishGetResult",
     "RedfishConnectionManager",
     "RedfishConnectionParams",
+    "RedfishTargetParams",
     "redfish_params_to_ssh",
     "RedfishPath",
     "collect_oem_diagnostic_data",
