@@ -25,13 +25,19 @@
 ###############################################################################
 from nodescraper.base import InBandDataPlugin
 
+from .analyzer_args import NvmeAnalyzerArgs
+from .nvme_analyzer import NvmeAnalyzer
 from .nvme_collector import NvmeCollector
 from .nvmedata import NvmeDataModel
 
 
-class NvmePlugin(InBandDataPlugin[NvmeDataModel, None, None]):
+class NvmePlugin(InBandDataPlugin[NvmeDataModel, None, NvmeAnalyzerArgs]):
     """Plugin for collection and analysis of nvme data"""
 
     DATA_MODEL = NvmeDataModel
 
     COLLECTOR = NvmeCollector
+
+    ANALYZER = NvmeAnalyzer
+
+    ANALYZER_ARGS = NvmeAnalyzerArgs

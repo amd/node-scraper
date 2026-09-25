@@ -23,7 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
-from typing import Union
+from typing import Optional, Union
 
 from pydantic import Field, field_validator
 
@@ -32,6 +32,11 @@ from nodescraper.plugins.inband.os.osdata import OsDataModel
 
 
 class OsAnalyzerArgs(AnalyzerArgs):
+    maximum_load_per_cpu_core: Optional[float] = Field(
+        default=None,
+        ge=0,
+        description="Maximum allowed 1-minute load average per CPU core.",
+    )
     exp_os: Union[str, list] = Field(
         default_factory=list,
         description="Expected OS name/version string(s) to match (e.g. from lsb_release or /etc/os-release).",
