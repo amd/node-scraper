@@ -23,6 +23,8 @@
 # SOFTWARE.
 #
 ###############################################################################
+from typing import Optional
+
 from pydantic import Field
 
 from nodescraper.models.analyzerargs import AnalyzerArgs
@@ -31,6 +33,12 @@ from .memorydata import MemoryDataModel
 
 
 class MemoryAnalyzerArgs(AnalyzerArgs):
+    minimum_free_memory_percent: Optional[float] = Field(
+        default=None,
+        ge=0,
+        le=100,
+        description="Minimum available system memory percentage required.",
+    )
     ratio: float = Field(
         default=0.66,
         description="Required free-memory ratio (0-1). Analysis fails if free/total < ratio.",

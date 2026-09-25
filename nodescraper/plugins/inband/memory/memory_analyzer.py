@@ -61,6 +61,46 @@ class MemoryAnalyzer(DataAnalyzer[MemoryDataModel, MemoryAnalyzerArgs]):
         total_memory = convert_to_bytes(data.mem_total)
         used_memory = total_memory - available_memory
 
+        if args.minimum_free_memory_percent is not None:
+            if total_memory <= 0:
+                self.result.status = ExecutionStatus.WARNING
+                self.result.message = "Total memory is unavailable"
+                self._log_event(
+                    category=EventCategory.OS,
+                    description="Cannot validate minimum free memory percentage",
+                    priority=EventPriority.WARNING,
+                    data={"total_memory": total_memory, "available_memory": available_memory},
+                    console_log=True,
+                )
+                return self.result
+
+            available_percent = available_memory / total_memory * 100
+            if available_percent < args.minimum_free_memory_percent:
+                self.result.status = ExecutionStatus.ERROR
+                self.result.message = "Minimum free memory percentage not met"
+                self._log_event(
+                    category=EventCategory.OS,
+                    description=(
+                        f"Available memory is {available_percent:.2f}% "
+                        f"(minimum {args.minimum_free_memory_percent:.2f}%)"
+                    ),
+                    priority=EventPriority.CRITICAL,
+                    data={
+                        "available_memory": available_memory,
+                        "total_memory": total_memory,
+                        "available_percent": available_percent,
+                        "minimum_free_memory_percent": args.minimum_free_memory_percent,
+                    },
+                    console_log=True,
+                )
+            else:
+                self.result.status = ExecutionStatus.OK
+                self.result.message = (
+                    f"Available memory is {available_percent:.2f}% "
+                    f"(minimum {args.minimum_free_memory_percent:.2f}%)"
+                )
+            return self.result
+
         threshold_bytes = convert_to_bytes(args.memory_threshold)
 
         if total_memory > threshold_bytes:
