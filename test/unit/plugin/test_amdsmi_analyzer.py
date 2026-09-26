@@ -42,6 +42,7 @@ from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     EccState,
     Fw,
     FwListItem,
+    LinkStatusTable,
     MetricEccTotals,
     MetricPcie,
     Partition,
@@ -62,6 +63,7 @@ from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     StaticVram,
     ValueUnit,
     XgmiLinkMetrics,
+    XgmiLinks,
     XgmiMetrics,
 )
 from nodescraper.plugins.inband.amdsmi.analyzer_args import AmdSmiAnalyzerArgs
@@ -751,6 +753,77 @@ def test_check_expected_xgmi_link_speed_missing_bit_rate(mock_analyzer):
     assert "XGMI link speed not available" in analyzer.result.events[0].description
 
 
+def test_check_xgmi_or_peer_links_status_accepts_up_and_self_links(mock_analyzer):
+    """Healthy links generate an informational event and self-links are ignored."""
+    analyzer = mock_analyzer
+    xgmi_links = [
+        XgmiLinks(
+            gpu=0,
+            bdf="0000:01:00.0",
+            link_status=[LinkStatusTable.UP, LinkStatusTable.SELF],
+        ),
+        XgmiLinks(
+            gpu=1,
+            bdf="0000:02:00.0",
+            link_status=[LinkStatusTable.UP],
+        ),
+    ]
+
+    analyzer.check_xgmi_or_peer_links_status(xgmi_links)
+
+    assert len(analyzer.result.events) == 1
+    assert analyzer.result.events[0].priority == EventPriority.INFO
+    assert "All XGMI/peer GPU links are working fine" in analyzer.result.events[0].description
+
+
+def test_check_xgmi_or_peer_links_status_reports_down_and_degraded_links(mock_analyzer):
+    """Down and degraded links generate IO warnings."""
+    analyzer = mock_analyzer
+    xgmi_links = [
+        XgmiLinks(
+            gpu=0,
+            bdf="0000:01:00.0",
+            link_status=[LinkStatusTable.DOWN, LinkStatusTable.DISABLED],
+        )
+    ]
+
+    analyzer.check_xgmi_or_peer_links_status(xgmi_links)
+
+    assert len(analyzer.result.events) == 2
+    assert all(event.category == "IO" for event in analyzer.result.events)
+    assert all(event.priority == EventPriority.WARNING for event in analyzer.result.events)
+    assert analyzer.result.events[0].data["link_error_count"] == 1
+    assert analyzer.result.events[1].data["degraded_links"][0]["status"] == "X"
+
+
+def test_check_xgmi_or_peer_links_status_reports_degraded_links(mock_analyzer):
+    """Disabled/degraded links generate warnings."""
+    analyzer = mock_analyzer
+    xgmi_links = [
+        XgmiLinks(
+            gpu=0,
+            bdf="0000:01:00.0",
+            link_status=[LinkStatusTable.DISABLED],
+        )
+    ]
+
+    analyzer.check_xgmi_or_peer_links_status(xgmi_links)
+
+    assert len(analyzer.result.events) == 1
+    assert analyzer.result.events[0].priority == EventPriority.WARNING
+
+
+def test_check_xgmi_or_peer_links_status_reports_missing_data(mock_analyzer):
+    """Configured link validation reports when XGMI data is unavailable."""
+    analyzer = mock_analyzer
+
+    analyzer.check_xgmi_or_peer_links_status(None)
+
+    assert len(analyzer.result.events) == 1
+    assert analyzer.result.events[0].priority == EventPriority.WARNING
+    assert "XGMI/peer link data is not available" in analyzer.result.events[0].description
+
+
 def test_analyze_data_full_workflow(mock_analyzer):
     """Test full analyze_data workflow with various checks."""
     analyzer = mock_analyzer
@@ -882,10 +955,24 @@ def _minimal_amdsmi_metric(
     ecc: Optional[MetricEccTotals] = None,
     ecc_blocks: Optional[dict] = None,
     power_management: Optional[str] = None,
+    mem_usage: Optional[dict] = None,
 ) -> AmdSmiMetric:
     """Build minimal AmdSmiMetric for PCIe/ECC tests with all required fields present."""
     pcie_dict = pcie.model_dump() if pcie is not None else {k: None for k in _PCIE_KEYS}
     ecc_dict = ecc.model_dump() if ecc is not None else {k: None for k in _ECC_TOTALS_KEYS}
+    mem_usage_dict = {
+        "total_vram": None,
+        "used_vram": None,
+        "free_vram": None,
+        "total_visible_vram": None,
+        "used_visible_vram": None,
+        "free_visible_vram": None,
+        "total_gtt": None,
+        "used_gtt": None,
+        "free_gtt": None,
+    }
+    if mem_usage is not None:
+        mem_usage_dict.update(mem_usage)
     return AmdSmiMetric.model_validate(
         {
             "gpu": gpu,
@@ -917,17 +1004,7 @@ def _minimal_amdsmi_metric(
             "perf_level": None,
             "xgmi_err": None,
             "energy": None,
-            "mem_usage": {
-                "total_vram": None,
-                "used_vram": None,
-                "free_vram": None,
-                "total_visible_vram": None,
-                "used_visible_vram": None,
-                "free_visible_vram": None,
-                "total_gtt": None,
-                "used_gtt": None,
-                "free_gtt": None,
-            },
+            "mem_usage": mem_usage_dict,
             "throttle": {},
         }
     )
@@ -1002,9 +1079,56 @@ def test_analyze_data_expected_power_management(mock_analyzer):
     assert not any("power_management mismatch" in e.description for e in result.events)
 
 
+def test_check_gpu_memory_meets_minimum(mock_analyzer):
+    """GPU VRAM availability at the configured minimum passes."""
+    analyzer = mock_analyzer
+    metrics = [
+        _minimal_amdsmi_metric(
+            0,
+            mem_usage={
+                "total_vram": {"value": 100, "unit": "B"},
+                "free_vram": {"value": 95, "unit": "B"},
+            },
+        )
+    ]
+
+    analyzer.check_gpu_memory(metrics, 95)
+
+    assert not analyzer.result.events
+
+
+def test_check_gpu_memory_below_minimum_logs_warning(mock_analyzer):
+    """GPU VRAM availability below the configured minimum logs a warning."""
+    analyzer = mock_analyzer
+    metrics = [
+        _minimal_amdsmi_metric(
+            1,
+            mem_usage={
+                "total_vram": {"value": 100, "unit": "B"},
+                "free_vram": {"value": 90, "unit": "B"},
+            },
+        )
+    ]
+
+    analyzer.check_gpu_memory(metrics, 95)
+
+    assert len(analyzer.result.events) == 1
+    event = analyzer.result.events[0]
+    assert event.priority == EventPriority.WARNING
+    assert "GPU 1 free VRAM is 90.00%" in event.description
+    assert event.data["available_percent"] == 90.0
+    assert event.data["minimum_available_percent"] == 95
+
+
 def test_amdsmi_analyzer_args_rejects_unknown_fields():
     """Plugin config must only use declared AmdSmiAnalyzerArgs fields."""
     from pydantic import ValidationError
+
+    args = AmdSmiAnalyzerArgs.model_validate({"gpu_memory": {"minimum_available_percent": 95}})
+    assert args.gpu_memory is not None
+    assert args.gpu_memory.minimum_available_percent == 95
+    args = AmdSmiAnalyzerArgs.model_validate({"check_xgmi_or_peer_links_status": True})
+    assert args.check_xgmi_or_peer_links_status is True
 
     with pytest.raises(ValidationError):
         AmdSmiAnalyzerArgs.model_validate(
