@@ -441,6 +441,73 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                         console_log=True,
                     )
 
+    def check_gpu_memory(
+        self,
+        amdsmi_metric_data: list[AmdSmiMetric],
+        minimum_available_percent: float,
+    ) -> None:
+        """Check the minimum free VRAM percentage for each GPU."""
+        for metric in amdsmi_metric_data:
+            memory = metric.mem_usage
+            total_vram = memory.total_vram if memory is not None else None
+            free_vram = memory.free_vram if memory is not None else None
+            values = {
+                "gpu": metric.gpu,
+                "total_vram": total_vram.value if total_vram is not None else None,
+                "free_vram": free_vram.value if free_vram is not None else None,
+                "unit": total_vram.unit if total_vram is not None else None,
+                "minimum_available_percent": minimum_available_percent,
+            }
+
+            if total_vram is None or free_vram is None:
+                self._log_event(
+                    category=EventCategory.PLATFORM,
+                    description=f"GPU {metric.gpu} VRAM availability is not available",
+                    priority=EventPriority.WARNING,
+                    data=values,
+                    console_log=True,
+                )
+                continue
+
+            try:
+                total_value = float(total_vram.value)
+                free_value = float(free_vram.value)
+            except (TypeError, ValueError):
+                self._log_event(
+                    category=EventCategory.PLATFORM,
+                    description=f"GPU {metric.gpu} VRAM availability is invalid",
+                    priority=EventPriority.WARNING,
+                    data=values,
+                    console_log=True,
+                )
+                continue
+
+            if total_value <= 0:
+                self._log_event(
+                    category=EventCategory.PLATFORM,
+                    description=f"GPU {metric.gpu} total VRAM is invalid",
+                    priority=EventPriority.WARNING,
+                    data=values,
+                    console_log=True,
+                )
+                continue
+
+            available_percent = free_value / total_value * 100
+            if available_percent < minimum_available_percent:
+                self._log_event(
+                    category=EventCategory.PLATFORM,
+                    description=(
+                        f"GPU {metric.gpu} free VRAM is {available_percent:.2f}% "
+                        f"(minimum {minimum_available_percent:.2f}%)"
+                    ),
+                    priority=EventPriority.WARNING,
+                    data={
+                        **values,
+                        "available_percent": available_percent,
+                    },
+                    console_log=True,
+                )
+
     def check_amdsmi_metric_ecc(self, amdsmi_metric_data: list[AmdSmiMetric]):
         """Check ECC counts in all blocks for all GPUs
 
@@ -958,6 +1025,11 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                     data.metric,
                     args.l0_to_recovery_count_error_threshold,
                     args.l0_to_recovery_count_warning_threshold or 1,
+                )
+            if args.gpu_memory:
+                self.check_gpu_memory(
+                    data.metric,
+                    args.gpu_memory.minimum_available_percent,
                 )
             self.check_amdsmi_metric_ecc_totals(data.metric)
             self.check_amdsmi_metric_ecc(data.metric)
