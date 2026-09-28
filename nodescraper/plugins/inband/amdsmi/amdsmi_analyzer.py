@@ -1107,6 +1107,10 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
             )
 
         if data.fabric:
-            self.check_fabric(data.fabric)
+            self.check_fabric(
+                data.fabric,
+                expected_accel_state=args.expected_accel_state,
+                expected_fabric_type=args.expected_fabric_type,
+            )
 
         return self.result
