@@ -26,7 +26,7 @@
 from __future__ import annotations
 
 from logging import Logger
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
 from nodescraper.interfaces.connectionmanager import ConnectionManager
@@ -43,6 +43,19 @@ def _build_base_url(host: str, port: Optional[int], use_https: bool) -> str:
     if port is not None:
         return f"{scheme}://{host_str}:{port}"
     return f"{scheme}://{host_str}"
+
+
+class MultiTargetRedfishConnection:
+    """Sentinel placed on RedfishConnectionManager.connection in multi-target mode.
+
+    Carrying this object (rather than leaving connection=None) allows the standard
+    DataPlugin.collect() guard to pass, while RedfishDataCollector's __init_subclass__
+    wrapper intercepts collect_data and iterates the individual target connections.
+    """
+
+    def __init__(self, target_connections: dict[str, RedfishConnection]) -> None:
+        self.target_connections = target_connections
+        self.multi_target_data: dict[str, Any] = {}
 
 
 class RedfishConnectionManager(ConnectionManager[RedfishConnection, RedfishConnectionParams]):
@@ -117,6 +130,9 @@ class RedfishConnectionManager(ConnectionManager[RedfishConnection, RedfishConne
                     self.target_connections[key] = conn
             if not self.target_connections:
                 self.result.status = ExecutionStatus.EXECUTION_FAILURE
+            else:
+                # Set self.connection so DataPlugin.collect() does not short-circuit.
+                self.connection = MultiTargetRedfishConnection(self.target_connections)  # type: ignore[assignment]
             return self.result
 
         return self._connect_single(params)
@@ -189,8 +205,13 @@ class RedfishConnectionManager(ConnectionManager[RedfishConnection, RedfishConne
         return self.result
 
     def disconnect(self) -> None:
-        """Disconnect all Redfish sessions."""
-        if self.connection is not None:
+        """Disconnect all Redfish sessions, preserving multi-target data on the manager."""
+        if isinstance(self.connection, MultiTargetRedfishConnection):
+            # Persist collected data so analyze() can access it after disconnect.
+            self._multi_target_data: dict[str, Any] = dict(self.connection.multi_target_data)
+            for conn in self.connection.target_connections.values():
+                conn.close()
+        elif self.connection is not None:
             self.connection.close()
         for conn in getattr(self, "target_connections", {}).values():
             conn.close()

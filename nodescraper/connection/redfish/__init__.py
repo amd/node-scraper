@@ -34,7 +34,7 @@ from .redfish_constants import (
     RF_MEMBERS_NEXT_LINK,
     RF_ODATA_ID,
 )
-from .redfish_manager import RedfishConnectionManager
+from .redfish_manager import MultiTargetRedfishConnection, RedfishConnectionManager
 from .redfish_oem_diag import (
     collect_oem_diagnostic_data,
     get_oem_diagnostic_allowable_values,
@@ -50,6 +50,7 @@ __all__ = [
     "RedfishConnection",
     "RedfishConnectionError",
     "RedfishGetResult",
+    "MultiTargetRedfishConnection",
     "RedfishConnectionManager",
     "RedfishConnectionParams",
     "RedfishTargetParams",
