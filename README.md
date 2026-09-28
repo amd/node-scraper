@@ -28,6 +28,9 @@ system debug. For details on what data is collected and analyzed, see the [plugi
       - [Global args](#global-args)
       - [Plugin config: **'--plugin-configs' command**](#plugin-config---plugin-configs-command)
       - [Post-action plugins](#post-action-plugins)
+        - [Config structure](#config-structure)
+        - [Condition fields](#condition-fields)
+        - [Example: run OsPlugin if DmesgPlugin finds error-level events](#example-run-osplugin-if-dmesgplugin-finds-error-level-events)
       - [Reference config: **'gen-reference-config' command**](#reference-config-gen-reference-config-command)
 
 ## Installation
@@ -209,6 +212,43 @@ Redfish (BMC) connection for Redfish-only plugins:
 ```
 
 - `api_root` (optional): Redfish API path (e.g. `redfish/v1`). If omitted, the default `redfish/v1` is used. Override this when your BMC uses a different API version path.
+
+Redfish **multi-target** connection (collect from multiple BMCs concurrently):
+
+```json
+{
+    "RedfishConnectionManager": {
+        "targets": [
+            {
+                "target_key": "node-a",
+                "host": "bmc-node-a.example.com",
+                "username": "admin",
+                "password": "secret",
+                "use_https": true,
+                "verify_ssl": false,
+                "timeout_seconds": 30
+            },
+            {
+                "target_key": "node-b",
+                "host": "bmc-node-b.example.com",
+                "username": "admin",
+                "password": "secret",
+                "use_https": true,
+                "verify_ssl": false,
+                "timeout_seconds": 30
+            }
+        ],
+        "max_workers": 32
+    }
+}
+```
+
+Multi-target mode is supported by all OOB Redfish plugins (`RedfishEndpointPlugin`, `RedfishOemDiagPlugin`, etc.). All targets are collected **concurrently** — wall-clock time is bounded by the slowest individual target, not the sum.
+
+- `targets`: list of per-target connection parameters. Each entry accepts the same fields as the single-target config plus an optional `target_key` (used as the result key; defaults to the host string).
+- `max_workers` (optional): maximum concurrent collection threads. Defaults to `min(len(targets), 32)`.
+
+Per-target results are written to separate log subdirectories named `<plugin>[<target_key>]/`.
 
 **Notes:**
 - If using SSH keys, specify `key_filename` instead of `password`.
@@ -472,9 +512,11 @@ Use a plugin config that points at your LogService and lists the types to collec
 
 The RedfishEndpointPlugin collects Redfish URIs (GET responses) and optionally runs checks on the returned JSON. It requires a Redfish connection config (same as RedfishOemDiagPlugin).
 
+**Multi-target support:** `RedfishEndpointPlugin` supports concurrent collection from multiple BMCs simultaneously. Use the `targets` list format in your connection config (see [multi-target example above](#example-connection_configjson)) — the same `uris`/`checks` plugin config is applied to every target in parallel. Per-target results are written to `redfish_endpoint_plugin[<target_key>]/` under the run log directory.
+
 **How to run**
 
-1. Create a connection config (e.g. `connection-config.json`) with `RedfishConnectionManager` and your BMC host, credentials, and API root.
+1. Create a connection config (e.g. `connection-config.json`) with `RedfishConnectionManager` and your BMC host (single target) or `targets` list (multi-target).
 2. Create a plugin config with `uris` to collect and optional `checks` for analysis (see example below). For example save as `plugin_config_redfish_endpoint.json`.
 3. Run:
    ```sh
