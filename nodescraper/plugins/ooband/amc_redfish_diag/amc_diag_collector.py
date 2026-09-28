@@ -136,7 +136,12 @@ class AmcRedfishDiagCollector(
 
         success_count = sum(1 for r in results.values() if r.success)
         self.result.message = f"AMC diag: {success_count}/{len(results)} collections succeeded"
-        self.result.status = ExecutionStatus.OK if success_count else ExecutionStatus.ERROR
+        if success_count == len(results):
+            self.result.status = ExecutionStatus.OK
+        elif success_count:
+            self.result.status = ExecutionStatus.WARNING
+        else:
+            self.result.status = ExecutionStatus.ERROR
         return self.result, RedfishOemDiagDataModel(results=results)
 
     def _member_paths(self, root: str, args: AmcRedfishDiagCollectorArgs) -> list[str]:

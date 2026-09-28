@@ -177,7 +177,7 @@ def _both_collections():
 
 
 @patch("nodescraper.plugins.ooband.amc_redfish_diag.amc_diag_collector.collect_oem_diagnostic_data")
-def test_amc_collector_partial_failure_is_ok_with_warning_event(mock_collect, amc_collector):
+def test_amc_collector_partial_failure_is_warning(mock_collect, amc_collector):
     def side_effect(conn, log_service_path, diagnostic_data_type, **kwargs):
         if diagnostic_data_type == "Manager":
             return (None, None, "LogEntry GET failed")
@@ -192,7 +192,7 @@ def test_amc_collector_partial_failure_is_ok_with_warning_event(mock_collect, am
             collections=_both_collections(),
         )
     )
-    assert result.status == ExecutionStatus.OK
+    assert result.status == ExecutionStatus.WARNING
     assert data.results["Managers:Manager"].success is False
     assert data.results["Systems:OEM:AllLogs"].success is True
     warnings = [e for e in result.events if e.priority == EventPriority.WARNING]
