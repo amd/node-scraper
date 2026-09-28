@@ -462,7 +462,7 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
             if total_vram is None or free_vram is None:
                 self._log_event(
                     category=EventCategory.PLATFORM,
-                    description=f"GPU {metric.gpu} VRAM availability is not available",
+                    description=f"GPU {metric.gpu} VRAM information is unavailable",
                     priority=EventPriority.WARNING,
                     data=values,
                     console_log=True,
@@ -475,17 +475,22 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
             except (TypeError, ValueError):
                 self._log_event(
                     category=EventCategory.PLATFORM,
-                    description=f"GPU {metric.gpu} VRAM availability is invalid",
+                    description=(
+                        f"GPU {metric.gpu} was not able to parse available VRAM from memory usage"
+                    ),
                     priority=EventPriority.WARNING,
                     data=values,
                     console_log=True,
                 )
                 continue
 
-            if total_value <= 0:
+            if total_value == 0:
                 self._log_event(
                     category=EventCategory.PLATFORM,
-                    description=f"GPU {metric.gpu} total VRAM is invalid",
+                    description=(
+                        f"GPU {metric.gpu} was not able to compute available VRAM "
+                        f"from memory usage (total={total_vram.value}, free={free_vram.value})"
+                    ),
                     priority=EventPriority.WARNING,
                     data=values,
                     console_log=True,
