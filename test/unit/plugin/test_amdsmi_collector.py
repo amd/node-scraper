@@ -266,6 +266,38 @@ def test_check_amdsmi_installed(collector):
     assert collector._check_amdsmi_installed() is True
 
 
+def test_check_amdsmi_installed_path_hit_leaves_exe_unchanged(collector, monkeypatch):
+    """Test that a PATH hit does not trigger the fallback search"""
+    mock_run_sut_cmd = MagicMock(return_value=make_cmd_result("/usr/bin/amd-smi"))
+    monkeypatch.setattr(collector, "_run_sut_cmd", mock_run_sut_cmd)
+
+    assert collector._check_amdsmi_installed() is True
+    assert collector.AMD_SMI_EXE == "amd-smi"
+    mock_run_sut_cmd.assert_called_once_with("which amd-smi")
+
+
+def test_check_amdsmi_installed_falls_back_to_rocm_path(conn_mock, system_info, monkeypatch):
+    """Test that a failed PATH lookup falls back to the known install paths"""
+    mock_run_sut_cmd = MagicMock(
+        side_effect=[
+            make_cmd_result("", "no amd-smi in /usr/bin", 1),
+            make_cmd_result("/opt/rocm/bin/amd-smi"),
+        ]
+    )
+
+    c = AmdSmiCollector(
+        system_info=system_info,
+        system_interaction_level=SystemInteractionLevel.PASSIVE,
+        connection=conn_mock,
+    )
+    monkeypatch.setattr(c, "_run_sut_cmd", mock_run_sut_cmd)
+
+    assert c._check_amdsmi_installed() is True
+    assert c.AMD_SMI_EXE == "/opt/rocm/bin/amd-smi"
+    for path in AmdSmiCollector.AMD_SMI_FALLBACK_PATHS:
+        assert path in mock_run_sut_cmd.call_args.args[0]
+
+
 def test_check_amdsmi_not_installed(conn_mock, system_info, monkeypatch):
     """Test when amd-smi is not installed"""
 
