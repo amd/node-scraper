@@ -123,6 +123,7 @@ Class for collection of inband tool amd-smi data.
 ### Class Variables
 
 - **AMD_SMI_EXE**: `amd-smi`
+- **AMD_SMI_FALLBACK_PATHS**: `('/opt/rocm/bin/amd-smi', '/opt/rocm-*/bin/amd-smi', '/usr/local/bin/amd-smi')`
 - **SUPPORTED_OS_FAMILY**: `{<OSFamily.LINUX: 3>}`
 - **CMD_VERSION**: `version --json`
 - **CMD_LIST**: `list --json`
