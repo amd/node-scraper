@@ -64,6 +64,9 @@ class PluginInterface(abc.ABC, Generic[TConnectionManager, TConnectArg]):
             task_result_hooks (Optional[list[TaskResultHook]], optional): list of task result hooks. Defaults to None.
             log_path (Optional[str], optional): path for file system logs. Defaults to None.
             queue_callback (Optional[Callable], optional): function to add additional plugins to plugin executor queue. Defaults to None.
+            event_reporter (str, optional): Reporter string stored on emitted events. Defaults to DEFAULT_EVENT_REPORTER.
+            session_id (Optional[str], optional): session identifier. Defaults to None.
+            kwargs (optional): additional keyword arguments. These are currently not used by the base plugin interface.
         """
         if logger is None:
             logger = logging.getLogger(DEFAULT_LOGGER)
@@ -71,15 +74,15 @@ class PluginInterface(abc.ABC, Generic[TConnectionManager, TConnectArg]):
 
         if system_info is None:
             system_info = SystemInfo()
-        self.system_info = system_info
+        self.system_info: SystemInfo = system_info
 
-        if not task_result_hooks:
-            task_result_hooks = []
-        self.task_result_hooks = task_result_hooks
+        # copy the hook list so that hooks added here are not leaked back to the caller
+        # If the copy is not performed then any modifications to the hook list here would affect the caller's list as well.
+        self.task_result_hooks = list(task_result_hooks) if task_result_hooks else []
 
         if log_path:
             for hook in self.task_result_hooks:
-                if isinstance(hook, FileSystemLogHook):
+                if isinstance(hook, FileSystemLogHook) and hook.log_base_path == log_path:
                     break
             else:
                 self.task_result_hooks.append(FileSystemLogHook(log_base_path=log_path))

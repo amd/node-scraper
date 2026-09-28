@@ -74,3 +74,21 @@ def test_plugin_registry_merges_entry_point_connection_managers():
 def test_plugin_registry_can_disable_entry_point_connection_managers():
     reg = PluginRegistry(load_entry_point_connection_managers=False)
     assert "InBandConnectionManager" in reg.connection_managers
+
+
+def test_load_connection_managers_cache_is_not_mutable_by_callers():
+    """The entry point cache must not be aliased out to callers (cf. load_plugins_from_entry_points)."""
+    mock_ep = MagicMock()
+    mock_ep.name = "AliasInBand"
+    mock_ep.load.return_value = InBandConnectionManager
+    PluginRegistry.clear_caches()
+
+    with patch("nodescraper.pluginregistry.importlib.metadata.entry_points") as mock_eps:
+        mock_eps.side_effect = lambda *a, **k: _entry_points_side_effect_cm_only(mock_ep, *a, **k)
+        PluginRegistry.load_connection_managers_from_entry_points()
+        warm = PluginRegistry.load_connection_managers_from_entry_points()
+        warm["InjectedByCaller"] = InBandConnectionManager
+
+        refetched = PluginRegistry.load_connection_managers_from_entry_points()
+
+    assert "InjectedByCaller" not in refetched

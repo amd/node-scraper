@@ -31,7 +31,7 @@ from nodescraper.connection.redfish import (
     RedfishGetResult,
     RedfishSshProxyConnectionManager,
 )
-from nodescraper.enums import ExecutionStatus
+from nodescraper.enums import EventPriority, ExecutionStatus
 from nodescraper.pluginregistry import PluginRegistry
 from nodescraper.plugins.ooband.amc_redfish_diag import (
     AmcDiagCollectionSpec,
@@ -55,6 +55,11 @@ def test_amc_redfish_diag_plugin_registers():
     assert AmcRedfishDiagPlugin.CONNECTION_TYPE is RedfishSshProxyConnectionManager
     assert "AmcRedfishDiagPlugin" in PluginRegistry().plugins
     assert "RedfishSshProxyConnectionManager" in PluginRegistry().connection_managers
+
+
+def test_amc_redfish_diag_plugin_is_collection_only():
+    assert AmcRedfishDiagPlugin.ANALYZER is None
+    assert AmcRedfishDiagPlugin.ANALYZER_ARGS is None
 
 
 def test_amc_collector_no_jobs(amc_collector):
@@ -137,3 +142,76 @@ def test_amc_collector_missing_log_service(mock_collect, amc_collector):
     assert data is not None
     assert data.results["Managers:Manager"].success is False
     mock_collect.assert_not_called()
+
+
+@patch("nodescraper.plugins.ooband.amc_redfish_diag.amc_diag_collector.collect_oem_diagnostic_data")
+def test_amc_collector_output_dir_is_diag_logs(
+    mock_collect, system_info, redfish_conn_mock, tmp_path
+):
+    mock_collect.return_value = (b"archive", {"Id": "1"}, None)
+    redfish_conn_mock.api_root = "redfish/v1"
+    redfish_conn_mock.run_get.side_effect = _get_side_effect
+    collector = AmcRedfishDiagCollector(
+        system_info=system_info,
+        connection=redfish_conn_mock,
+        log_path=str(tmp_path),
+    )
+    collector.collect_data(
+        args=AmcRedfishDiagCollectorArgs(
+            manager_ids=["dummy-amc"],
+            collections=[
+                AmcDiagCollectionSpec(root="Managers", diagnostic_data_type="Manager"),
+            ],
+        )
+    )
+    output_dir = mock_collect.call_args.kwargs["output_dir"]
+    assert output_dir == (tmp_path / "diag_logs").resolve()
+    assert output_dir.is_dir()
+
+
+def _both_collections():
+    return [
+        AmcDiagCollectionSpec(root="Managers", diagnostic_data_type="Manager"),
+        AmcDiagCollectionSpec(root="Systems", diagnostic_data_type="OEM", oem_data_type="AllLogs"),
+    ]
+
+
+@patch("nodescraper.plugins.ooband.amc_redfish_diag.amc_diag_collector.collect_oem_diagnostic_data")
+def test_amc_collector_partial_failure_is_ok_with_warning_event(mock_collect, amc_collector):
+    def side_effect(conn, log_service_path, diagnostic_data_type, **kwargs):
+        if diagnostic_data_type == "Manager":
+            return (None, None, "LogEntry GET failed")
+        return (b"archive", {"Id": "34"}, None)
+
+    mock_collect.side_effect = side_effect
+    amc_collector.connection.run_get.side_effect = _get_side_effect
+    result, data = amc_collector.collect_data(
+        args=AmcRedfishDiagCollectorArgs(
+            manager_ids=["dummy-amc"],
+            system_ids=["dummy-system"],
+            collections=_both_collections(),
+        )
+    )
+    assert result.status == ExecutionStatus.OK
+    assert data.results["Managers:Manager"].success is False
+    assert data.results["Systems:OEM:AllLogs"].success is True
+    warnings = [e for e in result.events if e.priority == EventPriority.WARNING]
+    assert len(warnings) == 1
+    assert "Managers:Manager" in warnings[0].description
+
+
+@patch("nodescraper.plugins.ooband.amc_redfish_diag.amc_diag_collector.collect_oem_diagnostic_data")
+def test_amc_collector_all_failed_is_error_with_event_per_failure(mock_collect, amc_collector):
+    mock_collect.return_value = (None, None, "LogEntry GET failed")
+    amc_collector.connection.run_get.side_effect = _get_side_effect
+    result, data = amc_collector.collect_data(
+        args=AmcRedfishDiagCollectorArgs(
+            manager_ids=["dummy-amc"],
+            system_ids=["dummy-system"],
+            collections=_both_collections(),
+        )
+    )
+    assert result.status == ExecutionStatus.ERROR
+    assert all(not r.success for r in data.results.values())
+    warnings = [e for e in result.events if e.priority == EventPriority.WARNING]
+    assert len(warnings) == 2

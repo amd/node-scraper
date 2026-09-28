@@ -31,24 +31,15 @@ from enum import Enum
 from typing import Any, Optional, Union, cast
 
 from pydantic import BaseModel, Field, field_serializer, field_validator
+from pydantic_core import to_jsonable_python
 
 from nodescraper.constants import DEFAULT_EVENT_REPORTER
 from nodescraper.enums import EventPriority
 
 
 def _data_to_json_safe(obj: Any) -> Any:
-    """Recursively convert event data to JSON-serializable form (e.g. exceptions -> str)."""
-    if isinstance(obj, BaseException):
-        return str(obj)
-    if isinstance(obj, dict):
-        return {k: _data_to_json_safe(v) for k, v in obj.items()}
-    if isinstance(obj, (list, tuple)):
-        return [_data_to_json_safe(v) for v in obj]
-    if isinstance(obj, (str, int, float, bool, type(None))):
-        return obj
-    if isinstance(obj, (Enum, datetime.datetime, uuid.UUID)):
-        return str(obj)
-    return str(obj)
+    """Convert data to JSON-serializable form using Pydantic's fast Rust core."""
+    return to_jsonable_python(obj, fallback=lambda x: str(x))
 
 
 LOG_LEVEL_MAP = {
@@ -178,7 +169,9 @@ class Event(BaseModel):
         Returns:
             dict: data output
         """
-        if len(str(data).encode("utf-8")) >= (1024 * 100):
+        # Use the same serialization that will happen during model_dump()
+        json_safe_data = _data_to_json_safe(data)
+        if len(str(json_safe_data).encode("utf-8")) >= (1024 * 100):
             raise ValueError("Data must be below 100KB in size")
         return data
 

@@ -33,7 +33,9 @@ from nodescraper.connection.redfish.redfish_oem_diag import (
     DEFAULT_TASK_TIMEOUT_S,
     RF_ANNOTATION_ALLOWABLE,
     _download_log_and_save,
+    _entries_collection_path,
     _get_task_monitor_uri,
+    _pick_member_href,
     _strip_port_from_url,
     _task_resource_path,
     collect_oem_diagnostic_data,
@@ -288,3 +290,224 @@ def test_collect_taskmonitor_404_does_not_spin():
     assert err is not None
     assert "404" in err
     assert conn.get_response.call_count == 1
+
+
+class TestCollectOemDiagnosticDataRetryAfter:
+    @staticmethod
+    def _conn_for_retry_after(retry_after: str) -> MagicMock:
+        conn = MagicMock()
+        conn.base_url = "https://host"
+        post_resp = MagicMock()
+        post_resp.status_code = codes.accepted
+        post_resp.headers = {
+            "Location": "/redfish/v1/TaskService/TaskMonitors/1",
+            "Retry-After": retry_after,
+        }
+        post_resp.json.return_value = {}
+        conn.post.return_value = post_resp
+
+        accepted = MagicMock()
+        accepted.status_code = codes.accepted
+        accepted.json.return_value = {}
+        monitor_resp = MagicMock()
+        monitor_resp.status_code = codes.ok
+        monitor_resp.json.return_value = {"@odata.id": "/redfish/v1/TaskService/Tasks/1"}
+        task_resp = MagicMock()
+        task_resp.status_code = codes.ok
+        task_resp.json.return_value = {"TaskState": "Completed", "Payload": {"HttpHeaders": []}}
+        conn.get_response.side_effect = [accepted, monitor_resp, task_resp]
+        return conn
+
+    @patch("nodescraper.connection.redfish.redfish_oem_diag.time.sleep")
+    def test_numeric_retry_after_is_used_as_poll_interval(self, mock_sleep):
+        """A Retry-After in seconds drives the poll interval after a 202 monitor."""
+        conn = self._conn_for_retry_after("3")
+
+        _, _, error = collect_oem_diagnostic_data(
+            conn, "redfish/v1/Systems/UBB/LogServices/DiagLogs", "AllLogs"
+        )
+
+        assert error == "Location header missing in task Payload.HttpHeaders"
+        mock_sleep.assert_called_with(3)
+
+    @patch("nodescraper.connection.redfish.redfish_oem_diag.time.sleep")
+    def test_http_date_retry_after_does_not_raise(self, mock_sleep):
+        """An HTTP-date Retry-After must be handled, not crash the collection."""
+        conn = self._conn_for_retry_after("Fri, 31 Dec 1999 23:59:59 GMT")
+
+        _, _, error = collect_oem_diagnostic_data(
+            conn, "redfish/v1/Systems/UBB/LogServices/DiagLogs", "AllLogs"
+        )
+
+        assert error == "Location header missing in task Payload.HttpHeaders"
+        mock_sleep.assert_called_with(1)
+
+
+def test_entries_collection_path_from_dump_entry():
+    assert (
+        _entries_collection_path("redfish/v1/Managers/AMC/LogServices/Dump/Entries/29")
+        == "redfish/v1/Managers/AMC/LogServices/Dump/Entries"
+    )
+
+
+def test_pick_member_href_prefers_wanted_id():
+    body = {
+        "Members": [
+            {"@odata.id": "/redfish/v1/Managers/AMC/LogServices/Dump/Entries/28"},
+            {"@odata.id": "/redfish/v1/Managers/AMC/LogServices/Dump/Entries/29"},
+        ]
+    }
+    assert _pick_member_href(body, "29") == "/redfish/v1/Managers/AMC/LogServices/Dump/Entries/29"
+    assert _pick_member_href(body, "31") is None
+    assert _pick_member_href({"Members": []}, "29") is None
+
+
+def _dump_collect_conn(get_side_effect):
+    conn = MagicMock()
+    conn.base_url = "http://192.0.2.1"
+    post_resp = MagicMock()
+    post_resp.status_code = codes.accepted
+    post_resp.headers = {"Location": "/redfish/v1/TaskService/TaskMonitors/1"}
+    post_resp.text = ""
+    post_resp.json.return_value = {
+        "@odata.id": "/redfish/v1/TaskService/Tasks/dummy-1",
+        "TaskState": "Running",
+    }
+    conn.post.return_value = post_resp
+    conn.get_response.side_effect = get_side_effect
+    return conn
+
+
+def _ok_json(payload):
+    resp = MagicMock()
+    resp.status_code = codes.ok
+    resp.json.return_value = payload
+    return resp
+
+
+def _status(code):
+    resp = MagicMock()
+    resp.status_code = code
+    resp.json.return_value = {}
+    return resp
+
+
+@patch("nodescraper.connection.redfish.redfish_oem_diag.time.sleep")
+def test_collect_retries_log_entry_404(mock_sleep):
+    """Dump LogEntry 404s are retried before failing."""
+    running = _ok_json({"TaskState": "Running"})
+    done = _ok_json(
+        {
+            "TaskState": "Completed",
+            "Payload": {
+                "HttpHeaders": ["Location: /redfish/v1/Managers/AMC/LogServices/Dump/Entries/29"]
+            },
+        }
+    )
+    entry = _ok_json(
+        {
+            "Id": "29",
+            "AdditionalDataURI": "/redfish/v1/Managers/AMC/LogServices/Dump/Entries/29/attachment",
+        }
+    )
+    attachment = MagicMock()
+    attachment.status_code = codes.ok
+    attachment.content = b"mgr-dump"
+    conn = _dump_collect_conn([running, done, _status(codes.not_found), entry, attachment])
+
+    log_bytes, metadata, err = collect_oem_diagnostic_data(
+        conn,
+        "redfish/v1/Managers/AMC/LogServices/Dump",
+        diagnostic_data_type="Manager",
+        task_timeout_s=30,
+    )
+
+    assert err is None
+    assert log_bytes == b"mgr-dump"
+    assert metadata["Id"] == "29"
+    mock_sleep.assert_called()
+
+
+@patch("nodescraper.connection.redfish.redfish_oem_diag.time.sleep")
+def test_collect_log_entry_falls_back_to_entries_collection(mock_sleep):
+    """After LogEntry 404s, list Dump/Entries and GET the matching member."""
+    running = _ok_json({"TaskState": "Running"})
+    done = _ok_json(
+        {
+            "TaskState": "Completed",
+            "Payload": {
+                "HttpHeaders": ["Location: /redfish/v1/Managers/AMC/LogServices/Dump/Entries/29"]
+            },
+        }
+    )
+    missing = _status(codes.not_found)
+    coll = _ok_json(
+        {
+            "Members": [
+                {"@odata.id": "/redfish/v1/Managers/AMC/LogServices/Dump/Entries/28"},
+                {"@odata.id": "/redfish/v1/Managers/AMC/LogServices/Dump/Entries/29"},
+            ]
+        }
+    )
+    member = _ok_json(
+        {
+            "Id": "29",
+            "AdditionalDataURI": "/redfish/v1/Managers/AMC/LogServices/Dump/Entries/29/attachment",
+        }
+    )
+    attachment = MagicMock()
+    attachment.status_code = codes.ok
+    attachment.content = b"mgr-dump"
+    conn = _dump_collect_conn(
+        [running, done, missing, missing, missing, missing, coll, member, attachment]
+    )
+
+    log_bytes, metadata, err = collect_oem_diagnostic_data(
+        conn,
+        "redfish/v1/Managers/AMC/LogServices/Dump",
+        diagnostic_data_type="Manager",
+        task_timeout_s=30,
+    )
+
+    assert err is None
+    assert log_bytes == b"mgr-dump"
+    assert metadata["Id"] == "29"
+    listed = [c.args[0] for c in conn.get_response.call_args_list]
+    assert "redfish/v1/Managers/AMC/LogServices/Dump/Entries" in listed
+
+
+@patch("nodescraper.connection.redfish.redfish_oem_diag.time.sleep")
+def test_collect_log_entry_collection_miss_keeps_entry_status(mock_sleep):
+    """Collection 200 without the requested Id must not report status 200."""
+    running = _ok_json({"TaskState": "Running"})
+    done = _ok_json(
+        {
+            "TaskState": "Completed",
+            "Payload": {
+                "HttpHeaders": ["Location: /redfish/v1/Managers/AMC/LogServices/Dump/Entries/31"]
+            },
+        }
+    )
+    missing = _status(codes.not_found)
+    coll = _ok_json(
+        {
+            "Members": [
+                {"@odata.id": "/redfish/v1/Managers/AMC/LogServices/Dump/Entries/30"},
+            ]
+        }
+    )
+    conn = _dump_collect_conn([running, done, missing, missing, missing, missing, coll])
+
+    log_bytes, metadata, err = collect_oem_diagnostic_data(
+        conn,
+        "redfish/v1/Managers/AMC/LogServices/Dump",
+        diagnostic_data_type="Manager",
+        task_timeout_s=30,
+    )
+
+    assert log_bytes is None
+    assert metadata is None
+    assert err is not None
+    assert "status 200" not in err
+    assert "status 404" in err
+    assert "Id 31 not in redfish/v1/Managers/AMC/LogServices/Dump/Entries" in err

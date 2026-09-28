@@ -456,7 +456,8 @@ def setup_logger(
         encoding="utf-8",
     )
     logging.root.setLevel(log_level_no)
-    logging.getLogger("paramiko").setLevel(logging.ERROR)
+    # Paramiko logs full tracebacks at ERROR; nodescraper surfaces SSH failures itself.
+    logging.getLogger("paramiko").setLevel(logging.CRITICAL)
 
     logger = logging.getLogger(DEFAULT_LOGGER)
 
@@ -648,6 +649,7 @@ def main(
             )
 
             if parsed_args.skip_sudo:
+                # Add skip_sudo to the collection_args of the last plugin config instance
                 plugin_config_inst_list[-1].global_args.setdefault("collection_args", {})[
                     "skip_sudo"
                 ] = True

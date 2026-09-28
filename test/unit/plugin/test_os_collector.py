@@ -128,3 +128,26 @@ def test_os_collector_error(collector, conn_mock, system_info):
 
     _, data = collector.collect_data()
     assert data is None
+
+
+def test_os_collector_esxi(collector, conn_mock, system_info):
+    """ESXi: os_name from `vmware -v`, os_version from the esxcli 'Version:' field."""
+    system_info.os_family = OSFamily.ESXI
+    conn_mock.run_command.side_effect = [
+        CommandArtifact(
+            exit_code=0,
+            stdout="VMware ESXi 9.1.0 build-25166133",
+            stderr="",
+            command="vmware -v",
+        ),
+        CommandArtifact(
+            exit_code=0,
+            stdout="   Product: VMware ESXi\n   Version: 9.1.0\n   Build: Releasebuild-25166133",
+            stderr="",
+            command="esxcli system version get",
+        ),
+    ]
+
+    result, data = collector.collect_data()
+    assert result.status == ExecutionStatus.OK
+    assert data == OsDataModel(os_name="VMware ESXi 9.1.0 build-25166133", os_version="9.1.0")

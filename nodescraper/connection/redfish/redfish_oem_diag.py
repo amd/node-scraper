@@ -236,6 +236,176 @@ def _strip_port_from_url(url: str) -> Optional[str]:
     return None
 
 
+_LOG_ENTRY_GET_ATTEMPTS = 4
+_LOG_ENTRY_GET_RETRY_SLEEP_S = 2
+
+
+def _entries_collection_path(log_entry_path: str) -> Optional[str]:
+    """Return the Entries collection path for a LogEntry URI.
+
+    Args:
+        log_entry_path (str): Task Location path or URL for a LogEntry.
+
+    Returns:
+        Optional[str]: collection path such as redfish/v1/.../Dump/Entries, or None.
+    """
+    path = log_entry_path.split("?", 1)[0]
+    if "://" in path:
+        path = path.split("://", 1)[1]
+        path = path.split("/", 1)[1] if "/" in path else path
+    path = path.lstrip("/")
+    if "/Entries/" not in f"/{path}":
+        return None
+    return path[: path.rfind("/Entries/") + len("/Entries")].lstrip("/")
+
+
+def _entry_id_from_path(log_entry_path: str) -> Optional[str]:
+    """Return the LogEntry Id from a Location path.
+
+    Args:
+        log_entry_path (str): Task Location path or URL.
+
+    Returns:
+        Optional[str]: entry Id, or None.
+    """
+    tail = log_entry_path.split("?", 1)[0].rstrip("/").rsplit("/", 1)
+    if len(tail) != 2 or tail[1] in ("", "Entries"):
+        return None
+    return tail[1]
+
+
+def _pick_member_href(body: dict[str, Any], wanted_id: Optional[str]) -> Optional[str]:
+    """Pick a Members @odata.id, preferring wanted_id then the last member.
+
+    Args:
+        body (dict[str, Any]): Entries collection JSON.
+        wanted_id (Optional[str]): LogEntry Id from the task Location.
+
+    Returns:
+        Optional[str]: member href, or None.
+    """
+    members = body.get("Members") or []
+    hrefs: list[str] = []
+    for member in members:
+        if not isinstance(member, dict):
+            continue
+        href = member.get(RF_ODATA_ID)
+        if isinstance(href, str) and href.strip():
+            hrefs.append(href.strip())
+            extra = member.get("Id")
+            if wanted_id and extra is not None and str(extra) == wanted_id:
+                return href.strip()
+    if wanted_id:
+        suffix = "/" + wanted_id
+        for href in hrefs:
+            if href.rstrip("/").endswith(suffix):
+                return href
+        return None
+    return hrefs[-1] if hrefs else None
+
+
+def _get_json_if_ok(conn: RedfishConnection, path: str) -> tuple[Optional[dict[str, Any]], int]:
+    """GET path and return JSON when the status is 200.
+
+    Args:
+        conn (RedfishConnection): Redfish connection.
+        path (str): relative Redfish path.
+
+    Returns:
+        tuple[Optional[dict[str, Any]], int]: parsed object (or None) and status.
+    """
+    resp = conn.get_response(path)
+    if resp.status_code != codes.ok:
+        return None, resp.status_code
+    try:
+        body = resp.json()
+    except Exception:
+        return None, resp.status_code
+    if isinstance(body, dict):
+        return body, resp.status_code
+    return None, resp.status_code
+
+
+def _fetch_log_entry_json(
+    conn: RedfishConnection,
+    log_entry_path: str,
+    log: logging.Logger,
+) -> tuple[Optional[dict[str, Any]], Optional[int], Optional[str]]:
+    """GET a LogEntry, retrying 404s and falling back to the Entries collection.
+
+    Args:
+        conn (RedfishConnection): Redfish connection.
+        log_entry_path (str): path from the completed task Location header.
+        log (logging.Logger): logger.
+
+    Returns:
+        tuple[Optional[dict[str, Any]], Optional[int], Optional[str]]: entry JSON,
+        last HTTP status, and last exception string.
+    """
+    paths_to_try: list[str] = []
+    log_entry_alt = _strip_port_from_url(log_entry_path)
+    if log_entry_alt is None and not log_entry_path.startswith("http"):
+        log_entry_alt = _strip_port_from_url(
+            conn.base_url.rstrip("/") + "/" + log_entry_path.lstrip("/")
+        )
+    if log_entry_alt:
+        paths_to_try.append(_get_path_from_connection(conn, log_entry_alt))
+    rel_path = _get_path_from_connection(conn, log_entry_path)
+    if rel_path not in paths_to_try:
+        paths_to_try.append(rel_path)
+
+    last_status: Optional[int] = codes.not_found
+    last_error = ""
+    for attempt in range(_LOG_ENTRY_GET_ATTEMPTS):
+        for try_path in paths_to_try:
+            if not try_path:
+                continue
+            try:
+                body, last_status = _get_json_if_ok(conn, try_path)
+                if body is not None:
+                    return body, codes.ok, None
+            except Exception as e:
+                last_status = None
+                last_error = str(e)
+        if attempt < _LOG_ENTRY_GET_ATTEMPTS - 1:
+            time.sleep(_LOG_ENTRY_GET_RETRY_SLEEP_S)
+
+    coll_path = _entries_collection_path(rel_path)
+    wanted_id = _entry_id_from_path(rel_path)
+    if coll_path:
+        log.info("LogEntry GET 404; listing %s for Id %s", coll_path, wanted_id)
+        try:
+            coll, coll_status = _get_json_if_ok(conn, coll_path)
+        except Exception as e:
+            last_error = str(e)
+            coll = None
+            coll_status = None
+        if coll is not None:
+            href = _pick_member_href(coll, wanted_id)
+            if href:
+                member_path = _get_path_from_connection(conn, href)
+                try:
+                    body, member_status = _get_json_if_ok(conn, member_path)
+                    if body is not None:
+                        return body, codes.ok, None
+                    extra = None
+                    for member in coll.get("Members") or []:
+                        if isinstance(member, dict) and member.get(RF_ODATA_ID) == href:
+                            extra = member
+                            break
+                    if extra and extra.get("AdditionalDataURI"):
+                        return extra, codes.ok, None
+                    last_error = f"member GET status {member_status} for {member_path}"
+                except Exception as e:
+                    last_error = str(e)
+            else:
+                last_error = f"Id {wanted_id} not in {coll_path}"
+        elif coll_status is not None:
+            last_error = f"Entries collection GET status {coll_status}"
+
+    return None, last_status, last_error or None
+
+
 def _download_log_and_save(
     conn: RedfishConnection,
     log_entry_json: dict[str, Any],
@@ -263,7 +433,9 @@ def _download_log_and_save(
         try:
             metadata_file.write_text(json.dumps(log_entry_json, indent=2), encoding="utf-8")
             log.info(
-                "Log metadata written to disk: %s -> %s", oem_diagnostic_type, metadata_file.name
+                "Log metadata written to disk: %s -> %s",
+                oem_diagnostic_type,
+                metadata_file.name,
             )
         except Exception as e:
             log.exception("Failed to write log metadata to %s: %s", metadata_file, e)
@@ -301,6 +473,7 @@ def collect_oem_diagnostic_data(
         (log_bytes, log_entry_metadata_dict, error_message).
         On success: (bytes, dict, None). On failure: (None, None, error_str).
     """
+    SLEEP_S_DEFAULT = 1
     log = logger if logger is not None else _module_logger
     diag_type = (diagnostic_data_type or "OEM").strip() or "OEM"
     oem_type = (oem_diagnostic_type or "").strip()
@@ -334,7 +507,10 @@ def collect_oem_diagnostic_data(
     location_header = resp.headers.get("Location") or resp.headers.get("Content-Location")
     if location_header and not location_header.startswith("http"):
         location_header = _resolve_path(conn, location_header)
-    sleep_s = int(resp.headers.get("Retry-After", 1) or 1)
+    try:
+        sleep_s = int(resp.headers.get("Retry-After", SLEEP_S_DEFAULT) or SLEEP_S_DEFAULT)
+    except ValueError:
+        sleep_s = SLEEP_S_DEFAULT
     try:
         oem_response = resp.json()
     except Exception:
@@ -435,33 +611,16 @@ def collect_oem_diagnostic_data(
     else:
         log_entry_path = location.lstrip("/")
 
-    # GET LogEntry (some BMCs 404 when URL includes explicit port; try without port first)
-    log_entry_alt = _strip_port_from_url(log_entry_path)
-    if log_entry_alt is None and not log_entry_path.startswith("http"):
-        log_entry_alt = _strip_port_from_url(
-            conn.base_url.rstrip("/") + "/" + log_entry_path.lstrip("/")
-        )
-    paths_to_try = [log_entry_alt, log_entry_path] if log_entry_alt else [log_entry_path]
-    log_entry_json = None
-    first_status: Optional[int] = codes.not_found
-    first_error = ""
-    for try_path in paths_to_try:
-        if try_path is None:
-            continue
-        try:
-            log_entry_resp = conn.get_response(try_path)
-            if log_entry_resp.status_code == codes.ok:
-                log_entry_json = log_entry_resp.json()
-                break
-            if try_path == paths_to_try[0]:
-                first_status = log_entry_resp.status_code
-        except Exception as e:
-            if try_path == paths_to_try[0]:
-                first_status = None
-                first_error = str(e)
-            continue
+    log_entry_json, first_status, first_error = _fetch_log_entry_json(conn, log_entry_path, log)
     if log_entry_json is None:
-        err = first_error if first_status is None else f"status {first_status}"
+        if first_error:
+            err = first_error
+            if first_status is not None:
+                err = f"{first_error} (status {first_status})"
+        elif first_status is not None:
+            err = f"status {first_status}"
+        else:
+            err = "unknown"
         return None, None, f"LogEntry GET failed: {err} (GET {log_entry_path})"
 
     file_stem = oem_type or diag_type

@@ -31,13 +31,18 @@ from nodescraper.models import CollectorArgs
 class SysSettingsCollectorArgs(CollectorArgs):
     """Collection args for SysSettingsCollector.
 
-    paths: sysfs paths to read (cat). If a path contains '*', collect with ls -l instead (e.g. class/net/*/device).
+    paths: sysfs paths to read (cat). If a path contains '*', collect with
+    ``cat`` first (e.g. class/drm/card*/device/vbios_version). If cat fails,
+    fall back to ls -l (e.g. class/net/*/device).
     directory_paths: sysfs paths to list (ls -1); use for checks that match entry names by regex.
     """
 
     paths: list[str] = Field(
         default_factory=list,
-        description="Sysfs paths to read (cat). Paths with '*' are collected with ls -l (e.g. class/net/*/device).",
+        description=(
+            "Sysfs paths to read (cat). Paths with '*' are cat'd via bash "
+            "(e.g. class/drm/card*/device/vbios_version); if cat fails, ls -l is used."
+        ),
     )
     directory_paths: list[str] = Field(
         default_factory=list,

@@ -72,3 +72,15 @@ def test_log_model_binary(tmp_path: Path):
     output_path = tmp_path / "binary.bin"
     assert output_path.exists()
     assert output_path.read_bytes() == binary_data
+
+
+def test_log_model_absolute_filename_stays_in_log_path(tmp_path: Path):
+    """An artifact filename that is an absolute path must not write outside the log dir."""
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    outside = tmp_path / "outside.txt"
+
+    artifact = TextFileArtifact(filename=str(outside), contents="leaked")
+    artifact.log_model(str(log_dir))
+
+    assert not outside.exists(), "log_model wrote outside of the provided log path"

@@ -58,6 +58,20 @@ class RedfishConnectionManager(ConnectionManager[RedfishConnection, RedfishConne
         connection_args: Optional[RedfishConnectionParams] = None,
         **kwargs,
     ):
+        """Creates a RedfishConnectionManager Task instance.
+
+        Args:
+            system_info (SystemInfo): System information for the connection manager task.
+            logger (Optional[logging.Logger], optional): _description_. Defaults to None.
+            max_event_priority_level (Union[EventPriority, str], optional): _description_. Defaults to EventPriority.CRITICAL.
+            parent (Optional[str], optional): _description_. Defaults to None.
+            task_result_hooks (Optional[list[TaskResultHook], None], optional): _description_. Defaults to None.
+            connection_args (Optional[Union[TConnectArg, dict]], optional): _description_. Defaults to None.
+            kwargs (dict, optional): Additional keyword arguments passed to the parent class.
+
+        Raises:
+            ValueError: Will raise a ValueError when the connection_args cannot be mapped to the expected model.
+        """
         super().__init__(
             system_info,
             logger,

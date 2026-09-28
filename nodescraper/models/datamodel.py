@@ -27,7 +27,7 @@ import io
 import json
 import os
 import tarfile
-from typing import TypeVar, Union
+from typing import Any, TypeVar, Union
 
 from pydantic import BaseModel, field_validator
 
@@ -78,7 +78,7 @@ class DataModel(BaseModel):
         )
 
         exlude_fields = set()
-        for key in self.model_fields:
+        for key in self.__class__.model_fields:
             data = getattr(self, key)
             if isinstance(data, FileModel):
                 data.log_model(log_path)
@@ -92,7 +92,7 @@ class DataModel(BaseModel):
         pass
 
     @classmethod
-    def import_model(cls: type[TDataModel], model_input: Union[dict, str]) -> TDataModel:
+    def import_model(cls: type[TDataModel], model_input: Union[dict[str, Any], str]) -> TDataModel:
         """import a data model
         if the input is a string attempt to read data from file using the string as a file name
         if input is a dict, pass key value pairs directly to init function
@@ -100,7 +100,7 @@ class DataModel(BaseModel):
 
         Args:
             cls (type[DataModel]): Data model class
-            model_input (Union[dict, str]): model data input
+            model_input (Union[dict[str, Any], str]): model data input
 
         Raises:
             ValueError: if model_input has an invalid type
@@ -113,18 +113,17 @@ class DataModel(BaseModel):
             return cls(**model_input)
 
         if isinstance(model_input, str):
-            # Build from tarfile if supported
-            if tarfile.is_tarfile(model_input):
-                return cls.build_from_tar(model_input)
             # Build from folder if supported
             if os.path.isdir(model_input):
                 return cls.build_from_folder(model_input)
-
+            # Build from tarfile if supported
+            elif tarfile.is_tarfile(model_input):
+                return cls.build_from_tar(model_input)
             # Build from json file
-            with open(model_input, "r", encoding="utf-8") as input_file:
-                data = json.load(input_file)
-
-            return cls(**data)
+            else:
+                with open(model_input, "r", encoding="utf-8") as input_file:
+                    data = json.load(input_file)
+                return cls(**data)
 
         raise ValueError("Invalid input for model data")
 

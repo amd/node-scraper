@@ -89,3 +89,10 @@ class MemoryDataModel(DataModel):
     mem_available: Optional[str] = None
     lsmem_data: Optional[LsmemData] = None
     numa_topology: Optional[NumaTopology] = None
+
+    def __str__(self) -> str:
+        return (
+            f"MemoryDataModel(mem_free={self.mem_free}, mem_total={self.mem_total}, "
+            f"mem_available={self.mem_available}, lsmem_data={self.lsmem_data}, "
+            f"numa_topology={self.numa_topology})"
+        )

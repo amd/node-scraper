@@ -31,13 +31,16 @@ import logging
 import uuid
 from collections import deque
 from collections.abc import Callable, Sequence
-from typing import Optional, Type, Union
+from typing import Any, Optional, Type, Union
 
 from pydantic import BaseModel
 
 from nodescraper.base.oobsshdataplugin import OOBSSHDataPlugin
+from nodescraper.connection.inband import InBandConnectionManager
+from nodescraper.connection.inband.osdetection import discover_and_write_os_family
 from nodescraper.connection.oob_ssh import OobSshConnectionManager
 from nodescraper.constants import DEFAULT_LOGGER
+from nodescraper.enums import ExecutionStatus, OSFamily
 from nodescraper.helpers.plugin_execution_target import (
     format_in_band_target_summary,
 )
@@ -64,7 +67,35 @@ class PluginExecutor:
         session_id: Optional[str] = None,
         plugin_run_result_hooks: Optional[Sequence[Callable[[PluginResult], None]]] = None,
     ):
+        """Initialize the PluginExecutor instance.
 
+        Args:
+            plugin_configs (list[PluginConfig]): This is a list of the PluginConfig Object, when this list is greater than a single PluginConfig
+                then the plugin_configs will be merged into a single PluginConfig. The single PluginConfig post merge will be used to control
+                all of the execution that is done by this executor. It will run all `plugins` defined in the merged PluginConfig.
+            connections (Optional[dict[str, Union[dict, BaseModel]]], optional): Connections is a dictionary where the
+                keys represent connection names and the values are either dictionaries or BaseModel instances containing the connection details
+                Optionally the user can provide just the dict[str, dict[Any,Any]] In this case the dictionary attributed to that connection name
+                will be transformed into a BaseModel instance and it will raise an error when this model fails to validate.
+                Any key in this dict will be promptly built using the args during `__init__` even if the connection is not used by any of the tasks
+                defined in the plugin_configs. If the connection isn't defined for a particular Plugin but that plugin requires the connection then
+                that connection will be built anyway but the arguments will not be provided which may lead to connection to not being properly established.
+                It is recommended that in-band connection arg should always be provided for remote connections. Defaults to None.
+            system_info (Optional[SystemInfo], optional): System information for the plugin executor, this is passed to the connection, and plugins, The executor will
+                only give out copies to other components. If the original system_info passed here is OSFamily.UNKOWN then the executor will attempt to detect the correct OS family
+                by starting a in-band connection and then determining the correct OS family. Defaults to None.
+            logger (Optional[logging.Logger], optional): Logger instance for the plugin executor. Defaults to None.
+            plugin_registry (Optional[PluginRegistry], optional): Plugin registry instance for the plugin executor, when this is None then the PluginRegistry will be
+            assigned a default `PluginRegistry()`. Defaults to None.
+            log_path (Optional[str], optional): Path to the log file for the plugin executor. When this is defined then the FileSystemLogHook will be automatically
+                added to the connection results hooks resulting in it logging to the defined folder. Defaults to None.
+            session_id (Optional[str], optional): Session identifier for the plugin executor. Defaults to None.
+            plugin_run_result_hooks (Optional[Sequence[Callable[[PluginResult], None]]], optional): Sequence of callables to be executed with the result of each plugin run. When this is
+            None then then this will be made empty list [] . Defaults to None.
+
+        Raises:
+            ValueError: If the provided session_id is not a valid UUID string.
+        """
         if logger is None:
             logger = logging.getLogger(DEFAULT_LOGGER)
         self.logger = logger
@@ -103,23 +134,7 @@ class PluginExecutor:
         if log_path:
             self.connection_result_hooks.append(FileSystemLogHook(log_base_path=log_path))
 
-        if connections:
-            for connection, connection_args in connections.items():
-                if connection not in self.plugin_registry.connection_managers:
-                    self.logger.error(
-                        "Unable to find registered connection manager class for %s", connection
-                    )
-                    continue
-
-                connection_manager = self.plugin_registry.connection_managers[connection]
-
-                self.connection_library[connection_manager] = connection_manager(
-                    system_info=self.system_info,
-                    logger=self.logger,
-                    connection_args=connection_args,
-                    task_result_hooks=self.connection_result_hooks,
-                    session_id=self.session_id,
-                )
+        self._populate_connection_library(connections)
 
         self.logger.info("System Name: %s", self.system_info.name)
         if self.system_info.sku:
@@ -130,6 +145,35 @@ class PluginExecutor:
             "%s",
             format_in_band_target_summary(self.system_info, self.connection_configs),
         )
+
+    def _populate_connection_library(
+        self, connections: dict[str, dict[str, Any] | BaseModel] | None
+    ) -> None:
+        """Init the connection library with the provided connections.
+
+        Args:
+            connections (dict[str, dict[str, Any]]): A dictionary mapping connection names to their arguments.
+            where the first level of the dict is always a name of the connection class and then its arguments.
+        """
+        if connections is None:
+            return
+        for connection, connection_args in connections.items():
+            if connection not in self.plugin_registry.connection_managers:
+                self.logger.error(
+                    "Unable to find registered connection manager class for %s",
+                    connection,
+                )
+                continue
+
+            connection_manager = self.plugin_registry.connection_managers[connection]
+
+            self.connection_library[connection_manager] = connection_manager(
+                system_info=self.system_info,
+                logger=self.logger,
+                connection_args=connection_args,
+                task_result_hooks=self.connection_result_hooks,
+                session_id=self.session_id,
+            )
 
     @staticmethod
     def _deep_merge_plugin_args(existing: dict, incoming: dict) -> dict:
@@ -151,6 +195,14 @@ class PluginExecutor:
 
     @staticmethod
     def merge_configs(plugin_configs: list[PluginConfig]) -> PluginConfig:
+        """Merge multiple PluginConfig instances into a single PluginConfig.
+
+        Args:
+            plugin_configs (list[PluginConfig]): A list of PluginConfig instances to merge.
+
+        Returns:
+            PluginConfig: A single PluginConfig instance containing the merged configurations.
+        """
         merged_config = PluginConfig()
         for config in plugin_configs:
             merged_config.global_args.update(config.global_args)
@@ -167,6 +219,37 @@ class PluginExecutor:
             merged_config.post_action_plugins.extend(config.post_action_plugins)
 
         return merged_config
+
+    def discover_os_info(self) -> None:
+        """If the connection library has an InBandConnectionManager, use it to discover OS info and update system_info
+        self.system_info will be updated with the discovered OS info.
+        """
+        inband_connection = self.connection_library.get(InBandConnectionManager)
+        if inband_connection is None:
+            # Init use and discard after
+            inband_connection = InBandConnectionManager(
+                system_info=self.system_info,
+                logger=self.logger,
+                connection_args=self.connection_configs.get(InBandConnectionManager.__name__),
+                task_result_hooks=self.connection_result_hooks,
+                session_id=self.session_id,
+            )
+        try:
+            result = inband_connection.connect() if inband_connection else None
+            if (not inband_connection) or (not result) or (result.status != ExecutionStatus.OK):
+                self.logger.info(
+                    "InBandConnectionManager not available or failed to connect for OS discovery. Skipping OS discovery."
+                )
+                return
+            discover_and_write_os_family(inband_connection, self.system_info, self.logger)
+        except Exception as e:
+            self.logger.error(
+                "Error occurred during OS discovery with InBandConnectionManager: %s",
+                str(e),
+            )
+        finally:
+            if inband_connection is not None:
+                inband_connection.disconnect()
 
     def _get_connection_manager_for_plugin(
         self,
@@ -276,22 +359,14 @@ class PluginExecutor:
         try:
             plugin_inst = plugin_class(**init_payload)
 
-            run_payload = copy.deepcopy(plugin_args)
+            plugin_run_args = copy.deepcopy(plugin_args)
             run_args = TypeUtils.get_func_arg_types(plugin_class.run, plugin_class)
-
-            for arg in run_args.keys():
-                if arg == "preserve_connection" and issubclass(plugin_class, DataPlugin):
-                    run_payload[arg] = True
 
             try:
                 global_run_args = self.apply_global_args_to_plugin(
                     plugin_inst, plugin_class, self.plugin_config.global_args
                 )
-                for args_key in ["analysis_args", "collection_args"]:
-                    if args_key in global_run_args and args_key in run_payload:
-                        run_payload[args_key].update(global_run_args[args_key])
-                        del global_run_args[args_key]
-                run_payload.update(global_run_args)
+                run_payload = self.merge_plugin_run_args(plugin_run_args, global_run_args)
             except ValueError as ve:
                 self.logger.error(
                     "Invalid global_args for plugin %s: %s. Skipping plugin.",
@@ -299,6 +374,10 @@ class PluginExecutor:
                     str(ve),
                 )
                 return False
+
+            for arg in run_args.keys():
+                if arg == "preserve_connection" and issubclass(plugin_class, DataPlugin):
+                    run_payload[arg] = True
 
             plugin_result = plugin_inst.run(**run_payload)
             plugin_results.append(plugin_result)
@@ -317,6 +396,9 @@ class PluginExecutor:
             list[PluginResult]: List of results from running the plugins in the queue
         """
         plugin_results = []
+        # For Plugins discover OS Family
+        if self.system_info.os_family is None or self.system_info.os_family == OSFamily.UNKNOWN:
+            self.discover_os_info()
         plugin_queue = deque(self.plugin_config.plugins.items())
         try:
             while len(plugin_queue) > 0:
@@ -338,11 +420,15 @@ class PluginExecutor:
 
             if self.plugin_config.result_collators:
                 self.logger.info("Running result collators")
-                for collator, collator_args in self.plugin_config.result_collators.items():
+                for (
+                    collator,
+                    collator_args,
+                ) in self.plugin_config.result_collators.items():
                     collator_class = self.plugin_registry.result_collators.get(collator)
                     if collator_class is None:
                         self.logger.warning(
-                            "No result collator found in registry for name: %s", collator
+                            "No result collator found in registry for name: %s",
+                            collator,
                         )
                         continue
 
@@ -410,6 +496,23 @@ class PluginExecutor:
                 plugin_results,
                 queue_callback=None,
             )
+
+    @staticmethod
+    def merge_plugin_run_args(plugin_args: dict, global_run_args: dict) -> dict:
+        """Apply per-plugin run() overrides on top of global defaults."""
+        run_payload = copy.deepcopy(global_run_args)
+        plugin_overrides = copy.deepcopy(plugin_args)
+        for args_key in ("analysis_args", "collection_args"):
+            plugin_nested = plugin_overrides.pop(args_key, None)
+            if plugin_nested is None:
+                continue
+            global_nested = run_payload.get(args_key)
+            if isinstance(global_nested, dict) and isinstance(plugin_nested, dict):
+                run_payload[args_key] = {**global_nested, **plugin_nested}
+            else:
+                run_payload[args_key] = plugin_nested
+        run_payload.update(plugin_overrides)
+        return run_payload
 
     def apply_global_args_to_plugin(
         self,

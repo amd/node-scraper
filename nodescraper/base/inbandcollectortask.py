@@ -55,8 +55,25 @@ class InBandDataCollector(
         task_result_hooks: Optional[list[TaskResultHook]] = None,
         event_reporter: str = DEFAULT_EVENT_REPORTER,
         session_id: Optional[str] = None,
+        log_path: Optional[str] = None,
         **kwargs,
     ):
+        """Creates a InBandDataCollector Class
+
+        Args:
+            system_info (SystemInfo): Information about the system being targeted for data collection.
+            connection (InBandConnection): The in-band connection used to communicate with the target system.
+            logger (Optional[logging.Logger], optional): Logger instance for logging messages. Defaults to None.
+            system_interaction_level (SystemInteractionLevel, optional): Level of interaction with the system. Defaults to SystemInteractionLevel.INTERACTIVE.
+            max_event_priority_level (Union[EventPriority, str], optional): Maximum priority level for events. Defaults to EventPriority.CRITICAL.
+            parent (Optional[str], optional): Parent task identifier. Defaults to None.
+            task_result_hooks (Optional[list[TaskResultHook]], optional): List of hooks to be called with task results. Defaults to None.
+            event_reporter (str, optional): Event reporter identifier. Defaults to DEFAULT_EVENT_REPORTER.
+            session_id (Optional[str], optional): Session identifier for the data collection task. Defaults to None.
+
+        Raises:
+            SystemCompatibilityError: Raised if the system's OS family is not supported.
+        """
         super().__init__(
             system_info=system_info,
             system_interaction_level=system_interaction_level,
@@ -67,6 +84,7 @@ class InBandDataCollector(
             task_result_hooks=task_result_hooks,
             event_reporter=event_reporter,
             session_id=session_id,
+            log_path=log_path,
         )
         if self.system_info.os_family not in self.SUPPORTED_OS_FAMILY:
             raise SystemCompatibilityError(

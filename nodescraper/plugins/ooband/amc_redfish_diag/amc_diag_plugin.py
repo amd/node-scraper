@@ -28,12 +28,6 @@ from nodescraper.connection.redfish import (
     RedfishSshProxyConnectionParams,
 )
 from nodescraper.interfaces import DataPlugin
-from nodescraper.plugins.ooband.redfish_oem_diag.analyzer_args import (
-    RedfishOemDiagAnalyzerArgs,
-)
-from nodescraper.plugins.ooband.redfish_oem_diag.oem_diag_analyzer import (
-    RedfishOemDiagAnalyzer,
-)
 from nodescraper.plugins.ooband.redfish_oem_diag.oem_diag_data import (
     RedfishOemDiagDataModel,
 )
@@ -48,10 +42,13 @@ class AmcRedfishDiagPlugin(
         RedfishSshProxyConnectionParams,
         RedfishOemDiagDataModel,
         AmcRedfishDiagCollectorArgs,
-        RedfishOemDiagAnalyzerArgs,
+        None,
     ]
 ):
     """AMC CollectDiagnosticData over SSH-proxy Redfish for manager and system diagnostic bundles.
+
+    Collection only, there is no analyzer. Each failed collection logs a WARNING event and the
+    collector reports ERROR when no collection succeeded, OK when at least one succeeded.
 
     Configure RedfishSshProxyConnectionManager: ssh to the BMC, host/port of the AMC Redfish
     URL reachable from that BMC. collection_args selects Managers Manager dump and Systems OEM AllLogs.
@@ -60,6 +57,4 @@ class AmcRedfishDiagPlugin(
     CONNECTION_TYPE = RedfishSshProxyConnectionManager
     DATA_MODEL = RedfishOemDiagDataModel
     COLLECTOR = AmcRedfishDiagCollector
-    ANALYZER = RedfishOemDiagAnalyzer
     COLLECTOR_ARGS = AmcRedfishDiagCollectorArgs
-    ANALYZER_ARGS = RedfishOemDiagAnalyzerArgs

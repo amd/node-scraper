@@ -89,3 +89,31 @@ def test_success_with_args(mock_analyzer, dummy_data_model, dummy_arg, system_in
     assert any(
         "Exception during data analysis: some_err" in event.description for event in result.events
     )
+
+
+def test_analyzer_subclass_with_none_data_model_raises_type_error(dummy_data_model):
+    """Baseline: DATA_MODEL explicitly set to None is rejected with a TypeError."""
+    import pytest
+
+    from nodescraper.interfaces.dataanalyzertask import DataAnalyzer
+
+    with pytest.raises(TypeError):
+
+        class NoneModelAnalyzer(DataAnalyzer):
+            DATA_MODEL = None
+
+            def analyze_data(self, data, args=None):
+                return self.result
+
+
+def test_analyzer_subclass_without_data_model_raises_type_error():
+    """A concrete analyzer that never declares DATA_MODEL must raise TypeError, not AttributeError."""
+    import pytest
+
+    from nodescraper.interfaces.dataanalyzertask import DataAnalyzer
+
+    with pytest.raises(TypeError):
+
+        class MissingModelAnalyzer(DataAnalyzer):
+            def analyze_data(self, data, args=None):
+                return self.result

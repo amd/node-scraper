@@ -221,16 +221,16 @@ class PluginRegistry:
             PluginRegistry._use_cache
             and PluginRegistry._entry_point_connection_managers_cache is not None
         ):
-            return PluginRegistry._entry_point_connection_managers_cache
+            return PluginRegistry._entry_point_connection_managers_cache.copy()
 
         # If caching disabled, skip lock and always reload
         if not PluginRegistry._use_cache:
-            return PluginRegistry._load_connection_managers_uncached()
+            return PluginRegistry._load_connection_managers_uncached().copy()
 
         with PluginRegistry._cache_lock:
             # Check again inside the lock to prevent duplicate work
             if PluginRegistry._entry_point_connection_managers_cache is not None:
-                return PluginRegistry._entry_point_connection_managers_cache
+                return PluginRegistry._entry_point_connection_managers_cache.copy()
 
             managers = PluginRegistry._load_connection_managers_uncached()
 
@@ -274,10 +274,8 @@ class PluginRegistry:
         """Internal: Load plugins without caching logic."""
         plugins = {}
         eps: Iterable = PluginRegistry.load_entry_points(ENTRY_POINT_PLUGINS)
-
         for entry_point in eps:
             plugin_class = entry_point.load()  # type: ignore[attr-defined, union-attr]
-
             if not PluginRegistry._valid_sub_class_check(
                 in_cls=plugin_class, base_class=PluginInterface
             ):
