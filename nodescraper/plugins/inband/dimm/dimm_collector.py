@@ -168,6 +168,7 @@ class DimmCollector(InBandDataCollector[DimmDataModel, DimmCollectorArgs]):
             category=EventCategory.OS,
             description="Error checking dimms",
             priority=EventPriority.ERROR,
+            data=res.model_dump(include={"command", "stderr", "exit_code"}),
             console_log=True,
         )
 

@@ -37,20 +37,7 @@ from pydantic import (
 from typing_extensions import override
 
 from nodescraper.models import DataModel
-
-# Byte multiplier for every size unit that dmidecode may report for a module.
-SIZE_UNITS = {
-    "B": 1,
-    "KB": 1024,
-    "MB": 1024**2,
-    "GB": 1024**3,
-    "TB": 1024**4,
-    "PB": 1024**5,
-}
-
-# Units considered when rendering a byte count, largest first so that the
-# shortest exact representation wins.
-DISPLAY_UNITS = ("PB", "TB", "GB", "MB", "KB")
+from nodescraper.utils import SIZE_UNITS, format_bytes
 
 # Field values that mean "nothing here" rather than a real value.
 PLACEHOLDERS = frozenset(
@@ -121,22 +108,6 @@ WMI_FORM_FACTORS = {
     22: "FPBGA",
     23: "LGA",
 }
-
-
-def format_size(size_bytes: int) -> str:
-    """Render a byte count using the largest unit that divides it evenly.
-
-    Args:
-        size_bytes (int): size in bytes.
-
-    Returns:
-        str: human readable size, e.g. "64GB".
-    """
-    for unit in DISPLAY_UNITS:
-        factor = SIZE_UNITS[unit]
-        if size_bytes >= factor and not size_bytes % factor:
-            return f"{size_bytes // factor}{unit}"
-    return f"{size_bytes}B"
 
 
 def clean(value: str) -> Optional[str]:
@@ -354,7 +325,7 @@ class DimmInfo(BaseModel):
     @property
     def size(self) -> str:
         """Module capacity as a human readable string, e.g. "64GB"."""
-        return format_size(self.size_bytes)
+        return format_bytes(self.size_bytes)
 
     @override
     def __str__(self) -> str:
@@ -394,7 +365,7 @@ class DimmDataModel(DataModel):
     @property
     def total_size(self) -> str:
         """Combined capacity as a human readable string, e.g. "256GB"."""
-        return format_size(self.total_size_bytes)
+        return format_bytes(self.total_size_bytes)
 
     @computed_field  # type: ignore[misc]
     @property
@@ -403,7 +374,7 @@ class DimmDataModel(DataModel):
         counts: dict[int, int] = {}
         for dimm in self.dimms:
             counts[dimm.size_bytes] = counts.get(dimm.size_bytes, 0) + 1
-        return {format_size(size): count for size, count in sorted(counts.items())}
+        return {format_bytes(size): count for size, count in sorted(counts.items())}
 
     @override
     def __str__(self) -> str:

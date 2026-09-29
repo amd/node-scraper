@@ -28,6 +28,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from nodescraper.connection.inband.inband import CommandArtifact
 from nodescraper.enums.eventcategory import EventCategory
 from nodescraper.enums.executionstatus import ExecutionStatus
 from nodescraper.enums.systeminteraction import SystemInteractionLevel
@@ -74,8 +75,8 @@ def windows_collector(system_info, conn_mock):
 
 
 def cmd_result(exit_code=0, stdout="", stderr="", command="dmidecode"):
-    """Build a stand in for the CommandArtifact that _run_sut_cmd returns."""
-    return MagicMock(exit_code=exit_code, stdout=stdout, stderr=stderr, command=command)
+    """Build the CommandArtifact that _run_sut_cmd returns."""
+    return CommandArtifact(exit_code=exit_code, stdout=stdout, stderr=stderr, command=command)
 
 
 def descriptions(result):
