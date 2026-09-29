@@ -24,13 +24,12 @@
 #
 ###############################################################################
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 from nodescraper.base import RedfishDataCollector
 from nodescraper.connection.redfish import collect_oem_diagnostic_data
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
 from nodescraper.models import TaskResult
-from nodescraper.utils import pascal_to_snake
 
 from .collector_args import RedfishOemDiagCollectorArgs
 from .oem_diag_data import OemDiagTypeResult, RedfishOemDiagDataModel
@@ -49,10 +48,6 @@ class RedfishOemDiagCollector(
         "Optional binary archives under the plugin log path when log_path is set.",
     )
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        self.log_path = kwargs.pop("log_path", None)
-        super().__init__(*args, **kwargs)
-
     def collect_data(
         self, args: Optional[RedfishOemDiagCollectorArgs] = None
     ) -> tuple[TaskResult, Optional[RedfishOemDiagDataModel]]:
@@ -66,12 +61,7 @@ class RedfishOemDiagCollector(
             return self.result, None
 
         if self.log_path:
-            output_dir = (
-                Path(self.log_path)
-                / pascal_to_snake(self.parent or "")
-                / pascal_to_snake(self.__class__.__name__)
-                / "diag_logs"
-            ).resolve()
+            output_dir = (Path(self.log_path) / "diag_logs").resolve()
         else:
             output_dir = None
 
