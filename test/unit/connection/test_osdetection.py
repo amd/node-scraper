@@ -238,3 +238,24 @@ def test_discover_and_write_os_family_linux_skips_network_probes(system_info, co
 
     assert system_info.os_family == OSFamily.LINUX
     conn_mock.run_command.assert_called_once_with("uname -s")
+
+
+DUMMY_UNAME_ESXI = CommandArtifact(
+    command="uname -s",
+    stdout="VMkernel",
+    stderr="",
+    exit_code=0,
+)
+
+
+def test_discover_and_write_os_family_detects_esxi(system_info, conn_mock, logger):
+    """ESXi reports 'VMkernel' from `uname -s` (exit 0); classify it as ESXI and
+    skip the network-OS probes (same fast path as Linux)."""
+    manager = InBandConnectionManager(system_info=system_info)
+    manager.connection = conn_mock
+    conn_mock.run_command.return_value = DUMMY_UNAME_ESXI
+
+    discover_and_write_os_family(manager, system_info, logger)
+
+    assert system_info.os_family == OSFamily.ESXI
+    conn_mock.run_command.assert_called_once_with("uname -s")

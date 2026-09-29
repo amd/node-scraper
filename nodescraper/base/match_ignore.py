@@ -57,13 +57,15 @@ def parse_mce_bank_spec(spec: Sequence[MceBankSpec]) -> frozenset[int]:
                 raise ValueError(f"Invalid MCE bank number: {entry}")
             banks.add(entry)
             continue
-
         token = str(entry).strip()
         if not token:
             raise ValueError("Empty MCE bank entry")
-
         if "-" in token:
             start_text, end_text = token.split("-", 1)
+            # Check if it looks like "-5"
+            if not start_text.strip() or not end_text.strip() or (int(end_text.strip()) < 0):
+                raise ValueError(f"Invalid MCE bank range: {entry}")
+
             start = int(start_text.strip())
             end = int(end_text.strip())
             if start < 0 or end < 0 or start > end:

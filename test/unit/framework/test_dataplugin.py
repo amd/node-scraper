@@ -31,6 +31,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from framework.common.shared_utils import MockConnectionManager
 
+from nodescraper import utils
 from nodescraper.enums import EventPriority, ExecutionStatus, SystemInteractionLevel
 from nodescraper.interfaces.dataanalyzertask import DataAnalyzer
 from nodescraper.interfaces.datacollectortask import DataCollector
@@ -123,6 +124,13 @@ class TestDataPluginCore:
         plugin.data = {"value": "dict_value"}
         assert isinstance(plugin.data, StandardDataModel)
         assert plugin.data.value == "dict_value"
+
+    def test_data_setter_error_names_expected_model(self, plugin):
+        """Invalid data should report the expected DATA_MODEL name, not its metaclass."""
+        with pytest.raises(ValueError) as exc_info:
+            plugin.data = 12345
+
+        assert "StandardDataModel" in str(exc_info.value)
 
     def test_collect_creates_connection_manager(self, plugin, conn_mock, system_info, logger):
         assert plugin.connection_manager is None
@@ -507,6 +515,30 @@ class TestDataPluginRunPaths:
         assert found is not None
         assert found.endswith("contentmodel.json")
 
+    def test_find_datamodel_path_prefers_datamodel_json_over_log(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        """A collector dir holding both files must yield the datamodel json, not the .log."""
+        import os
+
+        collector_dir = tmp_path / "extract_plugin" / "content_collector"
+        collector_dir.mkdir(parents=True)
+        (collector_dir / "result.json").write_text(
+            json.dumps({"parent": "ExtractPlugin"}), encoding="utf-8"
+        )
+        (collector_dir / "contentmodel.json").write_text(
+            json.dumps({"value": "from_run"}), encoding="utf-8"
+        )
+        (collector_dir / "capture.log").write_text("raw log", encoding="utf-8")
+
+        # make directory listing order deterministic: "capture.log" sorts first
+        real_listdir = os.listdir
+        monkeypatch.setattr(os, "listdir", lambda path: sorted(real_listdir(path)))
+
+        found = ExtractPlugin.find_datamodel_path_in_run(str(tmp_path))
+        assert found is not None
+        assert found.endswith("contentmodel.json")
+
     def test_find_datamodel_path_wrong_parent(self, tmp_path: Path) -> None:
         collector_dir = tmp_path / "extract_plugin" / "content_collector"
         collector_dir.mkdir(parents=True)
@@ -764,3 +796,80 @@ class TestMultiCollectorDataPlugin:
 
             beta_call_kwargs = beta_init.call_args[1]
             assert beta_call_kwargs["log_path"] is None
+
+
+class OverrideDataModel(DataModel):
+    value: str = "test"
+
+
+class OverrideCollector(DataCollector):
+    DATA_MODEL = OverrideDataModel
+
+    def collect_data(self, args=None):
+        self.result.status = ExecutionStatus.OK
+        return self.result, OverrideDataModel(value="collected")
+
+
+class OverrideAnalyzer(DataAnalyzer):
+    DATA_MODEL = OverrideDataModel
+
+    def analyze_data(self, data, args=None):
+        return TaskResult(status=ExecutionStatus.OK)
+
+
+class OverrideLogDirPlugin(DataPlugin):
+    DATA_MODEL = OverrideDataModel
+    CONNECTION_TYPE = MockConnectionManager
+    COLLECTOR = OverrideCollector
+    ANALYZER = OverrideAnalyzer
+
+
+class TestDataPluginLogDirNameOverride:
+    """find_datamodel_path_in_run must read from the dirs collect() actually writes to."""
+
+    @pytest.fixture(autouse=True)
+    def registered_overrides(self, monkeypatch):
+        monkeypatch.setitem(
+            utils._LOG_DIR_NAME_OVERRIDES, "OverrideLogDirPlugin", "override_LOGDIR_plugin"
+        )
+        monkeypatch.setitem(
+            utils._LOG_DIR_NAME_OVERRIDES, "OverrideCollector", "override_LOGDIR_collector"
+        )
+
+    def test_find_datamodel_path_honors_registered_log_dir_name(
+        self, plugin_with_conn, tmp_path: Path
+    ) -> None:
+        run_path = tmp_path / "scraper_logs_run"
+        plugin = OverrideLogDirPlugin(
+            system_info=plugin_with_conn.system_info,
+            logger=plugin_with_conn.logger,
+            connection_manager=plugin_with_conn.connection_manager,
+            log_path=str(run_path),
+        )
+
+        assert plugin.collect(preserve_connection=True).status == ExecutionStatus.OK
+
+        # collect() wrote the collector output under the registered override names
+        collector_dir = run_path / "override_LOGDIR_plugin" / "override_LOGDIR_collector"
+        assert (collector_dir / "result.json").is_file()
+        assert (collector_dir / "overridedatamodel.json").is_file()
+
+        found = OverrideLogDirPlugin.find_datamodel_path_in_run(str(run_path))
+        assert found is not None
+        assert Path(found).parent == collector_dir
+
+    def test_load_run_data_honors_registered_log_dir_name(
+        self, plugin_with_conn, tmp_path: Path
+    ) -> None:
+        run_path = tmp_path / "scraper_logs_run"
+        plugin = OverrideLogDirPlugin(
+            system_info=plugin_with_conn.system_info,
+            logger=plugin_with_conn.logger,
+            connection_manager=plugin_with_conn.connection_manager,
+            log_path=str(run_path),
+        )
+        plugin.collect(preserve_connection=True)
+
+        loaded = OverrideLogDirPlugin.load_run_data(str(run_path))
+        assert loaded is not None
+        assert loaded["value"] == "collected"

@@ -88,6 +88,26 @@ def test_run_linux(collector, conn_mock):
     assert result.status == ExecutionStatus.OK
 
 
+def test_run_esxi(collector, conn_mock):
+    """ESXi reuses the `uname -a` path (release in the same field); numa_balancing
+    has no ESXi equivalent and its command fails gracefully -> None."""
+    collector.system_info.os_family = OSFamily.ESXI
+    uname = "VMkernel host 9.1.0 #1 SMP Release build-25166133 Jan 14 2026 x86_64"
+    conn_mock.run_command.side_effect = [
+        CommandArtifact(exit_code=0, stdout=uname, stderr="", command="sh -c 'uname -a'"),
+        CommandArtifact(
+            exit_code=1,
+            stdout="",
+            stderr="not found",
+            command="sh -c 'cat /proc/sys/kernel/numa_balancing'",
+        ),
+    ]
+
+    result, data = collector.collect_data()
+    assert result.status == ExecutionStatus.OK
+    assert data == KernelDataModel(kernel_info=uname, kernel_version="9.1.0", numa_balancing=None)
+
+
 def test_run_error(collector, conn_mock):
     collector.system_info.os_family = OSFamily.LINUX
     conn_mock.run_command.return_value = CommandArtifact(

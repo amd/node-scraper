@@ -24,20 +24,25 @@
 #
 ###############################################################################
 import re
+from typing import Optional
 
 from nodescraper.base.regexanalyzer import RegexAnalyzer
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
 from nodescraper.models import TaskResult
+from nodescraper.utils import _validate_firmware_policy
 
+from .analyzer_args import NetworkAnalyzerArgs
 from .networkdata import NetworkDataModel
 
 
-class NetworkAnalyzer(RegexAnalyzer[NetworkDataModel, None]):
+class NetworkAnalyzer(RegexAnalyzer[NetworkDataModel, NetworkAnalyzerArgs]):
     """Check network statistics for errors."""
 
     DATA_MODEL = NetworkDataModel
 
-    def analyze_data(self, data: NetworkDataModel, args=None) -> TaskResult:
+    def analyze_data(
+        self, data: NetworkDataModel, args: Optional[NetworkAnalyzerArgs] = None
+    ) -> TaskResult:
         """Analyze ethtool -S statistics via RDMA-scoped vendor models.
 
         Args:
@@ -47,6 +52,40 @@ class NetworkAnalyzer(RegexAnalyzer[NetworkDataModel, None]):
         Returns:
             TaskResult with OK, WARNING (no devices, or only warning-tier counters), or ERROR.
         """
+        args = args or NetworkAnalyzerArgs()
+        firmware_records = []
+        for interface, info in data.ethtool_info.items():
+            vendor = _vendor_for_driver(info.driver)
+            if vendor is None:
+                continue
+            firmware_records.append(
+                {
+                    "identity": interface,
+                    "version": info.firmware_version,
+                    "source": "ethtool",
+                    "vendor": vendor,
+                    "driver": info.driver,
+                    "interface": interface,
+                    "pci_bdf": info.bus_info,
+                }
+            )
+        firmware_policy_issues = _validate_firmware_policy(
+            firmware_records,
+            (
+                {"expected_nic_firmware": args.expected_nic_firmware}
+                if args.expected_nic_firmware
+                else None
+            ),
+        )
+        for issue in firmware_policy_issues:
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description="Network adapter firmware policy mismatch",
+                data=issue,
+                priority=EventPriority.WARNING,
+                console_log=True,
+            )
+
         if not data.ethtool_info and not data.ethtool_statistics:
             self.result.message = "No network devices found"
             self.result.status = ExecutionStatus.WARNING
@@ -165,8 +204,25 @@ class NetworkAnalyzer(RegexAnalyzer[NetworkDataModel, None]):
         elif vendor_warning:
             self.result.message = "Network warning counters non-zero in statistics"
             self.result.status = ExecutionStatus.WARNING
+        elif firmware_policy_issues:
+            self.result.message = "Network adapter firmware policy mismatch"
+            self.result.status = ExecutionStatus.WARNING
         else:
             self.result.message = "No network errors detected in statistics"
             self.result.status = ExecutionStatus.OK
 
         return self.result
+
+
+def _vendor_for_driver(driver: Optional[str]) -> Optional[str]:
+    """Return a stable vendor label for common ethtool driver families."""
+    if not driver:
+        return None
+    normalized = driver.lower()
+    if normalized.startswith(("bnxt", "bnx2")):
+        return "Broadcom"
+    if normalized.startswith(("mlx", "ib_")):
+        return "Mellanox"
+    if normalized.startswith(("ionic",)):
+        return "Pensando"
+    return None

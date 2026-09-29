@@ -450,6 +450,24 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
 
         return ethtool_info
 
+    def _parse_ethtool_driver_info(self, info: EthtoolInfo, output: str) -> None:
+        """Merge ``ethtool -i`` identity and firmware fields into an interface model."""
+        for line in output.splitlines():
+            if ":" not in line:
+                continue
+            key, value = (part.strip() for part in line.split(":", 1))
+            if not key or not value:
+                continue
+            info.settings[key] = value
+            normalized_key = key.lower().replace("-", "_").replace(" ", "_")
+            if normalized_key == "driver":
+                info.driver = value
+            elif normalized_key in {"bus_info", "bus"}:
+                info.bus_info = value
+            elif normalized_key in {"firmware_version", "firmware"}:
+                firmware_match = re.search(r"\d+(?:\.\d+){2,}", value)
+                info.firmware_version = firmware_match.group(0) if firmware_match else value
+
     def _parse_ethtool_statistics(self, output: str, interface: str) -> Dict[str, str]:
         """Parse 'ethtool -S <interface>' output into a key-value dictionary.
 
@@ -519,6 +537,41 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
                     category=EventCategory.NETWORK,
                     description=f"Error collecting ethtool info for interface: {iface.name}",
                     data={"command": res_ethtool.command, "exit_code": res_ethtool.exit_code},
+                    priority=EventPriority.WARNING,
+                )
+
+            if iface.name == "lo" or any(flag.upper() == "LOOPBACK" for flag in iface.flags):
+                continue
+
+            # ``ethtool <interface>`` does not include firmware identity on all
+            # drivers, so always retain the separate ``ethtool -i`` response.
+            res_driver = self._run_sut_cmd(
+                self.CMD_ETHTOOL_I_TEMPLATE.format(interface=iface.name), sudo=True
+            )
+            if res_driver.exit_code == 0:
+                ethtool_info = ethtool_data.get(
+                    iface.name, EthtoolInfo(interface=iface.name, raw_output="")
+                )
+                self._parse_ethtool_driver_info(ethtool_info, res_driver.stdout)
+                ethtool_data[iface.name] = ethtool_info
+                self._log_event(
+                    category=EventCategory.NETWORK,
+                    description=(
+                        f"Collected ethtool -i driver info for interface: " f"{iface.name}"
+                    ),
+                    priority=EventPriority.INFO,
+                )
+            else:
+                self._log_event(
+                    category=EventCategory.NETWORK,
+                    description=(
+                        f"Error collecting ethtool -i driver info for interface: " f"{iface.name}"
+                    ),
+                    data={
+                        "command": res_driver.command,
+                        "exit_code": res_driver.exit_code,
+                        "stderr": res_driver.stderr,
+                    },
                     priority=EventPriority.WARNING,
                 )
 

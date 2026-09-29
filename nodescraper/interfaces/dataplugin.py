@@ -46,7 +46,7 @@ from nodescraper.models import (
     SystemInfo,
     TaskResult,
 )
-from nodescraper.utils import pascal_to_snake, resolve_log_dir_name
+from nodescraper.utils import resolve_log_dir_name
 
 from .connectionmanager import TConnectArg, TConnectionManager
 from .task import SystemCompatibilityError
@@ -292,7 +292,7 @@ class DataPlugin(
         if isinstance(data, (str, dict)):
             self._data = self.DATA_MODEL.import_model(data)
         elif not isinstance(data, self.DATA_MODEL):
-            raise ValueError(f"data is invalid type, expected {self.DATA_MODEL.__class__.__name__}")
+            raise ValueError(f"data is invalid type, expected {self.DATA_MODEL.__name__}")
         else:
             self._data = data
 
@@ -597,8 +597,8 @@ class DataPlugin(
         for collector_cls in cls.get_collector_classes():
             collector_dir = os.path.join(
                 run_path,
-                pascal_to_snake(cls.__name__),
-                pascal_to_snake(collector_cls.__name__),
+                resolve_log_dir_name(cls.__name__),
+                resolve_log_dir_name(collector_cls.__name__),
             )
             if not os.path.isdir(collector_dir):
                 continue
@@ -612,10 +612,14 @@ class DataPlugin(
             except (json.JSONDecodeError, OSError):
                 continue
             want_json = data_model_cls.__name__.lower() + ".json"
+            # First search all files for the json
             for fname in os.listdir(collector_dir):
                 low = fname.lower()
-                if low.endswith("datamodel.json") or low == want_json:
+                if low.endswith(f"{data_model_cls.__name__.lower()}.json") or low == want_json:
                     return os.path.join(collector_dir, fname)
+            # Then search for log since that is valid in some cases
+            for fname in os.listdir(collector_dir):
+                low = fname.lower()
                 if low.endswith(".log"):
                     return os.path.join(collector_dir, fname)
         return None

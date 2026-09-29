@@ -407,6 +407,7 @@ class RdmaDevice(BaseModel):
     node_guid: Optional[str] = None
     sys_image_guid: Optional[str] = None
     state: Optional[str] = None
+    firmware_version: Optional[str] = None
     attributes: dict[str, str] = Field(default_factory=dict)
 
 

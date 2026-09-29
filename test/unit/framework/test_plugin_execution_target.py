@@ -53,11 +53,11 @@ def test_format_in_band_target_summary_remote():
         SystemInfo(name="workstation01", location=SystemLocation.REMOTE),
         connection_configs={
             "InBandConnectionManager": {
-                "hostname": "ctheliosp-1b112-b34-1.mnb.dcgpu",
+                "hostname": "sut.example.com",
             }
         },
     )
-    assert summary == "In-band default: remote host via SSH (ctheliosp-1b112-b34-1.mnb.dcgpu)"
+    assert summary == "In-band default: remote host via SSH (sut.example.com)"
 
 
 def test_format_plugin_execution_target_redfish():

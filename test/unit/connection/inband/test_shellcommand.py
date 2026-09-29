@@ -23,9 +23,12 @@
 # SOFTWARE.
 #
 ###############################################################################
+import subprocess
 from unittest.mock import MagicMock, patch
 
 from nodescraper.connection.inband.inbandlocal import LocalShell
+from nodescraper.connection.inband.inbandremote import RemoteShell
+from nodescraper.connection.inband.sshparams import SSHConnectionParams
 
 
 @patch("nodescraper.connection.inband.inbandlocal.subprocess.run")
@@ -45,4 +48,34 @@ def test_localshell_string_with_sudo(mock_run):
     shell = LocalShell()
     shell.run_command("cat /etc/shadow", sudo=True)
 
-    assert mock_run.call_args.args[0] == "sudo cat /etc/shadow"
+    assert mock_run.call_args.args[0] == "sudo -n cat /etc/shadow"
+    assert mock_run.call_args.kwargs["stdin"] is subprocess.DEVNULL
+
+
+@patch("nodescraper.connection.inband.inbandlocal.subprocess.run")
+def test_localshell_timeout_returns_exit_124(mock_run):
+    mock_run.side_effect = subprocess.TimeoutExpired(
+        cmd="sleep 5", timeout=1, output=b"", stderr=b""
+    )
+
+    artifact = LocalShell().run_command("sleep 5", timeout=1)
+
+    assert artifact.exit_code == 124
+    assert "timed out" in artifact.stderr
+
+
+@patch("nodescraper.connection.inband.inbandremote.paramiko.SSHClient")
+def test_remoteshell_sudo_password_is_newline_terminated(mock_client_cls):
+    """sudo -S reads a line, so the password written to stdin must end with a newline."""
+    stdin, stdout, stderr = MagicMock(), MagicMock(), MagicMock()
+    stdout.read.return_value = b""
+    stderr.read.return_value = b""
+    stdout.channel.recv_exit_status.return_value = 0
+    mock_client_cls.return_value.exec_command.return_value = (stdin, stdout, stderr)
+
+    shell = RemoteShell(
+        SSHConnectionParams(hostname="127.0.0.1", username="user", password="hunter2")
+    )
+    shell.run_command("cat /etc/shadow", sudo=True)
+
+    stdin.write.assert_called_once_with("hunter2\n")
