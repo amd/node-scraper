@@ -88,6 +88,14 @@ class OobSshConnectionManager(ConnectionManager[InBandConnection, RedfishConnect
             self.result.status = ExecutionStatus.EXECUTION_FAILURE
             return self.result
 
+        if params.is_multi_target and params.host is None:
+            self.result.status = ExecutionStatus.NOT_RAN
+            self.result.message = (
+                "OOB SSH plugins use a single BMC host. "
+                "A targets list applies only to Redfish plugins."
+            )
+            return self.result
+
         try:
             ssh_params = redfish_params_to_ssh(params)
             self.logger.info("Initializing OOB SSH to BMC host %s", ssh_params.hostname)

@@ -28,6 +28,7 @@ from typing import Any, Generic, Optional, Union
 from nodescraper.connection.redfish import (
     RedfishConnectionManager,
     RedfishConnectionParams,
+    collected_multi_target_data,
 )
 from nodescraper.enums import EventPriority, ExecutionStatus
 from nodescraper.generictypes import TAnalyzeArg, TCollectArg, TDataModel
@@ -60,10 +61,18 @@ class OOBandDataPlugin(
         analysis_args: Optional[Union[TAnalyzeArg, dict]] = None,
         data: Optional[Any] = None,
     ) -> TaskResult:
-        """Analyze collected data. Single-target delegates to DataPlugin.analyze().
-        Multi-target runs the analyzer once per target and aggregates results."""
+        """Analyze collected data for one BMC or once per Redfish target.
+
+        Args:
+            max_event_priority_level: Priority limit for events.
+            analysis_args: Analyzer arguments.
+            data: Pre-collected data for a single-target run.
+
+        Returns:
+            TaskResult: Analysis result for the targets that returned data.
+        """
         cm = self.connection_manager
-        multi_target_data: dict = getattr(cm, "_multi_target_data", None) or {}
+        multi_target_data: dict = collected_multi_target_data(cm)
 
         if not multi_target_data:
             return super().analyze(

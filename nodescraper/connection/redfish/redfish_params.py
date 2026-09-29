@@ -116,6 +116,11 @@ def redfish_params_to_ssh(
         if ssh_port is None:
             ssh_port = 22
 
+    if params.host is None:
+        raise ValueError(
+            "SSH mapping requires a Redfish host. Multi-target configs apply only to Redfish plugins."
+        )
+
     return SSHConnectionParams(
         hostname=str(params.host),
         username=params.username,

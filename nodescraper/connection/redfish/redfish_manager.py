@@ -53,9 +53,31 @@ class MultiTargetRedfishConnection:
     wrapper intercepts collect_data and iterates the individual target connections.
     """
 
-    def __init__(self, target_connections: dict[str, RedfishConnection]) -> None:
+    def __init__(
+        self,
+        target_connections: dict[str, RedfishConnection],
+        max_workers: Optional[int] = None,
+        failed_targets: Optional[dict[str, str]] = None,
+    ) -> None:
         self.target_connections = target_connections
         self.multi_target_data: dict[str, Any] = {}
+        self.max_workers = max_workers
+        self.failed_targets = dict(failed_targets or {})
+
+
+def collected_multi_target_data(connection_manager: Any) -> dict[str, Any]:
+    """Return per-target data from an open connection or from the copy made at disconnect.
+
+    Args:
+        connection_manager: Redfish connection manager for this plugin.
+
+    Returns:
+        dict[str, Any]: Target key to collected data. Empty for single-target runs.
+    """
+    conn = getattr(connection_manager, "connection", None)
+    if isinstance(conn, MultiTargetRedfishConnection) and conn.multi_target_data:
+        return conn.multi_target_data
+    return getattr(connection_manager, "_multi_target_data", None) or {}
 
 
 class RedfishConnectionManager(ConnectionManager[RedfishConnection, RedfishConnectionParams]):
@@ -124,23 +146,47 @@ class RedfishConnectionManager(ConnectionManager[RedfishConnection, RedfishConne
 
         if params.is_multi_target:
             self.target_connections: dict[str, RedfishConnection] = {}
+            failed_targets: dict[str, str] = {}
             for target in params.targets:  # type: ignore[union-attr]
-                key, conn = self._connect_target(target)
-                if conn is not None:
-                    self.target_connections[key] = conn
+                key, conn, error = self._connect_target(target)
+                if conn is None:
+                    failed_targets[key] = error or f"Redfish connection failed for target {key!r}"
+                    continue
+                if key in self.target_connections:
+                    self._log_event(
+                        category=EventCategory.RUNTIME,
+                        description=f"Duplicate Redfish target key {key!r}; keeping the first connection",
+                        priority=EventPriority.WARNING,
+                        console_log=True,
+                    )
+                    conn.close()
+                    continue
+                self.target_connections[key] = conn
             if not self.target_connections:
                 self.result.status = ExecutionStatus.EXECUTION_FAILURE
+                self.result.message = "Redfish connection failed for every target"
             else:
                 # Set self.connection so DataPlugin.collect() does not short-circuit.
-                self.connection = MultiTargetRedfishConnection(self.target_connections)  # type: ignore[assignment]
+                self.connection = MultiTargetRedfishConnection(  # type: ignore[assignment]
+                    self.target_connections,
+                    max_workers=params.max_workers,
+                    failed_targets=failed_targets,
+                )
             return self.result
 
         return self._connect_single(params)
 
     def _connect_target(
         self, target: RedfishConnectionParams
-    ) -> tuple[str, Optional[RedfishConnection]]:
-        """Connect one target; returns (key, connection) or (key, None) on failure."""
+    ) -> tuple[str, Optional[RedfishConnection], Optional[str]]:
+        """Connect one target.
+
+        Args:
+            target: Connection parameters for a single BMC.
+
+        Returns:
+            tuple[str, Optional[RedfishConnection], Optional[str]]: Target key, connection, and error text.
+        """
         key = target.target_key or str(target.host)
         password = target.password.get_secret_value() if target.password else None
         base_url = _build_base_url(str(target.host), target.port, target.use_https)
@@ -157,15 +203,16 @@ class RedfishConnectionManager(ConnectionManager[RedfishConnection, RedfishConne
             )
             conn._ensure_session()
             conn.get_service_root()
-            return key, conn
+            return key, conn, None
         except (RedfishConnectionError, Exception) as exc:  # noqa: BLE001
+            description = f"Redfish connection failed for target {key!r}: {exc}"
             self._log_event(
                 category=EventCategory.RUNTIME,
-                description=f"Redfish connection failed for target {key!r}: {exc}",
-                priority=EventPriority.CRITICAL,
+                description=description,
+                priority=EventPriority.WARNING,
                 console_log=True,
             )
-            return key, None
+            return key, None, description
 
     def _connect_single(self, params: RedfishConnectionParams) -> TaskResult:
         """Connect in single-target mode (original connect logic)."""
@@ -205,15 +252,12 @@ class RedfishConnectionManager(ConnectionManager[RedfishConnection, RedfishConne
         return self.result
 
     def disconnect(self) -> None:
-        """Disconnect all Redfish sessions, preserving multi-target data on the manager."""
+        """Disconnect Redfish sessions and keep collected multi-target data on the manager."""
         if isinstance(self.connection, MultiTargetRedfishConnection):
-            # Persist collected data so analyze() can access it after disconnect.
             self._multi_target_data: dict[str, Any] = dict(self.connection.multi_target_data)
             for conn in self.connection.target_connections.values():
                 conn.close()
+            self.target_connections = {}
         elif self.connection is not None:
             self.connection.close()
-        for conn in getattr(self, "target_connections", {}).values():
-            conn.close()
-        self.target_connections = {}
         super().disconnect()

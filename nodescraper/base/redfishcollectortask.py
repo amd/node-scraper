@@ -24,9 +24,11 @@
 #
 ###############################################################################
 import logging
+import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import wraps
-from typing import Any, Callable, Generic, Optional, Union
+from pathlib import Path
+from typing import Any, Generic, Optional, Union
 
 from nodescraper.connection.redfish import (
     MultiTargetRedfishConnection,
@@ -37,7 +39,45 @@ from nodescraper.constants import DEFAULT_EVENT_REPORTER
 from nodescraper.enums import EventPriority, ExecutionStatus
 from nodescraper.generictypes import TCollectArg, TDataModel
 from nodescraper.interfaces import DataCollector, TaskResultHook
+from nodescraper.interfaces.dataplugin import DataPlugin
 from nodescraper.models import SystemInfo, TaskResult
+
+_HARD_FAIL = {ExecutionStatus.ERROR, ExecutionStatus.EXECUTION_FAILURE}
+_TARGET_SUCCESS = {ExecutionStatus.OK, ExecutionStatus.WARNING}
+
+
+def _target_dir_name(target_key: str) -> str:
+    """Return a filesystem-safe directory name for a target key.
+
+    Args:
+        target_key: Target identifier from the connection config.
+
+    Returns:
+        str: Directory name containing only letters, numbers, dot, underscore, and dash.
+    """
+    # Collapse characters that are unsafe in a log directory name.
+    cleaned = re.sub(r"[^A-Za-z0-9._-]+", "_", target_key).strip("._")
+    return cleaned or "target"
+
+
+def combine_target_results(parent: str, results: list[TaskResult]) -> TaskResult:
+    """Merge per-target task results.
+
+    Args:
+        parent: Parent name stored on the combined result.
+        results: Per-target task results.
+
+    Returns:
+        TaskResult: Combined result. Mixed success and failure stays at warning.
+    """
+    aggregated = DataPlugin._aggregate_collection_results(parent, results)
+    hard_fail = any(result.status in _HARD_FAIL for result in results)
+    succeeded = any(result.status in _TARGET_SUCCESS for result in results)
+    if hard_fail and succeeded:
+        aggregated.status = ExecutionStatus.WARNING
+        note = "One or more targets failed; continuing with the rest."
+        aggregated.message = f"{note} {aggregated.message}".strip() if aggregated.message else note
+    return aggregated
 
 
 class RedfishDataCollector(
@@ -109,28 +149,42 @@ class RedfishDataCollector(
                 return _fn(collector, args)
 
             multi_conn: MultiTargetRedfishConnection = collector.connection  # type: ignore[assignment]
-            parent_name = type(collector).__name__
-            all_results: list[TaskResult] = []
-            max_workers = min(len(multi_conn.target_connections), 32)
+            parent_name = collector.parent or type(collector).__name__
+            all_results: list[TaskResult] = [
+                TaskResult(
+                    status=ExecutionStatus.WARNING,
+                    parent=f"{parent_name}[{target_key}]",
+                    message=message,
+                )
+                for target_key, message in multi_conn.failed_targets.items()
+            ]
+            target_count = len(multi_conn.target_connections)
+            configured_workers = multi_conn.max_workers or target_count
+            max_workers = min(configured_workers, target_count, 32) if target_count else 1
 
             def _run_for_target(
                 target_key: str, conn: RedfishConnection
             ) -> tuple[str, TaskResult, Any]:
-                # Each thread gets its own collector instance to avoid shared state.
+                target_parent = f"{parent_name}[{target_key}]"
+                target_log = getattr(collector, "log_path", None)
+                if target_log:
+                    target_log = str(Path(target_log) / _target_dir_name(target_key))
                 target_collector = type(collector)(
-                    system_info=collector.system_info,
+                    system_info=collector.system_info.model_copy(),
                     connection=conn,
                     logger=collector.logger,
                     max_event_priority_level=getattr(
                         collector, "max_event_priority_level", EventPriority.CRITICAL
                     ),
-                    parent=f"{parent_name}[{target_key}]",
+                    parent=target_parent,
                     task_result_hooks=collector.task_result_hooks,
                     event_reporter=collector.event_reporter,
                     session_id=collector.session_id,
-                    log_path=getattr(collector, "log_path", None),
+                    log_path=target_log,
                     system_interaction_level=getattr(collector, "system_interaction_level", None),
                 )
+                if target_log:
+                    target_collector.log_path = target_log
                 collector.logger.info(
                     "Starting collection for target %r using %s", target_key, parent_name
                 )
@@ -138,76 +192,43 @@ class RedfishDataCollector(
                 collector.logger.info("Finished collection for target %r", target_key)
                 return target_key, result, data
 
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                futures = {
-                    executor.submit(_run_for_target, tk, conn): tk
-                    for tk, conn in multi_conn.target_connections.items()
-                }
-                for future in as_completed(futures):
-                    target_key = futures[future]
-                    try:
-                        tk, result, data = future.result()
-                        all_results.append(result)
-                        if data is not None:
-                            multi_conn.multi_target_data[tk] = data
-                    except Exception as exc:
-                        collector.logger.error(
-                            "Collection failed for target %r: %s", target_key, exc
-                        )
+            if multi_conn.target_connections:
+                with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    futures = {
+                        executor.submit(_run_for_target, tk, conn): tk
+                        for tk, conn in multi_conn.target_connections.items()
+                    }
+                    for future in as_completed(futures):
+                        target_key = futures[future]
+                        try:
+                            tk, result, data = future.result()
+                            all_results.append(result)
+                            if data is not None:
+                                multi_conn.multi_target_data[tk] = data
+                        except Exception as exc:
+                            collector.logger.error(
+                                "Collection failed for target %r: %s", target_key, exc
+                            )
+                            all_results.append(
+                                TaskResult(
+                                    status=ExecutionStatus.EXECUTION_FAILURE,
+                                    parent=f"{parent_name}[{target_key}]",
+                                    message=f"Collection failed for target {target_key!r}: {exc}",
+                                )
+                            )
 
             if not all_results:
-                return TaskResult(status=ExecutionStatus.NOT_RAN, parent=parent_name), None
-            combined_status = max(r.status for r in all_results)
-            return TaskResult(status=combined_status, parent=parent_name), None
+                return (
+                    TaskResult(
+                        status=ExecutionStatus.NOT_RAN,
+                        parent=parent_name,
+                        message="No Redfish targets were collected",
+                    ),
+                    None,
+                )
+            return combine_target_results(parent_name, all_results), None
 
         cls.collect_data = _multi_target_wrapper  # type: ignore[method-assign, assignment]
-
-    @staticmethod
-    def collect_for_target(
-        target_key: str,
-        conn: RedfishConnection,
-        collector_classes: tuple,
-        collection_args: Any,
-        *,
-        system_info: SystemInfo,
-        logger: logging.Logger,
-        system_interaction_level: Any,
-        max_event_priority_level: Any,
-        parent: str,
-        task_result_hooks: list,
-        event_reporter: str,
-        session_id: Optional[str],
-        log_path: Optional[str],
-        resolve_args: Callable,
-        merge_data: Callable,
-    ) -> tuple[str, list[TaskResult], Any]:
-        """Run all configured collectors for one Redfish target.
-
-        Intended to be submitted to a ThreadPoolExecutor by OOBandDataPlugin.
-        Returns (target_key, per-collector TaskResults, merged data model).
-        """
-        logger.info("Starting collection for target %r", target_key)
-        target_data = None
-        results: list[TaskResult] = []
-        for collector_cls in collector_classes:
-            resolved = resolve_args(collector_cls, collection_args)
-            task = collector_cls(
-                system_info=system_info.model_copy(),
-                connection=conn,
-                logger=logger,
-                system_interaction_level=system_interaction_level,
-                max_event_priority_level=max_event_priority_level,
-                parent=parent,
-                task_result_hooks=task_result_hooks,
-                event_reporter=event_reporter,
-                session_id=session_id,
-                log_path=log_path,
-            )
-            result, data = task.collect_data(resolved)
-            results.append(result)
-            target_data = merge_data(target_data, data)
-        logger.info("Finished collection for target %r", target_key)
-        return target_key, results, target_data
 
     def _run_redfish_get(
         self,
