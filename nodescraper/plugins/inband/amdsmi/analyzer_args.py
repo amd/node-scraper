@@ -97,6 +97,12 @@ class AmdSmiAnalyzerArgs(AnalyzerArgs):
     expected_xgmi_speed: Optional[list[float]] = Field(
         default=None, description="Expected xGMI speed value(s) (e.g. link rate)."
     )
+    expected_accel_state: str = Field(
+        default="ACTIVE", description="Expected amd-smi fabric accel_state value."
+    )
+    expected_fabric_type: str = Field(
+        default="UALOE", description="Expected amd-smi fabric fabric_type value."
+    )
     analysis_range_start: Optional[datetime] = Field(
         default=None, description="Start of time range for time-windowed analysis."
     )

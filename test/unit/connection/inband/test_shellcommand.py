@@ -23,6 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
+import subprocess
 from unittest.mock import MagicMock, patch
 
 from nodescraper.connection.inband.inbandlocal import LocalShell
@@ -47,7 +48,20 @@ def test_localshell_string_with_sudo(mock_run):
     shell = LocalShell()
     shell.run_command("cat /etc/shadow", sudo=True)
 
-    assert mock_run.call_args.args[0] == "sudo cat /etc/shadow"
+    assert mock_run.call_args.args[0] == "sudo -n cat /etc/shadow"
+    assert mock_run.call_args.kwargs["stdin"] is subprocess.DEVNULL
+
+
+@patch("nodescraper.connection.inband.inbandlocal.subprocess.run")
+def test_localshell_timeout_returns_exit_124(mock_run):
+    mock_run.side_effect = subprocess.TimeoutExpired(
+        cmd="sleep 5", timeout=1, output=b"", stderr=b""
+    )
+
+    artifact = LocalShell().run_command("sleep 5", timeout=1)
+
+    assert artifact.exit_code == 124
+    assert "timed out" in artifact.stderr
 
 
 @patch("nodescraper.connection.inband.inbandremote.paramiko.SSHClient")
