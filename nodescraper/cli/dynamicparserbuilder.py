@@ -156,11 +156,14 @@ class DynamicParserBuilder:
         Returns:
             Optional[list]: list of valid choices for the Literal type, or None if not a Literal
         """
-        # Check if Literal is in the type_class_map
         literal_type = type_class_map.get(Literal)
-        if literal_type and literal_type.inner_type is not None:
+        if literal_type is None or literal_type.inner_type is None:
             return None
-        return None
+
+        values = literal_type.inner_type
+        if isinstance(values, (list, tuple)):
+            return list(values)
+        return [values]
 
     def add_argument(
         self,
@@ -181,14 +184,16 @@ class DynamicParserBuilder:
         """
         add_kw = {} if help_text is None else {"help": help_text}
         # Check for Literal types and extract choices
-        literal_choices = None
-        if Literal in type_class_map and annotation:
-            # Extract all arguments from the annotation
-            args = get_args(annotation)
-            for arg in args:
-                if get_origin(arg) is Literal:
-                    literal_choices = list(get_args(arg))
-                    break
+        literal_choices = self.get_literal_choices(type_class_map)
+        if literal_choices is None and annotation is not None:
+            # fall back to pulling the choices out of the raw annotation
+            if get_origin(annotation) is Literal:
+                literal_choices = list(get_args(annotation))
+            else:
+                for arg in get_args(annotation):
+                    if get_origin(arg) is Literal:
+                        literal_choices = list(get_args(arg))
+                        break
 
         if list in type_class_map:
             type_class = type_class_map[list]
@@ -225,7 +230,7 @@ class DynamicParserBuilder:
                 type=str,
                 required=required,
                 choices=literal_choices,
-                metavar=f"{{{','.join(literal_choices)}}}",
+                metavar=f"{{{','.join(str(choice) for choice in literal_choices)}}}",
                 **add_kw,
             )
         elif float in type_class_map:

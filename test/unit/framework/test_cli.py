@@ -68,7 +68,9 @@ def test_dict_arg():
 
 
 def test_json_arg(framework_fixtures_path):
-    assert json_arg(os.path.join(framework_fixtures_path, "example.json")) == {"test": 123}
+    assert json_arg(os.path.join(framework_fixtures_path, "valid_configs", "example.json")) == {
+        "test": 123
+    }
     with pytest.raises(argparse.ArgumentTypeError):
         json_arg(os.path.join(framework_fixtures_path, "invalid.json"))
 
@@ -79,7 +81,7 @@ def test_model_arg(framework_fixtures_path):
 
     arg_handler = ModelArgHandler(TestArg)
     assert arg_handler.process_file_arg(
-        os.path.join(framework_fixtures_path, "example.json")
+        os.path.join(framework_fixtures_path, "valid_configs", "example.json")
     ) == TestArg(test=123)
 
     with pytest.raises(argparse.ArgumentTypeError):
@@ -96,7 +98,10 @@ def test_system_info_builder():
             system_config=None,
         )
     ) == SystemInfo(
-        name="test_name", sku="test_sku", platform="test_plat", location=SystemLocation.LOCAL
+        name="test_name",
+        sku="test_sku",
+        platform="test_plat",
+        location=SystemLocation.LOCAL,
     )
 
     with pytest.raises(argparse.ArgumentTypeError):
@@ -122,7 +127,18 @@ def test_system_info_builder():
         (
             ["--sys-name", "test-sys", "--sys-sku", "test-sku", "run-plugins", "-h"],
             ["TestPlugin1", "TestPlugin2"],
-            (["--sys-name", "test-sys", "--sys-sku", "test-sku", "run-plugins", "-h"], {}, []),
+            (
+                [
+                    "--sys-name",
+                    "test-sys",
+                    "--sys-sku",
+                    "test-sku",
+                    "run-plugins",
+                    "-h",
+                ],
+                {},
+                [],
+            ),
         ),
         (
             [

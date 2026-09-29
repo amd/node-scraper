@@ -26,19 +26,26 @@
 from nodescraper.base import InBandDataPlugin
 
 from .analyzer_args import DeviceEnumerationAnalyzerArgs
+from .collector_args import DeviceEnumerationCollectorArgs
 from .device_enumeration_analyzer import DeviceEnumerationAnalyzer
 from .device_enumeration_collector import DeviceEnumerationCollector
 from .deviceenumdata import DeviceEnumerationDataModel
 
 
 class DeviceEnumerationPlugin(
-    InBandDataPlugin[DeviceEnumerationDataModel, None, DeviceEnumerationAnalyzerArgs]
+    InBandDataPlugin[
+        DeviceEnumerationDataModel,
+        DeviceEnumerationCollectorArgs,
+        DeviceEnumerationAnalyzerArgs,
+    ]
 ):
     """Plugin for collection and analysis of BIOS data"""
 
     DATA_MODEL = DeviceEnumerationDataModel
 
     COLLECTOR = DeviceEnumerationCollector
+
+    COLLECTOR_ARGS = DeviceEnumerationCollectorArgs
 
     ANALYZER = DeviceEnumerationAnalyzer
 

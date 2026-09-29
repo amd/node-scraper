@@ -27,6 +27,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from nodescraper.enums import EventPriority
 from nodescraper.enums.executionstatus import ExecutionStatus
 from nodescraper.enums.systeminteraction import SystemInteractionLevel
 from nodescraper.models.systeminfo import OSFamily
@@ -464,6 +465,22 @@ def test_parse_ethtool_basic(collector):
     assert ethtool_info.raw_output == ETHTOOL_OUTPUT
 
 
+def test_parse_ethtool_driver_info_normalizes_package_firmware(collector):
+    """Keep the device firmware version when ethtool reports package metadata too."""
+    info = EthtoolInfo(interface="ethmock123", raw_output="")
+
+    collector._parse_ethtool_driver_info(
+        info,
+        "driver: bnxt_en\n"
+        "firmware-version: 238.1.168.0/pkg 238.1.169.0\n"
+        "bus-info: 0000:01:00.0\n",
+    )
+
+    assert info.driver == "bnxt_en"
+    assert info.firmware_version == "238.1.168.0"
+    assert info.bus_info == "0000:01:00.0"
+
+
 def test_parse_ethtool_supported_link_modes(collector):
     """Test parsing supported link modes from ethtool output"""
     ethtool_info = collector._parse_ethtool("ethmock123", ETHTOOL_OUTPUT)
@@ -734,6 +751,60 @@ def test_collect_data_includes_ethtool_statistics(collector, conn_mock):
     assert data.ethtool_statistics[0].netdev == "eth0"
     assert data.ethtool_statistics[0].driver == "bnxt_en"
     assert data.ethtool_statistics[0].vendor_statistics is not None
+
+
+def test_collect_ethtool_info_skips_loopback_driver_command(collector):
+    """Loopback interfaces skip only the ethtool -i driver command."""
+    loopback = NetworkInterface(name="lo", flags=["LOOPBACK"])
+    collector._run_sut_cmd = MagicMock(
+        return_value=MagicMock(exit_code=0, stdout="", command="ethtool lo")
+    )
+
+    data, skipped = collector._collect_ethtool_info([loopback])
+
+    assert "lo" in data
+    assert skipped == set()
+    collector._run_sut_cmd.assert_called_once()
+    assert collector._run_sut_cmd.call_args.args[0] == "ethtool lo"
+
+
+def test_collect_data_logs_ethtool_driver_failure(collector, conn_mock):
+    """A failed ethtool -i command emits a warning with command details."""
+    collector.system_info.os_family = OSFamily.LINUX
+
+    def run_sut_cmd_side_effect(cmd, **kwargs):
+        if "addr show" in cmd:
+            return MagicMock(exit_code=0, stdout=IP_ADDR_OUTPUT, command=cmd)
+        if "route show" in cmd:
+            return MagicMock(exit_code=0, stdout=IP_ROUTE_OUTPUT, command=cmd)
+        if "rule show" in cmd:
+            return MagicMock(exit_code=0, stdout=IP_RULE_OUTPUT, command=cmd)
+        if "neighbor show" in cmd:
+            return MagicMock(exit_code=0, stdout=IP_NEIGHBOR_OUTPUT, command=cmd)
+        if "ethtool -i" in cmd and "eth0" in cmd:
+            return MagicMock(
+                exit_code=1,
+                stdout="",
+                stderr="driver information unavailable",
+                command=cmd,
+            )
+        if "ethtool" in cmd or "lldpcli" in cmd or "lldpctl" in cmd:
+            return MagicMock(exit_code=1, stdout="", stderr="", command=cmd)
+        return MagicMock(exit_code=1, stdout="", stderr="", command=cmd)
+
+    collector._run_sut_cmd = MagicMock(side_effect=run_sut_cmd_side_effect)
+
+    result, data = collector.collect_data()
+
+    assert data is not None
+    event = next(
+        event
+        for event in result.events
+        if "ethtool -i driver info for interface: eth0" in event.description
+    )
+    assert event.priority == EventPriority.WARNING
+    assert event.data["exit_code"] == 1
+    assert event.data["stderr"] == "driver information unavailable"
 
 
 def test_collect_data_skips_non_vendor_netdev(collector, conn_mock):

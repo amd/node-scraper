@@ -36,10 +36,13 @@ from .osdata import OsDataModel
 class OsCollector(InBandDataCollector[OsDataModel, None]):
     """Collect OS details"""
 
+    SUPPORTED_OS_FAMILY: set[OSFamily] = {OSFamily.WINDOWS, OSFamily.LINUX, OSFamily.ESXI}
     DATA_MODEL = OsDataModel
     CMD_VERSION_WINDOWS = "wmic os get Version /value"
     CMD_VERSION = "cat /etc/*release | grep VERSION_ID"
+    CMD_VERSION_ESXI = "esxcli system version get"
     CMD_WINDOWS = "wmic os get Caption /Value"
+    CMD_ESXI = "vmware -v"
     PRETTY_STR = "PRETTY_NAME"  # noqa: N806
     CMD = f"sh -c '( lsb_release -ds || (cat /etc/*release | grep {PRETTY_STR}) || uname -om ) 2>/dev/null | head -n1'"
 
@@ -53,6 +56,22 @@ class OsCollector(InBandDataCollector[OsDataModel, None]):
             res = self._run_sut_cmd(self.CMD_VERSION_WINDOWS)
             if res.exit_code == 0:
                 os_version = re.search(r"Version=([\w\s\.]+)", res.stdout).group(1)
+            else:
+                self._log_event(
+                    category=EventCategory.OS,
+                    description="OS version not found",
+                    priority=EventPriority.ERROR,
+                )
+                os_version = ""
+        elif self.system_info.os_family == OSFamily.ESXI:
+            res = self._run_sut_cmd(self.CMD_VERSION_ESXI)
+            if res.exit_code == 0:
+                for line in res.stdout.splitlines():
+                    if "Version:" in line:
+                        os_version = line.split(":", 1)[1].strip()
+                        break
+                else:
+                    os_version = res.stdout.strip()
             else:
                 self._log_event(
                     category=EventCategory.OS,
@@ -86,6 +105,16 @@ class OsCollector(InBandDataCollector[OsDataModel, None]):
             res = self._run_sut_cmd(self.CMD_WINDOWS)
             if res.exit_code == 0:
                 os_name = re.search(r"Caption=([\w\s]+)", res.stdout).group(1)
+        elif self.system_info.os_family == OSFamily.ESXI:
+            res = self._run_sut_cmd(self.CMD_ESXI)
+            if res.exit_code == 0:
+                os_name = res.stdout.strip()
+            else:
+                self._log_event(
+                    category=EventCategory.OS,
+                    description="OS name not found",
+                    priority=EventPriority.ERROR,
+                )
         else:
             res = self._run_sut_cmd(self.CMD)
             # search for PRETTY_NAME in res

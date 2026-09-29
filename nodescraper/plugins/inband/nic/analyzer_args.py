@@ -33,6 +33,10 @@ from nodescraper.models import AnalyzerArgs
 class NicAnalyzerArgs(AnalyzerArgs):
     """Analyzer args for niccli/nicctl data, with expected_values keyed by canonical command key."""
 
+    expected_nic_firmware: Optional[str] = Field(
+        default=None,
+        description="Exact firmware version expected from each collected NIC.",
+    )
     expected_values: Optional[Dict[str, Dict[str, Any]]] = Field(
         default=None,
         description="Per-command expected checks keyed by canonical key (see command_to_canonical_key).",

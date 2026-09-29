@@ -120,7 +120,11 @@ def collect_decorator(
             result = collector.result
             data = None
 
-        if data is None and not result.status:
+        if data is None and result.status in {ExecutionStatus.OK, ExecutionStatus.UNSET}:
+            # If the collector doesn't set the result status but no data was collected, mark it as a failure
+            # If a collector does not want to return data it should be under NOT_RAN, OK must return a data model.
+            if result.message == "":
+                result.message = "Data Model was not collected and collection failed without specific error message"
             result.status = ExecutionStatus.EXECUTION_FAILURE
 
         result.finalize(collector.logger)
