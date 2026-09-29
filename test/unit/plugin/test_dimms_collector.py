@@ -51,7 +51,7 @@ QUIET_DUMP = (FIXTURES / "dmidecode_quiet.txt").read_text()
 FULL_DUMP = (FIXTURES / "dmidecode_full.txt").read_text()
 
 # `wmic memorychip get /format:csv` output from a host with soldered LPDDR5.
-WMIC_DUMP = (FIXTURES / "dmideode_wmic.txt").read_text()
+WMIC_DUMP = (FIXTURES / "dmidecode_wmic.txt").read_text()
 
 
 @pytest.fixture
