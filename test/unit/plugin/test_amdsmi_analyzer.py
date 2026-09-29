@@ -776,6 +776,25 @@ def test_check_xgmi_or_peer_links_status_accepts_up_and_self_links(mock_analyzer
     assert "All XGMI/peer GPU links are working fine" in analyzer.result.events[0].description
 
 
+def test_check_xgmi_or_peer_links_status_requires_healthy_links(mock_analyzer):
+    """Self-only links are ignored and do not count as all links working."""
+    analyzer = mock_analyzer
+    xgmi_links = [
+        XgmiLinks(
+            gpu=0,
+            bdf="0000:01:00.0",
+            link_status=[LinkStatusTable.SELF],
+        )
+    ]
+
+    analyzer.check_xgmi_or_peer_links_status(xgmi_links)
+
+    assert not any(
+        "All XGMI/peer GPU links are working fine" in event.description
+        for event in analyzer.result.events
+    )
+
+
 def test_check_xgmi_or_peer_links_status_reports_down_and_degraded_links(mock_analyzer):
     """Down and degraded links generate IO warnings."""
     analyzer = mock_analyzer
@@ -1118,6 +1137,40 @@ def test_check_gpu_memory_below_minimum_logs_warning(mock_analyzer):
     assert "GPU 1 free VRAM is 90.00%" in event.description
     assert event.data["available_percent"] == 90.0
     assert event.data["minimum_available_percent"] == 95
+
+
+def test_check_gpu_memory_no_data(mock_analyzer):
+    """check_gpu_memory warns and returns when metric data is missing."""
+    analyzer = mock_analyzer
+
+    analyzer.check_gpu_memory(None, 95)
+
+    assert len(analyzer.result.events) == 1
+    assert analyzer.result.events[0].priority == EventPriority.WARNING
+    assert "No AMD SMI metric data available" in analyzer.result.events[0].description
+
+
+def test_analyze_data_gpu_memory_no_metric_data(mock_analyzer):
+    """analyze_data warns when gpu_memory is set but metric data is missing."""
+    analyzer = mock_analyzer
+    data = AmdSmiDataModel(
+        version=None,
+        static=None,
+        process=None,
+        firmware=None,
+        partition=None,
+        gpu_list=None,
+        metric=None,
+    )
+    args = AmdSmiAnalyzerArgs.model_validate({"gpu_memory": {"minimum_available_percent": 95}})
+
+    result = analyzer.analyze_data(data, args)
+
+    assert any(
+        event.priority == EventPriority.WARNING
+        and "No AMD SMI metric data available" in event.description
+        for event in result.events
+    )
 
 
 def test_amdsmi_analyzer_args_rejects_unknown_fields():
