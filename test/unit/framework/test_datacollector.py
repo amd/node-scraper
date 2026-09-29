@@ -49,6 +49,9 @@ class DummyResult(TaskResult):
         pass
 
 
+DUMMY_GIVES_THIS = DummyDataModel(foo=0xC0FFEE)
+
+
 class DummyCollector(DataCollector[None, DummyDataModel, None]):
     SUPPORTED_SKUS = {"GOOD"}
     SUPPORTED_PLATFORMS = {"X"}
@@ -67,7 +70,7 @@ class DummyCollector(DataCollector[None, DummyDataModel, None]):
 
     def collect_data(self, args=None) -> Tuple[TaskResult, Optional[DummyDataModel]]:
         self.result.status = ExecutionStatus.OK
-        return self.result, None
+        return self.result, DUMMY_GIVES_THIS
 
 
 def test_ok(system_info, conn_mock):
@@ -82,7 +85,8 @@ def test_ok(system_info, conn_mock):
     result, data = dc.collect_data()
 
     assert result.status == ExecutionStatus.OK
-    assert ("hook", result, None) in calls
+    assert data == DUMMY_GIVES_THIS
+    assert ("hook", result, DUMMY_GIVES_THIS) in calls
 
 
 def test_exception(system_info, conn_mock):
@@ -194,3 +198,86 @@ def test_bad_data_model_type():
 
             def collect_data(self, args=None):
                 return self.result, None
+
+
+class LogPathCollector(DataCollector[None, DummyDataModel, None]):
+    DATA_MODEL = DummyDataModel
+
+    def collect_data(self, args=None) -> Tuple[TaskResult, Optional[DummyDataModel]]:
+        return self.result, None
+
+
+def test_data_collector_keeps_log_path(system_info, conn_mock):
+    """Baseline: the base collector stores the log path passed by DataPlugin.collect."""
+    collector = LogPathCollector(system_info, conn_mock, log_path="/tmp/run/collector")
+
+    assert collector.log_path == "/tmp/run/collector"
+
+
+def test_inband_collector_keeps_log_path(system_info, conn_mock):
+    """InBandDataCollector must forward log_path to the base collector, not drop it."""
+    from nodescraper.base.inbandcollectortask import InBandDataCollector
+    from nodescraper.enums import OSFamily
+
+    class InBandLogPathCollector(InBandDataCollector[DummyDataModel, None]):
+        DATA_MODEL = DummyDataModel
+
+        def collect_data(self, args=None) -> Tuple[TaskResult, Optional[DummyDataModel]]:
+            return self.result, None
+
+    system_info.os_family = OSFamily.LINUX
+    collector = InBandLogPathCollector(system_info, conn_mock, log_path="/tmp/run/collector")
+
+    assert collector.log_path == "/tmp/run/collector"
+
+
+class UnsetStatusWithDataCollector(DataCollector[None, DummyDataModel, None]):
+    DATA_MODEL = DummyDataModel
+
+    def collect_data(self, args=None) -> Tuple[TaskResult, Optional[DummyDataModel]]:
+        return self.result, DummyDataModel(foo=1)
+
+
+class UnsetStatusNoDataCollector(DataCollector[None, DummyDataModel, None]):
+    DATA_MODEL = DummyDataModel
+
+    def collect_data(self, args=None) -> Tuple[TaskResult, Optional[DummyDataModel]]:
+        return self.result, None
+
+
+class OkStatusNoDataCollector(DataCollector[None, DummyDataModel, None]):
+    DATA_MODEL = DummyDataModel
+
+    def collect_data(self, args=None) -> Tuple[TaskResult, Optional[DummyDataModel]]:
+        self.result.status = ExecutionStatus.OK
+        return self.result, None
+
+
+def test_collector_returning_data_with_unset_status_is_ok(system_info, conn_mock):
+    """Baseline: data collected with an unset status finalizes to OK."""
+    collector = UnsetStatusWithDataCollector(system_info, conn_mock)
+
+    result, data = collector.collect_data()
+
+    assert data is not None
+    assert result.status == ExecutionStatus.OK
+
+
+def test_collector_returning_no_data_with_unset_status_is_execution_failure(system_info, conn_mock):
+    """A collector that returns no data and never sets a status must not be reported as OK."""
+    collector = UnsetStatusNoDataCollector(system_info, conn_mock)
+
+    result, data = collector.collect_data()
+
+    assert data is None
+    assert result.status == ExecutionStatus.EXECUTION_FAILURE
+
+
+def test_collector_returning_no_data_with_ok_status_is_execution_failure(system_info, conn_mock):
+    """A collector that returns no data and never sets a status must not be reported as OK."""
+    collector = UnsetStatusNoDataCollector(system_info, conn_mock)
+
+    result, data = collector.collect_data()
+
+    assert data is None
+    assert result.status == ExecutionStatus.EXECUTION_FAILURE

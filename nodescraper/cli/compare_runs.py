@@ -125,7 +125,7 @@ def _load_plugin_data_from_run(
             res_payload = json.loads(Path(res_path).read_text(encoding="utf-8"))
             task_res = TaskResult(**res_payload)
             plugin_name = task_res.parent
-        except (json.JSONDecodeError, TypeError, OSError) as e:
+        except (json.JSONDecodeError, TypeError, OSError, ValidationError) as e:
             logger.warning("Skipping %s: failed to load result: %s", res_path, e)
             continue
 

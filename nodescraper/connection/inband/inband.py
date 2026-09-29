@@ -25,6 +25,7 @@
 ###############################################################################
 import abc
 import os
+from pathlib import Path
 from typing import Optional
 
 from pydantic import BaseModel
@@ -67,6 +68,41 @@ class BaseFileArtifact(BaseModel, abc.ABC):
     def contents_str(self) -> str:
         pass
 
+    def resolve_write_path(self, log_path: str) -> Path:
+        """Resolve where this artifact should be written and create any parent dirs
+
+        The filename is always treated as relative to log_path. Any anchor and
+        parent dir references are dropped so that a filename can never write
+        outside of log_path, while intentional sub directories are preserved.
+
+        Args:
+            log_path (str): dir that the artifact should be written into
+
+        Raises:
+            IOError: if the filename has no usable name or the dirs cannot be created
+
+        Returns:
+            Path: path to write the artifact to
+        """
+        filename_pathlib = Path(self.filename)
+        parts = [
+            part
+            for part in filename_pathlib.parts
+            if part not in (filename_pathlib.anchor, os.pardir, os.curdir)
+        ]
+
+        if not parts:
+            raise IOError(f"Artifact filename '{self.filename}' does not contain a file name")
+
+        write_path = Path(log_path).joinpath(*parts)
+
+        try:
+            write_path.parent.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            raise IOError(f"Failed to create log directory {write_path.parent}: {e}") from e
+
+        return write_path
+
     @classmethod
     def from_bytes(
         cls,
@@ -107,8 +143,10 @@ class TextFileArtifact(BaseFileArtifact):
         Args:
             log_path (str): Path for file
         """
-        path = os.path.join(log_path, self.filename)
-        with open(path, "w", encoding="utf-8") as f:
+        # the filename can look like a folder or a file, make sure it goes in log_path
+        write_path = self.resolve_write_path(log_path)
+
+        with open(write_path, "w", encoding="utf-8") as f:
             f.write(self.contents)
 
     def contents_str(self) -> str:
@@ -131,8 +169,9 @@ class BinaryFileArtifact(BaseFileArtifact):
         Args:
             log_path (str): Path for file
         """
-        log_name = os.path.join(log_path, self.filename)
-        with open(log_name, "wb") as f:
+        write_path = self.resolve_write_path(log_path)
+
+        with open(write_path, "wb") as f:
             f.write(self.contents)
 
     def contents_str(self) -> str:

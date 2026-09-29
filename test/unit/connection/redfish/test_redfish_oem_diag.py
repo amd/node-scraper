@@ -24,7 +24,7 @@
 #
 ###############################################################################
 import logging
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from requests.status_codes import codes
 
@@ -35,6 +35,7 @@ from nodescraper.connection.redfish.redfish_oem_diag import (
     _download_log_and_save,
     _get_task_monitor_uri,
     _strip_port_from_url,
+    collect_oem_diagnostic_data,
     get_oem_diagnostic_allowable_values,
 )
 
@@ -184,3 +185,50 @@ class TestDownloadLogAndSave:
         assert (tmp_path / "AllLogs.tar.xz").read_bytes() == b"log bytes"
         metadata = (tmp_path / "AllLogs_log_entry.json").read_text(encoding="utf-8")
         assert "Id" in metadata and "1" in metadata
+
+
+class TestCollectOemDiagnosticDataRetryAfter:
+    @staticmethod
+    def _conn_for_retry_after(retry_after: str) -> MagicMock:
+        conn = MagicMock()
+        conn.base_url = "https://host"
+        post_resp = MagicMock()
+        post_resp.status_code = codes.accepted
+        post_resp.headers = {
+            "Location": "/redfish/v1/TaskService/TaskMonitors/1",
+            "Retry-After": retry_after,
+        }
+        post_resp.json.return_value = {}
+        conn.post.return_value = post_resp
+
+        monitor_resp = MagicMock()
+        monitor_resp.status_code = codes.ok
+        monitor_resp.json.return_value = {"@odata.id": "/redfish/v1/TaskService/Tasks/1"}
+        task_resp = MagicMock()
+        task_resp.status_code = codes.ok
+        task_resp.json.return_value = {"TaskState": "Completed", "Payload": {"HttpHeaders": []}}
+        conn.get_response.side_effect = [monitor_resp, task_resp]
+        return conn
+
+    @patch("nodescraper.connection.redfish.redfish_oem_diag.time.sleep")
+    def test_numeric_retry_after_is_used_as_poll_interval(self, mock_sleep):
+        """Baseline: a Retry-After in seconds drives the poll interval."""
+        conn = self._conn_for_retry_after("3")
+
+        _, _, error = collect_oem_diagnostic_data(
+            conn, "redfish/v1/Systems/UBB/LogServices/DiagLogs", "AllLogs"
+        )
+
+        assert error == "Location header missing in task Payload.HttpHeaders"
+        mock_sleep.assert_called_with(3)
+
+    @patch("nodescraper.connection.redfish.redfish_oem_diag.time.sleep")
+    def test_http_date_retry_after_does_not_raise(self, mock_sleep):
+        """An HTTP-date Retry-After must be handled, not crash the collection."""
+        conn = self._conn_for_retry_after("Fri, 31 Dec 1999 23:59:59 GMT")
+
+        _, _, error = collect_oem_diagnostic_data(
+            conn, "redfish/v1/Systems/UBB/LogServices/DiagLogs", "AllLogs"
+        )
+
+        assert error == "Location header missing in task Payload.HttpHeaders"

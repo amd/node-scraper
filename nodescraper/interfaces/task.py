@@ -26,6 +26,7 @@
 import abc
 import copy
 import datetime
+import inspect
 import logging
 import uuid
 from typing import Any, Optional, Union
@@ -122,7 +123,9 @@ class Task(abc.ABC):
     def __init_subclass__(cls, **kwargs) -> None:
         """Validates that the subclass contains a TASK_TYPE attribute which is not None."""
         super().__init_subclass__(**kwargs)
-        if cls.TASK_TYPE is None:
+        if not inspect.isabstract(cls) and (
+            (getattr(cls, "TASK_TYPE", None) is None) or (cls.TASK_TYPE is None)
+        ):
             raise TypeError(f"No value provided for TASK_TYPE in task class {cls.__name__}")
 
     def _build_event(

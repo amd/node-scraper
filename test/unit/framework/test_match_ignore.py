@@ -110,3 +110,9 @@ def test_should_ignore_match_mce_banks_only_when_all_banks_ignored():
 def test_extract_mce_bank_from_line():
     line = "[Hardware Error]: Machine Check: CPU0 MC21_STATUS[0xcafe|CE|Misc]: 0x0"
     assert extract_mce_bank_from_line(line) == 21
+
+
+def test_parse_mce_bank_spec_rejects_negative_bank_string():
+    """A negative bank given as a string must be reported as an invalid bank number."""
+    with pytest.raises(ValueError, match="Invalid MCE bank"):
+        parse_mce_bank_spec(["-5"])

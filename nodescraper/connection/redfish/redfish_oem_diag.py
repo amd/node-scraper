@@ -202,7 +202,9 @@ def _download_log_and_save(
         try:
             metadata_file.write_text(json.dumps(log_entry_json, indent=2), encoding="utf-8")
             log.info(
-                "Log metadata written to disk: %s -> %s", oem_diagnostic_type, metadata_file.name
+                "Log metadata written to disk: %s -> %s",
+                oem_diagnostic_type,
+                metadata_file.name,
             )
         except Exception as e:
             log.exception("Failed to write log metadata to %s: %s", metadata_file, e)
@@ -238,6 +240,7 @@ def collect_oem_diagnostic_data(
         (log_bytes, log_entry_metadata_dict, error_message).
         On success: (bytes, dict, None). On failure: (None, None, error_str).
     """
+    SLEEP_S_DEFAULT = 1
     log = logger if logger is not None else _module_logger
     if not oem_diagnostic_type or not oem_diagnostic_type.strip():
         return None, None, "oem_diagnostic_type is required"
@@ -249,7 +252,10 @@ def collect_oem_diagnostic_data(
         )
     path_prefix = log_service_path.rstrip("/")
     action_path = f"{path_prefix}/Actions/LogService.CollectDiagnosticData"
-    payload = {"DiagnosticDataType": "OEM", "OEMDiagnosticDataType": oem_diagnostic_type}
+    payload = {
+        "DiagnosticDataType": "OEM",
+        "OEMDiagnosticDataType": oem_diagnostic_type,
+    }
 
     try:
         resp: Response = conn.post(action_path, json=payload)
@@ -267,7 +273,10 @@ def collect_oem_diagnostic_data(
     location_header = resp.headers.get("Location") or resp.headers.get("Content-Location")
     if location_header and not location_header.startswith("http"):
         location_header = _resolve_path(conn, location_header)
-    sleep_s = int(resp.headers.get("Retry-After", 1) or 1)
+    try:
+        sleep_s = int(resp.headers.get("Retry-After", SLEEP_S_DEFAULT) or SLEEP_S_DEFAULT)
+    except ValueError:
+        sleep_s = SLEEP_S_DEFAULT
     try:
         oem_response = resp.json()
     except Exception:
@@ -330,7 +339,11 @@ def collect_oem_diagnostic_data(
             return None, None, f"Task GET failed: {task_resp.status_code}"
         task_json = task_resp.json()
         if task_json.get("TaskState") != TaskState.completed.value:
-            return None, None, f"Task did not complete: TaskState={task_json.get('TaskState')}"
+            return (
+                None,
+                None,
+                f"Task did not complete: TaskState={task_json.get('TaskState')}",
+            )
 
     # LogEntry location from Payload.HttpHeaders
     headers_list = task_json.get("Payload", {}).get("HttpHeaders", []) or []

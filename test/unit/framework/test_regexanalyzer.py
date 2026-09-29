@@ -24,6 +24,7 @@
 #
 ###############################################################################
 import re
+import signal
 
 from pydantic import BaseModel
 
@@ -42,6 +43,8 @@ class DummyArgs(BaseModel):
 
 
 class TestRegexAnalyzer(RegexAnalyzer[DummyData, DummyArgs]):
+    __test__ = False  # Tells pytest to ignore this class
+
     DATA_MODEL = DummyData
 
     ERROR_REGEX = [
@@ -263,3 +266,20 @@ def test_check_all_regexes_skips_ignore_match_rules(system_info):
 
     assert len(events) == 1
     assert "dummy error 3" in str(events[0].data["match_content"])
+
+
+def test_check_all_regexes_terminates_on_zero_width_match(system_info):
+    """A pattern able to match empty text must not spin forever in check_all_regexes."""
+    analyzer = TestRegexAnalyzer(system_info=system_info)
+    zero_width = [ErrorRegex(regex=re.compile(r"x*"), message="Zero width")]
+
+    def _on_timeout(signum, frame):
+        raise TimeoutError("check_all_regexes did not terminate")
+
+    previous_handler = signal.signal(signal.SIGALRM, _on_timeout)
+    signal.setitimer(signal.ITIMER_REAL, 2.0)
+    try:
+        analyzer.check_all_regexes("abc", "src", zero_width)
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous_handler)

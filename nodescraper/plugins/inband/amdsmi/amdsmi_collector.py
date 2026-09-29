@@ -84,6 +84,12 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
 
     AMD_SMI_EXE = "amd-smi"
 
+    AMD_SMI_FALLBACK_PATHS: tuple[str, ...] = (
+        "/opt/rocm/bin/amd-smi",
+        "/opt/rocm-*/bin/amd-smi",
+        "/usr/local/bin/amd-smi",
+    )
+
     SUPPORTED_OS_FAMILY: set[OSFamily] = {OSFamily.LINUX}
 
     DATA_MODEL = AmdSmiDataModel
@@ -106,11 +112,26 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
     def _check_amdsmi_installed(self) -> bool:
         """Check if amd-smi is installed
 
+        When amd-smi is not on PATH, AMD_SMI_FALLBACK_PATHS is searched and AMD_SMI_EXE is
+        rebound on this instance to the resolved absolute path.
+
         Returns:
             bool: True if amd-smi is installed, False otherwise
         """
         cmd_ret = self._run_sut_cmd("which amd-smi")
-        return bool(cmd_ret.exit_code == 0 and "no amd-smi in" not in cmd_ret.stdout)
+        if cmd_ret.exit_code == 0 and "no amd-smi in" not in cmd_ret.stdout:
+            return True
+
+        # Some images omit /opt/rocm/bin from the non-interactive SSH PATH; left unquoted so
+        # the shell expands the versioned-install glob.
+        search_paths = " ".join(self.AMD_SMI_FALLBACK_PATHS)
+        cmd_ret = self._run_sut_cmd(f'for p in {search_paths}; do command -v "$p" && break; done')
+        resolved = cmd_ret.stdout.strip().splitlines()
+        if not resolved:
+            return False
+
+        self.AMD_SMI_EXE = resolved[0].strip()
+        return True
 
     def _run_amd_smi(self, cmd: str) -> Optional[str]:
         """Run amd-smi command
