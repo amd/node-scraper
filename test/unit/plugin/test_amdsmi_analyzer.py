@@ -1047,15 +1047,28 @@ def test_check_gpu_memory_below_minimum_logs_warning(mock_analyzer):
     assert event.data["minimum_available_percent"] == 95
 
 
-def test_check_gpu_memory_zero_total_skips_percentage(mock_analyzer):
-    """Zero total VRAM is rejected before division."""
+@pytest.mark.parametrize(
+    ("total_value", "total_unit", "free_value", "free_unit"),
+    [
+        (0, "B", 0, "B"),
+        (-1, "B", 0, "B"),
+        (100, "B", -1, "B"),
+        (float("inf"), "B", 50, "B"),
+        (100, "B", float("nan"), "B"),
+        (100, "B", 50, "KB"),
+    ],
+)
+def test_check_gpu_memory_invalid_values_skip_percentage(
+    mock_analyzer, total_value, total_unit, free_value, free_unit
+):
+    """Invalid VRAM values are rejected before computing a percentage."""
     analyzer = mock_analyzer
     metrics = [
         _minimal_amdsmi_metric(
             0,
             mem_usage={
-                "total_vram": {"value": 0, "unit": "B"},
-                "free_vram": {"value": 0, "unit": "B"},
+                "total_vram": {"value": total_value, "unit": total_unit},
+                "free_vram": {"value": free_value, "unit": free_unit},
             },
         )
     ]
@@ -1065,7 +1078,7 @@ def test_check_gpu_memory_zero_total_skips_percentage(mock_analyzer):
     assert len(analyzer.result.events) == 1
     event = analyzer.result.events[0]
     assert event.priority == EventPriority.WARNING
-    assert "was not able to compute available VRAM" in event.description
+    assert "VRAM values are invalid" in event.description
     assert "available_percent" not in event.data
 
 

@@ -24,6 +24,7 @@
 #
 ###############################################################################
 import io
+import math
 from collections import defaultdict
 from typing import Any, Mapping, Optional, Union
 
@@ -484,12 +485,19 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                 )
                 continue
 
-            if total_value == 0:
+            if (
+                not math.isfinite(total_value)
+                or not math.isfinite(free_value)
+                or total_value <= 0
+                or free_value < 0
+                or total_vram.unit != free_vram.unit
+            ):
                 self._log_event(
                     category=EventCategory.PLATFORM,
                     description=(
-                        f"GPU {metric.gpu} was not able to compute available VRAM "
-                        f"from memory usage (total={total_vram.value}, free={free_vram.value})"
+                        f"GPU {metric.gpu} VRAM values are invalid "
+                        f"(total={total_vram.value} {total_vram.unit}, "
+                        f"free={free_vram.value} {free_vram.unit})"
                     ),
                     priority=EventPriority.WARNING,
                     data=values,
