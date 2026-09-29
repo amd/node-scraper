@@ -402,8 +402,9 @@ class RegexAnalyzer(DataAnalyzer[TDataModel, TAnalyzeArg]):
                         new_event.data["timestamp"] = timestamp
 
                     regex_event_list.append(new_event)
-
                 search_from = match_obj.end()
+                if search_from == match_obj.start():  # Zero-width match
+                    search_from += 1  # Force advancement
 
         all_events = list(regex_map.values()) if group else regex_event_list
 

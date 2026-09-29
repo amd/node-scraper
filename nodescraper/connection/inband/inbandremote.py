@@ -154,16 +154,17 @@ class RemoteShell(InBandConnection):
 
         try:
             stdin, stdout, stderr = self.client.exec_command(cmd_str, timeout=timeout)
-
             if write_password:
                 stdin.write(
-                    self.ssh_params.password.get_secret_value()
-                    if self.ssh_params.password
-                    else "" + "\n"
+                    (
+                        self.ssh_params.password.get_secret_value()
+                        if self.ssh_params.password
+                        else ""
+                    )
+                    + "\n"
                 )
                 stdin.flush()
                 stdin.channel.shutdown_write()
-
             stdout_str = stdout.read().decode("utf-8", errors="replace")
             stderr_str = stderr.read().decode("utf-8", errors="replace")
             exit_code = stdout.channel.recv_exit_status()

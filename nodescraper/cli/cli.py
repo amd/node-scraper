@@ -649,6 +649,7 @@ def main(
             )
 
             if parsed_args.skip_sudo:
+                # Add skip_sudo to the collection_args of the last plugin config instance
                 plugin_config_inst_list[-1].global_args.setdefault("collection_args", {})[
                     "skip_sudo"
                 ] = True

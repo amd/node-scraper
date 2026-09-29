@@ -101,6 +101,32 @@ def test_dmesg_collection(system_info, conn_mock):
     assert data.dmesg_content == dmesg
 
 
+def test_dmesg_collection_esxi(system_info, conn_mock):
+    """ESXi has no dmesg ring buffer; the kernel log is read from vmkernel.log."""
+    system_info.os_family = OSFamily.ESXI
+    collector = DmesgCollector(
+        system_info=system_info,
+        system_interaction_level=SystemInteractionLevel.INTERACTIVE,
+        connection=conn_mock,
+    )
+
+    vmkernel = (
+        "2026-08-20T09:35:58.380Z -INFO vmkernel - boot line\n"
+        "2026-08-20T09:36:00.000Z -WARNING vmkernel - a warning\n"
+    )
+    conn_mock.run_command.return_value = CommandArtifact(
+        exit_code=0,
+        stdout=vmkernel,
+        stderr="",
+        command="cat /var/log/vmkernel.log",
+    )
+
+    res, data = collector.collect_data()
+    assert res.status == ExecutionStatus.OK
+    assert data is not None
+    assert data.dmesg_content == vmkernel
+
+
 def test_bad_exit_code(conn_mock, system_info):
 
     conn_mock.run_command.return_value = CommandArtifact(
