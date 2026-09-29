@@ -26,10 +26,20 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import Field
+from pydantic import BaseModel, Field
 
 from nodescraper.models import AnalyzerArgs
 from nodescraper.plugins.inband.amdsmi.amdsmidata import AmdSmiDataModel
+
+
+class GpuMemoryConfig(BaseModel):
+    """GPU VRAM availability threshold."""
+
+    minimum_available_percent: float = Field(
+        ge=0,
+        le=100,
+        description="Minimum free VRAM percentage required for each GPU.",
+    )
 
 
 class AmdSmiAnalyzerArgs(AnalyzerArgs):
@@ -62,6 +72,14 @@ class AmdSmiAnalyzerArgs(AnalyzerArgs):
     expected_firmware_versions: Optional[dict[str, str]] = Field(
         default=None,
         description="Expected firmware versions keyed by amd-smi fw_id (e.g. PLDM_BUNDLE).",
+    )
+    gpu_memory: Optional[GpuMemoryConfig] = Field(
+        default=None,
+        description="Minimum free VRAM threshold to validate for each GPU.",
+    )
+    check_xgmi_or_peer_links_status: bool = Field(
+        default=False,
+        description="Check XGMI or peer-link status for each GPU.",
     )
     l0_to_recovery_count_error_threshold: Optional[int] = Field(
         default=3,
