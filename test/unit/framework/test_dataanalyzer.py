@@ -23,9 +23,13 @@
 # SOFTWARE.
 #
 ###############################################################################
+from typing import Optional
+
 from nodescraper.enums.eventpriority import EventPriority
 from nodescraper.enums.executionstatus import ExecutionStatus
 from nodescraper.interfaces.dataanalyzertask import analyze_decorator
+from nodescraper.models.event import Event
+from nodescraper.models.taskresult import TaskResult
 
 
 def test_invalid_data(mock_analyzer, dummy_data_model, system_info):
@@ -117,3 +121,65 @@ def test_analyzer_subclass_without_data_model_raises_type_error():
         class MissingModelAnalyzer(DataAnalyzer):
             def analyze_data(self, data, args=None):
                 return self.result
+
+
+def _event(priority: EventPriority, description: str, count: Optional[int] = None) -> Event:
+    data = {"count": count} if count is not None else {}
+    return Event(category="OS", description=description, priority=priority, data=data)
+
+
+def test_event_summary_empty_when_no_events():
+    assert TaskResult()._get_event_summary() == ""
+
+
+def test_event_summary_counts_warnings_and_errors():
+    result = TaskResult(
+        events=[
+            _event(EventPriority.WARNING, "w1"),
+            _event(EventPriority.WARNING, "w2", count=2),
+            _event(EventPriority.ERROR, "e1"),
+        ]
+    )
+    assert result._get_event_summary() == "3 warnings; 1 errors: e1"
+
+
+def test_event_summary_top_three_errors_by_count_with_omission_note():
+    result = TaskResult(
+        events=[
+            _event(EventPriority.ERROR, "e1"),
+            _event(EventPriority.ERROR, "e2", count=4),
+            _event(EventPriority.ERROR, "e1"),
+            _event(EventPriority.ERROR, "e3"),
+            _event(EventPriority.ERROR, "e4"),
+        ]
+    )
+    assert result._get_event_summary() == (
+        "8 errors: e2 (x4), e1 (x2), e3 (omitted 1 descriptions)"
+    )
+
+
+def test_event_summary_critical_counted_as_error_and_listed():
+    result = TaskResult(events=[_event(EventPriority.CRITICAL, "c1")])
+    assert result._get_event_summary() == "1 errors; critical: c1"
+
+
+def test_event_summary_three_critical_no_omission_note():
+    result = TaskResult(events=[_event(EventPriority.CRITICAL, f"c{i}") for i in range(3)])
+    summary = result._get_event_summary()
+    assert summary == "3 errors; critical: c0, c1, c2"
+    assert "omitted" not in summary
+
+
+def test_event_summary_top_three_critical_by_count_with_omission_note():
+    result = TaskResult(
+        events=[
+            _event(EventPriority.CRITICAL, "rare"),
+            _event(EventPriority.CRITICAL, "common", count=5),
+            _event(EventPriority.CRITICAL, "mid", count=3),
+            _event(EventPriority.CRITICAL, "also_rare"),
+            _event(EventPriority.CRITICAL, "second", count=4),
+        ]
+    )
+    assert result._get_event_summary() == (
+        "14 errors; critical: common (x5), second (x4), mid (x3) (omitted 2 descriptions)"
+    )
