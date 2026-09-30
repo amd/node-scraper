@@ -73,10 +73,19 @@ def combine_target_results(parent: str, results: list[TaskResult]) -> TaskResult
     aggregated = DataPlugin._aggregate_collection_results(parent, results)
     hard_fail = any(result.status in _HARD_FAIL for result in results)
     succeeded = any(result.status in _TARGET_SUCCESS for result in results)
-    if hard_fail and succeeded:
-        aggregated.status = ExecutionStatus.WARNING
-        note = "One or more targets failed; continuing with the rest."
-        aggregated.message = f"{note} {aggregated.message}".strip() if aggregated.message else note
+
+    # Display one line per target so the summary table is easy to read.
+    messages = [r.message for r in results if r.message]
+    if messages:
+        prefix = (
+            "One or more targets failed; continuing with the rest.\n"
+            if (hard_fail and succeeded)
+            else ""
+        )
+        aggregated.message = prefix + "\n".join(messages)
+        if hard_fail and succeeded:
+            aggregated.status = ExecutionStatus.WARNING
+
     return aggregated
 
 
@@ -165,10 +174,27 @@ class RedfishDataCollector(
             def _run_for_target(
                 target_key: str, conn: RedfishConnection
             ) -> tuple[str, TaskResult, Any]:
-                target_parent = f"{parent_name}[{target_key}]"
-                target_log = getattr(collector, "log_path", None)
-                if target_log:
-                    target_log = str(Path(target_log) / _target_dir_name(target_key))
+                from nodescraper.taskresulthooks.filesystemloghook import (
+                    FileSystemLogHook,
+                )
+
+                safe_key = _target_dir_name(target_key)
+
+                # Replace FileSystemLogHook instances so per-target logs land at:
+                #   <plugin_dir>/<safe_key>/<collector_name>/
+                # instead of the old  <base>/<plugin[target_key]>/<collector_name>/
+                collector_log = getattr(collector, "log_path", None)
+                per_target_hooks: list = []
+                if collector_log:
+                    plugin_dir = str(Path(collector_log).parent)
+                    for hook in collector.task_result_hooks:
+                        if isinstance(hook, FileSystemLogHook):
+                            per_target_hooks.append(FileSystemLogHook(log_base_path=plugin_dir))
+                        else:
+                            per_target_hooks.append(hook)
+                else:
+                    per_target_hooks = list(collector.task_result_hooks)
+
                 target_collector = type(collector)(
                     system_info=collector.system_info.model_copy(),
                     connection=conn,
@@ -176,20 +202,23 @@ class RedfishDataCollector(
                     max_event_priority_level=getattr(
                         collector, "max_event_priority_level", EventPriority.CRITICAL
                     ),
-                    parent=target_parent,
-                    task_result_hooks=collector.task_result_hooks,
+                    parent=safe_key,  # → <plugin_dir>/<safe_key>/<collector_name>/
+                    task_result_hooks=per_target_hooks,
                     event_reporter=collector.event_reporter,
                     session_id=collector.session_id,
-                    log_path=target_log,
+                    log_path=None,  # avoid duplicate FileSystemLogHook from DataCollector
                     system_interaction_level=getattr(collector, "system_interaction_level", None),
                 )
-                if target_log:
-                    target_collector.log_path = target_log
                 collector.logger.info(
                     "Starting collection for target %r using %s", target_key, parent_name
                 )
                 result, data = _fn(target_collector, args)
                 collector.logger.info("Finished collection for target %r", target_key)
+
+                # Prefix result message with target key for attribution in the summary table.
+                if result.message:
+                    result.message = f"[{target_key}] {result.message}"
+
                 return target_key, result, data
 
             if multi_conn.target_connections:
