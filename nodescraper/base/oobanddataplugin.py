@@ -23,7 +23,6 @@
 # SOFTWARE.
 #
 ###############################################################################
-import shutil
 from pathlib import Path
 from typing import Any, Generic, Optional, Union
 
@@ -37,7 +36,7 @@ from nodescraper.enums import EventPriority, ExecutionStatus, SystemInteractionL
 from nodescraper.generictypes import TAnalyzeArg, TCollectArg, TDataModel
 from nodescraper.interfaces import DataPlugin
 from nodescraper.models import TaskResult
-from nodescraper.taskresulthooks.filesystemloghook import FileSystemLogHook
+from nodescraper.taskresulthooks.filesystemloghook import hooks_for_fixed_directory
 from nodescraper.utils import resolve_log_dir_name
 
 
@@ -93,20 +92,6 @@ class OOBandDataPlugin(
             ):
                 result.message = self.collection_result.message
 
-            # DataPlugin.collect() unconditionally creates a shared collector directory
-            # (e.g. redfish_endpoint_plugin/redfish_endpoint_collector/) and writes a
-            # combined result.json there. In multi-target mode this directory is redundant
-            # and confusing alongside the per-target subdirectories, so remove it.
-            if self.log_path:
-                for collector_cls in self.get_collector_classes():
-                    shared_dir = (
-                        Path(self.log_path)
-                        / resolve_log_dir_name(self.__class__.__name__)
-                        / resolve_log_dir_name(collector_cls.__name__)
-                    )
-                    if shared_dir.is_dir():
-                        shutil.rmtree(str(shared_dir), ignore_errors=True)
-
         return result
 
     def analyze(
@@ -151,31 +136,28 @@ class OOBandDataPlugin(
         ):
             analysis_args = self.ANALYZER_ARGS.model_validate(analysis_args)  # type: ignore[assignment]
 
-        # Replace FileSystemLogHook instances so analyzer logs land at:
-        #   <plugin_log_dir>/<target_key>/<analyzer_name>/
-        # (same directory tree used by the collector for that target)
-        plugin_log_dir: Optional[str] = None
-        if self.log_path:
-            plugin_log_dir = str(
-                Path(self.log_path) / resolve_log_dir_name(self.__class__.__name__)
-            )
-        per_target_hooks = [
-            (
-                FileSystemLogHook(log_base_path=plugin_log_dir)
-                if (isinstance(hook, FileSystemLogHook) and plugin_log_dir)
-                else hook
-            )
-            for hook in self.task_result_hooks
-        ]
+        plugin_log_dir = (
+            Path(self.log_path) / resolve_log_dir_name(self.__class__.__name__)
+            if self.log_path
+            else None
+        )
+        analyzer_name = resolve_log_dir_name(self.ANALYZER.__name__)
 
         analysis_results: list[TaskResult] = []
         for target_key, target_data in multi_target_data.items():
+            safe_key = _target_dir_name(target_key)
+            target_hooks = self.task_result_hooks
+            if plugin_log_dir is not None:
+                target_hooks = hooks_for_fixed_directory(
+                    self.task_result_hooks,
+                    str(plugin_log_dir / analyzer_name / safe_key),
+                )
             analyzer_task = self.ANALYZER(
                 system_info=self.system_info.model_copy(),
                 logger=self.logger,
                 max_event_priority_level=max_event_priority_level or EventPriority.CRITICAL,
-                parent=_target_dir_name(target_key),  # → <plugin_log_dir>/<target_key>/
-                task_result_hooks=per_target_hooks,
+                parent=safe_key,
+                task_result_hooks=target_hooks,
                 event_reporter=self.event_reporter,
                 session_id=self.session_id,
             )

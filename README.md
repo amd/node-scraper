@@ -256,7 +256,7 @@ A target that fails to connect or collect does not fail the run when another tar
 - `targets`: list of per-target connection parameters. Each entry accepts the same fields as the single-target config plus an optional `target_key` (used as the result key; defaults to the host string).
 - `max_workers` (optional): maximum concurrent collection threads. Defaults to `min(len(targets), 32)` and is capped at 32.
 
-Per-target results are written to `<plugin>[<target_key>]/<collector>/`.
+Per-target results are written to `<plugin>/<collector>/<target_key>/`. Single-target results stay in `<plugin>/<collector>/`. The same layout is used for the analyzer directory and for the AMC SSH-proxy plugin.
 
 A ready-to-edit sample is in `config/connection-config_redfish_multi_target.example.json`. Replace the example hosts and password, then pass it with `--connection-config`.
 
@@ -522,7 +522,7 @@ Use a plugin config that points at your LogService and lists the types to collec
 
 The RedfishEndpointPlugin collects Redfish URIs (GET responses) and optionally runs checks on the returned JSON. It requires a Redfish connection config (same as RedfishOemDiagPlugin).
 
-**Multi-target support:** `RedfishEndpointPlugin` collects from each BMC in the `targets` list at the same time. Use the [Redfish multi-target](#redfish-multi-target) connection config. The same `uris` and `checks` apply to every target. Per-target results are written to `redfish_endpoint_plugin[<target_key>]/redfish_endpoint_collector/` under the run log directory. A BMC that cannot be reached is reported as a warning when another target succeeds.
+**Multi-target support:** `RedfishEndpointPlugin` collects from each BMC in the `targets` list at the same time. Use the [Redfish multi-target](#redfish-multi-target) connection config. The same `uris` and `checks` apply to every target. Per-target results are written to `redfish_endpoint_plugin/redfish_endpoint_collector/<target_key>/` under the run log directory. A BMC that cannot be reached is reported as a warning when another target succeeds.
 
 **How to run**
 

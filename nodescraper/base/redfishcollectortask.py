@@ -41,6 +41,7 @@ from nodescraper.generictypes import TCollectArg, TDataModel
 from nodescraper.interfaces import DataCollector, TaskResultHook
 from nodescraper.interfaces.dataplugin import DataPlugin
 from nodescraper.models import SystemInfo, TaskResult
+from nodescraper.taskresulthooks.filesystemloghook import hooks_for_fixed_directory
 
 _HARD_FAIL = {ExecutionStatus.ERROR, ExecutionStatus.EXECUTION_FAILURE}
 _TARGET_SUCCESS = {ExecutionStatus.OK, ExecutionStatus.WARNING}
@@ -174,26 +175,14 @@ class RedfishDataCollector(
             def _run_for_target(
                 target_key: str, conn: RedfishConnection
             ) -> tuple[str, TaskResult, Any]:
-                from nodescraper.taskresulthooks.filesystemloghook import (
-                    FileSystemLogHook,
-                )
-
                 safe_key = _target_dir_name(target_key)
-
-                # Replace FileSystemLogHook instances so per-target logs land at:
-                #   <plugin_dir>/<safe_key>/<collector_name>/
-                # instead of the old  <base>/<plugin[target_key]>/<collector_name>/
                 collector_log = getattr(collector, "log_path", None)
-                per_target_hooks: list = []
-                if collector_log:
-                    plugin_dir = str(Path(collector_log).parent)
-                    for hook in collector.task_result_hooks:
-                        if isinstance(hook, FileSystemLogHook):
-                            per_target_hooks.append(FileSystemLogHook(log_base_path=plugin_dir))
-                        else:
-                            per_target_hooks.append(hook)
-                else:
-                    per_target_hooks = list(collector.task_result_hooks)
+                target_log = str(Path(collector_log) / safe_key) if collector_log else None
+                per_target_hooks = (
+                    hooks_for_fixed_directory(collector.task_result_hooks, target_log)
+                    if target_log
+                    else list(collector.task_result_hooks)
+                )
 
                 target_collector = type(collector)(
                     system_info=collector.system_info.model_copy(),
@@ -202,11 +191,11 @@ class RedfishDataCollector(
                     max_event_priority_level=getattr(
                         collector, "max_event_priority_level", EventPriority.CRITICAL
                     ),
-                    parent=safe_key,  # → <plugin_dir>/<safe_key>/<collector_name>/
+                    parent=safe_key,
                     task_result_hooks=per_target_hooks,
                     event_reporter=collector.event_reporter,
                     session_id=collector.session_id,
-                    log_path=None,  # avoid duplicate FileSystemLogHook from DataCollector
+                    log_path=target_log,
                     system_interaction_level=getattr(collector, "system_interaction_level", None),
                 )
                 collector.logger.info(

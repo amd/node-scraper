@@ -41,6 +41,7 @@ from nodescraper.connection.redfish import (
 from nodescraper.enums import ExecutionStatus
 from nodescraper.interfaces import DataAnalyzer
 from nodescraper.models import DataModel, SystemInfo
+from nodescraper.taskresulthooks.filesystemloghook import FileSystemLogHook
 
 
 class SampleModel(DataModel):
@@ -179,6 +180,50 @@ def test_one_bmc_collection_failure_stays_warning(system_info: SystemInfo) -> No
     assert multi.multi_target_data["good"].label == "good"
     assert "bad" not in multi.multi_target_data
     assert "offline" in result.message
+
+
+def test_multi_target_logs_under_collector_directory(system_info: SystemInfo, tmp_path) -> None:
+    """Collector logs for each target are written under the collector directory."""
+    good = MagicMock()
+    good.marker = "good"
+    other = MagicMock()
+    other.marker = "other"
+    multi = MultiTargetRedfishConnection({"node-a": good, "node-b": other})
+    collector_dir = tmp_path / "sample_plugin" / "sample_collector"
+    collector_dir.mkdir(parents=True)
+    collector = SampleCollector(
+        system_info=system_info,
+        connection=cast(RedfishConnection, multi),
+        logger=logging.getLogger("multi-target-test"),
+        parent="SamplePlugin",
+        log_path=str(collector_dir),
+        task_result_hooks=[FileSystemLogHook(log_base_path=str(tmp_path))],
+    )
+
+    collector.collect_data()
+
+    assert (collector_dir / "node-a" / "result.json").is_file()
+    assert (collector_dir / "node-b" / "result.json").is_file()
+    assert not (tmp_path / "sample_plugin" / "node-a").exists()
+
+
+def test_multi_target_analyzer_logs_under_analyzer_directory(
+    system_info: SystemInfo, tmp_path
+) -> None:
+    """Analyzer logs for each target are written under the analyzer directory."""
+    plugin = SamplePlugin(
+        system_info=system_info,
+        log_path=str(tmp_path),
+        logger=logging.getLogger("multi-target-test"),
+    )
+    multi = MultiTargetRedfishConnection({"node-a": MagicMock()})
+    multi.multi_target_data["node-a"] = SampleModel(label="good")
+    plugin.connection_manager = MagicMock(connection=multi)
+
+    plugin.analyze()
+
+    assert (tmp_path / "sample_plugin" / "sample_analyzer" / "node-a" / "result.json").is_file()
+    assert not (tmp_path / "sample_plugin" / "node-a").exists()
 
 
 def test_analyze_reads_data_before_disconnect(system_info: SystemInfo) -> None:

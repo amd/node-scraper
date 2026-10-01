@@ -268,6 +268,29 @@ def test_collect_polls_task_resource_until_completed():
     assert polled[1] == "redfish/v1/TaskService/Tasks/dummy-1"
 
 
+def test_collect_ssh_failure_during_poll_returns_error():
+    conn = MagicMock()
+    conn.base_url = "https://bmc.example.test"
+    post_resp = MagicMock()
+    post_resp.status_code = codes.accepted
+    post_resp.headers = {"Location": "/redfish/v1/TaskService/TaskMonitors/1"}
+    post_resp.text = ""
+    post_resp.json.return_value = {
+        "@odata.id": "/redfish/v1/TaskService/Tasks/dummy-1",
+        "TaskState": "Running",
+    }
+    conn.post.return_value = post_resp
+    conn.get_response.side_effect = RedfishConnectionError("Timeout opening channel.")
+
+    _log_bytes, _metadata, err = collect_oem_diagnostic_data(
+        conn,
+        "redfish/v1/Systems/dummy-system/LogServices/DiagLogs",
+        oem_diagnostic_type="AllLogs",
+        task_timeout_s=30,
+    )
+    assert err == "Timeout opening channel."
+
+
 def test_collect_taskmonitor_404_does_not_spin():
     conn = MagicMock()
     conn.base_url = "https://bmc.example.test"

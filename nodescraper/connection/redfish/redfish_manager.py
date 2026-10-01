@@ -26,7 +26,7 @@
 from __future__ import annotations
 
 from logging import Logger
-from typing import Any, Optional, Union
+from typing import Any, Mapping, Optional, Union
 
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
 from nodescraper.interfaces.connectionmanager import ConnectionManager
@@ -55,11 +55,11 @@ class MultiTargetRedfishConnection:
 
     def __init__(
         self,
-        target_connections: dict[str, RedfishConnection],
+        target_connections: Mapping[str, RedfishConnection],
         max_workers: Optional[int] = None,
         failed_targets: Optional[dict[str, str]] = None,
     ) -> None:
-        self.target_connections = target_connections
+        self.target_connections = dict(target_connections)
         self.multi_target_data: dict[str, Any] = {}
         self.max_workers = max_workers
         self.failed_targets = dict(failed_targets or {})
