@@ -49,6 +49,9 @@ from .redfish_params import (
     redfish_params_to_ssh,
 )
 from .redfish_path import RedfishPath
+from .ssh_proxy_connection import SshProxyRedfishConnection
+from .ssh_proxy_manager import RedfishSshProxyConnectionManager
+from .ssh_proxy_params import RedfishSshProxyConnectionParams
 
 __all__ = [
     "RedfishConnection",
@@ -57,6 +60,9 @@ __all__ = [
     "MultiTargetRedfishConnection",
     "RedfishConnectionManager",
     "collected_multi_target_data",
+    "RedfishSshProxyConnectionManager",
+    "RedfishSshProxyConnectionParams",
+    "SshProxyRedfishConnection",
     "RedfishConnectionParams",
     "RedfishTargetParams",
     "redfish_params_to_ssh",
