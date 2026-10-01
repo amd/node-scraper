@@ -183,8 +183,17 @@ class RedfishSshProxyConnectionManager(
             self.target_connections[key] = conn
         if not self.target_connections:
             self.result.status = ExecutionStatus.EXECUTION_FAILURE
-            self.result.message = "SSH-proxy Redfish connection failed for every target"
+            lines = "\n".join(f"[{k}] {v}" for k, v in failed_targets.items())
+            self.result.message = f"SSH-proxy Redfish connection failed for every target\n{lines}"
+            self.result.events.clear()
             return self.result
+        if failed_targets:
+            lines = "\n".join(f"[{k}] {v}" for k, v in failed_targets.items())
+            self.result.status = ExecutionStatus.WARNING
+            self.result.message = f"Some SSH-proxy Redfish targets failed to connect\n{lines}"
+            # Clear events so TaskResult.finalize() does not re-append them as
+            # "(N warnings: ...)" on the same line — the info is already in result.message.
+            self.result.events.clear()
         self.connection = MultiTargetRedfishConnection(  # type: ignore[assignment]
             self.target_connections,
             max_workers=params.max_workers,

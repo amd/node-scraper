@@ -47,6 +47,17 @@ _HARD_FAIL = {ExecutionStatus.ERROR, ExecutionStatus.EXECUTION_FAILURE}
 _TARGET_SUCCESS = {ExecutionStatus.OK, ExecutionStatus.WARNING}
 
 
+class _TargetPrefixAdapter(logging.LoggerAdapter):
+    """Prepend ``[target_key]`` to every log message emitted by a per-target collector thread."""
+
+    def __init__(self, logger: logging.Logger, extra: dict[str, Any]) -> None:
+        super().__init__(logger, extra)
+        self._target_key: str = extra["target_key"]
+
+    def process(self, msg: str, kwargs: Any) -> tuple[str, Any]:
+        return f"[{self._target_key}] {msg}", kwargs
+
+
 def _target_dir_name(target_key: str) -> str:
     """Return a filesystem-safe directory name for a target key.
 
@@ -187,7 +198,7 @@ class RedfishDataCollector(
                 target_collector = type(collector)(
                     system_info=collector.system_info.model_copy(),
                     connection=conn,
-                    logger=collector.logger,
+                    logger=_TargetPrefixAdapter(collector.logger, {"target_key": target_key}),  # type: ignore[arg-type]
                     max_event_priority_level=getattr(
                         collector, "max_event_priority_level", EventPriority.CRITICAL
                     ),

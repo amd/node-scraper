@@ -164,14 +164,20 @@ class RedfishConnectionManager(ConnectionManager[RedfishConnection, RedfishConne
                 self.target_connections[key] = conn
             if not self.target_connections:
                 self.result.status = ExecutionStatus.EXECUTION_FAILURE
-                self.result.message = "Redfish connection failed for every target"
-            else:
-                # Set self.connection so DataPlugin.collect() does not short-circuit.
-                self.connection = MultiTargetRedfishConnection(  # type: ignore[assignment]
-                    self.target_connections,
-                    max_workers=params.max_workers,
-                    failed_targets=failed_targets,
-                )
+                lines = "\n".join(f"[{k}] {v}" for k, v in failed_targets.items())
+                self.result.message = f"Redfish connection failed for every target\n{lines}"
+                self.result.events.clear()
+                return self.result
+            if failed_targets:
+                lines = "\n".join(f"[{k}] {v}" for k, v in failed_targets.items())
+                self.result.status = ExecutionStatus.WARNING
+                self.result.message = f"Some Redfish targets failed to connect\n{lines}"
+                self.result.events.clear()
+            self.connection = MultiTargetRedfishConnection(  # type: ignore[assignment]
+                self.target_connections,
+                max_workers=params.max_workers,
+                failed_targets=failed_targets,
+            )
             return self.result
 
         return self._connect_single(params)
