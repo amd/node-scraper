@@ -1424,6 +1424,48 @@ class Fabric(BaseModel):
     na_validator = field_validator("bdf", "fabric_info", mode="before")(na_to_none)
 
 
+# NODE
+
+
+class NodePowerManagement(BaseModel):
+    """``node[].node.power_management`` (NODE_TOTAL_POWER)."""
+
+    model_config = ConfigDict(extra="allow")
+
+    limit: Optional[Union[float, str]] = None
+    status: Optional[str] = None
+    threshold: Optional[Union[float, str]] = None
+
+    na_validator = field_validator("limit", "status", "threshold", mode="before")(na_to_none)
+
+
+class NodeGtt(BaseModel):
+    """``node[].node.gtt`` (GTT_SIZE). Plain numbers, not value+unit dicts."""
+
+    model_config = ConfigDict(extra="allow")
+
+    size_gb: Optional[float] = None
+    size_pages: Optional[float] = None
+
+    na_validator = field_validator("size_gb", "size_pages", mode="before")(na_to_none)
+
+
+class NodeData(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    power_management: Optional[NodePowerManagement] = None
+    gtt: Optional[NodeGtt] = None
+
+
+class NodeInfo(BaseModel):
+    """One entry from ``amd-smi node --json``: a top-level array of
+    ``{"node": {...}}`` objects."""
+
+    model_config = ConfigDict(extra="allow")
+
+    node: Optional[NodeData] = None
+
+
 # CPU / CORE
 
 
@@ -1705,6 +1747,7 @@ class AmdSmiDataModel(DataModel):
     xgmi_metric: Optional[list[XgmiMetrics]] = Field(default_factory=list)
     xgmi_link: Optional[list[XgmiLinks]] = Field(default_factory=list)
     fabric: Optional[list[Fabric]] = Field(default_factory=list)
+    node: Optional[list[NodeInfo]] = Field(default_factory=list)
     cpu_metric: Optional[list[CpuMetric]] = Field(default_factory=list)
     core_metric: Optional[list[CoreMetric]] = Field(default_factory=list)
     cper_data: Optional[list[FileModel]] = Field(default_factory=list)

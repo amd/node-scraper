@@ -990,6 +990,59 @@ def test_get_fabric_na_values(conn_mock, system_info, monkeypatch):
     assert fabric[0].fabric_info is None
 
 
+# NODE
+
+NODE_INFO_ENTRY: dict[str, Any] = {
+    "node": {
+        "power_management": {"limit": "N/A", "status": "N/A", "threshold": "N/A"},
+        "gtt": {"size_gb": 251.69, "size_pages": 65979228},
+    }
+}
+
+
+def make_node_collector(conn_mock, system_info, monkeypatch, node_payload) -> AmdSmiCollector:
+    """Create a collector whose only mocked amd-smi command is `node`."""
+
+    def mock_run_sut_cmd(cmd: str, sudo: bool = False) -> MagicMock:
+        if "which amd-smi" in cmd:
+            return make_cmd_result("/usr/bin/amd-smi")
+        if "node --json" in cmd:
+            if node_payload is None:
+                return make_cmd_result("", "node not supported", 1)
+            return make_cmd_result(make_json_response(node_payload))
+        return make_cmd_result("")
+
+    c = AmdSmiCollector(
+        system_info=system_info,
+        system_interaction_level=SystemInteractionLevel.PASSIVE,
+        connection=conn_mock,
+    )
+    monkeypatch.setattr(c, "_run_sut_cmd", mock_run_sut_cmd)
+    return c
+
+
+def test_get_node(conn_mock, system_info, monkeypatch):
+    """Test node parsing from the reference-schema {"node": {...}} array shape."""
+    payload = [NODE_INFO_ENTRY]
+    c = make_node_collector(conn_mock, system_info, monkeypatch, payload)
+
+    node = c.get_node()
+
+    assert len(node) == 1
+    assert node[0].node.gtt.size_gb == 251.69
+    assert node[0].node.gtt.size_pages == 65979228
+    assert node[0].node.power_management.limit is None
+    assert node[0].node.power_management.status is None
+    assert node[0].node.power_management.threshold is None
+
+
+def test_get_node_command_failure(conn_mock, system_info, monkeypatch):
+    """Test get_node returns an empty list when the command fails."""
+    c = make_node_collector(conn_mock, system_info, monkeypatch, None)
+
+    assert c.get_node() == []
+
+
 # CPU / CORE METRICS
 
 CPU_METRIC_ENTRY: dict[str, Any] = {
@@ -1090,7 +1143,6 @@ def test_get_cpu_metric(conn_mock, system_info, monkeypatch):
     assert entry.prochot.prochot_status == 0
     assert entry.freq_metrics.fclkmemclk.fclk.value == 1714
     assert entry.ddr_bandwidth.response.ddr_bw_max_bw.value == 256
-    # DCGPUSDV-6469: stock BKC lacks amd_hsmp, so these legally read N/A -> None.
     assert entry.cpu_temp.response is None
     assert entry.sdps_limit is None
     assert entry.xgmi_pstate_range.min_pstate is None
@@ -1113,7 +1165,6 @@ def test_get_core_metric(conn_mock, system_info, monkeypatch):
     assert [entry.core for entry in core_metric] == [0, 1]
     assert core_metric[0].boost_limit.value == 4000
     assert core_metric[0].curr_active_freq_core_limit.unit == "MHz"
-    # DCGPUSDV-6469: core energy/CCD power/floor limits legally read N/A -> None.
     assert core_metric[0].core_energy is None
     assert core_metric[0].ccd_power is None
     assert core_metric[0].floor_limit is None

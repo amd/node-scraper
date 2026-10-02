@@ -48,6 +48,7 @@ from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     Fabric,
     Fw,
     FwListItem,
+    NodeInfo,
     Partition,
     PartitionCompute,
     PartitionMemory,
@@ -112,6 +113,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
     CMD_RAS = "ras --cper --folder={folder}"
     CMD_RAS_AFID = "ras --afid --cper-file {cper_file}"
     CMD_FABRIC = "fabric"
+    CMD_NODE = "node"
     CMD_METRIC_CPU = "metric --cpu all"
     CMD_METRIC_CORE = "metric --core all"
 
@@ -503,6 +505,17 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
         built = self._build_amdsmi_sub_data(Fabric, fabric_entries)
         return built if isinstance(built, list) else ([built] if built else [])
 
+    def get_node(self) -> List[NodeInfo]:
+        """Get node-level data from amd-smi node --json."""
+        ret = self._run_amd_smi_dict(self.CMD_NODE)
+        if ret is None:
+            return []
+        if isinstance(ret, dict) and "node_data" in ret:
+            ret = ret["node_data"]
+        data = ret if isinstance(ret, list) else [ret]
+        built = self._build_amdsmi_sub_data(NodeInfo, data)
+        return built if isinstance(built, list) else ([built] if built else [])
+
     def get_cpu_metric(self) -> List[CpuMetric]:
         """Get per-CPU-socket metrics from amd-smi metric --cpu all --json."""
         ret = self._run_amd_smi_dict(self.CMD_METRIC_CPU)
@@ -545,6 +558,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
             bad_pages = self.get_bad_pages()
             xgmi_metric, xgmi_link = self.get_xgmi_data()
             fabric = self.get_fabric()
+            node = self.get_node()
             cpu_metric = self.get_cpu_metric()
             core_metric = self.get_core_metric()
             cper_data, cper_afids = self.get_cper_data()
@@ -574,6 +588,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
                 xgmi_metric=xgmi_metric or [],
                 xgmi_link=xgmi_link or [],
                 fabric=fabric or [],
+                node=node or [],
                 cpu_metric=cpu_metric or [],
                 core_metric=core_metric or [],
                 cper_data=cper_data,
