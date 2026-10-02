@@ -594,34 +594,64 @@ class DataPlugin(
         data_model_cls = getattr(cls, "DATA_MODEL", None)
         if not data_model_cls:
             return None
+        plugin_dir = resolve_log_dir_name(cls.__name__)
+        plugin_roots = [
+            entry
+            for entry in os.listdir(run_path)
+            if entry == plugin_dir or entry.startswith(plugin_dir + "[")
+        ]
         for collector_cls in cls.get_collector_classes():
-            collector_dir = os.path.join(
-                run_path,
-                resolve_log_dir_name(cls.__name__),
-                resolve_log_dir_name(collector_cls.__name__),
-            )
-            if not os.path.isdir(collector_dir):
-                continue
-            result_path = os.path.join(collector_dir, "result.json")
+            collector_name = resolve_log_dir_name(collector_cls.__name__)
+            for plugin_root in plugin_roots:
+                collector_dir = os.path.join(run_path, plugin_root, collector_name)
+                found = cls._datamodel_file_in_collector_tree(
+                    collector_dir, data_model_cls.__name__
+                )
+                if found:
+                    return found
+        return None
+
+    @classmethod
+    def _datamodel_file_in_collector_tree(
+        cls, collector_dir: str, data_model_name: str
+    ) -> Optional[str]:
+        """Return a datamodel file in a collector directory or one target subdirectory.
+
+        Args:
+            collector_dir: Plugin collector directory, which may contain target folders.
+            data_model_name: DATA_MODEL class name used to match the JSON file.
+
+        Returns:
+            Optional[str]: Absolute path to the datamodel file, or None.
+        """
+        if not os.path.isdir(collector_dir):
+            return None
+        search_dirs = [collector_dir]
+        search_dirs.extend(
+            os.path.join(collector_dir, child)
+            for child in sorted(os.listdir(collector_dir))
+            if os.path.isdir(os.path.join(collector_dir, child))
+        )
+        want_json = data_model_name.lower() + ".json"
+        for search_dir in search_dirs:
+            result_path = os.path.join(search_dir, "result.json")
             if not os.path.isfile(result_path):
                 continue
-            try:
-                res_payload = json.loads(Path(result_path).read_text(encoding="utf-8"))
-                if res_payload.get("parent") != cls.__name__:
+            if search_dir == collector_dir:
+                try:
+                    res_payload = json.loads(Path(result_path).read_text(encoding="utf-8"))
+                    parent = res_payload.get("parent") or ""
+                    if parent != cls.__name__ and not str(parent).startswith(cls.__name__ + "["):
+                        continue
+                except (json.JSONDecodeError, OSError):
                     continue
-            except (json.JSONDecodeError, OSError):
-                continue
-            want_json = data_model_cls.__name__.lower() + ".json"
-            # First search all files for the json
-            for fname in os.listdir(collector_dir):
+            for fname in os.listdir(search_dir):
                 low = fname.lower()
-                if low.endswith(f"{data_model_cls.__name__.lower()}.json") or low == want_json:
-                    return os.path.join(collector_dir, fname)
-            # Then search for log since that is valid in some cases
-            for fname in os.listdir(collector_dir):
-                low = fname.lower()
-                if low.endswith(".log"):
-                    return os.path.join(collector_dir, fname)
+                if low.endswith(f"{data_model_name.lower()}.json") or low == want_json:
+                    return os.path.join(search_dir, fname)
+            for fname in os.listdir(search_dir):
+                if fname.lower().endswith(".log"):
+                    return os.path.join(search_dir, fname)
         return None
 
     @classmethod

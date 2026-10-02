@@ -51,7 +51,8 @@ class AmcRedfishDiagPlugin(
     collector reports ERROR when no collection succeeded, OK when at least one succeeded.
 
     Configure RedfishSshProxyConnectionManager: ssh to the BMC, host/port of the AMC Redfish
-    URL reachable from that BMC. collection_args selects Managers Manager dump and Systems OEM AllLogs.
+    URL reachable from that BMC. A targets list collects once per BMC. collection_args selects
+    Managers Manager dump and Systems OEM AllLogs.
     """
 
     CONNECTION_TYPE = RedfishSshProxyConnectionManager
