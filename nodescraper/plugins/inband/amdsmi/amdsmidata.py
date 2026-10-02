@@ -1424,6 +1424,241 @@ class Fabric(BaseModel):
     na_validator = field_validator("bdf", "fabric_info", mode="before")(na_to_none)
 
 
+# CPU / CORE
+
+
+class CoreMetric(BaseModel):
+    """Per-core data from ``amd-smi metric --core all --json``."""
+
+    model_config = ConfigDict(extra="allow")
+
+    core: int
+    boost_limit: Optional[ValueUnit] = None
+    curr_active_freq_core_limit: Optional[ValueUnit] = None
+    core_energy: Optional[ValueUnit] = None
+    ccd_power: Optional[ValueUnit] = None
+    floor_limit: Optional[ValueUnit] = None
+    eff_floor_limit: Optional[ValueUnit] = None
+
+    _value_unit = field_validator(
+        "boost_limit",
+        "curr_active_freq_core_limit",
+        "core_energy",
+        "ccd_power",
+        "floor_limit",
+        "eff_floor_limit",
+        mode="before",
+    )(coerce_value_unit_input)
+
+
+class CpuMetricPower(BaseModel):
+    """``power_metrics`` group; JSON keys have literal spaces, not underscores."""
+
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
+    socket_power: Optional[ValueUnit] = Field(default=None, alias="socket power")
+    socket_power_limit: Optional[ValueUnit] = Field(default=None, alias="socket power limit")
+    socket_max_power_limit: Optional[ValueUnit] = Field(
+        default=None, alias="socket max power limit"
+    )
+
+    _value_unit = field_validator(
+        "socket_power", "socket_power_limit", "socket_max_power_limit", mode="before"
+    )(coerce_value_unit_input)
+
+
+class CpuMetricProchot(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    prochot_status: Optional[int] = None
+
+
+class CpuMetricFreqFclkMemclk(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    fclk: Optional[ValueUnit] = None
+    mclk: Optional[ValueUnit] = None
+
+    _value_unit = field_validator("fclk", "mclk", mode="before")(coerce_value_unit_input)
+
+
+class CpuMetricFreqActiveLimit(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    freq: Optional[ValueUnit] = None
+    freq_src: Optional[str] = None
+
+    _value_unit = field_validator("freq", mode="before")(coerce_value_unit_input)
+
+
+class CpuMetricFreqRange(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    max_socket_freq: Optional[ValueUnit] = None
+    min_socket_freq: Optional[ValueUnit] = None
+
+    _value_unit = field_validator("max_socket_freq", "min_socket_freq", mode="before")(
+        coerce_value_unit_input
+    )
+
+
+class CpuMetricFreq(BaseModel):
+    """``freq_metrics`` group"""
+
+    model_config = ConfigDict(extra="allow")
+
+    fclkmemclk: Optional[CpuMetricFreqFclkMemclk] = None
+    cclkfreqlimit: Optional[ValueUnit] = None
+    soc_current_active_freq_limit: Optional[CpuMetricFreqActiveLimit] = None
+    soc_freq_range: Optional[CpuMetricFreqRange] = None
+
+    _value_unit = field_validator("cclkfreqlimit", mode="before")(coerce_value_unit_input)
+
+
+class CpuMetricC0Residency(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    residency: Optional[ValueUnit] = None
+
+    _value_unit = field_validator("residency", mode="before")(coerce_value_unit_input)
+
+
+class CpuMetricSviTelemetry(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    power: Optional[ValueUnit] = None
+
+    _value_unit = field_validator("power", mode="before")(coerce_value_unit_input)
+
+
+class CpuMetricPwrEffMode(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    mode: Optional[str] = None
+
+
+class CpuMetricVersion(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    version: Optional[int] = None
+
+
+class CpuMetricTable(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    cpu_family: Optional[int] = None
+    cpu_model: Optional[int] = None
+    response: Optional[ValueUnit] = None
+
+    _value_unit = field_validator("response", mode="before")(coerce_value_unit_input)
+
+
+class CpuMetricSocketEnergy(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    response: Optional[ValueUnit] = None
+
+    _value_unit = field_validator("response", mode="before")(coerce_value_unit_input)
+
+
+class CpuMetricDdrBandwidthResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    ddr_bw_max_bw: Optional[ValueUnit] = None
+    ddr_bw_utilized_bw: Optional[ValueUnit] = None
+    ddr_bw_utilized_pct: Optional[ValueUnit] = None
+
+    _value_unit = field_validator(
+        "ddr_bw_max_bw", "ddr_bw_utilized_bw", "ddr_bw_utilized_pct", mode="before"
+    )(coerce_value_unit_input)
+
+
+class CpuMetricDdrBandwidth(BaseModel):
+    """``ddr_bandwidth`` nests its payload one level deeper than the other
+    ``response``-wrapped groups"""
+
+    model_config = ConfigDict(extra="allow")
+
+    response: Optional[CpuMetricDdrBandwidthResponse] = None
+
+    na_validator = field_validator("response", mode="before")(na_to_none)
+
+
+class CpuMetricCpuTemp(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    response: Optional[ValueUnit] = None
+
+    _value_unit = field_validator("response", mode="before")(coerce_value_unit_input)
+
+
+class CpuMetricXgmiPstateRange(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    min_pstate: Optional[int] = None
+    max_pstate: Optional[int] = None
+
+    na_validator = field_validator("min_pstate", "max_pstate", mode="before")(na_to_none)
+
+
+class CpuMetricEnabledCommands(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    READ_ENABLED_COMMANDS_BITMASK0: Optional[Union[int, str]] = None
+    READ_ENABLED_COMMANDS_BITMASK1: Optional[Union[int, str]] = None
+    READ_ENABLED_COMMANDS_BITMASK2: Optional[Union[int, str]] = None
+    WRITE_ENABLED_COMMANDS_BITMASK0: Optional[Union[int, str]] = None
+    WRITE_ENABLED_COMMANDS_BITMASK1: Optional[Union[int, str]] = None
+    WRITE_ENABLED_COMMANDS_BITMASK2: Optional[Union[int, str]] = None
+
+    na_validator = field_validator(
+        "READ_ENABLED_COMMANDS_BITMASK0",
+        "READ_ENABLED_COMMANDS_BITMASK1",
+        "READ_ENABLED_COMMANDS_BITMASK2",
+        "WRITE_ENABLED_COMMANDS_BITMASK0",
+        "WRITE_ENABLED_COMMANDS_BITMASK1",
+        "WRITE_ENABLED_COMMANDS_BITMASK2",
+        mode="before",
+    )(na_to_none)
+
+
+class CpuMetric(BaseModel):
+    """Per-CPU-socket data from ``amd-smi metric --cpu all --json``."""
+
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
+    cpu: int
+    power_metrics: Optional[CpuMetricPower] = None
+    prochot: Optional[CpuMetricProchot] = None
+    freq_metrics: Optional[CpuMetricFreq] = None
+    c0_residency: Optional[CpuMetricC0Residency] = None
+    svi_telemetry_all_rails: Optional[CpuMetricSviTelemetry] = None
+    pwr_eff_mode: Optional[CpuMetricPwrEffMode] = None
+    metric_version: Optional[CpuMetricVersion] = None
+    metrics_table: Optional[CpuMetricTable] = None
+    socket_energy: Optional[CpuMetricSocketEnergy] = None
+    ddr_bandwidth: Optional[CpuMetricDdrBandwidth] = None
+    cpu_temp: Optional[CpuMetricCpuTemp] = None
+    xgmi_pstate_range: Optional[CpuMetricXgmiPstateRange] = None
+    railisofreq_policy: Optional[ValueUnit] = None
+    dfcstate_ctrl: Optional[ValueUnit] = None
+    pc6_enable: Optional[ValueUnit] = None
+    cc6_enable: Optional[ValueUnit] = None
+    tdelta: Optional[ValueUnit] = None
+    enabled_commands: Optional[CpuMetricEnabledCommands] = None
+    sdps_limit: Optional[ValueUnit] = None
+
+    _value_unit = field_validator(
+        "railisofreq_policy",
+        "dfcstate_ctrl",
+        "pc6_enable",
+        "cc6_enable",
+        "tdelta",
+        "sdps_limit",
+        mode="before",
+    )(coerce_value_unit_input)
+
+
 class AmdSmiAnalysisRef(BaseModel):
     """Collector-filled summary for reference config"""
 
@@ -1470,6 +1705,8 @@ class AmdSmiDataModel(DataModel):
     xgmi_metric: Optional[list[XgmiMetrics]] = Field(default_factory=list)
     xgmi_link: Optional[list[XgmiLinks]] = Field(default_factory=list)
     fabric: Optional[list[Fabric]] = Field(default_factory=list)
+    cpu_metric: Optional[list[CpuMetric]] = Field(default_factory=list)
+    core_metric: Optional[list[CoreMetric]] = Field(default_factory=list)
     cper_data: Optional[list[FileModel]] = Field(default_factory=list)
     cper_afids: dict[str, int] = Field(default_factory=dict)
 

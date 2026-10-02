@@ -988,3 +988,139 @@ def test_get_fabric_na_values(conn_mock, system_info, monkeypatch):
     assert len(fabric) == 1
     assert fabric[0].bdf is None
     assert fabric[0].fabric_info is None
+
+
+# CPU / CORE METRICS
+
+CPU_METRIC_ENTRY: dict[str, Any] = {
+    "cpu": 0,
+    "power_metrics": {
+        "socket power": "174.764 W",
+        "socket power limit": "500.000 W",
+        "socket max power limit": "500.000 W",
+    },
+    "prochot": {"prochot_status": 0},
+    "freq_metrics": {
+        "fclkmemclk": {"fclk": "1714 MHz", "mclk": "4000 MHz"},
+        "cclkfreqlimit": "4000 MHz",
+        "soc_current_active_freq_limit": {"freq": "4000 MHz", "freq_src": "['OPN Max']"},
+        "soc_freq_range": {"max_socket_freq": "4000 MHz", "min_socket_freq": "600 MHz"},
+    },
+    "c0_residency": {"residency": "1 %"},
+    "svi_telemetry_all_rails": {"power": "166800 mW"},
+    "pwr_eff_mode": {"mode": "0"},
+    "metric_version": {"version": 7340033},
+    "metrics_table": {"cpu_family": 26, "cpu_model": 81, "response": "N/A"},
+    "socket_energy": {"response": "1165292.5021819999 J"},
+    "ddr_bandwidth": {
+        "response": {
+            "ddr_bw_max_bw": "256 Gbps",
+            "ddr_bw_utilized_bw": "0 Gbps",
+            "ddr_bw_utilized_pct": "0 %",
+        }
+    },
+    "cpu_temp": {"response": "N/A"},
+    "xgmi_pstate_range": {"min_pstate": "N/A", "max_pstate": "N/A"},
+    "railisofreq_policy": {"value": 0},
+    "dfcstate_ctrl": {"value": 1},
+    "pc6_enable": {"value": "N/A"},
+    "cc6_enable": {"value": "N/A"},
+    "tdelta": {"value": "N/A"},
+    "enabled_commands": {
+        "READ_ENABLED_COMMANDS_BITMASK0": "N/A",
+        "READ_ENABLED_COMMANDS_BITMASK1": "N/A",
+        "READ_ENABLED_COMMANDS_BITMASK2": "N/A",
+        "WRITE_ENABLED_COMMANDS_BITMASK0": "N/A",
+        "WRITE_ENABLED_COMMANDS_BITMASK1": "N/A",
+        "WRITE_ENABLED_COMMANDS_BITMASK2": "N/A",
+    },
+    "sdps_limit": {"value": "N/A"},
+}
+
+CORE_METRIC_ENTRY: dict[str, Any] = {
+    "core": 0,
+    "boost_limit": {"value": 4000},
+    "curr_active_freq_core_limit": {"value": "4000 MHz"},
+    "core_energy": {"value": "N/A"},
+    "ccd_power": {"value": "N/A"},
+    "floor_limit": {"value": "N/A"},
+    "eff_floor_limit": {"value": "N/A"},
+}
+
+
+def make_cpu_core_collector(
+    conn_mock, system_info, monkeypatch, cpu_payload=None, core_payload=None
+) -> AmdSmiCollector:
+    """Create a collector with metric --cpu/--core all commands."""
+
+    def mock_run_sut_cmd(cmd: str, sudo: bool = False) -> MagicMock:
+        if "which amd-smi" in cmd:
+            return make_cmd_result("/usr/bin/amd-smi")
+        if "metric --cpu all --json" in cmd:
+            if cpu_payload is None:
+                return make_cmd_result("", "cpu metrics not supported", 1)
+            return make_cmd_result(make_json_response(cpu_payload))
+        if "metric --core all --json" in cmd:
+            if core_payload is None:
+                return make_cmd_result("", "core metrics not supported", 1)
+            return make_cmd_result(make_json_response(core_payload))
+        return make_cmd_result("")
+
+    c = AmdSmiCollector(
+        system_info=system_info,
+        system_interaction_level=SystemInteractionLevel.PASSIVE,
+        connection=conn_mock,
+    )
+    monkeypatch.setattr(c, "_run_sut_cmd", mock_run_sut_cmd)
+    return c
+
+
+def test_get_cpu_metric(conn_mock, system_info, monkeypatch):
+    """Test CPU metric parsing from the real amd-smi metric --cpu all --json shape."""
+    payload = {"cpu_data": [CPU_METRIC_ENTRY]}
+    c = make_cpu_core_collector(conn_mock, system_info, monkeypatch, cpu_payload=payload)
+
+    cpu_metric = c.get_cpu_metric()
+
+    assert len(cpu_metric) == 1
+    entry = cpu_metric[0]
+    assert entry.cpu == 0
+    assert entry.power_metrics.socket_power.value == 174.764
+    assert entry.power_metrics.socket_power_limit.unit == "W"
+    assert entry.prochot.prochot_status == 0
+    assert entry.freq_metrics.fclkmemclk.fclk.value == 1714
+    assert entry.ddr_bandwidth.response.ddr_bw_max_bw.value == 256
+    # DCGPUSDV-6469: stock BKC lacks amd_hsmp, so these legally read N/A -> None.
+    assert entry.cpu_temp.response is None
+    assert entry.sdps_limit is None
+    assert entry.xgmi_pstate_range.min_pstate is None
+
+
+def test_get_cpu_metric_command_failure(conn_mock, system_info, monkeypatch):
+    """Test get_cpu_metric returns an empty list when the command fails."""
+    c = make_cpu_core_collector(conn_mock, system_info, monkeypatch, cpu_payload=None)
+
+    assert c.get_cpu_metric() == []
+
+
+def test_get_core_metric(conn_mock, system_info, monkeypatch):
+    """Test core metric parsing from the real amd-smi metric --core all --json shape."""
+    payload = {"core_data": [CORE_METRIC_ENTRY, {**CORE_METRIC_ENTRY, "core": 1}]}
+    c = make_cpu_core_collector(conn_mock, system_info, monkeypatch, core_payload=payload)
+
+    core_metric = c.get_core_metric()
+
+    assert [entry.core for entry in core_metric] == [0, 1]
+    assert core_metric[0].boost_limit.value == 4000
+    assert core_metric[0].curr_active_freq_core_limit.unit == "MHz"
+    # DCGPUSDV-6469: core energy/CCD power/floor limits legally read N/A -> None.
+    assert core_metric[0].core_energy is None
+    assert core_metric[0].ccd_power is None
+    assert core_metric[0].floor_limit is None
+
+
+def test_get_core_metric_command_failure(conn_mock, system_info, monkeypatch):
+    """Test get_core_metric returns an empty list when the command fails."""
+    c = make_cpu_core_collector(conn_mock, system_info, monkeypatch, core_payload=None)
+
+    assert c.get_core_metric() == []
