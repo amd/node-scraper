@@ -235,40 +235,52 @@ class TaskResult(BaseModel):
             return 1
         return max(1, n)
 
+    @staticmethod
+    def _format_limited_descriptions(msg_counts: dict[str, int], prefix: str) -> str:
+        """Format the 3 most frequent descriptions, noting how many were left out."""
+        items = sorted(msg_counts.items(), key=lambda kv: kv[1], reverse=True)
+        details = [f"{msg} (x{count})" if count > 1 else msg for msg, count in items[:3]]
+        summary = f"{prefix}: {', '.join(details)}"
+        omitted = len(items) - 3
+        if omitted > 0:
+            summary += f" (omitted {omitted} descriptions)"
+        return summary
+
     def _get_event_summary(self) -> str:
         """Get summary string for events
 
         Returns:
-            str: event summary with counts and descriptions
+            str: warning count, error count with the 3 most frequent error
+                descriptions, and the 3 most frequent critical descriptions
         """
+        total_warnings = 0
+        total_errors = 0
         error_msg_counts: dict[str, int] = {}
-        warning_msg_counts: dict[str, int] = {}
-
+        critical_msg_counts: dict[str, int] = {}
         for event in self.events:
             n = self._event_occurrence_count(event)
-            if event.priority == EventPriority.WARNING:
-                warning_msg_counts[event.description] = (
-                    warning_msg_counts.get(event.description, 0) + n
+            if event.priority == EventPriority.CRITICAL:
+                critical_msg_counts[event.description] = (
+                    critical_msg_counts.get(event.description, 0) + n
                 )
-            elif event.priority >= EventPriority.ERROR:
+            elif event.priority == EventPriority.ERROR:
                 error_msg_counts[event.description] = error_msg_counts.get(event.description, 0) + n
+            if event.priority == EventPriority.WARNING:
+                total_warnings += n
+            elif event.priority >= EventPriority.ERROR:
+                total_errors += n
 
         summary_parts = []
+        if total_warnings:
+            summary_parts.append(f"{total_warnings} warnings")
+        if total_errors:
+            error_summary = f"{total_errors} errors"
+            if error_msg_counts:
+                error_summary = self._format_limited_descriptions(error_msg_counts, error_summary)
+            summary_parts.append(error_summary)
 
-        if warning_msg_counts:
-            total_warnings = sum(warning_msg_counts.values())
-            warning_details = [
-                f"{msg} (x{count})" if count > 1 else msg
-                for msg, count in warning_msg_counts.items()
-            ]
-            summary_parts.append(f"{total_warnings} warnings: {', '.join(warning_details)}")
-
-        if error_msg_counts:
-            total_errors = sum(error_msg_counts.values())
-            error_details = [
-                f"{msg} (x{count})" if count > 1 else msg for msg, count in error_msg_counts.items()
-            ]
-            summary_parts.append(f"{total_errors} errors: {', '.join(error_details)}")
+        if critical_msg_counts:
+            summary_parts.append(self._format_limited_descriptions(critical_msg_counts, "critical"))
 
         return "; ".join(summary_parts)
 
