@@ -26,6 +26,7 @@
 import pytest
 
 from nodescraper.connection.inband.inband import CommandArtifact
+from nodescraper.enums.eventpriority import EventPriority
 from nodescraper.enums.executionstatus import ExecutionStatus
 from nodescraper.enums.systeminteraction import SystemInteractionLevel
 from nodescraper.models.systeminfo import OSFamily
@@ -82,16 +83,24 @@ def collector(system_info, conn_mock):
     ],
 )
 def test_os_collector_linux(
-    collector, conn_mock, stdout, version_stdout, expected_os, expected_version
+    collector, conn_mock, system_info, stdout, version_stdout, expected_os, expected_version
 ):
+    system_info.os_family = OSFamily.LINUX
     conn_mock.run_command.side_effect = [
         CommandArtifact(exit_code=0, stdout=stdout, stderr="", command="cmd1"),
         CommandArtifact(exit_code=0, stdout=version_stdout, stderr="", command="cmd2"),
+        CommandArtifact(exit_code=0, stdout="0.50 0.40 0.30 1/100 1234", stderr="", command="cmd3"),
+        CommandArtifact(exit_code=0, stdout="4", stderr="", command="cmd4"),
     ]
 
     result, data = collector.collect_data()
     assert result.status == ExecutionStatus.OK
-    assert data == OsDataModel(os_name=expected_os, os_version=expected_version)
+    assert data == OsDataModel(
+        os_name=expected_os,
+        os_version=expected_version,
+        load_average_1m=0.5,
+        cpu_count=4,
+    )
 
 
 def test_os_collector_windows(system_info, conn_mock):
@@ -128,6 +137,24 @@ def test_os_collector_error(collector, conn_mock, system_info):
 
     _, data = collector.collect_data()
     assert data is None
+
+
+def test_os_collector_invalid_load_data(collector, conn_mock, system_info):
+    system_info.os_family = OSFamily.LINUX
+    conn_mock.run_command.side_effect = [
+        CommandArtifact(exit_code=0, stdout="Ubuntu 22.04.4 LTS", stderr="", command="cmd1"),
+        CommandArtifact(exit_code=0, stdout='VERSION_ID="22.04"', stderr="", command="cmd2"),
+        CommandArtifact(exit_code=0, stdout="not-a-load", stderr="", command="cmd3"),
+        CommandArtifact(exit_code=0, stdout="not-a-cpu-count", stderr="", command="cmd4"),
+    ]
+
+    _, data = collector.collect_data()
+
+    assert data == OsDataModel(
+        os_name="Ubuntu 22.04.4 LTS",
+        os_version="22.04",
+    )
+    assert sum(event.priority == EventPriority.WARNING for event in collector.result.events) == 2
 
 
 def test_os_collector_esxi(collector, conn_mock, system_info):

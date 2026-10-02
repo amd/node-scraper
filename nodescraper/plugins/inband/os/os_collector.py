@@ -45,6 +45,8 @@ class OsCollector(InBandDataCollector[OsDataModel, None]):
     CMD_ESXI = "vmware -v"
     PRETTY_STR = "PRETTY_NAME"  # noqa: N806
     CMD = f"sh -c '( lsb_release -ds || (cat /etc/*release | grep {PRETTY_STR}) || uname -om ) 2>/dev/null | head -n1'"
+    CMD_LOAD_AVERAGE = "cat /proc/loadavg"
+    CMD_CPU_COUNT = "nproc"
 
     def collect_version(self) -> str:
         """Collect OS version.
@@ -135,9 +137,36 @@ class OsCollector(InBandDataCollector[OsDataModel, None]):
 
         if os_name:
             os_version = self.collect_version()
+            load_average_1m = None
+            cpu_count = None
+            if self.system_info.os_family == OSFamily.LINUX:
+                load_res = self._run_sut_cmd(self.CMD_LOAD_AVERAGE)
+                if load_res.exit_code == 0 and load_res.stdout.strip():
+                    try:
+                        load_average_1m = float(load_res.stdout.split()[0])
+                    except (ValueError, IndexError):
+                        self._log_event(
+                            category=EventCategory.OS,
+                            description="Invalid 1-minute load average",
+                            priority=EventPriority.WARNING,
+                        )
+
+                cpu_res = self._run_sut_cmd(self.CMD_CPU_COUNT)
+                if cpu_res.exit_code == 0 and cpu_res.stdout.strip():
+                    try:
+                        cpu_count = int(cpu_res.stdout.strip())
+                    except ValueError:
+                        self._log_event(
+                            category=EventCategory.OS,
+                            description="Invalid CPU count",
+                            priority=EventPriority.WARNING,
+                        )
+
             os_data = OsDataModel(
                 os_name=os_name,
                 os_version=os_version,
+                load_average_1m=load_average_1m,
+                cpu_count=cpu_count,
             )
             self._log_event(
                 category="OS_NAME_READ",
