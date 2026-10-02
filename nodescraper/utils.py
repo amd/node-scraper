@@ -310,6 +310,40 @@ def bytes_to_human_readable(input_bytes: int) -> str:
     return "0B"
 
 
+# Byte multiplier for every size unit that a firmware source may report.
+SIZE_UNITS = {
+    "B": 1,
+    "KB": 1024,
+    "MB": 1024**2,
+    "GB": 1024**3,
+    "TB": 1024**4,
+    "PB": 1024**5,
+}
+
+# Units considered when rendering a byte count, largest first so that the
+# shortest exact representation wins.
+DISPLAY_UNITS = ("PB", "TB", "GB", "MB", "KB")
+
+
+def format_bytes(size_bytes: int) -> str:
+    """Render a byte count using the largest binary unit that divides it evenly.
+
+    Unlike :func:`bytes_to_human_readable`, this never rounds: a count that no
+    unit divides exactly is rendered in bytes.
+
+    Args:
+        size_bytes (int): size in bytes.
+
+    Returns:
+        str: human readable size, e.g. "64GB".
+    """
+    for unit in DISPLAY_UNITS:
+        factor = SIZE_UNITS[unit]
+        if size_bytes >= factor and not size_bytes % factor:
+            return f"{size_bytes // factor}{unit}"
+    return f"{size_bytes}B"
+
+
 def find_annotation_in_container(
     annotation, target_type
 ) -> Union[tuple[Any, list[Any]], tuple[None, list[Any]]]:
