@@ -30,11 +30,15 @@ from typing import Any, Optional
 import pytest
 
 from nodescraper.plugins.inband.amdsmi.amdsmidata import (
+    _METRIC_GPU_BOARD_TEMPERATURE_RAILS,
     AmdSmiDataModel,
     AmdSmiMetric,
     Fabric,
     FabricInfo,
+    MetricBaseBoardTemperature,
     MetricClockData,
+    MetricClockRails,
+    MetricGpuBoardTemperature,
     MetricPcie,
     MetricPower,
     StaticClockData,
@@ -491,15 +495,18 @@ def test_metric_usage_string_na():
 
 
 def test_metric_gpuboard_baseboard_optional():
-    """Store gpuboard/baseboard sections from ROCm 7.1+ metric output."""
+    """Store gpuboard/baseboard sections from ROCm 7.1+ metric output as typed models."""
     metric = AmdSmiMetric.model_validate(
         dummy_metric_dict(
             gpuboard=DUMMY_METRIC_GPUBOARD,
             baseboard=DUMMY_METRIC_BASEBOARD,
         )
     )
-    assert metric.gpuboard == DUMMY_METRIC_GPUBOARD
-    assert metric.baseboard == DUMMY_METRIC_BASEBOARD
+    assert metric.gpuboard.temperature.NODE_RETIMER_X.value == 43
+    assert metric.gpuboard.temperature.NODE_OAM_X_IBC.value == 53
+    assert metric.gpuboard.temperature.VDDCR_VDD0 is None
+    assert metric.baseboard.temperature.UBB_FRONT.value == 55
+    assert metric.baseboard.temperature.UBB_FPGA.value == 78
 
 
 def test_metric_gpuboard_gpu_board_alias():
@@ -512,8 +519,46 @@ def test_metric_gpuboard_gpu_board_alias():
             }
         )
     )
-    assert metric.gpuboard == DUMMY_METRIC_GPUBOARD
-    assert metric.baseboard == DUMMY_METRIC_BASEBOARD
+    assert metric.gpuboard.temperature.NODE_RETIMER_X.value == 43
+    assert metric.baseboard.temperature.UBB_FRONT.value == 55
+
+
+def test_metric_gpuboard_all_rails_present():
+    """Every known gpuboard rail is parsed when present, numeric or N/A."""
+    reference_payload = {
+        name: (0 if i % 2 == 0 else "N/A")
+        for i, name in enumerate(_METRIC_GPU_BOARD_TEMPERATURE_RAILS)
+    }
+    board = MetricGpuBoardTemperature.model_validate(reference_payload)
+    for i, name in enumerate(_METRIC_GPU_BOARD_TEMPERATURE_RAILS):
+        rail = getattr(board, name)
+        if i % 2 == 0:
+            assert rail is not None and rail.value == 0
+        else:
+            assert rail is None
+
+
+def test_metric_gpuboard_rail_renamed_or_dropped_is_none_not_absorbed():
+    """A rail missing/renamed from the payload surfaces as None on its named field."""
+    board = MetricGpuBoardTemperature.model_validate({"NODE_RETIMER_X": {"value": 5, "unit": "C"}})
+    assert board.NODE_RETIMER_X.value == 5
+    assert board.VDDCR_VDD0 is None
+    assert board.VDD_085_HBM is None
+
+
+def test_metric_gpuboard_unknown_rail_tolerated():
+    """An unrecognized rail (future FW addition) does not fail validation."""
+    board = MetricGpuBoardTemperature.model_validate(
+        {"NODE_RETIMER_X": {"value": 1, "unit": "C"}, "SOME_NEW_RAIL": {"value": 2, "unit": "C"}}
+    )
+    assert board.NODE_RETIMER_X.value == 1
+
+
+def test_metric_baseboard_rail_na_and_zero():
+    """baseboard rails independently accept N/A and 0 without erroring."""
+    board = MetricBaseBoardTemperature.model_validate({"UBB_FRONT": "N/A", "UBB_FPGA": 0})
+    assert board.UBB_FRONT is None
+    assert board.UBB_FPGA.value == 0
 
 
 def test_metric_clock_per_aid_na_maps():
@@ -544,6 +589,32 @@ def test_metric_clock_per_aid_na_maps():
     assert metric.clock["uclk_aid"]["AID_0"] == "N/A"
     assert isinstance(metric.clock["GFX_0"], MetricClockData)
     assert metric.pcie.lc_perf_other_end_recovery_count == 0
+
+
+def test_metric_clock_rails_enumerates_known_rails_and_catches_drop():
+    """clock_rails exposes every known rail by name; a dropped one reads None."""
+    metric = AmdSmiMetric.model_validate(dummy_metric_dict())
+    assert isinstance(metric.clock_rails.GFX_0, MetricClockData)
+    assert metric.clock_rails.GFX_0.clk.value == 132
+    assert metric.clock_rails.MEM_0 is None
+    assert metric.clock_rails.VCLK_0 is None
+    assert metric.clock_rails.FCLK_0 is None
+
+
+def test_metric_clock_rails_case_insensitive_match():
+    """Current amd-smi builds emit lowercase rail names (e.g. gfx_0, mem_0)."""
+    rails = MetricClockRails.model_validate(
+        {
+            "gfx_0": {"clk": {"value": 2353, "unit": "MHz"}},
+            "mem_0": {"clk": {"value": 1200, "unit": "MHz"}},
+            "uclk_aid": {"AID_0": "N/A"},
+        }
+    )
+    assert rails.GFX_0 is not None
+    assert rails.GFX_0.clk.value == 2353
+    assert rails.MEM_0 is not None
+    assert rails.MEM_0.clk.value == 1200
+    assert rails.model_extra["uclk_aid"] == {"AID_0": "N/A"}
 
 
 # FABRIC

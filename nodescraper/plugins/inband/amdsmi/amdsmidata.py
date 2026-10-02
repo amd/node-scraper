@@ -974,6 +974,222 @@ class EccData(BaseModel):
     )(na_to_none)
 
 
+_METRIC_CLOCK_RAIL_NAMES: tuple[str, ...] = (
+    "GFX_0",
+    "GFX_1",
+    "GFX_2",
+    "GFX_3",
+    "GFX_4",
+    "GFX_5",
+    "GFX_6",
+    "GFX_7",
+    "MEM_0",
+    "VCLK_0",
+    "VCLK_1",
+    "VCLK_2",
+    "VCLK_3",
+    "DCLK_0",
+    "DCLK_1",
+    "DCLK_2",
+    "DCLK_3",
+    "SOCCLK_0",
+    "FCLK_0",
+)
+
+
+def _match_known_rails_case_insensitive(data: Any, known_names: tuple[str, ...]) -> Any:
+    if not isinstance(data, dict):
+        return data
+    canonical = {name.upper(): name for name in known_names}
+    out = dict(data)
+    for key in list(out.keys()):
+        target = canonical.get(key.upper())
+        if target and target not in out:
+            out[target] = out.pop(key)
+    return out
+
+
+class MetricClockRails(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    GFX_0: Optional[MetricClockData] = None
+    GFX_1: Optional[MetricClockData] = None
+    GFX_2: Optional[MetricClockData] = None
+    GFX_3: Optional[MetricClockData] = None
+    GFX_4: Optional[MetricClockData] = None
+    GFX_5: Optional[MetricClockData] = None
+    GFX_6: Optional[MetricClockData] = None
+    GFX_7: Optional[MetricClockData] = None
+    MEM_0: Optional[MetricClockData] = None
+    VCLK_0: Optional[MetricClockData] = None
+    VCLK_1: Optional[MetricClockData] = None
+    VCLK_2: Optional[MetricClockData] = None
+    VCLK_3: Optional[MetricClockData] = None
+    DCLK_0: Optional[MetricClockData] = None
+    DCLK_1: Optional[MetricClockData] = None
+    DCLK_2: Optional[MetricClockData] = None
+    DCLK_3: Optional[MetricClockData] = None
+    SOCCLK_0: Optional[MetricClockData] = None
+    FCLK_0: Optional[MetricClockData] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _match_rails(cls, data: Any) -> Any:
+        return _match_known_rails_case_insensitive(data, _METRIC_CLOCK_RAIL_NAMES)
+
+
+_METRIC_GPU_BOARD_TEMPERATURE_RAILS: tuple[str, ...] = (
+    "NODE_RETIMER_X",
+    "NODE_OAM_X_IBC",
+    "NODE_OAM_X_IBC_2",
+    "NODE_OAM_X_VDD18_VR",
+    "NODE_OAM_X_04_HBM_B_VR",
+    "NODE_OAM_X_04_HBM_D_VR",
+    "VDDCR_VDD0",
+    "VDDCR_VDD1",
+    "VDDCR_VDD2",
+    "VDDCR_VDD3",
+    "VDDCR_SOC_A",
+    "VDDCR_SOC_C",
+    "VDDCR_SOCIO_A",
+    "VDDCR_SOCIO_C",
+    "VDD_085_HBM",
+    "VDDCR_11_HBM_B",
+    "VDDCR_11_HBM_D",
+    "VDD_USR",
+    "VDDIO_11_E32",
+    "VDDIO_04_HBM_B",
+    "VDDIO_04_HBM_D",
+    "VDDCR_075_HBM_B",
+    "VDDCR_075_HBM_D",
+    "VDDIO_11_GTA_A",
+    "VDDIO_11_GTA_C",
+    "VDDAN_075_GTA_A",
+    "VDDAN_075_GTA_C",
+    "VDDCR_075_UCIE",
+    "VDDIO_065_UCIEAA",
+    "VDDIO_065_UCIEAM_A",
+    "VDDIO_065_UCIEAM_C",
+    "VDDAN_075",
+)
+
+
+class MetricGpuBoardTemperature(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    NODE_RETIMER_X: Optional[ValueUnit] = None
+    NODE_OAM_X_IBC: Optional[ValueUnit] = None
+    NODE_OAM_X_IBC_2: Optional[ValueUnit] = None
+    NODE_OAM_X_VDD18_VR: Optional[ValueUnit] = None
+    NODE_OAM_X_04_HBM_B_VR: Optional[ValueUnit] = None
+    NODE_OAM_X_04_HBM_D_VR: Optional[ValueUnit] = None
+    VDDCR_VDD0: Optional[ValueUnit] = None
+    VDDCR_VDD1: Optional[ValueUnit] = None
+    VDDCR_VDD2: Optional[ValueUnit] = None
+    VDDCR_VDD3: Optional[ValueUnit] = None
+    VDDCR_SOC_A: Optional[ValueUnit] = None
+    VDDCR_SOC_C: Optional[ValueUnit] = None
+    VDDCR_SOCIO_A: Optional[ValueUnit] = None
+    VDDCR_SOCIO_C: Optional[ValueUnit] = None
+    VDD_085_HBM: Optional[ValueUnit] = None
+    VDDCR_11_HBM_B: Optional[ValueUnit] = None
+    VDDCR_11_HBM_D: Optional[ValueUnit] = None
+    VDD_USR: Optional[ValueUnit] = None
+    VDDIO_11_E32: Optional[ValueUnit] = None
+    VDDIO_04_HBM_B: Optional[ValueUnit] = None
+    VDDIO_04_HBM_D: Optional[ValueUnit] = None
+    VDDCR_075_HBM_B: Optional[ValueUnit] = None
+    VDDCR_075_HBM_D: Optional[ValueUnit] = None
+    VDDIO_11_GTA_A: Optional[ValueUnit] = None
+    VDDIO_11_GTA_C: Optional[ValueUnit] = None
+    VDDAN_075_GTA_A: Optional[ValueUnit] = None
+    VDDAN_075_GTA_C: Optional[ValueUnit] = None
+    VDDCR_075_UCIE: Optional[ValueUnit] = None
+    VDDIO_065_UCIEAA: Optional[ValueUnit] = None
+    VDDIO_065_UCIEAM_A: Optional[ValueUnit] = None
+    VDDIO_065_UCIEAM_C: Optional[ValueUnit] = None
+    VDDAN_075: Optional[ValueUnit] = None
+
+    _rail_value_unit = field_validator(*_METRIC_GPU_BOARD_TEMPERATURE_RAILS, mode="before")(
+        coerce_value_unit_input
+    )
+
+
+class MetricGpuBoard(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    temperature: Optional[MetricGpuBoardTemperature] = None
+
+    na_validator = field_validator("temperature", mode="before")(na_to_none)
+
+
+_METRIC_BASE_BOARD_TEMPERATURE_RAILS: tuple[str, ...] = (
+    "UBB_FPGA",
+    "UBB_FRONT",
+    "UBB_BACK",
+    "UBB_OAM1",
+    "UBB_OAM7",
+    "UBB_IBC",
+    "UBB_UFPGA",
+    "UBB_FPGA_0V72_VR",
+    "UBB_FPGA_3V3_VR",
+    "OAM_0_1_HSC",
+    "OAM_2_3_HSC",
+    "OAM_4_5_HSC",
+    "OAM_6_7_HSC",
+    "OAM_0_1_2_3_3V3_VR",
+    "OAM_4_5_6_7_3V3_VR",
+    "IBC",
+    "IBC_HSC",
+    "RETIMER_0_1_0V9_VR",
+    "RETIMER_2_3_0V9_VR",
+    "RETIMER_4_5_0V9_VR",
+    "RETIMER_6_7_0V9_VR",
+    "RETIMER_0_1_2_3_1V2_VR",
+    "RETIMER_4_5_6_7_1V2_VR",
+)
+
+
+class MetricBaseBoardTemperature(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    UBB_FPGA: Optional[ValueUnit] = None
+    UBB_FRONT: Optional[ValueUnit] = None
+    UBB_BACK: Optional[ValueUnit] = None
+    UBB_OAM1: Optional[ValueUnit] = None
+    UBB_OAM7: Optional[ValueUnit] = None
+    UBB_IBC: Optional[ValueUnit] = None
+    UBB_UFPGA: Optional[ValueUnit] = None
+    UBB_FPGA_0V72_VR: Optional[ValueUnit] = None
+    UBB_FPGA_3V3_VR: Optional[ValueUnit] = None
+    OAM_0_1_HSC: Optional[ValueUnit] = None
+    OAM_2_3_HSC: Optional[ValueUnit] = None
+    OAM_4_5_HSC: Optional[ValueUnit] = None
+    OAM_6_7_HSC: Optional[ValueUnit] = None
+    OAM_0_1_2_3_3V3_VR: Optional[ValueUnit] = None
+    OAM_4_5_6_7_3V3_VR: Optional[ValueUnit] = None
+    IBC: Optional[ValueUnit] = None
+    IBC_HSC: Optional[ValueUnit] = None
+    RETIMER_0_1_0V9_VR: Optional[ValueUnit] = None
+    RETIMER_2_3_0V9_VR: Optional[ValueUnit] = None
+    RETIMER_4_5_0V9_VR: Optional[ValueUnit] = None
+    RETIMER_6_7_0V9_VR: Optional[ValueUnit] = None
+    RETIMER_0_1_2_3_1V2_VR: Optional[ValueUnit] = None
+    RETIMER_4_5_6_7_1V2_VR: Optional[ValueUnit] = None
+
+    _rail_value_unit = field_validator(*_METRIC_BASE_BOARD_TEMPERATURE_RAILS, mode="before")(
+        coerce_value_unit_input
+    )
+
+
+class MetricBaseBoard(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    temperature: Optional[MetricBaseBoardTemperature] = None
+
+    na_validator = field_validator("temperature", mode="before")(na_to_none)
+
+
 class AmdSmiMetric(BaseModel):
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
@@ -992,11 +1208,11 @@ class AmdSmiMetric(BaseModel):
     energy: Optional[MetricEnergy]
     mem_usage: MetricMemUsage
     throttle: MetricThrottle
-    gpuboard: Optional[Union[dict[str, Any], str]] = Field(
+    gpuboard: Optional[Union[MetricGpuBoard, str]] = Field(
         default=None,
         validation_alias=AliasChoices("gpuboard", "gpu_board"),
     )
-    baseboard: Optional[Union[dict[str, Any], str]] = Field(
+    baseboard: Optional[Union[MetricBaseBoard, str]] = Field(
         default=None,
         validation_alias=AliasChoices("baseboard", "base_board"),
     )
@@ -1008,6 +1224,11 @@ class AmdSmiMetric(BaseModel):
     @classmethod
     def _normalize_clock(cls, clock: Any) -> Any:
         return _normalize_metric_clock_map(clock)
+
+    @computed_field
+    def clock_rails(self) -> MetricClockRails:
+        """Enumerated view of clock catching a dropped/renamed known rail."""
+        return MetricClockRails.model_validate(self.clock or {})
 
     @field_validator("ecc_blocks", mode="before")
     @classmethod
