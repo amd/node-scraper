@@ -332,6 +332,38 @@ def test_collect_data_success(collector, conn_mock):
     assert "Network data collected successfully" in result.message
 
 
+def test_collect_data_logs_interface_mtu_and_speed(collector, conn_mock):
+    """Observed interface state, MTU, and ethtool speed are logged. Loopback is omitted."""
+    collector.system_info.os_family = OSFamily.LINUX
+
+    def run_sut_cmd_side_effect(cmd, **kwargs):
+        if cmd == "ip addr show":
+            return MagicMock(exit_code=0, stdout=IP_ADDR_OUTPUT, command=cmd)
+        if cmd == "ethtool eth0":
+            return MagicMock(exit_code=0, stdout=ETHTOOL_OUTPUT, command=cmd)
+        return MagicMock(exit_code=1, stdout="", command=cmd)
+
+    collector._run_sut_cmd = MagicMock(side_effect=run_sut_cmd_side_effect)
+
+    result, data = collector.collect_data()
+
+    assert result.status == ExecutionStatus.OK
+    assert data is not None
+    interface_event = next(
+        event for event in result.events if event.description == "Collected 2 network interfaces"
+    )
+    eth0 = next(iface for iface in interface_event.data["interfaces"] if iface["name"] == "eth0")
+    assert eth0["state"] == "UP"
+    assert eth0["mtu"] == 5678
+    speed_event = next(
+        event
+        for event in result.events
+        if event.description == "Collected ethtool info for interface: eth0"
+    )
+    assert speed_event.data["interface"] == "eth0"
+    assert speed_event.data["speed"] == "1000mockMb/s"
+
+
 def test_collect_data_addr_failure(collector, conn_mock):
     """Test collection when ip addr command fails"""
     collector.system_info.os_family = OSFamily.LINUX
