@@ -25,7 +25,7 @@
 ###############################################################################
 import re
 from enum import Enum
-from typing import Any, Mapping, Optional, Union
+from typing import Any, ClassVar, Mapping, Optional, Union
 
 from pydantic import (
     AliasChoices,
@@ -974,43 +974,32 @@ class EccData(BaseModel):
     )(na_to_none)
 
 
-_METRIC_CLOCK_RAIL_NAMES: tuple[str, ...] = (
-    "GFX_0",
-    "GFX_1",
-    "GFX_2",
-    "GFX_3",
-    "GFX_4",
-    "GFX_5",
-    "GFX_6",
-    "GFX_7",
-    "MEM_0",
-    "VCLK_0",
-    "VCLK_1",
-    "VCLK_2",
-    "VCLK_3",
-    "DCLK_0",
-    "DCLK_1",
-    "DCLK_2",
-    "DCLK_3",
-    "SOCCLK_0",
-    "FCLK_0",
-)
-
-
-def _match_known_rails_case_insensitive(data: Any, known_names: tuple[str, ...]) -> Any:
-    if not isinstance(data, dict):
-        return data
-    canonical = {name.upper(): name for name in known_names}
-    out = dict(data)
-    for key in list(out.keys()):
-        target = canonical.get(key.upper())
-        if target and target not in out:
-            out[target] = out.pop(key)
-    return out
-
-
 class MetricClockRails(BaseModel):
+    """Enumerated, typed view of the known ``AmdSmiMetric.clock`` rails."""
+
     model_config = ConfigDict(extra="allow")
+
+    RAIL_NAMES: ClassVar[tuple[str, ...]] = (
+        "GFX_0",
+        "GFX_1",
+        "GFX_2",
+        "GFX_3",
+        "GFX_4",
+        "GFX_5",
+        "GFX_6",
+        "GFX_7",
+        "MEM_0",
+        "VCLK_0",
+        "VCLK_1",
+        "VCLK_2",
+        "VCLK_3",
+        "DCLK_0",
+        "DCLK_1",
+        "DCLK_2",
+        "DCLK_3",
+        "SOCCLK_0",
+        "FCLK_0",
+    )
 
     GFX_0: Optional[MetricClockData] = None
     GFX_1: Optional[MetricClockData] = None
@@ -1032,50 +1021,68 @@ class MetricClockRails(BaseModel):
     SOCCLK_0: Optional[MetricClockData] = None
     FCLK_0: Optional[MetricClockData] = None
 
+    @classmethod
+    def _match_rails_case_insensitive(cls, data: Any) -> Any:
+        """Rename dict keys to their canonical-cased rail name when they match
+        ``RAIL_NAMES`` case-insensitively."""
+        if not isinstance(data, dict):
+            return data
+        canonical = {name.upper(): name for name in cls.RAIL_NAMES}
+        out = dict(data)
+        for key in list(out.keys()):
+            target = canonical.get(key.upper())
+            if target and target not in out:
+                out[target] = out.pop(key)
+        return out
+
     @model_validator(mode="before")
     @classmethod
     def _match_rails(cls, data: Any) -> Any:
-        return _match_known_rails_case_insensitive(data, _METRIC_CLOCK_RAIL_NAMES)
-
-
-_METRIC_GPU_BOARD_TEMPERATURE_RAILS: tuple[str, ...] = (
-    "NODE_RETIMER_X",
-    "NODE_OAM_X_IBC",
-    "NODE_OAM_X_IBC_2",
-    "NODE_OAM_X_VDD18_VR",
-    "NODE_OAM_X_04_HBM_B_VR",
-    "NODE_OAM_X_04_HBM_D_VR",
-    "VDDCR_VDD0",
-    "VDDCR_VDD1",
-    "VDDCR_VDD2",
-    "VDDCR_VDD3",
-    "VDDCR_SOC_A",
-    "VDDCR_SOC_C",
-    "VDDCR_SOCIO_A",
-    "VDDCR_SOCIO_C",
-    "VDD_085_HBM",
-    "VDDCR_11_HBM_B",
-    "VDDCR_11_HBM_D",
-    "VDD_USR",
-    "VDDIO_11_E32",
-    "VDDIO_04_HBM_B",
-    "VDDIO_04_HBM_D",
-    "VDDCR_075_HBM_B",
-    "VDDCR_075_HBM_D",
-    "VDDIO_11_GTA_A",
-    "VDDIO_11_GTA_C",
-    "VDDAN_075_GTA_A",
-    "VDDAN_075_GTA_C",
-    "VDDCR_075_UCIE",
-    "VDDIO_065_UCIEAA",
-    "VDDIO_065_UCIEAM_A",
-    "VDDIO_065_UCIEAM_C",
-    "VDDAN_075",
-)
+        return cls._match_rails_case_insensitive(data)
 
 
 class MetricGpuBoardTemperature(BaseModel):
+    """Known ``gpu_board.temperature`` rails (ROCm 7.1+ ``metric`` JSON).
+
+    Each rail is independently optional and N/A-tolerant.
+    """
+
     model_config = ConfigDict(extra="allow")
+
+    RAIL_NAMES: ClassVar[tuple[str, ...]] = (
+        "NODE_RETIMER_X",
+        "NODE_OAM_X_IBC",
+        "NODE_OAM_X_IBC_2",
+        "NODE_OAM_X_VDD18_VR",
+        "NODE_OAM_X_04_HBM_B_VR",
+        "NODE_OAM_X_04_HBM_D_VR",
+        "VDDCR_VDD0",
+        "VDDCR_VDD1",
+        "VDDCR_VDD2",
+        "VDDCR_VDD3",
+        "VDDCR_SOC_A",
+        "VDDCR_SOC_C",
+        "VDDCR_SOCIO_A",
+        "VDDCR_SOCIO_C",
+        "VDD_085_HBM",
+        "VDDCR_11_HBM_B",
+        "VDDCR_11_HBM_D",
+        "VDD_USR",
+        "VDDIO_11_E32",
+        "VDDIO_04_HBM_B",
+        "VDDIO_04_HBM_D",
+        "VDDCR_075_HBM_B",
+        "VDDCR_075_HBM_D",
+        "VDDIO_11_GTA_A",
+        "VDDIO_11_GTA_C",
+        "VDDAN_075_GTA_A",
+        "VDDAN_075_GTA_C",
+        "VDDCR_075_UCIE",
+        "VDDIO_065_UCIEAA",
+        "VDDIO_065_UCIEAM_A",
+        "VDDIO_065_UCIEAM_C",
+        "VDDAN_075",
+    )
 
     NODE_RETIMER_X: Optional[ValueUnit] = None
     NODE_OAM_X_IBC: Optional[ValueUnit] = None
@@ -1110,9 +1117,7 @@ class MetricGpuBoardTemperature(BaseModel):
     VDDIO_065_UCIEAM_C: Optional[ValueUnit] = None
     VDDAN_075: Optional[ValueUnit] = None
 
-    _rail_value_unit = field_validator(*_METRIC_GPU_BOARD_TEMPERATURE_RAILS, mode="before")(
-        coerce_value_unit_input
-    )
+    _rail_value_unit = field_validator(*RAIL_NAMES, mode="before")(coerce_value_unit_input)
 
 
 class MetricGpuBoard(BaseModel):
@@ -1123,35 +1128,36 @@ class MetricGpuBoard(BaseModel):
     na_validator = field_validator("temperature", mode="before")(na_to_none)
 
 
-_METRIC_BASE_BOARD_TEMPERATURE_RAILS: tuple[str, ...] = (
-    "UBB_FPGA",
-    "UBB_FRONT",
-    "UBB_BACK",
-    "UBB_OAM1",
-    "UBB_OAM7",
-    "UBB_IBC",
-    "UBB_UFPGA",
-    "UBB_FPGA_0V72_VR",
-    "UBB_FPGA_3V3_VR",
-    "OAM_0_1_HSC",
-    "OAM_2_3_HSC",
-    "OAM_4_5_HSC",
-    "OAM_6_7_HSC",
-    "OAM_0_1_2_3_3V3_VR",
-    "OAM_4_5_6_7_3V3_VR",
-    "IBC",
-    "IBC_HSC",
-    "RETIMER_0_1_0V9_VR",
-    "RETIMER_2_3_0V9_VR",
-    "RETIMER_4_5_0V9_VR",
-    "RETIMER_6_7_0V9_VR",
-    "RETIMER_0_1_2_3_1V2_VR",
-    "RETIMER_4_5_6_7_1V2_VR",
-)
-
-
 class MetricBaseBoardTemperature(BaseModel):
+    """Known ``base_board.temperature`` (UBB) rails (ROCm 7.1+ ``metric`` JSON)."""
+
     model_config = ConfigDict(extra="allow")
+
+    RAIL_NAMES: ClassVar[tuple[str, ...]] = (
+        "UBB_FPGA",
+        "UBB_FRONT",
+        "UBB_BACK",
+        "UBB_OAM1",
+        "UBB_OAM7",
+        "UBB_IBC",
+        "UBB_UFPGA",
+        "UBB_FPGA_0V72_VR",
+        "UBB_FPGA_3V3_VR",
+        "OAM_0_1_HSC",
+        "OAM_2_3_HSC",
+        "OAM_4_5_HSC",
+        "OAM_6_7_HSC",
+        "OAM_0_1_2_3_3V3_VR",
+        "OAM_4_5_6_7_3V3_VR",
+        "IBC",
+        "IBC_HSC",
+        "RETIMER_0_1_0V9_VR",
+        "RETIMER_2_3_0V9_VR",
+        "RETIMER_4_5_0V9_VR",
+        "RETIMER_6_7_0V9_VR",
+        "RETIMER_0_1_2_3_1V2_VR",
+        "RETIMER_4_5_6_7_1V2_VR",
+    )
 
     UBB_FPGA: Optional[ValueUnit] = None
     UBB_FRONT: Optional[ValueUnit] = None
@@ -1177,9 +1183,7 @@ class MetricBaseBoardTemperature(BaseModel):
     RETIMER_0_1_2_3_1V2_VR: Optional[ValueUnit] = None
     RETIMER_4_5_6_7_1V2_VR: Optional[ValueUnit] = None
 
-    _rail_value_unit = field_validator(*_METRIC_BASE_BOARD_TEMPERATURE_RAILS, mode="before")(
-        coerce_value_unit_input
-    )
+    _rail_value_unit = field_validator(*RAIL_NAMES, mode="before")(coerce_value_unit_input)
 
 
 class MetricBaseBoard(BaseModel):

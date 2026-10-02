@@ -30,7 +30,6 @@ from typing import Any, Optional
 import pytest
 
 from nodescraper.plugins.inband.amdsmi.amdsmidata import (
-    _METRIC_GPU_BOARD_TEMPERATURE_RAILS,
     AmdSmiDataModel,
     AmdSmiMetric,
     Fabric,
@@ -525,12 +524,12 @@ def test_metric_gpuboard_gpu_board_alias():
 
 def test_metric_gpuboard_all_rails_present():
     """Every known gpuboard rail is parsed when present, numeric or N/A."""
-    reference_payload = {
+    sample_payload = {
         name: (0 if i % 2 == 0 else "N/A")
-        for i, name in enumerate(_METRIC_GPU_BOARD_TEMPERATURE_RAILS)
+        for i, name in enumerate(MetricGpuBoardTemperature.RAIL_NAMES)
     }
-    board = MetricGpuBoardTemperature.model_validate(reference_payload)
-    for i, name in enumerate(_METRIC_GPU_BOARD_TEMPERATURE_RAILS):
+    board = MetricGpuBoardTemperature.model_validate(sample_payload)
+    for i, name in enumerate(MetricGpuBoardTemperature.RAIL_NAMES):
         rail = getattr(board, name)
         if i % 2 == 0:
             assert rail is not None and rail.value == 0
