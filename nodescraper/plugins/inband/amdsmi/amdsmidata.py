@@ -1066,6 +1066,8 @@ class AccessTable(Enum):
 
 
 # XGMI
+
+
 class XgmiLink(BaseModel):
     gpu: int
     bdf: str
@@ -1144,6 +1146,63 @@ class Topo(BaseModel):
     links: list[TopoLink]
 
 
+# FABRIC
+
+
+class FabricInfo(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    bdf: Optional[str] = None
+    version: Optional[int] = None
+    accelerator_id: Optional[int] = None
+    fabric_type: Optional[str] = None
+    bandwidth: Optional[ValueUnit] = None
+    latency: Optional[ValueUnit] = None
+    ppod_id: Optional[str] = None
+    ppod_size: Optional[int] = None
+    vpod_id: Optional[int] = None
+    vpod_size: Optional[int] = None
+    local_accelerators: Optional[Union[str, list[str]]] = None
+    local_active_accelerators: Optional[list[str]] = None
+    addr_mode: Optional[str] = None
+    accel_state: Optional[str] = None
+
+    na_validator = field_validator(
+        "bdf",
+        "version",
+        "accelerator_id",
+        "fabric_type",
+        "ppod_id",
+        "ppod_size",
+        "vpod_id",
+        "vpod_size",
+        "local_accelerators",
+        "local_active_accelerators",
+        "addr_mode",
+        "accel_state",
+        mode="before",
+    )(na_to_none)
+
+    value_unit_validator = field_validator("bandwidth", "latency", mode="before")(
+        coerce_value_unit_input
+    )
+
+
+class Fabric(BaseModel):
+    """Per GPU fabric data from ``amd-smi fabric``.
+
+    ``fabric_telemetry`` is intentionally not collected for now as it is very large.
+    """
+
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    gpu: int
+    bdf: Optional[str] = None
+    fabric_info: Optional[FabricInfo] = None
+
+    na_validator = field_validator("bdf", "fabric_info", mode="before")(na_to_none)
+
+
 class AmdSmiAnalysisRef(BaseModel):
     """Collector-filled summary for reference config"""
 
@@ -1189,6 +1248,7 @@ class AmdSmiDataModel(DataModel):
     metric: Optional[list[AmdSmiMetric]] = Field(default_factory=list)
     xgmi_metric: Optional[list[XgmiMetrics]] = Field(default_factory=list)
     xgmi_link: Optional[list[XgmiLinks]] = Field(default_factory=list)
+    fabric: Optional[list[Fabric]] = Field(default_factory=list)
     cper_data: Optional[list[FileModel]] = Field(default_factory=list)
     cper_afids: dict[str, int] = Field(default_factory=dict)
 
@@ -1240,6 +1300,15 @@ class AmdSmiDataModel(DataModel):
         if self.bad_pages is None:
             return None
         for item in self.bad_pages:
+            if item.gpu == gpu:
+                return item
+        return None
+
+    def get_fabric(self, gpu: int) -> Optional[Fabric]:
+        """Get the fabric data for the given gpu id."""
+        if self.fabric is None:
+            return None
+        for item in self.fabric:
             if item.gpu == gpu:
                 return item
         return None

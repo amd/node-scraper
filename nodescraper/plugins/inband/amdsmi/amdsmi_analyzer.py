@@ -24,6 +24,7 @@
 #
 ###############################################################################
 import io
+import math
 from collections import defaultdict
 from typing import Any, Mapping, Optional, Union
 
@@ -36,6 +37,7 @@ from .amdsmidata import (
     AmdSmiMetric,
     AmdSmiStatic,
     EccData,
+    Fabric,
     Fw,
     LinkStatusTable,
     Partition,
@@ -79,6 +81,15 @@ def _gpu_unavailable_description(
     else:
         description = f"{check_name} not available on {gpu_text}"
     return description, description
+
+
+def _is_all_zeros(value: Union[str, list[str]]) -> bool:
+    """Return True if every comma or space separated entry is zero."""
+    values = value if isinstance(value, list) else [value]
+    tokens = [tok for item in values for tok in str(item).replace(",", " ").split()]
+    if not tokens:
+        return False
+    return all(set(tok) == {"0"} for tok in tokens)
 
 
 def _static_mismatch_description(payload: dict[str, Any]) -> tuple[str, str]:
@@ -445,20 +456,10 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
 
     def check_gpu_memory(
         self,
-        amdsmi_metric_data: Optional[list[AmdSmiMetric]],
+        amdsmi_metric_data: list[AmdSmiMetric],
         minimum_available_percent: float,
     ) -> None:
         """Check the minimum free VRAM percentage for each GPU."""
-        if amdsmi_metric_data is None or len(amdsmi_metric_data) == 0:
-            self._log_event(
-                category=EventCategory.PLATFORM,
-                description="No AMD SMI metric data available",
-                priority=EventPriority.WARNING,
-                data={"amdsmi_metric_data": amdsmi_metric_data},
-                console_log=True,
-            )
-            return
-
         for metric in amdsmi_metric_data:
             memory = metric.mem_usage
             total_vram = memory.total_vram if memory is not None else None
@@ -474,7 +475,7 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
             if total_vram is None or free_vram is None:
                 self._log_event(
                     category=EventCategory.PLATFORM,
-                    description=f"GPU {metric.gpu} VRAM availability is not available",
+                    description=f"GPU {metric.gpu} VRAM information is unavailable",
                     priority=EventPriority.WARNING,
                     data=values,
                     console_log=True,
@@ -487,17 +488,29 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
             except (TypeError, ValueError):
                 self._log_event(
                     category=EventCategory.PLATFORM,
-                    description=f"GPU {metric.gpu} VRAM availability is invalid",
+                    description=(
+                        f"GPU {metric.gpu} was not able to parse available VRAM from memory usage"
+                    ),
                     priority=EventPriority.WARNING,
                     data=values,
                     console_log=True,
                 )
                 continue
 
-            if total_value <= 0:
+            if (
+                not math.isfinite(total_value)
+                or not math.isfinite(free_value)
+                or total_value <= 0
+                or free_value < 0
+                or total_vram.unit != free_vram.unit
+            ):
                 self._log_event(
                     category=EventCategory.PLATFORM,
-                    description=f"GPU {metric.gpu} total VRAM is invalid",
+                    description=(
+                        f"GPU {metric.gpu} VRAM values are invalid "
+                        f"(total={total_vram.value} {total_vram.unit}, "
+                        f"free={free_vram.value} {free_vram.unit})"
+                    ),
                     priority=EventPriority.WARNING,
                     data=values,
                     console_log=True,
@@ -1102,6 +1115,11 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                     data.metric,
                     args.l0_to_recovery_count_error_threshold,
                     args.l0_to_recovery_count_warning_threshold or 1,
+                )
+            if args.gpu_memory:
+                self.check_gpu_memory(
+                    data.metric,
+                    args.gpu_memory.minimum_available_percent,
                 )
             self.check_amdsmi_metric_ecc_totals(data.metric)
             self.check_amdsmi_metric_ecc(data.metric)

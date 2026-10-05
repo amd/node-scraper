@@ -1,0 +1,6 @@
+
+Node,Attributes,BankLabel,Capacity,Caption,ConfiguredClockSpeed,ConfiguredVoltage,CreationClassName,DataWidth,Description,DeviceLocator,FormFactor,HotSwappable,InstallDate,InterleaveDataDepth,InterleavePosition,Manufacturer,MaxVoltage,MemoryType,MinVoltage,Model,Name,OtherIdentifyingInfo,PartNumber,PositionInRow,PoweredOn,Removable,Replaceable,SerialNumber,SKU,SMBIOSMemoryType,Speed,Status,Tag,TotalWidth,TypeDetail,Version
+MKMGRAEPAUL01,2,P0 CHANNEL A,8589934592,Physical Memory,6400,500,Win32_PhysicalMemory,32,Physical Memory,DIMM 0,1,,,,,Micron Technology,500,0,500,,Physical Memory,,MT62F2G32D8DR-031 WT,,,,,00000000,,35,6400,,Physical Memory 0,32,16512,
+MKMGRAEPAUL01,2,P0 CHANNEL B,8589934592,Physical Memory,6400,500,Win32_PhysicalMemory,32,Physical Memory,DIMM 0,1,,,,,Micron Technology,500,0,500,,Physical Memory,,MT62F2G32D8DR-031 WT,,,,,00000000,,35,6400,,Physical Memory 1,32,16512,
+MKMGRAEPAUL01,2,P0 CHANNEL C,8589934592,Physical Memory,6400,500,Win32_PhysicalMemory,32,Physical Memory,DIMM 0,1,,,,,Micron Technology,500,0,500,,Physical Memory,,MT62F2G32D8DR-031 WT,,,,,00000000,,35,6400,,Physical Memory 2,32,16512,
+MKMGRAEPAUL01,2,P0 CHANNEL D,8589934592,Physical Memory,6400,500,Win32_PhysicalMemory,32,Physical Memory,DIMM 0,1,,,,,Micron Technology,500,0,500,,Physical Memory,,MT62F2G32D8DR-031 WT,,,,,00000000,,35,6400,,Physical Memory 3,32,16512,
