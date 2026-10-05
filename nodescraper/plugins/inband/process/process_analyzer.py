@@ -34,7 +34,7 @@ from .processdata import ProcessDataModel
 
 
 class ProcessAnalyzer(DataAnalyzer[ProcessDataModel, ProcessAnalyzerArgs]):
-    """Check cpu and kfd processes are within allowed maximum cpu and gpu usage"""
+    """Check aggregate CPU usage against the configured maximum."""
 
     DATA_MODEL = ProcessDataModel
 
@@ -42,8 +42,7 @@ class ProcessAnalyzer(DataAnalyzer[ProcessDataModel, ProcessAnalyzerArgs]):
         self, data: ProcessDataModel, args: Optional[ProcessAnalyzerArgs] = None
     ) -> TaskResult:
         """
-        Analyze the process data to check if the number of KFD processes and CPU usage
-        are within the allowed limits.
+        Analyze whether aggregate CPU usage is within the allowed limit.
 
         Args:
             data (ProcessDataModel): The process data to analyze.
@@ -56,19 +55,6 @@ class ProcessAnalyzer(DataAnalyzer[ProcessDataModel, ProcessAnalyzerArgs]):
             args = ProcessAnalyzerArgs()
 
         has_errors = False
-        if data.kfd_process is not None and data.kfd_process > args.max_kfd_processes:
-            has_errors = True
-            self._log_event(
-                category=EventCategory.OS,
-                description=f"Kfd processes {data.kfd_process} exeed max limit {args.max_kfd_processes}",
-                data={
-                    "kfd_process": data.kfd_process,
-                    "kfd_process_limit": args.max_kfd_processes,
-                },
-                priority=EventPriority.CRITICAL,
-                console_log=True,
-            )
-
         if data.cpu_usage is not None and data.cpu_usage > args.max_cpu_usage:
             has_errors = True
             self._log_event(

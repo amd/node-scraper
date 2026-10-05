@@ -38,6 +38,13 @@ class PowerConfig(BaseModel):
     power_cap_mismatch_allowed: bool = Field(
         default=False,
         description="Whether different GPU power caps are allowed.",
+class GpuMemoryConfig(BaseModel):
+    """GPU VRAM availability threshold."""
+
+    minimum_available_percent: float = Field(
+        ge=0,
+        le=100,
+        description="Minimum free VRAM percentage required for each GPU.",
     )
 
 
@@ -76,6 +83,10 @@ class AmdSmiAnalyzerArgs(AnalyzerArgs):
         default=None,
         description="Expected firmware versions keyed by amd-smi fw_id (e.g. PLDM_BUNDLE).",
     )
+    gpu_memory: Optional[GpuMemoryConfig] = Field(
+        default=None,
+        description="Minimum free VRAM threshold to validate for each GPU.",
+    )
     l0_to_recovery_count_error_threshold: Optional[int] = Field(
         default=3,
         description="L0-to-recovery count above which an error is raised.",
@@ -95,6 +106,12 @@ class AmdSmiAnalyzerArgs(AnalyzerArgs):
     sku_name: Optional[str] = Field(default=None, description="Expected SKU name string for GPU.")
     expected_xgmi_speed: Optional[list[float]] = Field(
         default=None, description="Expected xGMI speed value(s) (e.g. link rate)."
+    )
+    expected_accel_state: str = Field(
+        default="ACTIVE", description="Expected amd-smi fabric accel_state value."
+    )
+    expected_fabric_type: str = Field(
+        default="UALOE", description="Expected amd-smi fabric fabric_type value."
     )
     analysis_range_start: Optional[datetime] = Field(
         default=None, description="Start of time range for time-windowed analysis."

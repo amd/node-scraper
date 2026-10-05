@@ -31,6 +31,7 @@ from nodescraper.base.regexanalyzer import ErrorRegex
 from nodescraper.enums.eventcategory import EventCategory
 from nodescraper.enums.eventpriority import EventPriority
 from nodescraper.enums.executionstatus import ExecutionStatus
+from nodescraper.models.systeminfo import OSFamily
 from nodescraper.plugins.inband.dmesg.analyzer_args import DmesgAnalyzerArgs
 from nodescraper.plugins.inband.dmesg.dmesg_analyzer import DmesgAnalyzer
 from nodescraper.plugins.inband.dmesg.dmesgdata import DmesgData
@@ -1435,3 +1436,75 @@ def test_mce_match_content_is_single_status_line(system_info):
     assert "CPU:29" in match_content
     assert "CPU:8" not in match_content
     assert "\n" not in match_content
+
+
+# --- ESXi ------------------------------------------------------------------
+
+
+def test_esxi_analyzer_uses_esxi_timestamp_pattern(system_info):
+    """On ESXi the analyzer swaps in the vmkernel.log (dot-ms/Z) timestamp pattern."""
+    system_info.os_family = OSFamily.ESXI
+    analyzer = DmesgAnalyzer(system_info=system_info)
+    assert analyzer._is_esxi() is True
+    assert analyzer.TIMESTAMP_PATTERN is DmesgAnalyzer.ESXI_TIMESTAMP_PATTERN
+
+    system_info.os_family = OSFamily.LINUX
+    linux_analyzer = DmesgAnalyzer(system_info=system_info)
+    assert linux_analyzer._is_esxi() is False
+    assert linux_analyzer.TIMESTAMP_PATTERN is not DmesgAnalyzer.ESXI_TIMESTAMP_PATTERN
+
+
+def test_filter_dmesg_handles_esxi_and_linux_timestamps():
+    """filter_dmesg accepts both ESXi dot-ms/Z and Linux comma-form timestamps."""
+    esxi_log = (
+        "2026-08-20T08:00:00.100Z -INFO vmkernel - line A\n"
+        "2026-08-20T09:00:00.100Z -INFO vmkernel - line B\n"
+        "2026-08-20T10:00:00.100Z -INFO vmkernel - line C\n"
+    )
+    start = datetime.datetime.fromisoformat("2026-08-20T08:30:00+00:00")
+    end = datetime.datetime.fromisoformat("2026-08-20T09:30:00+00:00")
+    filtered = DmesgAnalyzer.filter_dmesg(esxi_log, start, end)
+    assert filtered.strip() == "2026-08-20T09:00:00.100Z -INFO vmkernel - line B"
+
+    # Linux comma-form still filters (no regression).
+    linux_log = "2024-10-01T07:00:00,000000-05:00 log1\n" "2024-10-01T09:00:00,000000-05:00 log2\n"
+    l_start = datetime.datetime.fromisoformat("2024-10-01T08:00:00-05:00")
+    assert "log2" in DmesgAnalyzer.filter_dmesg(linux_log, l_start)
+    assert "log1" not in DmesgAnalyzer.filter_dmesg(linux_log, l_start)
+
+
+def test_esxi_ras_regex_phrasing(system_info):
+    """ESXi mxGPU RAS phrasing ('... detected in <Block> Block.') is flagged as RAS."""
+    system_info.os_family = OSFamily.ESXI
+    analyzer = DmesgAnalyzer(system_info=system_info)
+    data = DmesgData(
+        dmesg_content=(
+            "2026-08-20T09:35:58.380Z -ALERT vmkernel - "
+            "3 new uncorrectable hardware errors detected in MMHUB Block.\n"
+            "2026-08-20T09:35:59.000Z -ALERT vmkernel - GPU detected ECC Fatal Error.\n"
+        ),
+        skip_log_file=True,
+    )
+    res = analyzer.analyze_data(data)
+    by_desc = {e.description: e for e in res.events}
+    assert "RAS Uncorrectable Error" in by_desc
+    assert "RAS ECC Fatal Error" in by_desc
+    assert by_desc["RAS Uncorrectable Error"].category == EventCategory.RAS.value
+
+
+def test_esxi_unknown_error_uses_driver_body_severity(system_info):
+    """On ESXi the unknown-error signal is the driver-body severity (gim/amdgpuv),
+    not the unreliable vmkernel -ALERT/-INFO token."""
+    system_info.os_family = OSFamily.ESXI
+    analyzer = DmesgAnalyzer(system_info=system_info)
+    data = DmesgData(
+        dmesg_content=(
+            "2026-08-20T09:35:58.380Z -INFO vmkernel - amdgpuv error [0:65:0]: unexpected thing\n"
+            "2026-08-20T09:35:59.000Z -ALERT vmkernel - benign boot notice, no driver marker\n"
+        ),
+        skip_log_file=True,
+    )
+    res = analyzer.analyze_data(data)
+    unknown = [e for e in res.events if e.description == "Unknown dmesg error"]
+    assert len(unknown) == 1
+    assert "unexpected thing" in str(unknown[0].data["match_content"])

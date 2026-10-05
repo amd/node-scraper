@@ -124,3 +124,19 @@ def test_redfish_oem_diag_collector_passes_args_to_connection(
     assert call_kw["oem_diagnostic_type"] == "JournalControl"
     assert call_kw["task_timeout_s"] == 300
     assert call_kw["output_dir"] is None
+
+
+@patch("nodescraper.plugins.ooband.redfish_oem_diag.oem_diag_collector.collect_oem_diagnostic_data")
+def test_redfish_oem_diag_collector_output_dir_is_diag_logs(
+    mock_collect, system_info, redfish_conn_mock, tmp_path
+):
+    mock_collect.return_value = (b"log bytes", {}, None)
+    collector = RedfishOemDiagCollector(
+        system_info=system_info,
+        connection=redfish_conn_mock,
+        log_path=str(tmp_path),
+    )
+    collector.collect_data(args=RedfishOemDiagCollectorArgs(oem_diagnostic_types=["AllLogs"]))
+    output_dir = mock_collect.call_args.kwargs["output_dir"]
+    assert output_dir == (tmp_path / "diag_logs").resolve()
+    assert not output_dir.exists()

@@ -32,27 +32,49 @@ from nodescraper.utils import resolve_log_dir_name
 
 
 class FileSystemLogHook(TaskResultHook):
-    def __init__(self, log_base_path=None, **kwargs) -> None:
+    def __init__(self, log_base_path=None, include_task_path: bool = True, **kwargs) -> None:
         """Create a FileSystemLogHook Instance
 
         Args:
             log_base_path (Optional[str], optional): The base path where logs will be stored. Defaults to the current working directory.
+            include_task_path: Append parent and task directory names when True.
             **kwargs: Additional keyword arguments, which are not used.
         """
         if log_base_path is None:
             log_base_path = os.getcwd()
 
         self.log_base_path = log_base_path
+        self.include_task_path = include_task_path
 
     def process_result(self, task_result: TaskResult, data: Optional[DataModel] = None, **kwargs):
         """Log task result to the filesystem (single events.json per directory)."""
         log_path = self.log_base_path
-        if task_result.parent:
-            log_path = os.path.join(log_path, resolve_log_dir_name(task_result.parent))
-        if task_result.task:
-            log_path = os.path.join(log_path, resolve_log_dir_name(task_result.task))
+        if self.include_task_path:
+            if task_result.parent:
+                log_path = os.path.join(log_path, resolve_log_dir_name(task_result.parent))
+            if task_result.task:
+                log_path = os.path.join(log_path, resolve_log_dir_name(task_result.task))
 
         task_result.log_result(log_path)
 
         if data:
             data.log_model(log_path)
+
+
+def hooks_for_fixed_directory(hooks: list, directory: str) -> list:
+    """Point filesystem log hooks at one directory.
+
+    Args:
+        hooks: Hooks copied from the parent task.
+        directory: Directory that should receive this task's logs.
+
+    Returns:
+        list: Hooks with filesystem logs written directly into directory.
+    """
+    rewritten = []
+    for hook in hooks:
+        if isinstance(hook, FileSystemLogHook):
+            rewritten.append(FileSystemLogHook(log_base_path=directory, include_task_path=False))
+        else:
+            rewritten.append(hook)
+    return rewritten
