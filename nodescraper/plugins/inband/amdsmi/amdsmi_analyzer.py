@@ -284,15 +284,31 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
             return
 
         expected_power_cap = next(iter(power_caps.values()))
-        for gpu, power_cap in power_caps.items():
-            if power_cap != expected_power_cap:
-                self._log_event(
-                    category=EventCategory.PLATFORM,
-                    description=f"Power cap inconsistency for gpu {gpu}",
-                    priority=EventPriority.ERROR,
-                    data={"power_caps": list(power_caps.values())},
-                    console_log=True,
-                )
+        mismatched_power_caps = {
+            gpu: power_cap
+            for gpu, power_cap in power_caps.items()
+            if power_cap != expected_power_cap
+        }
+        if mismatched_power_caps:
+            desc, details = _gpu_mismatch_description(
+                "GPU power cap",
+                expected_power_cap,
+                mismatched_power_caps,
+                unit=" W",
+            )
+            self._log_event(
+                category=EventCategory.PLATFORM,
+                description=desc,
+                priority=EventPriority.ERROR,
+                data={
+                    "gpus": list(mismatched_power_caps.keys()),
+                    "power_caps": power_caps,
+                    "mismatched_power_caps": mismatched_power_caps,
+                    "expected_power_cap": expected_power_cap,
+                    "details": details,
+                },
+                console_log=True,
+            )
 
     def check_expected_driver_version(
         self,

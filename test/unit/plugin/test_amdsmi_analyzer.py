@@ -351,8 +351,30 @@ def test_check_power_cap_consistency_mismatch(mock_analyzer):
     assert len(analyzer.result.events) == 1
     assert analyzer.result.events[0].category == "PLATFORM"
     assert analyzer.result.events[0].priority == EventPriority.ERROR
-    assert "Power cap inconsistency for gpu 1" in analyzer.result.events[0].description
-    assert analyzer.result.events[0].data["power_caps"] == [550.0, 450.0]
+    assert "GPU power cap mismatch" in analyzer.result.events[0].description
+    assert "GPU 1=450.0 W" in analyzer.result.events[0].description
+    assert analyzer.result.events[0].data["power_caps"] == {0: 550.0, 1: 450.0}
+    assert analyzer.result.events[0].data["mismatched_power_caps"] == {1: 450.0}
+    assert analyzer.result.events[0].data["expected_power_cap"] == 550.0
+
+
+def test_check_power_cap_consistency_multiple_mismatches(mock_analyzer):
+    """Every differing power cap is reported in a single event."""
+    analyzer = mock_analyzer
+    static_data = [create_static_gpu(gpu, max_power=float(500 + gpu * 10)) for gpu in range(8)]
+
+    analyzer.check_power_cap_consistency(
+        static_data,
+        PowerConfig(power_cap_mismatch_allowed=False),
+    )
+
+    assert len(analyzer.result.events) == 1
+    event = analyzer.result.events[0]
+    assert event.priority == EventPriority.ERROR
+    assert event.data["gpus"] == [1, 2, 3, 4, 5, 6, 7]
+    assert event.data["expected_power_cap"] == 500.0
+    assert "GPU 1=510.0 W" in event.description
+    assert "GPU 7=570.0 W" in event.description
 
 
 def test_check_power_cap_consistency_allowed(mock_analyzer):
