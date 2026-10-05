@@ -37,7 +37,6 @@ from .amdsmidata import (
     AmdSmiMetric,
     AmdSmiStatic,
     EccData,
-    Fabric,
     Fw,
     LinkStatusTable,
     Partition,
@@ -456,10 +455,18 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
 
     def check_gpu_memory(
         self,
-        amdsmi_metric_data: list[AmdSmiMetric],
+        amdsmi_metric_data: Optional[list[AmdSmiMetric]],
         minimum_available_percent: float,
     ) -> None:
         """Check the minimum free VRAM percentage for each GPU."""
+        if amdsmi_metric_data is None or len(amdsmi_metric_data) == 0:
+            self._log_event(
+                category=EventCategory.PLATFORM,
+                description="No AMD SMI metric data available",
+                priority=EventPriority.WARNING,
+                data={"amdsmi_metric_data": amdsmi_metric_data},
+            )
+            return
         for metric in amdsmi_metric_data:
             memory = metric.mem_usage
             total_vram = memory.total_vram if memory is not None else None
@@ -1115,11 +1122,6 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                     data.metric,
                     args.l0_to_recovery_count_error_threshold,
                     args.l0_to_recovery_count_warning_threshold or 1,
-                )
-            if args.gpu_memory:
-                self.check_gpu_memory(
-                    data.metric,
-                    args.gpu_memory.minimum_available_percent,
                 )
             self.check_amdsmi_metric_ecc_totals(data.metric)
             self.check_amdsmi_metric_ecc(data.metric)
