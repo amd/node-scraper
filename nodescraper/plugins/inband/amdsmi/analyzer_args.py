@@ -38,6 +38,9 @@ class PowerConfig(BaseModel):
     power_cap_mismatch_allowed: bool = Field(
         default=False,
         description="Whether different GPU power caps are allowed.",
+    )
+
+
 class GpuMemoryConfig(BaseModel):
     """GPU VRAM availability threshold."""
 
