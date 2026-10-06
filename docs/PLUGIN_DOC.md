@@ -5,12 +5,12 @@
 | Plugin | Collection | Analyzer Args | Collection Args | DataModel | Collector | Analyzer |
 | --- | --- | --- | --- | --- | --- | --- |
 | GenericCollectionPlugin | Runs each command from collection_args.commands on the target (in-band host or BMC over OOB SSH).<br>Commands are user-configured; there are no fixed CMD_\* class fields. | **Analyzer Args:**<br>- `checks`: list[nodescraper.plugins.generic_collection.analyzer_args.CommandCheck] — Per-command validation rules keyed by collected command name. | **Collection Args:**<br>- `html_view`: bool — When true, include logged command artifacts in command_artifacts.html using human-readable output.<br>- `commands`: list[nodescraper.plugins.generic_collection.collector_args.CommandSpec] — Named commands to run. Each entry must include 'name' and 'command'. Prefer small textual stdout; see class docstring...<br>- `sudo`: bool — Default sudo setting for commands that do not specify sudo.<br>- `timeout`: int — Default per-command timeout in seconds.<br>- `include_stdout`: bool — Default: include each command's stdout in collected results for analysis. When false, stdout is omitted from stored r... | [GenericCollectionDataModel](#GenericCollectionDataModel-Model) | [GenericCollectionCollector](#Collector-Class-GenericCollectionCollector) | [GenericAnalyzer](#Data-Analyzer-Class-GenericAnalyzer) |
-| AmdSmiFlavorPlugin | bad-pages<br>firmware --json<br>list --json<br>metric -g all<br>partition --json<br>process --json<br>ras --cper --folder={folder}<br>ras --afid --cper-file {cper_file}<br>static -g all --json<br>static -g {gpu_id} --json<br>topology<br>version --json<br>xgmi -l<br>xgmi -m | **Analyzer Args:**<br>- `check_static_data`: bool — If True, run static data checks (e.g. driver version, partition mode).<br>- `expected_gpu_processes`: Optional[int] — Expected number of GPU processes.<br>- `expected_max_power`: Optional[int] — Expected maximum power value (e.g. watts).<br>- `expected_power_management`: Optional[str] — Expected amd-smi metric power_management value per GPU (e.g. DISABLED for active/full power, ENABLED for power-manage...<br>- `expected_driver_version`: Optional[str] — Expected AMD driver version string.<br>- `expected_memory_partition_mode`: Optional[str] — Expected memory partition mode (e.g. sp3, dp).<br>- `expected_compute_partition_mode`: Optional[str] — Expected compute partition mode.<br>- `expected_firmware_versions`: Optional[dict[str, str]] — Expected firmware versions keyed by amd-smi fw_id (e.g. PLDM_BUNDLE).<br>- `l0_to_recovery_count_error_threshold`: Optional[int] — L0-to-recovery count above which an error is raised.<br>- `l0_to_recovery_count_warning_threshold`: Optional[int] — L0-to-recovery count above which a warning is raised.<br>- `vendorid_ep`: Optional[str] — Expected endpoint vendor ID (e.g. for PCIe).<br>- `vendorid_ep_vf`: Optional[str] — Expected endpoint VF vendor ID.<br>- `devid_ep`: Optional[str] — Expected endpoint device ID.<br>- `devid_ep_vf`: Optional[str] — Expected endpoint VF device ID.<br>- `sku_name`: Optional[str] — Expected SKU name string for GPU.<br>- `expected_xgmi_speed`: Optional[list[float]] — Expected xGMI speed value(s) (e.g. link rate).<br>- `analysis_range_start`: Optional[datetime.datetime] — Start of time range for time-windowed analysis.<br>- `analysis_range_end`: Optional[datetime.datetime] — End of time range for time-windowed analysis. | **Collection Args:**<br>- `html_view`: bool — When true, include logged command artifacts in command_artifacts.html using human-readable output.<br>- `analysis_firmware_ids`: Optional[list[str]] — amd-smi fw_id values to record in analysis_ref.firmware_versions<br>- `cper_file_path`: Optional[str] — Path to CPER folder or file for RAS AFID collection (ras --afid --cper-file). | [AmdSmiFlavorDataModel](#AmdSmiFlavorDataModel-Model) | [AmdSmiFlavorCollector](#Collector-Class-AmdSmiFlavorCollector) | [AmdSmiAnalyzer](#Data-Analyzer-Class-AmdSmiAnalyzer) |
-| AmdSmiPlugin | bad-pages<br>firmware --json<br>list --json<br>metric -g all<br>partition --json<br>process --json<br>ras --cper --folder={folder}<br>ras --afid --cper-file {cper_file}<br>static -g all --json<br>static -g {gpu_id} --json<br>topology<br>version --json<br>xgmi -l<br>xgmi -m | **Analyzer Args:**<br>- `check_static_data`: bool — If True, run static data checks (e.g. driver version, partition mode).<br>- `expected_gpu_processes`: Optional[int] — Expected number of GPU processes.<br>- `expected_max_power`: Optional[int] — Expected maximum power value (e.g. watts).<br>- `expected_power_management`: Optional[str] — Expected amd-smi metric power_management value per GPU (e.g. DISABLED for active/full power, ENABLED for power-manage...<br>- `expected_driver_version`: Optional[str] — Expected AMD driver version string.<br>- `expected_memory_partition_mode`: Optional[str] — Expected memory partition mode (e.g. sp3, dp).<br>- `expected_compute_partition_mode`: Optional[str] — Expected compute partition mode.<br>- `expected_firmware_versions`: Optional[dict[str, str]] — Expected firmware versions keyed by amd-smi fw_id (e.g. PLDM_BUNDLE).<br>- `l0_to_recovery_count_error_threshold`: Optional[int] — L0-to-recovery count above which an error is raised.<br>- `l0_to_recovery_count_warning_threshold`: Optional[int] — L0-to-recovery count above which a warning is raised.<br>- `vendorid_ep`: Optional[str] — Expected endpoint vendor ID (e.g. for PCIe).<br>- `vendorid_ep_vf`: Optional[str] — Expected endpoint VF vendor ID.<br>- `devid_ep`: Optional[str] — Expected endpoint device ID.<br>- `devid_ep_vf`: Optional[str] — Expected endpoint VF device ID.<br>- `sku_name`: Optional[str] — Expected SKU name string for GPU.<br>- `expected_xgmi_speed`: Optional[list[float]] — Expected xGMI speed value(s) (e.g. link rate).<br>- `analysis_range_start`: Optional[datetime.datetime] — Start of time range for time-windowed analysis.<br>- `analysis_range_end`: Optional[datetime.datetime] — End of time range for time-windowed analysis. | **Collection Args:**<br>- `html_view`: bool — When true, include logged command artifacts in command_artifacts.html using human-readable output.<br>- `analysis_firmware_ids`: Optional[list[str]] — amd-smi fw_id values to record in analysis_ref.firmware_versions<br>- `cper_file_path`: Optional[str] — Path to CPER folder or file for RAS AFID collection (ras --afid --cper-file). | [AmdSmiDataModel](#AmdSmiDataModel-Model) | [AmdSmiCollector](#Collector-Class-AmdSmiCollector) | [AmdSmiAnalyzer](#Data-Analyzer-Class-AmdSmiAnalyzer) |
+| AmdSmiFlavorPlugin | bad-pages<br>fabric<br>firmware<br>list<br>metric -g all<br>metric --core all<br>metric --cpu all<br>node<br>partition<br>process<br>ras --cper --folder={folder}<br>ras --afid --cper-file {cper_file}<br>static -g all<br>static -g {gpu_id}<br>topology<br>version<br>xgmi -l<br>xgmi -m | **Analyzer Args:**<br>- `check_static_data`: bool — If True, run static data checks (e.g. driver version, partition mode).<br>- `expected_gpu_processes`: Optional[int] — Expected number of GPU processes.<br>- `expected_max_power`: Optional[int] — Expected maximum power value (e.g. watts).<br>- `expected_power_management`: Optional[str] — Expected amd-smi metric power_management value per GPU (e.g. DISABLED for active/full power, ENABLED for power-manage...<br>- `expected_driver_version`: Optional[str] — Expected AMD driver version string.<br>- `expected_memory_partition_mode`: Optional[str] — Expected memory partition mode (e.g. sp3, dp).<br>- `expected_compute_partition_mode`: Optional[str] — Expected compute partition mode.<br>- `expected_firmware_versions`: Optional[dict[str, str]] — Expected firmware versions keyed by amd-smi fw_id (e.g. PLDM_BUNDLE).<br>- `gpu_memory`: Optional[nodescraper.plugins.inband.amdsmi.analyzer_args.GpuMemoryConfig] — Minimum free VRAM threshold to validate for each GPU.<br>- `l0_to_recovery_count_error_threshold`: Optional[int] — L0-to-recovery count above which an error is raised.<br>- `l0_to_recovery_count_warning_threshold`: Optional[int] — L0-to-recovery count above which a warning is raised.<br>- `vendorid_ep`: Optional[str] — Expected endpoint vendor ID (e.g. for PCIe).<br>- `vendorid_ep_vf`: Optional[str] — Expected endpoint VF vendor ID.<br>- `devid_ep`: Optional[str] — Expected endpoint device ID.<br>- `devid_ep_vf`: Optional[str] — Expected endpoint VF device ID.<br>- `sku_name`: Optional[str] — Expected SKU name string for GPU.<br>- `expected_xgmi_speed`: Optional[list[float]] — Expected xGMI speed value(s) (e.g. link rate).<br>- `expected_accel_state`: str — Expected amd-smi fabric accel_state value.<br>- `expected_fabric_type`: str — Expected amd-smi fabric fabric_type value.<br>- `analysis_range_start`: Optional[datetime.datetime] — Start of time range for time-windowed analysis.<br>- `analysis_range_end`: Optional[datetime.datetime] — End of time range for time-windowed analysis. | **Collection Args:**<br>- `html_view`: bool — When true, include logged command artifacts in command_artifacts.html using human-readable output.<br>- `analysis_firmware_ids`: Optional[list[str]] — amd-smi fw_id values to record in analysis_ref.firmware_versions<br>- `cper_file_path`: Optional[str] — Path to CPER folder or file for RAS AFID collection (ras --afid --cper-file). | [AmdSmiFlavorDataModel](#AmdSmiFlavorDataModel-Model) | [AmdSmiFlavorCollector](#Collector-Class-AmdSmiFlavorCollector) | [AmdSmiAnalyzer](#Data-Analyzer-Class-AmdSmiAnalyzer) |
+| AmdSmiPlugin | bad-pages<br>fabric<br>firmware<br>list<br>metric -g all<br>metric --core all<br>metric --cpu all<br>node<br>partition<br>process<br>ras --cper --folder={folder}<br>ras --afid --cper-file {cper_file}<br>static -g all<br>static -g {gpu_id}<br>topology<br>version<br>xgmi -l<br>xgmi -m | **Analyzer Args:**<br>- `check_static_data`: bool — If True, run static data checks (e.g. driver version, partition mode).<br>- `expected_gpu_processes`: Optional[int] — Expected number of GPU processes.<br>- `expected_max_power`: Optional[int] — Expected maximum power value (e.g. watts).<br>- `expected_power_management`: Optional[str] — Expected amd-smi metric power_management value per GPU (e.g. DISABLED for active/full power, ENABLED for power-manage...<br>- `expected_driver_version`: Optional[str] — Expected AMD driver version string.<br>- `expected_memory_partition_mode`: Optional[str] — Expected memory partition mode (e.g. sp3, dp).<br>- `expected_compute_partition_mode`: Optional[str] — Expected compute partition mode.<br>- `expected_firmware_versions`: Optional[dict[str, str]] — Expected firmware versions keyed by amd-smi fw_id (e.g. PLDM_BUNDLE).<br>- `gpu_memory`: Optional[nodescraper.plugins.inband.amdsmi.analyzer_args.GpuMemoryConfig] — Minimum free VRAM threshold to validate for each GPU.<br>- `l0_to_recovery_count_error_threshold`: Optional[int] — L0-to-recovery count above which an error is raised.<br>- `l0_to_recovery_count_warning_threshold`: Optional[int] — L0-to-recovery count above which a warning is raised.<br>- `vendorid_ep`: Optional[str] — Expected endpoint vendor ID (e.g. for PCIe).<br>- `vendorid_ep_vf`: Optional[str] — Expected endpoint VF vendor ID.<br>- `devid_ep`: Optional[str] — Expected endpoint device ID.<br>- `devid_ep_vf`: Optional[str] — Expected endpoint VF device ID.<br>- `sku_name`: Optional[str] — Expected SKU name string for GPU.<br>- `expected_xgmi_speed`: Optional[list[float]] — Expected xGMI speed value(s) (e.g. link rate).<br>- `expected_accel_state`: str — Expected amd-smi fabric accel_state value.<br>- `expected_fabric_type`: str — Expected amd-smi fabric fabric_type value.<br>- `analysis_range_start`: Optional[datetime.datetime] — Start of time range for time-windowed analysis.<br>- `analysis_range_end`: Optional[datetime.datetime] — End of time range for time-windowed analysis. | **Collection Args:**<br>- `html_view`: bool — When true, include logged command artifacts in command_artifacts.html using human-readable output.<br>- `analysis_firmware_ids`: Optional[list[str]] — amd-smi fw_id values to record in analysis_ref.firmware_versions<br>- `cper_file_path`: Optional[str] — Path to CPER folder or file for RAS AFID collection (ras --afid --cper-file). | [AmdSmiDataModel](#AmdSmiDataModel-Model) | [AmdSmiCollector](#Collector-Class-AmdSmiCollector) | [AmdSmiAnalyzer](#Data-Analyzer-Class-AmdSmiAnalyzer) |
 | BiosPlugin | sh -c 'cat /sys/devices/virtual/dmi/id/bios_version'<br>smbiosDump &#124; grep -A5 'BIOS Info (Type 0)' &#124; grep 'Version:' &#124; head -1<br>wmic bios get SMBIOSBIOSVersion /Value | **Analyzer Args:**<br>- `exp_bios_version`: list[str] — Expected BIOS version(s) to match against collected value (str or list).<br>- `regex_match`: bool — If True, match exp_bios_version as regex; otherwise exact match. | - | [BiosDataModel](#BiosDataModel-Model) | [BiosCollector](#Collector-Class-BiosCollector) | [BiosAnalyzer](#Data-Analyzer-Class-BiosAnalyzer) |
 | CmdlinePlugin | cat /proc/cmdline | **Analyzer Args:**<br>- `required_cmdline`: Union[str, List] — Command-line parameters that must be present (e.g. 'pci=bfsort').<br>- `banned_cmdline`: Union[str, List] — Command-line parameters that must not be present.<br>- `os_overrides`: Dict[str, nodescraper.plugins.inband.cmdline.cmdlineconfig.OverrideConfig] — Per-OS overrides for required_cmdline and banned_cmdline (keyed by OS identifier).<br>- `platform_overrides`: Dict[str, nodescraper.plugins.inband.cmdline.cmdlineconfig.OverrideConfig] — Per-platform overrides for required_cmdline and banned_cmdline (keyed by platform). | - | [CmdlineDataModel](#CmdlineDataModel-Model) | [CmdlineCollector](#Collector-Class-CmdlineCollector) | [CmdlineAnalyzer](#Data-Analyzer-Class-CmdlineAnalyzer) |
 | DeviceEnumerationPlugin | esxcli hardware cpu global get &#124; awk '/CPU Packages:/ {print $NF}'<br>powershell -Command "(Get-WmiObject -Class Win32_Processor &#124; Measure-Object).Count"<br>lspci -d {vendorid_ep}: &#124; grep -iE 'VGA&#124;Display&#124;3D&#124;Processing accelerators&#124;Co-processor&#124;Accelerator' &#124; grep -vi 'Virtual Function' &#124; wc -l<br>powershell -Command "(wmic path win32_VideoController get name &#124; findstr AMD &#124; Measure-Object).Count"<br>lscpu<br>lshw<br>esxcli hardware pci list &#124; grep -iE '^ \*Device ID: 0x0\*{device_id}([^0-9a-f]&#124;$)' &#124; wc -l<br>lspci -d {vendorid_ep}: &#124; grep -i 'Virtual Function' &#124; wc -l<br>powershell -Command "(Get-VMHostPartitionableGpu &#124; Measure-Object).Count" | **Analyzer Args:**<br>- `cpu_count`: Optional[list[int]] — Expected CPU count(s); pass as int or list of ints. Analysis passes if actual is in list.<br>- `gpu_count`: Optional[list[int]] — Expected GPU count(s); pass as int or list of ints. Analysis passes if actual is in list.<br>- `vf_count`: Optional[list[int]] — Expected virtual function count(s); pass as int or list of ints. Analysis passes if actual is in list. | **Collection Args:**<br>- `html_view`: bool — When true, include logged command artifacts in command_artifacts.html using human-readable output.<br>- `devid_ep`: Optional[int] — Expected GPU PF PCI device ID (int, e.g. 0x75a3) for ESXi device counting.<br>- `devid_ep_vf`: Optional[int] — Expected GPU VF PCI device ID (int) for ESXi VF counting. | [DeviceEnumerationDataModel](#DeviceEnumerationDataModel-Model) | [DeviceEnumerationCollector](#Collector-Class-DeviceEnumerationCollector) | [DeviceEnumerationAnalyzer](#Data-Analyzer-Class-DeviceEnumerationAnalyzer) |
-| DimmPlugin | sh -c 'dmidecode -t 17 &#124; tr -s " " &#124; grep -v "Volatile\&#124;None\&#124;Module" &#124; grep Size' 2>/dev/null<br>dmidecode<br>smbiosDump &#124; grep -A15 'Memory Device (Type 17)' &#124; grep 'Size:'<br>wmic memorychip get Capacity | - | **Collection Args:**<br>- `html_view`: bool — When true, include logged command artifacts in command_artifacts.html using human-readable output.<br>- `skip_sudo`: bool — If True, do not use sudo when running dmidecode or wmic for memory info. | [DimmDataModel](#DimmDataModel-Model) | [DimmCollector](#Collector-Class-DimmCollector) | - |
+| DimmPlugin | dmidecode -q --type 17<br>dmidecode<br>wmic memorychip get /format:csv | - | **Collection Args:**<br>- `html_view`: bool — When true, include logged command artifacts in command_artifacts.html using human-readable output.<br>- `skip_sudo`: bool — If True, do not use sudo when running dmidecode or wmic for memory info. | [DimmDataModel](#DimmDataModel-Model) | [DimmCollector](#Collector-Class-DimmCollector) | - |
 | DkmsPlugin | dkms status<br>dkms --version | **Analyzer Args:**<br>- `dkms_status`: Union[str, list] — Expected dkms status string(s) to match (e.g. 'amd/1.0.0'). At least one of dkms_status or dkms_version required.<br>- `dkms_version`: Union[str, list] — Expected dkms version string(s) to match. At least one of dkms_status or dkms_version required.<br>- `regex_match`: bool — If True, match dkms_status and dkms_version as regex; otherwise exact match. | - | [DkmsDataModel](#DkmsDataModel-Model) | [DkmsCollector](#Collector-Class-DkmsCollector) | [DkmsAnalyzer](#Data-Analyzer-Class-DkmsAnalyzer) |
 | DmesgPlugin | dmesg --time-format iso -x<br>cat /var/log/vmkernel.log<br>ls -1 /var/log/dmesg\* 2>/dev/null &#124; grep -E '^/var/log/dmesg(\.[0-9]+(\.gz)?)?$' &#124;&#124; true<br>ls -1 /var/log/vmkernel.\* 2>/dev/null &#124; grep -E '^/var/log/vmkernel\.[0-9]+(\.gz)?$' &#124;&#124; true | **Built-in Regexes:**<br>- Out of memory error: `(?:oom_kill_process.*)&#124;(?:Out of memory.*)`<br>- I/O Page Fault: `IO_PAGE_FAULT`<br>- Kernel Panic: `\bkernel panic\b.*`<br>- SQ Interrupt: `sq_intr`<br>- SRAM ECC: `sram_ecc.*`<br>- Failed to load driver. IP hardware init error.: `\[amdgpu\]\] \*ERROR\* hw_init of IP block.*`<br>- Failed to load driver. IP software init error.: `\[amdgpu\]\] \*ERROR\* sw_init of IP block.*`<br>- Real Time throttling activated: `sched: RT throttling activated.*`<br>- RCU preempt detected stalls: `rcu_preempt detected stalls.*`<br>- RCU preempt self-detected stall: `rcu_preempt self-detected stall.*`<br>- QCM fence timeout: `qcm fence wait loop timeout.*`<br>- General protection fault: `(?:[\w-]+(?:\[[0-9.]+\])?\s+)?general protectio...`<br>- Segmentation fault: `(?:segfault.*in .*\[)&#124;(?:[Ss]egmentation [Ff]au...`<br>- Failed to disallow cf state: `amdgpu: Failed to disallow cf state.*`<br>- Failed to terminate tmr: `\*ERROR\* Failed to terminate tmr.*`<br>- Suspend of IP block failed: `\*ERROR\* suspend of IP block <\w+> failed.*`<br>- amdgpu Page Fault: `(amdgpu \w{4}:\w{2}:\w{2}\.\w:\s+amdgpu:\s+\[\S...`<br>- Page Fault: `page fault for address.*`<br>- Fatal error during GPU init: `(?:amdgpu)(.*Fatal error during GPU init)&#124;(Fata...`<br>- PCIe AER Error Status: `(pcieport [\w:.]+: AER: aer_status:[^\n]*(?:\n[...`<br>- PCIe AER Correctable Error Status: `(.*aer_cor_status: 0x[0-9a-fA-F]+, aer_cor_mask...`<br>- PCIe AER Uncorrectable Error Status: `(.*aer_uncor_status: 0x[0-9a-fA-F]+, aer_uncor_...`<br>- PCIe AER Uncorrectable Error Severity with TLP Header: `(.*aer_uncor_severity: 0x[0-9a-fA-F]+.*)(\n.*TL...`<br>- Failed to read journal file: `Failed to read journal file.*`<br>- Journal file corrupted or uncleanly shut down: `journal corrupted or uncleanly shut down.*`<br>- ACPI BIOS Error: `ACPI BIOS Error`<br>- ACPI Error: `ACPI Error`<br>- Filesystem corrupted!: `EXT4-fs error \(device .*\):`<br>- Error in buffered IO, check filesystem integrity: `(Buffer I\/O error on dev)(?:ice)? (\w+)`<br>- PCIe card no longer present: `pcieport (\w+:\w+:\w+\.\w+):\s+(\w+):\s+(Slot\(...`<br>- PCIe Link Down: `pcieport (\w+:\w+:\w+\.\w+):\s+(\w+):\s+(Slot\(...`<br>- Mismatched clock configuration between PCIe device and host: `pcieport (\w+:\w+:\w+\.\w+):\s+(\w+):\s+(curren...`<br>- RAS Correctable Error: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- RAS Uncorrectable Error: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- RAS Deferred Error: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- RAS Uncorrectable Error: `(\d+ new uncorrectable hardware errors detected...`<br>- RAS Correctable Error: `(\d+ new correctable hardware errors detected i...`<br>- RAS ECC Fatal Error: `(GPU detected ECC Fatal Error\.)`<br>- GPU Reset: `(Issuing Whole GPU reset\.)`<br>- RAS Corrected PCIe Error: `((?:\[Hardware Error\]:\s+)?event severity: cor...`<br>- GPU Reset: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- GPU reset failed: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- ACA Error: `(Accelerator Check Architecture[^\n]*)(?:\n[^\n...`<br>- ACA Error: `(Accelerator Check Architecture[^\n]*)(?:\n[^\n...`<br>- MCE Corrected Error: `\[Hardware Error\]:[^\n]*MC\d+_STATUS\[[^\]]*\&#124;...`<br>- MCE Uncorrected Error: `\[Hardware Error\]:[^\n]*MC\d+_STATUS\[[^\]]*\&#124;...`<br>- Mode 2 Reset Failed: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)? (...`<br>- RAS Corrected Error: `(?:\d{4}-\d+-\d+T\d+:\d+:\d+,\d+[+-]\d+:\d+)?(....`<br>- SGX Error: `x86/cpu: SGX disabled by BIOS`<br>- MMP Error: `Failed to load MMP firmware qat_4xxx_mmp.bin`<br>- GPU Throttled: `amdgpu \w{4}:\w{2}:\w{2}.\w: amdgpu: WARN: GPU ...`<br>- RAS Poison Consumed: `amdgpu[ 0-9a-fA-F:.]+:(?:\s*amdgpu:)?\s+(?:{\d+...`<br>- RAS Poison created: `amdgpu[ 0-9a-fA-F:.]+:(?:\s*amdgpu:)?\s+(?:{\d+...`<br>- Bad page threshold exceeded: `(amdgpu: Saved bad pages (\d+) reaches threshol...`<br>- RAS Hardware Error: `Hardware error from APEI Generic Hardware Error...`<br>- Error Address: `Error Address.*(?:\s.*)`<br>- RAS EDR Event: `EDR: EDR event received`<br>- DPC Event: `DPC: .*`<br>- LNet: ko2iblnd has no matching interfaces: `(?:\[[^\]]+\]\s*)?LNetError:.*ko2iblnd:\s*No ma...`<br>- LNet: Error starting up LNI: `(?:\[[^\]]+\]\s*)?LNetError:\s*.*Error\s*-?\d+\...`<br>- Lustre: network initialisation failed: `LustreError:.*ptlrpc_init_portals\(\).*network ...`<br>**Analyzer Args:**<br>- `analysis_range_start`: Optional[datetime.datetime] — Start of time range for analysis (ISO format). Only events on or after this time are analyzed.<br>- `analysis_range_end`: Optional[datetime.datetime] — End of time range for analysis (ISO format). Only events before this time are analyzed.<br>- `check_unknown_dmesg_errors`: Optional[bool] — If True, treat unknown/unmatched dmesg error lines as failures.<br>- `exclude_category`: Optional[set[str]] — Set of error categories to exclude from analysis.<br>- `interval_to_collapse_event`: int — Seconds within which repeated events are collapsed into one (for rate limiting).<br>- `num_timestamps`: int — Number of timestamps to include per event in output.<br>- `error_regex`: Union[list[nodescraper.base.regexanalyzer.ErrorRegex], list[dict], NoneType] — Custom error regex patterns; each item can be ErrorRegex or dict with category/pattern.<br>- `priority_override_rules`: Optional[list[dict]] — Rules to override the priority of matched ErrorRegex objects. Each rule is a dict where all keys except 'new_priority...<br>- `mce_threshold`: Optional[int] — When set, raise ERROR if correctable MCE/RAS error count for any component (CPU, GPU BDF/block, etc.) reaches or exce...<br>- `ignore_match_rules`: Optional[list[dict[str, object]]] — Rules that skip regex matches during analysis. Each rule may use line_regex, match_regex, message, and/or mce_banks.... | **Collection Args:**<br>- `html_view`: bool — When true, include logged command artifacts in command_artifacts.html using human-readable output.<br>- `collect_rotated_logs`: bool — If True, also collect rotated dmesg log files from /var/log/dmesg\*.<br>- `skip_sudo`: bool — If True, do not use sudo when running dmesg or listing log files.<br>- `log_dmesg_data`: bool — If True, log the collected dmesg output in artifacts. | [DmesgData](#DmesgData-Model) | [DmesgCollector](#Collector-Class-DmesgCollector) | [DmesgAnalyzer](#Data-Analyzer-Class-DmesgAnalyzer) |
 | FabricsPlugin | lspci &#124; grep -i cassini<br>lsmod &#124; grep cxi<br>cxi_stat<br>ibstat<br>ibv_devinfo<br>ls -l /sys/class/infiniband/\*/device/net<br>fi_info -p cxi<br>mst start<br>mst status -v<br>ip link show<br>ofed_info -s | - | - | [FabricsDataModel](#FabricsDataModel-Model) | [FabricsCollector](#Collector-Class-FabricsCollector) | - |
@@ -96,17 +96,21 @@ AmdSmiFlavorDataModel
 ### Commands
 
 - bad-pages
-- firmware --json
-- list --json
+- fabric
+- firmware
+- list
 - metric -g all
-- partition --json
-- process --json
+- metric --core all
+- metric --cpu all
+- node
+- partition
+- process
 - ras --cper --folder={folder}
 - ras --afid --cper-file {cper_file}
-- static -g all --json
-- static -g {gpu_id} --json
+- static -g all
+- static -g {gpu_id}
 - topology
-- version --json
+- version
 - xgmi -l
 - xgmi -m
 
@@ -125,13 +129,13 @@ Class for collection of inband tool amd-smi data.
 - **AMD_SMI_EXE**: `amd-smi`
 - **AMD_SMI_FALLBACK_PATHS**: `('/opt/rocm/bin/amd-smi', '/opt/rocm-*/bin/amd-smi', '/usr/local/bin/amd-smi')`
 - **SUPPORTED_OS_FAMILY**: `{<OSFamily.LINUX: 3>}`
-- **CMD_VERSION**: `version --json`
-- **CMD_LIST**: `list --json`
-- **CMD_PROCESS**: `process --json`
-- **CMD_PARTITION**: `partition --json`
-- **CMD_FIRMWARE**: `firmware --json`
-- **CMD_STATIC**: `static -g all --json`
-- **CMD_STATIC_GPU**: `static -g {gpu_id} --json`
+- **CMD_VERSION**: `version`
+- **CMD_LIST**: `list`
+- **CMD_PROCESS**: `process`
+- **CMD_PARTITION**: `partition`
+- **CMD_FIRMWARE**: `firmware`
+- **CMD_STATIC**: `static -g all`
+- **CMD_STATIC_GPU**: `static -g {gpu_id}`
 - **CMD_TOPOLOGY**: `topology`
 - **CMD_METRIC**: `metric -g all`
 - **CMD_BAD_PAGES**: `bad-pages`
@@ -139,6 +143,10 @@ Class for collection of inband tool amd-smi data.
 - **CMD_XGMI_LINK**: `xgmi -l`
 - **CMD_RAS**: `ras --cper --folder={folder}`
 - **CMD_RAS_AFID**: `ras --afid --cper-file {cper_file}`
+- **CMD_FABRIC**: `fabric`
+- **CMD_NODE**: `node`
+- **CMD_METRIC_CPU**: `metric --cpu all`
+- **CMD_METRIC_CORE**: `metric --core all`
 
 ### Provides Data
 
@@ -147,17 +155,21 @@ AmdSmiDataModel
 ### Commands
 
 - bad-pages
-- firmware --json
-- list --json
+- fabric
+- firmware
+- list
 - metric -g all
-- partition --json
-- process --json
+- metric --core all
+- metric --cpu all
+- node
+- partition
+- process
 - ras --cper --folder={folder}
 - ras --afid --cper-file {cper_file}
-- static -g all --json
-- static -g {gpu_id} --json
+- static -g all
+- static -g {gpu_id}
 - topology
-- version --json
+- version
 - xgmi -l
 - xgmi -m
 
@@ -262,11 +274,10 @@ Collect data on installed DIMMs
 
 ### Class Variables
 
-- **SUPPORTED_OS_FAMILY**: `{<OSFamily.ESXI: 4>, <OSFamily.LINUX: 3>, <OSFamily.WINDOWS: 1>}`
-- **CMD_WINDOWS**: `wmic memorychip get Capacity`
-- **CMD**: `sh -c 'dmidecode -t 17 | tr -s " " | grep -v "Volatile\|None\|Module" | grep Size' 2>/dev/null`
-- **CMD_ESXI**: `smbiosDump | grep -A15 'Memory Device (Type 17)' | grep 'Size:'`
+- **CMD_WINDOWS**: `wmic memorychip get /format:csv`
+- **CMD_DMIDECODE**: `dmidecode -q --type 17`
 - **CMD_DMIDECODE_FULL**: `dmidecode`
+- **MEMORY_DEVICE**: `Memory Device`
 
 ### Provides Data
 
@@ -274,10 +285,9 @@ DimmDataModel
 
 ### Commands
 
-- sh -c 'dmidecode -t 17 | tr -s " " | grep -v "Volatile\|None\|Module" | grep Size' 2>/dev/null
+- dmidecode -q --type 17
 - dmidecode
-- smbiosDump | grep -A15 'Memory Device (Type 17)' | grep 'Size:'
-- wmic memorychip get Capacity
+- wmic memorychip get /format:csv
 
 ## Collector Class DkmsCollector
 
@@ -1685,6 +1695,10 @@ Data model for amd-smi data.
 - **metric**: `Optional[list[nodescraper.plugins.inband.amdsmi.amdsmidata.AmdSmiMetric]]`
 - **xgmi_metric**: `Optional[list[nodescraper.plugins.inband.amdsmi.amdsmidata.XgmiMetrics]]`
 - **xgmi_link**: `Optional[list[nodescraper.plugins.inband.amdsmi.amdsmidata.XgmiLinks]]`
+- **fabric**: `Optional[list[nodescraper.plugins.inband.amdsmi.amdsmidata.Fabric]]`
+- **node**: `Optional[list[nodescraper.plugins.inband.amdsmi.amdsmidata.NodeInfo]]`
+- **cpu_metric**: `Optional[list[nodescraper.plugins.inband.amdsmi.amdsmidata.CpuMetric]]`
+- **core_metric**: `Optional[list[nodescraper.plugins.inband.amdsmi.amdsmidata.CoreMetric]]`
 - **cper_data**: `Optional[list[nodescraper.models.datamodel.FileModel]]`
 - **cper_afids**: `dict[str, int]`
 - **analysis_firmware_ids**: `Optional[list[str]]`
@@ -1726,13 +1740,17 @@ Data model for amd-smi data.
 
 ## DimmDataModel Model
 
+### Description
+
+Inventory of the memory modules installed in the system
+
 **Link to code**: [dimmdata.py](https://github.com/amd/node-scraper/blob/HEAD/nodescraper/plugins/inband/dimm/dimmdata.py)
 
 **Bases**: ['DataModel']
 
 ### Model annotations and fields
 
-- **dimms**: `str`
+- **dimms**: `list[nodescraper.plugins.inband.dimm.dimmdata.DimmInfo]`
 
 ## DkmsDataModel Model
 
@@ -2736,6 +2754,7 @@ Build AFID events from collected data and run the configured entry-point hub.
 - **expected_memory_partition_mode**: `Optional[str]` — Expected memory partition mode (e.g. sp3, dp).
 - **expected_compute_partition_mode**: `Optional[str]` — Expected compute partition mode.
 - **expected_firmware_versions**: `Optional[dict[str, str]]` — Expected firmware versions keyed by amd-smi fw_id (e.g. PLDM_BUNDLE).
+- **gpu_memory**: `Optional[nodescraper.plugins.inband.amdsmi.analyzer_args.GpuMemoryConfig]` — Minimum free VRAM threshold to validate for each GPU.
 - **l0_to_recovery_count_error_threshold**: `Optional[int]` — L0-to-recovery count above which an error is raised.
 - **l0_to_recovery_count_warning_threshold**: `Optional[int]` — L0-to-recovery count above which a warning is raised.
 - **vendorid_ep**: `Optional[str]` — Expected endpoint vendor ID (e.g. for PCIe).
@@ -2744,6 +2763,8 @@ Build AFID events from collected data and run the configured entry-point hub.
 - **devid_ep_vf**: `Optional[str]` — Expected endpoint VF device ID.
 - **sku_name**: `Optional[str]` — Expected SKU name string for GPU.
 - **expected_xgmi_speed**: `Optional[list[float]]` — Expected xGMI speed value(s) (e.g. link rate).
+- **expected_accel_state**: `str` — Expected amd-smi fabric accel_state value.
+- **expected_fabric_type**: `str` — Expected amd-smi fabric fabric_type value.
 - **analysis_range_start**: `Optional[datetime.datetime]` — Start of time range for time-windowed analysis.
 - **analysis_range_end**: `Optional[datetime.datetime]` — End of time range for time-windowed analysis.
 
