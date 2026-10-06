@@ -71,6 +71,15 @@ class RedfishEndpointCollectorArgs(CollectorArgs):
         description="When follow_next_link is True: safety cap on the number of pages to follow per URI (default 200).",
     )
 
+    clear_log_uris: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Redfish LogService.ClearLog action URIs to POST {} to after successful collection. "
+            "Each URI is posted with an empty JSON body. "
+            "Requires system_interaction_level >= INTERACTIVE."
+        ),
+    )
+
     @field_validator("uris", mode="before")
     @classmethod
     def strip_uris(cls, v: list[str]) -> list[str]:
