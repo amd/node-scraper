@@ -46,7 +46,7 @@ class OsCollector(InBandDataCollector[OsDataModel, None]):
     PRETTY_STR = "PRETTY_NAME"  # noqa: N806
     CMD = f"sh -c '( lsb_release -ds || (cat /etc/*release | grep {PRETTY_STR}) || uname -om ) 2>/dev/null | head -n1'"
     CMD_LOAD_AVERAGE = "cat /proc/loadavg"
-    CMD_CPU_COUNT = "nproc"
+    CMD_CPU_COUNT = "grep -c ^processor /proc/cpuinfo"
 
     def collect_version(self) -> str:
         """Collect OS version.

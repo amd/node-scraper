@@ -59,11 +59,29 @@ def test_nvme_smart_media_errors_exceed_threshold(system_info):
     assert result.events[0].data["media_errors"] == 2
 
 
-def test_nvme_smart_media_errors_missing_logs_warning(system_info):
+def test_nvme_smart_media_errors_missing_for_every_device(system_info):
     analyzer = NvmeAnalyzer(system_info)
     data = NvmeDataModel(
         devices={
             "nvme0": DeviceNvmeData(smart_log="critical_warning : 0"),
+            "nvme1": DeviceNvmeData(smart_log=None),
+        }
+    )
+
+    result = analyzer.analyze_data(data, NvmeAnalyzerArgs(maximum_smart_error_count=0))
+
+    assert result.status == ExecutionStatus.ERROR
+    assert "unavailable" in result.message
+    assert len(result.events) == 2
+    assert all(event.priority == EventPriority.ERROR for event in result.events)
+
+
+def test_nvme_smart_media_errors_missing_on_one_device_still_checks_others(system_info):
+    analyzer = NvmeAnalyzer(system_info)
+    data = NvmeDataModel(
+        devices={
+            "nvme0": DeviceNvmeData(smart_log="critical_warning : 0"),
+            "nvme1": DeviceNvmeData(smart_log="media_errors : 0"),
         }
     )
 
@@ -72,6 +90,7 @@ def test_nvme_smart_media_errors_missing_logs_warning(system_info):
     assert result.status == ExecutionStatus.OK
     assert len(result.events) == 1
     assert result.events[0].priority == EventPriority.WARNING
+    assert result.events[0].data["device"] == "nvme0"
 
 
 def test_nvme_smart_check_not_run_without_threshold(system_info):

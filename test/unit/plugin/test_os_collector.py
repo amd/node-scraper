@@ -95,6 +95,10 @@ def test_os_collector_linux(
 
     result, data = collector.collect_data()
     assert result.status == ExecutionStatus.OK
+    assert (
+        conn_mock.run_command.call_args_list[3].kwargs["command"]
+        == "grep -c ^processor /proc/cpuinfo"
+    )
     assert data == OsDataModel(
         os_name=expected_os,
         os_version=expected_version,

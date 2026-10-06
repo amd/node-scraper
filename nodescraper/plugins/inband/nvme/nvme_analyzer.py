@@ -61,20 +61,37 @@ class NvmeAnalyzer(DataAnalyzer[NvmeDataModel, NvmeAnalyzerArgs]):
             return self.result
 
         failures = []
+        unavailable = []
         for device, device_data in data.devices.items():
             media_errors = self._parse_media_errors(device_data.smart_log)
             if media_errors is None:
-                self._log_event(
-                    category=EventCategory.STORAGE,
-                    description=f"NVMe SMART media error count unavailable for {device}",
-                    priority=EventPriority.WARNING,
-                    data={"device": device},
-                    console_log=True,
-                )
+                unavailable.append(device)
                 continue
 
             if media_errors > args.maximum_smart_error_count:
                 failures.append((device, media_errors))
+
+        if unavailable and not failures and len(unavailable) == len(data.devices):
+            for device in unavailable:
+                self._log_event(
+                    category=EventCategory.STORAGE,
+                    description=f"NVMe SMART media error count unavailable for {device}",
+                    priority=EventPriority.ERROR,
+                    data={"device": device},
+                    console_log=True,
+                )
+            self.result.status = ExecutionStatus.ERROR
+            self.result.message = "NVMe SMART media error count unavailable"
+            return self.result
+
+        for device in unavailable:
+            self._log_event(
+                category=EventCategory.STORAGE,
+                description=f"NVMe SMART media error count unavailable for {device}",
+                priority=EventPriority.WARNING,
+                data={"device": device},
+                console_log=True,
+            )
 
         if failures:
             for device, media_errors in failures:

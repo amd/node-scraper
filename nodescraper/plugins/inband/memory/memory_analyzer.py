@@ -61,6 +61,7 @@ class MemoryAnalyzer(DataAnalyzer[MemoryDataModel, MemoryAnalyzerArgs]):
         total_memory = convert_to_bytes(data.mem_total)
         used_memory = total_memory - available_memory
 
+        available_percent = None
         if args.minimum_free_memory_percent is not None:
             if total_memory <= 0:
                 self.result.status = ExecutionStatus.WARNING
@@ -93,13 +94,7 @@ class MemoryAnalyzer(DataAnalyzer[MemoryDataModel, MemoryAnalyzerArgs]):
                     },
                     console_log=True,
                 )
-            else:
-                self.result.status = ExecutionStatus.OK
-                self.result.message = (
-                    f"Available memory is {available_percent:.2f}% "
-                    f"(minimum {args.minimum_free_memory_percent:.2f}%)"
-                )
-            return self.result
+                return self.result
 
         threshold_bytes = convert_to_bytes(args.memory_threshold)
 
@@ -121,6 +116,11 @@ class MemoryAnalyzer(DataAnalyzer[MemoryDataModel, MemoryAnalyzerArgs]):
                 f"Memory usage is within limit: Used {used_gb:.2f} GB "
                 f"(allowed {allowed_gb:.2f} GB; base={base_source} {base_gb:.2f} GB × ratio={args.ratio:.2f})"
             )
+            if available_percent is not None:
+                self.result.message += (
+                    f"; available memory is {available_percent:.2f}% "
+                    f"(minimum {args.minimum_free_memory_percent:.2f}%)"
+                )
             self.result.status = ExecutionStatus.OK
         else:
             self.result.message = "Memory usage exceeded max allowed!"
