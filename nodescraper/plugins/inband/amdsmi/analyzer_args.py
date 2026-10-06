@@ -77,6 +77,10 @@ class AmdSmiAnalyzerArgs(AnalyzerArgs):
         default=None,
         description="Minimum free VRAM threshold to validate for each GPU.",
     )
+    check_xgmi_or_peer_links_status: bool = Field(
+        default=False,
+        description="Check XGMI or peer-link status for each GPU.",
+    )
     l0_to_recovery_count_error_threshold: Optional[int] = Field(
         default=3,
         description="L0-to-recovery count above which an error is raised.",
