@@ -24,6 +24,7 @@
 #
 ###############################################################################
 import io
+import math
 from collections import defaultdict
 from typing import Any, Mapping, Optional, Union
 
@@ -36,9 +37,12 @@ from .amdsmidata import (
     AmdSmiMetric,
     AmdSmiStatic,
     EccData,
+    Fabric,
     Fw,
+    LinkStatusTable,
     Partition,
     Processes,
+    XgmiLinks,
     XgmiMetrics,
 )
 from .analyzer_args import AmdSmiAnalyzerArgs
@@ -77,6 +81,15 @@ def _gpu_unavailable_description(
     else:
         description = f"{check_name} not available on {gpu_text}"
     return description, description
+
+
+def _is_all_zeros(value: Union[str, list[str]]) -> bool:
+    """Return True if every comma or space separated entry is zero."""
+    values = value if isinstance(value, list) else [value]
+    tokens = [tok for item in values for tok in str(item).replace(",", " ").split()]
+    if not tokens:
+        return False
+    return all(set(tok) == {"0"} for tok in tokens)
 
 
 def _static_mismatch_description(payload: dict[str, Any]) -> tuple[str, str]:
@@ -440,6 +453,93 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                         },
                         console_log=True,
                     )
+
+    def check_gpu_memory(
+        self,
+        amdsmi_metric_data: Optional[list[AmdSmiMetric]],
+        minimum_available_percent: float,
+    ) -> None:
+        """Check the minimum free VRAM percentage for each GPU."""
+        if amdsmi_metric_data is None or len(amdsmi_metric_data) == 0:
+            self._log_event(
+                category=EventCategory.PLATFORM,
+                description="No AMD SMI metric data available",
+                priority=EventPriority.WARNING,
+                data={"amdsmi_metric_data": amdsmi_metric_data},
+            )
+            return
+        for metric in amdsmi_metric_data:
+            memory = metric.mem_usage
+            total_vram = memory.total_vram if memory is not None else None
+            free_vram = memory.free_vram if memory is not None else None
+            values = {
+                "gpu": metric.gpu,
+                "total_vram": total_vram.value if total_vram is not None else None,
+                "free_vram": free_vram.value if free_vram is not None else None,
+                "unit": total_vram.unit if total_vram is not None else None,
+                "minimum_available_percent": minimum_available_percent,
+            }
+
+            if total_vram is None or free_vram is None:
+                self._log_event(
+                    category=EventCategory.PLATFORM,
+                    description=f"GPU {metric.gpu} VRAM information is unavailable",
+                    priority=EventPriority.WARNING,
+                    data=values,
+                    console_log=True,
+                )
+                continue
+
+            try:
+                total_value = float(total_vram.value)
+                free_value = float(free_vram.value)
+            except (TypeError, ValueError):
+                self._log_event(
+                    category=EventCategory.PLATFORM,
+                    description=(
+                        f"GPU {metric.gpu} was not able to parse available VRAM from memory usage"
+                    ),
+                    priority=EventPriority.WARNING,
+                    data=values,
+                    console_log=True,
+                )
+                continue
+
+            if (
+                not math.isfinite(total_value)
+                or not math.isfinite(free_value)
+                or total_value <= 0
+                or free_value < 0
+                or total_vram.unit != free_vram.unit
+            ):
+                self._log_event(
+                    category=EventCategory.PLATFORM,
+                    description=(
+                        f"GPU {metric.gpu} VRAM values are invalid "
+                        f"(total={total_vram.value} {total_vram.unit}, "
+                        f"free={free_vram.value} {free_vram.unit})"
+                    ),
+                    priority=EventPriority.WARNING,
+                    data=values,
+                    console_log=True,
+                )
+                continue
+
+            available_percent = free_value / total_value * 100
+            if available_percent < minimum_available_percent:
+                self._log_event(
+                    category=EventCategory.PLATFORM,
+                    description=(
+                        f"GPU {metric.gpu} free VRAM is {available_percent:.2f}% "
+                        f"(minimum {minimum_available_percent:.2f}%)"
+                    ),
+                    priority=EventPriority.WARNING,
+                    data={
+                        **values,
+                        "available_percent": available_percent,
+                    },
+                    console_log=True,
+                )
 
     def check_amdsmi_metric_ecc(self, amdsmi_metric_data: list[AmdSmiMetric]):
         """Check ECC counts in all blocks for all GPUs
@@ -933,6 +1033,147 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                     console_log=True,
                 )
 
+    def check_fabric(
+        self,
+        fabric_data: Optional[list[Fabric]],
+        expected_accel_state: str = "ACTIVE",
+        expected_fabric_type: str = "UALOE",
+    ) -> None:
+        """Check fabric state, type, pod IDs and accelerator maps for all GPUs
+
+        Args:
+            fabric_data (Optional[list[Fabric]]): fabric data from amd-smi fabric
+            expected_accel_state (str): expected accel_state value
+            expected_fabric_type (str): expected fabric_type value
+        """
+        if not fabric_data:
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description="Fabric data is not available and cannot be checked",
+                priority=EventPriority.WARNING,
+                data={"fabric": fabric_data},
+            )
+            return
+
+        expected_state = expected_accel_state.strip().upper()
+        expected_type = expected_fabric_type.strip().upper()
+        issues: list[dict[str, Any]] = []
+
+        def _add(gpu: int, field: str, expected: object, actual: object) -> None:
+            issues.append(
+                {"gpu": gpu, "field": field, "expected": str(expected), "actual": str(actual)}
+            )
+
+        for entry in fabric_data:
+            info = entry.fabric_info
+            gpu = entry.gpu
+
+            accel_state = info.accel_state if info else None
+            if accel_state is None or accel_state.strip().upper() != expected_state:
+                _add(gpu, "accel_state", expected_state, accel_state or "N/A")
+
+            fabric_type = info.fabric_type if info else None
+            if fabric_type is None or fabric_type.strip().upper() != expected_type:
+                _add(gpu, "fabric_type", expected_type, fabric_type or "N/A")
+
+            ppod_id = info.ppod_id if info else None
+            if ppod_id is None or set(ppod_id) <= {"0", "-"}:
+                _add(gpu, "ppod_id", "non-zero", ppod_id or "N/A")
+
+            for field in ("local_accelerators", "local_active_accelerators"):
+                value = getattr(info, field) if info else None
+                if value is None or _is_all_zeros(value):
+                    _add(gpu, field, "non-zero", value if value is not None else "N/A")
+
+            for field in ("ppod_size", "vpod_size"):
+                value = getattr(info, field) if info else None
+                if not value:
+                    _add(gpu, field, "non-zero", value if value is not None else "N/A")
+
+        if issues:
+            details = "; ".join(
+                f"GPU {i['gpu']} {i['field']}: expected {i['expected']}, actual {i['actual']}"
+                for i in issues
+            )
+            gpus_affected = len({i["gpu"] for i in issues})
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description=f"Fabric data mismatch on {gpus_affected} GPU(s): {details}",
+                priority=EventPriority.ERROR,
+                data={
+                    "expected_accel_state": expected_state,
+                    "expected_fabric_type": expected_type,
+                    "mismatches": issues,
+                    "details": details,
+                },
+                console_log=True,
+            )
+
+    def check_xgmi_or_peer_links_status(self, xgmi_links: Optional[list[XgmiLinks]]) -> None:
+        """Check XGMI or peer-link status: U passes, SELF is ignored, D/X warn."""
+        if not xgmi_links:
+            self._log_event(
+                category=EventCategory.IO,
+                description="XGMI/peer link data is not available and cannot be checked",
+                priority=EventPriority.WARNING,
+                data={"xgmi_links": xgmi_links},
+                console_log=True,
+            )
+            return
+
+        down_links: list[dict[str, Any]] = []
+        degraded_links: list[dict[str, Any]] = []
+        healthy_link_count = 0
+        for gpu_links in xgmi_links:
+            for link_index, status in enumerate(gpu_links.link_status):
+                if status == LinkStatusTable.SELF:
+                    continue
+                link_data = {
+                    "gpu": gpu_links.gpu,
+                    "link_index": link_index,
+                    "status": status.value,
+                }
+                if status == LinkStatusTable.DOWN:
+                    down_links.append(link_data)
+                elif status == LinkStatusTable.DISABLED:
+                    degraded_links.append(link_data)
+                elif status == LinkStatusTable.UP:
+                    healthy_link_count += 1
+
+        if not down_links and not degraded_links and healthy_link_count > 0:
+            self._log_event(
+                category=EventCategory.IO,
+                description="All XGMI/peer GPU links are working fine",
+                priority=EventPriority.INFO,
+                data={"healthy_link_count": healthy_link_count},
+                console_log=True,
+            )
+
+        if down_links:
+            self._log_event(
+                category=EventCategory.IO,
+                description=(f"XGMI/peer links contain {len(down_links)} down/error links"),
+                priority=EventPriority.WARNING,
+                data={
+                    "down_links": down_links,
+                    "link_error_count": len(down_links),
+                },
+                console_log=True,
+            )
+
+        if degraded_links:
+            self._log_event(
+                category=EventCategory.IO,
+                description=(
+                    f"XGMI/peer links contain {len(degraded_links)} " "disabled/degraded links"
+                ),
+                priority=EventPriority.WARNING,
+                data={
+                    "degraded_links": degraded_links,
+                },
+                console_log=True,
+            )
+
     def analyze_data(
         self, data: AmdSmiDataModel, args: Optional[AmdSmiAnalyzerArgs] = None
     ) -> TaskResult:
@@ -961,6 +1202,12 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                 )
             self.check_amdsmi_metric_ecc_totals(data.metric)
             self.check_amdsmi_metric_ecc(data.metric)
+
+        if args.gpu_memory:
+            self.check_gpu_memory(
+                data.metric,
+                args.gpu_memory.minimum_available_percent,
+            )
 
         if args.expected_gpu_processes:
             self.expected_gpu_processes(data.process, args.expected_gpu_processes)
@@ -1019,5 +1266,15 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
             self.check_expected_xgmi_link_speed(
                 data.xgmi_metric, expected_xgmi_speed=args.expected_xgmi_speed
             )
+
+        if data.fabric:
+            self.check_fabric(
+                data.fabric,
+                expected_accel_state=args.expected_accel_state,
+                expected_fabric_type=args.expected_fabric_type,
+            )
+
+        if args.check_xgmi_or_peer_links_status:
+            self.check_xgmi_or_peer_links_status(data.xgmi_link)
 
         return self.result

@@ -40,8 +40,11 @@ from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     AmdSmiStatic,
     AmdSmiVersion,
     EccState,
+    Fabric,
+    FabricInfo,
     Fw,
     FwListItem,
+    LinkStatusTable,
     MetricEccTotals,
     MetricPcie,
     Partition,
@@ -62,6 +65,7 @@ from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     StaticVram,
     ValueUnit,
     XgmiLinkMetrics,
+    XgmiLinks,
     XgmiMetrics,
 )
 from nodescraper.plugins.inband.amdsmi.analyzer_args import AmdSmiAnalyzerArgs
@@ -751,6 +755,96 @@ def test_check_expected_xgmi_link_speed_missing_bit_rate(mock_analyzer):
     assert "XGMI link speed not available" in analyzer.result.events[0].description
 
 
+def test_check_xgmi_or_peer_links_status_accepts_up_and_self_links(mock_analyzer):
+    """Healthy links generate an informational event and self-links are ignored."""
+    analyzer = mock_analyzer
+    xgmi_links = [
+        XgmiLinks(
+            gpu=0,
+            bdf="0000:01:00.0",
+            link_status=[LinkStatusTable.UP, LinkStatusTable.SELF],
+        ),
+        XgmiLinks(
+            gpu=1,
+            bdf="0000:02:00.0",
+            link_status=[LinkStatusTable.UP],
+        ),
+    ]
+
+    analyzer.check_xgmi_or_peer_links_status(xgmi_links)
+
+    assert len(analyzer.result.events) == 1
+    assert analyzer.result.events[0].priority == EventPriority.INFO
+    assert "All XGMI/peer GPU links are working fine" in analyzer.result.events[0].description
+
+
+def test_check_xgmi_or_peer_links_status_requires_healthy_links(mock_analyzer):
+    """Self-only links are ignored and do not count as all links working."""
+    analyzer = mock_analyzer
+    xgmi_links = [
+        XgmiLinks(
+            gpu=0,
+            bdf="0000:01:00.0",
+            link_status=[LinkStatusTable.SELF],
+        )
+    ]
+
+    analyzer.check_xgmi_or_peer_links_status(xgmi_links)
+
+    assert not any(
+        "All XGMI/peer GPU links are working fine" in event.description
+        for event in analyzer.result.events
+    )
+
+
+def test_check_xgmi_or_peer_links_status_reports_down_and_degraded_links(mock_analyzer):
+    """Down and degraded links generate IO warnings."""
+    analyzer = mock_analyzer
+    xgmi_links = [
+        XgmiLinks(
+            gpu=0,
+            bdf="0000:01:00.0",
+            link_status=[LinkStatusTable.DOWN, LinkStatusTable.DISABLED],
+        )
+    ]
+
+    analyzer.check_xgmi_or_peer_links_status(xgmi_links)
+
+    assert len(analyzer.result.events) == 2
+    assert all(event.category == "IO" for event in analyzer.result.events)
+    assert all(event.priority == EventPriority.WARNING for event in analyzer.result.events)
+    assert analyzer.result.events[0].data["link_error_count"] == 1
+    assert analyzer.result.events[1].data["degraded_links"][0]["status"] == "X"
+
+
+def test_check_xgmi_or_peer_links_status_reports_degraded_links(mock_analyzer):
+    """Disabled/degraded links generate warnings."""
+    analyzer = mock_analyzer
+    xgmi_links = [
+        XgmiLinks(
+            gpu=0,
+            bdf="0000:01:00.0",
+            link_status=[LinkStatusTable.DISABLED],
+        )
+    ]
+
+    analyzer.check_xgmi_or_peer_links_status(xgmi_links)
+
+    assert len(analyzer.result.events) == 1
+    assert analyzer.result.events[0].priority == EventPriority.WARNING
+
+
+def test_check_xgmi_or_peer_links_status_reports_missing_data(mock_analyzer):
+    """Configured link validation reports when XGMI data is unavailable."""
+    analyzer = mock_analyzer
+
+    analyzer.check_xgmi_or_peer_links_status(None)
+
+    assert len(analyzer.result.events) == 1
+    assert analyzer.result.events[0].priority == EventPriority.WARNING
+    assert "XGMI/peer link data is not available" in analyzer.result.events[0].description
+
+
 def test_analyze_data_full_workflow(mock_analyzer):
     """Test full analyze_data workflow with various checks."""
     analyzer = mock_analyzer
@@ -882,10 +976,24 @@ def _minimal_amdsmi_metric(
     ecc: Optional[MetricEccTotals] = None,
     ecc_blocks: Optional[dict] = None,
     power_management: Optional[str] = None,
+    mem_usage: Optional[dict] = None,
 ) -> AmdSmiMetric:
     """Build minimal AmdSmiMetric for PCIe/ECC tests with all required fields present."""
     pcie_dict = pcie.model_dump() if pcie is not None else {k: None for k in _PCIE_KEYS}
     ecc_dict = ecc.model_dump() if ecc is not None else {k: None for k in _ECC_TOTALS_KEYS}
+    mem_usage_dict = {
+        "total_vram": None,
+        "used_vram": None,
+        "free_vram": None,
+        "total_visible_vram": None,
+        "used_visible_vram": None,
+        "free_visible_vram": None,
+        "total_gtt": None,
+        "used_gtt": None,
+        "free_gtt": None,
+    }
+    if mem_usage is not None:
+        mem_usage_dict.update(mem_usage)
     return AmdSmiMetric.model_validate(
         {
             "gpu": gpu,
@@ -917,17 +1025,7 @@ def _minimal_amdsmi_metric(
             "perf_level": None,
             "xgmi_err": None,
             "energy": None,
-            "mem_usage": {
-                "total_vram": None,
-                "used_vram": None,
-                "free_vram": None,
-                "total_visible_vram": None,
-                "used_visible_vram": None,
-                "free_visible_vram": None,
-                "total_gtt": None,
-                "used_gtt": None,
-                "free_gtt": None,
-            },
+            "mem_usage": mem_usage_dict,
             "throttle": {},
         }
     )
@@ -1002,9 +1100,90 @@ def test_analyze_data_expected_power_management(mock_analyzer):
     assert not any("power_management mismatch" in e.description for e in result.events)
 
 
+def test_check_gpu_memory_meets_minimum(mock_analyzer):
+    """GPU VRAM availability at the configured minimum passes."""
+    analyzer = mock_analyzer
+    metrics = [
+        _minimal_amdsmi_metric(
+            0,
+            mem_usage={
+                "total_vram": {"value": 100, "unit": "B"},
+                "free_vram": {"value": 95, "unit": "B"},
+            },
+        )
+    ]
+
+    analyzer.check_gpu_memory(metrics, 95)
+
+    assert not analyzer.result.events
+
+
+def test_check_gpu_memory_below_minimum_logs_warning(mock_analyzer):
+    """GPU VRAM availability below the configured minimum logs a warning."""
+    analyzer = mock_analyzer
+    metrics = [
+        _minimal_amdsmi_metric(
+            1,
+            mem_usage={
+                "total_vram": {"value": 100, "unit": "B"},
+                "free_vram": {"value": 90, "unit": "B"},
+            },
+        )
+    ]
+
+    analyzer.check_gpu_memory(metrics, 95)
+
+    assert len(analyzer.result.events) == 1
+    event = analyzer.result.events[0]
+    assert event.priority == EventPriority.WARNING
+    assert "GPU 1 free VRAM is 90.00%" in event.description
+    assert event.data["available_percent"] == 90.0
+    assert event.data["minimum_available_percent"] == 95
+
+
+def test_check_gpu_memory_no_data(mock_analyzer):
+    """check_gpu_memory warns and returns when metric data is missing."""
+    analyzer = mock_analyzer
+
+    analyzer.check_gpu_memory(None, 95)
+
+    assert len(analyzer.result.events) == 1
+    assert analyzer.result.events[0].priority == EventPriority.WARNING
+    assert "No AMD SMI metric data available" in analyzer.result.events[0].description
+
+
+def test_analyze_data_gpu_memory_no_metric_data(mock_analyzer):
+    """analyze_data warns when gpu_memory is set but metric data is missing."""
+    analyzer = mock_analyzer
+    data = AmdSmiDataModel(
+        version=None,
+        static=None,
+        process=None,
+        firmware=None,
+        partition=None,
+        gpu_list=None,
+        metric=None,
+    )
+    args = AmdSmiAnalyzerArgs.model_validate({"gpu_memory": {"minimum_available_percent": 95}})
+
+    result = analyzer.analyze_data(data, args)
+
+    assert any(
+        event.priority == EventPriority.WARNING
+        and "No AMD SMI metric data available" in event.description
+        for event in result.events
+    )
+
+
 def test_amdsmi_analyzer_args_rejects_unknown_fields():
     """Plugin config must only use declared AmdSmiAnalyzerArgs fields."""
     from pydantic import ValidationError
+
+    args = AmdSmiAnalyzerArgs.model_validate({"gpu_memory": {"minimum_available_percent": 95}})
+    assert args.gpu_memory is not None
+    assert args.gpu_memory.minimum_available_percent == 95
+    args = AmdSmiAnalyzerArgs.model_validate({"check_xgmi_or_peer_links_status": True})
+    assert args.check_xgmi_or_peer_links_status is True
 
     with pytest.raises(ValidationError):
         AmdSmiAnalyzerArgs.model_validate(
@@ -1162,3 +1341,147 @@ def test_check_amdsmi_metric_ecc_blocks(mock_analyzer):
     assert any("GFX" in d and "correctable" in d for d in desc)
     assert any("MMHUB" in d for d in desc)
     assert any("HDP" in d for d in desc)
+
+
+def create_fabric(
+    gpu: int = 0,
+    fabric_type: str = "UALOE",
+    accel_state: str = "ACTIVE",
+    ppod_id: str = "4c8fab1c-fb8b-42aa-92ae-ea17ca953bdb",
+) -> Fabric:
+    """Helper function to create a healthy mock Fabric object for testing."""
+    return Fabric(
+        gpu=gpu,
+        bdf=f"{gpu + 1:04d}:01:00.0",
+        fabric_info=FabricInfo(
+            bdf=f"{gpu + 1:04d}:01:00.1",
+            version=4294967295,
+            accelerator_id=7 - gpu,
+            fabric_type=fabric_type,
+            bandwidth=ValueUnit(value=400000, unit="Mb/s"),
+            latency=ValueUnit(value=150, unit="ns"),
+            ppod_id=ppod_id,
+            ppod_size=72,
+            vpod_id=1,
+            vpod_size=8,
+            local_accelerators="1, 2, 3, 4, 5, 6, 7, 8",
+            local_active_accelerators=["1, 2, 3, 4, 5, 6, 7, 8"],
+            addr_mode="DIRECT",
+            accel_state=accel_state,
+        ),
+    )
+
+
+def test_check_fabric_success(mock_analyzer):
+    """Healthy fabric data on all GPUs generates no events."""
+    analyzer = mock_analyzer
+
+    analyzer.check_fabric([create_fabric(gpu) for gpu in range(4)])
+
+    assert len(analyzer.result.events) == 0
+
+
+def test_check_fabric_no_data(mock_analyzer):
+    """Missing fabric data logs a warning rather than an error."""
+    analyzer = mock_analyzer
+
+    analyzer.check_fabric([])
+
+    assert len(analyzer.result.events) == 1
+    assert analyzer.result.events[0].priority == EventPriority.WARNING
+    assert "Fabric data is not available" in analyzer.result.events[0].description
+
+
+def test_check_fabric_inactive_output(mock_analyzer):
+    """Real amd-smi fabric output from an inactive fabric reports every mismatch."""
+    analyzer = mock_analyzer
+
+    fabric_data = [
+        Fabric.model_validate(
+            {
+                "gpu": gpu,
+                "bdf": f"{gpu + 1:04d}:01:00.0",
+                "fabric_info": {
+                    "bdf": f"{gpu + 1:04d}:01:00.1",
+                    "version": 4294967295,
+                    "accelerator_id": 7 - gpu,
+                    "fabric_type": "UALOE",
+                    "bandwidth": {"value": 0, "unit": "Mb/s"},
+                    "latency": {"value": 0, "unit": "ns"},
+                    "ppod_id": "4c8fab1c-fb8b-42aa-92ae-ea17ca953bdb",
+                    "ppod_size": 72,
+                    "vpod_id": 0,
+                    "vpod_size": 0,
+                    "local_accelerators": "0, 0, 0, 0, 0, 0, 0, 0",
+                    "local_active_accelerators": ["0, 0, 0, 0, 0, 0, 0, 0"],
+                    "addr_mode": "UNKNOWN",
+                    "accel_state": "UNKNOWN",
+                },
+            }
+        )
+        for gpu in range(4)
+    ]
+
+    analyzer.check_fabric(fabric_data)
+
+    assert len(analyzer.result.events) == 1
+    event = analyzer.result.events[0]
+    assert event.priority == EventPriority.ERROR
+    assert event.category == "NETWORK"
+    mismatched_fields = {m["field"] for m in event.data["mismatches"]}
+    assert mismatched_fields == {
+        "accel_state",
+        "local_accelerators",
+        "local_active_accelerators",
+        "vpod_size",
+    }
+    assert {m["gpu"] for m in event.data["mismatches"]} == {0, 1, 2, 3}
+    assert "Fabric data mismatch on 4 GPU(s)" in event.description
+
+
+def test_check_fabric_unexpected_fabric_type(mock_analyzer):
+    """A fabric_type other than the expected one is reported."""
+    analyzer = mock_analyzer
+
+    analyzer.check_fabric([create_fabric(0, fabric_type="XGMI")])
+
+    assert len(analyzer.result.events) == 1
+    mismatches = analyzer.result.events[0].data["mismatches"]
+    assert mismatches == [{"gpu": 0, "field": "fabric_type", "expected": "UALOE", "actual": "XGMI"}]
+
+
+def test_check_fabric_custom_expected_values(mock_analyzer):
+    """Expected accel_state/fabric_type are configurable and case insensitive."""
+    analyzer = mock_analyzer
+
+    analyzer.check_fabric(
+        [create_fabric(0, fabric_type="xgmi", accel_state="up")],
+        expected_accel_state="UP",
+        expected_fabric_type="XGMI",
+    )
+
+    assert len(analyzer.result.events) == 0
+
+
+def test_check_fabric_missing_fabric_info(mock_analyzer):
+    """A GPU with no fabric_info reports all fields as N/A."""
+    analyzer = mock_analyzer
+
+    analyzer.check_fabric([Fabric(gpu=0, bdf="0001:01:00.0", fabric_info=None)])
+
+    assert len(analyzer.result.events) == 1
+    mismatches = analyzer.result.events[0].data["mismatches"]
+    assert len(mismatches) == 7
+    assert all(m["actual"] == "N/A" and m["gpu"] == 0 for m in mismatches)
+
+
+def test_check_fabric_zero_ppod_id(mock_analyzer):
+    """An all-zero ppod_id is treated as a mismatch."""
+    analyzer = mock_analyzer
+
+    analyzer.check_fabric([create_fabric(0, ppod_id="00000000-0000-0000-0000-000000000000")])
+
+    assert len(analyzer.result.events) == 1
+    mismatches = analyzer.result.events[0].data["mismatches"]
+    assert [m["field"] for m in mismatches] == ["ppod_id"]
+    assert mismatches[0]["expected"] == "non-zero"
