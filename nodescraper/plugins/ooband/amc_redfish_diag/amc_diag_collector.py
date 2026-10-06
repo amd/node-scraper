@@ -92,7 +92,6 @@ class AmcRedfishDiagCollector(
 
         if self.log_path:
             output_dir = (Path(self.log_path) / "diag_logs").resolve()
-            output_dir.mkdir(parents=True, exist_ok=True)
             self.logger.info(
                 "(AmcRedfishDiagPlugin) Diagnostic archives will be written to: %s",
                 output_dir,
@@ -126,8 +125,9 @@ class AmcRedfishDiagCollector(
             if collect_err:
                 self._log_event(
                     category=EventCategory.RUNTIME,
-                    description=f"AMC diag {key}: {collect_err}",
+                    description=f"AMC diag {key}: error",
                     priority=EventPriority.WARNING,
+                    data={"response_body": collect_err},
                     console_log=True,
                 )
                 results[key] = OemDiagTypeResult(success=False, error=collect_err, metadata=None)

@@ -40,6 +40,16 @@ def _host_from_connection_args(raw: Optional[Union[dict[str, Any], BaseModel]]) 
     if raw is None:
         return None
     if isinstance(raw, dict):
+        targets = raw.get("targets")
+        if isinstance(targets, list) and targets:
+            hosts = []
+            for item in targets:
+                if isinstance(item, dict):
+                    host = item.get("target_key") or item.get("host")
+                    if host:
+                        hosts.append(str(host))
+            if hosts:
+                return ", ".join(hosts)
         for key in ("host", "hostname", "ip"):
             value = raw.get(key)
             if value:

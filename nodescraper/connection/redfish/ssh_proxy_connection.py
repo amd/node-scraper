@@ -31,6 +31,7 @@ from http import HTTPStatus
 from typing import Any, Optional, Union
 from urllib.parse import urljoin, urlparse
 
+from paramiko.ssh_exception import SSHException
 from requests.structures import CaseInsensitiveDict
 
 from nodescraper.connection.inband.inband import BinaryFileArtifact, CommandArtifact
@@ -140,7 +141,8 @@ class SshProxyRedfishConnection(RedfishConnection):
         artifact = self._shell.run_command("mktemp", timeout=self._cmd_timeout())
         path = (artifact.stdout or "").strip()
         if artifact.exit_code != 0 or not path:
-            raise RedfishConnectionError("Failed to create remote temp file via mktemp")
+            detail = (artifact.stderr or "").strip()
+            raise RedfishConnectionError(detail or "Failed to create remote temp file via mktemp")
         return path
 
     def _rm(self, *paths: str) -> None:
@@ -149,9 +151,11 @@ class SshProxyRedfishConnection(RedfishConnection):
             self._shell.run_command(f"rm -f {quoted}", timeout=self._cmd_timeout())
 
     def _curl(self, url: str, extra_flags: str = "") -> CurlResponse:
-        header_path = self._mktemp()
-        body_path = self._mktemp()
+        header_path = ""
+        body_path = ""
         try:
+            header_path = self._mktemp()
+            body_path = self._mktemp()
             max_time = max(int(self.timeout), 1)
             cmd = (
                 f"curl -sS --max-time {max_time} -D {shlex.quote(header_path)} "
@@ -186,6 +190,8 @@ class SshProxyRedfishConnection(RedfishConnection):
                 content=body,
                 headers=parse_curl_headers(header_text),
             )
+        except SSHException as exc:
+            raise RedfishConnectionError(f"SSH channel failed: {exc}") from exc
         finally:
             self._rm(header_path, body_path)
 
