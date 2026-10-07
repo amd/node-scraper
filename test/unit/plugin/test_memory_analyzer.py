@@ -60,6 +60,85 @@ def test_config_provided(analyzer, model_obj):
     assert result.status == ExecutionStatus.OK
 
 
+def test_minimum_free_memory_percent_and_ratio_pass(analyzer):
+    model = MemoryDataModel(
+        mem_total="100Gi",
+        mem_free="20Gi",
+        mem_available="20Gi",
+    )
+
+    result = analyzer.analyze_data(
+        model,
+        MemoryAnalyzerArgs(
+            minimum_free_memory_percent=10,
+            ratio=0.9,
+            memory_threshold="100Gi",
+        ),
+    )
+
+    assert result.status == ExecutionStatus.OK
+    assert "20.00%" in result.message
+    assert "ratio=0.90" in result.message
+
+
+def test_minimum_free_memory_percent_passes_ratio_fails(analyzer):
+    model = MemoryDataModel(
+        mem_total="100Gi",
+        mem_free="20Gi",
+        mem_available="20Gi",
+    )
+
+    result = analyzer.analyze_data(
+        model,
+        MemoryAnalyzerArgs(
+            minimum_free_memory_percent=10,
+            ratio=0.5,
+            memory_threshold="100Gi",
+        ),
+    )
+
+    assert result.status == ExecutionStatus.ERROR
+    assert "Memory usage exceeded max allowed!" in result.message
+
+
+def test_ratio_passes_minimum_free_memory_percent_fails(analyzer):
+    model = MemoryDataModel(
+        mem_total="100Gi",
+        mem_free="90Gi",
+        mem_available="90Gi",
+    )
+
+    result = analyzer.analyze_data(
+        model,
+        MemoryAnalyzerArgs(
+            minimum_free_memory_percent=95,
+            ratio=0.5,
+            memory_threshold="100Gi",
+        ),
+    )
+
+    assert result.status == ExecutionStatus.ERROR
+    assert "Minimum free memory percentage not met" in result.message
+    assert len(result.events) == 1
+
+
+def test_minimum_free_memory_percent_fails(analyzer):
+    model = MemoryDataModel(
+        mem_total="100Gi",
+        mem_free="5Gi",
+        mem_available="5Gi",
+    )
+
+    result = analyzer.analyze_data(
+        model,
+        MemoryAnalyzerArgs(minimum_free_memory_percent=10),
+    )
+
+    assert result.status == ExecutionStatus.ERROR
+    assert len(result.events) == 1
+    assert result.events[0].data["available_percent"] == pytest.approx(5.0)
+
+
 def test_linux_low_free_high_available_passes(analyzer):
     """MemFree alone looks tight; MemAvailable reflects reclaimable cache."""
     model = MemoryDataModel(
