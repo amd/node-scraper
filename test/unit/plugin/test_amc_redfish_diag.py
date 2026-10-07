@@ -288,3 +288,160 @@ def test_failed_collection_skips_diag_logs_and_writes_events(
     event_log = (tmp_path / "events.json").read_text(encoding="utf-8")
     assert "ResourceInUse" in event_log
     assert "The resource is in use." in event_log
+
+
+@patch("nodescraper.plugins.ooband.amc_redfish_diag.amc_diag_collector.collect_oem_diagnostic_data")
+@patch(
+    "nodescraper.plugins.ooband.amc_redfish_diag.amc_diag_collector.discover_clear_log_endpoints"
+)
+@patch("nodescraper.plugins.ooband.amc_redfish_diag.amc_diag_collector.clear_redfish_logs")
+def test_amc_clear_logs_called_after_success(
+    mock_clear, mock_discover, mock_collect, amc_collector
+):
+    from nodescraper.connection.redfish.redfish_clear_log import (
+        ClearLogEndpoint,
+        ClearLogResult,
+    )
+
+    mock_collect.return_value = (b"archive", {"Id": "1"}, None)
+    amc_collector.connection.run_get.side_effect = _get_side_effect
+    endpoint = ClearLogEndpoint(
+        path="/redfish/v1/Managers/dummy-amc/LogServices/Dump/Actions/LogService.ClearLog"
+    )
+    mock_discover.return_value = [endpoint]
+    mock_clear.return_value = [ClearLogResult(path=endpoint.path, success=True, status_code=200)]
+
+    result, data = amc_collector.collect_data(
+        args=AmcRedfishDiagCollectorArgs(
+            manager_ids=["dummy-amc"],
+            system_ids=["dummy-system"],
+            collections=[
+                AmcDiagCollectionSpec(root="Managers", diagnostic_data_type="Manager"),
+            ],
+            clear_logs_after_collection=True,
+        )
+    )
+    assert result.status == ExecutionStatus.OK
+    mock_discover.assert_called_once()
+    mock_clear.assert_called_once()
+
+
+@patch("nodescraper.plugins.ooband.amc_redfish_diag.amc_diag_collector.collect_oem_diagnostic_data")
+@patch(
+    "nodescraper.plugins.ooband.amc_redfish_diag.amc_diag_collector.discover_clear_log_endpoints"
+)
+@patch("nodescraper.plugins.ooband.amc_redfish_diag.amc_diag_collector.clear_redfish_logs")
+def test_amc_clear_logs_not_called_when_all_failed(
+    mock_clear, mock_discover, mock_collect, amc_collector
+):
+    mock_collect.return_value = (None, None, "Task timeout")
+    amc_collector.connection.run_get.side_effect = _get_side_effect
+
+    result, data = amc_collector.collect_data(
+        args=AmcRedfishDiagCollectorArgs(
+            manager_ids=["dummy-amc"],
+            collections=[
+                AmcDiagCollectionSpec(root="Managers", diagnostic_data_type="Manager"),
+            ],
+            clear_logs_after_collection=True,
+        )
+    )
+    assert result.status == ExecutionStatus.ERROR
+    mock_discover.assert_not_called()
+    mock_clear.assert_not_called()
+
+
+@patch("nodescraper.plugins.ooband.amc_redfish_diag.amc_diag_collector.collect_oem_diagnostic_data")
+@patch(
+    "nodescraper.plugins.ooband.amc_redfish_diag.amc_diag_collector.discover_clear_log_endpoints"
+)
+@patch("nodescraper.plugins.ooband.amc_redfish_diag.amc_diag_collector.clear_redfish_logs")
+def test_amc_clear_log_failure_downgrades_ok_to_warning(
+    mock_clear, mock_discover, mock_collect, amc_collector
+):
+    from nodescraper.connection.redfish.redfish_clear_log import (
+        ClearLogEndpoint,
+        ClearLogResult,
+    )
+
+    mock_collect.return_value = (b"archive", {"Id": "1"}, None)
+    amc_collector.connection.run_get.side_effect = _get_side_effect
+    endpoint = ClearLogEndpoint(path="/some/ClearLog")
+    mock_discover.return_value = [endpoint]
+    mock_clear.return_value = [
+        ClearLogResult(path=endpoint.path, success=False, status_code=503, error="Server Error")
+    ]
+
+    result, data = amc_collector.collect_data(
+        args=AmcRedfishDiagCollectorArgs(
+            manager_ids=["dummy-amc"],
+            collections=[
+                AmcDiagCollectionSpec(root="Managers", diagnostic_data_type="Manager"),
+            ],
+            clear_logs_after_collection=True,
+        )
+    )
+    assert result.status == ExecutionStatus.WARNING
+    assert "log store(s) failed to clear" in result.message
+    warning_events = [e for e in result.events if e.priority == EventPriority.WARNING]
+    assert any("Failed to clear" in e.description for e in warning_events)
+
+
+@patch("nodescraper.plugins.ooband.amc_redfish_diag.amc_diag_collector.collect_oem_diagnostic_data")
+@patch(
+    "nodescraper.plugins.ooband.amc_redfish_diag.amc_diag_collector.discover_clear_log_endpoints"
+)
+@patch("nodescraper.plugins.ooband.amc_redfish_diag.amc_diag_collector.clear_redfish_logs")
+def test_amc_clear_logs_skipped_when_passive(
+    mock_clear, mock_discover, mock_collect, system_info, redfish_conn_mock
+):
+    from nodescraper.enums import SystemInteractionLevel
+
+    mock_collect.return_value = (b"archive", {"Id": "1"}, None)
+    redfish_conn_mock.api_root = "redfish/v1"
+    redfish_conn_mock.run_get.side_effect = _get_side_effect
+    collector = AmcRedfishDiagCollector(
+        system_info=system_info,
+        connection=redfish_conn_mock,
+        system_interaction_level=SystemInteractionLevel.PASSIVE,
+    )
+    result, data = collector.collect_data(
+        args=AmcRedfishDiagCollectorArgs(
+            manager_ids=["dummy-amc"],
+            collections=[
+                AmcDiagCollectionSpec(root="Managers", diagnostic_data_type="Manager"),
+            ],
+            clear_logs_after_collection=True,
+        )
+    )
+    assert result.status == ExecutionStatus.OK
+    mock_discover.assert_not_called()
+    mock_clear.assert_not_called()
+
+
+@patch("nodescraper.plugins.ooband.amc_redfish_diag.amc_diag_collector.collect_oem_diagnostic_data")
+@patch(
+    "nodescraper.plugins.ooband.amc_redfish_diag.amc_diag_collector.discover_clear_log_endpoints"
+)
+def test_amc_discover_uses_correct_member_ids(mock_discover, mock_collect, amc_collector):
+    mock_collect.return_value = (b"archive", {"Id": "1"}, None)
+    amc_collector.connection.run_get.side_effect = _get_side_effect
+    mock_discover.return_value = []
+
+    amc_collector.collect_data(
+        args=AmcRedfishDiagCollectorArgs(
+            manager_ids=["AMC"],
+            system_ids=["MI450"],
+            collections=[
+                AmcDiagCollectionSpec(root="Managers", diagnostic_data_type="Manager"),
+                AmcDiagCollectionSpec(
+                    root="Systems", diagnostic_data_type="OEM", oem_data_type="AllLogs"
+                ),
+            ],
+            clear_logs_after_collection=True,
+        )
+    )
+    mock_discover.assert_called_once()
+    call_kwargs = mock_discover.call_args[1]
+    assert call_kwargs["member_ids"]["Managers"] == ["AMC"]
+    assert call_kwargs["member_ids"]["Systems"] == ["MI450"]
