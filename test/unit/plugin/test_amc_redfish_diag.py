@@ -39,6 +39,7 @@ from nodescraper.plugins.ooband.amc_redfish_diag import (
     AmcRedfishDiagCollectorArgs,
     AmcRedfishDiagPlugin,
 )
+from nodescraper.taskresulthooks.filesystemloghook import FileSystemLogHook
 
 
 @pytest.fixture
@@ -166,7 +167,7 @@ def test_amc_collector_output_dir_is_diag_logs(
     )
     output_dir = mock_collect.call_args.kwargs["output_dir"]
     assert output_dir == (tmp_path / "diag_logs").resolve()
-    assert output_dir.is_dir()
+    assert not output_dir.exists()
 
 
 def _both_collections():
@@ -197,7 +198,8 @@ def test_amc_collector_partial_failure_is_warning(mock_collect, amc_collector):
     assert data.results["Systems:OEM:AllLogs"].success is True
     warnings = [e for e in result.events if e.priority == EventPriority.WARNING]
     assert len(warnings) == 1
-    assert "Managers:Manager" in warnings[0].description
+    assert warnings[0].description == "AMC diag Managers:Manager: error"
+    assert warnings[0].data["response_body"] == "LogEntry GET failed"
 
 
 @patch("nodescraper.plugins.ooband.amc_redfish_diag.amc_diag_collector.collect_oem_diagnostic_data")
@@ -215,3 +217,74 @@ def test_amc_collector_all_failed_is_error_with_event_per_failure(mock_collect, 
     assert all(not r.success for r in data.results.values())
     warnings = [e for e in result.events if e.priority == EventPriority.WARNING]
     assert len(warnings) == 2
+
+
+@patch("nodescraper.plugins.ooband.amc_redfish_diag.amc_diag_collector.collect_oem_diagnostic_data")
+def test_amc_collector_redfish_body_stays_on_event_not_description(mock_collect, amc_collector):
+    body = '{"error":{"code":"Base.1.21.ResourceInUse",' '"message":"The resource is in use."}}'
+    full = f"Unexpected status 503 for CollectDiagnosticData: {body}"
+    mock_collect.return_value = (None, None, full)
+    amc_collector.connection.run_get.side_effect = _get_side_effect
+    result, data = amc_collector.collect_data(
+        args=AmcRedfishDiagCollectorArgs(
+            manager_ids=["dummy-amc"],
+            collections=[
+                AmcDiagCollectionSpec(root="Managers", diagnostic_data_type="Manager"),
+            ],
+        )
+    )
+    warning = result.events[0]
+    assert warning.description == "AMC diag Managers:Manager: error"
+    assert warning.data["response_body"] == full
+    assert data.results["Managers:Manager"].error == full
+    assert "{" not in result.message
+
+
+@patch("nodescraper.plugins.ooband.amc_redfish_diag.amc_diag_collector.collect_oem_diagnostic_data")
+def test_amc_collector_logs_event_for_ssh_failure(mock_collect, amc_collector):
+    mock_collect.return_value = (None, None, "Timeout opening channel.")
+    amc_collector.connection.run_get.side_effect = _get_side_effect
+    result, data = amc_collector.collect_data(
+        args=AmcRedfishDiagCollectorArgs(
+            manager_ids=["dummy-amc"],
+            collections=[
+                AmcDiagCollectionSpec(root="Managers", diagnostic_data_type="Manager"),
+            ],
+        )
+    )
+    warning = result.events[0]
+    assert warning.description == "AMC diag Managers:Manager: error"
+    assert warning.data["response_body"] == "Timeout opening channel."
+    assert data.results["Managers:Manager"].error == "Timeout opening channel."
+
+
+@patch("nodescraper.plugins.ooband.amc_redfish_diag.amc_diag_collector.collect_oem_diagnostic_data")
+def test_failed_collection_skips_diag_logs_and_writes_events(
+    mock_collect, system_info, redfish_conn_mock, tmp_path
+):
+    full = (
+        "Unexpected status 503 for CollectDiagnosticData: "
+        '{"error":{"code":"Base.1.21.ResourceInUse","message":"The resource is in use."}}'
+    )
+    mock_collect.return_value = (None, None, full)
+    redfish_conn_mock.api_root = "redfish/v1"
+    redfish_conn_mock.run_get.side_effect = _get_side_effect
+    collector = AmcRedfishDiagCollector(
+        system_info=system_info,
+        connection=redfish_conn_mock,
+        log_path=str(tmp_path),
+        task_result_hooks=[FileSystemLogHook(log_base_path=str(tmp_path), include_task_path=False)],
+    )
+    result, _data = collector.collect_data(
+        args=AmcRedfishDiagCollectorArgs(
+            manager_ids=["dummy-amc"],
+            collections=[
+                AmcDiagCollectionSpec(root="Managers", diagnostic_data_type="Manager"),
+            ],
+        )
+    )
+    assert result.status == ExecutionStatus.ERROR
+    assert not (tmp_path / "diag_logs").exists()
+    event_log = (tmp_path / "events.json").read_text(encoding="utf-8")
+    assert "ResourceInUse" in event_log
+    assert "The resource is in use." in event_log

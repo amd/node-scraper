@@ -62,15 +62,12 @@ class RedfishOemDiagCollector(
 
         if self.log_path:
             output_dir = (Path(self.log_path) / "diag_logs").resolve()
-        else:
-            output_dir = None
-
-        if output_dir is not None:
-            output_dir.mkdir(parents=True, exist_ok=True)
             self.logger.info(
                 "(RedfishOemDiagPlugin) Diagnostic archives (e.g. *.tar.xz) will be written to: %s",
                 output_dir,
             )
+        else:
+            output_dir = None
 
         results: dict[str, OemDiagTypeResult] = {}
         validate = bool(args.oem_diagnostic_types_allowable)
@@ -91,8 +88,9 @@ class RedfishOemDiagCollector(
             if err:
                 self._log_event(
                     category=EventCategory.RUNTIME,
-                    description=f"OEM diag {oem_type!r}: {err}",
+                    description=f"OEM diag {oem_type!r}: error",
                     priority=EventPriority.WARNING,
+                    data={"response_body": err},
                     console_log=True,
                 )
                 results[oem_type] = OemDiagTypeResult(success=False, error=err, metadata=None)

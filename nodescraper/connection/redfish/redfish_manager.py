@@ -26,7 +26,7 @@
 from __future__ import annotations
 
 from logging import Logger
-from typing import Optional, Union
+from typing import Any, Mapping, Optional, Union
 
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
 from nodescraper.interfaces.connectionmanager import ConnectionManager
@@ -43,6 +43,41 @@ def _build_base_url(host: str, port: Optional[int], use_https: bool) -> str:
     if port is not None:
         return f"{scheme}://{host_str}:{port}"
     return f"{scheme}://{host_str}"
+
+
+class MultiTargetRedfishConnection:
+    """Sentinel placed on RedfishConnectionManager.connection in multi-target mode.
+
+    Carrying this object (rather than leaving connection=None) allows the standard
+    DataPlugin.collect() guard to pass, while RedfishDataCollector's __init_subclass__
+    wrapper intercepts collect_data and iterates the individual target connections.
+    """
+
+    def __init__(
+        self,
+        target_connections: Mapping[str, RedfishConnection],
+        max_workers: Optional[int] = None,
+        failed_targets: Optional[dict[str, str]] = None,
+    ) -> None:
+        self.target_connections = dict(target_connections)
+        self.multi_target_data: dict[str, Any] = {}
+        self.max_workers = max_workers
+        self.failed_targets = dict(failed_targets or {})
+
+
+def collected_multi_target_data(connection_manager: Any) -> dict[str, Any]:
+    """Return per-target data from an open connection or from the copy made at disconnect.
+
+    Args:
+        connection_manager: Redfish connection manager for this plugin.
+
+    Returns:
+        dict[str, Any]: Target key to collected data. Empty for single-target runs.
+    """
+    conn = getattr(connection_manager, "connection", None)
+    if isinstance(conn, MultiTargetRedfishConnection) and conn.multi_target_data:
+        return conn.multi_target_data
+    return getattr(connection_manager, "_multi_target_data", None) or {}
 
 
 class RedfishConnectionManager(ConnectionManager[RedfishConnection, RedfishConnectionParams]):
@@ -83,7 +118,7 @@ class RedfishConnectionManager(ConnectionManager[RedfishConnection, RedfishConne
         )
 
     def connect(self) -> TaskResult:
-        """Connect to the Redfish service and perform a simple GET to verify."""
+        """Connect to Redfish (single-target or multi-target)."""
         if not self.connection_args:
             self._log_event(
                 category=EventCategory.RUNTIME,
@@ -94,7 +129,6 @@ class RedfishConnectionManager(ConnectionManager[RedfishConnection, RedfishConne
             self.result.status = ExecutionStatus.EXECUTION_FAILURE
             return self.result
 
-        # Accept dict from JSON config; convert to RedfishConnectionParams
         raw = self.connection_args
         if isinstance(raw, dict):
             params = RedfishConnectionParams.model_validate(raw)
@@ -110,14 +144,91 @@ class RedfishConnectionManager(ConnectionManager[RedfishConnection, RedfishConne
             self.result.status = ExecutionStatus.EXECUTION_FAILURE
             return self.result
 
+        if params.is_multi_target:
+            self.target_connections: dict[str, RedfishConnection] = {}
+            failed_targets: dict[str, str] = {}
+            for target in params.targets:  # type: ignore[union-attr]
+                key, conn, error = self._connect_target(target)
+                if conn is None:
+                    failed_targets[key] = error or f"Redfish connection failed for target {key!r}"
+                    continue
+                if key in self.target_connections:
+                    self._log_event(
+                        category=EventCategory.RUNTIME,
+                        description=f"Duplicate Redfish target key {key!r}; keeping the first connection",
+                        priority=EventPriority.WARNING,
+                        console_log=True,
+                    )
+                    conn.close()
+                    continue
+                self.target_connections[key] = conn
+            if not self.target_connections:
+                self.result.status = ExecutionStatus.EXECUTION_FAILURE
+                lines = "\n".join(f"[{k}] {v}" for k, v in failed_targets.items())
+                self.result.message = f"Redfish connection failed for every target\n{lines}"
+                self.result.events.clear()
+                return self.result
+            if failed_targets:
+                lines = "\n".join(f"[{k}] {v}" for k, v in failed_targets.items())
+                self.result.status = ExecutionStatus.WARNING
+                self.result.message = f"Some Redfish targets failed to connect\n{lines}"
+                self.result.events.clear()
+            self.connection = MultiTargetRedfishConnection(  # type: ignore[assignment]
+                self.target_connections,
+                max_workers=params.max_workers,
+                failed_targets=failed_targets,
+            )
+            return self.result
+
+        return self._connect_single(params)
+
+    def _connect_target(
+        self, target: RedfishConnectionParams
+    ) -> tuple[str, Optional[RedfishConnection], Optional[str]]:
+        """Connect one target.
+
+        Args:
+            target: Connection parameters for a single BMC.
+
+        Returns:
+            tuple[str, Optional[RedfishConnection], Optional[str]]: Target key, connection, and error text.
+        """
+        key = target.target_key or str(target.host)
+        password = target.password.get_secret_value() if target.password else None
+        base_url = _build_base_url(str(target.host), target.port, target.use_https)
+        try:
+            self.logger.info("Connecting to Redfish at %s (target=%r)", base_url, key)
+            conn = RedfishConnection(
+                base_url=base_url,
+                username=target.username or "",
+                password=password,
+                timeout=target.timeout_seconds,
+                use_session_auth=target.use_session_auth,
+                verify_ssl=target.verify_ssl,
+                api_root=target.api_root,
+            )
+            conn._ensure_session()
+            conn.get_service_root()
+            return key, conn, None
+        except (RedfishConnectionError, Exception) as exc:  # noqa: BLE001
+            description = f"Redfish connection failed for target {key!r}: {exc}"
+            self._log_event(
+                category=EventCategory.RUNTIME,
+                description=description,
+                priority=EventPriority.WARNING,
+                console_log=True,
+            )
+            return key, None, description
+
+    def _connect_single(self, params: RedfishConnectionParams) -> TaskResult:
+        """Connect in single-target mode (original connect logic)."""
         password = params.password.get_secret_value() if params.password else None
         base_url = _build_base_url(str(params.host), params.port, params.use_https)
-
         try:
             self.logger.info("Connecting to Redfish at %s", base_url)
             self.connection = RedfishConnection(
                 base_url=base_url,
-                username=params.username,
+                username=params.username or "",
                 password=password,
                 timeout=params.timeout_seconds,
                 use_session_auth=params.use_session_auth,
@@ -147,7 +258,12 @@ class RedfishConnectionManager(ConnectionManager[RedfishConnection, RedfishConne
         return self.result
 
     def disconnect(self) -> None:
-        """Disconnect and release the Redfish session."""
-        if self.connection is not None:
+        """Disconnect Redfish sessions and keep collected multi-target data on the manager."""
+        if isinstance(self.connection, MultiTargetRedfishConnection):
+            self._multi_target_data: dict[str, Any] = dict(self.connection.multi_target_data)
+            for conn in self.connection.target_connections.values():
+                conn.close()
+            self.target_connections = {}
+        elif self.connection is not None:
             self.connection.close()
         super().disconnect()

@@ -207,7 +207,10 @@ def _poll_task_resource(
     while True:
         if time.time() - start > timeout_s:
             return None, f"Task did not complete within {timeout_s}s"
-        poll_resp = conn.get_response(task_path)
+        try:
+            poll_resp = conn.get_response(task_path)
+        except RedfishConnectionError as exc:
+            return None, str(exc)
         if poll_resp.status_code == codes.ok:
             try:
                 body = poll_resp.json()
@@ -551,7 +554,10 @@ def collect_oem_diagnostic_data(
                 if time.time() - start > task_timeout_s:
                     return None, None, f"Task did not complete within {task_timeout_s}s"
                 monitor_path = _get_path_from_connection(conn, task_monitor)
-                poll_resp = conn.get_response(monitor_path)
+                try:
+                    poll_resp = conn.get_response(monitor_path)
+                except RedfishConnectionError as exc:
+                    return None, None, str(exc)
                 if poll_resp.status_code == codes.not_found:
                     return None, None, f"TaskMonitor GET failed: status {codes.not_found}"
                 if poll_resp.status_code != codes.accepted:
@@ -578,7 +584,10 @@ def collect_oem_diagnostic_data(
                 if poll_err:
                     return None, None, poll_err
             else:
-                task_resp = conn.get_response(follow_path)
+                try:
+                    task_resp = conn.get_response(follow_path)
+                except RedfishConnectionError as exc:
+                    return None, None, str(exc)
                 if task_resp.status_code != codes.ok:
                     return None, None, f"Task GET failed: {task_resp.status_code}"
                 task_json = task_resp.json()
@@ -624,5 +633,8 @@ def collect_oem_diagnostic_data(
         return None, None, f"LogEntry GET failed: {err} (GET {log_entry_path})"
 
     file_stem = oem_type or diag_type
-    log_bytes = _download_log_and_save(conn, log_entry_json, file_stem, output_dir, log)
+    try:
+        log_bytes = _download_log_and_save(conn, log_entry_json, file_stem, output_dir, log)
+    except RedfishConnectionError as exc:
+        return None, None, str(exc)
     return log_bytes, log_entry_json, None

@@ -27,7 +27,7 @@ from __future__ import annotations
 
 from typing import Optional, Union
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic.networks import IPvAnyAddress
 
 from nodescraper.connection.inband.sshparams import SSHConnectionParams
@@ -36,15 +36,36 @@ from .redfish_connection import DEFAULT_REDFISH_API_ROOT
 
 
 class RedfishSshProxyConnectionParams(BaseModel):
-    """Redfish over SSH: curl on the BMC to an AMC (or other) address reachable from that host."""
+    """Redfish over SSH: curl on the BMC to an AMC address reachable from that host.
+
+    Single-target mode supplies host and ssh. Multi-target mode supplies targets,
+    and each entry has its own ssh block and AMC host.
+    """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    host: Union[IPvAnyAddress, str] = Field(
+    target_key: Optional[str] = Field(
+        default=None,
+        description="Identifier used when this entry appears inside a targets list.",
+    )
+    targets: Optional[list["RedfishSshProxyConnectionParams"]] = Field(
+        default=None,
+        description="BMC SSH-proxy targets. Each entry has its own ssh block and AMC host.",
+    )
+    max_workers: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description=(
+            "Max concurrent collection threads. Defaults to the target count, capped at 32."
+        ),
+    )
+    host: Optional[Union[IPvAnyAddress, str]] = Field(
+        default=None,
         description="Redfish host as seen from the SSH target (internal AMC address).",
     )
-    ssh: SSHConnectionParams = Field(
-        description="SSH parameters for the BMC (or other host) that can reach host.",
+    ssh: Optional[SSHConnectionParams] = Field(
+        default=None,
+        description="SSH parameters for the BMC that can reach host.",
     )
     port: Optional[int] = Field(default=80, ge=1, le=65535)
     use_https: bool = Field(
@@ -56,3 +77,28 @@ class RedfishSshProxyConnectionParams(BaseModel):
         default=DEFAULT_REDFISH_API_ROOT,
         description="Redfish API path (e.g. redfish/v1).",
     )
+
+    @model_validator(mode="after")
+    def _validate_target_config(self) -> "RedfishSshProxyConnectionParams":
+        """Require host and ssh unless a targets list is set.
+
+        Returns:
+            RedfishSshProxyConnectionParams: This params object.
+        """
+        if self.targets:
+            return self
+        if self.host is None or self.ssh is None:
+            raise ValueError("Either targets or both host and ssh must be provided.")
+        return self
+
+    @property
+    def is_multi_target(self) -> bool:
+        """True when one or more targets are configured via the targets list.
+
+        Returns:
+            bool: True when targets is non-empty.
+        """
+        return bool(self.targets)
+
+
+RedfishSshProxyConnectionParams.model_rebuild()

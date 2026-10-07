@@ -24,12 +24,16 @@
 #
 ###############################################################################
 import shlex
+from typing import Optional
 from unittest.mock import MagicMock, patch
 
 import pytest
 from pydantic import ValidationError
 
 from nodescraper.connection.inband.inband import BaseFileArtifact, CommandArtifact
+from nodescraper.connection.inband.sshparams import SSHConnectionParams
+from nodescraper.connection.redfish.redfish_connection import RedfishConnectionError
+from nodescraper.connection.redfish.redfish_manager import MultiTargetRedfishConnection
 from nodescraper.connection.redfish.ssh_proxy_connection import (
     CurlResponse,
     SshProxyRedfishConnection,
@@ -155,3 +159,114 @@ def test_ssh_proxy_manager_connect_success(system_info):
 def test_ssh_proxy_params_require_ssh():
     with pytest.raises(ValidationError):
         RedfishSshProxyConnectionParams(host="192.0.2.10")
+
+
+def _proxy_target(
+    target_key: Optional[str], amc_host: str, ssh_host: str
+) -> RedfishSshProxyConnectionParams:
+    return RedfishSshProxyConnectionParams(
+        target_key=target_key,
+        host=amc_host,
+        ssh=SSHConnectionParams(
+            hostname=ssh_host, username="testuser", key_filename="/tmp/dummy_id"
+        ),
+    )
+
+
+def test_ssh_proxy_partial_connect_keeps_reachable_bmc(system_info):
+    """One unreachable BMC leaves the reachable BMC connected at warning."""
+    shells: list[MagicMock] = []
+
+    def factory(_params):
+        shell = MagicMock()
+        shells.append(shell)
+        return shell
+
+    def service_root(conn):
+        if "amc-down" in conn.base_url:
+            raise RedfishConnectionError("unreachable")
+        return {"RedfishVersion": "1.0"}
+
+    params = RedfishSshProxyConnectionParams(
+        max_workers=2,
+        targets=[
+            _proxy_target("good", "192.0.2.10", "bmc-good.example"),
+            _proxy_target("bad", "amc-down.example", "bmc-down.example"),
+        ],
+    )
+    mgr = RedfishSshProxyConnectionManager(system_info=system_info, connection_args=params)
+    with (
+        patch(
+            "nodescraper.connection.redfish.ssh_proxy_manager.RemoteShell",
+            side_effect=factory,
+        ),
+        patch.object(SshProxyRedfishConnection, "get_service_root", service_root),
+    ):
+        result = mgr.connect()
+
+    assert result.status == ExecutionStatus.WARNING
+    assert isinstance(mgr.connection, MultiTargetRedfishConnection)
+    assert set(mgr.connection.target_connections) == {"good"}
+    assert "bad" in mgr.connection.failed_targets
+    assert mgr.connection.max_workers == 2
+    assert shells[1].client.close.called
+    assert not shells[0].client.close.called
+
+    mgr.connection.multi_target_data["good"] = {"label": "ok"}
+    mgr.disconnect()
+    assert mgr.connection is None
+    assert mgr._multi_target_data == {"good": {"label": "ok"}}
+    assert shells[0].client.close.called
+
+
+def test_ssh_proxy_every_target_down_fails_connect(system_info):
+    """Every target failing is an execution failure and does not set a connection."""
+
+    def service_root(_conn):
+        raise RedfishConnectionError("unreachable")
+
+    params = RedfishSshProxyConnectionParams(
+        targets=[
+            _proxy_target("a", "amc-down-a.example", "bmc-a.example"),
+            _proxy_target("b", "amc-down-b.example", "bmc-b.example"),
+        ],
+    )
+    mgr = RedfishSshProxyConnectionManager(system_info=system_info, connection_args=params)
+    with (
+        patch(
+            "nodescraper.connection.redfish.ssh_proxy_manager.RemoteShell",
+            return_value=MagicMock(),
+        ),
+        patch.object(SshProxyRedfishConnection, "get_service_root", service_root),
+    ):
+        result = mgr.connect()
+
+    assert result.status == ExecutionStatus.EXECUTION_FAILURE
+    assert mgr.connection is None
+
+
+def test_ssh_proxy_target_key_defaults_to_ssh_hostname(system_info):
+    """Targets that share an AMC address stay distinct by SSH hostname."""
+
+    def service_root(_conn):
+        return {"RedfishVersion": "1.0"}
+
+    params = RedfishSshProxyConnectionParams(
+        targets=[
+            _proxy_target(None, "192.0.2.10", "bmc-one.example"),
+            _proxy_target(None, "192.0.2.10", "bmc-two.example"),
+        ],
+    )
+    mgr = RedfishSshProxyConnectionManager(system_info=system_info, connection_args=params)
+    with (
+        patch(
+            "nodescraper.connection.redfish.ssh_proxy_manager.RemoteShell",
+            return_value=MagicMock(),
+        ),
+        patch.object(SshProxyRedfishConnection, "get_service_root", service_root),
+    ):
+        result = mgr.connect()
+
+    assert result.status in (ExecutionStatus.UNSET, ExecutionStatus.OK)
+    assert isinstance(mgr.connection, MultiTargetRedfishConnection)
+    assert set(mgr.connection.target_connections) == {"bmc-one.example", "bmc-two.example"}

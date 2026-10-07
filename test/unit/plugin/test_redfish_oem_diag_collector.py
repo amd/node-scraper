@@ -139,4 +139,4 @@ def test_redfish_oem_diag_collector_output_dir_is_diag_logs(
     collector.collect_data(args=RedfishOemDiagCollectorArgs(oem_diagnostic_types=["AllLogs"]))
     output_dir = mock_collect.call_args.kwargs["output_dir"]
     assert output_dir == (tmp_path / "diag_logs").resolve()
-    assert output_dir.is_dir()
+    assert not output_dir.exists()
