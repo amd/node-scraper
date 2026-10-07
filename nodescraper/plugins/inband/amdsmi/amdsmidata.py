@@ -974,6 +974,19 @@ class EccData(BaseModel):
     )(na_to_none)
 
 
+def _match_known_rails_case_insensitive(rail_set: frozenset[str], data: Any) -> Any:
+    """Rename dict keys to their canonical-cased rail name when their upper-cased
+    form matches an entry in ``rail_set`` (the known, already-uppercase rail names)."""
+    if not isinstance(data, dict):
+        return data
+    out = dict(data)
+    for key in list(out.keys()):
+        upper_key = key.upper()
+        if upper_key in rail_set and upper_key not in out:
+            out[upper_key] = out.pop(key)
+    return out
+
+
 class MetricClockRails(BaseModel):
     """Enumerated, typed view of the known ``AmdSmiMetric.clock`` rails."""
 
@@ -1000,6 +1013,7 @@ class MetricClockRails(BaseModel):
         "SOCCLK_0",
         "FCLK_0",
     )
+    _RAIL_SET: ClassVar[frozenset[str]] = frozenset(RAIL_NAMES)
 
     GFX_0: Optional[MetricClockData] = None
     GFX_1: Optional[MetricClockData] = None
@@ -1021,24 +1035,10 @@ class MetricClockRails(BaseModel):
     SOCCLK_0: Optional[MetricClockData] = None
     FCLK_0: Optional[MetricClockData] = None
 
-    @classmethod
-    def _match_rails_case_insensitive(cls, data: Any) -> Any:
-        """Rename dict keys to their canonical-cased rail name when they match
-        ``RAIL_NAMES`` case-insensitively."""
-        if not isinstance(data, dict):
-            return data
-        canonical = {name.upper(): name for name in cls.RAIL_NAMES}
-        out = dict(data)
-        for key in list(out.keys()):
-            target = canonical.get(key.upper())
-            if target and target not in out:
-                out[target] = out.pop(key)
-        return out
-
     @model_validator(mode="before")
     @classmethod
     def _match_rails(cls, data: Any) -> Any:
-        return cls._match_rails_case_insensitive(data)
+        return _match_known_rails_case_insensitive(cls._RAIL_SET, data)
 
 
 class MetricGpuBoardTemperature(BaseModel):
@@ -1083,6 +1083,7 @@ class MetricGpuBoardTemperature(BaseModel):
         "VDDIO_065_UCIEAM_C",
         "VDDAN_075",
     )
+    _RAIL_SET: ClassVar[frozenset[str]] = frozenset(RAIL_NAMES)
 
     NODE_RETIMER_X: Optional[ValueUnit] = None
     NODE_OAM_X_IBC: Optional[ValueUnit] = None
@@ -1118,6 +1119,11 @@ class MetricGpuBoardTemperature(BaseModel):
     VDDAN_075: Optional[ValueUnit] = None
 
     _rail_value_unit = field_validator(*RAIL_NAMES, mode="before")(coerce_value_unit_input)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _match_rails(cls, data: Any) -> Any:
+        return _match_known_rails_case_insensitive(cls._RAIL_SET, data)
 
 
 class MetricGpuBoard(BaseModel):
@@ -1158,6 +1164,7 @@ class MetricBaseBoardTemperature(BaseModel):
         "RETIMER_0_1_2_3_1V2_VR",
         "RETIMER_4_5_6_7_1V2_VR",
     )
+    _RAIL_SET: ClassVar[frozenset[str]] = frozenset(RAIL_NAMES)
 
     UBB_FPGA: Optional[ValueUnit] = None
     UBB_FRONT: Optional[ValueUnit] = None
@@ -1184,6 +1191,11 @@ class MetricBaseBoardTemperature(BaseModel):
     RETIMER_4_5_6_7_1V2_VR: Optional[ValueUnit] = None
 
     _rail_value_unit = field_validator(*RAIL_NAMES, mode="before")(coerce_value_unit_input)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _match_rails(cls, data: Any) -> Any:
+        return _match_known_rails_case_insensitive(cls._RAIL_SET, data)
 
 
 class MetricBaseBoard(BaseModel):

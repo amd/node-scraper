@@ -560,6 +560,24 @@ def test_metric_baseboard_rail_na_and_zero():
     assert board.UBB_FPGA.value == 0
 
 
+def test_metric_gpuboard_rail_case_insensitive_match():
+    """Current amd-smi builds emit lowercase rail names (e.g. node_retimer_x)."""
+    board = MetricGpuBoardTemperature.model_validate(
+        {"node_retimer_x": {"value": 43, "unit": "C"}}
+    )
+    assert board.NODE_RETIMER_X is not None
+    assert board.NODE_RETIMER_X.value == 43
+    assert board.model_extra == {}
+
+
+def test_metric_baseboard_rail_case_insensitive_match():
+    """Current amd-smi builds emit lowercase rail names (e.g. ubb_front)."""
+    board = MetricBaseBoardTemperature.model_validate({"ubb_front": {"value": 55, "unit": "C"}})
+    assert board.UBB_FRONT is not None
+    assert board.UBB_FRONT.value == 55
+    assert board.model_extra == {}
+
+
 def test_metric_clock_per_aid_na_maps():
     """MI355 metric clock may expose per-AID/MID maps instead of MetricClockData leaves."""
     metric = AmdSmiMetric.model_validate(
