@@ -23,9 +23,13 @@
 # SOFTWARE.
 #
 ###############################################################################
+from typing import Optional
+
 from nodescraper.models import DataModel
 
 
 class OsDataModel(DataModel):
     os_name: str
     os_version: str = ""
+    load_average_1m: Optional[float] = None
+    cpu_count: Optional[int] = None

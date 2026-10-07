@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# Copyright (c) 2025 Advanced Micro Devices, Inc.
+# Copyright (c) 2026 Advanced Micro Devices, Inc.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,21 +23,16 @@
 # SOFTWARE.
 #
 ###############################################################################
-from nodescraper.base import InBandDataPlugin
+from typing import Optional
 
-from .analyzer_args import NvmeAnalyzerArgs
-from .nvme_analyzer import NvmeAnalyzer
-from .nvme_collector import NvmeCollector
-from .nvmedata import NvmeDataModel
+from pydantic import Field
+
+from nodescraper.models import AnalyzerArgs
 
 
-class NvmePlugin(InBandDataPlugin[NvmeDataModel, None, NvmeAnalyzerArgs]):
-    """Plugin for collection and analysis of nvme data"""
-
-    DATA_MODEL = NvmeDataModel
-
-    COLLECTOR = NvmeCollector
-
-    ANALYZER = NvmeAnalyzer
-
-    ANALYZER_ARGS = NvmeAnalyzerArgs
+class NvmeAnalyzerArgs(AnalyzerArgs):
+    maximum_smart_error_count: Optional[int] = Field(
+        default=None,
+        ge=0,
+        description="Maximum allowed NVMe SMART media error count per device.",
+    )
