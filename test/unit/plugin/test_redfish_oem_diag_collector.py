@@ -140,3 +140,121 @@ def test_redfish_oem_diag_collector_output_dir_is_diag_logs(
     output_dir = mock_collect.call_args.kwargs["output_dir"]
     assert output_dir == (tmp_path / "diag_logs").resolve()
     assert not output_dir.exists()
+
+
+@patch("nodescraper.plugins.ooband.redfish_oem_diag.oem_diag_collector.collect_oem_diagnostic_data")
+@patch("nodescraper.plugins.ooband.redfish_oem_diag.oem_diag_collector.clear_redfish_logs")
+@patch("nodescraper.plugins.ooband.redfish_oem_diag.oem_diag_collector._parse_clear_endpoint")
+def test_clear_logs_called_after_successful_collection(
+    mock_parse, mock_clear, mock_collect, redfish_oem_diag_collector, redfish_conn_mock
+):
+    from nodescraper.connection.redfish import RedfishGetResult
+    from nodescraper.connection.redfish.redfish_clear_log import (
+        ClearLogEndpoint,
+        ClearLogResult,
+    )
+
+    mock_collect.return_value = (b"data", {}, None)
+    mock_parse.return_value = ClearLogEndpoint(path="/clear/path")
+    mock_clear.return_value = [ClearLogResult(path="/clear/path", success=True, status_code=200)]
+    redfish_conn_mock.run_get.return_value = RedfishGetResult(
+        path="/svc", success=True, data={"Actions": {}}, status_code=200
+    )
+
+    result, data = redfish_oem_diag_collector.collect_data(
+        args=RedfishOemDiagCollectorArgs(
+            oem_diagnostic_types=["AllLogs"],
+            clear_logs_after_collection=True,
+        )
+    )
+    assert result.status == ExecutionStatus.OK
+    mock_clear.assert_called_once()
+
+
+@patch("nodescraper.plugins.ooband.redfish_oem_diag.oem_diag_collector.collect_oem_diagnostic_data")
+@patch("nodescraper.plugins.ooband.redfish_oem_diag.oem_diag_collector.clear_redfish_logs")
+def test_clear_logs_not_called_when_collection_fails(
+    mock_clear, mock_collect, redfish_oem_diag_collector
+):
+    mock_collect.return_value = (None, None, "Task timeout")
+    result, data = redfish_oem_diag_collector.collect_data(
+        args=RedfishOemDiagCollectorArgs(
+            oem_diagnostic_types=["AllLogs"],
+            clear_logs_after_collection=True,
+        )
+    )
+    assert result.status == ExecutionStatus.ERROR
+    mock_clear.assert_not_called()
+
+
+@patch("nodescraper.plugins.ooband.redfish_oem_diag.oem_diag_collector.collect_oem_diagnostic_data")
+@patch("nodescraper.plugins.ooband.redfish_oem_diag.oem_diag_collector.clear_redfish_logs")
+@patch("nodescraper.plugins.ooband.redfish_oem_diag.oem_diag_collector._parse_clear_endpoint")
+def test_clear_log_failure_downgrades_to_warning(
+    mock_parse, mock_clear, mock_collect, redfish_oem_diag_collector, redfish_conn_mock
+):
+    from nodescraper.connection.redfish import RedfishGetResult
+    from nodescraper.connection.redfish.redfish_clear_log import (
+        ClearLogEndpoint,
+        ClearLogResult,
+    )
+    from nodescraper.enums import EventPriority
+
+    mock_collect.return_value = (b"data", {}, None)
+    mock_parse.return_value = ClearLogEndpoint(path="/clear/path")
+    mock_clear.return_value = [
+        ClearLogResult(
+            path="/clear/path", success=False, status_code=500, error="POST returned 500"
+        )
+    ]
+    redfish_conn_mock.run_get.return_value = RedfishGetResult(
+        path="/svc", success=True, data={"Actions": {}}, status_code=200
+    )
+
+    result, data = redfish_oem_diag_collector.collect_data(
+        args=RedfishOemDiagCollectorArgs(
+            oem_diagnostic_types=["AllLogs"],
+            clear_logs_after_collection=True,
+        )
+    )
+    assert result.status == ExecutionStatus.WARNING
+    assert "log clear failed" in result.message
+    warning_events = [e for e in result.events if e.priority == EventPriority.WARNING]
+    assert any("Failed to clear" in e.description for e in warning_events)
+
+
+@patch("nodescraper.plugins.ooband.redfish_oem_diag.oem_diag_collector.collect_oem_diagnostic_data")
+@patch("nodescraper.plugins.ooband.redfish_oem_diag.oem_diag_collector.clear_redfish_logs")
+def test_clear_logs_skipped_when_passive_interaction(
+    mock_clear, mock_collect, system_info, redfish_conn_mock
+):
+    from nodescraper.enums import SystemInteractionLevel
+
+    mock_collect.return_value = (b"data", {}, None)
+    collector = RedfishOemDiagCollector(
+        system_info=system_info,
+        connection=redfish_conn_mock,
+        system_interaction_level=SystemInteractionLevel.PASSIVE,
+    )
+    result, data = collector.collect_data(
+        args=RedfishOemDiagCollectorArgs(
+            oem_diagnostic_types=["AllLogs"],
+            clear_logs_after_collection=True,
+        )
+    )
+    assert result.status == ExecutionStatus.OK
+    mock_clear.assert_not_called()
+
+
+@patch("nodescraper.plugins.ooband.redfish_oem_diag.oem_diag_collector.collect_oem_diagnostic_data")
+@patch("nodescraper.plugins.ooband.redfish_oem_diag.oem_diag_collector.clear_redfish_logs")
+def test_clear_logs_not_called_when_disabled(mock_clear, mock_collect, redfish_oem_diag_collector):
+    mock_collect.return_value = (b"data", {}, None)
+    result, data = redfish_oem_diag_collector.collect_data(
+        args=RedfishOemDiagCollectorArgs(
+            oem_diagnostic_types=["AllLogs"],
+            clear_logs_after_collection=False,
+        )
+    )
+    assert result.status == ExecutionStatus.OK
+    mock_clear.assert_not_called()
