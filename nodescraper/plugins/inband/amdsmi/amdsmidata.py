@@ -25,7 +25,7 @@
 ###############################################################################
 import re
 from enum import Enum
-from typing import Any, ClassVar, Mapping, Optional, Union
+from typing import Any, ClassVar, Literal, Mapping, Optional, Union
 
 from pydantic import (
     AliasChoices,
@@ -40,11 +40,13 @@ from pydantic import (
 from nodescraper.models.datamodel import DataModel, FileModel
 from nodescraper.utils import find_annotation_in_container
 
+NA_STR = "N/A"
+NA_LITERAL = Literal["N/A"]
 _NUM_UNIT_RE = re.compile(r"^\s*([-+]?\d+(?:\.\d+)?)(?:\s*([A-Za-z%/][A-Za-z0-9%/._-]*))?\s*$")
 
 
 def _value_unit_is_na(x: Any) -> bool:
-    return x is None or (isinstance(x, str) and x.strip().upper() in {"N/A", "NA", ""})
+    return x is None or (isinstance(x, str) and x.strip().upper() in {NA_STR, "NA", ""})
 
 
 def _coerce_value_unit_raw(v: Any) -> Any:
@@ -81,7 +83,7 @@ def _coerce_value_unit_raw(v: Any) -> Any:
 
 
 def na_to_none(values: Union[int, str]):
-    if values == "N/A":
+    if values == NA_STR:
         return None
     return values
 
@@ -89,7 +91,7 @@ def na_to_none(values: Union[int, str]):
 def na_to_none_list(values: list[Union[int, str, None]]) -> list[Union[int, str, None]]:
     ret_list: list[Union[int, str, None]] = values.copy()
     for i in range(len(ret_list)):
-        if ret_list[i] == "N/A":
+        if ret_list[i] == NA_STR:
             ret_list[i] = None
     return ret_list
 
@@ -99,14 +101,14 @@ def na_to_none_dict(values: object) -> Optional[dict[str, Any]]:
     Accepts None; returns None for 'N/A'/'NA'/'' or non-mapping inputs."""
     if values is None:
         return None
-    if isinstance(values, str) and values.strip().upper() in {"N/A", "NA", ""}:
+    if isinstance(values, str) and values.strip().upper() in {NA_STR, "NA", ""}:
         return None
     if not isinstance(values, Mapping):
         return None
 
     out: dict[str, Any] = {}
     for k, v in values.items():
-        if isinstance(v, str) and v.strip().upper() in {"N/A", "NA", ""}:
+        if isinstance(v, str) and v.strip().upper() in {NA_STR, "NA", ""}:
             out[k] = None
         else:
             out[k] = v
@@ -216,7 +218,7 @@ class EccState(Enum):
     SING_C = "SING_C"
     MULT_UC = "MULT_UC"
     POISON = "POISON"
-    NA = "N/A"
+    NA = NA_STR
 
 
 class ProcessListItem(BaseModel):
@@ -418,13 +420,13 @@ def _normalize_static_ppt_block(val: object) -> object:
     """Drop N/A-only ``ppt0``/``ppt1`` blocks; pass through already-parsed models."""
     if val is None:
         return None
-    if isinstance(val, str) and val.strip().upper() in {"N/A", "NA", ""}:
+    if isinstance(val, str) and val.strip().upper() in {NA_STR, "NA", ""}:
         return None
     if not isinstance(val, dict):
         return val
     out: dict[str, Any] = {}
     for key, raw in val.items():
-        if isinstance(raw, str) and raw.strip().upper() in {"N/A", "NA", ""}:
+        if isinstance(raw, str) and raw.strip().upper() in {NA_STR, "NA", ""}:
             continue
         if raw is not None:
             out[key] = raw
@@ -1251,7 +1253,7 @@ class AmdSmiMetric(BaseModel):
     def validate_ecc_blocks(cls, value: Union[dict[str, EccData], str]) -> dict[str, EccData]:
         """Validate the ecc_blocks field."""
         if isinstance(value, str):
-            # If it's a string, we assume it's "N/A" and return an empty dict
+            # If it's a string, we assume it's NA_STR and return an empty dict
             return {}
         return value
 
@@ -1259,7 +1261,7 @@ class AmdSmiMetric(BaseModel):
     @classmethod
     def validate_energy(cls, value: Optional[Any]) -> Optional[MetricEnergy]:
         """Validate the energy field."""
-        if value == "N/A" or value is None:
+        if value == NA_STR or value is None:
             return None
         return value
 
@@ -1272,6 +1274,7 @@ class LinkStatusTable(Enum):
     DOWN = "D"
     DISABLED = "X"
     SELF = "SELF"
+    NA = NA_STR
 
 
 class BiDirectionalTable(Enum):
