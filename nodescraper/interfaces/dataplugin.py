@@ -119,13 +119,18 @@ class DataPlugin(
             **kwargs,
         )
         self._validate_class_var()
+        collector = self.get_collector_classes()
         self.collection_result: TaskResult = TaskResult(
             status=ExecutionStatus.NOT_RAN,
             message=f"Data collection not ran for {self.__class__.__name__}",
+            parent=self.__class__.__name__,
+            task=collector[0].__name__ if collector else None,
         )
         self.analysis_result: TaskResult = TaskResult(
             status=ExecutionStatus.NOT_RAN,
             message=f"Data analysis not ran for {self.__class__.__name__}",
+            parent=self.__class__.__name__,
+            task=self.ANALYZER.__name__ if self.ANALYZER is not None else None,
         )
         self._data: Optional[TDataModel] = None
 
