@@ -562,9 +562,7 @@ def test_metric_baseboard_rail_na_and_zero():
 
 def test_metric_gpuboard_rail_case_insensitive_match():
     """Current amd-smi builds emit lowercase rail names (e.g. node_retimer_x)."""
-    board = MetricGpuBoardTemperature.model_validate(
-        {"node_retimer_x": {"value": 43, "unit": "C"}}
-    )
+    board = MetricGpuBoardTemperature.model_validate({"node_retimer_x": {"value": 43, "unit": "C"}})
     assert board.NODE_RETIMER_X is not None
     assert board.NODE_RETIMER_X.value == 43
     assert board.model_extra == {}
