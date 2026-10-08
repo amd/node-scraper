@@ -24,11 +24,12 @@
 #
 ###############################################################################
 import io
+import json
 import os
 import tarfile
 from typing import Any, TypeVar, Union
 
-from pydantic import BaseModel, ConfigDict, ValidationInfo, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from nodescraper.utils import get_unique_filename
 
@@ -36,37 +37,46 @@ TDataModel = TypeVar("TDataModel", bound="DataModel")
 
 
 class FileModel(BaseModel):
-    """Binary file payload. JSON uses URL-safe base64 for ``file_contents``."""
+    """A file captured from the system.
 
-    model_config = ConfigDict(ser_json_bytes="base64", val_json_bytes="base64")
+    ``file_contents`` is excluded from model serialization (it may be binary); use
+    ``to_file`` to write the raw bytes to disk.
+    """
 
-    file_contents: bytes
+    file_contents: bytes = Field(default=b"", exclude=True)
     file_name: str
 
     @field_validator("file_contents", mode="before")
     @classmethod
-    def file_contents_conformer(
-        cls, value: Union[io.BytesIO, str, bytes], info: ValidationInfo
-    ) -> Union[str, bytes]:
+    def file_contents_conformer(cls, value: Union[io.BytesIO, str, bytes]) -> bytes:
         if isinstance(value, io.BytesIO):
             return value.getvalue()
-        if isinstance(value, str) and info.mode != "json":
-            # Constructor/Python input is text.
+        if isinstance(value, str):
             return value.encode("utf-8")
-        # JSON strings stay base64 for val_json_bytes.
         return value
 
-    def log_model(self, log_path: str) -> None:
-        """Log data model to a file
+    def to_file(self, log_path: str) -> None:
+        """Write the raw file contents to ``log_path``/``file_name``
 
         Args:
-            log_path (str): log path
+            log_path (str): directory to write the file into
+
+        Raises:
+            ValueError: if ``file_name`` resolves to a location outside of ``log_path``
         """
-        log_name = os.path.join(log_path, self.file_name)
+        base_dir = os.path.realpath(log_path)
+        log_name = os.path.realpath(os.path.join(base_dir, self.file_name))
+        if os.path.commonpath([base_dir, log_name]) != base_dir or log_name == base_dir:
+            raise ValueError(f"file_name {self.file_name!r} resolves outside of {log_path!r}")
+        os.makedirs(os.path.dirname(log_name), exist_ok=True)
         with open(log_name, "wb") as log_file:
             log_file.write(self.file_contents)
 
-    def file_contents_str(self) -> None:
+    def log_model(self, log_path: str) -> None:
+        """Alias for ``to_file``"""
+        self.to_file(log_path)
+
+    def file_contents_str(self) -> str:
         return self.file_contents.decode("utf-8")
 
 
@@ -84,18 +94,14 @@ class DataModel(BaseModel):
             get_unique_filename(log_path, f"{self.__class__.__name__.lower()}.json"),
         )
 
-        # Write binary FileModel payloads as files; keep them in JSON as base64.
         for key in self.__class__.model_fields:
             data = getattr(self, key)
             if isinstance(data, FileModel):
-                data.log_model(log_path)
-            elif (
-                isinstance(data, list)
-                and data
-                and all(isinstance(item, FileModel) for item in data)
-            ):
+                data.to_file(log_path)
+            elif isinstance(data, list):
                 for item in data:
-                    item.log_model(log_path)
+                    if isinstance(item, FileModel):
+                        item.to_file(log_path)
 
         with open(log_name, "w", encoding="utf-8") as log_file:
             log_file.write(self.model_dump_json(indent=2))
@@ -135,7 +141,8 @@ class DataModel(BaseModel):
             # Build from json file
             else:
                 with open(model_input, "r", encoding="utf-8") as input_file:
-                    return cls.model_validate_json(input_file.read())
+                    data = json.load(input_file)
+                return cls(**data)
 
         raise ValueError("Invalid input for model data")
 
