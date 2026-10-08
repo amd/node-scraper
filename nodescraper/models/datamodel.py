@@ -29,7 +29,7 @@ import os
 import tarfile
 from typing import Any, TypeVar, Union
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from nodescraper.utils import get_unique_filename
 
@@ -37,7 +37,13 @@ TDataModel = TypeVar("TDataModel", bound="DataModel")
 
 
 class FileModel(BaseModel):
-    file_contents: bytes
+    """A file captured from the system.
+
+    ``file_contents`` is excluded from model serialization (it may be binary); use
+    ``to_file`` to write the raw bytes to disk.
+    """
+
+    file_contents: bytes = Field(default=b"", exclude=True)
     file_name: str
 
     @field_validator("file_contents", mode="before")
@@ -49,17 +55,28 @@ class FileModel(BaseModel):
             return value.encode("utf-8")
         return value
 
-    def log_model(self, log_path: str) -> None:
-        """Log data model to a file
+    def to_file(self, log_path: str) -> None:
+        """Write the raw file contents to ``log_path``/``file_name``
 
         Args:
-            log_path (str): log path
+            log_path (str): directory to write the file into
+
+        Raises:
+            ValueError: if ``file_name`` resolves to a location outside of ``log_path``
         """
-        log_name = os.path.join(log_path, self.file_name)
+        base_dir = os.path.realpath(log_path)
+        log_name = os.path.realpath(os.path.join(base_dir, self.file_name))
+        if os.path.commonpath([base_dir, log_name]) != base_dir or log_name == base_dir:
+            raise ValueError(f"file_name {self.file_name!r} resolves outside of {log_path!r}")
+        os.makedirs(os.path.dirname(log_name), exist_ok=True)
         with open(log_name, "wb") as log_file:
             log_file.write(self.file_contents)
 
-    def file_contents_str(self) -> None:
+    def log_model(self, log_path: str) -> None:
+        """Alias for ``to_file``"""
+        self.to_file(log_path)
+
+    def file_contents_str(self) -> str:
         return self.file_contents.decode("utf-8")
 
 
@@ -77,15 +94,17 @@ class DataModel(BaseModel):
             get_unique_filename(log_path, f"{self.__class__.__name__.lower()}.json"),
         )
 
-        exlude_fields = set()
         for key in self.__class__.model_fields:
             data = getattr(self, key)
             if isinstance(data, FileModel):
-                data.log_model(log_path)
-                exlude_fields.add(key)
+                data.to_file(log_path)
+            elif isinstance(data, list):
+                for item in data:
+                    if isinstance(item, FileModel):
+                        item.to_file(log_path)
 
         with open(log_name, "w", encoding="utf-8") as log_file:
-            log_file.write(self.model_dump_json(indent=2, exclude=exlude_fields))
+            log_file.write(self.model_dump_json(indent=2))
 
     def merge_data(self, input_data: "DataModel") -> None:
         """Merge data into current data"""
