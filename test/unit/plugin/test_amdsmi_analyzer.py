@@ -68,7 +68,10 @@ from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     XgmiLinks,
     XgmiMetrics,
 )
-from nodescraper.plugins.inband.amdsmi.analyzer_args import AmdSmiAnalyzerArgs
+from nodescraper.plugins.inband.amdsmi.analyzer_args import (
+    AmdSmiAnalyzerArgs,
+    PowerConfig,
+)
 
 
 @pytest.fixture
@@ -316,6 +319,80 @@ def test_check_expected_max_power_ppt0(mock_analyzer):
     analyzer.check_expected_max_power([gpu], 550)
     assert len(analyzer.result.events) == 1
     assert "GPU max power mismatch" in analyzer.result.events[0].description
+
+
+def test_check_power_cap_consistency_success(mock_analyzer):
+    """Matching GPU power caps pass consistency validation."""
+    analyzer = mock_analyzer
+    static_data = [
+        create_static_gpu(0, max_power=550.0),
+        create_static_gpu(1, max_power=550.0),
+    ]
+
+    analyzer.check_power_cap_consistency(
+        static_data,
+        PowerConfig(power_cap_mismatch_allowed=False),
+    )
+
+    assert not analyzer.result.events
+
+
+def test_check_power_cap_consistency_mismatch(mock_analyzer):
+    """Different GPU power caps generate an error."""
+    analyzer = mock_analyzer
+    static_data = [
+        create_static_gpu(0, max_power=550.0),
+        create_static_gpu(1, max_power=450.0),
+    ]
+
+    analyzer.check_power_cap_consistency(
+        static_data,
+        PowerConfig(power_cap_mismatch_allowed=False),
+    )
+
+    assert len(analyzer.result.events) == 1
+    assert analyzer.result.events[0].category == "PLATFORM"
+    assert analyzer.result.events[0].priority == EventPriority.ERROR
+    assert "GPU power cap mismatch" in analyzer.result.events[0].description
+    assert "GPU 1=450.0 W" in analyzer.result.events[0].description
+    assert analyzer.result.events[0].data["power_caps"] == {0: 550.0, 1: 450.0}
+    assert analyzer.result.events[0].data["mismatched_power_caps"] == {1: 450.0}
+    assert analyzer.result.events[0].data["expected_power_cap"] == 550.0
+
+
+def test_check_power_cap_consistency_multiple_mismatches(mock_analyzer):
+    """Every differing power cap is reported in a single event."""
+    analyzer = mock_analyzer
+    static_data = [create_static_gpu(gpu, max_power=float(500 + gpu * 10)) for gpu in range(8)]
+
+    analyzer.check_power_cap_consistency(
+        static_data,
+        PowerConfig(power_cap_mismatch_allowed=False),
+    )
+
+    assert len(analyzer.result.events) == 1
+    event = analyzer.result.events[0]
+    assert event.priority == EventPriority.ERROR
+    assert event.data["gpus"] == [1, 2, 3, 4, 5, 6, 7]
+    assert event.data["expected_power_cap"] == 500.0
+    assert "GPU 1=510.0 W" in event.description
+    assert "GPU 7=570.0 W" in event.description
+
+
+def test_check_power_cap_consistency_allowed(mock_analyzer):
+    """Power-cap mismatches are skipped when explicitly allowed."""
+    analyzer = mock_analyzer
+    static_data = [
+        create_static_gpu(0, max_power=550.0),
+        create_static_gpu(1, max_power=450.0),
+    ]
+
+    analyzer.check_power_cap_consistency(
+        static_data,
+        PowerConfig(power_cap_mismatch_allowed=True),
+    )
+
+    assert not analyzer.result.events
 
 
 def test_check_expected_driver_version_success(mock_analyzer):
@@ -1179,6 +1256,9 @@ def test_amdsmi_analyzer_args_rejects_unknown_fields():
     """Plugin config must only use declared AmdSmiAnalyzerArgs fields."""
     from pydantic import ValidationError
 
+    args = AmdSmiAnalyzerArgs.model_validate({"power": {"power_cap_mismatch_allowed": False}})
+    assert args.power is not None
+    assert args.power.power_cap_mismatch_allowed is False
     args = AmdSmiAnalyzerArgs.model_validate({"gpu_memory": {"minimum_available_percent": 95}})
     assert args.gpu_memory is not None
     assert args.gpu_memory.minimum_available_percent == 95
