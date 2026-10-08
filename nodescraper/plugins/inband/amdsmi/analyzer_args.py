@@ -32,6 +32,15 @@ from nodescraper.models import AnalyzerArgs
 from nodescraper.plugins.inband.amdsmi.amdsmidata import AmdSmiDataModel
 
 
+class PowerConfig(BaseModel):
+    """GPU power-cap consistency policy."""
+
+    power_cap_mismatch_allowed: bool = Field(
+        default=False,
+        description="Whether different GPU power caps are allowed.",
+    )
+
+
 class GpuMemoryConfig(BaseModel):
     """GPU VRAM availability threshold."""
 
@@ -52,6 +61,10 @@ class AmdSmiAnalyzerArgs(AnalyzerArgs):
     )
     expected_max_power: Optional[int] = Field(
         default=None, description="Expected maximum power value (e.g. watts)."
+    )
+    power: Optional[PowerConfig] = Field(
+        default=None,
+        description="GPU power-cap consistency policy.",
     )
     expected_power_management: Optional[str] = Field(
         default=None,
