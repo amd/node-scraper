@@ -605,6 +605,9 @@ def test_metric_clock_per_aid_na_maps():
     assert isinstance(metric.clock["GFX_0"], MetricClockData)
     assert metric.pcie.lc_perf_other_end_recovery_count == 0
 
+    assert metric.clock_rails.UCLK_AID == {"AID_0": None, "AID_1": None}
+    assert metric.clock_rails.SOCCLKS_MID == {"MID_0": None, "MID_1": None}
+
 
 def test_metric_clock_rails_enumerates_known_rails_and_catches_drop():
     """clock_rails exposes every known rail by name; a dropped one reads None."""
@@ -614,6 +617,8 @@ def test_metric_clock_rails_enumerates_known_rails_and_catches_drop():
     assert metric.clock_rails.MEM_0 is None
     assert metric.clock_rails.VCLK_0 is None
     assert metric.clock_rails.FCLK_0 is None
+    assert metric.clock_rails.UCLK_AID is None
+    assert metric.clock_rails.SOCCLKS_MID is None
 
 
 def test_metric_clock_rails_case_insensitive_match():
@@ -622,14 +627,17 @@ def test_metric_clock_rails_case_insensitive_match():
         {
             "gfx_0": {"clk": {"value": 2353, "unit": "MHz"}},
             "mem_0": {"clk": {"value": 1200, "unit": "MHz"}},
-            "uclk_aid": {"AID_0": "N/A"},
+            "uclk_aid": {"AID_0": "N/A", "AID_1": {"value": 2000, "unit": "MHz"}},
         }
     )
     assert rails.GFX_0 is not None
     assert rails.GFX_0.clk.value == 2353
+    assert rails.UCLK_AID["AID_0"] is None
+    assert rails.UCLK_AID["AID_1"].value == 2000
+    assert rails.UCLK_AID["AID_1"].unit == "MHz"
     assert rails.MEM_0 is not None
     assert rails.MEM_0.clk.value == 1200
-    assert rails.model_extra["uclk_aid"] == {"AID_0": "N/A"}
+    assert rails.model_extra == {}
 
 
 # FABRIC

@@ -1012,6 +1012,8 @@ class MetricClockRails(BaseModel):
         "DCLK_3",
         "SOCCLK_0",
         "FCLK_0",
+        "UCLK_AID",
+        "SOCCLKS_MID",
     )
     _RAIL_SET: ClassVar[frozenset[str]] = frozenset(RAIL_NAMES)
 
@@ -1034,11 +1036,20 @@ class MetricClockRails(BaseModel):
     DCLK_3: Optional[MetricClockData] = None
     SOCCLK_0: Optional[MetricClockData] = None
     FCLK_0: Optional[MetricClockData] = None
+    UCLK_AID: Optional[dict[str, Optional[ValueUnit]]] = None
+    SOCCLKS_MID: Optional[dict[str, Optional[ValueUnit]]] = None
 
     @model_validator(mode="before")
     @classmethod
     def _match_rails(cls, data: Any) -> Any:
         return _match_known_rails_case_insensitive(cls._RAIL_SET, data)
+
+    @field_validator("UCLK_AID", "SOCCLKS_MID", mode="before")
+    @classmethod
+    def _coerce_submap(cls, v: Any) -> Any:
+        if not isinstance(v, dict):
+            return v
+        return {k: coerce_value_unit_input(val) for k, val in v.items()}
 
 
 class MetricGpuBoardTemperature(BaseModel):
@@ -1448,11 +1459,12 @@ class NodePowerManagement(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    limit: Optional[Union[float, str]] = None
+    limit: Optional[ValueUnit] = None
     status: Optional[str] = None
-    threshold: Optional[Union[float, str]] = None
+    threshold: Optional[ValueUnit] = None
 
-    na_validator = field_validator("limit", "status", "threshold", mode="before")(na_to_none)
+    na_validator = field_validator("status", mode="before")(na_to_none)
+    _value_unit = field_validator("limit", "threshold", mode="before")(coerce_value_unit_input)
 
 
 class NodeGtt(BaseModel):
@@ -1466,10 +1478,25 @@ class NodeGtt(BaseModel):
     na_validator = field_validator("size_gb", "size_pages", mode="before")(na_to_none)
 
 
+class NodeBaseBoard(BaseModel):
+    """``node[].node.base_board`` (named chassis temperature sensors)."""
+
+    model_config = ConfigDict(extra="allow")
+
+    temperature: dict[str, ValueUnit] = Field(default_factory=dict)
+
+    _value_unit = field_validator("temperature", mode="before")(
+        lambda v: (
+            {k: coerce_value_unit_input(val) for k, val in v.items()} if isinstance(v, dict) else v
+        )
+    )
+
+
 class NodeData(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     power_management: Optional[NodePowerManagement] = None
+    base_board: Optional[NodeBaseBoard] = None
     gtt: Optional[NodeGtt] = None
 
 

@@ -1057,6 +1057,44 @@ def test_get_node_command_failure(conn_mock, system_info, monkeypatch):
     assert c.get_node() == []
 
 
+def test_get_node_real_hardware_shape(conn_mock, system_info, monkeypatch):
+    """Real amd-smi reports power_management.limit/threshold as value+unit dicts
+    (not bare numbers/"N/A" strings), and includes a base_board.temperature block."""
+    payload = [
+        {
+            "node": {
+                "power_management": {
+                    "limit": {"value": 0, "unit": "W"},
+                    "status": "DISABLED",
+                    "threshold": "N/A",
+                },
+                "base_board": {
+                    "temperature": {
+                        "UBB_FPGA": {"value": -1, "unit": "°C"},
+                        "IBC": {"value": -1, "unit": "°C"},
+                    }
+                },
+                "gtt": {"size_gb": 256.000, "size_pages": 65900000},
+            }
+        }
+    ]
+    c = make_node_collector(conn_mock, system_info, monkeypatch, payload)
+
+    node = c.get_node()
+
+    assert len(node) == 1
+    pm = node[0].node.power_management
+    assert pm.limit.value == 0
+    assert pm.limit.unit == "W"
+    assert pm.status == "DISABLED"
+    assert pm.threshold is None
+
+    temps = node[0].node.base_board.temperature
+    assert temps["UBB_FPGA"].value == -1
+    assert temps["UBB_FPGA"].unit == "°C"
+    assert temps["IBC"].value == -1
+
+
 # CPU / CORE METRICS
 
 
