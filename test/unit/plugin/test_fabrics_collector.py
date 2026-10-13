@@ -174,6 +174,67 @@ def test_parse_ibv_devinfo_basic(collector):
     assert device.hw_ver == "0x0"
 
 
+IBSTAT_MULTI_INDENTED_OUTPUT = """CA 'bnxt_re0'
+	CA type: AB1234
+	Number of ports: 1
+	Firmware version: 1.2.3
+	Port 1:
+		State: Active
+		Physical state: LinkUp
+		Rate: 400
+		Port GUID: 0x0000000000000001
+		Link layer: Ethernet
+CA 'bnxt_re1'
+	CA type: AB1234
+	Number of ports: 1
+	Firmware version: 1.2.3
+	Port 1:
+		State: Down
+		Physical state: Disabled
+		Rate: 400
+		Port GUID: 0x0000000000000002
+		Link layer: Ethernet"""
+
+IBV_DEVINFO_MULTI_OUTPUT = """hca_id:	bnxt_re0
+	transport:			InfiniBand (0)
+	fw_ver:				1.2.3
+		port:	1
+			state:			PORT_ACTIVE (4)
+			active_mtu:		4096 (5)
+			link_layer:		Ethernet
+
+hca_id:	bnxt_re1
+	transport:			InfiniBand (0)
+	fw_ver:				1.2.3
+		port:	1
+			state:			PORT_DOWN (1)
+			active_mtu:		1024 (3)
+			link_layer:		Ethernet"""
+
+
+def test_parse_ibstat_indented_ports_multiple_devices(collector):
+    """Indented 'Port N:' lines are parsed and each device keeps its own port."""
+    devices = collector._parse_ibstat(IBSTAT_MULTI_INDENTED_OUTPUT)
+
+    assert [device.ca_name for device in devices] == ["bnxt_re0", "bnxt_re1"]
+    assert devices[0].ports[1]["State"] == "Active"
+    assert devices[0].ports[1]["Rate"] == "400"
+    assert devices[0].ports[1]["Link layer"] == "Ethernet"
+    assert devices[0].ports[1]["Port GUID"] == "0x0000000000000001"
+    assert devices[1].ports[1]["State"] == "Down"
+
+
+def test_parse_ibv_devinfo_multiple_devices_keep_ports(collector):
+    """Each ibv_devinfo device keeps its port when another hca_id follows."""
+    devices = collector._parse_ibv_devinfo(IBV_DEVINFO_MULTI_OUTPUT)
+
+    assert [device.device for device in devices] == ["bnxt_re0", "bnxt_re1"]
+    assert devices[0].ports[1]["state"] == "PORT_ACTIVE (4)"
+    assert devices[0].ports[1]["active_mtu"] == "4096 (5)"
+    assert devices[1].ports[1]["state"] == "PORT_DOWN (1)"
+    assert devices[1].ports[1]["link_layer"] == "Ethernet"
+
+
 def test_parse_ibv_devinfo_port(collector):
     """Test parsing ibv_devinfo port information"""
     devices = collector._parse_ibv_devinfo(IBV_DEVINFO_OUTPUT)
@@ -366,3 +427,49 @@ def test_collect_data_not_ran_when_no_ib_and_no_slingshot(collector):
 
     assert result.status == ExecutionStatus.NOT_RAN
     assert data is None
+
+
+def test_collect_data_logs_fabric_rate_and_mtu(collector):
+    """ibstat and ibv_devinfo events carry fabric, rate, state, and active MTU."""
+
+    def run_sut_cmd_side_effect(cmd, *args, **kwargs):
+        if cmd == "ibstat":
+            return MagicMock(exit_code=0, stdout=IBSTAT_OUTPUT, command=cmd)
+        if cmd == "ibv_devinfo":
+            return MagicMock(exit_code=0, stdout=IBV_DEVINFO_OUTPUT, command=cmd)
+        return MagicMock(exit_code=1, stdout="", command=cmd)
+
+    collector._run_sut_cmd = MagicMock(side_effect=run_sut_cmd_side_effect)
+
+    result, data = collector.collect_data()
+
+    assert result.status == ExecutionStatus.OK
+    assert data is not None
+    ibstat_event = next(
+        event
+        for event in result.events
+        if event.description == "Collected 1 IB devices from ibstat"
+    )
+    assert ibstat_event.data["ports"] == [
+        {
+            "device": "mlx5_0",
+            "port": 1,
+            "link_layer": "MockBand",
+            "rate": "200",
+            "state": "Active",
+        }
+    ]
+    ibv_event = next(
+        event
+        for event in result.events
+        if event.description == "Collected 1 IB devices from ibv_devinfo"
+    )
+    assert ibv_event.data["devices"][0]["transport"] == "MockBand (0)"
+    assert ibv_event.data["devices"][0]["ports"] == [
+        {
+            "port": 1,
+            "state": "PORT_ACTIVE (4)",
+            "link_layer": "MockBand",
+            "active_mtu": "4096 (5)",
+        }
+    ]

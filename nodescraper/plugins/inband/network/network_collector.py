@@ -530,6 +530,7 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
                 self._log_event(
                     category=EventCategory.NETWORK,
                     description=f"Collected ethtool info for interface: {iface.name}",
+                    data={"interface": iface.name, "speed": ethtool_info.speed},
                     priority=EventPriority.INFO,
                 )
             else:
@@ -841,6 +842,12 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
             self._log_event(
                 category=EventCategory.NETWORK,
                 description=f"Collected {len(interfaces)} network interfaces",
+                data={
+                    "interfaces": [
+                        {"name": iface.name, "state": iface.state, "mtu": iface.mtu}
+                        for iface in interfaces
+                    ]
+                },
                 priority=EventPriority.INFO,
             )
         else:

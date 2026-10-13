@@ -79,6 +79,8 @@ class FabricsCollector(InBandDataCollector[FabricsDataModel, None]):
             if line.startswith("CA "):
                 # Save previous device if exists
                 if current_device:
+                    if current_port is not None:
+                        current_device.ports[current_port] = current_port_attrs
                     devices.append(current_device)
 
                 # Extract CA name
@@ -90,7 +92,7 @@ class FabricsCollector(InBandDataCollector[FabricsDataModel, None]):
                     current_port_attrs = {}
 
             # Port line (e.g., "Port 1:")
-            elif line.startswith("Port ") and ":" in line:
+            elif re.match(r"Port\s+\d+:\s*$", line_stripped):
                 # Save previous port if exists
                 if current_device and current_port is not None:
                     current_device.ports[current_port] = current_port_attrs
@@ -158,6 +160,8 @@ class FabricsCollector(InBandDataCollector[FabricsDataModel, None]):
             if line.startswith("hca_id:"):
                 # Save previous device if exists
                 if current_device:
+                    if current_port is not None:
+                        current_device.ports[current_port] = current_port_attrs
                     devices.append(current_device)
 
                 parts = line.split(":", 1)
@@ -418,9 +422,23 @@ class FabricsCollector(InBandDataCollector[FabricsDataModel, None]):
         res_ibstat = self._run_sut_cmd(self.CMD_IBSTAT)
         if res_ibstat.exit_code == 0:
             ibstat_devices = self._parse_ibstat(res_ibstat.stdout)
+            ibstat_ports = []
+            for device in ibstat_devices:
+                for port_num, attrs in device.ports.items():
+                    port = {"device": device.ca_name, "port": port_num}
+                    if "Link layer" in attrs:
+                        port["link_layer"] = attrs["Link layer"]
+                    if "Rate" in attrs:
+                        port["rate"] = attrs["Rate"]
+                    if "State" in attrs:
+                        port["state"] = attrs["State"]
+                    if "Active MTU" in attrs:
+                        port["active_mtu"] = attrs["Active MTU"]
+                    ibstat_ports.append(port)
             self._log_event(
                 category=EventCategory.NETWORK,
                 description=f"Collected {len(ibstat_devices)} IB devices from ibstat",
+                data={"ports": ibstat_ports},
                 priority=EventPriority.INFO,
             )
         else:
@@ -435,9 +453,29 @@ class FabricsCollector(InBandDataCollector[FabricsDataModel, None]):
         res_ibv = self._run_sut_cmd(self.CMD_IBV_DEVINFO)
         if res_ibv.exit_code == 0:
             ibv_devices = self._parse_ibv_devinfo(res_ibv.stdout)
+            ibv_device_info = []
+            for ibv_device in ibv_devices:
+                ports = []
+                for port_num, attrs in ibv_device.ports.items():
+                    port = {"port": port_num}
+                    if "state" in attrs:
+                        port["state"] = attrs["state"]
+                    if "link_layer" in attrs:
+                        port["link_layer"] = attrs["link_layer"]
+                    if "active_mtu" in attrs:
+                        port["active_mtu"] = attrs["active_mtu"]
+                    ports.append(port)
+                ibv_device_info.append(
+                    {
+                        "device": ibv_device.device,
+                        "transport": ibv_device.transport_type,
+                        "ports": ports,
+                    }
+                )
             self._log_event(
                 category=EventCategory.NETWORK,
                 description=f"Collected {len(ibv_devices)} IB devices from ibv_devinfo",
+                data={"devices": ibv_device_info},
                 priority=EventPriority.INFO,
             )
         else:

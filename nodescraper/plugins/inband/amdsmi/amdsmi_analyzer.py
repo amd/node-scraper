@@ -45,7 +45,7 @@ from .amdsmidata import (
     XgmiLinks,
     XgmiMetrics,
 )
-from .analyzer_args import AmdSmiAnalyzerArgs
+from .analyzer_args import AmdSmiAnalyzerArgs, PowerConfig
 from .cper import CperAnalysisTaskMixin
 
 
@@ -243,6 +243,70 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                     "gpus": list(incorrect_max_power_gpus.keys()),
                     "max_power_values": incorrect_max_power_gpus,
                     "expected_max_power": expected_max_power,
+                    "details": details,
+                },
+                console_log=True,
+            )
+
+    def check_power_cap_consistency(
+        self,
+        amdsmi_static_data: list[AmdSmiStatic],
+        power_config: PowerConfig,
+    ) -> None:
+        """Check that all GPUs have the same resolved maximum power cap."""
+        if power_config.power_cap_mismatch_allowed:
+            return
+
+        power_caps: dict[int, float] = {}
+        for gpu in amdsmi_static_data:
+            limit = gpu.limit
+            max_power_vu = limit.resolved_max_power() if limit is not None else None
+            if max_power_vu is None or max_power_vu.value is None:
+                self._log_event(
+                    category=EventCategory.PLATFORM,
+                    description=f"GPU {gpu.gpu}: power cap is not available",
+                    priority=EventPriority.WARNING,
+                    data={"gpu": gpu.gpu},
+                    console_log=True,
+                )
+                continue
+
+            try:
+                power_caps[gpu.gpu] = float(max_power_vu.value)
+            except (TypeError, ValueError):
+                self._log_event(
+                    category=EventCategory.PLATFORM,
+                    description=f"GPU {gpu.gpu}: power cap is invalid",
+                    priority=EventPriority.WARNING,
+                    data={"gpu": gpu.gpu, "power_cap": max_power_vu.value},
+                    console_log=True,
+                )
+
+        if len(power_caps) < 2:
+            return
+
+        expected_power_cap = next(iter(power_caps.values()))
+        mismatched_power_caps = {
+            gpu: power_cap
+            for gpu, power_cap in power_caps.items()
+            if power_cap != expected_power_cap
+        }
+        if mismatched_power_caps:
+            desc, details = _gpu_mismatch_description(
+                "GPU power cap",
+                expected_power_cap,
+                mismatched_power_caps,
+                unit=" W",
+            )
+            self._log_event(
+                category=EventCategory.PLATFORM,
+                description=desc,
+                priority=EventPriority.ERROR,
+                data={
+                    "gpus": list(mismatched_power_caps.keys()),
+                    "power_caps": power_caps,
+                    "mismatched_power_caps": mismatched_power_caps,
+                    "expected_power_cap": expected_power_cap,
                     "details": details,
                 },
                 console_log=True,
@@ -1222,6 +1286,8 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
         else:
             if args.expected_max_power:
                 self.check_expected_max_power(data.static, args.expected_max_power)
+            if args.power:
+                self.check_power_cap_consistency(data.static, args.power)
             if args.expected_driver_version:
                 self.check_expected_driver_version(data.static, args.expected_driver_version)
 

@@ -80,6 +80,44 @@ def test_collect_success(collector, conn_mock, rdma_link_output, rdma_statistic_
     assert data.link_list[0].ifname == "ionic_0"
     # netdev is cross-referenced from link data onto statistics
     assert data.statistic_list[0].netdev == "benic8p1"
+    link_event = next(
+        event
+        for event in res.events
+        if event.description == "Collected 4 RDMA links from 'rdma link -j'"
+    )
+    assert link_event.data["links"][0] == {
+        "ifname": "ionic_0",
+        "port": 1,
+        "state": "ACTIVE",
+        "physical_state": "LINK_UP",
+        "netdev": "benic8p1",
+    }
+
+
+def test_collect_logs_text_link_state(collector, conn_mock):
+    """Text 'rdma link' output records link state on the collection event."""
+    collector.system_info.os_family = OSFamily.LINUX
+    conn_mock.run_command.side_effect = [
+        CommandArtifact(exit_code=0, stdout="[]", stderr="", command="rdma link -j"),
+        CommandArtifact(exit_code=0, stdout="[]", stderr="", command="rdma statistic -j"),
+        CommandArtifact(exit_code=0, stdout="", stderr="", command="rdma dev"),
+        CommandArtifact(exit_code=0, stdout=RDMA_LINK_OUTPUT, stderr="", command="rdma link"),
+    ]
+    res, data = collector.collect_data()
+    assert res.status == ExecutionStatus.OK
+    assert data is not None
+    link_event = next(
+        event
+        for event in res.events
+        if event.description == "Collected 2 RDMA links from 'rdma link'"
+    )
+    assert link_event.data["links"][0] == {
+        "device": "rocep9s0",
+        "port": 1,
+        "state": "DOWN",
+        "physical_state": "POLLING",
+        "netdev": "benic8p1",
+    }
 
 
 def test_collect_both_commands_fail(collector, conn_mock):
