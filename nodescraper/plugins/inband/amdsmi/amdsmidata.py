@@ -25,7 +25,7 @@
 ###############################################################################
 import re
 from enum import Enum
-from typing import Any, Mapping, Optional, Union
+from typing import Any, ClassVar, Mapping, Optional, Union
 
 from pydantic import (
     AliasChoices,
@@ -974,6 +974,249 @@ class EccData(BaseModel):
     )(na_to_none)
 
 
+def _match_known_rails_case_insensitive(rail_set: frozenset[str], data: Any) -> Any:
+    """Rename dict keys to their canonical-cased rail name when their upper-cased
+    form matches an entry in ``rail_set`` (the known, already-uppercase rail names)."""
+    if not isinstance(data, dict):
+        return data
+    out = dict(data)
+    for key in list(out.keys()):
+        upper_key = key.upper()
+        if upper_key in rail_set and upper_key not in out:
+            out[upper_key] = out.pop(key)
+    return out
+
+
+class MetricClockRails(BaseModel):
+    """Enumerated, typed view of the known ``AmdSmiMetric.clock`` rails."""
+
+    model_config = ConfigDict(extra="allow")
+
+    RAIL_NAMES: ClassVar[tuple[str, ...]] = (
+        "GFX_0",
+        "GFX_1",
+        "GFX_2",
+        "GFX_3",
+        "GFX_4",
+        "GFX_5",
+        "GFX_6",
+        "GFX_7",
+        "MEM_0",
+        "VCLK_0",
+        "VCLK_1",
+        "VCLK_2",
+        "VCLK_3",
+        "DCLK_0",
+        "DCLK_1",
+        "DCLK_2",
+        "DCLK_3",
+        "SOCCLK_0",
+        "FCLK_0",
+        "UCLK_AID",
+        "SOCCLKS_MID",
+    )
+    _RAIL_SET: ClassVar[frozenset[str]] = frozenset(RAIL_NAMES)
+
+    GFX_0: Optional[MetricClockData] = None
+    GFX_1: Optional[MetricClockData] = None
+    GFX_2: Optional[MetricClockData] = None
+    GFX_3: Optional[MetricClockData] = None
+    GFX_4: Optional[MetricClockData] = None
+    GFX_5: Optional[MetricClockData] = None
+    GFX_6: Optional[MetricClockData] = None
+    GFX_7: Optional[MetricClockData] = None
+    MEM_0: Optional[MetricClockData] = None
+    VCLK_0: Optional[MetricClockData] = None
+    VCLK_1: Optional[MetricClockData] = None
+    VCLK_2: Optional[MetricClockData] = None
+    VCLK_3: Optional[MetricClockData] = None
+    DCLK_0: Optional[MetricClockData] = None
+    DCLK_1: Optional[MetricClockData] = None
+    DCLK_2: Optional[MetricClockData] = None
+    DCLK_3: Optional[MetricClockData] = None
+    SOCCLK_0: Optional[MetricClockData] = None
+    FCLK_0: Optional[MetricClockData] = None
+    UCLK_AID: Optional[dict[str, Optional[ValueUnit]]] = None
+    SOCCLKS_MID: Optional[dict[str, Optional[ValueUnit]]] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _match_rails(cls, data: Any) -> Any:
+        return _match_known_rails_case_insensitive(cls._RAIL_SET, data)
+
+    @field_validator("UCLK_AID", "SOCCLKS_MID", mode="before")
+    @classmethod
+    def _coerce_submap(cls, v: Any) -> Any:
+        if not isinstance(v, dict):
+            return v
+        return {k: coerce_value_unit_input(val) for k, val in v.items()}
+
+
+class MetricGpuBoardTemperature(BaseModel):
+    """Known ``gpu_board.temperature`` rails (ROCm 7.1+ ``metric`` JSON).
+
+    Each rail is independently optional and N/A-tolerant.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    RAIL_NAMES: ClassVar[tuple[str, ...]] = (
+        "NODE_RETIMER_X",
+        "NODE_OAM_X_IBC",
+        "NODE_OAM_X_IBC_2",
+        "NODE_OAM_X_VDD18_VR",
+        "NODE_OAM_X_04_HBM_B_VR",
+        "NODE_OAM_X_04_HBM_D_VR",
+        "VDDCR_VDD0",
+        "VDDCR_VDD1",
+        "VDDCR_VDD2",
+        "VDDCR_VDD3",
+        "VDDCR_SOC_A",
+        "VDDCR_SOC_C",
+        "VDDCR_SOCIO_A",
+        "VDDCR_SOCIO_C",
+        "VDD_085_HBM",
+        "VDDCR_11_HBM_B",
+        "VDDCR_11_HBM_D",
+        "VDD_USR",
+        "VDDIO_11_E32",
+        "VDDIO_04_HBM_B",
+        "VDDIO_04_HBM_D",
+        "VDDCR_075_HBM_B",
+        "VDDCR_075_HBM_D",
+        "VDDIO_11_GTA_A",
+        "VDDIO_11_GTA_C",
+        "VDDAN_075_GTA_A",
+        "VDDAN_075_GTA_C",
+        "VDDCR_075_UCIE",
+        "VDDIO_065_UCIEAA",
+        "VDDIO_065_UCIEAM_A",
+        "VDDIO_065_UCIEAM_C",
+        "VDDAN_075",
+    )
+    _RAIL_SET: ClassVar[frozenset[str]] = frozenset(RAIL_NAMES)
+
+    NODE_RETIMER_X: Optional[ValueUnit] = None
+    NODE_OAM_X_IBC: Optional[ValueUnit] = None
+    NODE_OAM_X_IBC_2: Optional[ValueUnit] = None
+    NODE_OAM_X_VDD18_VR: Optional[ValueUnit] = None
+    NODE_OAM_X_04_HBM_B_VR: Optional[ValueUnit] = None
+    NODE_OAM_X_04_HBM_D_VR: Optional[ValueUnit] = None
+    VDDCR_VDD0: Optional[ValueUnit] = None
+    VDDCR_VDD1: Optional[ValueUnit] = None
+    VDDCR_VDD2: Optional[ValueUnit] = None
+    VDDCR_VDD3: Optional[ValueUnit] = None
+    VDDCR_SOC_A: Optional[ValueUnit] = None
+    VDDCR_SOC_C: Optional[ValueUnit] = None
+    VDDCR_SOCIO_A: Optional[ValueUnit] = None
+    VDDCR_SOCIO_C: Optional[ValueUnit] = None
+    VDD_085_HBM: Optional[ValueUnit] = None
+    VDDCR_11_HBM_B: Optional[ValueUnit] = None
+    VDDCR_11_HBM_D: Optional[ValueUnit] = None
+    VDD_USR: Optional[ValueUnit] = None
+    VDDIO_11_E32: Optional[ValueUnit] = None
+    VDDIO_04_HBM_B: Optional[ValueUnit] = None
+    VDDIO_04_HBM_D: Optional[ValueUnit] = None
+    VDDCR_075_HBM_B: Optional[ValueUnit] = None
+    VDDCR_075_HBM_D: Optional[ValueUnit] = None
+    VDDIO_11_GTA_A: Optional[ValueUnit] = None
+    VDDIO_11_GTA_C: Optional[ValueUnit] = None
+    VDDAN_075_GTA_A: Optional[ValueUnit] = None
+    VDDAN_075_GTA_C: Optional[ValueUnit] = None
+    VDDCR_075_UCIE: Optional[ValueUnit] = None
+    VDDIO_065_UCIEAA: Optional[ValueUnit] = None
+    VDDIO_065_UCIEAM_A: Optional[ValueUnit] = None
+    VDDIO_065_UCIEAM_C: Optional[ValueUnit] = None
+    VDDAN_075: Optional[ValueUnit] = None
+
+    _rail_value_unit = field_validator(*RAIL_NAMES, mode="before")(coerce_value_unit_input)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _match_rails(cls, data: Any) -> Any:
+        return _match_known_rails_case_insensitive(cls._RAIL_SET, data)
+
+
+class MetricGpuBoard(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    temperature: Optional[MetricGpuBoardTemperature] = None
+
+    na_validator = field_validator("temperature", mode="before")(na_to_none)
+
+
+class MetricBaseBoardTemperature(BaseModel):
+    """Known ``base_board.temperature`` (UBB) rails (ROCm 7.1+ ``metric`` JSON)."""
+
+    model_config = ConfigDict(extra="allow")
+
+    RAIL_NAMES: ClassVar[tuple[str, ...]] = (
+        "UBB_FPGA",
+        "UBB_FRONT",
+        "UBB_BACK",
+        "UBB_OAM1",
+        "UBB_OAM7",
+        "UBB_IBC",
+        "UBB_UFPGA",
+        "UBB_FPGA_0V72_VR",
+        "UBB_FPGA_3V3_VR",
+        "OAM_0_1_HSC",
+        "OAM_2_3_HSC",
+        "OAM_4_5_HSC",
+        "OAM_6_7_HSC",
+        "OAM_0_1_2_3_3V3_VR",
+        "OAM_4_5_6_7_3V3_VR",
+        "IBC",
+        "IBC_HSC",
+        "RETIMER_0_1_0V9_VR",
+        "RETIMER_2_3_0V9_VR",
+        "RETIMER_4_5_0V9_VR",
+        "RETIMER_6_7_0V9_VR",
+        "RETIMER_0_1_2_3_1V2_VR",
+        "RETIMER_4_5_6_7_1V2_VR",
+    )
+    _RAIL_SET: ClassVar[frozenset[str]] = frozenset(RAIL_NAMES)
+
+    UBB_FPGA: Optional[ValueUnit] = None
+    UBB_FRONT: Optional[ValueUnit] = None
+    UBB_BACK: Optional[ValueUnit] = None
+    UBB_OAM1: Optional[ValueUnit] = None
+    UBB_OAM7: Optional[ValueUnit] = None
+    UBB_IBC: Optional[ValueUnit] = None
+    UBB_UFPGA: Optional[ValueUnit] = None
+    UBB_FPGA_0V72_VR: Optional[ValueUnit] = None
+    UBB_FPGA_3V3_VR: Optional[ValueUnit] = None
+    OAM_0_1_HSC: Optional[ValueUnit] = None
+    OAM_2_3_HSC: Optional[ValueUnit] = None
+    OAM_4_5_HSC: Optional[ValueUnit] = None
+    OAM_6_7_HSC: Optional[ValueUnit] = None
+    OAM_0_1_2_3_3V3_VR: Optional[ValueUnit] = None
+    OAM_4_5_6_7_3V3_VR: Optional[ValueUnit] = None
+    IBC: Optional[ValueUnit] = None
+    IBC_HSC: Optional[ValueUnit] = None
+    RETIMER_0_1_0V9_VR: Optional[ValueUnit] = None
+    RETIMER_2_3_0V9_VR: Optional[ValueUnit] = None
+    RETIMER_4_5_0V9_VR: Optional[ValueUnit] = None
+    RETIMER_6_7_0V9_VR: Optional[ValueUnit] = None
+    RETIMER_0_1_2_3_1V2_VR: Optional[ValueUnit] = None
+    RETIMER_4_5_6_7_1V2_VR: Optional[ValueUnit] = None
+
+    _rail_value_unit = field_validator(*RAIL_NAMES, mode="before")(coerce_value_unit_input)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _match_rails(cls, data: Any) -> Any:
+        return _match_known_rails_case_insensitive(cls._RAIL_SET, data)
+
+
+class MetricBaseBoard(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    temperature: Optional[MetricBaseBoardTemperature] = None
+
+    na_validator = field_validator("temperature", mode="before")(na_to_none)
+
+
 class AmdSmiMetric(BaseModel):
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
@@ -992,11 +1235,11 @@ class AmdSmiMetric(BaseModel):
     energy: Optional[MetricEnergy]
     mem_usage: MetricMemUsage
     throttle: MetricThrottle
-    gpuboard: Optional[Union[dict[str, Any], str]] = Field(
+    gpuboard: Optional[Union[MetricGpuBoard, str]] = Field(
         default=None,
         validation_alias=AliasChoices("gpuboard", "gpu_board"),
     )
-    baseboard: Optional[Union[dict[str, Any], str]] = Field(
+    baseboard: Optional[Union[MetricBaseBoard, str]] = Field(
         default=None,
         validation_alias=AliasChoices("baseboard", "base_board"),
     )
@@ -1008,6 +1251,11 @@ class AmdSmiMetric(BaseModel):
     @classmethod
     def _normalize_clock(cls, clock: Any) -> Any:
         return _normalize_metric_clock_map(clock)
+
+    @computed_field
+    def clock_rails(self) -> MetricClockRails:
+        """Enumerated view of clock catching a dropped/renamed known rail."""
+        return MetricClockRails.model_validate(self.clock or {})
 
     @field_validator("ecc_blocks", mode="before")
     @classmethod
@@ -1203,6 +1451,299 @@ class Fabric(BaseModel):
     na_validator = field_validator("bdf", "fabric_info", mode="before")(na_to_none)
 
 
+# NODE
+
+
+class NodePowerManagement(BaseModel):
+    """``node[].node.power_management`` (NODE_TOTAL_POWER)."""
+
+    model_config = ConfigDict(extra="allow")
+
+    limit: Optional[ValueUnit] = None
+    status: Optional[str] = None
+    threshold: Optional[ValueUnit] = None
+
+    na_validator = field_validator("status", mode="before")(na_to_none)
+    _value_unit = field_validator("limit", "threshold", mode="before")(coerce_value_unit_input)
+
+
+class NodeGtt(BaseModel):
+    """``node[].node.gtt`` (GTT_SIZE). Plain numbers, not value+unit dicts."""
+
+    model_config = ConfigDict(extra="allow")
+
+    size_gb: Optional[float] = None
+    size_pages: Optional[float] = None
+
+    na_validator = field_validator("size_gb", "size_pages", mode="before")(na_to_none)
+
+
+class NodeBaseBoard(BaseModel):
+    """``node[].node.base_board`` (named chassis temperature sensors)."""
+
+    model_config = ConfigDict(extra="allow")
+
+    temperature: dict[str, ValueUnit] = Field(default_factory=dict)
+
+    _value_unit = field_validator("temperature", mode="before")(
+        lambda v: (
+            {k: coerce_value_unit_input(val) for k, val in v.items()} if isinstance(v, dict) else v
+        )
+    )
+
+
+class NodeData(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    power_management: Optional[NodePowerManagement] = None
+    base_board: Optional[NodeBaseBoard] = None
+    gtt: Optional[NodeGtt] = None
+
+
+class NodeInfo(BaseModel):
+    """One entry from ``amd-smi node --json``: a top-level array of
+    ``{"node": {...}}`` objects."""
+
+    model_config = ConfigDict(extra="allow")
+
+    node: Optional[NodeData] = None
+
+
+# CPU / CORE
+
+
+class CoreMetric(BaseModel):
+    """Per-core data from ``amd-smi metric --core all --json``."""
+
+    model_config = ConfigDict(extra="allow")
+
+    core: int
+    boost_limit: Optional[ValueUnit] = None
+    curr_active_freq_core_limit: Optional[ValueUnit] = None
+    core_energy: Optional[ValueUnit] = None
+    ccd_power: Optional[ValueUnit] = None
+    floor_limit: Optional[ValueUnit] = None
+    eff_floor_limit: Optional[ValueUnit] = None
+
+    _value_unit = field_validator(
+        "boost_limit",
+        "curr_active_freq_core_limit",
+        "core_energy",
+        "ccd_power",
+        "floor_limit",
+        "eff_floor_limit",
+        mode="before",
+    )(coerce_value_unit_input)
+
+
+class CpuMetricPower(BaseModel):
+    """``power_metrics`` group; JSON keys have literal spaces, not underscores."""
+
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
+    socket_power: Optional[ValueUnit] = Field(default=None, alias="socket power")
+    socket_power_limit: Optional[ValueUnit] = Field(default=None, alias="socket power limit")
+    socket_max_power_limit: Optional[ValueUnit] = Field(
+        default=None, alias="socket max power limit"
+    )
+
+    _value_unit = field_validator(
+        "socket_power", "socket_power_limit", "socket_max_power_limit", mode="before"
+    )(coerce_value_unit_input)
+
+
+class CpuMetricProchot(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    prochot_status: Optional[int] = None
+
+
+class CpuMetricFreqFclkMemclk(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    fclk: Optional[ValueUnit] = None
+    mclk: Optional[ValueUnit] = None
+
+    _value_unit = field_validator("fclk", "mclk", mode="before")(coerce_value_unit_input)
+
+
+class CpuMetricFreqActiveLimit(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    freq: Optional[ValueUnit] = None
+    freq_src: Optional[str] = None
+
+    _value_unit = field_validator("freq", mode="before")(coerce_value_unit_input)
+
+
+class CpuMetricFreqRange(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    max_socket_freq: Optional[ValueUnit] = None
+    min_socket_freq: Optional[ValueUnit] = None
+
+    _value_unit = field_validator("max_socket_freq", "min_socket_freq", mode="before")(
+        coerce_value_unit_input
+    )
+
+
+class CpuMetricFreq(BaseModel):
+    """``freq_metrics`` group"""
+
+    model_config = ConfigDict(extra="allow")
+
+    fclkmemclk: Optional[CpuMetricFreqFclkMemclk] = None
+    cclkfreqlimit: Optional[ValueUnit] = None
+    soc_current_active_freq_limit: Optional[CpuMetricFreqActiveLimit] = None
+    soc_freq_range: Optional[CpuMetricFreqRange] = None
+
+    _value_unit = field_validator("cclkfreqlimit", mode="before")(coerce_value_unit_input)
+
+
+class CpuMetricC0Residency(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    residency: Optional[ValueUnit] = None
+
+    _value_unit = field_validator("residency", mode="before")(coerce_value_unit_input)
+
+
+class CpuMetricSviTelemetry(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    power: Optional[ValueUnit] = None
+
+    _value_unit = field_validator("power", mode="before")(coerce_value_unit_input)
+
+
+class CpuMetricPwrEffMode(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    mode: Optional[str] = None
+
+
+class CpuMetricVersion(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    version: Optional[int] = None
+
+
+class CpuMetricTable(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    cpu_family: Optional[int] = None
+    cpu_model: Optional[int] = None
+    response: Optional[ValueUnit] = None
+
+    _value_unit = field_validator("response", mode="before")(coerce_value_unit_input)
+
+
+class CpuMetricSocketEnergy(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    response: Optional[ValueUnit] = None
+
+    _value_unit = field_validator("response", mode="before")(coerce_value_unit_input)
+
+
+class CpuMetricDdrBandwidthResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    ddr_bw_max_bw: Optional[ValueUnit] = None
+    ddr_bw_utilized_bw: Optional[ValueUnit] = None
+    ddr_bw_utilized_pct: Optional[ValueUnit] = None
+
+    _value_unit = field_validator(
+        "ddr_bw_max_bw", "ddr_bw_utilized_bw", "ddr_bw_utilized_pct", mode="before"
+    )(coerce_value_unit_input)
+
+
+class CpuMetricDdrBandwidth(BaseModel):
+    """``ddr_bandwidth`` nests its payload one level deeper than the other
+    ``response``-wrapped groups"""
+
+    model_config = ConfigDict(extra="allow")
+
+    response: Optional[CpuMetricDdrBandwidthResponse] = None
+
+    na_validator = field_validator("response", mode="before")(na_to_none)
+
+
+class CpuMetricCpuTemp(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    response: Optional[ValueUnit] = None
+
+    _value_unit = field_validator("response", mode="before")(coerce_value_unit_input)
+
+
+class CpuMetricXgmiPstateRange(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    min_pstate: Optional[int] = None
+    max_pstate: Optional[int] = None
+
+    na_validator = field_validator("min_pstate", "max_pstate", mode="before")(na_to_none)
+
+
+class CpuMetricEnabledCommands(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    READ_ENABLED_COMMANDS_BITMASK0: Optional[Union[int, str]] = None
+    READ_ENABLED_COMMANDS_BITMASK1: Optional[Union[int, str]] = None
+    READ_ENABLED_COMMANDS_BITMASK2: Optional[Union[int, str]] = None
+    WRITE_ENABLED_COMMANDS_BITMASK0: Optional[Union[int, str]] = None
+    WRITE_ENABLED_COMMANDS_BITMASK1: Optional[Union[int, str]] = None
+    WRITE_ENABLED_COMMANDS_BITMASK2: Optional[Union[int, str]] = None
+
+    na_validator = field_validator(
+        "READ_ENABLED_COMMANDS_BITMASK0",
+        "READ_ENABLED_COMMANDS_BITMASK1",
+        "READ_ENABLED_COMMANDS_BITMASK2",
+        "WRITE_ENABLED_COMMANDS_BITMASK0",
+        "WRITE_ENABLED_COMMANDS_BITMASK1",
+        "WRITE_ENABLED_COMMANDS_BITMASK2",
+        mode="before",
+    )(na_to_none)
+
+
+class CpuMetric(BaseModel):
+    """Per-CPU-socket data from ``amd-smi metric --cpu all --json``."""
+
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
+    cpu: int
+    power_metrics: Optional[CpuMetricPower] = None
+    prochot: Optional[CpuMetricProchot] = None
+    freq_metrics: Optional[CpuMetricFreq] = None
+    c0_residency: Optional[CpuMetricC0Residency] = None
+    svi_telemetry_all_rails: Optional[CpuMetricSviTelemetry] = None
+    pwr_eff_mode: Optional[CpuMetricPwrEffMode] = None
+    metric_version: Optional[CpuMetricVersion] = None
+    metrics_table: Optional[CpuMetricTable] = None
+    socket_energy: Optional[CpuMetricSocketEnergy] = None
+    ddr_bandwidth: Optional[CpuMetricDdrBandwidth] = None
+    cpu_temp: Optional[CpuMetricCpuTemp] = None
+    xgmi_pstate_range: Optional[CpuMetricXgmiPstateRange] = None
+    railisofreq_policy: Optional[ValueUnit] = None
+    dfcstate_ctrl: Optional[ValueUnit] = None
+    pc6_enable: Optional[ValueUnit] = None
+    cc6_enable: Optional[ValueUnit] = None
+    tdelta: Optional[ValueUnit] = None
+    enabled_commands: Optional[CpuMetricEnabledCommands] = None
+    sdps_limit: Optional[ValueUnit] = None
+
+    _value_unit = field_validator(
+        "railisofreq_policy",
+        "dfcstate_ctrl",
+        "pc6_enable",
+        "cc6_enable",
+        "tdelta",
+        "sdps_limit",
+        mode="before",
+    )(coerce_value_unit_input)
+
+
 class AmdSmiAnalysisRef(BaseModel):
     """Collector-filled summary for reference config"""
 
@@ -1249,6 +1790,9 @@ class AmdSmiDataModel(DataModel):
     xgmi_metric: Optional[list[XgmiMetrics]] = Field(default_factory=list)
     xgmi_link: Optional[list[XgmiLinks]] = Field(default_factory=list)
     fabric: Optional[list[Fabric]] = Field(default_factory=list)
+    node: Optional[list[NodeInfo]] = Field(default_factory=list)
+    cpu_metric: Optional[list[CpuMetric]] = Field(default_factory=list)
+    core_metric: Optional[list[CoreMetric]] = Field(default_factory=list)
     cper_data: Optional[list[FileModel]] = Field(default_factory=list)
     cper_afids: dict[str, int] = Field(default_factory=dict)
 
