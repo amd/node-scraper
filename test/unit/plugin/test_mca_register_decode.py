@@ -33,30 +33,27 @@ from nodescraper.enums.executionstatus import ExecutionStatus
 from nodescraper.enums.systeminteraction import SystemInteractionLevel
 from nodescraper.enums.systemlocation import SystemLocation
 from nodescraper.interfaces.task import SystemCompatibilityError
+from nodescraper.models import TaskResult
 from nodescraper.models.systeminfo import OSFamily, SystemInfo
-from nodescraper.plugins.inband.mca_register_decode import (
-    mca_register_decode_collector as collector_mod,
+from nodescraper.plugins.registers import (
+    register_decode_collector as base_collector_mod,
 )
-from nodescraper.plugins.inband.mca_register_decode import (
-    register_tool as register_tool_mod,
-)
-from nodescraper.plugins.inband.mca_register_decode.collector_args import (
+from nodescraper.plugins.registers import register_decode_plugin as base_plugin_mod
+from nodescraper.plugins.registers import register_tool as register_tool_mod
+from nodescraper.plugins.registers.mca.collector_args import (
     McaRegisterDecodeCollectorArgs,
 )
-from nodescraper.plugins.inband.mca_register_decode.mca_register_decode_analyzer import (
+from nodescraper.plugins.registers.mca.mca_register_decode_analyzer import (
     McaRegisterDecodeAnalyzer,
 )
-from nodescraper.plugins.inband.mca_register_decode.mca_register_decode_collector import (
+from nodescraper.plugins.registers.mca.mca_register_decode_collector import (
     McaRegisterDecodeCollector,
 )
-from nodescraper.plugins.inband.mca_register_decode.mca_register_decode_data import (
+from nodescraper.plugins.registers.mca.mca_register_decode_data import (
     McaRegisterDecodeDataModel,
 )
-from nodescraper.plugins.inband.mca_register_decode.mca_register_decode_plugin import (
+from nodescraper.plugins.registers.mca.mca_register_decode_plugin import (
     McaRegisterDecodePlugin,
-)
-from nodescraper.plugins.inband.mca_register_decode.mca_register_session import (
-    McaRegisterDecodeSession,
 )
 
 
@@ -244,7 +241,7 @@ def _forbid_command(*args, **kwargs):
     raise AssertionError("dmesg command should not run")
 
 
-def test_collect_uses_register_tool(collector, monkeypatch, tmp_path):
+def test_collect_uses_register_tool(collector, monkeypatch):
     tool = FakeRegisterTool()
 
     def _discover(name=None, group=None):
@@ -252,8 +249,7 @@ def test_collect_uses_register_tool(collector, monkeypatch, tmp_path):
         assert name is None
         return tool
 
-    _stage_collected_dmesg(collector, tmp_path, "kernel log line")
-    monkeypatch.setattr(collector_mod, "discover_register_tool", _discover)
+    monkeypatch.setattr(base_collector_mod, "discover_register_tool", _discover)
     monkeypatch.setattr(collector, "_run_sut_cmd", _forbid_command)
     result, data = collector.collect_data(
         McaRegisterDecodeCollectorArgs(
@@ -261,26 +257,15 @@ def test_collect_uses_register_tool(collector, monkeypatch, tmp_path):
             threads=[0],
             banks=[1],
             capture_all=True,
-            gpu="example-gpu",
         )
     )
     assert result.status == ExecutionStatus.OK
-    assert result.message == (
-        "Collected 1 MCA register record(s) and decoded 1 MSR record(s) and 1 dmesg record(s)"
-    )
+    assert result.message == "Collected 1 MCA register record(s)"
     assert data.records == [{"cpu": 0, "bank": 1}]
     assert data.stats == {"cpus_found": 1}
-    assert data.decoded_records == [{"cpu": 0, "bank": 1, "decoded": {"summary": "example"}}]
-    assert data.dmesg_decoded_records == [{"cpu": 0, "bank": 1, "decoded": {"summary": "dmesg"}}]
-    assert ("set_check_interval", 0, [0]) in tool.calls
-    assert ("decode_dmesg", "kernel log line", "example-gpu") in tool.calls
-    assert ("clear", [0], 2.0) in tool.calls
-    assert ("set_check_interval", 5, [0]) in tool.calls
-    assert tool.calls.index(("set_check_interval", 0, [0])) < tool.calls.index("collect")
-    assert tool.calls.index("decode_records") < tool.calls.index(
-        ("decode_dmesg", "kernel log line", "example-gpu")
-    )
-    assert tool.calls.index(("clear", [0], 2.0)) < tool.calls.index(("set_check_interval", 5, [0]))
+    assert data.decoded_records is None
+    assert data.dmesg_decoded_records is None
+    assert tool.calls == ["collect"]
 
 
 def test_collect_skips_when_remote(collector, monkeypatch):
@@ -289,11 +274,11 @@ def test_collect_skips_when_remote(collector, monkeypatch):
     def _discover(name=None, group=None):
         raise AssertionError("register tool should not be loaded for a remote system")
 
-    monkeypatch.setattr(collector_mod, "discover_register_tool", _discover)
+    monkeypatch.setattr(base_collector_mod, "discover_register_tool", _discover)
     result, data = collector.collect_data(McaRegisterDecodeCollectorArgs(tool_group="mca_tool"))
     assert result.status == ExecutionStatus.NOT_RAN
     assert data is None
-    assert result.message == "MCA register decode is only supported on local"
+    assert result.message == "MCA register collection is only supported on local"
     assert result.events[0].description == result.message
 
 
@@ -307,31 +292,141 @@ def test_analyze_skips_when_remote(system_info):
     assert result.events[0].description == result.message
 
 
-def test_collect_reports_missing_tool_group(collector, monkeypatch):
-    monkeypatch.setattr(
-        collector_mod, "discover_register_tool", register_tool_mod.discover_register_tool
-    )
+def test_collect_reports_missing_tool_group(collector):
     result, data = collector.collect_data()
     assert result.status == ExecutionStatus.ERROR
     assert data is None
     assert "tool_group is required" in result.message
 
 
-def test_collect_reports_health_check_failure(collector, monkeypatch):
+def test_collect_reports_tool_failure(collector, monkeypatch):
     tool = FakeRegisterTool()
-    tool.health_check = lambda: 8
-    monkeypatch.setattr(collector_mod, "discover_register_tool", lambda name=None, group=None: tool)
-    result, data = collector.collect_data(McaRegisterDecodeCollectorArgs(tool_group="mca_tool"))
+
+    def _boom(threads=None, banks=None, verbose=False, capture_all=False):
+        tool.calls.append("collect")
+        raise RuntimeError("scan failed")
+
+    tool.collect = _boom
+    monkeypatch.setattr(
+        base_collector_mod, "discover_register_tool", lambda name=None, group=None: tool
+    )
+    result, data = collector.collect_data(
+        McaRegisterDecodeCollectorArgs(
+            tool_group="mca_tool",
+            threads=[0],
+            banks=[1],
+            capture_all=True,
+        )
+    )
     assert result.status == ExecutionStatus.ERROR
     assert data is None
-    assert "MCA register tool health check failed" in result.message
+    assert "scan failed" in result.message
+    assert tool.calls == ["collect"]
+
+
+def _plugin(system_info, monkeypatch, tool=None):
+    plugin = McaRegisterDecodePlugin(system_info, tool_group="mca_tool")
+    selected = tool or FakeRegisterTool()
+
+    def _discover(name=None, group=None):
+        assert group == "mca_tool"
+        assert name is None
+        return selected
+
+    monkeypatch.setattr(base_plugin_mod, "discover_register_tool", _discover)
+    return plugin, selected
+
+
+def test_plugin_health_check(system_info, monkeypatch):
+    plugin, tool = _plugin(system_info, monkeypatch)
+    result = plugin.health_check()
+    assert result.status == ExecutionStatus.OK
+    assert result.message == "Register tool health check passed"
+    assert tool.calls == ["health_check"]
+    plugin.health_check()
+    assert tool.calls == ["health_check", "health_check"]
+
+
+def test_plugin_health_check_failure(system_info, monkeypatch):
+    plugin, tool = _plugin(system_info, monkeypatch)
+    tool.health_check = lambda: 8
+    result = plugin.health_check()
+    assert result.status == ExecutionStatus.ERROR
+    assert "status 8" in result.message
+
+
+def test_plugin_reads_and_sets_check_interval(system_info, monkeypatch):
+    plugin, tool = _plugin(system_info, monkeypatch)
+    tool.intervals = [FakeInterval(0, 5), FakeInterval(1, 5), FakeInterval(2, 30)]
+    read_result = plugin.get_check_intervals()
+    assert read_result.status == ExecutionStatus.OK
+    assert plugin.check_intervals == [
+        {"cpu": 0, "seconds": 5},
+        {"cpu": 1, "seconds": 5},
+        {"cpu": 2, "seconds": 30},
+    ]
+    grouped: dict[int, list[int]] = {}
+    for interval in plugin.check_intervals:
+        grouped.setdefault(interval["seconds"], []).append(interval["cpu"])
+    for seconds, cpus in grouped.items():
+        result = plugin.set_check_interval(seconds, threads=cpus)
+        assert result.status == ExecutionStatus.OK
+    assert ("set_check_interval", 5, [0, 1]) in tool.calls
+    assert ("set_check_interval", 30, [2]) in tool.calls
+
+
+def test_plugin_decodes_records_and_dmesg(system_info, monkeypatch, tmp_path):
+    plugin, tool = _plugin(system_info, monkeypatch)
+    _stage_collected_dmesg(plugin, tmp_path, "kernel log line")
+    plugin.data = McaRegisterDecodeDataModel(records=[{"cpu": 0, "bank": 1}])
+    decoded = plugin.decode()
+    dmesg = plugin.decode_dmesg(gpu="example-gpu")
+    assert decoded.status == ExecutionStatus.OK
+    assert plugin.data.decoded_records == [{"cpu": 0, "bank": 1, "decoded": {"summary": "example"}}]
+    assert dmesg.status == ExecutionStatus.OK
+    assert ("decode_dmesg", "kernel log line", "example-gpu") in tool.calls
+    assert plugin.data.dmesg_decoded_records == [
+        {"cpu": 0, "bank": 1, "decoded": {"summary": "dmesg"}}
+    ]
+
+
+def test_plugin_warns_when_collected_dmesg_is_missing(system_info, monkeypatch):
+    plugin, tool = _plugin(system_info, monkeypatch)
+    plugin.data = McaRegisterDecodeDataModel(records=[{"cpu": 0, "bank": 1}])
+    result = plugin.decode_dmesg()
+    assert result.status == ExecutionStatus.WARNING
+    assert plugin.data.dmesg_decoded_records == []
+    assert not any(isinstance(call, tuple) and call[0] == "decode_dmesg" for call in tool.calls)
+
+
+def test_plugin_clear(system_info, monkeypatch):
+    plugin, tool = _plugin(system_info, monkeypatch)
+    result = plugin.clear(threads=[0], wait_seconds=2.0)
+    assert result.status == ExecutionStatus.OK
+    assert ("clear", [0], 2.0) in tool.calls
+
+
+def test_collect_uses_constructor_tool_group(system_info, monkeypatch):
+    plugin = McaRegisterDecodePlugin(system_info, tool_group="mca_tool", tool_name="tool-a")
+    seen = {}
+
+    def _collect(self, collection_args=None, **kwargs):
+        seen["args"] = collection_args
+        return TaskResult(status=ExecutionStatus.OK, message="collected")
+
+    monkeypatch.setattr(base_plugin_mod.InBandDataPlugin, "collect", _collect)
+    result = plugin.collect(collection_args={"threads": [0]})
+    assert result.status == ExecutionStatus.OK
+    assert seen["args"].tool_group == "mca_tool"
+    assert seen["args"].tool_name == "tool-a"
+    assert seen["args"].threads == [0]
 
 
 def test_collect_reports_missing_entry_point(collector, monkeypatch):
     def _missing(name=None, group=None):
         raise RuntimeError(f"No {group} entry point is installed")
 
-    monkeypatch.setattr(collector_mod, "discover_register_tool", _missing)
+    monkeypatch.setattr(base_collector_mod, "discover_register_tool", _missing)
     result, data = collector.collect_data(McaRegisterDecodeCollectorArgs(tool_group="mca_tool"))
     assert result.status == ExecutionStatus.ERROR
     assert data is None
@@ -356,80 +451,3 @@ def test_analyze_reports_records_already_decoded(system_info):
     result = analyzer.analyze_data(data)
     assert result.status == ExecutionStatus.OK
     assert result.message == "Decoded 1 MCA register record(s) and 1 dmesg record(s)"
-
-
-def test_collect_restores_check_interval_when_collect_fails(collector, monkeypatch):
-    tool = FakeRegisterTool()
-
-    def _boom(threads=None, banks=None, verbose=False, capture_all=False):
-        tool.calls.append("collect")
-        raise RuntimeError("scan failed")
-
-    tool.collect = _boom
-    monkeypatch.setattr(collector_mod, "discover_register_tool", lambda name=None, group=None: tool)
-    result, data = collector.collect_data(
-        McaRegisterDecodeCollectorArgs(
-            tool_group="mca_tool",
-            threads=[0],
-            banks=[1],
-            capture_all=True,
-        )
-    )
-    assert result.status == ExecutionStatus.ERROR
-    assert data is None
-    assert "scan failed" in result.message
-    assert ("set_check_interval", 0, [0]) in tool.calls
-    assert ("set_check_interval", 5, [0]) in tool.calls
-
-
-def test_collect_skips_interval_changes_when_caller_manages_them(collector, monkeypatch, tmp_path):
-    tool = FakeRegisterTool()
-    _stage_collected_dmesg(collector, tmp_path, "kernel log line")
-    monkeypatch.setattr(collector_mod, "discover_register_tool", lambda name=None, group=None: tool)
-    monkeypatch.setattr(collector, "_run_sut_cmd", _forbid_command)
-    result, data = collector.collect_data(
-        McaRegisterDecodeCollectorArgs(
-            tool_group="mca_tool",
-            threads=[0],
-            banks=[1],
-            capture_all=True,
-            manage_check_interval=False,
-        )
-    )
-    assert result.status == ExecutionStatus.OK
-    assert data is not None
-    assert not any(
-        isinstance(call, tuple) and call[0] in {"get_check_intervals", "set_check_interval"}
-        for call in tool.calls
-    )
-    assert ("clear", [0], 2.0) in tool.calls
-
-
-def test_collect_warns_when_collected_dmesg_is_missing(collector, monkeypatch):
-    tool = FakeRegisterTool()
-    monkeypatch.setattr(collector_mod, "discover_register_tool", lambda name=None, group=None: tool)
-    monkeypatch.setattr(collector, "_run_sut_cmd", _forbid_command)
-    result, data = collector.collect_data(
-        McaRegisterDecodeCollectorArgs(
-            tool_group="mca_tool",
-            threads=[0],
-            banks=[1],
-            capture_all=True,
-        )
-    )
-    assert result.status == ExecutionStatus.WARNING
-    assert data.decoded_records
-    assert data.dmesg_decoded_records == []
-    assert not any(isinstance(call, tuple) and call[0] == "decode_dmesg" for call in tool.calls)
-
-
-def test_session_restores_each_saved_interval():
-    tool = FakeRegisterTool()
-    tool.intervals = [FakeInterval(0, 5), FakeInterval(1, 5), FakeInterval(2, 30)]
-    session = McaRegisterDecodeSession(tool)
-    assert session.prepare() == 0
-    session.suspend_polling()
-    assert session.restore() == 3
-    assert ("set_check_interval", 0, None) in tool.calls
-    assert ("set_check_interval", 5, [0, 1]) in tool.calls
-    assert ("set_check_interval", 30, [2]) in tool.calls
