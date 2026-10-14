@@ -88,6 +88,87 @@ def test_no_config_data(analyzer, model_obj):
     assert len(result.events) == 0
 
 
+def test_maximum_load_per_cpu_core_passes(analyzer):
+    model = OsDataModel(
+        os_name="Ubuntu 22.04.2 LTS",
+        load_average_1m=8.0,
+        cpu_count=4,
+    )
+
+    result = analyzer.analyze_data(
+        model,
+        OsAnalyzerArgs(maximum_load_per_cpu_core=2.0),
+    )
+
+    assert result.status == ExecutionStatus.OK
+
+
+def test_os_name_and_maximum_load_per_cpu_core_pass(analyzer):
+    model = OsDataModel(
+        os_name="Ubuntu 22.04.2 LTS",
+        load_average_1m=8.0,
+        cpu_count=4,
+    )
+
+    result = analyzer.analyze_data(
+        model,
+        OsAnalyzerArgs(
+            exp_os="Ubuntu 22.04.2 LTS",
+            maximum_load_per_cpu_core=2.0,
+        ),
+    )
+
+    assert result.status == ExecutionStatus.OK
+
+
+def test_os_name_mismatch_still_checks_load(analyzer):
+    model = OsDataModel(
+        os_name="Ubuntu 22.04.2 LTS",
+        load_average_1m=9.0,
+        cpu_count=4,
+    )
+
+    result = analyzer.analyze_data(
+        model,
+        OsAnalyzerArgs(
+            exp_os="RHEL 9",
+            maximum_load_per_cpu_core=2.0,
+        ),
+    )
+
+    assert result.status == ExecutionStatus.ERROR
+    assert len(result.events) == 2
+
+
+def test_maximum_load_per_cpu_core_fails(analyzer):
+    model = OsDataModel(
+        os_name="Ubuntu 22.04.2 LTS",
+        load_average_1m=9.0,
+        cpu_count=4,
+    )
+
+    result = analyzer.analyze_data(
+        model,
+        OsAnalyzerArgs(maximum_load_per_cpu_core=2.0),
+    )
+
+    assert result.status == ExecutionStatus.ERROR
+    assert len(result.events) == 1
+    assert result.events[0].data["load_per_cpu_core"] == pytest.approx(2.25)
+
+
+def test_maximum_load_per_cpu_core_missing_data(analyzer):
+    model = OsDataModel(os_name="Ubuntu 22.04.2 LTS")
+
+    result = analyzer.analyze_data(
+        model,
+        OsAnalyzerArgs(maximum_load_per_cpu_core=2.0),
+    )
+
+    assert result.status == ExecutionStatus.WARNING
+    assert len(result.events) == 1
+
+
 def test_invalid_os(analyzer, config):
     model = OsDataModel(os_name="some invalid os")
     args = OsAnalyzerArgs(exp_os=config["os_name"])
