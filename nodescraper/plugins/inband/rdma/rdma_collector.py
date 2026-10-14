@@ -284,6 +284,23 @@ class RdmaCollector(InBandDataCollector[RdmaDataModel, CollectorArgs]):
                     )
                     continue
                 links.append(RdmaLink(**link))
+            self._log_event(
+                category=EventCategory.NETWORK,
+                description=f"Collected {len(links)} RDMA links from 'rdma link -j'",
+                data={
+                    "links": [
+                        {
+                            "ifname": link.ifname,
+                            "port": link.port,
+                            "state": link.state,
+                            "physical_state": link.physical_state,
+                            "netdev": link.netdev,
+                        }
+                        for link in links
+                    ]
+                },
+                priority=EventPriority.INFO,
+            )
             return links
         except ValidationError as e:
             self._log_event(
@@ -321,6 +338,11 @@ class RdmaCollector(InBandDataCollector[RdmaDataModel, CollectorArgs]):
                 self._log_event(
                     category=EventCategory.NETWORK,
                     description=f"Collected {len(dev_list)} RDMA devices from 'rdma dev'",
+                    data={
+                        "devices": [
+                            {"device": device.device, "state": device.state} for device in dev_list
+                        ]
+                    },
                     priority=EventPriority.INFO,
                 )
             else:
@@ -338,6 +360,18 @@ class RdmaCollector(InBandDataCollector[RdmaDataModel, CollectorArgs]):
                 self._log_event(
                     category=EventCategory.NETWORK,
                     description=f"Collected {len(link_list_text)} RDMA links from 'rdma link'",
+                    data={
+                        "links": [
+                            {
+                                "device": link.device,
+                                "port": link.port,
+                                "state": link.state,
+                                "physical_state": link.physical_state,
+                                "netdev": link.netdev,
+                            }
+                            for link in link_list_text
+                        ]
+                    },
                     priority=EventPriority.INFO,
                 )
             else:
