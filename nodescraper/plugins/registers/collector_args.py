@@ -23,14 +23,24 @@
 # SOFTWARE.
 #
 ###############################################################################
-from .collector_args import McaRegisterDecodeCollectorArgs
-from .mca_register_decode_data import McaRegisterDecodeDataModel
-from .mca_register_decode_plugin import McaRegisterDecodePlugin
-from .mca_register_session import McaRegisterDecodeSession
+from typing import Optional
 
-__all__ = [
-    "McaRegisterDecodeCollectorArgs",
-    "McaRegisterDecodeDataModel",
-    "McaRegisterDecodePlugin",
-    "McaRegisterDecodeSession",
-]
+from pydantic import Field
+
+from nodescraper.models import CollectorArgs
+
+
+class RegisterDecodeCollectorArgs(CollectorArgs):
+    """Arguments for selecting an installed register tool."""
+
+    tool_group: Optional[str] = Field(
+        default=None,
+        description="Entry-point group used to discover the register tool.",
+    )
+    tool_name: Optional[str] = Field(
+        default=None,
+        description=(
+            "Optional entry-point name within tool_group. Required only when more "
+            "than one register tool is installed."
+        ),
+    )

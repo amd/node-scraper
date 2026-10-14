@@ -27,6 +27,42 @@ from importlib.metadata import entry_points
 from typing import Any, Optional
 
 
+def dump_tool_value(value: Any) -> Any:
+    """Serialize a register-tool model to JSON-ready data.
+
+    Args:
+        value: Model, mapping, or None.
+
+    Returns:
+        JSON-ready value, or None when value is None.
+    """
+    if value is None:
+        return None
+    dump = getattr(value, "model_dump", None)
+    if callable(dump):
+        return dump(mode="json")
+    return value
+
+
+def tool_rows(value: Any) -> list[dict[str, Any]]:
+    """Serialize register-tool records to a list of mappings.
+
+    Args:
+        value: Collection result or a sequence of records.
+
+    Returns:
+        JSON-ready record mappings.
+    """
+    rows = getattr(value, "records", value)
+    dumped = []
+    for row in rows:
+        item = dump_tool_value(row)
+        if not isinstance(item, dict):
+            raise TypeError("register tool record is not a mapping")
+        dumped.append(item)
+    return dumped
+
+
 def discover_register_tool(
     name: Optional[str] = None,
     group: Optional[str] = None,
@@ -65,15 +101,6 @@ def discover_register_tool(
         )
 
     tool = next(iter(unique_entries.values())).load()()
-    for method_name in (
-        "health_check",
-        "get_check_intervals",
-        "set_check_interval",
-        "collect",
-        "decode_records",
-        "decode_dmesg",
-        "clear",
-    ):
-        if not callable(getattr(tool, method_name, None)):
-            raise RuntimeError(f"{group} entry point does not provide {method_name}()")
+    if not callable(getattr(tool, "collect", None)):
+        raise RuntimeError(f"{group} entry point does not provide collect()")
     return tool

@@ -32,32 +32,28 @@ from nodescraper.enums import (
 from nodescraper.interfaces import DataAnalyzer
 from nodescraper.models import TaskResult
 
-from .mca_register_decode_data import McaRegisterDecodeDataModel
+from .register_decode_data import RegisterDecodeDataModel
 
 
-class McaRegisterDecodeAnalyzer(DataAnalyzer[McaRegisterDecodeDataModel, None]):
-    """Report MCA register records decoded during collection."""
+class RegisterDecodeAnalyzer(DataAnalyzer[RegisterDecodeDataModel, None]):
+    """Report register records already decoded on the data model."""
 
-    DATA_MODEL = McaRegisterDecodeDataModel
+    DATA_MODEL = RegisterDecodeDataModel
 
-    def analyze_data(
-        self,
-        data: McaRegisterDecodeDataModel,
-        args=None,
-    ) -> TaskResult:
-        """Report MCA records decoded during collection.
+    def analyze_data(self, data: RegisterDecodeDataModel, args=None) -> TaskResult:
+        """Report decoded register records.
 
         Args:
-            data: Collected stats and MCA register records.
+            data: Collected stats and register records.
             args: Analysis arguments. Defaults to None.
 
         Returns:
-            Task result for the decode.
+            Task result for the decoded records.
         """
-        if data.decoded_records is not None or data.dmesg_decoded_records is not None:
+        if data.decoded_records is not None:
             return self._report_decoded(data)
         if self.system_info.location == SystemLocation.REMOTE:
-            message = "MCA register decode is only supported on local"
+            message = "Register decode is only supported on local"
             self.result.status = ExecutionStatus.NOT_RAN
             self.result.message = message
             self._log_event(
@@ -67,25 +63,24 @@ class McaRegisterDecodeAnalyzer(DataAnalyzer[McaRegisterDecodeDataModel, None]):
                 console_log=True,
             )
             return self.result
-        return self._fail("MCA register records were not decoded during collection")
+        return self._fail("Register records were not decoded")
 
-    def _report_decoded(self, data: McaRegisterDecodeDataModel) -> TaskResult:
-        """Report MCA records the collector already decoded.
+    def _report_decoded(self, data: RegisterDecodeDataModel) -> TaskResult:
+        """Report records already decoded on the data model.
 
         Args:
-            data: Collected records plus decoded MSR and dmesg results.
+            data: Collected records plus decoded results.
 
         Returns:
             Task result for the decode.
         """
         decoded = list(data.decoded_records or [])
-        dmesg_decoded = list(data.dmesg_decoded_records or [])
         self.result.status = ExecutionStatus.OK
-        self.result.message = f"Decoded {len(decoded)} MCA register record(s) and {len(dmesg_decoded)} dmesg record(s)"
+        self.result.message = f"Decoded {len(decoded)} register record(s)"
         self._log_event(
             category=EventCategory.RAS,
             description=self.result.message,
-            data={"records": decoded, "dmesg_records": dmesg_decoded},
+            data={"records": decoded},
             priority=EventPriority.INFO,
         )
         return self.result

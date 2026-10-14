@@ -23,20 +23,20 @@
 # SOFTWARE.
 #
 ###############################################################################
-from nodescraper.base import InBandDataPlugin
+from .collector_args import RegisterDecodeCollectorArgs
+from .mca import (
+    McaRegisterDecodeCollectorArgs,
+    McaRegisterDecodeDataModel,
+    McaRegisterDecodePlugin,
+)
+from .register_decode_data import RegisterDecodeDataModel
+from .register_decode_plugin import RegisterDecodePlugin
 
-from .collector_args import McaRegisterDecodeCollectorArgs
-from .mca_register_decode_analyzer import McaRegisterDecodeAnalyzer
-from .mca_register_decode_collector import McaRegisterDecodeCollector
-from .mca_register_decode_data import McaRegisterDecodeDataModel
-
-
-class McaRegisterDecodePlugin(
-    InBandDataPlugin[McaRegisterDecodeDataModel, McaRegisterDecodeCollectorArgs, None]
-):
-    """Collect and decode MCA registers through an installed register-tool entry point."""
-
-    DATA_MODEL = McaRegisterDecodeDataModel
-    COLLECTOR = McaRegisterDecodeCollector
-    ANALYZER = McaRegisterDecodeAnalyzer
-    COLLECTOR_ARGS = McaRegisterDecodeCollectorArgs
+__all__ = [
+    "McaRegisterDecodeCollectorArgs",
+    "McaRegisterDecodeDataModel",
+    "McaRegisterDecodePlugin",
+    "RegisterDecodeCollectorArgs",
+    "RegisterDecodeDataModel",
+    "RegisterDecodePlugin",
+]

@@ -27,23 +27,12 @@ from typing import Optional
 
 from pydantic import Field
 
-from nodescraper.models import CollectorArgs
+from nodescraper.plugins.registers.collector_args import RegisterDecodeCollectorArgs
 
 
-class McaRegisterDecodeCollectorArgs(CollectorArgs):
-    """Arguments passed through to the MCA register tool collect entry point."""
+class McaRegisterDecodeCollectorArgs(RegisterDecodeCollectorArgs):
+    """Arguments for reading MCA registers."""
 
-    tool_group: Optional[str] = Field(
-        default=None,
-        description="Entry-point group used to discover the register tool.",
-    )
-    tool_name: Optional[str] = Field(
-        default=None,
-        description=(
-            "Optional entry-point name within tool_group. Required only when more "
-            "than one register tool is installed."
-        ),
-    )
     threads: Optional[list[int]] = Field(
         default=None,
         description="Logical CPU indices to scan. Omit to scan every online CPU.",
@@ -59,22 +48,4 @@ class McaRegisterDecodeCollectorArgs(CollectorArgs):
     capture_all: bool = Field(
         default=False,
         description="Keep banks that do not have a pending error.",
-    )
-    gpu: Optional[str] = Field(
-        default=None,
-        description=(
-            "GPU project name passed to dmesg MCA decode. Required by the register "
-            "tool when the kernel log contains a GPU bank."
-        ),
-    )
-    manage_check_interval: bool = Field(
-        default=True,
-        description=(
-            "Save check_interval, disable kernel MCA polling for this collection, "
-            "and restore the saved values afterward."
-        ),
-    )
-    wait_seconds: float = Field(
-        default=2.0,
-        description="Seconds to wait while the kernel drains MCA banks.",
     )

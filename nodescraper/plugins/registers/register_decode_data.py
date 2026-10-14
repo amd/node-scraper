@@ -28,10 +28,9 @@ from typing import Any, Optional
 from nodescraper.models import DataModel
 
 
-class McaRegisterDecodeDataModel(DataModel):
-    """MCA register records collected by an installed register-tool entry point."""
+class RegisterDecodeDataModel(DataModel):
+    """Register records collected by an installed register-tool entry point."""
 
     stats: Optional[dict[str, Any]] = None
     records: list[dict[str, Any]]
     decoded_records: Optional[list[dict[str, Any]]] = None
-    dmesg_decoded_records: Optional[list[dict[str, Any]]] = None
