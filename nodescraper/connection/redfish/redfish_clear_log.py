@@ -238,8 +238,8 @@ def clear_redfish_logs(
         path = endpoint.path
         try:
             resp = conn.post(path, json={})
-            success = resp.ok
             status_code = resp.status_code
+            success = status_code in (200, 202, 204)
             if success:
                 log.debug("Cleared log store: %s (status %s)", path, status_code)
                 results.append(ClearLogResult(path=path, success=True, status_code=status_code))

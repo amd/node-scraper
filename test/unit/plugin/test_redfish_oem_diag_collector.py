@@ -190,6 +190,44 @@ def test_clear_logs_not_called_when_collection_fails(
 @patch("nodescraper.plugins.ooband.redfish_oem_diag.oem_diag_collector.collect_oem_diagnostic_data")
 @patch("nodescraper.plugins.ooband.redfish_oem_diag.oem_diag_collector.clear_redfish_logs")
 @patch("nodescraper.plugins.ooband.redfish_oem_diag.oem_diag_collector._parse_clear_endpoint")
+def test_clear_logs_called_on_partial_success(
+    mock_parse, mock_clear, mock_collect, redfish_oem_diag_collector, redfish_conn_mock
+):
+    """Clear runs when at least one type succeeded — mirrors AMC: clear the log service
+    whose collections (even partial) are complete."""
+    from nodescraper.connection.redfish import RedfishGetResult
+    from nodescraper.connection.redfish.redfish_clear_log import (
+        ClearLogEndpoint,
+        ClearLogResult,
+    )
+
+    def side_effect(conn, log_service_path, oem_diagnostic_type, **kwargs):
+        if oem_diagnostic_type == "AllLogs":
+            return (b"data", {}, None)
+        return (None, None, "Not supported")
+
+    mock_collect.side_effect = side_effect
+    mock_parse.return_value = ClearLogEndpoint(path="/clear/path")
+    mock_clear.return_value = [ClearLogResult(path="/clear/path", success=True, status_code=200)]
+    redfish_conn_mock.run_get.return_value = RedfishGetResult(
+        path="/svc", success=True, data={"Actions": {}}, status_code=200
+    )
+
+    result, data = redfish_oem_diag_collector.collect_data(
+        args=RedfishOemDiagCollectorArgs(
+            oem_diagnostic_types=["AllLogs", "JournalControl"],
+            clear_logs_after_collection=True,
+        )
+    )
+    assert result.status == ExecutionStatus.OK
+    assert data.results["AllLogs"].success is True
+    assert data.results["JournalControl"].success is False
+    mock_clear.assert_called_once()
+
+
+@patch("nodescraper.plugins.ooband.redfish_oem_diag.oem_diag_collector.collect_oem_diagnostic_data")
+@patch("nodescraper.plugins.ooband.redfish_oem_diag.oem_diag_collector.clear_redfish_logs")
+@patch("nodescraper.plugins.ooband.redfish_oem_diag.oem_diag_collector._parse_clear_endpoint")
 def test_clear_log_failure_downgrades_to_warning(
     mock_parse, mock_clear, mock_collect, redfish_oem_diag_collector, redfish_conn_mock
 ):
