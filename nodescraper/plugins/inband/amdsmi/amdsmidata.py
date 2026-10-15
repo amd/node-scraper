@@ -183,6 +183,29 @@ def coerce_value_unit_input(v: Any) -> Any:
     return _coerce_value_unit_raw(v)
 
 
+_SPACED_UNIT_RE = re.compile(r"^\s*([-+]?\d+(?:\.\d+)?)\s+(.+?)\s*$")
+
+
+def coerce_spaced_unit_value_unit_input(v: Any) -> Any:
+    """Similar to ``coerce_value_unit_input``, but for units containing a space
+    (e.g. amd-smi's ``"0.0 Degrees C"``).
+
+    ``_NUM_UNIT_RE`` disallows whitespace inside the unit portion
+    so a multi-word unit falls through to being stored verbatim as 
+    ``value``.
+    """
+    if v is None:
+        return None
+    if isinstance(v, ValueUnit):
+        return v
+    if isinstance(v, str) and not _value_unit_is_na(v):
+        m = _SPACED_UNIT_RE.match(v.strip())
+        if m:
+            num, unit = m.groups()
+            return {"value": float(num) if "." in num else int(num), "unit": unit}
+    return coerce_value_unit_input(v)
+
+
 # Process
 class ProcessMemoryUsage(BaseModel):
     gtt_mem: Optional[ValueUnit]
@@ -1744,6 +1767,124 @@ class CpuMetric(BaseModel):
     )(coerce_value_unit_input)
 
 
+class CpuDimmPowConsumption(BaseModel):
+    """Per-DIMM data from ``amd-smi metric --cpu-dimm-pow-consumption DIMM_ADDR --json``.
+
+    ``dimm_addr`` is the address the collector queried with, not the (unreliable) echoed value.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    cpu: int
+    dimm_addr: int
+    dimm_power_consumed: Optional[ValueUnit] = None
+    dimm_power_update_rate: Optional[ValueUnit] = None
+
+    _value_unit = field_validator("dimm_power_consumed", "dimm_power_update_rate", mode="before")(
+        coerce_value_unit_input
+    )
+
+
+class CpuDimmThermalSensor(BaseModel):
+    """Per-DIMM data from ``amd-smi metric --cpu-dimm-thermal-sensor DIMM_ADDR --json``."""
+
+    model_config = ConfigDict(extra="allow")
+
+    cpu: int
+    dimm_addr: int
+    dimm_thermal_sensor_value: Optional[int] = None
+    dimm_thermal_update_rate: Optional[ValueUnit] = None
+    dimm_thermal_temperature: Optional[ValueUnit] = None
+
+    na_validator = field_validator("dimm_thermal_sensor_value", mode="before")(na_to_none)
+    _value_unit = field_validator("dimm_thermal_update_rate", mode="before")(
+        coerce_value_unit_input
+    )
+    _temperature_value_unit = field_validator("dimm_thermal_temperature", mode="before")(
+        coerce_spaced_unit_value_unit_input
+    )
+
+
+class CpuDimmTempRangeRate(BaseModel):
+    """Per-DIMM data from ``amd-smi metric --cpu-dimm-temp-range-rate DIMM_ADDR --json``."""
+
+    model_config = ConfigDict(extra="allow")
+
+    cpu: int
+    dimm_addr: int
+    dimm_temperature_range: Optional[int] = None
+    dimm_refresh_rate: Optional[int] = None
+
+    na_validator = field_validator("dimm_temperature_range", "dimm_refresh_rate", mode="before")(
+        na_to_none
+    )
+
+
+class CpuSvi3VrControllerTemp(BaseModel):
+    """Per-rail data from ``amd-smi metric --cpu-svi3-vr-controller-temp TYPE [RAIL_INDEX] --json``.
+
+    ``rail_type``/``rail_index`` are the arguments the collector queried with
+    (0=HottestRail/1=IndividualRail; rail 0-4 maps to VDDCR_CPU0, VDDCR_CPU1,
+    VDDCR_SOC, VDDIO, VDDIO_MEM_S3).
+    """
+
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
+    cpu: int
+    rail_type: int
+    rail_index: Optional[int] = None
+    rail_selection: Optional[str] = Field(default=None, alias="RAIL_SELECTION")
+    reported_rail_index: Optional[int] = Field(default=None, alias="RAIL_INDEX")
+    temperature: Optional[ValueUnit] = Field(default=None, alias="TEMPERATURE")
+
+    na_validator = field_validator("rail_selection", "reported_rail_index", mode="before")(
+        na_to_none
+    )
+    _value_unit = field_validator("temperature", mode="before")(coerce_value_unit_input)
+
+
+class CpuXgmiBandwidth(BaseModel):
+    """Per-link data from ``amd-smi metric --cpu-xgmi-bandwidth XGMI_BW LINKID_NAME --json``."""
+
+    model_config = ConfigDict(extra="allow")
+
+    cpu: int
+    xgmi_bw: int
+    link_id: str
+    band_width: Optional[ValueUnit] = None
+
+    _value_unit = field_validator("band_width", mode="before")(coerce_value_unit_input)
+
+
+class CpuIoBandwidth(BaseModel):
+    """Per-link data from ``amd-smi metric --cpu-io-bandwidth IO_BW LINKID_NAME --json``.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    cpu: int
+    io_bw: int
+    link_id: str
+    band_width: Optional[ValueUnit] = None
+
+    _value_unit = field_validator("band_width", mode="before")(coerce_value_unit_input)
+
+
+class CpuLclkDpmLevel(BaseModel):
+    """Per-NBIO data from ``amd-smi metric --cpu-lclk-dpm-level NBIOID --json``."""
+
+    model_config = ConfigDict(extra="allow")
+
+    cpu: int
+    nbio_id: int
+    nbio_min_dpm_level: Optional[int] = None
+    nbio_max_dpm_level: Optional[int] = None
+
+    na_validator = field_validator("nbio_min_dpm_level", "nbio_max_dpm_level", mode="before")(
+        na_to_none
+    )
+
+
 class AmdSmiAnalysisRef(BaseModel):
     """Collector-filled summary for reference config"""
 
@@ -1793,6 +1934,15 @@ class AmdSmiDataModel(DataModel):
     node: Optional[list[NodeInfo]] = Field(default_factory=list)
     cpu_metric: Optional[list[CpuMetric]] = Field(default_factory=list)
     core_metric: Optional[list[CoreMetric]] = Field(default_factory=list)
+    cpu_dimm_pow_consumption: Optional[list[CpuDimmPowConsumption]] = Field(default_factory=list)
+    cpu_dimm_thermal_sensor: Optional[list[CpuDimmThermalSensor]] = Field(default_factory=list)
+    cpu_dimm_temp_range_rate: Optional[list[CpuDimmTempRangeRate]] = Field(default_factory=list)
+    cpu_svi3_vr_controller_temp: Optional[list[CpuSvi3VrControllerTemp]] = Field(
+        default_factory=list
+    )
+    cpu_xgmi_bandwidth: Optional[list[CpuXgmiBandwidth]] = Field(default_factory=list)
+    cpu_io_bandwidth: Optional[list[CpuIoBandwidth]] = Field(default_factory=list)
+    cpu_lclk_dpm_level: Optional[list[CpuLclkDpmLevel]] = Field(default_factory=list)
     cper_data: Optional[list[FileModel]] = Field(default_factory=list)
     cper_afids: dict[str, int] = Field(default_factory=dict)
 
