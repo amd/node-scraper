@@ -212,9 +212,12 @@ def all_subclasses_union(bases: Iterable[type]) -> set[type]:
 
 
 def all_subclasses_single(cls: type) -> set[type]:
-    seen, out, work = set(), set(), [cls]
+    seen: set[type] = set()
+    out: set[type] = set()
+    work: list[type] = [cls]
     while work:
         parent = work.pop()
+        sub: type
         for sub in parent.__subclasses__():
             if sub not in seen:
                 seen.add(sub)

@@ -1160,9 +1160,13 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                 for i in issues
             )
             gpus_affected = len({i["gpu"] for i in issues})
+            fields = sorted({i["field"] for i in issues})
             self._log_event(
                 category=EventCategory.NETWORK,
-                description=f"Fabric data mismatch on {gpus_affected} GPU(s): {details}",
+                description=(
+                    f"Fabric data mismatch on {gpus_affected} GPU(s): {', '.join(fields)} "
+                    "(per-GPU detail in data.mismatches)"
+                ),
                 priority=EventPriority.ERROR,
                 data={
                     "expected_accel_state": expected_state,
