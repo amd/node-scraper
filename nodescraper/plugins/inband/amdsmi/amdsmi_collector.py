@@ -574,7 +574,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
     def _amdsmi_cpu_entries(self, cmd: str) -> List[dict]:
         """Run an amd-smi ``metric --cpu-*`` command and return its ``cpu_data`` list.
 
-        Returns an empty list on any hard failure so callers can treat "no 
+        Returns an empty list on any hard failure so callers can treat "no
         cpu_data at all" as a definitive stop signal.
         """
         ret = self._run_amd_smi_dict(cmd)

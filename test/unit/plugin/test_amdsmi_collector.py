@@ -1244,8 +1244,7 @@ def test_get_core_metric_command_failure(conn_mock, system_info, monkeypatch):
 def make_cpu_arg_collector(
     conn_mock, system_info, monkeypatch, responses: dict[str, Any]
 ) -> tuple[AmdSmiCollector, list[str]]:
-    """Create a collector driven by an exact command -> JSON-payload map.
-    """
+    """Create a collector driven by an exact command -> JSON-payload map."""
     calls: list[str] = []
 
     def mock_run_sut_cmd(cmd: str) -> MagicMock:
@@ -1370,8 +1369,7 @@ def test_get_cpu_dimm_temp_range_rate(conn_mock, system_info, monkeypatch):
 
 
 def test_get_cpu_lclk_dpm_level_stops_after_na_grace(conn_mock, system_info, monkeypatch):
-    """NBIO 0-3 populated, stop after 2 consecutive N/A.
-    """
+    """NBIO 0-3 populated, stop after 2 consecutive N/A."""
     dpm_range = {"nbio_max_dpm_level": 1, "nbio_min_dpm_level": 0}
     responses = {
         f"metric --cpu-lclk-dpm-level {i}": {
@@ -1439,8 +1437,8 @@ def test_get_cpu_svi3_vr_controller_temp_probes_full_fixed_candidate_set(
 def test_get_cpu_xgmi_bandwidth_keeps_na_links_and_probes_every_bw(
     conn_mock, system_info, monkeypatch
 ):
-    """Every candidate link is kept (N/A included, no filtering) and 
-    every XGMI_BW value is probed for every link (no shared-link-id 
+    """Every candidate link is kept (N/A included, no filtering) and
+    every XGMI_BW value is probed for every link (no shared-link-id
     optimization across BW values)."""
 
     def payload(band_width):

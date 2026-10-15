@@ -191,7 +191,7 @@ def coerce_spaced_unit_value_unit_input(v: Any) -> Any:
     (e.g. amd-smi's ``"0.0 Degrees C"``).
 
     ``_NUM_UNIT_RE`` disallows whitespace inside the unit portion
-    so a multi-word unit falls through to being stored verbatim as 
+    so a multi-word unit falls through to being stored verbatim as
     ``value``.
     """
     if v is None:
@@ -1857,8 +1857,7 @@ class CpuXgmiBandwidth(BaseModel):
 
 
 class CpuIoBandwidth(BaseModel):
-    """Per-link data from ``amd-smi metric --cpu-io-bandwidth IO_BW LINKID_NAME --json``.
-    """
+    """Per-link data from ``amd-smi metric --cpu-io-bandwidth IO_BW LINKID_NAME --json``."""
 
     model_config = ConfigDict(extra="allow")
 
