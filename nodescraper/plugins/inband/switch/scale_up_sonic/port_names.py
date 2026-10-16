@@ -26,4 +26,4 @@
 
 import re
 
-PORT_TOKEN_RE = re.compile(r"^(?:Ethernet)?((?:Mgmt)?\d+)$", re.IGNORECASE)
+PORT_TOKEN_RE = re.compile(r"^(Ethernet\d+)$")

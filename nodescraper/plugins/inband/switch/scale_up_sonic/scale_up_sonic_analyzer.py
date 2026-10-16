@@ -52,7 +52,7 @@ class ScaleUpSonicAnalyzer(
     DATA_MODEL = ScaleUpSonicDataModel
 
     PORT_NAME_RE: ClassVar[re.Pattern] = PORT_TOKEN_RE
-    PORT_FORMAT_HINT: ClassVar[str] = "expected 'Ethernet<N>' or '<N>' (e.g. 'Ethernet1', '1')"
+    PORT_FORMAT_HINT: ClassVar[str] = "expected full port name 'Ethernet<N>' (e.g. 'Ethernet1')"
 
     def _extra_port_findings(self, port_name: str, port_data: BaseModel) -> list[dict[str, Any]]:
         if not isinstance(port_data, SonicPortData):

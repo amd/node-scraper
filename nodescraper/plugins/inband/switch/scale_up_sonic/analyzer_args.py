@@ -36,16 +36,12 @@ class ScaleUpSonicAnalyzerArgs(AnalyzerArgs):
     analysis_ports: Optional[List[str]] = Field(
         default=None,
         description=(
-            "Restrict per-port analysis to the given ports. Accepts an optional "
-            "Ethernet prefix (e.g. ['1', '31', 'Mgmt1'] or ['Ethernet1']). "
-            "When omitted, every port present in the data is analyzed. "
-            "Independent of any collection-time filter."
+            "Restrict per-port analysis to the given full port names "
+            "(e.g. ['Ethernet1', 'Ethernet31']). "
+            "When omitted, every port present in the data is analyzed."
         ),
     )
     expected_port_speed: str = Field(
         default="400G",
-        description=(
-            "Expected interface speed from show interface status "
-            "(SonicInterfaceStatus.speed). Ports with a different speed are flagged."
-        ),
+        description=("Expected interface speed from show interface status "),
     )
