@@ -26,7 +26,7 @@
 from __future__ import annotations
 
 from logging import Logger
-from typing import Any, Mapping, Optional, Union
+from typing import Any, ClassVar, Mapping, Optional, Union
 
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
 from nodescraper.interfaces.connectionmanager import ConnectionManager
@@ -82,6 +82,8 @@ def collected_multi_target_data(connection_manager: Any) -> dict[str, Any]:
 
 class RedfishConnectionManager(ConnectionManager[RedfishConnection, RedfishConnectionParams]):
     """Connection manager for Redfish (BMC) API."""
+
+    CONNECTION_ARGS_MODEL: ClassVar[type[RedfishConnectionParams]] = RedfishConnectionParams
 
     def __init__(
         self,

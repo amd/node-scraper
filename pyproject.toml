@@ -29,23 +29,6 @@ dependencies = [
     "urllib3>=2.6.0"
 ]
 
-[project.optional-dependencies]
-dev = [
-    "build",
-    "black",
-    "pylint",
-    "coverage",
-    "twine",
-    "ruff",
-    "pre-commit",
-    "pytest",
-    "pytest-cov",
-    "mypy",
-    "types-paramiko",
-    "types-requests",
-    "types-setuptools",
-]
-
 [project.urls]
 homepage = "https://github.com/amd/node-scraper"
 documentation = "https://github.com/amd/node-scraper/blob/main/docs/PLUGIN_DOC.md"
