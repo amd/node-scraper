@@ -26,7 +26,7 @@
 from __future__ import annotations
 
 from logging import Logger
-from typing import Optional, Union
+from typing import ClassVar, Optional, Union
 
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
 from nodescraper.interfaces.connectionmanager import ConnectionManager
@@ -45,6 +45,10 @@ class RedfishSshProxyConnectionManager(
     ConnectionManager[SshProxyRedfishConnection, RedfishSshProxyConnectionParams]
 ):
     """SSH to a BMC and curl Redfish on an address reachable only from that host (AMC)."""
+
+    CONNECTION_ARGS_MODEL: ClassVar[type[RedfishSshProxyConnectionParams]] = (
+        RedfishSshProxyConnectionParams
+    )
 
     def __init__(
         self,

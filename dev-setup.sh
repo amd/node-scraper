@@ -14,13 +14,13 @@ export UV_SYSTEM_CERTS=1
 
 # Create venv if not already present or if Python version is below 3.9
 if [ ! -d "venv" ] || ! venv/bin/python -c 'import sys; exit(0 if sys.version_info >= (3, 9) else 1)' 2>/dev/null; then
-    uv venv venv --python python3 --no-python-downloads
+    uv venv venv --python 3.9  --no-python-downloads
 fi
 
 # Activate the desired venv
 source venv/bin/activate
 
-uv pip install -e ".[dev]"
+uv pip install -e . --group dev
 
 # Only install pre-commit hooks if not in CI environment
 if [ -z "${CI:-}" ]; then

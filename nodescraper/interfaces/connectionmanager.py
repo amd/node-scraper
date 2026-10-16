@@ -29,14 +29,13 @@ import abc
 import logging
 import types
 from functools import wraps
-from typing import Any, Callable, Generic, Optional, TypeVar, Union
+from typing import Any, Callable, ClassVar, Generic, Optional, TypeVar, Union
 
 from pydantic import BaseModel
 
 from nodescraper.constants import DEFAULT_EVENT_REPORTER
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
 from nodescraper.models import SystemInfo, TaskResult
-from nodescraper.typeutils import TypeUtils
 from nodescraper.utils import get_exception_traceback
 
 from .task import Task
@@ -89,6 +88,8 @@ class ConnectionManager(Task, Generic[TConnection, TConnectArg]):
 
     TASK_TYPE = "CONNECTION_MANAGER"
 
+    CONNECTION_ARGS_MODEL: ClassVar[Optional[type[BaseModel]]] = None
+
     def __init__(
         self,
         system_info: SystemInfo,
@@ -130,8 +131,7 @@ class ConnectionManager(Task, Generic[TConnection, TConnectArg]):
         )
 
         if isinstance(connection_args, dict):
-            generic_map = TypeUtils.get_generic_map(self.__class__)
-            connection_arg_model = generic_map.get(TConnectArg)
+            connection_arg_model = self.CONNECTION_ARGS_MODEL
             if not connection_arg_model:
                 raise ValueError("No model defined for connection args")
 
