@@ -24,7 +24,7 @@
 #
 ###############################################################################
 import types
-from datetime import datetime
+from datetime import datetime, timezone
 
 from nodescraper.enums import ExecutionStatus
 from nodescraper.enums.systeminteraction import SystemInteractionLevel
@@ -73,6 +73,24 @@ def test_collect_data_integration(monkeypatch, system_info, conn_mock):
     assert isinstance(data, JournalData)
 
     assert data.journal_log == '{"MESSAGE":"hello"}\n'
+
+
+def test_journal_entry_timestamps_are_utc_aware():
+    entry = JournalJsonEntry(
+        **{
+            "_SOURCE_REALTIME_TIMESTAMP": "0",
+            "__REALTIME_TIMESTAMP": "2025-02-23T21:03:46.685975",
+        }
+    )
+
+    assert entry.SOURCE_REALTIME_TIMESTAMP == datetime(1970, 1, 1, tzinfo=timezone.utc)
+    assert entry.REALTIME_TIMESTAMP == datetime(2025, 2, 23, 21, 3, 46, 685975, tzinfo=timezone.utc)
+
+
+def test_journal_entry_decodes_non_utf8_message_byte_array():
+    entry = JournalJsonEntry(MESSAGE=[104, 195, 169, 255])
+
+    assert entry.MESSAGE == "hé�"
 
 
 def test_journal_filter():
@@ -142,8 +160,8 @@ def test_journal_filter():
 
     journal_content_json = [JournalJsonEntry(**entry) for entry in journal_data]
 
-    start_range = datetime.fromisoformat("2025-02-23T21:03:46.686006")
-    end_range = datetime.fromisoformat("2025-02-23T21:03:46.686020")
+    start_range = datetime.fromisoformat("2025-02-23T21:03:46.686006").replace(tzinfo=timezone.utc)
+    end_range = datetime.fromisoformat("2025-02-23T21:03:46.686020").replace(tzinfo=timezone.utc)
 
     filtered_journal = JournalAnalyzer.filter_journal(journal_content_json, start_range, end_range)
     assert filtered_journal == [JournalJsonEntry(**entry) for entry in journal_data[1:3]]

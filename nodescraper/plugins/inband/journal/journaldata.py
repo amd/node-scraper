@@ -24,10 +24,10 @@
 #
 ###############################################################################
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Union
 
-from pydantic import ConfigDict, Field, field_validator
+from pydantic import AwareDatetime, ConfigDict, Field, field_validator
 
 from nodescraper.models import DataModel
 
@@ -42,35 +42,33 @@ class JournalJsonEntry(DataModel):
     SYSLOG_IDENTIFIER: Optional[str] = Field(None, alias="SYSLOG_IDENTIFIER")
     CURSOR: Optional[str] = Field(None, alias="__CURSOR")
     SYSLOG_FACILITY: Optional[int] = Field(None, alias="SYSLOG_FACILITY")
-    SOURCE_REALTIME_TIMESTAMP: Optional[datetime] = Field(None, alias="_SOURCE_REALTIME_TIMESTAMP")
-    REALTIME_TIMESTAMP: Optional[datetime] = Field(None, alias="__REALTIME_TIMESTAMP")
+    SOURCE_REALTIME_TIMESTAMP: Optional[AwareDatetime] = Field(
+        None, alias="_SOURCE_REALTIME_TIMESTAMP"
+    )
+    REALTIME_TIMESTAMP: Optional[AwareDatetime] = Field(None, alias="__REALTIME_TIMESTAMP")
     PRIORITY: int = Field(default=7, alias="PRIORITY")  # Default to DEBUG (7) if not present
     BOOT_ID: Optional[str] = Field(None, alias="_BOOT_ID")
     SOURCE_MONOTONIC_TIMESTAMP: Optional[float] = Field(None, alias="_SOURCE_MONOTONIC_TIMESTAMP")
     MONOTONIC_TIMESTAMP: Optional[float] = Field(None, alias="__MONOTONIC_TIMESTAMP")
-    MESSAGE: Union[str, list[str]] = Field(default="", alias="MESSAGE")
+    MESSAGE: str = Field(default="", alias="MESSAGE")
 
-    # assume datetime has microseconds
-    @field_validator("SOURCE_REALTIME_TIMESTAMP", mode="before")
-    @classmethod
-    def validate_source_realtime_timestamp(cls, v):
-        if v is None:
-            return None
-        try:
-            return datetime.fromisoformat(v)
-        except ValueError:
-            return datetime.fromtimestamp(float(v) / 1e6)
-
-    # assume datetime has microseconds
-    @field_validator("REALTIME_TIMESTAMP", mode="before")
+    @field_validator("SOURCE_REALTIME_TIMESTAMP", "REALTIME_TIMESTAMP", mode="before")
     @classmethod
     def validate_realtime_timestamp(cls, v):
         if v is None:
             return None
-        try:
-            return datetime.fromisoformat(v)
-        except ValueError:
-            return datetime.fromtimestamp(float(v) / 1e6)
+
+        if isinstance(v, datetime):
+            parsed = v
+        else:
+            try:
+                parsed = datetime.fromisoformat(str(v))
+            except ValueError:
+                return datetime.fromtimestamp(float(v) / 1e6, tz=timezone.utc)
+
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
 
     @field_validator("SOURCE_MONOTONIC_TIMESTAMP", mode="before")
     @classmethod
@@ -113,15 +111,13 @@ class JournalJsonEntry(DataModel):
     @field_validator("MESSAGE", mode="before")
     @classmethod
     def validate_message(cls, v):
-        """Convert MESSAGE field to string or list[str] based on input type"""
+        """Convert MESSAGE to text, including journald's JSON byte-array form."""
         if v is None:
             return ""
 
-        # If it's a list but not all items are strings, convert each item to string
         if isinstance(v, list):
-            return [str(item) for item in v]
+            return bytes(v).decode("utf-8", errors="replace")
 
-        # Return string representation for any other type
         return str(v)
 
 
