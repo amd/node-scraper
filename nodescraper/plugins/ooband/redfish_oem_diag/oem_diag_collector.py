@@ -28,7 +28,16 @@ from typing import Optional
 
 from nodescraper.base import RedfishDataCollector
 from nodescraper.connection.redfish import collect_oem_diagnostic_data
-from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
+from nodescraper.connection.redfish.redfish_clear_log import (
+    _parse_clear_endpoint,
+    clear_redfish_logs,
+)
+from nodescraper.enums import (
+    EventCategory,
+    EventPriority,
+    ExecutionStatus,
+    SystemInteractionLevel,
+)
 from nodescraper.models import TaskResult
 
 from .collector_args import RedfishOemDiagCollectorArgs
@@ -100,4 +109,47 @@ class RedfishOemDiagCollector(
         success_count = sum(1 for r in results.values() if r.success)
         self.result.message = f"OEM diag: {success_count}/{len(results)} types collected"
         self.result.status = ExecutionStatus.OK if success_count else ExecutionStatus.ERROR
+
+        if (
+            args.clear_logs_after_collection
+            and success_count > 0
+            and self.system_interaction_level >= SystemInteractionLevel.INTERACTIVE
+        ):
+            self._clear_log_service(args.log_service_path)
+        elif args.clear_logs_after_collection and success_count == 0:
+            self.logger.debug("Skipping log clear: no OEM diag types collected successfully")
+        elif args.clear_logs_after_collection:
+            self.logger.debug(
+                "Skipping log clear: system_interaction_level is %s (requires INTERACTIVE)",
+                self.system_interaction_level.name,
+            )
+
         return self.result, RedfishOemDiagDataModel(results=results)
+
+    def _clear_log_service(self, log_service_path: str) -> None:
+        """POST LogService.ClearLog to the configured log service if it supports the action.
+
+        Args:
+            log_service_path: Redfish path to the LogService.
+        """
+        svc_res = self._run_redfish_get(log_service_path, log_artifact=False)
+        if not svc_res.success or not svc_res.data:
+            self.logger.debug("Skipping log clear: could not GET log service %s", log_service_path)
+            return
+        endpoint = _parse_clear_endpoint(svc_res.data)
+        if endpoint is None:
+            self.logger.debug("LogService %s does not advertise ClearLog action", log_service_path)
+            return
+        clear_results = clear_redfish_logs(self.connection, [endpoint], self.logger)
+        if clear_results and clear_results[0].success:
+            self.result.message += "; cleared log store"
+        elif clear_results and not clear_results[0].success:
+            self._log_event(
+                category=EventCategory.RUNTIME,
+                description=f"Failed to clear log store {endpoint.path}: {clear_results[0].error}",
+                priority=EventPriority.WARNING,
+                console_log=True,
+            )
+            if self.result.status == ExecutionStatus.OK:
+                self.result.status = ExecutionStatus.WARNING
+                self.result.message += "; log clear failed"

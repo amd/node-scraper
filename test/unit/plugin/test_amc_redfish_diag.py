@@ -288,3 +288,161 @@ def test_failed_collection_skips_diag_logs_and_writes_events(
     event_log = (tmp_path / "events.json").read_text(encoding="utf-8")
     assert "ResourceInUse" in event_log
     assert "The resource is in use." in event_log
+
+
+@patch("nodescraper.plugins.ooband.amc_redfish_diag.amc_diag_collector.collect_oem_diagnostic_data")
+@patch("nodescraper.plugins.ooband.amc_redfish_diag.amc_diag_collector._parse_clear_endpoint")
+@patch("nodescraper.plugins.ooband.amc_redfish_diag.amc_diag_collector.clear_redfish_logs")
+def test_amc_clear_logs_called_after_success(mock_clear, mock_parse, mock_collect, amc_collector):
+    from nodescraper.connection.redfish.redfish_clear_log import (
+        ClearLogEndpoint,
+        ClearLogResult,
+    )
+
+    mock_collect.return_value = (b"archive", {"Id": "1"}, None)
+    amc_collector.connection.run_get.side_effect = _get_side_effect
+    endpoint = ClearLogEndpoint(
+        path="/redfish/v1/Managers/dummy-amc/LogServices/Dump/Actions/LogService.ClearLog"
+    )
+    mock_parse.return_value = endpoint
+    mock_clear.return_value = [ClearLogResult(path=endpoint.path, success=True, status_code=200)]
+
+    result, data = amc_collector.collect_data(
+        args=AmcRedfishDiagCollectorArgs(
+            manager_ids=["dummy-amc"],
+            system_ids=["dummy-system"],
+            collections=[
+                AmcDiagCollectionSpec(root="Managers", diagnostic_data_type="Manager"),
+            ],
+            clear_logs_after_collection=True,
+        )
+    )
+    assert result.status == ExecutionStatus.OK
+    mock_parse.assert_called_once()
+    mock_clear.assert_called_once()
+
+
+@patch("nodescraper.plugins.ooband.amc_redfish_diag.amc_diag_collector.collect_oem_diagnostic_data")
+@patch("nodescraper.plugins.ooband.amc_redfish_diag.amc_diag_collector._parse_clear_endpoint")
+@patch("nodescraper.plugins.ooband.amc_redfish_diag.amc_diag_collector.clear_redfish_logs")
+def test_amc_clear_logs_not_called_when_all_failed(
+    mock_clear, mock_parse, mock_collect, amc_collector
+):
+    mock_collect.return_value = (None, None, "Task timeout")
+    amc_collector.connection.run_get.side_effect = _get_side_effect
+
+    result, data = amc_collector.collect_data(
+        args=AmcRedfishDiagCollectorArgs(
+            manager_ids=["dummy-amc"],
+            collections=[
+                AmcDiagCollectionSpec(root="Managers", diagnostic_data_type="Manager"),
+            ],
+            clear_logs_after_collection=True,
+        )
+    )
+    assert result.status == ExecutionStatus.ERROR
+    mock_parse.assert_not_called()
+    mock_clear.assert_not_called()
+
+
+@patch("nodescraper.plugins.ooband.amc_redfish_diag.amc_diag_collector.collect_oem_diagnostic_data")
+@patch("nodescraper.plugins.ooband.amc_redfish_diag.amc_diag_collector._parse_clear_endpoint")
+@patch("nodescraper.plugins.ooband.amc_redfish_diag.amc_diag_collector.clear_redfish_logs")
+def test_amc_clear_log_failure_downgrades_ok_to_warning(
+    mock_clear, mock_parse, mock_collect, amc_collector
+):
+    from nodescraper.connection.redfish.redfish_clear_log import (
+        ClearLogEndpoint,
+        ClearLogResult,
+    )
+
+    mock_collect.return_value = (b"archive", {"Id": "1"}, None)
+    amc_collector.connection.run_get.side_effect = _get_side_effect
+    endpoint = ClearLogEndpoint(path="/some/ClearLog")
+    mock_parse.return_value = endpoint
+    mock_clear.return_value = [
+        ClearLogResult(path=endpoint.path, success=False, status_code=503, error="Server Error")
+    ]
+
+    result, data = amc_collector.collect_data(
+        args=AmcRedfishDiagCollectorArgs(
+            manager_ids=["dummy-amc"],
+            collections=[
+                AmcDiagCollectionSpec(root="Managers", diagnostic_data_type="Manager"),
+            ],
+            clear_logs_after_collection=True,
+        )
+    )
+    assert result.status == ExecutionStatus.WARNING
+    assert "log store(s) failed to clear" in result.message
+    warning_events = [e for e in result.events if e.priority == EventPriority.WARNING]
+    assert any("Failed to clear" in e.description for e in warning_events)
+
+
+@patch("nodescraper.plugins.ooband.amc_redfish_diag.amc_diag_collector.collect_oem_diagnostic_data")
+@patch("nodescraper.plugins.ooband.amc_redfish_diag.amc_diag_collector._parse_clear_endpoint")
+@patch("nodescraper.plugins.ooband.amc_redfish_diag.amc_diag_collector.clear_redfish_logs")
+def test_amc_clear_logs_skipped_when_passive(
+    mock_clear, mock_parse, mock_collect, system_info, redfish_conn_mock
+):
+    from nodescraper.enums import SystemInteractionLevel
+
+    mock_collect.return_value = (b"archive", {"Id": "1"}, None)
+    redfish_conn_mock.api_root = "redfish/v1"
+    redfish_conn_mock.run_get.side_effect = _get_side_effect
+    collector = AmcRedfishDiagCollector(
+        system_info=system_info,
+        connection=redfish_conn_mock,
+        system_interaction_level=SystemInteractionLevel.PASSIVE,
+    )
+    result, data = collector.collect_data(
+        args=AmcRedfishDiagCollectorArgs(
+            manager_ids=["dummy-amc"],
+            collections=[
+                AmcDiagCollectionSpec(root="Managers", diagnostic_data_type="Manager"),
+            ],
+            clear_logs_after_collection=True,
+        )
+    )
+    assert result.status == ExecutionStatus.OK
+    mock_parse.assert_not_called()
+    mock_clear.assert_not_called()
+
+
+@patch("nodescraper.plugins.ooband.amc_redfish_diag.amc_diag_collector.collect_oem_diagnostic_data")
+@patch("nodescraper.plugins.ooband.amc_redfish_diag.amc_diag_collector._parse_clear_endpoint")
+@patch("nodescraper.plugins.ooband.amc_redfish_diag.amc_diag_collector.clear_redfish_logs")
+def test_amc_clear_only_clears_successful_log_services(
+    mock_clear, mock_parse, mock_collect, amc_collector
+):
+    """Only log services whose collection succeeded are cleared; failed ones are skipped."""
+    from nodescraper.connection.redfish.redfish_clear_log import (
+        ClearLogEndpoint,
+        ClearLogResult,
+    )
+
+    def collect_side(conn, log_service_path, diagnostic_data_type, **kwargs):
+        if diagnostic_data_type == "Manager":
+            return (None, None, "Task timeout")
+        return (b"archive", {"Id": "1"}, None)
+
+    mock_collect.side_effect = collect_side
+    amc_collector.connection.run_get.side_effect = _get_side_effect
+    endpoint = ClearLogEndpoint(path="/some/Systems/ClearLog")
+    mock_parse.return_value = endpoint
+    mock_clear.return_value = [ClearLogResult(path=endpoint.path, success=True, status_code=200)]
+
+    result, data = amc_collector.collect_data(
+        args=AmcRedfishDiagCollectorArgs(
+            manager_ids=["dummy-amc"],
+            system_ids=["dummy-system"],
+            collections=_both_collections(),
+            clear_logs_after_collection=True,
+        )
+    )
+    assert result.status == ExecutionStatus.WARNING
+    assert data.results["Managers:Manager"].success is False
+    assert data.results["Systems:OEM:AllLogs"].success is True
+    # _parse_clear_endpoint called once (for the Systems log service that succeeded only)
+    mock_parse.assert_called_once()
+    mock_clear.assert_called_once()
