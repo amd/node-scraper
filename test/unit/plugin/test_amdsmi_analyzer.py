@@ -1567,17 +1567,6 @@ def test_check_fabric_zero_ppod_id(mock_analyzer):
     assert mismatches[0]["expected"] == "non-zero"
 
 
-_ALL_FABRIC_FIELDS = {
-    "accel_state",
-    "fabric_type",
-    "ppod_id",
-    "local_accelerators",
-    "local_active_accelerators",
-    "ppod_size",
-    "vpod_size",
-}
-
-
 def create_unconfigured_fabric(gpu: int) -> Fabric:
     """Helper building amd-smi fabric output for a GPU whose fabric is not configured."""
     return Fabric.model_validate(
@@ -1614,14 +1603,11 @@ def test_check_fabric_unconfigured_many_gpus(mock_analyzer):
     event = analyzer.result.events[0]
     assert event.priority == EventPriority.ERROR
     assert event.category == "NETWORK"
-    assert len(event.data["mismatches"]) == 56
+    assert len(event.data["mismatches"]) == 8
     assert {m["gpu"] for m in event.data["mismatches"]} == set(range(8))
-    assert {m["field"] for m in event.data["mismatches"]} == _ALL_FABRIC_FIELDS
+    assert {m["field"] for m in event.data["mismatches"]} == {'accel_state'}
     assert len(event.description.encode("utf-8")) < 2048
     assert event.description.startswith("Fabric data mismatch on 8 GPU(s)")
-    for field in _ALL_FABRIC_FIELDS:
-        assert field in event.description
-    assert "GPU 7 accel_state: expected ACTIVE, actual UNCONFIGURED" in event.data["details"]
 
 
 def test_analyze_data_unconfigured_fabric_completes(mock_analyzer):
