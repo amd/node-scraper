@@ -31,13 +31,11 @@ from typing import Any, ClassVar, Optional, Union
 from nodescraper.enums import (
     EventCategory,
     EventPriority,
-    ExecutionStatus,
     SystemLocation,
 )
 from nodescraper.interfaces.connectionmanager import ConnectionManager
 from nodescraper.interfaces.taskresulthook import TaskResultHook
 from nodescraper.models import SystemInfo, TaskResult
-from nodescraper.utils import get_exception_traceback
 
 from .inband import InBandConnection
 from .inbandlocal import LocalShell
@@ -92,47 +90,23 @@ class InBandConnectionManager(ConnectionManager[InBandConnection, SSHConnectionP
             self.connection = LocalShell()
             return self.result
 
-        if not self.connection_args or not isinstance(self.connection_args, SSHConnectionParams):
-            if not self.connection_args:
-                message = "No SSH credentials provided"
-            else:
-                message = "Invalide SSH creddentials provided"
+        if not self.connection_args:
+            return self._fail_connect(EventCategory.RUNTIME, "No SSH credentials provided")
 
-            self._log_event(
-                category=EventCategory.RUNTIME,
-                description=message,
-                priority=EventPriority.CRITICAL,
-                console_log=True,
-            )
-            self.result.status = ExecutionStatus.EXECUTION_FAILURE
-            return self.result
+        if not isinstance(self.connection_args, SSHConnectionParams):
+            return self._fail_connect(EventCategory.RUNTIME, "Invalid SSH credentials provided")
 
+        hostname = self.connection_args.hostname
+        self.logger.info("Initializing SSH connection to system '%s'", hostname)
+        shell = RemoteShell(self.connection_args)
         try:
-            self.logger.info(
-                "Initializing SSH connection to system '%s'",
-                self.connection_args.hostname,
-            )
-            self.connection = RemoteShell(self.connection_args)
-            self.connection.connect_ssh()
+            shell.connect_ssh()
         except SSHConnectionError as exception:
-            self._log_event(
-                category=EventCategory.SSH,
-                description=f"{str(exception)}",
-                priority=EventPriority.CRITICAL,
-                console_log=True,
+            return self._fail_connect(
+                EventCategory.SSH, f"SSH connection to '{hostname}' failed: {exception}"
             )
-            self.connection = None  # Nullify the connection since its not usable
-            self.result.status = ExecutionStatus.EXECUTION_FAILURE
-        except Exception as exception:
-            self._log_event(
-                category=EventCategory.SSH,
-                description=f"Exception during SSH: {str(exception)}",
-                data=get_exception_traceback(exception),
-                priority=EventPriority.CRITICAL,
-                console_log=True,
-            )
-            self.connection = None  # Nullify the connection since its not usable
-            self.result.status = ExecutionStatus.EXECUTION_FAILURE
+
+        self.connection = shell
         return self.result
 
     def disconnect(self):
