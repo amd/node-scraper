@@ -1605,7 +1605,7 @@ def test_check_fabric_unconfigured_many_gpus(mock_analyzer):
     assert event.category == "NETWORK"
     assert len(event.data["mismatches"]) == 8
     assert {m["gpu"] for m in event.data["mismatches"]} == set(range(8))
-    assert {m["field"] for m in event.data["mismatches"]} == {'accel_state'}
+    assert {m["field"] for m in event.data["mismatches"]} == {"accel_state"}
     assert len(event.description.encode("utf-8")) < 2048
     assert event.description.startswith("Fabric data mismatch on 8 GPU(s)")
 

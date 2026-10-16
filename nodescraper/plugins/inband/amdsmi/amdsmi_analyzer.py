@@ -59,13 +59,10 @@ def _gpu_mismatch_description(
     """Return (event description, console details) for per-GPU expected vs actual."""
     gpu_ids = sorted(actual_by_gpu.keys())
     exp = f"{expected}{unit}" if unit else str(expected)
-    per_gpu_short = ", ".join(
-        f"GPU {gpu}={actual_by_gpu[gpu]}{unit}" for gpu in gpu_ids
-    )
+    per_gpu_short = ", ".join(f"GPU {gpu}={actual_by_gpu[gpu]}{unit}" for gpu in gpu_ids)
     description = f"{check_name} mismatch (expected {exp}): {per_gpu_short}"
     details = "; ".join(
-        f"GPU {gpu}: expected {exp}, actual {actual_by_gpu[gpu]}{unit}"
-        for gpu in gpu_ids
+        f"GPU {gpu}: expected {exp}, actual {actual_by_gpu[gpu]}{unit}" for gpu in gpu_ids
     )
     return description, details
 
@@ -429,10 +426,7 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                 )
 
             if pcie_data.l0_to_recovery_count is not None:
-                if (
-                    pcie_data.l0_to_recovery_count
-                    > l0_to_recovery_count_error_threshold
-                ):
+                if pcie_data.l0_to_recovery_count > l0_to_recovery_count_error_threshold:
                     self._log_event(
                         category=EventCategory.IO,
                         description=f"GPU: {gpu} has {pcie_data.l0_to_recovery_count} L0 recoveries",
@@ -444,10 +438,7 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                         },
                         console_log=True,
                     )
-                elif (
-                    pcie_data.l0_to_recovery_count
-                    > l0_to_recovery_count_warning_threshold
-                ):
+                elif pcie_data.l0_to_recovery_count > l0_to_recovery_count_warning_threshold:
                     self._log_event(
                         category=EventCategory.IO,
                         description=f"GPU: {gpu} has {pcie_data.l0_to_recovery_count} L0 recoveries",
@@ -469,10 +460,7 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                     console_log=True,
                 )
 
-            if (
-                pcie_data.nak_received_count is not None
-                and pcie_data.nak_received_count > 0
-            ):
+            if pcie_data.nak_received_count is not None and pcie_data.nak_received_count > 0:
                 self._log_event(
                     category=EventCategory.IO,
                     description=f"GPU: {gpu} has received {pcie_data.nak_received_count} PCIe NAKs",
@@ -647,10 +635,7 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                 if not isinstance(ecc_data, EccData):
                     continue
 
-                if (
-                    ecc_data.correctable_count is not None
-                    and ecc_data.correctable_count > 0
-                ):
+                if ecc_data.correctable_count is not None and ecc_data.correctable_count > 0:
                     self._log_event(
                         category=EventCategory.RAS,
                         description=f"GPU: {gpu} has correctable ECC errors in block {block_name}",
@@ -663,10 +648,7 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                         console_log=True,
                     )
 
-                if (
-                    ecc_data.uncorrectable_count is not None
-                    and ecc_data.uncorrectable_count > 0
-                ):
+                if ecc_data.uncorrectable_count is not None and ecc_data.uncorrectable_count > 0:
                     self._log_event(
                         category=EventCategory.RAS,
                         description=f"GPU: {gpu} has uncorrectable ECC errors in block {block_name}",
@@ -754,9 +736,7 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
             "subsystem_id": {gpu.asic.subsystem_id for gpu in amdsmi_static_data},
             "device_id": {gpu.asic.device_id for gpu in amdsmi_static_data},
             "rev_id": {gpu.asic.rev_id for gpu in amdsmi_static_data},
-            "num_compute_units": {
-                str(gpu.asic.num_compute_units) for gpu in amdsmi_static_data
-            },
+            "num_compute_units": {str(gpu.asic.num_compute_units) for gpu in amdsmi_static_data},
             "target_graphics_version": {
                 gpu.asic.target_graphics_version for gpu in amdsmi_static_data
             },
@@ -877,9 +857,7 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
 
         for gpu, field, expected, actual in mismatches:
             field_set.add(field)
-            per_gpu[gpu].append(
-                {"field": field, "expected": expected, "actual": actual}
-            )
+            per_gpu[gpu].append({"field": field, "expected": expected, "actual": actual})
 
         per_gpu_list: list[dict[str, Any]] = [
             {"gpu": gpu, "mismatches": entries}
@@ -1063,9 +1041,7 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
         if expected_xgmi_speed is None or len(expected_xgmi_speed) == 0:
             self._log_event(
                 category=EventCategory.IO,
-                description=(
-                    "Expected XGMI link speed not set; skipping XGMI link speed analysis"
-                ),
+                description=("Expected XGMI link speed not set; skipping XGMI link speed analysis"),
                 priority=EventPriority.INFO,
                 console_log=True,
             )
@@ -1087,9 +1063,7 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                             "gpu": xgmi_data.gpu,
                             "expected_xgmi_speed": expected_xgmi_speed,
                             "xgmi_bit_rate": (
-                                link_metric.bit_rate.unit
-                                if link_metric.bit_rate
-                                else "N/A"
+                                link_metric.bit_rate.unit if link_metric.bit_rate else "N/A"
                             ),
                             "details": details,
                         },
@@ -1111,9 +1085,7 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                         "gpu": xgmi_data.gpu,
                         "expected_xgmi_speed": expected_xgmi_speed,
                         "xgmi_bit_rate": (
-                            link_metric.bit_rate.value
-                            if link_metric.bit_rate
-                            else "N/A"
+                            link_metric.bit_rate.value if link_metric.bit_rate else "N/A"
                         ),
                         "details": details,
                     },
@@ -1218,9 +1190,7 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                 console_log=True,
             )
 
-    def check_xgmi_or_peer_links_status(
-        self, xgmi_links: Optional[list[XgmiLinks]]
-    ) -> None:
+    def check_xgmi_or_peer_links_status(self, xgmi_links: Optional[list[XgmiLinks]]) -> None:
         """Check XGMI or peer-link status: U passes, SELF is ignored, D/X warn."""
         if not xgmi_links:
             self._log_event(
@@ -1263,9 +1233,7 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
         if down_links:
             self._log_event(
                 category=EventCategory.IO,
-                description=(
-                    f"XGMI/peer links contain {len(down_links)} down/error links"
-                ),
+                description=(f"XGMI/peer links contain {len(down_links)} down/error links"),
                 priority=EventPriority.WARNING,
                 data={
                     "down_links": down_links,
@@ -1278,8 +1246,7 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
             self._log_event(
                 category=EventCategory.IO,
                 description=(
-                    f"XGMI/peer links contain {len(degraded_links)} "
-                    "disabled/degraded links"
+                    f"XGMI/peer links contain {len(degraded_links)} " "disabled/degraded links"
                 ),
                 priority=EventPriority.WARNING,
                 data={
@@ -1307,9 +1274,7 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
 
         if data.metric is not None and len(data.metric) > 0:
             if args.expected_power_management:
-                self.check_expected_power_management(
-                    data.metric, args.expected_power_management
-                )
+                self.check_expected_power_management(data.metric, args.expected_power_management)
             if args.l0_to_recovery_count_error_threshold is not None:
                 self.check_amdsmi_metric_pcie(
                     data.metric,
@@ -1341,9 +1306,7 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
             if args.power:
                 self.check_power_cap_consistency(data.static, args.power)
             if args.expected_driver_version:
-                self.check_expected_driver_version(
-                    data.static, args.expected_driver_version
-                )
+                self.check_expected_driver_version(data.static, args.expected_driver_version)
 
             self.static_consistancy_check(data.static)
             if (
