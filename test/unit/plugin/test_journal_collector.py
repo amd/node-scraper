@@ -24,7 +24,7 @@
 #
 ###############################################################################
 import types
-from datetime import datetime
+from datetime import datetime, timezone
 
 from nodescraper.enums import ExecutionStatus
 from nodescraper.enums.systeminteraction import SystemInteractionLevel
@@ -73,6 +73,46 @@ def test_collect_data_integration(monkeypatch, system_info, conn_mock):
     assert isinstance(data, JournalData)
 
     assert data.journal_log == '{"MESSAGE":"hello"}\n'
+
+
+def test_journal_entry_timestamps_are_utc_aware():
+    entry = JournalJsonEntry(
+        **{
+            "_SOURCE_REALTIME_TIMESTAMP": "0",
+            "__REALTIME_TIMESTAMP": "2025-02-23T21:03:46.685975",
+        }
+    )
+
+    assert entry.SOURCE_REALTIME_TIMESTAMP == datetime(1970, 1, 1, tzinfo=timezone.utc)
+    assert entry.REALTIME_TIMESTAMP == datetime(2025, 2, 23, 21, 3, 46, 685975, tzinfo=timezone.utc)
+
+
+def test_journal_entry_decodes_non_utf8_message_byte_array():
+    entry = JournalJsonEntry(MESSAGE=[104, 195, 169, 255])
+
+    assert entry.MESSAGE == "hé�"
+
+
+def test_journal_entry_joins_repeated_message_values():
+    strings = JournalJsonEntry(MESSAGE=["first", "second"])
+    mixed = JournalJsonEntry(MESSAGE=[[104, 105], "x"])
+    with_null = JournalJsonEntry(MESSAGE=["first line", [104, 105], None])
+
+    assert strings.MESSAGE == "first second"
+    assert mixed.MESSAGE == "hi x"
+    assert with_null.MESSAGE == "first line hi "
+
+
+def test_journal_entry_converts_offset_and_datetime_inputs_to_utc():
+    offset = JournalJsonEntry(**{"__REALTIME_TIMESTAMP": "2025-02-23T21:03:46+05:00"})
+    assert offset.REALTIME_TIMESTAMP == datetime(2025, 2, 23, 16, 3, 46, tzinfo=timezone.utc)
+
+    naive = JournalJsonEntry(**{"__REALTIME_TIMESTAMP": datetime(2025, 2, 23, 21, 3, 46)})
+    assert naive.REALTIME_TIMESTAMP == datetime(2025, 2, 23, 21, 3, 46, tzinfo=timezone.utc)
+
+    aware = datetime(2025, 2, 23, 16, 3, 46, tzinfo=timezone.utc)
+    from_aware = JournalJsonEntry(**{"__REALTIME_TIMESTAMP": aware})
+    assert from_aware.REALTIME_TIMESTAMP == aware
 
 
 def test_journal_filter():
@@ -142,8 +182,8 @@ def test_journal_filter():
 
     journal_content_json = [JournalJsonEntry(**entry) for entry in journal_data]
 
-    start_range = datetime.fromisoformat("2025-02-23T21:03:46.686006")
-    end_range = datetime.fromisoformat("2025-02-23T21:03:46.686020")
+    start_range = datetime.fromisoformat("2025-02-23T21:03:46.686006").replace(tzinfo=timezone.utc)
+    end_range = datetime.fromisoformat("2025-02-23T21:03:46.686020").replace(tzinfo=timezone.utc)
 
     filtered_journal = JournalAnalyzer.filter_journal(journal_content_json, start_range, end_range)
     assert filtered_journal == [JournalJsonEntry(**entry) for entry in journal_data[1:3]]
@@ -153,6 +193,11 @@ def test_journal_filter():
 
     filtered_journal = JournalAnalyzer.filter_journal(journal_content_json, None, end_range)
     assert filtered_journal == [JournalJsonEntry(**entry) for entry in journal_data[:3]]
+
+    naive_start = datetime.fromisoformat("2025-02-23T21:03:46.686006")
+    naive_end = datetime.fromisoformat("2025-02-23T21:03:46.686020")
+    filtered_journal = JournalAnalyzer.filter_journal(journal_content_json, naive_start, naive_end)
+    assert filtered_journal == [JournalJsonEntry(**entry) for entry in journal_data[1:3]]
 
 
 def test_check_priority(system_info):
@@ -230,3 +275,18 @@ def test_check_priority(system_info):
 
     assert res.status == ExecutionStatus.ERROR
     assert len(res.events) == 3
+
+
+def test_grouped_missing_timestamp_uses_utc_epoch(system_info):
+    journal_data = JournalData(
+        journal_log="",
+        journal_content_json=[
+            JournalJsonEntry(MESSAGE="no time", PRIORITY=3, REALTIME_TIMESTAMP=None)
+        ],
+    )
+    analyzer = JournalAnalyzer(system_info=system_info)
+    res = analyzer.analyze_data(data=journal_data, args=JournalAnalyzerArgs(check_priority=5))
+
+    assert res.status == ExecutionStatus.ERROR
+    assert res.events[0].data["first_occurrence"] == datetime(1970, 1, 1, tzinfo=timezone.utc)
+    assert res.events[0].data["last_occurrence"] == datetime(1970, 1, 1, tzinfo=timezone.utc)
