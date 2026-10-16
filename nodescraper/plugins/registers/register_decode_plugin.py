@@ -53,6 +53,20 @@ class RegisterDecodePlugin(
     ANALYZER = RegisterDecodeAnalyzer
     COLLECTOR_ARGS = RegisterDecodeCollectorArgs
 
+    @classmethod
+    def is_valid(cls) -> bool:
+        """Register concrete subclasses and skip this base plugin.
+
+        Args:
+            cls: Plugin class being checked.
+
+        Returns:
+            False for this base class, otherwise the standard plugin check.
+        """
+        if cls is RegisterDecodePlugin:
+            return False
+        return super().is_valid()
+
     def __init__(
         self,
         system_info: SystemInfo,

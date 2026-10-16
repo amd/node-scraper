@@ -25,9 +25,18 @@
 ###############################################################################
 from typing import Optional
 
-from pydantic import Field
+from pydantic import BaseModel, Field
 
 from nodescraper.plugins.registers.collector_args import RegisterDecodeCollectorArgs
+
+
+class McaCheckInterval(BaseModel):
+    """One logical CPU check_interval value."""
+
+    cpu: int = Field(description="Logical CPU index.")
+    seconds: int = Field(
+        description="check_interval seconds for this CPU. Zero disables kernel MCA polling.",
+    )
 
 
 class McaRegisterDecodeCollectorArgs(RegisterDecodeCollectorArgs):
@@ -48,4 +57,8 @@ class McaRegisterDecodeCollectorArgs(RegisterDecodeCollectorArgs):
     capture_all: bool = Field(
         default=False,
         description="Keep banks that do not have a pending error.",
+    )
+    check_intervals: Optional[list[McaCheckInterval]] = Field(
+        default=None,
+        description="Per-CPU check_interval values. Each entry sets one logical CPU.",
     )

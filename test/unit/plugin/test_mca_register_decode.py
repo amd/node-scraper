@@ -24,6 +24,7 @@
 #
 ###############################################################################
 from pathlib import Path
+from types import FunctionType
 from typing import Optional
 
 import pytest
@@ -35,12 +36,14 @@ from nodescraper.enums.systemlocation import SystemLocation
 from nodescraper.interfaces.task import SystemCompatibilityError
 from nodescraper.models import TaskResult
 from nodescraper.models.systeminfo import OSFamily, SystemInfo
+from nodescraper.pluginregistry import PluginRegistry
 from nodescraper.plugins.registers import (
     register_decode_collector as base_collector_mod,
 )
 from nodescraper.plugins.registers import register_decode_plugin as base_plugin_mod
 from nodescraper.plugins.registers import register_tool as register_tool_mod
 from nodescraper.plugins.registers.mca.collector_args import (
+    McaCheckInterval,
     McaRegisterDecodeCollectorArgs,
 )
 from nodescraper.plugins.registers.mca.mca_register_decode_analyzer import (
@@ -54,6 +57,7 @@ from nodescraper.plugins.registers.mca.mca_register_decode_data import (
 )
 from nodescraper.plugins.registers.mca.mca_register_decode_plugin import (
     McaRegisterDecodePlugin,
+    tool_check_intervals,
 )
 
 
@@ -94,6 +98,13 @@ class FakeRegisterTool:
     def set_check_interval(self, seconds, threads=None):
         self.calls.append(("set_check_interval", seconds, threads))
         return len(threads) if threads else len(self.intervals)
+
+    def set_check_interval_from_obj(self, intervals):
+        rows = intervals if isinstance(intervals, list) else [intervals]
+        self.calls.append(
+            ("set_check_interval_from_obj", [(item.cpu, item.seconds) for item in rows])
+        )
+        return len(rows)
 
     def collect(self, threads=None, banks=None, verbose=False, capture_all=False) -> FakeCollection:
         self.calls.append("collect")
@@ -164,6 +175,11 @@ def test_plugin_wires_collector_analyzer_and_model():
     assert McaRegisterDecodePlugin.ANALYZER_ARGS is None
     assert McaRegisterDecodeCollector.SUPPORTED_SKUS == {"MI450", "MI455", "MI4XX"}
     assert McaRegisterDecodeCollectorArgs().tool_group is None
+    assert base_plugin_mod.RegisterDecodePlugin.is_valid() is False
+    assert McaRegisterDecodePlugin.is_valid() is True
+    plugins = PluginRegistry().plugins
+    assert "RegisterDecodePlugin" not in plugins
+    assert "McaRegisterDecodePlugin" in plugins
 
 
 def test_collector_rejects_unsupported_sku(conn_mock):
@@ -373,6 +389,53 @@ def test_plugin_reads_and_sets_check_interval(system_info, monkeypatch):
         assert result.status == ExecutionStatus.OK
     assert ("set_check_interval", 5, [0, 1]) in tool.calls
     assert ("set_check_interval", 30, [2]) in tool.calls
+
+
+def test_plugin_sets_check_interval_from_collector_args(system_info, monkeypatch):
+    plugin, tool = _plugin(system_info, monkeypatch)
+    result = plugin.set_check_interval_from_obj(
+        collection_args={
+            "check_intervals": [
+                {"cpu": 0, "seconds": 5},
+                {"cpu": 2, "seconds": 30},
+            ]
+        }
+    )
+    assert result.status == ExecutionStatus.OK
+    assert result.details["written"] == 2
+    assert result.details["intervals"] == [
+        {"cpu": 0, "seconds": 5},
+        {"cpu": 2, "seconds": 30},
+    ]
+    assert ("set_check_interval_from_obj", [(0, 5), (2, 30)]) in tool.calls
+
+
+def test_plugin_requires_check_intervals(system_info, monkeypatch):
+    plugin, _tool = _plugin(system_info, monkeypatch)
+    result = plugin.set_check_interval_from_obj(collection_args={})
+    assert result.status == ExecutionStatus.ERROR
+    assert result.message == "check_intervals is required"
+
+
+def test_tool_check_intervals_builds_tool_type():
+    class CheckInterval:
+        def __init__(self, cpu, seconds):
+            self.cpu = cpu
+            self.seconds = seconds
+
+    class CollectModule:
+        pass
+
+    CollectModule.CheckInterval = CheckInterval
+
+    def _body(intervals):
+        return intervals
+
+    method = FunctionType(_body.__code__, {"_collect": CollectModule})
+    built = tool_check_intervals(method, [McaCheckInterval(cpu=1, seconds=9)])
+    assert isinstance(built[0], CheckInterval)
+    assert built[0].cpu == 1
+    assert built[0].seconds == 9
 
 
 def test_plugin_decodes_records_and_dmesg(system_info, monkeypatch, tmp_path):

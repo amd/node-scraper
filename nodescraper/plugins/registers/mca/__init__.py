@@ -23,11 +23,12 @@
 # SOFTWARE.
 #
 ###############################################################################
-from .collector_args import McaRegisterDecodeCollectorArgs
+from .collector_args import McaCheckInterval, McaRegisterDecodeCollectorArgs
 from .mca_register_decode_data import McaRegisterDecodeDataModel
 from .mca_register_decode_plugin import McaRegisterDecodePlugin
 
 __all__ = [
+    "McaCheckInterval",
     "McaRegisterDecodeCollectorArgs",
     "McaRegisterDecodeDataModel",
     "McaRegisterDecodePlugin",

@@ -24,7 +24,7 @@
 #
 ###############################################################################
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
 from nodescraper.models import TaskResult
@@ -34,7 +34,7 @@ from nodescraper.plugins.registers.register_decode_plugin import RegisterDecodeP
 from nodescraper.plugins.registers.register_tool import tool_rows
 from nodescraper.utils import resolve_log_dir_name
 
-from .collector_args import McaRegisterDecodeCollectorArgs
+from .collector_args import McaCheckInterval, McaRegisterDecodeCollectorArgs
 from .mca_register_decode_analyzer import McaRegisterDecodeAnalyzer
 from .mca_register_decode_collector import McaRegisterDecodeCollector
 from .mca_register_decode_data import McaRegisterDecodeDataModel
@@ -59,6 +59,24 @@ def interval_rows(intervals: Any) -> list[dict[str, int]]:
             seconds = int(interval.seconds)
         rows.append({"cpu": cpu, "seconds": seconds})
     return rows
+
+
+def tool_check_intervals(method: Any, intervals: list[McaCheckInterval]) -> list[Any]:
+    """Build the interval objects the register tool write accepts.
+
+    Args:
+        method: Tool set_check_interval_from_obj method.
+        intervals: Per-CPU intervals from collector args.
+
+    Returns:
+        Interval objects for the tool method.
+    """
+    func = getattr(method, "__func__", method)
+    collect = getattr(func, "__globals__", {}).get("_collect")
+    interval_cls: Any = getattr(collect, "CheckInterval", None)
+    if not isinstance(interval_cls, type):
+        return list(intervals)
+    return [interval_cls(cpu=item.cpu, seconds=item.seconds) for item in intervals]
 
 
 class McaRegisterDecodePlugin(RegisterDecodePlugin):
@@ -152,6 +170,48 @@ class McaRegisterDecodePlugin(RegisterDecodePlugin):
         self.result.status = ExecutionStatus.OK
         self.result.message = f"Set check_interval to {seconds} on {written} logical CPU(s)"
         self.result.details = {"seconds": seconds, "written": written}
+        self._log_event(
+            category=EventCategory.RAS,
+            description=self.result.message,
+            priority=EventPriority.INFO,
+        )
+        return self.result
+
+    def set_check_interval_from_obj(
+        self,
+        collection_args: Optional[Union[McaRegisterDecodeCollectorArgs, dict]] = None,
+    ) -> TaskResult:
+        """Write per-CPU check_interval values from collector args.
+
+        Args:
+            collection_args: Collector args carrying check_intervals. Each entry has cpu and seconds.
+
+        Returns:
+            OK with the number of CPUs written, or ERROR when none were written.
+        """
+        self._begin("set_check_interval_from_obj")
+        remote = self._reject_remote()
+        if remote is not None:
+            return remote
+        try:
+            method = self._optional_method("set_check_interval_from_obj")
+            if method is None:
+                return self.result
+            selected = self._apply_tool_selection(collection_args)
+            intervals = list(getattr(selected, "check_intervals", None) or [])
+            if not intervals:
+                return self._fail("check_intervals is required")
+            written = int(method(tool_check_intervals(method, intervals)))
+        except Exception as exc:
+            return self._fail(f"MCA check_interval write failed: {exc}")
+        if written <= 0:
+            return self._fail("failed to set MCA check_interval")
+        self.result.status = ExecutionStatus.OK
+        self.result.message = f"Set check_interval on {written} logical CPU(s)"
+        self.result.details = {
+            "intervals": [item.model_dump() for item in intervals],
+            "written": written,
+        }
         self._log_event(
             category=EventCategory.RAS,
             description=self.result.message,
