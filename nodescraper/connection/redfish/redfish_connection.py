@@ -70,6 +70,30 @@ class RedfishGetResult(BaseModel):
         }
 
 
+class RedfishPostResult(BaseModel):
+    """Artifact for the result of a Redfish POST request."""
+
+    ARTIFACT_LOG_BASENAME: ClassVar[str] = "command_artifacts"
+
+    path: str
+    success: bool
+    data: Optional[dict[str, Any]] = None
+    error: Optional[str] = None
+    status_code: Optional[int] = None
+
+    def to_html_entry(self) -> dict:
+        """Return a dict suitable for HTML command artifact rendering."""
+        stdout = json.dumps(self.data, indent=2, sort_keys=True) if self.data is not None else ""
+        stderr = self.error or ""
+        exit_code = 0 if self.success else (self.status_code if self.status_code is not None else 1)
+        return {
+            "command": f"POST {self.path}",
+            "stdout": stdout,
+            "stderr": stderr,
+            "exit_code": exit_code,
+        }
+
+
 class RedfishHttpResponse(Protocol):
     """Status, headers, and body from a Redfish GET or POST."""
 
