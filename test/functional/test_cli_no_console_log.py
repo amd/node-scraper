@@ -28,7 +28,7 @@ import subprocess
 import sys
 
 
-def test_no_console_log_with_log_path_none_still_parses(tmp_path):
+def test_no_console_log_with_log_path_none_still_parses():
     """--log-path None + --no-console-log defaults to ./scraper_logs_* (no argparse error)."""
     result = subprocess.run(
         [
@@ -44,7 +44,6 @@ def test_no_console_log_with_log_path_none_still_parses(tmp_path):
         ],
         capture_output=True,
         text=True,
-        cwd=tmp_path,
     )
     assert result.returncode == 0, result.stderr
     combined = (result.stdout or "") + (result.stderr or "")
