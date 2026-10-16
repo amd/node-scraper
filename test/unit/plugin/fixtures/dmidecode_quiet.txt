@@ -65,7 +65,7 @@ Memory Device
 Memory Device
 	Total Width: 80 bits
 	Data Width: 64 bits
-	Size: 96 GB
+	Size: 96 GiB
 	Form Factor: DIMM
 	Set: None
 	Locator: CPU0_C

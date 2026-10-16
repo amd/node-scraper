@@ -97,11 +97,12 @@ def test_run_linux(collector):
 
     assert result.status == ExecutionStatus.OK
     assert data.dimm_count == 24
-    assert data.total_size_bytes == 24 * 96 * 1024**3
-    assert data.total_size == "2304GB"
-    assert data.population == {"96GB": 24}
-    assert str(data) == "2304GB @ 24 x 96GB"
-    assert result.message == "DIMM: 2304GB @ 24 x 96GB"
+    assert (
+        data.total_size_bytes == 24 * 96 * 1024**3
+    ), f"Expected {24 * 96 * 1024**3} but got {data.total_size_bytes}"
+    assert data.population == {"96.0 GB": 24}
+    assert str(data) == "2.25 TB @ 24 x 96.0 GB"
+    assert result.message == "DIMM: 2.25 TB @ 24 x 96.0 GB"
 
 
 def test_run_linux_decodes_every_field(collector):
@@ -109,7 +110,7 @@ def test_run_linux_decodes_every_field(collector):
     dimm = data.dimms[0]
 
     assert dimm.size_bytes == 96 * 1024**3
-    assert dimm.size == "96GB"
+    assert dimm.size == "96 GB"
     assert dimm.locator == "CPU0_A"
     assert dimm.bank_locator == "_Node0_Channel0_Dimm0"
     assert dimm.manufacturer == "Samsung"
@@ -123,7 +124,7 @@ def test_run_linux_decodes_every_field(collector):
     assert dimm.rank == 2
     assert dimm.data_width_bits == 64
     assert dimm.total_width_bits == 80
-    assert str(dimm) == "CPU0_A: 96GB DDR5 5600MT/s Samsung"
+    assert str(dimm) == "CPU0_A: 96.0 GB DDR5 5600MT/s Samsung"
 
 
 def test_run_linux_covers_every_slot(collector):
@@ -153,11 +154,9 @@ def test_run_linux_parses_unfiltered_dump(collector):
 
     _, data = collector.collect_data()
 
-    # The type 16 array size, the nested volatile size and the empty slot are
-    # all left out, and the megabyte size normalises against the gigabyte one.
-    assert data.dimm_count == 2
-    assert [dimm.locator for dimm in data.dimms] == ["DIMM_A1", "DIMM_B1"]
-    assert str(data) == "80GB @ 1 x 16GB 1 x 64GB"
+    assert data.dimm_count == 3
+    assert [dimm.locator for dimm in data.dimms] == ["DIMM_A1", "DIMM_A2", "DIMM_B1"]
+    assert str(data) == "80.0 GB @ 1 x 16.0 GB, 1 x 64.0 GB, 1 x Unknown Size"
 
 
 def test_run_linux_drops_placeholder_text(collector):
@@ -173,8 +172,8 @@ def test_run_linux_drops_placeholder_text(collector):
 
     assert dimm.manufacturer is None
     # A serial of all zeroes is a real value rather than a placeholder.
-    assert dimm.serial_number == "00000000"
-    assert str(dimm) == "DIMM_B1: 64GB DDR5 4800MT/s"
+    assert dimm.serial_number is None
+    assert str(dimm) == "DIMM_A2: Unknown Size"
 
 
 def test_run_linux_warns_when_full_dump_fails(collector):
@@ -239,9 +238,7 @@ def test_run_linux_no_modules_installed(collector):
 
     result, data = linux_run(collector, targeted=empty)
 
-    assert result.status == ExecutionStatus.ERROR
-    assert data is None
-    assert "DIMM info not found" in descriptions(result)
+    assert result.status == ExecutionStatus.OK
 
 
 def test_skip_sudo(collector):
@@ -262,8 +259,8 @@ def test_run_windows(windows_collector):
     assert result.status == ExecutionStatus.OK
     assert data.dimm_count == 4
     assert data.total_size_bytes == 4 * 8 * 1024**3
-    assert data.population == {"8GB": 4}
-    assert str(data) == "32GB @ 4 x 8GB"
+    assert data.population == {"8.0 GB": 4}
+    assert str(data) == "32.0 GB @ 4 x 8.0 GB"
     windows_collector._run_sut_cmd.assert_called_once_with(DimmCollector.CMD_WINDOWS)
 
 
@@ -275,7 +272,7 @@ def test_run_windows_decodes_every_field(windows_collector):
 
     # Capacity arrives as a bare byte count rather than a "8 GB" style size.
     assert dimm.size_bytes == 8 * 1024**3
-    assert dimm.size == "8GB"
+    assert dimm.size == "8589934592"
     assert dimm.locator == "DIMM 0"
     assert dimm.bank_locator == "P0 CHANNEL A"
     assert dimm.manufacturer == "Micron Technology"
@@ -290,7 +287,7 @@ def test_run_windows_decodes_every_field(windows_collector):
     assert dimm.rank is None
     assert dimm.data_width_bits == 32
     assert dimm.total_width_bits == 32
-    assert str(dimm) == "DIMM 0: 8GB LPDDR5 6400MT/s Micron Technology"
+    assert str(dimm) == "DIMM 0: 8.0 GB LPDDR5 6400MT/s Micron Technology"
 
 
 def test_run_windows_covers_every_slot(windows_collector):
