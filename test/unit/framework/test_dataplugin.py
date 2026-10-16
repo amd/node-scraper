@@ -32,11 +32,16 @@ import pytest
 from framework.common.shared_utils import MockConnectionManager
 
 from nodescraper import utils
-from nodescraper.enums import EventPriority, ExecutionStatus, SystemInteractionLevel
+from nodescraper.enums import (
+    EventCategory,
+    EventPriority,
+    ExecutionStatus,
+    SystemInteractionLevel,
+)
 from nodescraper.interfaces.dataanalyzertask import DataAnalyzer
 from nodescraper.interfaces.datacollectortask import DataCollector
 from nodescraper.interfaces.dataplugin import DataPlugin
-from nodescraper.models import CollectorArgs, DataModel, TaskResult
+from nodescraper.models import CollectorArgs, DataModel, DataPluginResult, TaskResult
 
 
 class StandardDataModel(DataModel):
@@ -887,3 +892,149 @@ class TestDataPluginLogDirNameOverride:
         loaded = OverrideLogDirPlugin.load_run_data(str(run_path))
         assert loaded is not None
         assert loaded["value"] == "collected"
+
+
+class TestDataPluginConnectionResult:
+    def test_run_includes_connection_result_when_connection_initiated(self, plugin_with_conn):
+        plugin_with_conn.connection_manager.result.status = ExecutionStatus.EXECUTION_FAILURE
+        plugin_with_conn.connection_manager.connection = None
+
+        result = plugin_with_conn.run(analysis=False)
+
+        assert result.result_data.connection_result is not None
+        assert result.result_data.connection_result.status == ExecutionStatus.EXECUTION_FAILURE
+        assert result.result_data.collection_result.status == ExecutionStatus.NOT_RAN
+
+    def test_run_has_no_connection_result_without_connection_attempt(self, plugin):
+        with patch.object(CoreDataPlugin, "CONNECTION_TYPE", None):
+            result = plugin.run(analysis=False)
+
+        assert result.result_data.connection_result is None
+
+
+class FailingConnectionManager(MockConnectionManager):
+    """Connection manager whose connect() fails without producing a connection."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.connection = None
+        self.result = TaskResult(task=self.__class__.__name__, parent=self.parent)
+
+    def connect(self):
+        self._log_event(
+            category=EventCategory.SSH,
+            description="Unable to reach host",
+            priority=EventPriority.CRITICAL,
+        )
+        self.result.status = ExecutionStatus.EXECUTION_FAILURE
+        return self.result
+
+
+class FailingConnectionPlugin(CoreDataPlugin):
+    CONNECTION_TYPE = FailingConnectionManager
+
+
+class SilentFailingConnectionManager(FailingConnectionManager):
+    """Connection manager that returns without a connection, status or event."""
+
+    def connect(self):
+        return self.result
+
+
+class SilentFailingConnectionPlugin(CoreDataPlugin):
+    CONNECTION_TYPE = SilentFailingConnectionManager
+
+
+class TestDataPluginResultConnection:
+    """connection_result is saved in DataPluginResult whenever a connection is initiated."""
+
+    def test_default_is_none(self):
+        assert DataPluginResult().connection_result is None
+
+    def test_successful_connection_saved_after_disconnect(self, plugin):
+        result = plugin.run()
+
+        connection_result = result.result_data.connection_result
+        assert connection_result is not None
+        assert connection_result.status == ExecutionStatus.OK
+        assert result.status == ExecutionStatus.OK
+
+    def test_connection_result_kept_when_connection_preserved(self, plugin):
+        result = plugin.run(preserve_connection=True)
+
+        assert result.result_data.connection_result.status == ExecutionStatus.OK
+
+    def test_failed_connection_saved_with_event(self, system_info, logger):
+        plugin = FailingConnectionPlugin(system_info=system_info, logger=logger)
+
+        result = plugin.run()
+
+        connection_result = result.result_data.connection_result
+        assert connection_result is not None
+        assert connection_result.status == ExecutionStatus.EXECUTION_FAILURE
+        assert any(e.description == "Unable to reach host" for e in connection_result.events)
+        assert result.result_data.collection_result.status == ExecutionStatus.NOT_RAN
+        assert result.result_data.collection_result.message == (
+            "Connection not available, data collection skipped"
+        )
+
+    def test_failed_connection_not_reset_by_disconnect(self, system_info, logger):
+        plugin = FailingConnectionPlugin(system_info=system_info, logger=logger)
+
+        plugin.collect()
+        plugin.connection_manager.disconnect()
+
+        assert plugin.connection_manager.result.status == ExecutionStatus.EXECUTION_FAILURE
+
+    def test_failed_connection_is_not_retried(self, system_info, logger):
+        plugin = FailingConnectionPlugin(system_info=system_info, logger=logger)
+
+        with patch.object(
+            FailingConnectionManager, "connect", autospec=True, side_effect=lambda s: s.result
+        ) as mock_connect:
+            plugin.collect()
+            plugin.connection_manager.result.status = ExecutionStatus.EXECUTION_FAILURE
+            plugin.collect()
+            plugin.collect()
+
+        assert mock_connect.call_count == 1
+
+    def test_silent_connect_failure_gets_status_and_event(self, system_info, logger):
+        plugin = SilentFailingConnectionPlugin(system_info=system_info, logger=logger)
+
+        result = plugin.run()
+
+        connection_result = result.result_data.connection_result
+        assert connection_result.status == ExecutionStatus.EXECUTION_FAILURE
+        assert len(connection_result.events) >= 1
+
+    def test_reconnects_after_successful_disconnect(self, plugin_with_conn):
+        manager = plugin_with_conn.connection_manager
+        manager.connection = None
+        manager.result.status = ExecutionStatus.OK
+
+        with patch.object(MockConnectionManager, "connect", autospec=True) as mock_connect:
+            mock_connect.side_effect = lambda s: setattr(s, "connection", MagicMock()) or s.result
+            plugin_with_conn.collect()
+
+        mock_connect.assert_called_once()
+
+    def test_no_connection_result_when_no_connection_type(self, plugin):
+        with patch.object(CoreDataPlugin, "CONNECTION_TYPE", None):
+            result = plugin.run(analysis=False)
+
+        assert result.result_data.connection_result is None
+
+    def test_connection_result_is_a_snapshot(self, plugin_with_conn):
+        result = plugin_with_conn.run(analysis=False)
+
+        plugin_with_conn.connection_manager.result.status = ExecutionStatus.EXECUTION_FAILURE
+
+        assert result.result_data.connection_result.status == ExecutionStatus.OK
+
+    def test_connection_result_serializes(self, plugin_with_conn):
+        result = plugin_with_conn.run(analysis=False)
+
+        dumped = result.result_data.model_dump(mode="json")
+
+        assert dumped["connection_result"]["status"] == "OK"

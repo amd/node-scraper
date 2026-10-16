@@ -66,8 +66,8 @@ class TestConnectionManagerBase(unittest.TestCase):
 
         self.assertIsNone(manager.connection)
 
-    def test_disconnect_resets_status(self):
-        """Test that disconnect resets the result status to UNSET"""
+    def test_disconnect_preserves_status(self):
+        """Test that disconnect keeps the result of the connection attempt"""
         system_info = SystemInfo(
             name="test_system",
             location=SystemLocation.LOCAL,
@@ -78,7 +78,48 @@ class TestConnectionManagerBase(unittest.TestCase):
 
         manager.disconnect()
 
-        self.assertEqual(manager.result.status, ExecutionStatus.UNSET)
+        self.assertEqual(manager.result.status, ExecutionStatus.OK)
+
+    def test_connect_success_sets_ok_and_survives_disconnect(self):
+        manager = DummyConnectionManager(
+            system_info=SystemInfo(name="test_system", location=SystemLocation.LOCAL)
+        )
+
+        result = manager.connect()
+        manager.disconnect()
+
+        self.assertEqual(result.status, ExecutionStatus.OK)
+        self.assertEqual(manager.result.status, ExecutionStatus.OK)
+
+    def test_connect_exception_sets_failure_with_event(self):
+        class FailingManager(DummyConnectionManager):
+            def connect(self) -> TaskResult:
+                raise RuntimeError("boom")
+
+        manager = FailingManager(
+            system_info=SystemInfo(name="test_system", location=SystemLocation.LOCAL)
+        )
+
+        result = manager.connect()
+        manager.disconnect()
+
+        self.assertEqual(result.status, ExecutionStatus.EXECUTION_FAILURE)
+        self.assertEqual(manager.result.status, ExecutionStatus.EXECUTION_FAILURE)
+        self.assertGreaterEqual(len(result.events), 1)
+
+    def test_connect_without_connection_reports_failure_event(self):
+        class NoConnectionManager(DummyConnectionManager):
+            def connect(self) -> TaskResult:
+                return self.result
+
+        manager = NoConnectionManager(
+            system_info=SystemInfo(name="test_system", location=SystemLocation.LOCAL)
+        )
+
+        result = manager.connect()
+
+        self.assertEqual(result.status, ExecutionStatus.EXECUTION_FAILURE)
+        self.assertEqual(len(result.events), 1)
 
     def test_context_manager_calls_disconnect(self):
         """Test that using connection manager as context manager calls disconnect on exit"""

@@ -363,9 +363,16 @@ class DataPlugin(
                     session_id=self.session_id,
                 )
 
+            # Connect if never attempted or previously connected then disconnected;
+            # a failed or skipped attempt is not retried.
             if (
                 not self.connection_manager.connection
-                and self.connection_manager.result.status == ExecutionStatus.UNSET
+                and self.connection_manager.result.status
+                in (
+                    ExecutionStatus.UNSET,
+                    ExecutionStatus.OK,
+                    ExecutionStatus.WARNING,
+                )
             ):
                 self.connection_manager.connect()
 
@@ -498,6 +505,15 @@ class DataPlugin(
         self.analysis_result = analyzer_task.analyze_data(self.data, analysis_args)
         return self.analysis_result
 
+    def _get_connection_result(self) -> Optional[TaskResult]:
+        """Snapshot of the connection result, or None if no connection was initiated."""
+        if self.connection_manager is None:
+            return None
+        result = self.connection_manager.result
+        if result is None or result.status == ExecutionStatus.UNSET:
+            return None
+        return result.model_copy(deep=True)
+
     def run(
         self,
         collection: Annotated[
@@ -591,6 +607,7 @@ class DataPlugin(
                 system_data=self.data,
                 collection_result=self.collection_result,
                 analysis_result=self.analysis_result,
+                connection_result=self._get_connection_result(),
             ),
         )
 
