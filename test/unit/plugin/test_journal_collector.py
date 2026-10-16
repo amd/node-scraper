@@ -93,6 +93,28 @@ def test_journal_entry_decodes_non_utf8_message_byte_array():
     assert entry.MESSAGE == "hé�"
 
 
+def test_journal_entry_joins_repeated_message_values():
+    strings = JournalJsonEntry(MESSAGE=["first", "second"])
+    mixed = JournalJsonEntry(MESSAGE=[[104, 105], "x"])
+    with_null = JournalJsonEntry(MESSAGE=["first line", [104, 105], None])
+
+    assert strings.MESSAGE == "first second"
+    assert mixed.MESSAGE == "hi x"
+    assert with_null.MESSAGE == "first line hi "
+
+
+def test_journal_entry_converts_offset_and_datetime_inputs_to_utc():
+    offset = JournalJsonEntry(**{"__REALTIME_TIMESTAMP": "2025-02-23T21:03:46+05:00"})
+    assert offset.REALTIME_TIMESTAMP == datetime(2025, 2, 23, 16, 3, 46, tzinfo=timezone.utc)
+
+    naive = JournalJsonEntry(**{"__REALTIME_TIMESTAMP": datetime(2025, 2, 23, 21, 3, 46)})
+    assert naive.REALTIME_TIMESTAMP == datetime(2025, 2, 23, 21, 3, 46, tzinfo=timezone.utc)
+
+    aware = datetime(2025, 2, 23, 16, 3, 46, tzinfo=timezone.utc)
+    from_aware = JournalJsonEntry(**{"__REALTIME_TIMESTAMP": aware})
+    assert from_aware.REALTIME_TIMESTAMP == aware
+
+
 def test_journal_filter():
     """Test filtering journal entries based on timestamp range."""
     journal_data = [
@@ -172,6 +194,11 @@ def test_journal_filter():
     filtered_journal = JournalAnalyzer.filter_journal(journal_content_json, None, end_range)
     assert filtered_journal == [JournalJsonEntry(**entry) for entry in journal_data[:3]]
 
+    naive_start = datetime.fromisoformat("2025-02-23T21:03:46.686006")
+    naive_end = datetime.fromisoformat("2025-02-23T21:03:46.686020")
+    filtered_journal = JournalAnalyzer.filter_journal(journal_content_json, naive_start, naive_end)
+    assert filtered_journal == [JournalJsonEntry(**entry) for entry in journal_data[1:3]]
+
 
 def test_check_priority(system_info):
     """Test checking priority of journal entries."""
@@ -248,3 +275,18 @@ def test_check_priority(system_info):
 
     assert res.status == ExecutionStatus.ERROR
     assert len(res.events) == 3
+
+
+def test_grouped_missing_timestamp_uses_utc_epoch(system_info):
+    journal_data = JournalData(
+        journal_log="",
+        journal_content_json=[
+            JournalJsonEntry(MESSAGE="no time", PRIORITY=3, REALTIME_TIMESTAMP=None)
+        ],
+    )
+    analyzer = JournalAnalyzer(system_info=system_info)
+    res = analyzer.analyze_data(data=journal_data, args=JournalAnalyzerArgs(check_priority=5))
+
+    assert res.status == ExecutionStatus.ERROR
+    assert res.events[0].data["first_occurrence"] == datetime(1970, 1, 1, tzinfo=timezone.utc)
+    assert res.events[0].data["last_occurrence"] == datetime(1970, 1, 1, tzinfo=timezone.utc)

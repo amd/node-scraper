@@ -55,6 +55,7 @@ class JournalJsonEntry(DataModel):
     @field_validator("SOURCE_REALTIME_TIMESTAMP", "REALTIME_TIMESTAMP", mode="before")
     @classmethod
     def validate_realtime_timestamp(cls, v):
+        """Return a UTC datetime."""
         if v is None:
             return None
 
@@ -112,13 +113,17 @@ class JournalJsonEntry(DataModel):
     @classmethod
     def validate_message(cls, v):
         """Convert MESSAGE to text, including journald's JSON byte-array form."""
-        if v is None:
-            return ""
 
-        if isinstance(v, list):
-            return bytes(v).decode("utf-8", errors="replace")
+        def to_text(item) -> str:
+            if item is None:
+                return ""
+            if isinstance(item, list):
+                return bytes(item).decode("utf-8", errors="replace")
+            return str(item)
 
-        return str(v)
+        if isinstance(v, list) and not all(isinstance(b, int) for b in v):
+            return " ".join(to_text(item) for item in v)
+        return to_text(v)
 
 
 class JournalData(DataModel):
