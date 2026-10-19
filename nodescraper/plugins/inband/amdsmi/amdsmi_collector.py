@@ -1037,7 +1037,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
                 )
 
             # NUMA
-            numa_node = int(numa.get("node", 0) or 0)
+            numa_node = numa.get("node")
             affinity_raw = numa.get("affinity")
             if affinity_raw in (None, "", "N/A"):
                 affinity_val: Union[int, str] = "N/A"

@@ -500,8 +500,12 @@ class StaticXgmiPlpd(BaseModel):
 
 
 class StaticNuma(BaseModel):
-    node: int
+
+    model_config = ConfigDict(extra="allow")
+
+    node: Optional[int]
     affinity: Union[int, str]  # can be N/A
+    na_validator = field_validator("node", mode="before")(na_to_none)
 
 
 class StaticVram(AmdSmiBaseModel):
