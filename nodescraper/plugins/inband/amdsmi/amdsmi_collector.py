@@ -27,7 +27,7 @@ import io
 import json
 import re
 from tarfile import TarFile
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, TypeVar, Union
 
 from pydantic import BaseModel, ValidationError
 
@@ -88,6 +88,8 @@ from nodescraper.plugins.inband.amdsmi.amdsmidata import (
 )
 from nodescraper.plugins.inband.amdsmi.collector_args import AmdSmiCollectorArgs
 from nodescraper.utils import get_exception_traceback, shell_quote
+
+T = TypeVar("T", bound=BaseModel)
 
 
 class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs]):
@@ -605,10 +607,10 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
         self,
         cmd_template: str,
         path: tuple[str, ...],
-        model_cls: type[BaseModel],
+        model_cls: type[T],
         max_value: int,
         id_field: str,
-    ) -> list:
+    ) -> list[T]:
         """Probe a sequential CPU metric argument (DIMM_ADDR, NBIOID) per host.
 
         Calls ``cmd_template`` for ``id_field`` values ``0, 1, 2, ...`` and
@@ -616,11 +618,14 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
         ``CPU_SEQUENTIAL_NA_GRACE`` consecutive values produce no dict at
         ``path``, or immediately if the command itself hard-fails.
         """
-        entries: list = []
+        entries: list[T] = []
         consecutive_na = 0
         for value in range(max_value):
-            cpu_entries = self._amdsmi_cpu_entries(cmd_template.format(**{id_field: value}))
-            if not cpu_entries:
+            try:
+                cpu_entries = self._amdsmi_cpu_entries(cmd_template.format(**{id_field: value}))
+                if not cpu_entries:
+                    break
+            except Exception:
                 break
 
             found_any = False
@@ -694,20 +699,8 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
         every documented individual rail (TYPE=1, RAIL_INDEX 0-4).
         """
         entries: List[CpuSvi3VrControllerTemp] = []
-
-        for cpu_entry in self._amdsmi_cpu_entries(self.CMD_CPU_SVI3_HOTTEST):
-            group = cpu_entry.get("svi3_vr_controller_temp")
-            if isinstance(group, dict):
-                self._append_amdsmi_model(
-                    entries,
-                    CpuSvi3VrControllerTemp,
-                    {"cpu": cpu_entry.get("cpu", 0), "rail_type": 0, "rail_index": None, **group},
-                    context="rail_type=0",
-                )
-
-        for rail_index in self.CPU_SVI3_RAIL_CANDIDATES:
-            cmd = self.CMD_CPU_SVI3_RAIL.format(rail_index=rail_index)
-            for cpu_entry in self._amdsmi_cpu_entries(cmd):
+        try:
+            for cpu_entry in self._amdsmi_cpu_entries(self.CMD_CPU_SVI3_HOTTEST):
                 group = cpu_entry.get("svi3_vr_controller_temp")
                 if isinstance(group, dict):
                     self._append_amdsmi_model(
@@ -715,13 +708,36 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
                         CpuSvi3VrControllerTemp,
                         {
                             "cpu": cpu_entry.get("cpu", 0),
-                            "rail_type": 1,
-                            "rail_index": rail_index,
+                            "rail_type": 0,
+                            "rail_index": None,
                             **group,
                         },
-                        context=f"rail_type=1 rail_index={rail_index}",
+                        context="rail_type=0",
                     )
 
+            for rail_index in self.CPU_SVI3_RAIL_CANDIDATES:
+                cmd = self.CMD_CPU_SVI3_RAIL.format(rail_index=rail_index)
+                for cpu_entry in self._amdsmi_cpu_entries(cmd):
+                    group = cpu_entry.get("svi3_vr_controller_temp")
+                    if isinstance(group, dict):
+                        self._append_amdsmi_model(
+                            entries,
+                            CpuSvi3VrControllerTemp,
+                            {
+                                "cpu": cpu_entry.get("cpu", 0),
+                                "rail_type": 1,
+                                "rail_index": rail_index,
+                                **group,
+                            },
+                            context=f"rail_type=1 rail_index={rail_index}",
+                        )
+        except Exception as e:
+            self._log_event(
+                category=EventCategory.APPLICATION,
+                description="Failed to build CpuSvi3VrControllerTemp",
+                data={"exception": get_exception_traceback(e)},
+                priority=EventPriority.ERROR,
+            )
         return entries
 
     def get_cpu_xgmi_bandwidth(self) -> List[CpuXgmiBandwidth]:
@@ -1022,7 +1038,10 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
                 self._log_event(
                     category=EventCategory.APPLICATION,
                     description="Failed to build Processes",
-                    data={"errors": err.errors(include_url=False), "gpu_index": gpu_idx},
+                    data={
+                        "errors": err.errors(include_url=False),
+                        "gpu_index": gpu_idx,
+                    },
                     priority=EventPriority.WARNING,
                 )
 
@@ -1153,7 +1172,10 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
                 self._log_event(
                     category=EventCategory.APPLICATION,
                     description="Failed to build Fw",
-                    data={"errors": err.errors(include_url=False), "gpu_index": gpu_idx},
+                    data={
+                        "errors": err.errors(include_url=False),
+                        "gpu_index": gpu_idx,
+                    },
                     priority=EventPriority.WARNING,
                 )
 
@@ -1363,7 +1385,10 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
                 self._log_event(
                     category=EventCategory.APPLICATION,
                     description="Failed to build AmdSmiStatic",
-                    data={"errors": err.errors(include_url=False), "gpu_index": gpu_idx},
+                    data={
+                        "errors": err.errors(include_url=False),
+                        "gpu_index": gpu_idx,
+                    },
                     priority=EventPriority.WARNING,
                 )
 
@@ -1764,7 +1789,10 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
             )
             # Load the tar files
             cper_zip = self._read_sut_file(
-                f"{AMD_SMI_CPER_FOLDER}.tar.gz", encoding=None, strip=False, log_artifact=True
+                f"{AMD_SMI_CPER_FOLDER}.tar.gz",
+                encoding=None,
+                strip=False,
+                log_artifact=True,
             )
             # Since encoding=None, this returns BinaryFileArtifact which has contents: bytes
             if hasattr(cper_zip, "contents"):
@@ -1786,7 +1814,10 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
                             else:
                                 file_content_bytes = b""
                             cper_data.append(
-                                FileModel(file_contents=file_content_bytes, file_name=member.name)
+                                FileModel(
+                                    file_contents=file_content_bytes,
+                                    file_name=member.name,
+                                )
                             )
 
                             cper_file_path = f"{AMD_SMI_CPER_FOLDER}/{member.name}"
