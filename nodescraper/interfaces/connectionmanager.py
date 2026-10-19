@@ -88,7 +88,7 @@ class ConnectionManager(Task, Generic[TConnection, TConnectArg]):
 
     TASK_TYPE = "CONNECTION_MANAGER"
 
-    CONNECTION_ARGS_MODEL: ClassVar[Optional[type[BaseModel]]] = None
+    CONNECTION_ARGS_MODEL: ClassVar[Optional[type[BaseModel]]]
 
     def __init__(
         self,
@@ -132,17 +132,18 @@ class ConnectionManager(Task, Generic[TConnection, TConnectArg]):
 
         if isinstance(connection_args, dict):
             connection_arg_model = self.CONNECTION_ARGS_MODEL
-            if not connection_arg_model:
-                raise ValueError("No model defined for connection args")
-
-            connection_args = connection_arg_model(**connection_args)
+            if connection_arg_model is not None:
+                connection_args = connection_arg_model(**connection_args)
+            elif connection_args:
+                self.logger.warning("Connection args provided but no model defined")
 
         self.connection_args = connection_args
         self.connection: Optional[TConnection] = None
 
     def __init_subclass__(cls, **kwargs) -> None:
         super().__init_subclass__(**kwargs)
-
+        if not hasattr(cls, "CONNECTION_ARGS_MODEL"):
+            raise ValueError("Subclasses of ConnectionManager must define CONNECTION_ARGS_MODEL")
         if "connect" in cls.__dict__:
             cls.connect = connect_decorator(cls.connect)
 

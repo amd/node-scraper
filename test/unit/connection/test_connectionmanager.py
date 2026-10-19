@@ -55,6 +55,8 @@ class DummyConnection:
 class DummyConnectionManager(ConnectionManager[DummyConnection, None]):
     """Concrete implementation of ConnectionManager for testing base class behavior"""
 
+    CONNECTION_ARGS_MODEL = None
+
     def connect(self) -> TaskResult:
         """Minimal connect implementation for testing"""
         self.connection = DummyConnection()
@@ -199,9 +201,6 @@ class TestConnectionArgsModelClassVar(unittest.TestCase):
     def setUp(self):
         self.system_info = SystemInfo(name="test_system", location=SystemLocation.REMOTE)
 
-    def test_base_default_is_none(self):
-        self.assertIsNone(ConnectionManager.CONNECTION_ARGS_MODEL)
-
     def test_subclasses_declare_expected_models(self):
         expected = {
             InBandConnectionManager: SSHConnectionParams,
@@ -244,7 +243,7 @@ class TestConnectionArgsModelClassVar(unittest.TestCase):
     def test_ssh_proxy_dict_args_converted_to_model(self):
         manager = RedfishSshProxyConnectionManager(
             system_info=self.system_info,
-            connection_args={"max_workers": 2},
+            connection_args={"host": "", "ssh": {"hostname": "", "username": ""}, "max_workers": 2},
         )
         self.assertIsInstance(manager.connection_args, RedfishSshProxyConnectionParams)
         self.assertEqual(manager.connection_args.max_workers, 2)
@@ -257,10 +256,6 @@ class TestConnectionArgsModelClassVar(unittest.TestCase):
     def test_none_args_stay_none(self):
         manager = InBandConnectionManager(system_info=self.system_info)
         self.assertIsNone(manager.connection_args)
-
-    def test_dict_args_without_model_raises(self):
-        with self.assertRaises(ValueError):
-            DummyConnectionManager(system_info=self.system_info, connection_args={"a": 1})
 
     def test_custom_subclass_classvar_is_used(self):
         class CustomManager(ConnectionManager[DummyConnection, SSHConnectionParams]):

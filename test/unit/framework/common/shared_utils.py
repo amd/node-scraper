@@ -36,6 +36,7 @@ from nodescraper.models.datamodel import DataModel
 class MockConnectionManager(ConnectionManager):
     # Class variable to store the mock connector
     mock_connector = None
+    CONNECTION_ARGS_MODEL = None
 
     def __init__(
         self,
