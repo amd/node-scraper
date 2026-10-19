@@ -51,12 +51,14 @@ def redfish_conn_mock():
 def run_cli_command():
     """Fixture that returns a function to run CLI commands."""
 
-    def _run_command(args: List[str], check: bool = False):
+    def _run_command(args: List[str], check: bool = False, cwd=None):
         """Run a node-scraper CLI command.
 
         Args:
             args: List of command-line arguments
             check: If True, raise CalledProcessError on non-zero exit
+            cwd: Working directory for the command (default: the caller's). Use a tmp dir for
+                plugins whose probes write files to the cwd, e.g. wget saving index.html
 
         Returns:
             subprocess.CompletedProcess instance
@@ -68,6 +70,7 @@ def run_cli_command():
             capture_output=True,
             text=True,
             check=check,
+            cwd=cwd,
         )
 
     return _run_command
