@@ -1,0 +1,12 @@
+{
+  "RedfishConnectionManager": {
+    "host": "bmc.example.com",
+    "port": 443,
+    "username": "admin",
+    "password": "placeholder",
+    "use_https": true,
+    "verify_ssl": false,
+    "timeout_seconds": 30,
+    "api_root": "redfish/v1"
+  }
+}

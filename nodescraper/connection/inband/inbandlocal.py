@@ -46,7 +46,7 @@ class LocalShell(InBandConnection):
 
         Args:
             command (str): shell command string.
-            sudo (bool, optional): run command with sudo (Linux only). Defaults to False.
+            sudo (bool, optional): run command with non-interactive sudo -n (Linux only). Defaults to False.
             timeout (int, optional): timeout for command in seconds. Defaults to 300.
             strip (bool, optional): strip output of command. Defaults to True.
 
@@ -54,17 +54,37 @@ class LocalShell(InBandConnection):
             CommandArtifact: command result object
         """
         if sudo:
-            command = f"sudo {command}"
+            command = f"sudo -n {command}"
 
-        res = subprocess.run(
-            command,
-            encoding="utf-8",
-            shell=True,
-            errors="replace",
-            timeout=timeout,
-            capture_output=True,
-            check=False,
-        )
+        try:
+            res = subprocess.run(
+                command,
+                encoding="utf-8",
+                shell=True,
+                errors="replace",
+                timeout=timeout,
+                capture_output=True,
+                stdin=subprocess.DEVNULL,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            stdout = exc.stdout or ""
+            stderr = exc.stderr or ""
+            if isinstance(stdout, bytes):
+                stdout = stdout.decode("utf-8", errors="replace")
+            if isinstance(stderr, bytes):
+                stderr = stderr.decode("utf-8", errors="replace")
+            timeout_msg = f"Command timed out after {timeout}s"
+            stderr = f"{stderr}\n{timeout_msg}".strip() if stderr else timeout_msg
+            if strip:
+                stdout = stdout.strip()
+                stderr = stderr.strip()
+            return CommandArtifact(
+                command=command,
+                stdout=stdout,
+                stderr=stderr,
+                exit_code=124,
+            )
 
         return CommandArtifact(
             command=command,

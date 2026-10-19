@@ -23,7 +23,10 @@
 # SOFTWARE.
 #
 ###############################################################################
+import subprocess
 from unittest.mock import MagicMock, patch
+
+from paramiko.ssh_exception import SSHException
 
 from nodescraper.connection.inband.inbandlocal import LocalShell
 from nodescraper.connection.inband.inbandremote import RemoteShell
@@ -47,7 +50,20 @@ def test_localshell_string_with_sudo(mock_run):
     shell = LocalShell()
     shell.run_command("cat /etc/shadow", sudo=True)
 
-    assert mock_run.call_args.args[0] == "sudo cat /etc/shadow"
+    assert mock_run.call_args.args[0] == "sudo -n cat /etc/shadow"
+    assert mock_run.call_args.kwargs["stdin"] is subprocess.DEVNULL
+
+
+@patch("nodescraper.connection.inband.inbandlocal.subprocess.run")
+def test_localshell_timeout_returns_exit_124(mock_run):
+    mock_run.side_effect = subprocess.TimeoutExpired(
+        cmd="sleep 5", timeout=1, output=b"", stderr=b""
+    )
+
+    artifact = LocalShell().run_command("sleep 5", timeout=1)
+
+    assert artifact.exit_code == 124
+    assert "timed out" in artifact.stderr
 
 
 @patch("nodescraper.connection.inband.inbandremote.paramiko.SSHClient")
@@ -65,3 +81,14 @@ def test_remoteshell_sudo_password_is_newline_terminated(mock_client_cls):
     shell.run_command("cat /etc/shadow", sudo=True)
 
     stdin.write.assert_called_once_with("hunter2\n")
+
+
+@patch("nodescraper.connection.inband.inbandremote.paramiko.SSHClient")
+def test_remoteshell_ssh_exception_is_a_failed_command(mock_client_cls):
+    mock_client_cls.return_value.exec_command.side_effect = SSHException("Timeout opening channel.")
+    shell = RemoteShell(
+        SSHConnectionParams(hostname="127.0.0.1", username="user", password="secret")
+    )
+    artifact = shell.run_command("mktemp")
+    assert artifact.exit_code == 124
+    assert artifact.stderr == "Timeout opening channel."

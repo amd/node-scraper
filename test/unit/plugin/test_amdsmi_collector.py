@@ -266,6 +266,38 @@ def test_check_amdsmi_installed(collector):
     assert collector._check_amdsmi_installed() is True
 
 
+def test_check_amdsmi_installed_path_hit_leaves_exe_unchanged(collector, monkeypatch):
+    """Test that a PATH hit does not trigger the fallback search"""
+    mock_run_sut_cmd = MagicMock(return_value=make_cmd_result("/usr/bin/amd-smi"))
+    monkeypatch.setattr(collector, "_run_sut_cmd", mock_run_sut_cmd)
+
+    assert collector._check_amdsmi_installed() is True
+    assert collector.AMD_SMI_EXE == "amd-smi"
+    mock_run_sut_cmd.assert_called_once_with("which amd-smi")
+
+
+def test_check_amdsmi_installed_falls_back_to_rocm_path(conn_mock, system_info, monkeypatch):
+    """Test that a failed PATH lookup falls back to the known install paths"""
+    mock_run_sut_cmd = MagicMock(
+        side_effect=[
+            make_cmd_result("", "no amd-smi in /usr/bin", 1),
+            make_cmd_result("/opt/rocm/bin/amd-smi"),
+        ]
+    )
+
+    c = AmdSmiCollector(
+        system_info=system_info,
+        system_interaction_level=SystemInteractionLevel.PASSIVE,
+        connection=conn_mock,
+    )
+    monkeypatch.setattr(c, "_run_sut_cmd", mock_run_sut_cmd)
+
+    assert c._check_amdsmi_installed() is True
+    assert c.AMD_SMI_EXE == "/opt/rocm/bin/amd-smi"
+    for path in AmdSmiCollector.AMD_SMI_FALLBACK_PATHS:
+        assert path in mock_run_sut_cmd.call_args.args[0]
+
+
 def test_check_amdsmi_not_installed(conn_mock, system_info, monkeypatch):
     """Test when amd-smi is not installed"""
 
@@ -832,3 +864,372 @@ def test_collect_data_with_both_auto_and_custom_cper(conn_mock, system_info, mon
     assert data.cper_afids["auto1.cper"] == 11111
     assert "/home/user/custom.cper" in data.cper_afids
     assert data.cper_afids["/home/user/custom.cper"] == 99999
+
+
+def fabric_json_entry(gpu: int) -> dict[str, Any]:
+    """Build one `amd-smi fabric --json` entry as emitted by the tool."""
+    return {
+        "gpu": gpu,
+        "fabric": {
+            "gpu": gpu,
+            "bdf": f"{gpu + 1:04d}:01:00.0",
+            "fabric_info": {
+                "bdf": f"{gpu + 1:04d}:01:00.1",
+                "version": 4294967295,
+                "accelerator_id": 7 - gpu,
+                "fabric_type": "UALOE",
+                "bandwidth": {"value": 0, "unit": "Mb/s"},
+                "latency": {"value": 0, "unit": "ns"},
+                "ppod_id": "4c8fab1c-fb8b-42aa-92ae-ea17ca953bdb",
+                "ppod_size": 72,
+                "vpod_id": 0,
+                "vpod_size": 0,
+                "local_accelerators": "0, 0, 0, 0, 0, 0, 0, 0",
+                "local_active_accelerators": ["0, 0, 0, 0, 0, 0, 0, 0"],
+                "addr_mode": "UNKNOWN",
+                "accel_state": "UNKNOWN",
+            },
+            "fabric_telemetry": "N/A",
+        },
+    }
+
+
+def make_fabric_collector(conn_mock, system_info, monkeypatch, fabric_payload) -> AmdSmiCollector:
+    """Create a collector whose only mocked amd-smi command is `fabric`."""
+
+    def mock_run_sut_cmd(cmd: str, sudo: bool = False) -> MagicMock:
+        if "which amd-smi" in cmd:
+            return make_cmd_result("/usr/bin/amd-smi")
+        if "fabric --json" in cmd:
+            if fabric_payload is None:
+                return make_cmd_result("", "fabric not supported", 1)
+            return make_cmd_result(make_json_response(fabric_payload))
+        return make_cmd_result("")
+
+    c = AmdSmiCollector(
+        system_info=system_info,
+        system_interaction_level=SystemInteractionLevel.PASSIVE,
+        connection=conn_mock,
+    )
+    monkeypatch.setattr(c, "_run_sut_cmd", mock_run_sut_cmd)
+    return c
+
+
+def test_get_fabric(conn_mock, system_info, monkeypatch):
+    """Test fabric parsing from the nested {'gpu': n, 'fabric': {...}} output"""
+    payload = [fabric_json_entry(0), fabric_json_entry(1)]
+    c = make_fabric_collector(conn_mock, system_info, monkeypatch, payload)
+
+    fabric = c.get_fabric()
+
+    assert len(fabric) == 2
+    assert [f.gpu for f in fabric] == [0, 1]
+    assert fabric[0].bdf == "0001:01:00.0"
+    info = fabric[0].fabric_info
+    assert info is not None
+    assert info.fabric_type == "UALOE"
+    assert info.accelerator_id == 7
+    assert info.ppod_id == "4c8fab1c-fb8b-42aa-92ae-ea17ca953bdb"
+    assert info.ppod_size == 72
+    assert info.bandwidth is not None and info.bandwidth.unit == "Mb/s"
+    assert info.latency is not None and info.latency.unit == "ns"
+
+
+def test_get_fabric_drops_fabric_telemetry(conn_mock, system_info, monkeypatch):
+    """Test that the large fabric_telemetry payload is not collected"""
+    entry = fabric_json_entry(0)
+    entry["fabric"]["fabric_telemetry"] = {"links": [{"id": i} for i in range(64)]}
+    c = make_fabric_collector(conn_mock, system_info, monkeypatch, [entry])
+
+    fabric = c.get_fabric()
+
+    assert len(fabric) == 1
+    assert "fabric_telemetry" not in fabric[0].model_dump()
+
+
+def test_get_fabric_gpu_data_wrapper(conn_mock, system_info, monkeypatch):
+    """Test fabric parsing when output is wrapped in a gpu_data key"""
+    payload = {"gpu_data": [fabric_json_entry(0), fabric_json_entry(1), fabric_json_entry(2)]}
+    c = make_fabric_collector(conn_mock, system_info, monkeypatch, payload)
+
+    fabric = c.get_fabric()
+
+    assert [f.gpu for f in fabric] == [0, 1, 2]
+
+
+def test_get_fabric_flat_entry(conn_mock, system_info, monkeypatch):
+    """Test fabric parsing when entries are not nested under a fabric key"""
+    payload = [fabric_json_entry(0)["fabric"]]
+    c = make_fabric_collector(conn_mock, system_info, monkeypatch, payload)
+
+    fabric = c.get_fabric()
+
+    assert len(fabric) == 1
+    assert fabric[0].gpu == 0
+    assert fabric[0].fabric_info is not None
+
+
+def test_get_fabric_command_failure(conn_mock, system_info, monkeypatch):
+    """Test fabric returns an empty list when amd-smi fabric fails"""
+    c = make_fabric_collector(conn_mock, system_info, monkeypatch, None)
+
+    assert c.get_fabric() == []
+
+
+def test_get_fabric_na_values(conn_mock, system_info, monkeypatch):
+    """Test fabric handles N/A values reported by amd-smi"""
+    entry = fabric_json_entry(0)
+    entry["fabric"]["bdf"] = "N/A"
+    entry["fabric"]["fabric_info"] = "N/A"
+    c = make_fabric_collector(conn_mock, system_info, monkeypatch, [entry])
+
+    fabric = c.get_fabric()
+
+    assert len(fabric) == 1
+    assert fabric[0].bdf is None
+    assert fabric[0].fabric_info is None
+
+
+# NODE
+
+
+def node_json_entry(include_gtt: bool = True) -> dict[str, Any]:
+    """Build one dummy `amd-smi node --json` entry as emitted by the tool."""
+    node: dict[str, Any] = {
+        "power_management": {"limit": "N/A", "status": "N/A", "threshold": "N/A"},
+    }
+    if include_gtt:
+        node["gtt"] = {"size_gb": 100.0, "size_pages": 1000}
+    return {"node": node}
+
+
+def make_node_collector(conn_mock, system_info, monkeypatch, node_payload) -> AmdSmiCollector:
+    """Create a collector whose only mocked amd-smi command is `node`."""
+
+    def mock_run_sut_cmd(cmd: str, sudo: bool = False) -> MagicMock:
+        if "which amd-smi" in cmd:
+            return make_cmd_result("/usr/bin/amd-smi")
+        if "node --json" in cmd:
+            if node_payload is None:
+                return make_cmd_result("", "node not supported", 1)
+            return make_cmd_result(make_json_response(node_payload))
+        return make_cmd_result("")
+
+    c = AmdSmiCollector(
+        system_info=system_info,
+        system_interaction_level=SystemInteractionLevel.PASSIVE,
+        connection=conn_mock,
+    )
+    monkeypatch.setattr(c, "_run_sut_cmd", mock_run_sut_cmd)
+    return c
+
+
+def test_get_node(conn_mock, system_info, monkeypatch):
+    """Test node parsing from the {"node": {...}} array shape."""
+    payload = [node_json_entry()]
+    c = make_node_collector(conn_mock, system_info, monkeypatch, payload)
+
+    node = c.get_node()
+
+    assert len(node) == 1
+    assert node[0].node.gtt.size_gb == 100.0
+    assert node[0].node.gtt.size_pages == 1000
+    assert node[0].node.power_management.limit is None
+    assert node[0].node.power_management.status is None
+    assert node[0].node.power_management.threshold is None
+
+
+def test_get_node_missing_gtt(conn_mock, system_info, monkeypatch):
+    """gtt may be entirely absent from a node entry."""
+    payload = [node_json_entry(include_gtt=False)]
+    c = make_node_collector(conn_mock, system_info, monkeypatch, payload)
+
+    node = c.get_node()
+
+    assert len(node) == 1
+    assert node[0].node.gtt is None
+
+
+def test_get_node_command_failure(conn_mock, system_info, monkeypatch):
+    """Test get_node returns an empty list when the command fails."""
+    c = make_node_collector(conn_mock, system_info, monkeypatch, None)
+
+    assert c.get_node() == []
+
+
+def test_get_node_real_hardware_shape(conn_mock, system_info, monkeypatch):
+    """Real amd-smi reports power_management.limit/threshold as value+unit dicts
+    (not bare numbers/"N/A" strings), and includes a base_board.temperature block."""
+    payload = [
+        {
+            "node": {
+                "power_management": {
+                    "limit": {"value": 0, "unit": "W"},
+                    "status": "DISABLED",
+                    "threshold": "N/A",
+                },
+                "base_board": {
+                    "temperature": {
+                        "UBB_FPGA": {"value": -1, "unit": "°C"},
+                        "IBC": {"value": -1, "unit": "°C"},
+                    }
+                },
+                "gtt": {"size_gb": 256.000, "size_pages": 65900000},
+            }
+        }
+    ]
+    c = make_node_collector(conn_mock, system_info, monkeypatch, payload)
+
+    node = c.get_node()
+
+    assert len(node) == 1
+    pm = node[0].node.power_management
+    assert pm.limit.value == 0
+    assert pm.limit.unit == "W"
+    assert pm.status == "DISABLED"
+    assert pm.threshold is None
+
+    temps = node[0].node.base_board.temperature
+    assert temps["UBB_FPGA"].value == -1
+    assert temps["UBB_FPGA"].unit == "°C"
+    assert temps["IBC"].value == -1
+
+
+# CPU / CORE METRICS
+
+
+def cpu_metric_json_entry(cpu: int = 0) -> dict[str, Any]:
+    """Build one dummy `amd-smi metric --cpu all --json` entry as emitted by the tool."""
+    return {
+        "cpu": cpu,
+        "power_metrics": {
+            "socket power": "100.000 W",
+            "socket power limit": "200.000 W",
+            "socket max power limit": "200.000 W",
+        },
+        "prochot": {"prochot_status": 0},
+        "freq_metrics": {
+            "fclkmemclk": {"fclk": "1000 MHz", "mclk": "2000 MHz"},
+            "cclkfreqlimit": "2000 MHz",
+            "soc_current_active_freq_limit": {"freq": "2000 MHz", "freq_src": "['Example']"},
+            "soc_freq_range": {"max_socket_freq": "2000 MHz", "min_socket_freq": "500 MHz"},
+        },
+        "c0_residency": {"residency": "1 %"},
+        "svi_telemetry_all_rails": {"power": "1000 mW"},
+        "pwr_eff_mode": {"mode": "0"},
+        "metric_version": {"version": 1},
+        "metrics_table": {"cpu_family": 1, "cpu_model": 1, "response": "N/A"},
+        "socket_energy": {"response": "1000.0 J"},
+        "ddr_bandwidth": {
+            "response": {
+                "ddr_bw_max_bw": "100 Gbps",
+                "ddr_bw_utilized_bw": "0 Gbps",
+                "ddr_bw_utilized_pct": "0 %",
+            }
+        },
+        "cpu_temp": {"response": "N/A"},
+        "xgmi_pstate_range": {"min_pstate": "N/A", "max_pstate": "N/A"},
+        "railisofreq_policy": {"value": 0},
+        "dfcstate_ctrl": {"value": 1},
+        "pc6_enable": {"value": "N/A"},
+        "cc6_enable": {"value": "N/A"},
+        "tdelta": {"value": "N/A"},
+        "enabled_commands": {
+            "READ_ENABLED_COMMANDS_BITMASK0": "N/A",
+            "READ_ENABLED_COMMANDS_BITMASK1": "N/A",
+            "READ_ENABLED_COMMANDS_BITMASK2": "N/A",
+            "WRITE_ENABLED_COMMANDS_BITMASK0": "N/A",
+            "WRITE_ENABLED_COMMANDS_BITMASK1": "N/A",
+            "WRITE_ENABLED_COMMANDS_BITMASK2": "N/A",
+        },
+        "sdps_limit": {"value": "N/A"},
+    }
+
+
+def core_metric_json_entry(core: int = 0) -> dict[str, Any]:
+    """Build a `amd-smi metric --core all --json` entry as emitted by the tool."""
+    return {
+        "core": core,
+        "boost_limit": {"value": 2000},
+        "curr_active_freq_core_limit": {"value": "2000 MHz"},
+        "core_energy": {"value": "N/A"},
+        "ccd_power": {"value": "N/A"},
+        "floor_limit": {"value": "N/A"},
+        "eff_floor_limit": {"value": "N/A"},
+    }
+
+
+def make_cpu_core_collector(
+    conn_mock, system_info, monkeypatch, cpu_payload=None, core_payload=None
+) -> AmdSmiCollector:
+    """Create a collector with metric --cpu/--core all commands."""
+
+    def mock_run_sut_cmd(cmd: str, sudo: bool = False) -> MagicMock:
+        if "which amd-smi" in cmd:
+            return make_cmd_result("/usr/bin/amd-smi")
+        if "metric --cpu all --json" in cmd:
+            if cpu_payload is None:
+                return make_cmd_result("", "cpu metrics not supported", 1)
+            return make_cmd_result(make_json_response(cpu_payload))
+        if "metric --core all --json" in cmd:
+            if core_payload is None:
+                return make_cmd_result("", "core metrics not supported", 1)
+            return make_cmd_result(make_json_response(core_payload))
+        return make_cmd_result("")
+
+    c = AmdSmiCollector(
+        system_info=system_info,
+        system_interaction_level=SystemInteractionLevel.PASSIVE,
+        connection=conn_mock,
+    )
+    monkeypatch.setattr(c, "_run_sut_cmd", mock_run_sut_cmd)
+    return c
+
+
+def test_get_cpu_metric(conn_mock, system_info, monkeypatch):
+    """Test CPU metric parsing from the amd-smi metric --cpu all --json shape."""
+    payload = {"cpu_data": [cpu_metric_json_entry()]}
+    c = make_cpu_core_collector(conn_mock, system_info, monkeypatch, cpu_payload=payload)
+
+    cpu_metric = c.get_cpu_metric()
+
+    assert len(cpu_metric) == 1
+    entry = cpu_metric[0]
+    assert entry.cpu == 0
+    assert entry.power_metrics.socket_power.value == 100.0
+    assert entry.power_metrics.socket_power_limit.unit == "W"
+    assert entry.prochot.prochot_status == 0
+    assert entry.freq_metrics.fclkmemclk.fclk.value == 1000
+    assert entry.ddr_bandwidth.response.ddr_bw_max_bw.value == 100
+    assert entry.cpu_temp.response is None
+    assert entry.sdps_limit is None
+    assert entry.xgmi_pstate_range.min_pstate is None
+
+
+def test_get_cpu_metric_command_failure(conn_mock, system_info, monkeypatch):
+    """Test get_cpu_metric returns an empty list when the command fails."""
+    c = make_cpu_core_collector(conn_mock, system_info, monkeypatch, cpu_payload=None)
+
+    assert c.get_cpu_metric() == []
+
+
+def test_get_core_metric(conn_mock, system_info, monkeypatch):
+    """Test core metric parsing from the amd-smi metric --core all --json shape."""
+    payload = {"core_data": [core_metric_json_entry(), core_metric_json_entry(core=1)]}
+    c = make_cpu_core_collector(conn_mock, system_info, monkeypatch, core_payload=payload)
+
+    core_metric = c.get_core_metric()
+
+    assert [entry.core for entry in core_metric] == [0, 1]
+    assert core_metric[0].boost_limit.value == 2000
+    assert core_metric[0].curr_active_freq_core_limit.unit == "MHz"
+    assert core_metric[0].core_energy is None
+    assert core_metric[0].ccd_power is None
+    assert core_metric[0].floor_limit is None
+
+
+def test_get_core_metric_command_failure(conn_mock, system_info, monkeypatch):
+    """Test get_core_metric returns an empty list when the command fails."""
+    c = make_cpu_core_collector(conn_mock, system_info, monkeypatch, core_payload=None)
+
+    assert c.get_core_metric() == []

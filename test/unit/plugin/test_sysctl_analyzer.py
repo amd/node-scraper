@@ -63,6 +63,7 @@ def test_analyzer_mismatch(analyzer, correct_data):
     args = SysctlAnalyzerArgs(exp_vm_swappiness=3, exp_vm_numa_balancing=4)
     result = analyzer.analyze_data(correct_data, args)
     assert result.status == ExecutionStatus.ERROR
-    assert "2 sysctl parameter(s) mismatched." in result.message
-    assert "1 errors" in result.message
-    assert "Sysctl mismatch detected" in result.message
+    assert result.message == (
+        "2 sysctl parameter(s) mismatched. (1 errors: Sysctl mismatch detected)"
+    )
+    assert result.events[0].description == "Sysctl mismatch detected"

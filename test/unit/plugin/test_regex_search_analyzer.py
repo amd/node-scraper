@@ -78,8 +78,7 @@ def test_regex_search_analyzer_match(system_info):
     )
     result = analyzer.analyze_data(data, args)
     assert result.status == ExecutionStatus.ERROR
-    assert "task detected errors" in result.message
-    assert "fatal seen" in result.message
+    assert result.message == "task detected errors (1 errors: fatal seen)"
     assert len(result.events) == 1
     assert result.events[0].description == "fatal seen"
 
@@ -167,8 +166,10 @@ def test_regex_search_plugin_analyzer_only(system_info, logger):
             },
         )
         assert out.status == ExecutionStatus.ERROR
-        assert "Analysis error:" in out.message
-        assert "found" in out.message
+        assert out.message.startswith(
+            "Analysis error: task detected errors (1 errors: found [file: "
+        )
+        assert out.message.endswith("])")
         assert out.result_data.analysis_result.status == ExecutionStatus.ERROR
         assert len(out.result_data.analysis_result.events) == 1
         desc = out.result_data.analysis_result.events[0].description

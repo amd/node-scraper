@@ -24,12 +24,11 @@
 #
 ###############################################################################
 import io
-import json
 import os
 import tarfile
 from typing import Any, TypeVar, Union
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ConfigDict, ValidationInfo, field_validator
 
 from nodescraper.utils import get_unique_filename
 
@@ -37,16 +36,24 @@ TDataModel = TypeVar("TDataModel", bound="DataModel")
 
 
 class FileModel(BaseModel):
+    """Binary file payload. JSON uses URL-safe base64 for ``file_contents``."""
+
+    model_config = ConfigDict(ser_json_bytes="base64", val_json_bytes="base64")
+
     file_contents: bytes
     file_name: str
 
     @field_validator("file_contents", mode="before")
     @classmethod
-    def file_contents_conformer(cls, value: Union[io.BytesIO, str, bytes]) -> bytes:
+    def file_contents_conformer(
+        cls, value: Union[io.BytesIO, str, bytes], info: ValidationInfo
+    ) -> Union[str, bytes]:
         if isinstance(value, io.BytesIO):
             return value.getvalue()
-        if isinstance(value, str):
+        if isinstance(value, str) and info.mode != "json":
+            # Constructor/Python input is text.
             return value.encode("utf-8")
+        # JSON strings stay base64 for val_json_bytes.
         return value
 
     def log_model(self, log_path: str) -> None:
@@ -77,15 +84,21 @@ class DataModel(BaseModel):
             get_unique_filename(log_path, f"{self.__class__.__name__.lower()}.json"),
         )
 
-        exlude_fields = set()
+        # Write binary FileModel payloads as files; keep them in JSON as base64.
         for key in self.__class__.model_fields:
             data = getattr(self, key)
             if isinstance(data, FileModel):
                 data.log_model(log_path)
-                exlude_fields.add(key)
+            elif (
+                isinstance(data, list)
+                and data
+                and all(isinstance(item, FileModel) for item in data)
+            ):
+                for item in data:
+                    item.log_model(log_path)
 
         with open(log_name, "w", encoding="utf-8") as log_file:
-            log_file.write(self.model_dump_json(indent=2, exclude=exlude_fields))
+            log_file.write(self.model_dump_json(indent=2))
 
     def merge_data(self, input_data: "DataModel") -> None:
         """Merge data into current data"""
@@ -122,8 +135,7 @@ class DataModel(BaseModel):
             # Build from json file
             else:
                 with open(model_input, "r", encoding="utf-8") as input_file:
-                    data = json.load(input_file)
-                return cls(**data)
+                    return cls.model_validate_json(input_file.read())
 
         raise ValueError("Invalid input for model data")
 

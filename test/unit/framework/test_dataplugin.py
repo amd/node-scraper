@@ -125,6 +125,20 @@ class TestDataPluginCore:
         assert isinstance(plugin.data, StandardDataModel)
         assert plugin.data.value == "dict_value"
 
+    def test_default_analysis_result_is_poplulated(self, plugin):
+        assert plugin.analysis_result.status == ExecutionStatus.NOT_RAN
+        assert "not ran" in plugin.analysis_result.message
+        assert "analysis" in plugin.analysis_result.message
+        assert plugin.analysis_result.parent is not None
+        assert plugin.analysis_result.task is not None
+
+    def test_default_collection_result_is_poplulated(self, plugin):
+        assert plugin.collection_result.status == ExecutionStatus.NOT_RAN
+        assert "not ran" in plugin.collection_result.message
+        assert "collection" in plugin.collection_result.message
+        assert plugin.collection_result.parent is not None
+        assert plugin.collection_result.task is not None
+
     def test_data_setter_error_names_expected_model(self, plugin):
         """Invalid data should report the expected DATA_MODEL name, not its metaclass."""
         with pytest.raises(ValueError) as exc_info:

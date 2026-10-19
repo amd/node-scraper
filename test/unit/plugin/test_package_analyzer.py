@@ -107,7 +107,7 @@ def test_data_version_regex(package_analyzer, default_data_lib):
 
 
 def test_data_multiple_errors_regex(package_analyzer, default_data_lib):
-    """Test that detailed error messages are shown for multiple package errors"""
+    """Test that the first package error descriptions are included in the summary"""
     args = PackageAnalyzerArgs(
         exp_package_ver={
             "missing-package": None,
@@ -118,8 +118,16 @@ def test_data_multiple_errors_regex(package_analyzer, default_data_lib):
     )
     res = package_analyzer.analyze_data(default_data_lib, args=args)
     assert res.status == ExecutionStatus.ERROR
-    assert "missing-package" in res.message
-    assert "another-missing" in res.message
+    assert res.message == (
+        "Package version mismatch (3 errors: "
+        "Package missing-package not found in the package list, "
+        r"Package test-ubuntu-package\.x86_64 Version Mismatch, "
+        r"Expected 2\.\d+ but found 1.11-1.xx11, "
+        "Package another-missing not found in the package list)"
+    )
+    descriptions = " ".join(event.description for event in res.events)
+    assert "missing-package" in descriptions
+    assert "another-missing" in descriptions
     assert len(res.events) == 3
 
 

@@ -1,0 +1,767 @@
+Memory Device
+	Total Width: 80 bits
+	Data Width: 64 bits
+	Size: 96 GB
+	Form Factor: DIMM
+	Set: None
+	Locator: CPU0_A
+	Bank Locator: _Node0_Channel0_Dimm0
+	Type: DDR5
+	Type Detail: Synchronous Registered (Buffered)
+	Speed: 5600 MT/s
+	Manufacturer: Samsung
+	Serial Number: 2432-50F82DCB
+	Asset Tag: CPU0_A_AssetTag
+	Part Number: M321RYGA0PB0-CWMXJ
+	Rank: 2
+	Configured Memory Speed: 5600 MT/s
+	Minimum Voltage: 1.1 V
+	Maximum Voltage: 1.1 V
+	Configured Voltage: 1.1 V
+	Memory Technology: DRAM
+	Memory Operating Mode Capability: Volatile memory
+	Firmware Version: 0000
+	Module Manufacturer ID: Bank 1, Hex 0xCE
+	Module Product ID: Unknown
+	Memory Subsystem Controller Manufacturer ID: Unknown
+	Memory Subsystem Controller Product ID: Unknown
+	Non-Volatile Size: None
+	Volatile Size: 96 GB
+	Cache Size: None
+	Logical Size: None
+
+Memory Device
+	Total Width: 80 bits
+	Data Width: 64 bits
+	Size: 96 GB
+	Form Factor: DIMM
+	Set: None
+	Locator: CPU0_B
+	Bank Locator: _Node0_Channel1_Dimm0
+	Type: DDR5
+	Type Detail: Synchronous Registered (Buffered)
+	Speed: 5600 MT/s
+	Manufacturer: Samsung
+	Serial Number: 2432-50F83B85
+	Asset Tag: CPU0_B_AssetTag
+	Part Number: M321RYGA0PB0-CWMXJ
+	Rank: 2
+	Configured Memory Speed: 5600 MT/s
+	Minimum Voltage: 1.1 V
+	Maximum Voltage: 1.1 V
+	Configured Voltage: 1.1 V
+	Memory Technology: DRAM
+	Memory Operating Mode Capability: Volatile memory
+	Firmware Version: 0000
+	Module Manufacturer ID: Bank 1, Hex 0xCE
+	Module Product ID: Unknown
+	Memory Subsystem Controller Manufacturer ID: Unknown
+	Memory Subsystem Controller Product ID: Unknown
+	Non-Volatile Size: None
+	Volatile Size: 96 GB
+	Cache Size: None
+	Logical Size: None
+
+Memory Device
+	Total Width: 80 bits
+	Data Width: 64 bits
+	Size: 96 GB
+	Form Factor: DIMM
+	Set: None
+	Locator: CPU0_C
+	Bank Locator: _Node0_Channel2_Dimm0
+	Type: DDR5
+	Type Detail: Synchronous Registered (Buffered)
+	Speed: 5600 MT/s
+	Manufacturer: Samsung
+	Serial Number: 2432-50F83B92
+	Asset Tag: CPU0_C_AssetTag
+	Part Number: M321RYGA0PB0-CWMXJ
+	Rank: 2
+	Configured Memory Speed: 5600 MT/s
+	Minimum Voltage: 1.1 V
+	Maximum Voltage: 1.1 V
+	Configured Voltage: 1.1 V
+	Memory Technology: DRAM
+	Memory Operating Mode Capability: Volatile memory
+	Firmware Version: 0000
+	Module Manufacturer ID: Bank 1, Hex 0xCE
+	Module Product ID: Unknown
+	Memory Subsystem Controller Manufacturer ID: Unknown
+	Memory Subsystem Controller Product ID: Unknown
+	Non-Volatile Size: None
+	Volatile Size: 96 GB
+	Cache Size: None
+	Logical Size: None
+
+Memory Device
+	Total Width: 80 bits
+	Data Width: 64 bits
+	Size: 96 GB
+	Form Factor: DIMM
+	Set: None
+	Locator: CPU0_D
+	Bank Locator: _Node0_Channel3_Dimm0
+	Type: DDR5
+	Type Detail: Synchronous Registered (Buffered)
+	Speed: 5600 MT/s
+	Manufacturer: Samsung
+	Serial Number: 2432-50F83B8C
+	Asset Tag: CPU0_D_AssetTag
+	Part Number: M321RYGA0PB0-CWMXJ
+	Rank: 2
+	Configured Memory Speed: 5600 MT/s
+	Minimum Voltage: 1.1 V
+	Maximum Voltage: 1.1 V
+	Configured Voltage: 1.1 V
+	Memory Technology: DRAM
+	Memory Operating Mode Capability: Volatile memory
+	Firmware Version: 0000
+	Module Manufacturer ID: Bank 1, Hex 0xCE
+	Module Product ID: Unknown
+	Memory Subsystem Controller Manufacturer ID: Unknown
+	Memory Subsystem Controller Product ID: Unknown
+	Non-Volatile Size: None
+	Volatile Size: 96 GB
+	Cache Size: None
+	Logical Size: None
+
+Memory Device
+	Total Width: 80 bits
+	Data Width: 64 bits
+	Size: 96 GB
+	Form Factor: DIMM
+	Set: None
+	Locator: CPU0_E
+	Bank Locator: _Node0_Channel4_Dimm0
+	Type: DDR5
+	Type Detail: Synchronous Registered (Buffered)
+	Speed: 5600 MT/s
+	Manufacturer: Samsung
+	Serial Number: 2432-50F833EE
+	Asset Tag: CPU0_E_AssetTag
+	Part Number: M321RYGA0PB0-CWMXJ
+	Rank: 2
+	Configured Memory Speed: 5600 MT/s
+	Minimum Voltage: 1.1 V
+	Maximum Voltage: 1.1 V
+	Configured Voltage: 1.1 V
+	Memory Technology: DRAM
+	Memory Operating Mode Capability: Volatile memory
+	Firmware Version: 0000
+	Module Manufacturer ID: Bank 1, Hex 0xCE
+	Module Product ID: Unknown
+	Memory Subsystem Controller Manufacturer ID: Unknown
+	Memory Subsystem Controller Product ID: Unknown
+	Non-Volatile Size: None
+	Volatile Size: 96 GB
+	Cache Size: None
+	Logical Size: None
+
+Memory Device
+	Total Width: 80 bits
+	Data Width: 64 bits
+	Size: 96 GB
+	Form Factor: DIMM
+	Set: None
+	Locator: CPU0_F
+	Bank Locator: _Node0_Channel5_Dimm0
+	Type: DDR5
+	Type Detail: Synchronous Registered (Buffered)
+	Speed: 5600 MT/s
+	Manufacturer: Samsung
+	Serial Number: 2435-512E5A2B
+	Asset Tag: CPU0_F_AssetTag
+	Part Number: M321RYGA0PB0-CWMXJ
+	Rank: 2
+	Configured Memory Speed: 5600 MT/s
+	Minimum Voltage: 1.1 V
+	Maximum Voltage: 1.1 V
+	Configured Voltage: 1.1 V
+	Memory Technology: DRAM
+	Memory Operating Mode Capability: Volatile memory
+	Firmware Version: 0000
+	Module Manufacturer ID: Bank 1, Hex 0xCE
+	Module Product ID: Unknown
+	Memory Subsystem Controller Manufacturer ID: Unknown
+	Memory Subsystem Controller Product ID: Unknown
+	Non-Volatile Size: None
+	Volatile Size: 96 GB
+	Cache Size: None
+	Logical Size: None
+
+Memory Device
+	Total Width: 80 bits
+	Data Width: 64 bits
+	Size: 96 GB
+	Form Factor: DIMM
+	Set: None
+	Locator: CPU0_G
+	Bank Locator: _Node0_Channel6_Dimm0
+	Type: DDR5
+	Type Detail: Synchronous Registered (Buffered)
+	Speed: 5600 MT/s
+	Manufacturer: Samsung
+	Serial Number: 2432-50F833D3
+	Asset Tag: CPU0_G_AssetTag
+	Part Number: M321RYGA0PB0-CWMXJ
+	Rank: 2
+	Configured Memory Speed: 5600 MT/s
+	Minimum Voltage: 1.1 V
+	Maximum Voltage: 1.1 V
+	Configured Voltage: 1.1 V
+	Memory Technology: DRAM
+	Memory Operating Mode Capability: Volatile memory
+	Firmware Version: 0000
+	Module Manufacturer ID: Bank 1, Hex 0xCE
+	Module Product ID: Unknown
+	Memory Subsystem Controller Manufacturer ID: Unknown
+	Memory Subsystem Controller Product ID: Unknown
+	Non-Volatile Size: None
+	Volatile Size: 96 GB
+	Cache Size: None
+	Logical Size: None
+
+Memory Device
+	Total Width: 80 bits
+	Data Width: 64 bits
+	Size: 96 GB
+	Form Factor: DIMM
+	Set: None
+	Locator: CPU0_H
+	Bank Locator: _Node0_Channel7_Dimm0
+	Type: DDR5
+	Type Detail: Synchronous Registered (Buffered)
+	Speed: 5600 MT/s
+	Manufacturer: Samsung
+	Serial Number: 2435-512E59BD
+	Asset Tag: CPU0_H_AssetTag
+	Part Number: M321RYGA0PB0-CWMXJ
+	Rank: 2
+	Configured Memory Speed: 5600 MT/s
+	Minimum Voltage: 1.1 V
+	Maximum Voltage: 1.1 V
+	Configured Voltage: 1.1 V
+	Memory Technology: DRAM
+	Memory Operating Mode Capability: Volatile memory
+	Firmware Version: 0000
+	Module Manufacturer ID: Bank 1, Hex 0xCE
+	Module Product ID: Unknown
+	Memory Subsystem Controller Manufacturer ID: Unknown
+	Memory Subsystem Controller Product ID: Unknown
+	Non-Volatile Size: None
+	Volatile Size: 96 GB
+	Cache Size: None
+	Logical Size: None
+
+Memory Device
+	Total Width: 80 bits
+	Data Width: 64 bits
+	Size: 96 GB
+	Form Factor: DIMM
+	Set: None
+	Locator: CPU0_I
+	Bank Locator: _Node0_Channel8_Dimm0
+	Type: DDR5
+	Type Detail: Synchronous Registered (Buffered)
+	Speed: 5600 MT/s
+	Manufacturer: Samsung
+	Serial Number: 2435-512E5880
+	Asset Tag: CPU0_I_AssetTag
+	Part Number: M321RYGA0PB0-CWMXJ
+	Rank: 2
+	Configured Memory Speed: 5600 MT/s
+	Minimum Voltage: 1.1 V
+	Maximum Voltage: 1.1 V
+	Configured Voltage: 1.1 V
+	Memory Technology: DRAM
+	Memory Operating Mode Capability: Volatile memory
+	Firmware Version: 0000
+	Module Manufacturer ID: Bank 1, Hex 0xCE
+	Module Product ID: Unknown
+	Memory Subsystem Controller Manufacturer ID: Unknown
+	Memory Subsystem Controller Product ID: Unknown
+	Non-Volatile Size: None
+	Volatile Size: 96 GB
+	Cache Size: None
+	Logical Size: None
+
+Memory Device
+	Total Width: 80 bits
+	Data Width: 64 bits
+	Size: 96 GB
+	Form Factor: DIMM
+	Set: None
+	Locator: CPU0_J
+	Bank Locator: _Node0_Channel9_Dimm0
+	Type: DDR5
+	Type Detail: Synchronous Registered (Buffered)
+	Speed: 5600 MT/s
+	Manufacturer: Samsung
+	Serial Number: 2435-512E5998
+	Asset Tag: CPU0_J_AssetTag
+	Part Number: M321RYGA0PB0-CWMXJ
+	Rank: 2
+	Configured Memory Speed: 5600 MT/s
+	Minimum Voltage: 1.1 V
+	Maximum Voltage: 1.1 V
+	Configured Voltage: 1.1 V
+	Memory Technology: DRAM
+	Memory Operating Mode Capability: Volatile memory
+	Firmware Version: 0000
+	Module Manufacturer ID: Bank 1, Hex 0xCE
+	Module Product ID: Unknown
+	Memory Subsystem Controller Manufacturer ID: Unknown
+	Memory Subsystem Controller Product ID: Unknown
+	Non-Volatile Size: None
+	Volatile Size: 96 GB
+	Cache Size: None
+	Logical Size: None
+
+Memory Device
+	Total Width: 80 bits
+	Data Width: 64 bits
+	Size: 96 GB
+	Form Factor: DIMM
+	Set: None
+	Locator: CPU0_K
+	Bank Locator: _Node0_Channel10_Dimm0
+	Type: DDR5
+	Type Detail: Synchronous Registered (Buffered)
+	Speed: 5600 MT/s
+	Manufacturer: Samsung
+	Serial Number: 2435-512E5207
+	Asset Tag: CPU0_K_AssetTag
+	Part Number: M321RYGA0PB0-CWMXJ
+	Rank: 2
+	Configured Memory Speed: 5600 MT/s
+	Minimum Voltage: 1.1 V
+	Maximum Voltage: 1.1 V
+	Configured Voltage: 1.1 V
+	Memory Technology: DRAM
+	Memory Operating Mode Capability: Volatile memory
+	Firmware Version: 0000
+	Module Manufacturer ID: Bank 1, Hex 0xCE
+	Module Product ID: Unknown
+	Memory Subsystem Controller Manufacturer ID: Unknown
+	Memory Subsystem Controller Product ID: Unknown
+	Non-Volatile Size: None
+	Volatile Size: 96 GB
+	Cache Size: None
+	Logical Size: None
+
+Memory Device
+	Total Width: 80 bits
+	Data Width: 64 bits
+	Size: 96 GB
+	Form Factor: DIMM
+	Set: None
+	Locator: CPU0_L
+	Bank Locator: _Node0_Channel11_Dimm0
+	Type: DDR5
+	Type Detail: Synchronous Registered (Buffered)
+	Speed: 5600 MT/s
+	Manufacturer: Samsung
+	Serial Number: 2435-512E5169
+	Asset Tag: CPU0_L_AssetTag
+	Part Number: M321RYGA0PB0-CWMXJ
+	Rank: 2
+	Configured Memory Speed: 5600 MT/s
+	Minimum Voltage: 1.1 V
+	Maximum Voltage: 1.1 V
+	Configured Voltage: 1.1 V
+	Memory Technology: DRAM
+	Memory Operating Mode Capability: Volatile memory
+	Firmware Version: 0000
+	Module Manufacturer ID: Bank 1, Hex 0xCE
+	Module Product ID: Unknown
+	Memory Subsystem Controller Manufacturer ID: Unknown
+	Memory Subsystem Controller Product ID: Unknown
+	Non-Volatile Size: None
+	Volatile Size: 96 GB
+	Cache Size: None
+	Logical Size: None
+
+Memory Device
+	Total Width: 80 bits
+	Data Width: 64 bits
+	Size: 96 GB
+	Form Factor: DIMM
+	Set: None
+	Locator: CPU1_A
+	Bank Locator: _Node1_Channel0_Dimm0
+	Type: DDR5
+	Type Detail: Synchronous Registered (Buffered)
+	Speed: 5600 MT/s
+	Manufacturer: Samsung
+	Serial Number: 2435-512E517A
+	Asset Tag: CPU1_A_AssetTag
+	Part Number: M321RYGA0PB0-CWMXJ
+	Rank: 2
+	Configured Memory Speed: 5600 MT/s
+	Minimum Voltage: 1.1 V
+	Maximum Voltage: 1.1 V
+	Configured Voltage: 1.1 V
+	Memory Technology: DRAM
+	Memory Operating Mode Capability: Volatile memory
+	Firmware Version: 0000
+	Module Manufacturer ID: Bank 1, Hex 0xCE
+	Module Product ID: Unknown
+	Memory Subsystem Controller Manufacturer ID: Unknown
+	Memory Subsystem Controller Product ID: Unknown
+	Non-Volatile Size: None
+	Volatile Size: 96 GB
+	Cache Size: None
+	Logical Size: None
+
+Memory Device
+	Total Width: 80 bits
+	Data Width: 64 bits
+	Size: 96 GB
+	Form Factor: DIMM
+	Set: None
+	Locator: CPU1_B
+	Bank Locator: _Node1_Channel1_Dimm0
+	Type: DDR5
+	Type Detail: Synchronous Registered (Buffered)
+	Speed: 5600 MT/s
+	Manufacturer: Samsung
+	Serial Number: 2435-512E5311
+	Asset Tag: CPU1_B_AssetTag
+	Part Number: M321RYGA0PB0-CWMXJ
+	Rank: 2
+	Configured Memory Speed: 5600 MT/s
+	Minimum Voltage: 1.1 V
+	Maximum Voltage: 1.1 V
+	Configured Voltage: 1.1 V
+	Memory Technology: DRAM
+	Memory Operating Mode Capability: Volatile memory
+	Firmware Version: 0000
+	Module Manufacturer ID: Bank 1, Hex 0xCE
+	Module Product ID: Unknown
+	Memory Subsystem Controller Manufacturer ID: Unknown
+	Memory Subsystem Controller Product ID: Unknown
+	Non-Volatile Size: None
+	Volatile Size: 96 GB
+	Cache Size: None
+	Logical Size: None
+
+Memory Device
+	Total Width: 80 bits
+	Data Width: 64 bits
+	Size: 96 GB
+	Form Factor: DIMM
+	Set: None
+	Locator: CPU1_C
+	Bank Locator: _Node1_Channel2_Dimm0
+	Type: DDR5
+	Type Detail: Synchronous Registered (Buffered)
+	Speed: 5600 MT/s
+	Manufacturer: Samsung
+	Serial Number: 2435-512E5778
+	Asset Tag: CPU1_C_AssetTag
+	Part Number: M321RYGA0PB0-CWMXJ
+	Rank: 2
+	Configured Memory Speed: 5600 MT/s
+	Minimum Voltage: 1.1 V
+	Maximum Voltage: 1.1 V
+	Configured Voltage: 1.1 V
+	Memory Technology: DRAM
+	Memory Operating Mode Capability: Volatile memory
+	Firmware Version: 0000
+	Module Manufacturer ID: Bank 1, Hex 0xCE
+	Module Product ID: Unknown
+	Memory Subsystem Controller Manufacturer ID: Unknown
+	Memory Subsystem Controller Product ID: Unknown
+	Non-Volatile Size: None
+	Volatile Size: 96 GB
+	Cache Size: None
+	Logical Size: None
+
+Memory Device
+	Total Width: 80 bits
+	Data Width: 64 bits
+	Size: 96 GB
+	Form Factor: DIMM
+	Set: None
+	Locator: CPU1_D
+	Bank Locator: _Node1_Channel3_Dimm0
+	Type: DDR5
+	Type Detail: Synchronous Registered (Buffered)
+	Speed: 5600 MT/s
+	Manufacturer: Samsung
+	Serial Number: 2435-512E5884
+	Asset Tag: CPU1_D_AssetTag
+	Part Number: M321RYGA0PB0-CWMXJ
+	Rank: 2
+	Configured Memory Speed: 5600 MT/s
+	Minimum Voltage: 1.1 V
+	Maximum Voltage: 1.1 V
+	Configured Voltage: 1.1 V
+	Memory Technology: DRAM
+	Memory Operating Mode Capability: Volatile memory
+	Firmware Version: 0000
+	Module Manufacturer ID: Bank 1, Hex 0xCE
+	Module Product ID: Unknown
+	Memory Subsystem Controller Manufacturer ID: Unknown
+	Memory Subsystem Controller Product ID: Unknown
+	Non-Volatile Size: None
+	Volatile Size: 96 GB
+	Cache Size: None
+	Logical Size: None
+
+Memory Device
+	Total Width: 80 bits
+	Data Width: 64 bits
+	Size: 96 GB
+	Form Factor: DIMM
+	Set: None
+	Locator: CPU1_E
+	Bank Locator: _Node1_Channel4_Dimm0
+	Type: DDR5
+	Type Detail: Synchronous Registered (Buffered)
+	Speed: 5600 MT/s
+	Manufacturer: Samsung
+	Serial Number: 2435-512E5755
+	Asset Tag: CPU1_E_AssetTag
+	Part Number: M321RYGA0PB0-CWMXJ
+	Rank: 2
+	Configured Memory Speed: 5600 MT/s
+	Minimum Voltage: 1.1 V
+	Maximum Voltage: 1.1 V
+	Configured Voltage: 1.1 V
+	Memory Technology: DRAM
+	Memory Operating Mode Capability: Volatile memory
+	Firmware Version: 0000
+	Module Manufacturer ID: Bank 1, Hex 0xCE
+	Module Product ID: Unknown
+	Memory Subsystem Controller Manufacturer ID: Unknown
+	Memory Subsystem Controller Product ID: Unknown
+	Non-Volatile Size: None
+	Volatile Size: 96 GB
+	Cache Size: None
+	Logical Size: None
+
+Memory Device
+	Total Width: 80 bits
+	Data Width: 64 bits
+	Size: 96 GB
+	Form Factor: DIMM
+	Set: None
+	Locator: CPU1_F
+	Bank Locator: _Node1_Channel5_Dimm0
+	Type: DDR5
+	Type Detail: Synchronous Registered (Buffered)
+	Speed: 5600 MT/s
+	Manufacturer: Samsung
+	Serial Number: 2435-512E520A
+	Asset Tag: CPU1_F_AssetTag
+	Part Number: M321RYGA0PB0-CWMXJ
+	Rank: 2
+	Configured Memory Speed: 5600 MT/s
+	Minimum Voltage: 1.1 V
+	Maximum Voltage: 1.1 V
+	Configured Voltage: 1.1 V
+	Memory Technology: DRAM
+	Memory Operating Mode Capability: Volatile memory
+	Firmware Version: 0000
+	Module Manufacturer ID: Bank 1, Hex 0xCE
+	Module Product ID: Unknown
+	Memory Subsystem Controller Manufacturer ID: Unknown
+	Memory Subsystem Controller Product ID: Unknown
+	Non-Volatile Size: None
+	Volatile Size: 96 GB
+	Cache Size: None
+	Logical Size: None
+
+Memory Device
+	Total Width: 80 bits
+	Data Width: 64 bits
+	Size: 96 GB
+	Form Factor: DIMM
+	Set: None
+	Locator: CPU1_G
+	Bank Locator: _Node1_Channel6_Dimm0
+	Type: DDR5
+	Type Detail: Synchronous Registered (Buffered)
+	Speed: 5600 MT/s
+	Manufacturer: Samsung
+	Serial Number: 2435-512E5774
+	Asset Tag: CPU1_G_AssetTag
+	Part Number: M321RYGA0PB0-CWMXJ
+	Rank: 2
+	Configured Memory Speed: 5600 MT/s
+	Minimum Voltage: 1.1 V
+	Maximum Voltage: 1.1 V
+	Configured Voltage: 1.1 V
+	Memory Technology: DRAM
+	Memory Operating Mode Capability: Volatile memory
+	Firmware Version: 0000
+	Module Manufacturer ID: Bank 1, Hex 0xCE
+	Module Product ID: Unknown
+	Memory Subsystem Controller Manufacturer ID: Unknown
+	Memory Subsystem Controller Product ID: Unknown
+	Non-Volatile Size: None
+	Volatile Size: 96 GB
+	Cache Size: None
+	Logical Size: None
+
+Memory Device
+	Total Width: 80 bits
+	Data Width: 64 bits
+	Size: 96 GB
+	Form Factor: DIMM
+	Set: None
+	Locator: CPU1_H
+	Bank Locator: _Node1_Channel7_Dimm0
+	Type: DDR5
+	Type Detail: Synchronous Registered (Buffered)
+	Speed: 5600 MT/s
+	Manufacturer: Samsung
+	Serial Number: 2435-512E56E5
+	Asset Tag: CPU1_H_AssetTag
+	Part Number: M321RYGA0PB0-CWMXJ
+	Rank: 2
+	Configured Memory Speed: 5600 MT/s
+	Minimum Voltage: 1.1 V
+	Maximum Voltage: 1.1 V
+	Configured Voltage: 1.1 V
+	Memory Technology: DRAM
+	Memory Operating Mode Capability: Volatile memory
+	Firmware Version: 0000
+	Module Manufacturer ID: Bank 1, Hex 0xCE
+	Module Product ID: Unknown
+	Memory Subsystem Controller Manufacturer ID: Unknown
+	Memory Subsystem Controller Product ID: Unknown
+	Non-Volatile Size: None
+	Volatile Size: 96 GB
+	Cache Size: None
+	Logical Size: None
+
+Memory Device
+	Total Width: 80 bits
+	Data Width: 64 bits
+	Size: 96 GB
+	Form Factor: DIMM
+	Set: None
+	Locator: CPU1_I
+	Bank Locator: _Node1_Channel8_Dimm0
+	Type: DDR5
+	Type Detail: Synchronous Registered (Buffered)
+	Speed: 5600 MT/s
+	Manufacturer: Samsung
+	Serial Number: 2435-512E5883
+	Asset Tag: CPU1_I_AssetTag
+	Part Number: M321RYGA0PB0-CWMXJ
+	Rank: 2
+	Configured Memory Speed: 5600 MT/s
+	Minimum Voltage: 1.1 V
+	Maximum Voltage: 1.1 V
+	Configured Voltage: 1.1 V
+	Memory Technology: DRAM
+	Memory Operating Mode Capability: Volatile memory
+	Firmware Version: 0000
+	Module Manufacturer ID: Bank 1, Hex 0xCE
+	Module Product ID: Unknown
+	Memory Subsystem Controller Manufacturer ID: Unknown
+	Memory Subsystem Controller Product ID: Unknown
+	Non-Volatile Size: None
+	Volatile Size: 96 GB
+	Cache Size: None
+	Logical Size: None
+
+Memory Device
+	Total Width: 80 bits
+	Data Width: 64 bits
+	Size: 96 GB
+	Form Factor: DIMM
+	Set: None
+	Locator: CPU1_J
+	Bank Locator: _Node1_Channel9_Dimm0
+	Type: DDR5
+	Type Detail: Synchronous Registered (Buffered)
+	Speed: 5600 MT/s
+	Manufacturer: Samsung
+	Serial Number: 2435-512E56E6
+	Asset Tag: CPU1_J_AssetTag
+	Part Number: M321RYGA0PB0-CWMXJ
+	Rank: 2
+	Configured Memory Speed: 5600 MT/s
+	Minimum Voltage: 1.1 V
+	Maximum Voltage: 1.1 V
+	Configured Voltage: 1.1 V
+	Memory Technology: DRAM
+	Memory Operating Mode Capability: Volatile memory
+	Firmware Version: 0000
+	Module Manufacturer ID: Bank 1, Hex 0xCE
+	Module Product ID: Unknown
+	Memory Subsystem Controller Manufacturer ID: Unknown
+	Memory Subsystem Controller Product ID: Unknown
+	Non-Volatile Size: None
+	Volatile Size: 96 GB
+	Cache Size: None
+	Logical Size: None
+
+Memory Device
+	Total Width: 80 bits
+	Data Width: 64 bits
+	Size: 96 GB
+	Form Factor: DIMM
+	Set: None
+	Locator: CPU1_K
+	Bank Locator: _Node1_Channel10_Dimm0
+	Type: DDR5
+	Type Detail: Synchronous Registered (Buffered)
+	Speed: 5600 MT/s
+	Manufacturer: Samsung
+	Serial Number: 2435-512E599C
+	Asset Tag: CPU1_K_AssetTag
+	Part Number: M321RYGA0PB0-CWMXJ
+	Rank: 2
+	Configured Memory Speed: 5600 MT/s
+	Minimum Voltage: 1.1 V
+	Maximum Voltage: 1.1 V
+	Configured Voltage: 1.1 V
+	Memory Technology: DRAM
+	Memory Operating Mode Capability: Volatile memory
+	Firmware Version: 0000
+	Module Manufacturer ID: Bank 1, Hex 0xCE
+	Module Product ID: Unknown
+	Memory Subsystem Controller Manufacturer ID: Unknown
+	Memory Subsystem Controller Product ID: Unknown
+	Non-Volatile Size: None
+	Volatile Size: 96 GB
+	Cache Size: None
+	Logical Size: None
+
+Memory Device
+	Total Width: 80 bits
+	Data Width: 64 bits
+	Size: 96 GB
+	Form Factor: DIMM
+	Set: None
+	Locator: CPU1_L
+	Bank Locator: _Node1_Channel11_Dimm0
+	Type: DDR5
+	Type Detail: Synchronous Registered (Buffered)
+	Speed: 5600 MT/s
+	Manufacturer: Samsung
+	Serial Number: 2435-512E5D04
+	Asset Tag: CPU1_L_AssetTag
+	Part Number: M321RYGA0PB0-CWMXJ
+	Rank: 2
+	Configured Memory Speed: 5600 MT/s
+	Minimum Voltage: 1.1 V
+	Maximum Voltage: 1.1 V
+	Configured Voltage: 1.1 V
+	Memory Technology: DRAM
+	Memory Operating Mode Capability: Volatile memory
+	Firmware Version: 0000
+	Module Manufacturer ID: Bank 1, Hex 0xCE
+	Module Product ID: Unknown
+	Memory Subsystem Controller Manufacturer ID: Unknown
+	Memory Subsystem Controller Product ID: Unknown
+	Non-Volatile Size: None
+	Volatile Size: 96 GB
+	Cache Size: None
+	Logical Size: None

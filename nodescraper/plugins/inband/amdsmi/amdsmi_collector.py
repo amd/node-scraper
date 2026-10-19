@@ -42,9 +42,13 @@ from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     AmdSmiStatic,
     AmdSmiVersion,
     BadPages,
+    CoreMetric,
+    CpuMetric,
     EccState,
+    Fabric,
     Fw,
     FwListItem,
+    NodeInfo,
     Partition,
     PartitionCompute,
     PartitionMemory,
@@ -84,17 +88,23 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
 
     AMD_SMI_EXE = "amd-smi"
 
+    AMD_SMI_FALLBACK_PATHS: tuple[str, ...] = (
+        "/opt/rocm/bin/amd-smi",
+        "/opt/rocm-*/bin/amd-smi",
+        "/usr/local/bin/amd-smi",
+    )
+
     SUPPORTED_OS_FAMILY: set[OSFamily] = {OSFamily.LINUX}
 
     DATA_MODEL = AmdSmiDataModel
 
-    CMD_VERSION = "version --json"
-    CMD_LIST = "list --json"
-    CMD_PROCESS = "process --json"
-    CMD_PARTITION = "partition --json"
-    CMD_FIRMWARE = "firmware --json"
-    CMD_STATIC = "static -g all --json"
-    CMD_STATIC_GPU = "static -g {gpu_id} --json"
+    CMD_VERSION = "version"
+    CMD_LIST = "list"
+    CMD_PROCESS = "process"
+    CMD_PARTITION = "partition"
+    CMD_FIRMWARE = "firmware"
+    CMD_STATIC = "static -g all"
+    CMD_STATIC_GPU = "static -g {gpu_id}"
     CMD_TOPOLOGY = "topology"
     CMD_METRIC = "metric -g all"
     CMD_BAD_PAGES = "bad-pages"
@@ -102,15 +112,34 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
     CMD_XGMI_LINK = "xgmi -l"
     CMD_RAS = "ras --cper --folder={folder}"
     CMD_RAS_AFID = "ras --afid --cper-file {cper_file}"
+    CMD_FABRIC = "fabric"
+    CMD_NODE = "node"
+    CMD_METRIC_CPU = "metric --cpu all"
+    CMD_METRIC_CORE = "metric --core all"
 
     def _check_amdsmi_installed(self) -> bool:
         """Check if amd-smi is installed
+
+        When amd-smi is not on PATH, AMD_SMI_FALLBACK_PATHS is searched and AMD_SMI_EXE is
+        rebound on this instance to the resolved absolute path.
 
         Returns:
             bool: True if amd-smi is installed, False otherwise
         """
         cmd_ret = self._run_sut_cmd("which amd-smi")
-        return bool(cmd_ret.exit_code == 0 and "no amd-smi in" not in cmd_ret.stdout)
+        if cmd_ret.exit_code == 0 and "no amd-smi in" not in cmd_ret.stdout:
+            return True
+
+        # Some images omit /opt/rocm/bin from the non-interactive SSH PATH; left unquoted so
+        # the shell expands the versioned-install glob.
+        search_paths = " ".join(self.AMD_SMI_FALLBACK_PATHS)
+        cmd_ret = self._run_sut_cmd(f'for p in {search_paths}; do command -v "$p" && break; done')
+        resolved = cmd_ret.stdout.strip().splitlines()
+        if not resolved:
+            return False
+
+        self.AMD_SMI_EXE = resolved[0].strip()
+        return True
 
     def _run_amd_smi(self, cmd: str) -> Optional[str]:
         """Run amd-smi command
@@ -449,6 +478,66 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
 
         return xgmi_metrics or [], xgmi_links or []
 
+    def get_fabric(self) -> List[Fabric]:
+        """Get fabric data from amd-smi fabric --json.
+
+        ``fabric_telemetry`` is not collected as the payload is very large.
+        """
+        ret = self._run_amd_smi_dict(self.CMD_FABRIC)
+        if ret is None:
+            return []
+        if isinstance(ret, dict) and "gpu_data" in ret:
+            ret = ret["gpu_data"]
+        data = ret if isinstance(ret, list) else [ret]
+
+        fabric_entries: List[dict] = []
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+            # each entry is {"gpu": <id>, "fabric": {...}}
+            entry = item.get("fabric") if isinstance(item.get("fabric"), dict) else item
+            if not isinstance(entry, dict):
+                continue
+            entry = {k: v for k, v in entry.items() if k != "fabric_telemetry"}
+            entry.setdefault("gpu", item.get("gpu", 0))
+            fabric_entries.append(entry)
+
+        built = self._build_amdsmi_sub_data(Fabric, fabric_entries)
+        return built if isinstance(built, list) else ([built] if built else [])
+
+    def get_node(self) -> List[NodeInfo]:
+        """Get node-level data from amd-smi node --json."""
+        ret = self._run_amd_smi_dict(self.CMD_NODE)
+        if ret is None:
+            return []
+        if isinstance(ret, dict) and "node_data" in ret:
+            ret = ret["node_data"]
+        data = ret if isinstance(ret, list) else [ret]
+        built = self._build_amdsmi_sub_data(NodeInfo, data)
+        return built if isinstance(built, list) else ([built] if built else [])
+
+    def get_cpu_metric(self) -> List[CpuMetric]:
+        """Get per-CPU-socket metrics from amd-smi metric --cpu all --json."""
+        ret = self._run_amd_smi_dict(self.CMD_METRIC_CPU)
+        if ret is None:
+            return []
+        if isinstance(ret, dict) and "cpu_data" in ret:
+            ret = ret["cpu_data"]
+        data = ret if isinstance(ret, list) else [ret]
+        built = self._build_amdsmi_sub_data(CpuMetric, data)
+        return built if isinstance(built, list) else ([built] if built else [])
+
+    def get_core_metric(self) -> List[CoreMetric]:
+        """Get per-core metrics from amd-smi metric --core all --json."""
+        ret = self._run_amd_smi_dict(self.CMD_METRIC_CORE)
+        if ret is None:
+            return []
+        if isinstance(ret, dict) and "core_data" in ret:
+            ret = ret["core_data"]
+        data = ret if isinstance(ret, list) else [ret]
+        built = self._build_amdsmi_sub_data(CoreMetric, data)
+        return built if isinstance(built, list) else ([built] if built else [])
+
     def _get_amdsmi_data(
         self, args: Optional[AmdSmiCollectorArgs] = None
     ) -> Optional[AmdSmiDataModel]:
@@ -468,6 +557,10 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
             metric = self.get_metric()
             bad_pages = self.get_bad_pages()
             xgmi_metric, xgmi_link = self.get_xgmi_data()
+            fabric = self.get_fabric()
+            node = self.get_node()
+            cpu_metric = self.get_cpu_metric()
+            core_metric = self.get_core_metric()
             cper_data, cper_afids = self.get_cper_data()
         except Exception as e:
             self._log_event(
@@ -494,6 +587,10 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
                 bad_pages=bad_pages or [],
                 xgmi_metric=xgmi_metric or [],
                 xgmi_link=xgmi_link or [],
+                fabric=fabric or [],
+                node=node or [],
+                cpu_metric=cpu_metric or [],
+                core_metric=core_metric or [],
                 cper_data=cper_data,
                 cper_afids=cper_afids,
                 analysis_firmware_ids=fw_ids,

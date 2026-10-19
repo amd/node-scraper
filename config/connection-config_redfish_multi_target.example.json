@@ -1,0 +1,25 @@
+{
+  "RedfishConnectionManager": {
+    "max_workers": 2,
+    "targets": [
+      {
+        "target_key": "node-a",
+        "host": "bmc-node-a.example.com",
+        "username": "admin",
+        "password": "placeholder",
+        "use_https": true,
+        "verify_ssl": false,
+        "timeout_seconds": 30
+      },
+      {
+        "target_key": "node-b",
+        "host": "bmc-node-b.example.com",
+        "username": "admin",
+        "password": "placeholder",
+        "use_https": true,
+        "verify_ssl": false,
+        "timeout_seconds": 30
+      }
+    ]
+  }
+}

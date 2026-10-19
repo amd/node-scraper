@@ -172,6 +172,10 @@ class RemoteShell(InBandConnection):
             stderr_str = "Command timed out"
             stdout_str = ""
             exit_code = 124
+        except SSHException as exc:
+            stderr_str = str(exc) or "SSH channel failed"
+            stdout_str = ""
+            exit_code = 124
 
         return CommandArtifact(
             command=cmd_str,

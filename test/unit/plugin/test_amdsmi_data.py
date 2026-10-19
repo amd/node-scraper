@@ -32,7 +32,12 @@ import pytest
 from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     AmdSmiDataModel,
     AmdSmiMetric,
+    Fabric,
+    FabricInfo,
+    MetricBaseBoardTemperature,
     MetricClockData,
+    MetricClockRails,
+    MetricGpuBoardTemperature,
     MetricPcie,
     MetricPower,
     StaticClockData,
@@ -489,15 +494,18 @@ def test_metric_usage_string_na():
 
 
 def test_metric_gpuboard_baseboard_optional():
-    """Store gpuboard/baseboard sections from ROCm 7.1+ metric output."""
+    """Store gpuboard/baseboard sections from ROCm 7.1+ metric output as typed models."""
     metric = AmdSmiMetric.model_validate(
         dummy_metric_dict(
             gpuboard=DUMMY_METRIC_GPUBOARD,
             baseboard=DUMMY_METRIC_BASEBOARD,
         )
     )
-    assert metric.gpuboard == DUMMY_METRIC_GPUBOARD
-    assert metric.baseboard == DUMMY_METRIC_BASEBOARD
+    assert metric.gpuboard.temperature.NODE_RETIMER_X.value == 43
+    assert metric.gpuboard.temperature.NODE_OAM_X_IBC.value == 53
+    assert metric.gpuboard.temperature.VDDCR_VDD0 is None
+    assert metric.baseboard.temperature.UBB_FRONT.value == 55
+    assert metric.baseboard.temperature.UBB_FPGA.value == 78
 
 
 def test_metric_gpuboard_gpu_board_alias():
@@ -510,8 +518,62 @@ def test_metric_gpuboard_gpu_board_alias():
             }
         )
     )
-    assert metric.gpuboard == DUMMY_METRIC_GPUBOARD
-    assert metric.baseboard == DUMMY_METRIC_BASEBOARD
+    assert metric.gpuboard.temperature.NODE_RETIMER_X.value == 43
+    assert metric.baseboard.temperature.UBB_FRONT.value == 55
+
+
+def test_metric_gpuboard_all_rails_present():
+    """Every known gpuboard rail is parsed when present, numeric or N/A."""
+    sample_payload = {
+        name: (0 if i % 2 == 0 else "N/A")
+        for i, name in enumerate(MetricGpuBoardTemperature.RAIL_NAMES)
+    }
+    board = MetricGpuBoardTemperature.model_validate(sample_payload)
+    for i, name in enumerate(MetricGpuBoardTemperature.RAIL_NAMES):
+        rail = getattr(board, name)
+        if i % 2 == 0:
+            assert rail is not None and rail.value == 0
+        else:
+            assert rail is None
+
+
+def test_metric_gpuboard_rail_renamed_or_dropped_is_none_not_absorbed():
+    """A rail missing/renamed from the payload surfaces as None on its named field."""
+    board = MetricGpuBoardTemperature.model_validate({"NODE_RETIMER_X": {"value": 5, "unit": "C"}})
+    assert board.NODE_RETIMER_X.value == 5
+    assert board.VDDCR_VDD0 is None
+    assert board.VDD_085_HBM is None
+
+
+def test_metric_gpuboard_unknown_rail_tolerated():
+    """An unrecognized rail (future FW addition) does not fail validation."""
+    board = MetricGpuBoardTemperature.model_validate(
+        {"NODE_RETIMER_X": {"value": 1, "unit": "C"}, "SOME_NEW_RAIL": {"value": 2, "unit": "C"}}
+    )
+    assert board.NODE_RETIMER_X.value == 1
+
+
+def test_metric_baseboard_rail_na_and_zero():
+    """baseboard rails independently accept N/A and 0 without erroring."""
+    board = MetricBaseBoardTemperature.model_validate({"UBB_FRONT": "N/A", "UBB_FPGA": 0})
+    assert board.UBB_FRONT is None
+    assert board.UBB_FPGA.value == 0
+
+
+def test_metric_gpuboard_rail_case_insensitive_match():
+    """Current amd-smi builds emit lowercase rail names (e.g. node_retimer_x)."""
+    board = MetricGpuBoardTemperature.model_validate({"node_retimer_x": {"value": 43, "unit": "C"}})
+    assert board.NODE_RETIMER_X is not None
+    assert board.NODE_RETIMER_X.value == 43
+    assert board.model_extra == {}
+
+
+def test_metric_baseboard_rail_case_insensitive_match():
+    """Current amd-smi builds emit lowercase rail names (e.g. ubb_front)."""
+    board = MetricBaseBoardTemperature.model_validate({"ubb_front": {"value": 55, "unit": "C"}})
+    assert board.UBB_FRONT is not None
+    assert board.UBB_FRONT.value == 55
+    assert board.model_extra == {}
 
 
 def test_metric_clock_per_aid_na_maps():
@@ -542,3 +604,180 @@ def test_metric_clock_per_aid_na_maps():
     assert metric.clock["uclk_aid"]["AID_0"] == "N/A"
     assert isinstance(metric.clock["GFX_0"], MetricClockData)
     assert metric.pcie.lc_perf_other_end_recovery_count == 0
+
+    assert metric.clock_rails.UCLK_AID == {"AID_0": None, "AID_1": None}
+    assert metric.clock_rails.SOCCLKS_MID == {"MID_0": None, "MID_1": None}
+
+
+def test_metric_clock_rails_enumerates_known_rails_and_catches_drop():
+    """clock_rails exposes every known rail by name; a dropped one reads None."""
+    metric = AmdSmiMetric.model_validate(dummy_metric_dict())
+    assert isinstance(metric.clock_rails.GFX_0, MetricClockData)
+    assert metric.clock_rails.GFX_0.clk.value == 132
+    assert metric.clock_rails.MEM_0 is None
+    assert metric.clock_rails.VCLK_0 is None
+    assert metric.clock_rails.FCLK_0 is None
+    assert metric.clock_rails.UCLK_AID is None
+    assert metric.clock_rails.SOCCLKS_MID is None
+
+
+def test_metric_clock_rails_case_insensitive_match():
+    """Current amd-smi builds emit lowercase rail names (e.g. gfx_0, mem_0)."""
+    rails = MetricClockRails.model_validate(
+        {
+            "gfx_0": {"clk": {"value": 2353, "unit": "MHz"}},
+            "mem_0": {"clk": {"value": 1200, "unit": "MHz"}},
+            "uclk_aid": {"AID_0": "N/A", "AID_1": {"value": 2000, "unit": "MHz"}},
+        }
+    )
+    assert rails.GFX_0 is not None
+    assert rails.GFX_0.clk.value == 2353
+    assert rails.UCLK_AID["AID_0"] is None
+    assert rails.UCLK_AID["AID_1"].value == 2000
+    assert rails.UCLK_AID["AID_1"].unit == "MHz"
+    assert rails.MEM_0 is not None
+    assert rails.MEM_0.clk.value == 1200
+    assert rails.model_extra == {}
+
+
+# FABRIC
+
+
+def dummy_fabric_entry(gpu: int = 0, **overrides: Any) -> dict[str, Any]:
+    """Build one ``amd-smi fabric --json`` entry as emitted by the tool."""
+    fabric_info: dict[str, Any] = {
+        "bdf": f"{gpu + 1:04d}:01:00.1",
+        "version": 4294967295,
+        "accelerator_id": 7 - gpu,
+        "fabric_type": "UALOE",
+        "bandwidth": {"value": 0, "unit": "Mb/s"},
+        "latency": {"value": 0, "unit": "ns"},
+        "ppod_id": "4c8fab1c-fb8b-42aa-92ae-ea17ca953bdb",
+        "ppod_size": 72,
+        "vpod_id": 0,
+        "vpod_size": 0,
+        "local_accelerators": "0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0",
+        "local_active_accelerators": [
+            "0, 0, 0, 0, 0, 0, 0, 0",
+            "0, 0, 0, 0, 0, 0, 0, 0",
+            "0, 0, 0, 0, 0, 0, 0, 0",
+            "0, 0, 0, 0, 0, 0, 0, 0",
+        ],
+        "addr_mode": "UNKNOWN",
+        "accel_state": "UNKNOWN",
+    }
+    fabric_info.update(overrides)
+    return {
+        "gpu": gpu,
+        "fabric": {
+            "gpu": gpu,
+            "bdf": f"{gpu + 1:04d}:01:00.0",
+            "fabric_info": fabric_info,
+            "fabric_telemetry": "N/A",
+        },
+    }
+
+
+def test_fabric_model_from_amd_smi_output():
+    """Fabric parses the nested ``fabric`` payload from amd-smi fabric --json."""
+    fabric = Fabric.model_validate(dummy_fabric_entry(gpu=0)["fabric"])
+
+    assert fabric.gpu == 0
+    assert fabric.bdf == "0001:01:00.0"
+    info = fabric.fabric_info
+    assert info is not None
+    assert info.bdf == "0001:01:00.1"
+    assert info.version == 4294967295
+    assert info.accelerator_id == 7
+    assert info.fabric_type == "UALOE"
+    assert info.ppod_id == "4c8fab1c-fb8b-42aa-92ae-ea17ca953bdb"
+    assert info.ppod_size == 72
+    assert info.vpod_id == 0
+    assert info.vpod_size == 0
+    assert info.addr_mode == "UNKNOWN"
+    assert info.accel_state == "UNKNOWN"
+    assert len(info.local_active_accelerators) == 4
+
+
+def test_fabric_ignores_fabric_telemetry():
+    """fabric_telemetry is not modelled and must not cause a validation error."""
+    entry = dummy_fabric_entry(gpu=1)["fabric"]
+    entry["fabric_telemetry"] = {"huge": [1, 2, 3]}
+
+    fabric = Fabric.model_validate(entry)
+
+    assert fabric.gpu == 1
+    assert not hasattr(fabric, "fabric_telemetry")
+
+
+def test_fabric_info_value_unit_coercion():
+    """bandwidth/latency accept dicts, bare numbers and number+unit strings."""
+    info = FabricInfo.model_validate(
+        {
+            "bandwidth": {"value": 0, "unit": "Mb/s"},
+            "latency": "150 ns",
+        }
+    )
+
+    assert info.bandwidth == ValueUnit(value=0, unit="Mb/s")
+    assert info.latency is not None
+    assert info.latency.value == 150
+    assert info.latency.unit == "ns"
+
+
+def test_fabric_na_fields_map_to_none():
+    """'N/A' values from amd-smi are normalized to None."""
+    fabric = Fabric.model_validate(
+        {
+            "gpu": 2,
+            "bdf": "N/A",
+            "fabric_info": {
+                "bdf": "N/A",
+                "fabric_type": "N/A",
+                "ppod_id": "N/A",
+                "ppod_size": "N/A",
+                "accel_state": "N/A",
+                "bandwidth": "N/A",
+                "latency": None,
+            },
+        }
+    )
+
+    assert fabric.bdf is None
+    info = fabric.fabric_info
+    assert info is not None
+    assert info.bdf is None
+    assert info.fabric_type is None
+    assert info.ppod_id is None
+    assert info.ppod_size is None
+    assert info.accel_state is None
+    assert info.bandwidth is None
+    assert info.latency is None
+
+
+def test_fabric_info_na_maps_to_none():
+    """A whole fabric_info block reported as 'N/A' becomes None."""
+    fabric = Fabric.model_validate({"gpu": 3, "bdf": "0004:01:00.0", "fabric_info": "N/A"})
+
+    assert fabric.fabric_info is None
+
+
+def test_data_model_get_fabric():
+    """AmdSmiDataModel.get_fabric returns the entry for the requested gpu."""
+    data = AmdSmiDataModel(
+        fabric=[
+            Fabric.model_validate(dummy_fabric_entry(gpu=0)["fabric"]),
+            Fabric.model_validate(dummy_fabric_entry(gpu=1)["fabric"]),
+        ]
+    )
+
+    fabric = data.get_fabric(1)
+    assert fabric is not None
+    assert fabric.gpu == 1
+    assert fabric.bdf == "0002:01:00.0"
+    assert data.get_fabric(9) is None
+
+
+def test_data_model_fabric_defaults_to_empty_list():
+    """fabric defaults to an empty list when amd-smi fabric is unavailable."""
+    assert AmdSmiDataModel().fabric == []

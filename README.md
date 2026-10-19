@@ -28,6 +28,9 @@ system debug. For details on what data is collected and analyzed, see the [plugi
       - [Global args](#global-args)
       - [Plugin config: **'--plugin-configs' command**](#plugin-config---plugin-configs-command)
       - [Post-action plugins](#post-action-plugins)
+        - [Config structure](#config-structure)
+        - [Condition fields](#condition-fields)
+        - [Example: run OsPlugin if DmesgPlugin finds error-level events](#example-run-osplugin-if-dmesgplugin-finds-error-level-events)
       - [Reference config: **'gen-reference-config' command**](#reference-config-gen-reference-config-command)
 
 ## Installation
@@ -192,6 +195,8 @@ In-band (SSH) connection:
 }
 ```
 
+A sample is in `config/connection-config_inband.example.json`. Use `password` or `key_filename`.
+
 Redfish (BMC) connection for Redfish-only plugins:
 
 ```json
@@ -209,6 +214,51 @@ Redfish (BMC) connection for Redfish-only plugins:
 ```
 
 - `api_root` (optional): Redfish API path (e.g. `redfish/v1`). If omitted, the default `redfish/v1` is used. Override this when your BMC uses a different API version path.
+
+OOB SSH plugins use this same single-host `RedfishConnectionManager` block and open SSH to that BMC. A sample is in `config/connection-config_oob.example.json`.
+
+#### Redfish multi-target
+
+Redfish plugins can collect from multiple BMCs concurrently. In-band plugins and OOB SSH plugins stay single-host. If this config has no top-level `host`, OOB SSH plugins are skipped. Add a top-level `host` when those plugins should still run against one BMC.
+
+```json
+{
+    "RedfishConnectionManager": {
+        "targets": [
+            {
+                "target_key": "node-a",
+                "host": "bmc-node-a.example.com",
+                "username": "admin",
+                "password": "secret",
+                "use_https": true,
+                "verify_ssl": false,
+                "timeout_seconds": 30
+            },
+            {
+                "target_key": "node-b",
+                "host": "bmc-node-b.example.com",
+                "username": "admin",
+                "password": "secret",
+                "use_https": true,
+                "verify_ssl": false,
+                "timeout_seconds": 30
+            }
+        ],
+        "max_workers": 32
+    }
+}
+```
+
+Multi-target mode applies to Redfish plugins (`RedfishEndpointPlugin`, `RedfishOemDiagPlugin`, and other plugins based on `OOBandDataPlugin`). Targets are collected concurrently. Wall-clock time follows the slowest target.
+
+A target that fails to connect or collect does not fail the run when another target succeeds. That plugin result is a warning, and analysis still runs for the targets that returned data. The run fails when every target fails, or when analysis of collected data reports an error.
+
+- `targets`: list of per-target connection parameters. Each entry accepts the same fields as the single-target config plus an optional `target_key` (used as the result key; defaults to the host string).
+- `max_workers` (optional): maximum concurrent collection threads. Defaults to `min(len(targets), 32)` and is capped at 32.
+
+Per-target results are written to `<plugin>/<collector>/<target_key>/`. Single-target results stay in `<plugin>/<collector>/`. The same layout is used for the analyzer directory and for the AMC SSH-proxy plugin.
+
+A ready-to-edit sample is in `config/connection-config_redfish_multi_target.example.json`. Replace the example hosts and password, then pass it with `--connection-config`.
 
 **Notes:**
 - If using SSH keys, specify `key_filename` instead of `password`.
@@ -472,9 +522,11 @@ Use a plugin config that points at your LogService and lists the types to collec
 
 The RedfishEndpointPlugin collects Redfish URIs (GET responses) and optionally runs checks on the returned JSON. It requires a Redfish connection config (same as RedfishOemDiagPlugin).
 
+**Multi-target support:** `RedfishEndpointPlugin` collects from each BMC in the `targets` list at the same time. Use the [Redfish multi-target](#redfish-multi-target) connection config. The same `uris` and `checks` apply to every target. Per-target results are written to `redfish_endpoint_plugin/redfish_endpoint_collector/<target_key>/` under the run log directory. A BMC that cannot be reached is reported as a warning when another target succeeds.
+
 **How to run**
 
-1. Create a connection config (e.g. `connection-config.json`) with `RedfishConnectionManager` and your BMC host, credentials, and API root.
+1. Create a connection config (e.g. `connection-config.json`) with `RedfishConnectionManager` and your BMC host (single target) or `targets` list (multi-target).
 2. Create a plugin config with `uris` to collect and optional `checks` for analysis (see example below). For example save as `plugin_config_redfish_endpoint.json`.
 3. Run:
    ```sh

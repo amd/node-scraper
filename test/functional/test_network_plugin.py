@@ -158,6 +158,7 @@ def test_network_plugin_with_netprobe_wget(run_cli_command, tmp_path):
             "wget",
         ],
         check=False,
+        cwd=tmp_path,  # wget saves the fetched page (index.html, index.html.1, ...) into the cwd
     )
 
     assert result.returncode in [0, 1, 2]
