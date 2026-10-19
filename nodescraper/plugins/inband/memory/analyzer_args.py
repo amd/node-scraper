@@ -38,7 +38,7 @@ class MemoryAnalyzerArgs(AnalyzerArgs):
         ge=0,
         description=(
             "Minimum installed system memory in GiB. Compared to MemTotal. "
-            "Passes when reported memory is at least 98% of this value, because "
+            "Passes when reported memory is at least 98 percent of this value, because "
             "the OS reports slightly less than nominal DIMM capacity."
         ),
     )
