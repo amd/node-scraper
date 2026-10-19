@@ -38,6 +38,8 @@ class MemoryAnalyzer(DataAnalyzer[MemoryDataModel, MemoryAnalyzerArgs]):
     """Check memory usage is within the maximum allowed used memory"""
 
     DATA_MODEL = MemoryDataModel
+    # free(1) MemTotal is a bit under the nominal DIMM capacity.
+    _INSTALLED_MEMORY_TOLERANCE = 0.98
 
     def analyze_data(
         self, data: MemoryDataModel, args: Optional[MemoryAnalyzerArgs] = None
@@ -60,6 +62,29 @@ class MemoryAnalyzer(DataAnalyzer[MemoryDataModel, MemoryAnalyzerArgs]):
         available_memory = convert_to_bytes(data.mem_available or data.mem_free)
         total_memory = convert_to_bytes(data.mem_total)
         used_memory = total_memory - available_memory
+
+        if args.minimum_system_memory_gib is not None:
+            minimum_bytes = args.minimum_system_memory_gib * (1024**3)
+            required_bytes = minimum_bytes * self._INSTALLED_MEMORY_TOLERANCE
+            if total_memory < required_bytes:
+                total_gib = _bytes_to_gb(total_memory)
+                self.result.status = ExecutionStatus.ERROR
+                self.result.message = "Installed system memory is below the minimum"
+                self._log_event(
+                    category=EventCategory.OS,
+                    description=(
+                        f"Installed memory is {total_gib:.2f} GiB "
+                        f"(minimum {args.minimum_system_memory_gib:.2f} GiB)"
+                    ),
+                    priority=EventPriority.CRITICAL,
+                    data={
+                        "total_memory": total_memory,
+                        "total_memory_gib": total_gib,
+                        "minimum_system_memory_gib": args.minimum_system_memory_gib,
+                    },
+                    console_log=True,
+                )
+                return self.result
 
         available_percent = None
         if args.minimum_free_memory_percent is not None:

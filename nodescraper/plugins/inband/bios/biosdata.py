@@ -23,8 +23,12 @@
 # SOFTWARE.
 #
 ###############################################################################
+from typing import Optional
+
 from nodescraper.models import DataModel
 
 
 class BiosDataModel(DataModel):
     bios_version: str
+    server_vendor: Optional[str] = None
+    server_model: Optional[str] = None

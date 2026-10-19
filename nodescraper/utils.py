@@ -24,6 +24,7 @@
 #
 ###############################################################################
 import inspect
+import math
 import os
 import re
 import traceback
@@ -223,6 +224,39 @@ def convert_to_bytes(value: str, si=False) -> int:
             return int(float(value) * (exponent_base ** ((unit_index + 1) * exponent_power)))
     # If the unit is not found, it is bytes
     return int(value)
+
+
+_UNIT_BYTES = {
+    "B": 1,
+    "BYTE": 1,
+    "BYTES": 1,
+    "KB": 1024,
+    "KIB": 1024,
+    "MB": 1024**2,
+    "MIB": 1024**2,
+    "GB": 1024**3,
+    "GIB": 1024**3,
+    "TB": 1024**4,
+    "TIB": 1024**4,
+}
+
+
+def unit_size_to_bytes(value: Union[int, float, str], unit: str) -> Optional[float]:
+    """Convert a numeric size and a unit label to bytes.
+
+    KB, MB, GB, and TB use powers of 1024, the same scale as convert_to_bytes.
+    Unknown units and non-numeric values return None.
+    """
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(number):
+        return None
+    factor = _UNIT_BYTES.get((unit or "").strip().upper())
+    if factor is None:
+        return None
+    return number * factor
 
 
 def get_unique_filename(directory, filename) -> str:

@@ -54,6 +54,26 @@ def test_too_much_memory_usage(analyzer, model_obj):
     assert result.status == ExecutionStatus.ERROR
 
 
+def test_minimum_system_memory_passes_nominal_2tib(analyzer):
+    """2048 GiB nominal still passes when the OS reports slightly less."""
+    model = MemoryDataModel(mem_free="1900Gi", mem_total="2016Gi", mem_available="1900Gi")
+    result = analyzer.analyze_data(
+        model,
+        MemoryAnalyzerArgs(minimum_system_memory_gib=2048, ratio=0.9, memory_threshold="4Ti"),
+    )
+    assert result.status == ExecutionStatus.OK
+
+
+def test_minimum_system_memory_fails(analyzer):
+    model = MemoryDataModel(mem_free="100Gi", mem_total="1024Gi", mem_available="100Gi")
+    result = analyzer.analyze_data(
+        model,
+        MemoryAnalyzerArgs(minimum_system_memory_gib=2048),
+    )
+    assert result.status == ExecutionStatus.ERROR
+    assert "Installed system memory is below the minimum" in result.message
+
+
 def test_config_provided(analyzer, model_obj):
     args = MemoryAnalyzerArgs(ratio=0.66, memory_threshold="30Gi")
     result = analyzer.analyze_data(model_obj, args)

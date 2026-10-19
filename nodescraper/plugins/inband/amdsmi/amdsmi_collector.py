@@ -335,6 +335,28 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
         assert vu is not None
         return vu
 
+    def _static_vram_size(self, vram: dict) -> Optional[ValueUnit]:
+        """Read VRAM capacity from current or older amd-smi static JSON.
+
+        Current amd-smi reports ``size: {value, unit}``. Older output reports
+        ``vram_size_mb`` as a number of megabytes.
+        """
+        raw_size = vram.get("size")
+        if isinstance(raw_size, dict):
+            value = raw_size.get("value")
+            if value in (None, "", "N/A"):
+                return None
+            unit = str(raw_size.get("unit") or "B")
+            return self._valueunit(value, unit)
+
+        if vram.get("vram_size_mb") is not None:
+            try:
+                nbytes = int(vram["vram_size_mb"]) * 1024 * 1024
+            except (TypeError, ValueError):
+                return None
+            return self._valueunit(nbytes, "B")
+        return None
+
     def _normalize(self, val: object, default: str = "unknown", slot_type: bool = False) -> str:
         """Normalize strings
 
@@ -1052,17 +1074,10 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
             vram_type = str(vram.get("vram_type", "") or "unknown")
             vram_vendor = vram.get("vram_vendor")
             vram_bits = vram.get("vram_bit_width")
-            vram_size_b: Optional[int] = None
-            if vram.get("vram_size_mb") is not None:
-                try:
-                    vram_size_b = int(vram["vram_size_mb"]) * 1024 * 1024
-                except Exception:
-                    vram_size_b = None
-
             vram_model = StaticVram(
                 type=vram_type,
                 vendor=None if vram_vendor in (None, "", "N/A") else str(vram_vendor),
-                size=self._valueunit(vram_size_b, "B"),
+                size=self._static_vram_size(vram),
                 bit_width=self._valueunit(vram_bits, "bit"),
                 max_bandwidth=None,
             )

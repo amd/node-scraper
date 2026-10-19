@@ -115,6 +115,35 @@ def test_analyze_mismatched_cpu_count(device_enumeration_analyzer):
         assert event.category == EventCategory.PLATFORM.value
 
 
+def test_analyze_architecture_and_physical_cores(device_enumeration_analyzer):
+    data = DeviceEnumerationDataModel(
+        cpu_count=2, cpu_architecture="x86_64", cpu_cores=128, gpu_count=8, vf_count=0
+    )
+    args = DeviceEnumerationAnalyzerArgs(
+        cpu_architecture="x86_64",
+        min_cpu_cores=96,
+        gpu_count=8,
+    )
+
+    result = device_enumeration_analyzer.analyze_data(data=data, args=args)
+
+    assert result.status == ExecutionStatus.OK
+    assert "cpu_architecture" in result.message
+    assert "cpu_cores" in result.message
+    assert "gpu_count" in result.message
+    assert len(result.events) == 0
+
+
+def test_analyze_physical_cores_below_minimum(device_enumeration_analyzer):
+    data = DeviceEnumerationDataModel(cpu_count=2, cpu_architecture="x86_64", cpu_cores=64)
+    args = DeviceEnumerationAnalyzerArgs(cpu_architecture=["x86_64"], min_cpu_cores=96)
+
+    result = device_enumeration_analyzer.analyze_data(data=data, args=args)
+
+    assert result.status == ExecutionStatus.ERROR
+    assert any("cpu_cores" in event.description for event in result.events)
+
+
 def test_analyze_list_of_accepted_counts(device_enumeration_analyzer):
     """Test with a list of acceptable counts"""
 
