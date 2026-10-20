@@ -181,34 +181,25 @@ def test_plugin_config_with_multiple_configs(run_cli_command, plugin_config_file
 def test_plugin_config_with_nonexistent_file(run_cli_command, tmp_path):
     """Test that a nonexistent config file path fails gracefully."""
     nonexistent_path = str(tmp_path / "nonexistent_config.json")
-    result = run_cli_command(
-        ["--log-path", str(tmp_path / "logs"), f"--plugin-configs={nonexistent_path}"],
-        check=False,
-    )
+    result = run_cli_command([f"--plugin-configs={nonexistent_path}"], check=False)
 
     assert result.returncode != 0
     output = (result.stdout + result.stderr).lower()
     assert "error" in output or "no plugin config found" in output
 
 
-def test_plugin_config_with_invalid_builtin_name(run_cli_command, tmp_path):
+def test_plugin_config_with_invalid_builtin_name(run_cli_command):
     """Test that an invalid built-in config name fails gracefully."""
-    result = run_cli_command(
-        ["--log-path", str(tmp_path / "logs"), "--plugin-configs=NonExistentConfig"],
-        check=False,
-    )
+    result = run_cli_command(["--plugin-configs=NonExistentConfig"], check=False)
 
     assert result.returncode != 0
     output = (result.stdout + result.stderr).lower()
     assert "error" in output or "no plugin config found" in output
 
 
-def test_plugin_config_with_invalid_json(run_cli_command, invalid_plugin_config, tmp_path):
+def test_plugin_config_with_invalid_json(run_cli_command, invalid_plugin_config):
     """Test that an invalid JSON file fails gracefully."""
-    result = run_cli_command(
-        ["--log-path", str(tmp_path / "logs"), f"--plugin-configs={invalid_plugin_config}"],
-        check=False,
-    )
+    result = run_cli_command([f"--plugin-configs={invalid_plugin_config}"], check=False)
 
     assert result.returncode != 0
     output = (result.stdout + result.stderr).lower()

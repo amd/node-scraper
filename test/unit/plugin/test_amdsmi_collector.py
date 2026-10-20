@@ -1244,3 +1244,256 @@ def test_get_core_metric_command_failure(conn_mock, system_info, monkeypatch):
     c = make_cpu_core_collector(conn_mock, system_info, monkeypatch, core_payload=None)
 
     assert c.get_core_metric() == []
+
+
+# ---------------------------------------------------------------------------
+# CPU metric flags that require an explicit argument (not covered by
+# ``metric --cpu all``).
+# ---------------------------------------------------------------------------
+
+
+def make_cpu_arg_collector(
+    conn_mock, system_info, monkeypatch, responses: dict[str, Any]
+) -> tuple[AmdSmiCollector, list[str]]:
+    """Create a collector driven by an exact command -> JSON-payload map."""
+    calls: list[str] = []
+
+    def mock_run_sut_cmd(cmd: str) -> MagicMock:
+        if "which amd-smi" in cmd:
+            return make_cmd_result("/usr/bin/amd-smi")
+        assert cmd.startswith("amd-smi ") and cmd.endswith(" --json")
+        key = cmd[len("amd-smi ") : -len(" --json")]
+        calls.append(key)
+        if key not in responses:
+            return make_cmd_result("", "not captured in test", 1)
+        return make_cmd_result(make_json_response(responses[key]))
+
+    c = AmdSmiCollector(
+        system_info=system_info,
+        system_interaction_level=SystemInteractionLevel.PASSIVE,
+        connection=conn_mock,
+    )
+    monkeypatch.setattr(c, "_run_sut_cmd", mock_run_sut_cmd)
+    return c, calls
+
+
+def _dimm_payload(group_key: str, response: Any) -> dict:
+    """Build a ``{"cpu_data": [...]}`` payload for a DIMM-flag response group."""
+    return {"cpu_data": [{"cpu": 0, group_key: {"response": response}}]}
+
+
+def test_get_cpu_dimm_pow_consumption_stops_after_na_grace(conn_mock, system_info, monkeypatch):
+    """DIMM 0-1 populated, 2-3 N/A (real capture shape): collect the 2 real
+    entries and stop after CPU_SEQUENTIAL_NA_GRACE consecutive misses, never
+    probing address 4+."""
+    responses = {
+        "metric --cpu-dimm-pow-consumption 0": _dimm_payload(
+            "dimm_pow_consumption",
+            {
+                "dimm_power_consumed": "3688 mW",
+                "dimm_power_update_rate": "0 ms",
+                "dimm_dimm_addr": 0,
+            },
+        ),
+        "metric --cpu-dimm-pow-consumption 1": _dimm_payload(
+            "dimm_pow_consumption",
+            {
+                "dimm_power_consumed": "3562 mW",
+                "dimm_power_update_rate": "256 ms",
+                "dimm_dimm_addr": 0,
+            },
+        ),
+        "metric --cpu-dimm-pow-consumption 2": _dimm_payload("dimm_pow_consumption", "N/A"),
+        "metric --cpu-dimm-pow-consumption 3": _dimm_payload("dimm_pow_consumption", "N/A"),
+    }
+    c, calls = make_cpu_arg_collector(conn_mock, system_info, monkeypatch, responses)
+
+    entries = c.get_cpu_dimm_pow_consumption()
+
+    assert [e.dimm_addr for e in entries] == [0, 1]
+    assert entries[0].dimm_power_consumed.value == 3688
+    assert entries[0].dimm_power_consumed.unit == "mW"
+    assert entries[1].dimm_power_update_rate.value == 256
+    assert calls == [
+        "metric --cpu-dimm-pow-consumption 0",
+        "metric --cpu-dimm-pow-consumption 1",
+        "metric --cpu-dimm-pow-consumption 2",
+        "metric --cpu-dimm-pow-consumption 3",
+    ]
+
+
+def test_get_cpu_dimm_pow_consumption_command_failure_stops_immediately(
+    conn_mock, system_info, monkeypatch
+):
+    """A hard command failure at address 0 stops enumeration immediately."""
+    c, calls = make_cpu_arg_collector(conn_mock, system_info, monkeypatch, responses={})
+
+    assert c.get_cpu_dimm_pow_consumption() == []
+    assert calls == ["metric --cpu-dimm-pow-consumption 0"]
+
+
+def test_get_cpu_dimm_thermal_sensor_parses_spaced_unit_temperature(
+    conn_mock, system_info, monkeypatch
+):
+    """``"0.0 Degrees C"`` must parse into value=0.0/unit="Degrees C" (the
+    shared ValueUnit regex doesn't allow a space inside the unit, so this
+    field needs ``coerce_spaced_unit_value_unit_input``)."""
+    responses = {
+        "metric --cpu-dimm-thermal-sensor 0": _dimm_payload(
+            "dimm_thermal_sensor",
+            {
+                "dimm_thermal_sensor_value": 0,
+                "dimm_thermal_update_rate": "0 ms",
+                "dimm_thermal_dimm_addr": 0,
+                "dimm_thermal_temperature": "0.0 Degrees C",
+            },
+        ),
+        "metric --cpu-dimm-thermal-sensor 1": _dimm_payload("dimm_thermal_sensor", "N/A"),
+        "metric --cpu-dimm-thermal-sensor 2": _dimm_payload("dimm_thermal_sensor", "N/A"),
+    }
+    c, _ = make_cpu_arg_collector(conn_mock, system_info, monkeypatch, responses)
+
+    entries = c.get_cpu_dimm_thermal_sensor()
+
+    assert len(entries) == 1
+    assert entries[0].dimm_thermal_temperature.value == 0.0
+    assert entries[0].dimm_thermal_temperature.unit == "Degrees C"
+    assert entries[0].dimm_thermal_sensor_value == 0
+
+
+def test_get_cpu_dimm_temp_range_rate(conn_mock, system_info, monkeypatch):
+    """Plain-int fields (no units) parse directly; N/A collapses the group."""
+    responses = {
+        "metric --cpu-dimm-temp-range-rate 0": _dimm_payload(
+            "dimm_temp_range_rate", {"dimm_temperature_range": 0, "dimm_refresh_rate": 0}
+        ),
+        "metric --cpu-dimm-temp-range-rate 1": _dimm_payload("dimm_temp_range_rate", "N/A"),
+        "metric --cpu-dimm-temp-range-rate 2": _dimm_payload("dimm_temp_range_rate", "N/A"),
+    }
+    c, _ = make_cpu_arg_collector(conn_mock, system_info, monkeypatch, responses)
+
+    entries = c.get_cpu_dimm_temp_range_rate()
+
+    assert [e.dimm_addr for e in entries] == [0]
+    assert entries[0].dimm_temperature_range == 0
+    assert entries[0].dimm_refresh_rate == 0
+
+
+def test_get_cpu_lclk_dpm_level_stops_after_na_grace(conn_mock, system_info, monkeypatch):
+    """NBIO 0-3 populated, stop after 2 consecutive N/A."""
+    dpm_range = {"nbio_max_dpm_level": 1, "nbio_min_dpm_level": 0}
+    responses = {
+        f"metric --cpu-lclk-dpm-level {i}": {
+            "cpu_data": [{"cpu": 0, "socket_dpm": {"dpml_level_range": dpm_range}}]
+        }
+        for i in range(4)
+    }
+    responses["metric --cpu-lclk-dpm-level 4"] = {
+        "cpu_data": [{"cpu": 0, "socket_dpm": {"dpml_level_range": "N/A"}}]
+    }
+    responses["metric --cpu-lclk-dpm-level 5"] = {
+        "cpu_data": [{"cpu": 0, "socket_dpm": {"dpml_level_range": "N/A"}}]
+    }
+    c, calls = make_cpu_arg_collector(conn_mock, system_info, monkeypatch, responses)
+
+    entries = c.get_cpu_lclk_dpm_level()
+
+    assert [e.nbio_id for e in entries] == [0, 1, 2, 3]
+    assert entries[0].nbio_max_dpm_level == 1
+    assert entries[0].nbio_min_dpm_level == 0
+    assert calls == [f"metric --cpu-lclk-dpm-level {i}" for i in range(6)]
+
+
+def test_get_cpu_svi3_vr_controller_temp_probes_full_fixed_candidate_set(
+    conn_mock, system_info, monkeypatch
+):
+    """SVI3's candidate set (TYPE 0, TYPE 1 x rail 0-4) is small and fully
+    documented by amd-smi --help, so every combination is always probed and
+    kept, including all-N/A."""
+    na_group = {"RAIL_SELECTION": "N/A", "RAIL_INDEX": "N/A", "TEMPERATURE": "N/A"}
+    responses = {
+        "metric --cpu-svi3-vr-controller-temp 0": {
+            "cpu_data": [{"cpu": 0, "svi3_vr_controller_temp": na_group}]
+        },
+        **{
+            f"metric --cpu-svi3-vr-controller-temp 1 {rail}": {
+                "cpu_data": [{"cpu": 0, "svi3_vr_controller_temp": na_group}]
+            }
+            for rail in range(5)
+        },
+    }
+    c, calls = make_cpu_arg_collector(conn_mock, system_info, monkeypatch, responses)
+
+    entries = c.get_cpu_svi3_vr_controller_temp()
+
+    assert [(e.rail_type, e.rail_index) for e in entries] == [
+        (0, None),
+        (1, 0),
+        (1, 1),
+        (1, 2),
+        (1, 3),
+        (1, 4),
+    ]
+    assert all(e.temperature is None for e in entries)
+    assert calls == [
+        "metric --cpu-svi3-vr-controller-temp 0",
+        "metric --cpu-svi3-vr-controller-temp 1 0",
+        "metric --cpu-svi3-vr-controller-temp 1 1",
+        "metric --cpu-svi3-vr-controller-temp 1 2",
+        "metric --cpu-svi3-vr-controller-temp 1 3",
+        "metric --cpu-svi3-vr-controller-temp 1 4",
+    ]
+
+
+def test_get_cpu_xgmi_bandwidth_keeps_na_links_and_probes_every_bw(
+    conn_mock, system_info, monkeypatch
+):
+    """Every candidate link is kept (N/A included, no filtering) and
+    every XGMI_BW value is probed for every link (no shared-link-id
+    optimization across BW values)."""
+
+    def payload(band_width):
+        return {"cpu_data": [{"cpu": 0, "xgmi_bandwidth": {"band_width": band_width}}]}
+
+    real_links = {"G0": "37 Mbps", "G1": "37 Mbps", "G2": "92444 Mbps"}
+    responses = {}
+    for bw in (1, 2, 4):
+        for link_id in AmdSmiCollector.CPU_LINK_ID_CANDIDATES:
+            responses[f"metric --cpu-xgmi-bandwidth {bw} {link_id}"] = payload(
+                real_links.get(link_id, "N/A")
+            )
+    c, calls = make_cpu_arg_collector(conn_mock, system_info, monkeypatch, responses)
+
+    entries = c.get_cpu_xgmi_bandwidth()
+
+    assert len(entries) == 3 * len(AmdSmiCollector.CPU_LINK_ID_CANDIDATES)
+    assert len(calls) == len(entries)
+    by_bw_link = {(e.xgmi_bw, e.link_id): e.band_width for e in entries}
+    assert by_bw_link[(1, "G2")].value == 92444
+    assert by_bw_link[(1, "G2")].unit == "Mbps"
+    assert by_bw_link[(1, "P2")] is None
+    assert by_bw_link[(4, "G7")] is None
+
+
+def test_get_cpu_io_bandwidth_independent_from_xgmi_validity(conn_mock, system_info, monkeypatch):
+    """IO bandwidth's valid-link subset does not have to match xgmi-bandwidth's,
+    it must be probed and kept independently."""
+
+    def payload(band_width):
+        return {"cpu_data": [{"cpu": 0, "io_bandwidth": {"band_width": band_width}}]}
+
+    real_links = {"P2": "0 Mbps", "G0": "0 Mbps", "G1": "1 Mbps", "G2": "0 Mbps"}
+    responses = {
+        f"metric --cpu-io-bandwidth 1 {link_id}": payload(real_links.get(link_id, "N/A"))
+        for link_id in AmdSmiCollector.CPU_LINK_ID_CANDIDATES
+    }
+    c, calls = make_cpu_arg_collector(conn_mock, system_info, monkeypatch, responses)
+
+    entries = c.get_cpu_io_bandwidth()
+
+    assert len(entries) == len(AmdSmiCollector.CPU_LINK_ID_CANDIDATES)
+    assert len(calls) == len(entries)
+    by_link = {e.link_id: e.band_width for e in entries}
+    assert by_link["P2"].value == 0
+    assert by_link["G1"].value == 1
+    assert by_link["G3"] is None
