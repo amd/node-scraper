@@ -93,12 +93,9 @@ def test_run_all_plugins_together(run_cli_command, all_plugins, tmp_path):
     assert len(output) > 0
 
 
-def test_run_plugin_with_invalid_name(run_cli_command, tmp_path):
+def test_run_plugin_with_invalid_name(run_cli_command):
     """Test that running a non-existent plugin logs a warning and falls back to default config."""
-    result = run_cli_command(
-        ["--log-path", str(tmp_path / "logs"), "run-plugins", "NonExistentPlugin"],
-        check=False,
-    )
+    result = run_cli_command(["run-plugins", "NonExistentPlugin"], check=False)
 
     # Invalid plugin is ignored and default config runs instead
     # Exit code depends on whether default config plugins succeed
