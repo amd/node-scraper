@@ -23,10 +23,17 @@
 # SOFTWARE.
 #
 ###############################################################################
+from .redfish_clear_log import (
+    ClearLogEndpoint,
+    ClearLogResult,
+    clear_redfish_logs,
+    discover_clear_log_endpoints,
+)
 from .redfish_connection import (
     RedfishConnection,
     RedfishConnectionError,
     RedfishGetResult,
+    RedfishPostResult,
 )
 from .redfish_constants import (
     RF_MEMBERS,
@@ -54,9 +61,14 @@ from .ssh_proxy_manager import RedfishSshProxyConnectionManager
 from .ssh_proxy_params import RedfishSshProxyConnectionParams
 
 __all__ = [
+    "ClearLogEndpoint",
+    "ClearLogResult",
+    "clear_redfish_logs",
+    "discover_clear_log_endpoints",
     "RedfishConnection",
     "RedfishConnectionError",
     "RedfishGetResult",
+    "RedfishPostResult",
     "MultiTargetRedfishConnection",
     "RedfishConnectionManager",
     "collected_multi_target_data",

@@ -28,8 +28,18 @@ from typing import Optional
 
 from nodescraper.base import RedfishDataCollector
 from nodescraper.connection.redfish import collect_oem_diagnostic_data
+from nodescraper.connection.redfish.redfish_clear_log import (
+    ClearLogResult,
+    _parse_clear_endpoint,
+    clear_redfish_logs,
+)
 from nodescraper.connection.redfish.redfish_constants import RF_MEMBERS, RF_ODATA_ID
-from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
+from nodescraper.enums import (
+    EventCategory,
+    EventPriority,
+    ExecutionStatus,
+    SystemInteractionLevel,
+)
 from nodescraper.models import TaskResult
 from nodescraper.plugins.ooband.redfish_oem_diag.oem_diag_data import (
     OemDiagTypeResult,
@@ -100,6 +110,7 @@ class AmcRedfishDiagCollector(
             output_dir = None
 
         results: dict[str, OemDiagTypeResult] = {}
+        successful_log_services: list[str] = []
         for spec in jobs:
             key = _collection_key(spec)
             log_service = self._find_log_service(spec.root, args)
@@ -133,6 +144,8 @@ class AmcRedfishDiagCollector(
                 results[key] = OemDiagTypeResult(success=False, error=collect_err, metadata=None)
             else:
                 results[key] = OemDiagTypeResult(success=True, error=None, metadata=metadata)
+                if log_service not in successful_log_services:
+                    successful_log_services.append(log_service)
 
         success_count = sum(1 for r in results.values() if r.success)
         self.result.message = f"AMC diag: {success_count}/{len(results)} collections succeeded"
@@ -142,7 +155,69 @@ class AmcRedfishDiagCollector(
             self.result.status = ExecutionStatus.WARNING
         else:
             self.result.status = ExecutionStatus.ERROR
+
+        if (
+            args.clear_logs_after_collection
+            and successful_log_services
+            and self.system_interaction_level >= SystemInteractionLevel.INTERACTIVE
+        ):
+            self._clear_log_stores(successful_log_services)
+        elif args.clear_logs_after_collection and not successful_log_services:
+            self.logger.debug("Skipping log clear: no AMC diag collections succeeded")
+        elif args.clear_logs_after_collection:
+            self.logger.debug(
+                "Skipping log clear: system_interaction_level is %s (requires INTERACTIVE)",
+                self.system_interaction_level.name,
+            )
+
         return self.result, RedfishOemDiagDataModel(results=results)
+
+    def _clear_log_stores(self, log_service_paths: list[str]) -> None:
+        """Clear only the log services whose collection succeeded.
+
+        GETs each log service path, checks for a ClearLog action, and POSTs to it.
+        Failures downgrade the overall result to WARNING.
+
+        Args:
+            log_service_paths: Deduplicated Redfish paths for successfully collected
+                log services.
+        """
+        all_cleared: list[ClearLogResult] = []
+        all_failed: list[ClearLogResult] = []
+
+        for log_service_path in log_service_paths:
+            svc_res = self._run_redfish_get(log_service_path, log_artifact=False)
+            if not svc_res.success or not svc_res.data:
+                self.logger.debug(
+                    "Skipping log clear: could not GET log service %s", log_service_path
+                )
+                continue
+            endpoint = _parse_clear_endpoint(svc_res.data)
+            if endpoint is None:
+                self.logger.debug(
+                    "LogService %s does not advertise ClearLog action", log_service_path
+                )
+                continue
+            clear_results = clear_redfish_logs(self.connection, [endpoint], self.logger)
+            for r in clear_results:
+                if r.success:
+                    all_cleared.append(r)
+                else:
+                    all_failed.append(r)
+
+        if all_cleared:
+            self.result.message += f"; cleared {len(all_cleared)} log store(s)"
+        if all_failed:
+            descriptions = "; ".join(f"{r.path}: {r.error}" for r in all_failed)
+            self._log_event(
+                category=EventCategory.RUNTIME,
+                description=f"Failed to clear {len(all_failed)} log store(s): {descriptions}",
+                priority=EventPriority.WARNING,
+                console_log=True,
+            )
+            if self.result.status == ExecutionStatus.OK:
+                self.result.status = ExecutionStatus.WARNING
+            self.result.message += f"; {len(all_failed)} log store(s) failed to clear"
 
     def _member_paths(self, root: str, args: AmcRedfishDiagCollectorArgs) -> list[str]:
         """Resolve Systems or Managers member URIs to probe.

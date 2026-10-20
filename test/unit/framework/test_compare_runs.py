@@ -126,24 +126,30 @@ def test_run_compare_runs_no_data(caplog, tmp_path):
     (tmp_path / "run2").mkdir()
     logger = logging.getLogger()
     plugin_reg = PluginRegistry()
-    run_compare_runs(str(tmp_path / "run1"), str(tmp_path / "run2"), plugin_reg, logger)
+    run_compare_runs(
+        str(tmp_path / "run1"),
+        str(tmp_path / "run2"),
+        plugin_reg,
+        logger,
+        artifact_dir=str(tmp_path),
+    )
     assert "No plugin data found" in caplog.text
 
 
-def test_run_compare_runs_with_fixture_dirs(caplog, framework_fixtures_path):
+def test_run_compare_runs_with_fixture_dirs(caplog, framework_fixtures_path, tmp_path):
     """With two log dirs using fixture (same content), table is produced and no diffs."""
     caplog.set_level(logging.INFO)
     logger = logging.getLogger()
     plugin_reg = PluginRegistry()
     base = framework_fixtures_path / "log_dir"
-    run_compare_runs(str(base), str(base), plugin_reg, logger)
+    run_compare_runs(str(base), str(base), plugin_reg, logger, artifact_dir=str(tmp_path))
     assert "Loading run 1" in caplog.text
     assert "Loading run 2" in caplog.text
     assert "Plugin" in caplog.text
     assert "No differences" in caplog.text or "difference" in caplog.text.lower()
 
 
-def test_run_compare_runs_sysctl_fixture(caplog, framework_fixtures_path):
+def test_run_compare_runs_sysctl_fixture(caplog, framework_fixtures_path, tmp_path):
     """Compare runs using compare_runs_sysctl fixtures; run1 and run2 differ (SysctlPlugin)."""
     caplog.set_level(logging.INFO)
     logger = logging.getLogger()
@@ -151,7 +157,7 @@ def test_run_compare_runs_sysctl_fixture(caplog, framework_fixtures_path):
     run1 = base / "run1"
     run2 = base / "run2"
     plugin_reg = PluginRegistry()
-    run_compare_runs(str(run1), str(run2), plugin_reg, logger)
+    run_compare_runs(str(run1), str(run2), plugin_reg, logger, artifact_dir=str(tmp_path))
     assert "Loading run 1" in caplog.text
     assert "Loading run 2" in caplog.text
     assert "Sysctl" in caplog.text or "sysctl" in caplog.text
@@ -167,7 +173,7 @@ def test_run_compare_runs_one_run_missing_plugin(caplog, framework_fixtures_path
     run2 = tmp_path / "run2"
     run2.mkdir()
     # run2 has no collector dirs
-    run_compare_runs(str(run1), str(run2), plugin_reg, logger)
+    run_compare_runs(str(run1), str(run2), plugin_reg, logger, artifact_dir=str(tmp_path))
     assert "Loading run 1" in caplog.text
     assert "Loading run 2" in caplog.text
     assert "not found in run 2" in caplog.text or "NOT_RAN" in caplog.text

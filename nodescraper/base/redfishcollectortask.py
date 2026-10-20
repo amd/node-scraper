@@ -35,6 +35,7 @@ from nodescraper.connection.redfish import (
     RedfishConnection,
     RedfishGetResult,
 )
+from nodescraper.connection.redfish.redfish_connection import RedfishPostResult
 from nodescraper.constants import DEFAULT_EVENT_REPORTER
 from nodescraper.enums import EventPriority, ExecutionStatus
 from nodescraper.generictypes import TCollectArg, TDataModel
@@ -323,3 +324,53 @@ class RedfishDataCollector(
             res.log_html = effective_html_view
             self.result.artifacts.append(res)
         return res
+
+    def _run_redfish_post(
+        self,
+        path: str,
+        payload: Optional[dict] = None,
+        log_artifact: bool = True,
+    ) -> RedfishPostResult:
+        """Run a Redfish POST request and return the result.
+
+        Args:
+            path: Redfish URI path.
+            payload: JSON payload body. Defaults to an empty dict.
+            log_artifact: If True, append the result to self.result.artifacts.
+
+        Returns:
+            RedfishPostResult: path, success, data (or error), status_code.
+        """
+        path_norm = path.strip()
+        if not path_norm.startswith("/"):
+            path_norm = "/" + path_norm
+        try:
+            resp = self.connection.post(path_norm, json=payload or {})
+            success = resp.ok
+            status_code = resp.status_code
+            try:
+                data = resp.json() if resp.content else None
+                if not isinstance(data, dict):
+                    data = None
+            except Exception:
+                data = None
+            error = (
+                None if success else f"POST {path_norm} failed: {resp.status_code} {resp.reason}"
+            )
+            result = RedfishPostResult(
+                path=path_norm,
+                success=success,
+                data=data,
+                error=error,
+                status_code=status_code,
+            )
+        except Exception as exc:
+            result = RedfishPostResult(
+                path=path_norm,
+                success=False,
+                error=str(exc),
+                status_code=None,
+            )
+        if log_artifact:
+            self.result.artifacts.append(result)
+        return result

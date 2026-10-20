@@ -496,3 +496,140 @@ def test_collect_data_concurrent_two_uris(redfish_endpoint_collector, redfish_co
     assert "/redfish/v1" in data.responses or "redfish/v1" in data.responses
     assert any("Systems" in k for k in data.responses)
     assert redfish_conn_mock.copy.called
+
+
+@MagicMock
+def _ok_post_resp():
+    resp = MagicMock()
+    resp.ok = True
+    resp.status_code = 200
+    resp.content = b"{}"
+    resp.json.return_value = {}
+    return resp
+
+
+def test_clear_log_uris_posted_after_successful_collection(
+    redfish_endpoint_collector, redfish_conn_mock
+):
+    redfish_conn_mock.run_get.return_value = RedfishGetResult(
+        path="/redfish/v1", success=True, data={"Name": "Root"}, status_code=200
+    )
+    resp = MagicMock()
+    resp.ok = True
+    resp.status_code = 200
+    resp.content = b"{}"
+    resp.reason = "OK"
+    redfish_conn_mock.post.return_value = resp
+
+    result, data = redfish_endpoint_collector.collect_data(
+        args=RedfishEndpointCollectorArgs(
+            uris=["/redfish/v1"],
+            clear_log_uris=[
+                "/redfish/v1/Systems/UBB/LogServices/DiagLogs/Actions/LogService.ClearLog"
+            ],
+        )
+    )
+    assert result.status == ExecutionStatus.OK
+    redfish_conn_mock.post.assert_called_once_with(
+        "/redfish/v1/Systems/UBB/LogServices/DiagLogs/Actions/LogService.ClearLog",
+        json={},
+    )
+
+
+def test_clear_log_uris_failure_downgrades_to_warning(
+    redfish_endpoint_collector, redfish_conn_mock
+):
+    from nodescraper.enums import EventPriority
+
+    redfish_conn_mock.run_get.return_value = RedfishGetResult(
+        path="/redfish/v1", success=True, data={"Name": "Root"}, status_code=200
+    )
+    resp = MagicMock()
+    resp.ok = False
+    resp.status_code = 500
+    resp.reason = "Internal Server Error"
+    resp.content = b""
+    redfish_conn_mock.post.return_value = resp
+
+    result, data = redfish_endpoint_collector.collect_data(
+        args=RedfishEndpointCollectorArgs(
+            uris=["/redfish/v1"],
+            clear_log_uris=["/some/ClearLog"],
+        )
+    )
+    assert result.status == ExecutionStatus.WARNING
+    assert "log store(s) failed to clear" in result.message
+    warning_events = [e for e in result.events if e.priority == EventPriority.WARNING]
+    assert any("Failed to clear" in e.description for e in warning_events)
+
+
+def test_clear_log_uris_not_posted_when_passive(system_info, redfish_conn_mock):
+    from nodescraper.enums import SystemInteractionLevel
+
+    redfish_conn_mock.run_get.return_value = RedfishGetResult(
+        path="/redfish/v1", success=True, data={"Name": "Root"}, status_code=200
+    )
+    from nodescraper.plugins.ooband.redfish_endpoint import RedfishEndpointCollector
+
+    collector = RedfishEndpointCollector(
+        system_info=system_info,
+        connection=redfish_conn_mock,
+        system_interaction_level=SystemInteractionLevel.PASSIVE,
+    )
+    result, data = collector.collect_data(
+        args=RedfishEndpointCollectorArgs(
+            uris=["/redfish/v1"],
+            clear_log_uris=["/some/ClearLog"],
+        )
+    )
+    assert result.status == ExecutionStatus.OK
+    redfish_conn_mock.post.assert_not_called()
+
+
+def test_clear_log_uris_empty_list_no_post(redfish_endpoint_collector, redfish_conn_mock):
+    redfish_conn_mock.run_get.return_value = RedfishGetResult(
+        path="/redfish/v1", success=True, data={"Name": "Root"}, status_code=200
+    )
+    result, data = redfish_endpoint_collector.collect_data(
+        args=RedfishEndpointCollectorArgs(uris=["/redfish/v1"], clear_log_uris=[])
+    )
+    assert result.status == ExecutionStatus.OK
+    redfish_conn_mock.post.assert_not_called()
+
+
+def test_clear_log_uris_not_posted_when_collection_fails(
+    redfish_endpoint_collector, redfish_conn_mock
+):
+    redfish_conn_mock.run_get.return_value = RedfishGetResult(
+        path="/redfish/v1", success=False, error="Timeout", status_code=None
+    )
+    result, data = redfish_endpoint_collector.collect_data(
+        args=RedfishEndpointCollectorArgs(
+            uris=["/redfish/v1"],
+            clear_log_uris=["/some/ClearLog"],
+        )
+    )
+    assert result.status == ExecutionStatus.ERROR
+    redfish_conn_mock.post.assert_not_called()
+
+
+def test_clear_log_uris_multiple_uris_all_posted(redfish_endpoint_collector, redfish_conn_mock):
+    redfish_conn_mock.run_get.return_value = RedfishGetResult(
+        path="/redfish/v1", success=True, data={"Name": "Root"}, status_code=200
+    )
+    resp = MagicMock()
+    resp.ok = True
+    resp.status_code = 200
+    resp.content = b"{}"
+    resp.reason = "OK"
+    redfish_conn_mock.post.return_value = resp
+
+    clear_uris = ["/clear/a", "/clear/b"]
+    result, data = redfish_endpoint_collector.collect_data(
+        args=RedfishEndpointCollectorArgs(uris=["/redfish/v1"], clear_log_uris=clear_uris)
+    )
+    assert result.status == ExecutionStatus.OK
+    assert redfish_conn_mock.post.call_count == 2
+    posted_paths = {call.args[0] for call in redfish_conn_mock.post.call_args_list}
+    assert "/clear/a" in posted_paths
+    assert "/clear/b" in posted_paths
