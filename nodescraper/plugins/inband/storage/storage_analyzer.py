@@ -40,6 +40,19 @@ class StorageAnalyzer(DataAnalyzer[StorageDataModel, StorageAnalyzerArgs]):
 
     DATA_MODEL = StorageDataModel
 
+    LOOP_DEVICE_REGEX = re.compile(r"^/dev/loop\d+$")
+
+    def _is_loop_device(self, device_name: str) -> bool:
+        """Check if the device name is a loop device (e.g. /dev/loop0)
+
+        Args:
+            device_name (str): device name to check
+
+        Returns:
+            bool: True if the device name is a /dev/loopN device, False otherwise
+        """
+        return bool(self.LOOP_DEVICE_REGEX.match(device_name))
+
     def _matches_device_filter(
         self, device_name: str, exp_devices: list[str], regex_match: bool
     ) -> bool:
@@ -104,8 +117,12 @@ class StorageAnalyzer(DataAnalyzer[StorageDataModel, StorageAnalyzerArgs]):
                     device_name, args.check_devices, args.regex_match
                 ):
                     continue
-            elif args.ignore_devices:
-                if self._matches_device_filter(device_name, args.ignore_devices, args.regex_match):
+            else:
+                if args.skip_loop_devices and self._is_loop_device(device_name):
+                    continue
+                if args.ignore_devices and self._matches_device_filter(
+                    device_name, args.ignore_devices, args.regex_match
+                ):
                     continue
 
             condition = False

@@ -25,5 +25,6 @@
 ###############################################################################
 from .scale_out_arista import ScaleOutAristaPlugin
 from .scale_out_dell import ScaleOutDellPlugin
+from .scale_up_sonic import ScaleUpSonicPlugin
 
-__all__ = ["ScaleOutAristaPlugin", "ScaleOutDellPlugin"]
+__all__ = ["ScaleOutAristaPlugin", "ScaleOutDellPlugin", "ScaleUpSonicPlugin"]
