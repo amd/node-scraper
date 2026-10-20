@@ -32,6 +32,7 @@ from typing import Any, Dict, List, Optional, Union
 from pydantic import BaseModel, ValidationError
 
 from nodescraper.base.inbandcollectortask import InBandDataCollector
+from nodescraper.connection.inband import TextFileArtifact
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus, OSFamily
 from nodescraper.models import TaskResult
 from nodescraper.models.datamodel import FileModel
@@ -478,8 +479,40 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
         built = self._build_amdsmi_sub_data(Fabric, fabric_entries)
         return built if isinstance(built, list) else ([built] if built else [])
 
+    def collect_fabric_telemetry(self) -> None:
+        """Collect full ``amd-smi fabric`` output as a log file artifact.
+
+        ``fabric_telemetry`` is only populated when amd-smi runs as root, and the payload is
+        too large for the data model, so it is saved as a standalone log file instead.
+        """
+        cmd_ret = self._run_sut_cmd(
+            f"{self.AMD_SMI_EXE} {self.CMD_FABRIC}",
+            sudo=True,
+            log_artifact=False,
+            html_view=False,
+        )
+        if cmd_ret.exit_code != 0 or not cmd_ret.stdout:
+            self._log_event(
+                category=EventCategory.APPLICATION,
+                description="Error collecting amd-smi fabric telemetry",
+                data={
+                    "command": cmd_ret.command,
+                    "exit_code": cmd_ret.exit_code,
+                    "stderr": cmd_ret.stderr,
+                },
+                priority=EventPriority.WARNING,
+                console_log=True,
+            )
+            return
+
+        self.result.artifacts.append(
+            TextFileArtifact(filename="amd-smi_fabric.log", contents=cmd_ret.stdout)
+        )
+
     def _get_amdsmi_data(
-        self, args: Optional[AmdSmiCollectorArgs] = None
+        self,
+        args: Optional[AmdSmiCollectorArgs] = None,
+        version: Optional[AmdSmiVersion] = None,
     ) -> Optional[AmdSmiDataModel]:
         """Fill in information for AmdSmi data model
 
@@ -487,7 +520,8 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
             Optional[AmdSmiDataModel]: instance of the AmdSmi data model
         """
         try:
-            version = self._get_amdsmi_version()
+            if version is None:
+                version = self._get_amdsmi_version()
             processes = self.get_process()
             partition = self.get_partition()
             firmware = self.get_firmware()
@@ -498,6 +532,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
             bad_pages = self.get_bad_pages()
             xgmi_metric, xgmi_link = self.get_xgmi_data()
             fabric = self.get_fabric()
+            self.collect_fabric_telemetry()
             cper_data, cper_afids = self.get_cper_data()
         except Exception as e:
             self._log_event(
@@ -1582,7 +1617,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
                 self.logger.info("amd-smi version: %s", version.version)
                 self.logger.info("ROCm version: %s", version.rocm_version)
 
-            amd_smi_data = self._get_amdsmi_data(args)
+            amd_smi_data = self._get_amdsmi_data(args, version)
 
             if amd_smi_data is None:
                 return self.result, None
