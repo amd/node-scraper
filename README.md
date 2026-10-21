@@ -100,16 +100,19 @@ options are available:
 
 <!-- node-scraper -h start -->
 ```sh
-usage: cli.py [-h] [--version] [--sys-name STRING]
-              [--sys-location {LOCAL,REMOTE}]
-              [--sys-interaction-level {PASSIVE,INTERACTIVE,DISRUPTIVE}]
-              [--sys-sku STRING] [--sys-platform STRING]
-              [--plugin-configs LIST] [--system-config STRING]
-              [--connection-config STRING] [--log-path STRING]
-              [--log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}]
-              [--no-console-log] [--gen-reference-config] [--skip-sudo]
-              {summary,run-plugins,describe,gen-plugin-config,compare-runs,show-redfish-oem-allowable}
-              ...
+usage: python -m nodescraper.cli.cli [-h] [--version] [--sys-name STRING]
+                                     [--sys-location {LOCAL,REMOTE}]
+                                     [--sys-interaction-level {PASSIVE,INTERACTIVE,DISRUPTIVE}]
+                                     [--sys-sku STRING]
+                                     [--sys-platform STRING]
+                                     [--plugin-configs LIST]
+                                     [--system-config STRING]
+                                     [--connection-config STRING]
+                                     [--log-path STRING]
+                                     [--log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}]
+                                     [--no-console-log]
+                                     [--gen-reference-config] [--skip-sudo]
+                                     {summary,run-plugins,describe,gen-plugin-config,compare-runs,show-redfish-oem-allowable} ...
 
 node scraper CLI
 
