@@ -25,7 +25,7 @@
 ###############################################################################
 import re
 from enum import Enum
-from typing import Any, ClassVar, Mapping, Optional, Union
+from typing import Any, ClassVar, Literal, Mapping, Optional, Union
 
 from pydantic import (
     AliasChoices,
@@ -40,11 +40,13 @@ from pydantic import (
 from nodescraper.models.datamodel import DataModel, FileModel
 from nodescraper.utils import find_annotation_in_container
 
+NA_STR = "N/A"
+NA_LITERAL = Literal["N/A"]
 _NUM_UNIT_RE = re.compile(r"^\s*([-+]?\d+(?:\.\d+)?)(?:\s*([A-Za-z%/][A-Za-z0-9%/._-]*))?\s*$")
 
 
 def _value_unit_is_na(x: Any) -> bool:
-    return x is None or (isinstance(x, str) and x.strip().upper() in {"N/A", "NA", ""})
+    return x is None or (isinstance(x, str) and x.strip().upper() in {NA_STR, "NA", ""})
 
 
 def _coerce_value_unit_raw(v: Any) -> Any:
@@ -81,7 +83,7 @@ def _coerce_value_unit_raw(v: Any) -> Any:
 
 
 def na_to_none(values: Union[int, str]):
-    if values == "N/A":
+    if values == NA_STR:
         return None
     return values
 
@@ -89,7 +91,7 @@ def na_to_none(values: Union[int, str]):
 def na_to_none_list(values: list[Union[int, str, None]]) -> list[Union[int, str, None]]:
     ret_list: list[Union[int, str, None]] = values.copy()
     for i in range(len(ret_list)):
-        if ret_list[i] == "N/A":
+        if ret_list[i] == NA_STR:
             ret_list[i] = None
     return ret_list
 
@@ -99,14 +101,14 @@ def na_to_none_dict(values: object) -> Optional[dict[str, Any]]:
     Accepts None; returns None for 'N/A'/'NA'/'' or non-mapping inputs."""
     if values is None:
         return None
-    if isinstance(values, str) and values.strip().upper() in {"N/A", "NA", ""}:
+    if isinstance(values, str) and values.strip().upper() in {NA_STR, "NA", ""}:
         return None
     if not isinstance(values, Mapping):
         return None
 
     out: dict[str, Any] = {}
     for k, v in values.items():
-        if isinstance(v, str) and v.strip().upper() in {"N/A", "NA", ""}:
+        if isinstance(v, str) and v.strip().upper() in {NA_STR, "NA", ""}:
             out[k] = None
         else:
             out[k] = v
@@ -183,6 +185,29 @@ def coerce_value_unit_input(v: Any) -> Any:
     return _coerce_value_unit_raw(v)
 
 
+_SPACED_UNIT_RE = re.compile(r"^\s*([-+]?\d+(?:\.\d+)?)\s+(.+?)\s*$")
+
+
+def coerce_spaced_unit_value_unit_input(v: Any) -> Any:
+    """Similar to ``coerce_value_unit_input``, but for units containing a space
+    (e.g. amd-smi's ``"0.0 Degrees C"``).
+
+    ``_NUM_UNIT_RE`` disallows whitespace inside the unit portion
+    so a multi-word unit falls through to being stored verbatim as
+    ``value``.
+    """
+    if v is None:
+        return None
+    if isinstance(v, ValueUnit):
+        return v
+    if isinstance(v, str) and not _value_unit_is_na(v):
+        m = _SPACED_UNIT_RE.match(v.strip())
+        if m:
+            num, unit = m.groups()
+            return {"value": float(num) if "." in num else int(num), "unit": unit}
+    return coerce_value_unit_input(v)
+
+
 # Process
 class ProcessMemoryUsage(BaseModel):
     gtt_mem: Optional[ValueUnit]
@@ -216,7 +241,7 @@ class EccState(Enum):
     SING_C = "SING_C"
     MULT_UC = "MULT_UC"
     POISON = "POISON"
-    NA = "N/A"
+    NA = NA_STR
 
 
 class ProcessListItem(BaseModel):
@@ -418,13 +443,13 @@ def _normalize_static_ppt_block(val: object) -> object:
     """Drop N/A-only ``ppt0``/``ppt1`` blocks; pass through already-parsed models."""
     if val is None:
         return None
-    if isinstance(val, str) and val.strip().upper() in {"N/A", "NA", ""}:
+    if isinstance(val, str) and val.strip().upper() in {NA_STR, "NA", ""}:
         return None
     if not isinstance(val, dict):
         return val
     out: dict[str, Any] = {}
     for key, raw in val.items():
-        if isinstance(raw, str) and raw.strip().upper() in {"N/A", "NA", ""}:
+        if isinstance(raw, str) and raw.strip().upper() in {NA_STR, "NA", ""}:
             continue
         if raw is not None:
             out[key] = raw
@@ -498,8 +523,12 @@ class StaticXgmiPlpd(BaseModel):
 
 
 class StaticNuma(BaseModel):
-    node: int
+
+    model_config = ConfigDict(extra="allow")
+
+    node: Optional[int]
     affinity: Union[int, str]  # can be N/A
+    na_validator = field_validator("node", mode="before")(na_to_none)
 
 
 class StaticVram(AmdSmiBaseModel):
@@ -1262,7 +1291,7 @@ class AmdSmiMetric(BaseModel):
     def validate_ecc_blocks(cls, value: Union[dict[str, EccData], str]) -> dict[str, EccData]:
         """Validate the ecc_blocks field."""
         if isinstance(value, str):
-            # If it's a string, we assume it's "N/A" and return an empty dict
+            # If it's a string, we assume it's NA_STR and return an empty dict
             return {}
         return value
 
@@ -1270,7 +1299,7 @@ class AmdSmiMetric(BaseModel):
     @classmethod
     def validate_energy(cls, value: Optional[Any]) -> Optional[MetricEnergy]:
         """Validate the energy field."""
-        if value == "N/A" or value is None:
+        if value == NA_STR or value is None:
             return None
         return value
 
@@ -1283,6 +1312,7 @@ class LinkStatusTable(Enum):
     DOWN = "D"
     DISABLED = "X"
     SELF = "SELF"
+    NA = NA_STR
 
 
 class BiDirectionalTable(Enum):
@@ -1744,6 +1774,123 @@ class CpuMetric(BaseModel):
     )(coerce_value_unit_input)
 
 
+class CpuDimmPowConsumption(BaseModel):
+    """Per-DIMM data from ``amd-smi metric --cpu-dimm-pow-consumption DIMM_ADDR --json``.
+
+    ``dimm_addr`` is the address the collector queried with, not the (unreliable) echoed value.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    cpu: int
+    dimm_addr: int
+    dimm_power_consumed: Optional[ValueUnit] = None
+    dimm_power_update_rate: Optional[ValueUnit] = None
+
+    _value_unit = field_validator("dimm_power_consumed", "dimm_power_update_rate", mode="before")(
+        coerce_value_unit_input
+    )
+
+
+class CpuDimmThermalSensor(BaseModel):
+    """Per-DIMM data from ``amd-smi metric --cpu-dimm-thermal-sensor DIMM_ADDR --json``."""
+
+    model_config = ConfigDict(extra="allow")
+
+    cpu: int
+    dimm_addr: int
+    dimm_thermal_sensor_value: Optional[int] = None
+    dimm_thermal_update_rate: Optional[ValueUnit] = None
+    dimm_thermal_temperature: Optional[ValueUnit] = None
+
+    na_validator = field_validator("dimm_thermal_sensor_value", mode="before")(na_to_none)
+    _value_unit = field_validator("dimm_thermal_update_rate", mode="before")(
+        coerce_value_unit_input
+    )
+    _temperature_value_unit = field_validator("dimm_thermal_temperature", mode="before")(
+        coerce_spaced_unit_value_unit_input
+    )
+
+
+class CpuDimmTempRangeRate(BaseModel):
+    """Per-DIMM data from ``amd-smi metric --cpu-dimm-temp-range-rate DIMM_ADDR --json``."""
+
+    model_config = ConfigDict(extra="allow")
+
+    cpu: int
+    dimm_addr: int
+    dimm_temperature_range: Optional[int] = None
+    dimm_refresh_rate: Optional[int] = None
+
+    na_validator = field_validator("dimm_temperature_range", "dimm_refresh_rate", mode="before")(
+        na_to_none
+    )
+
+
+class CpuSvi3VrControllerTemp(BaseModel):
+    """Per-rail data from ``amd-smi metric --cpu-svi3-vr-controller-temp TYPE [RAIL_INDEX] --json``.
+
+    ``rail_type``/``rail_index`` are the arguments the collector queried with
+    (0=HottestRail/1=IndividualRail; rail 0-4 maps to VDDCR_CPU0, VDDCR_CPU1,
+    VDDCR_SOC, VDDIO, VDDIO_MEM_S3).
+    """
+
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
+    cpu: int
+    rail_type: int
+    rail_index: Optional[int] = None
+    rail_selection: Optional[str] = Field(default=None, alias="RAIL_SELECTION")
+    reported_rail_index: Optional[int] = Field(default=None, alias="RAIL_INDEX")
+    temperature: Optional[ValueUnit] = Field(default=None, alias="TEMPERATURE")
+
+    na_validator = field_validator("rail_selection", "reported_rail_index", mode="before")(
+        na_to_none
+    )
+    _value_unit = field_validator("temperature", mode="before")(coerce_value_unit_input)
+
+
+class CpuXgmiBandwidth(BaseModel):
+    """Per-link data from ``amd-smi metric --cpu-xgmi-bandwidth XGMI_BW LINKID_NAME --json``."""
+
+    model_config = ConfigDict(extra="allow")
+
+    cpu: int
+    xgmi_bw: int
+    link_id: str
+    band_width: Optional[ValueUnit] = None
+
+    _value_unit = field_validator("band_width", mode="before")(coerce_value_unit_input)
+
+
+class CpuIoBandwidth(BaseModel):
+    """Per-link data from ``amd-smi metric --cpu-io-bandwidth IO_BW LINKID_NAME --json``."""
+
+    model_config = ConfigDict(extra="allow")
+
+    cpu: int
+    io_bw: int
+    link_id: str
+    band_width: Optional[ValueUnit] = None
+
+    _value_unit = field_validator("band_width", mode="before")(coerce_value_unit_input)
+
+
+class CpuLclkDpmLevel(BaseModel):
+    """Per-NBIO data from ``amd-smi metric --cpu-lclk-dpm-level NBIOID --json``."""
+
+    model_config = ConfigDict(extra="allow")
+
+    cpu: int
+    nbio_id: int
+    nbio_min_dpm_level: Optional[int] = None
+    nbio_max_dpm_level: Optional[int] = None
+
+    na_validator = field_validator("nbio_min_dpm_level", "nbio_max_dpm_level", mode="before")(
+        na_to_none
+    )
+
+
 class AmdSmiAnalysisRef(BaseModel):
     """Collector-filled summary for reference config"""
 
@@ -1793,6 +1940,15 @@ class AmdSmiDataModel(DataModel):
     node: Optional[list[NodeInfo]] = Field(default_factory=list)
     cpu_metric: Optional[list[CpuMetric]] = Field(default_factory=list)
     core_metric: Optional[list[CoreMetric]] = Field(default_factory=list)
+    cpu_dimm_pow_consumption: Optional[list[CpuDimmPowConsumption]] = Field(default_factory=list)
+    cpu_dimm_thermal_sensor: Optional[list[CpuDimmThermalSensor]] = Field(default_factory=list)
+    cpu_dimm_temp_range_rate: Optional[list[CpuDimmTempRangeRate]] = Field(default_factory=list)
+    cpu_svi3_vr_controller_temp: Optional[list[CpuSvi3VrControllerTemp]] = Field(
+        default_factory=list
+    )
+    cpu_xgmi_bandwidth: Optional[list[CpuXgmiBandwidth]] = Field(default_factory=list)
+    cpu_io_bandwidth: Optional[list[CpuIoBandwidth]] = Field(default_factory=list)
+    cpu_lclk_dpm_level: Optional[list[CpuLclkDpmLevel]] = Field(default_factory=list)
     cper_data: Optional[list[FileModel]] = Field(default_factory=list)
     cper_afids: dict[str, int] = Field(default_factory=dict)
 

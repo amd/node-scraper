@@ -35,7 +35,17 @@ from nodescraper.connection.redfish import (
     RedfishConnection,
     RedfishGetResult,
 )
-from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
+from nodescraper.connection.redfish.redfish_clear_log import (
+    ClearLogEndpoint,
+    ClearLogResult,
+    clear_redfish_logs,
+)
+from nodescraper.enums import (
+    EventCategory,
+    EventPriority,
+    ExecutionStatus,
+    SystemInteractionLevel,
+)
 from nodescraper.models import TaskResult
 
 from .collector_args import RedfishEndpointCollectorArgs
@@ -193,6 +203,7 @@ class RedfishEndpointCollector(
             data = RedfishEndpointDataModel(responses=responses)
             self.result.message = f"Collected {len(responses)} Redfish endpoint(s) from tree"
             self.result.status = ExecutionStatus.OK
+            self._apply_clear_log_uris(args)
             return self.result, data
 
         # 2) URI list: when discover_tree is false/absent and uris are provided
@@ -279,4 +290,46 @@ class RedfishEndpointCollector(
         data = RedfishEndpointDataModel(responses=responses)
         self.result.message = f"Collected {len(responses)} Redfish endpoint(s)"
         self.result.status = ExecutionStatus.OK
+        self._apply_clear_log_uris(args)
         return self.result, data
+
+    def _apply_clear_log_uris(self, args: Optional[RedfishEndpointCollectorArgs]) -> None:
+        """POST {} to each URI in args.clear_log_uris (LogService.ClearLog endpoints).
+
+        Skips when system_interaction_level < INTERACTIVE. Failures downgrade
+        the overall result to WARNING.
+
+        Args:
+            args: Collector args carrying the clear_log_uris list.
+        """
+        if args is None:
+            return
+        uris = [u.strip() for u in (args.clear_log_uris or []) if u and u.strip()]
+        if not uris:
+            return
+        if self.system_interaction_level < SystemInteractionLevel.INTERACTIVE:
+            self.logger.debug(
+                "Skipping log clear: system_interaction_level is %s (requires INTERACTIVE)",
+                self.system_interaction_level.name,
+            )
+            return
+
+        endpoints = [ClearLogEndpoint(path=uri) for uri in uris]
+        clear_results: list[ClearLogResult] = clear_redfish_logs(
+            self.connection, endpoints, self.logger
+        )
+        cleared = [r for r in clear_results if r.success]
+        failed = [r for r in clear_results if not r.success]
+        if cleared:
+            self.result.message += f"; cleared {len(cleared)} log store(s)"
+        if failed:
+            descriptions = "; ".join(f"{r.path}: {r.error}" for r in failed)
+            self._log_event(
+                category=EventCategory.RUNTIME,
+                description=f"Failed to clear {len(failed)} log store(s): {descriptions}",
+                priority=EventPriority.WARNING,
+                console_log=True,
+            )
+            if self.result.status == ExecutionStatus.OK:
+                self.result.status = ExecutionStatus.WARNING
+            self.result.message += f"; {len(failed)} log store(s) failed to clear"

@@ -62,8 +62,42 @@ def multiple_dev():
 
 
 @pytest.fixture
+def loop_dev_model():
+    return StorageDataModel(
+        storage_data={
+            "/dev/nvme0n1p2": DeviceStorageData(
+                total=943441641472,
+                free=869796294656,
+                used=25645850624,
+                percent=3,
+            ),
+            "/dev/loop1": DeviceStorageData(
+                total=1966080,
+                free=0,
+                used=1966080,
+                percent=100.0,
+            ),
+            "/dev/loop2": DeviceStorageData(
+                total=52559872,
+                free=0,
+                used=52559872,
+                percent=100.0,
+            ),
+        }
+    )
+
+
+@pytest.fixture
 def analyzer(system_info):
     return StorageAnalyzer(system_info=system_info)
+
+
+def _critical_devices(result):
+    return sorted(
+        e.data["offending_device"]["device"]
+        for e in result.events
+        if e.priority == EventPriority.CRITICAL
+    )
 
 
 def test_filter_exact_match(analyzer):
@@ -166,3 +200,123 @@ def test_device_filter(analyzer, model_obj):
     )
     result2 = analyzer.analyze_data(model_obj, args2)
     assert result2.status == ExecutionStatus.OK
+
+
+def test_skip_loop_devices_default_true():
+    assert StorageAnalyzerArgs().skip_loop_devices is True
+
+
+@pytest.mark.parametrize(
+    "args",
+    [StorageAnalyzerArgs(min_required_free_space_prct=10), None],
+    ids=["explicit_args", "args_none"],
+)
+def test_loop_devices_skipped_by_default(analyzer, loop_dev_model, args):
+    result = analyzer.analyze_data(loop_dev_model, args)
+    assert result.status == ExecutionStatus.OK
+    assert result.events == []
+    assert not any(e.priority == EventPriority.CRITICAL for e in result.events)
+    assert "loop" not in result.message
+    assert result.message == "Sufficient disk space available on [/dev/nvme0n1p2]"
+
+
+def test_loop_devices_checked_when_skip_disabled(analyzer, loop_dev_model):
+    args = StorageAnalyzerArgs(min_required_free_space_prct=10, skip_loop_devices=False)
+    result = analyzer.analyze_data(loop_dev_model, args)
+    assert result.status == ExecutionStatus.ERROR
+    assert len(result.events) == 2
+    assert all(e.category == EventCategory.STORAGE.value for e in result.events)
+    assert all(e.priority == EventPriority.CRITICAL for e in result.events)
+    assert all("Insufficient disk space" in e.description for e in result.events)
+    assert _critical_devices(result) == ["/dev/loop1", "/dev/loop2"]
+    assert result.message.startswith("Insufficient disk space on [/dev/loop1, /dev/loop2]")
+
+
+def test_check_devices_overrides_loop_skip(analyzer, loop_dev_model):
+    args = StorageAnalyzerArgs(min_required_free_space_prct=10, check_devices=["/dev/loop1"])
+    assert args.skip_loop_devices is True
+    result = analyzer.analyze_data(loop_dev_model, args)
+    assert result.status == ExecutionStatus.ERROR
+    assert len(result.events) == 1
+    event = result.events[0]
+    assert event.category == EventCategory.STORAGE.value
+    assert event.priority == EventPriority.CRITICAL
+    assert "Insufficient disk space" in event.description
+    assert "/dev/loop1" in event.description
+    assert event.data["offending_device"]["device"] == "/dev/loop1"
+    assert result.message.startswith("Insufficient disk space on [/dev/loop1]")
+
+
+def test_loop_skip_does_not_hide_real_full_disk(analyzer, loop_dev_model):
+    loop_dev_model.storage_data["/dev/sda1"] = DeviceStorageData(
+        total=1000, free=50, used=950, percent=95
+    )
+    args = StorageAnalyzerArgs(min_required_free_space_prct=10)
+    result = analyzer.analyze_data(loop_dev_model, args)
+    assert result.status == ExecutionStatus.ERROR
+    assert len(result.events) == 1
+    event = result.events[0]
+    assert event.category == EventCategory.STORAGE.value
+    assert event.priority == EventPriority.CRITICAL
+    assert "Insufficient disk space" in event.description
+    assert event.data["offending_device"]["device"] == "/dev/sda1"
+    assert result.message.startswith("Insufficient disk space on [/dev/sda1]")
+    assert "loop" not in result.message
+
+
+def test_loop_skip_composes_with_ignore_devices(analyzer, loop_dev_model):
+    loop_dev_model.storage_data["/dev/sda1"] = DeviceStorageData(
+        total=1000, free=50, used=950, percent=95
+    )
+    args = StorageAnalyzerArgs(min_required_free_space_prct=10, ignore_devices=["/dev/sda1"])
+    result = analyzer.analyze_data(loop_dev_model, args)
+    assert result.status == ExecutionStatus.OK
+    assert result.events == []
+    assert result.message == "Sufficient disk space available on [/dev/nvme0n1p2]"
+
+
+@pytest.mark.parametrize(
+    "device_name, is_loop",
+    [
+        ("/dev/loop0", True),
+        ("/dev/loop12", True),
+        ("/dev/loopback-foo", False),
+        ("loop1", False),
+        ("/dev/loop", False),
+        ("/dev/sda1", False),
+        ("C:", False),
+    ],
+)
+def test_is_loop_device(analyzer, device_name, is_loop):
+    assert analyzer._is_loop_device(device_name) is is_loop
+
+
+@pytest.mark.parametrize(
+    "device_name, skipped",
+    [
+        ("/dev/loop0", True),
+        ("/dev/loop12", True),
+        ("/dev/loopback-foo", False),
+        ("loop1", False),
+    ],
+)
+def test_loop_skip_name_matching(analyzer, device_name, skipped):
+    model = StorageDataModel(
+        storage_data={
+            device_name: DeviceStorageData(total=1000, free=0, used=1000, percent=100.0),
+        }
+    )
+    args = StorageAnalyzerArgs(min_required_free_space_prct=10)
+    result = analyzer.analyze_data(model, args)
+    if skipped:
+        assert result.status == ExecutionStatus.OK
+        assert result.events == []
+        assert result.message == "Sufficient disk space available on []"
+    else:
+        assert result.status == ExecutionStatus.ERROR
+        assert len(result.events) == 1
+        event = result.events[0]
+        assert event.category == EventCategory.STORAGE.value
+        assert event.priority == EventPriority.CRITICAL
+        assert event.data["offending_device"]["device"] == device_name
+        assert result.message.startswith(f"Insufficient disk space on [{device_name}]")
