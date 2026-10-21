@@ -26,7 +26,7 @@
 from __future__ import annotations
 
 from logging import Logger
-from typing import Any, Optional, Union
+from typing import Any, ClassVar, Optional, Union
 
 from nodescraper.enums import (
     EventCategory,
@@ -46,6 +46,8 @@ from .sshparams import SSHConnectionParams
 
 
 class InBandConnectionManager(ConnectionManager[InBandConnection, SSHConnectionParams]):
+    CONNECTION_ARGS_MODEL: ClassVar[type[SSHConnectionParams]] = SSHConnectionParams
+
     def __init__(
         self,
         system_info: SystemInfo,
