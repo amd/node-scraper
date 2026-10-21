@@ -35,7 +35,19 @@ from .deviceenumdata import DeviceEnumerationDataModel
 class DeviceEnumerationAnalyzerArgs(AnalyzerArgs):
     cpu_count: Optional[list[int]] = Field(
         default=None,
-        description="Expected CPU count(s); pass as int or list of ints. Analysis passes if actual is in list.",
+        description="Expected CPU socket count(s) from lscpu Socket(s); pass as int or list of ints.",
+    )
+    cpu_architecture: Optional[list[str]] = Field(
+        default=None,
+        description="Expected CPU architecture(s) from lscpu Architecture (e.g. x86_64).",
+    )
+    min_cpu_cores: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description=(
+            "Minimum physical CPU cores, Core(s) per socket times Socket(s). "
+            "This is not the logical CPU count from nproc."
+        ),
     )
     gpu_count: Optional[list[int]] = Field(
         default=None,
@@ -45,6 +57,16 @@ class DeviceEnumerationAnalyzerArgs(AnalyzerArgs):
         default=None,
         description="Expected virtual function count(s); pass as int or list of ints. Analysis passes if actual is in list.",
     )
+
+    @field_validator("cpu_architecture", mode="before")
+    @classmethod
+    def normalize_architecture(cls, v: Any) -> Optional[list[str]]:
+        """Convert a single architecture string to a list."""
+        if v is None:
+            return None
+        if isinstance(v, str):
+            return [v]
+        return v
 
     @field_validator("cpu_count", "gpu_count", "vf_count", mode="before")
     @classmethod
@@ -77,6 +99,10 @@ class DeviceEnumerationAnalyzerArgs(AnalyzerArgs):
         """
         return cls(
             cpu_count=[datamodel.cpu_count] if datamodel.cpu_count is not None else None,
+            cpu_architecture=(
+                [datamodel.cpu_architecture] if datamodel.cpu_architecture is not None else None
+            ),
+            min_cpu_cores=datamodel.cpu_cores,
             gpu_count=[datamodel.gpu_count] if datamodel.gpu_count is not None else None,
             vf_count=[datamodel.vf_count] if datamodel.vf_count is not None else None,
         )

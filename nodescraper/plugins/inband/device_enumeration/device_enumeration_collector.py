@@ -54,6 +54,17 @@ class DeviceEnumerationCollector(
     CMD_CPU_COUNT_WINDOWS = (
         'powershell -Command "(Get-WmiObject -Class Win32_Processor | Measure-Object).Count"'
     )
+    # Architecture codes are Win32_Processor.Architecture. Names match lscpu
+    # (9 -> x86_64) so the same analyzer value works on Linux and Windows.
+    CMD_CPU_INFO_WINDOWS = (
+        "powershell -NoProfile -Command "
+        '"$p = @(Get-CimInstance -ClassName Win32_Processor); '
+        "$cores = ($p | Measure-Object -Property NumberOfCores -Sum).Sum; "
+        "$map = @{0='i686'; 5='arm'; 6='ia64'; 9='x86_64'; 12='aarch64'}; "
+        "$arch = $map[[int]$p[0].Architecture]; "
+        "Write-Output ('Architecture=' + $arch); "
+        "Write-Output ('Cores=' + $cores)\""
+    )
     CMD_GPU_COUNT_WINDOWS = 'powershell -Command "(wmic path win32_VideoController get name | findstr AMD | Measure-Object).Count"'
     CMD_VF_COUNT_WINDOWS = (
         'powershell -Command "(Get-VMHostPartitionableGpu | Measure-Object).Count"'
@@ -108,6 +119,78 @@ class DeviceEnumerationCollector(
             return None
         return int(text)
 
+    def _apply_lscpu(self, device_enum: DeviceEnumerationDataModel, lscpu_res: CommandArtifact):
+        """Fill socket count, architecture, and physical cores from lscpu.
+
+        Physical cores are Core(s) per socket times Socket(s). nproc's logical
+        CPU count is not used for the core gate.
+        """
+        fields: dict[str, str] = {}
+        for line in lscpu_res.stdout.splitlines():
+            if ":" not in line:
+                continue
+            key, value = line.split(":", 1)
+            fields[key.strip().lower()] = value.strip()
+
+        socket_text = fields.get("socket(s)")
+        if socket_text:
+            try:
+                device_enum.cpu_count = int(socket_text)
+            except ValueError:
+                self._warning(
+                    description="Cannot parse CPU count from lscpu output",
+                    command=lscpu_res,
+                )
+
+        architecture = fields.get("architecture")
+        if architecture:
+            device_enum.cpu_architecture = architecture
+
+        cores_text = fields.get("core(s) per socket")
+        if cores_text and device_enum.cpu_count:
+            try:
+                device_enum.cpu_cores = int(cores_text) * device_enum.cpu_count
+            except ValueError:
+                self._warning(
+                    description="Cannot parse physical CPU cores from lscpu output",
+                    command=lscpu_res,
+                )
+
+    def _apply_windows_cpu_info(
+        self, device_enum: DeviceEnumerationDataModel, cpu_info_res: CommandArtifact
+    ):
+        """Fill architecture and total physical cores from Win32_Processor."""
+        if cpu_info_res.exit_code != 0 or not cpu_info_res.stdout:
+            self._warning(
+                description="Cannot collect Windows CPU architecture and cores",
+                command=cpu_info_res,
+            )
+            return
+        fields: dict[str, str] = {}
+        for line in cpu_info_res.stdout.splitlines():
+            if "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            fields[key.strip().lower()] = value.strip()
+
+        architecture = fields.get("architecture")
+        if architecture:
+            device_enum.cpu_architecture = architecture
+        else:
+            self._warning(
+                description="Cannot parse CPU architecture from Windows processor info",
+                command=cpu_info_res,
+            )
+
+        cores_text = fields.get("cores")
+        if cores_text and cores_text.isdigit():
+            device_enum.cpu_cores = int(cores_text)
+        else:
+            self._warning(
+                description="Cannot parse physical CPU cores from Windows processor info",
+                command=cpu_info_res,
+            )
+
     def _esxi_device_count(self, device_id: Optional[int]) -> CommandArtifact:
         """Count PCI devices on ESXi whose Device ID matches ``device_id`` (as hex).
 
@@ -128,6 +211,7 @@ class DeviceEnumerationCollector(
         """
         if args is None:
             args = DeviceEnumerationCollectorArgs()
+        cpu_info_res = None
         if self.system_info.os_family == OSFamily.LINUX:
             lscpu_res = self._run_sut_cmd(self.CMD_LSCPU_LINUX, log_artifact=False)
 
@@ -157,22 +241,13 @@ class DeviceEnumerationCollector(
             cpu_count_res = self._run_sut_cmd(self.CMD_CPU_COUNT_WINDOWS)
             gpu_count_res = self._run_sut_cmd(self.CMD_GPU_COUNT_WINDOWS)
             vf_count_res = self._run_sut_cmd(self.CMD_VF_COUNT_WINDOWS)
+            cpu_info_res = self._run_sut_cmd(self.CMD_CPU_INFO_WINDOWS)
 
         device_enum = DeviceEnumerationDataModel()
 
         if self.system_info.os_family == OSFamily.LINUX:
             if lscpu_res.exit_code == 0 and lscpu_res.stdout:
-                # Extract socket count from lscpu output
-                for line in lscpu_res.stdout.splitlines():
-                    if line.startswith("Socket(s):"):
-                        try:
-                            device_enum.cpu_count = int(line.split(":")[1].strip())
-                            break
-                        except (ValueError, IndexError):
-                            self._warning(
-                                description="Cannot parse CPU count from lscpu output",
-                                command=lscpu_res,
-                            )
+                self._apply_lscpu(device_enum, lscpu_res)
                 device_enum.lscpu_output = lscpu_res.stdout
                 self._log_event(
                     category=EventCategory.PLATFORM,
@@ -185,6 +260,8 @@ class DeviceEnumerationCollector(
             cpu_count = self._parse_count(cpu_count_res, "Cannot determine CPU count")
             if cpu_count is not None:
                 device_enum.cpu_count = cpu_count
+            if cpu_info_res is not None:
+                self._apply_windows_cpu_info(device_enum, cpu_info_res)
 
         gpu_count = self._parse_count(gpu_count_res, "Cannot determine GPU count")
         if gpu_count is not None:

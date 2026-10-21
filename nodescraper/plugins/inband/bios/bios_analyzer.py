@@ -54,42 +54,100 @@ class BiosAnalyzer(DataAnalyzer[BiosDataModel, BiosAnalyzerArgs]):
             the expected versions or not.
         """
 
-        if not args or not args.exp_bios_version:
+        if not args or not (
+            args.exp_bios_version or args.exp_server_vendor or args.exp_server_model
+        ):
             self.result.message = "Expected bios not provided"
             self.result.status = ExecutionStatus.NOT_RAN
             return self.result
 
-        for bios_version in args.exp_bios_version:
-            self.logger.info(bios_version)
-            if args.regex_match:
+        failures: list[str] = []
+        if args.exp_bios_version and not self._matches_expected(
+            data.bios_version, args.exp_bios_version, args.regex_match
+        ):
+            failures.append("Bios data mismatch!")
+            self._log_event(
+                category=EventCategory.BIOS,
+                description=(
+                    f"Bios data mismatch! Expected {args.exp_bios_version}, "
+                    f"actual: {data.bios_version}"
+                ),
+                data={
+                    "actual_bios_version": data.bios_version,
+                    "expected_bios_version": args.exp_bios_version,
+                },
+                priority=EventPriority.ERROR,
+                console_log=True,
+            )
+
+        if args.exp_server_vendor and not self._matches_expected(
+            data.server_vendor, args.exp_server_vendor, args.regex_match
+        ):
+            failures.append("Server vendor mismatch!")
+            self._log_event(
+                category=EventCategory.PLATFORM,
+                description=(
+                    f"Server vendor mismatch! Expected {args.exp_server_vendor}, "
+                    f"actual: {data.server_vendor}"
+                ),
+                data={
+                    "actual_server_vendor": data.server_vendor,
+                    "expected_server_vendor": args.exp_server_vendor,
+                },
+                priority=EventPriority.ERROR,
+                console_log=True,
+            )
+
+        if args.exp_server_model and not self._matches_expected(
+            data.server_model, args.exp_server_model, args.regex_match
+        ):
+            failures.append("Server model mismatch!")
+            self._log_event(
+                category=EventCategory.PLATFORM,
+                description=(
+                    f"Server model mismatch! Expected {args.exp_server_model}, "
+                    f"actual: {data.server_model}"
+                ),
+                data={
+                    "actual_server_model": data.server_model,
+                    "expected_server_model": args.exp_server_model,
+                },
+                priority=EventPriority.ERROR,
+                console_log=True,
+            )
+
+        if not failures:
+            self.result.message = "Bios data matches expected"
+            self.result.status = ExecutionStatus.OK
+        else:
+            self.result.message = " ".join(failures)
+            self.result.status = ExecutionStatus.ERROR
+        return self.result
+
+    def _matches_expected(
+        self, actual: Optional[str], expected: list[str], regex_match: bool
+    ) -> bool:
+        """Return True when actual matches one expected value.
+
+        Invalid regex patterns are logged and skipped, matching the previous BIOS
+        version behavior of recording that error and then failing the check.
+        """
+        if actual is None:
+            return False
+        for item in expected:
+            self.logger.info(item)
+            if regex_match:
                 try:
-                    bios_regex = re.compile(bios_version)
+                    pattern = re.compile(item)
                 except re.error:
                     self._log_event(
                         category=EventCategory.BIOS,
-                        description=f"Invalid regex pattern: {bios_version}",
+                        description=f"Invalid regex pattern: {item}",
                         priority=EventPriority.ERROR,
                     )
                     continue
-                if bios_regex.match(data.bios_version):
-                    self.result.message = "Bios data matches expected"
-                    self.result.status = ExecutionStatus.OK
-                    return self.result
-            elif data.bios_version == bios_version:
-                self.result.message = "Bios data matches expected"
-                self.result.status = ExecutionStatus.OK
-                return self.result
-
-        self.result.message = "Bios data mismatch!"
-        self.result.status = ExecutionStatus.ERROR
-        self._log_event(
-            category=EventCategory.BIOS,
-            description=f"Bios data mismatch! Expected {args.exp_bios_version}, actual: {data.bios_version}",
-            data={
-                "actual_bios_version": data.bios_version,
-                "expected_bios_version": args.exp_bios_version,
-            },
-            priority=EventPriority.ERROR,
-            console_log=True,
-        )
-        return self.result
+                if pattern.match(actual):
+                    return True
+            elif actual == item:
+                return True
+        return False
