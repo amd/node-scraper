@@ -460,14 +460,14 @@ class FabricsCollector(InBandDataCollector[FabricsDataModel, None]):
             for ibv_device in ibv_devices:
                 ports = []
                 for port_num, attrs in ibv_device.ports.items():
-                    port = {"port": port_num}
+                    port_entry: Dict[str, Union[int, str]] = {"port": port_num}
                     if "state" in attrs:
-                        port["state"] = attrs["state"]
+                        port_entry["state"] = attrs["state"]
                     if "link_layer" in attrs:
-                        port["link_layer"] = attrs["link_layer"]
+                        port_entry["link_layer"] = attrs["link_layer"]
                     if "active_mtu" in attrs:
-                        port["active_mtu"] = attrs["active_mtu"]
-                    ports.append(port)
+                        port_entry["active_mtu"] = attrs["active_mtu"]
+                    ports.append(port_entry)
                 ibv_device_info.append(
                     {
                         "device": ibv_device.device,
