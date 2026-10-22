@@ -29,14 +29,13 @@ import abc
 import logging
 import types
 from functools import wraps
-from typing import Any, Callable, Generic, Optional, TypeVar, Union
+from typing import Any, Callable, ClassVar, Generic, Optional, TypeVar, Union
 
 from pydantic import BaseModel
 
 from nodescraper.constants import DEFAULT_EVENT_REPORTER
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
 from nodescraper.models import SystemInfo, TaskResult
-from nodescraper.typeutils import TypeUtils
 from nodescraper.utils import get_exception_traceback
 
 from .task import Task
@@ -92,6 +91,8 @@ class ConnectionManager(Task, Generic[TConnection, TConnectArg]):
 
     TASK_TYPE = "CONNECTION_MANAGER"
 
+    CONNECTION_ARGS_MODEL: ClassVar[Optional[type[BaseModel]]]
+
     def __init__(
         self,
         system_info: SystemInfo,
@@ -133,19 +134,19 @@ class ConnectionManager(Task, Generic[TConnection, TConnectArg]):
         )
 
         if isinstance(connection_args, dict):
-            generic_map = TypeUtils.get_generic_map(self.__class__)
-            connection_arg_model = generic_map.get(TConnectArg)
-            if not connection_arg_model:
-                raise ValueError("No model defined for connection args")
-
-            connection_args = connection_arg_model(**connection_args)
+            connection_arg_model = self.CONNECTION_ARGS_MODEL
+            if connection_arg_model is not None:
+                connection_args = connection_arg_model(**connection_args)
+            elif connection_args:
+                self.logger.warning("Connection args provided but no model defined")
 
         self.connection_args = connection_args
         self.connection: Optional[TConnection] = None
 
     def __init_subclass__(cls, **kwargs) -> None:
         super().__init_subclass__(**kwargs)
-
+        if not hasattr(cls, "CONNECTION_ARGS_MODEL"):
+            raise ValueError("Subclasses of ConnectionManager must define CONNECTION_ARGS_MODEL")
         if "connect" in cls.__dict__:
             cls.connect = connect_decorator(cls.connect)
 

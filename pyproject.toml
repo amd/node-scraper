@@ -29,7 +29,6 @@ dependencies = [
     "urllib3>=2.6.0"
 ]
 
-
 [project.urls]
 homepage = "https://github.com/amd/node-scraper"
 documentation = "https://github.com/amd/node-scraper/blob/main/docs/PLUGIN_DOC.md"

@@ -26,7 +26,7 @@
 from __future__ import annotations
 
 from logging import Logger
-from typing import Optional, Union
+from typing import ClassVar, Optional, Union
 
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
 from nodescraper.interfaces.connectionmanager import ConnectionManager
@@ -40,6 +40,8 @@ from ..redfish.redfish_params import RedfishConnectionParams, redfish_params_to_
 
 class OobSshConnectionManager(ConnectionManager[InBandConnection, RedfishConnectionParams]):
     """SSH to the BMC using the same host and credentials as Redfish (OOB shell)."""
+
+    CONNECTION_ARGS_MODEL: ClassVar[type[RedfishConnectionParams]] = RedfishConnectionParams
 
     def __init__(
         self,

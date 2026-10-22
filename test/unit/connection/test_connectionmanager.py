@@ -28,8 +28,19 @@ from unittest.mock import MagicMock
 
 from nodescraper.connection.inband.inbandmanager import InBandConnectionManager
 from nodescraper.connection.inband.inbandremote import RemoteShell
+from nodescraper.connection.inband.sshparams import SSHConnectionParams
+from nodescraper.connection.oob_ssh.oob_ssh_connection_manager import (
+    OobSshConnectionManager,
+)
 from nodescraper.connection.redfish.redfish_connection import RedfishConnection
 from nodescraper.connection.redfish.redfish_manager import RedfishConnectionManager
+from nodescraper.connection.redfish.redfish_params import RedfishConnectionParams
+from nodescraper.connection.redfish.ssh_proxy_manager import (
+    RedfishSshProxyConnectionManager,
+)
+from nodescraper.connection.redfish.ssh_proxy_params import (
+    RedfishSshProxyConnectionParams,
+)
 from nodescraper.enums import ExecutionStatus, SystemLocation
 from nodescraper.interfaces.connectionmanager import ConnectionManager
 from nodescraper.models import SystemInfo, TaskResult
@@ -43,6 +54,8 @@ class DummyConnection:
 
 class DummyConnectionManager(ConnectionManager[DummyConnection, None]):
     """Concrete implementation of ConnectionManager for testing base class behavior"""
+
+    CONNECTION_ARGS_MODEL = None
 
     def connect(self) -> TaskResult:
         """Minimal connect implementation for testing"""
@@ -221,6 +234,86 @@ class TestRedfishConnectionManagerDisconnect(unittest.TestCase):
         mock_connection.close.assert_called_once()
         # Verify connection was cleared by parent class
         self.assertIsNone(manager.connection)
+
+
+class TestConnectionArgsModelClassVar(unittest.TestCase):
+    """CONNECTION_ARGS_MODEL classvar drives dict -> model conversion of connection_args."""
+
+    def setUp(self):
+        self.system_info = SystemInfo(name="test_system", location=SystemLocation.REMOTE)
+
+    def test_subclasses_declare_expected_models(self):
+        expected = {
+            InBandConnectionManager: SSHConnectionParams,
+            RedfishConnectionManager: RedfishConnectionParams,
+            RedfishSshProxyConnectionManager: RedfishSshProxyConnectionParams,
+            OobSshConnectionManager: RedfishConnectionParams,
+        }
+        for manager_cls, model in expected.items():
+            with self.subTest(manager=manager_cls.__name__):
+                self.assertIs(manager_cls.CONNECTION_ARGS_MODEL, model)
+
+    def test_classvar_not_set_on_instance(self):
+        manager = InBandConnectionManager(system_info=self.system_info)
+        self.assertNotIn("CONNECTION_ARGS_MODEL", vars(manager))
+
+    def test_dict_args_converted_to_model(self):
+        manager = InBandConnectionManager(
+            system_info=self.system_info,
+            connection_args={"hostname": "host1", "username": "user1"},
+        )
+        self.assertIsInstance(manager.connection_args, SSHConnectionParams)
+        self.assertEqual(manager.connection_args.hostname, "host1")
+        self.assertEqual(manager.connection_args.username, "user1")
+
+    def test_redfish_dict_args_converted_to_model(self):
+        manager = RedfishConnectionManager(
+            system_info=self.system_info,
+            connection_args={"host": "bmc1", "username": "admin"},
+        )
+        self.assertIsInstance(manager.connection_args, RedfishConnectionParams)
+        self.assertEqual(manager.connection_args.host, "bmc1")
+
+    def test_oob_ssh_dict_args_converted_to_model(self):
+        manager = OobSshConnectionManager(
+            system_info=self.system_info,
+            connection_args={"host": "bmc1", "username": "admin"},
+        )
+        self.assertIsInstance(manager.connection_args, RedfishConnectionParams)
+
+    def test_ssh_proxy_dict_args_converted_to_model(self):
+        manager = RedfishSshProxyConnectionManager(
+            system_info=self.system_info,
+            connection_args={"host": "", "ssh": {"hostname": "", "username": ""}, "max_workers": 2},
+        )
+        self.assertIsInstance(manager.connection_args, RedfishSshProxyConnectionParams)
+        self.assertEqual(manager.connection_args.max_workers, 2)
+
+    def test_model_instance_passed_through_unchanged(self):
+        params = SSHConnectionParams(hostname="host1", username="user1")
+        manager = InBandConnectionManager(system_info=self.system_info, connection_args=params)
+        self.assertIs(manager.connection_args, params)
+
+    def test_none_args_stay_none(self):
+        manager = InBandConnectionManager(system_info=self.system_info)
+        self.assertIsNone(manager.connection_args)
+
+    def test_custom_subclass_classvar_is_used(self):
+        class CustomManager(ConnectionManager[DummyConnection, SSHConnectionParams]):
+            CONNECTION_ARGS_MODEL = SSHConnectionParams
+
+            def connect(self) -> TaskResult:
+                return self.result
+
+        manager = CustomManager(
+            system_info=self.system_info,
+            connection_args={"hostname": "h", "username": "u"},
+        )
+        self.assertIsInstance(manager.connection_args, SSHConnectionParams)
+
+    def test_invalid_dict_args_raise_validation_error(self):
+        with self.assertRaises(ValueError):
+            InBandConnectionManager(system_info=self.system_info, connection_args={"port": 22})
 
 
 if __name__ == "__main__":

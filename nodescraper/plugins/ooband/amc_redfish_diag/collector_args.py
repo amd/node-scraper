@@ -84,3 +84,11 @@ class AmcRedfishDiagCollectorArgs(CollectorArgs):
         le=3600,
         description="Max seconds to wait for each CollectDiagnosticData task.",
     )
+    clear_logs_after_collection: bool = Field(
+        default=False,
+        description=(
+            "If True, discover and POST LogService.ClearLog to all log stores under the "
+            "configured Systems/Managers members after a successful collection. "
+            "Requires system_interaction_level >= INTERACTIVE."
+        ),
+    )

@@ -51,3 +51,7 @@ class StorageAnalyzerArgs(AnalyzerArgs):
         default=False,
         description="If True, match device/mount names with regex; otherwise exact match.",
     )
+    skip_loop_devices: bool = Field(
+        default=True,
+        description="If True, skip /dev/loopN devices (read-only image mounts that always report 100 percent used) unless listed in check_devices.",
+    )
