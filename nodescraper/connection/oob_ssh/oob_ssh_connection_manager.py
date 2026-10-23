@@ -113,6 +113,7 @@ class OobSshConnectionManager(ConnectionManager[InBandConnection, RedfishConnect
         try:
             shell.connect_ssh()
         except SSHConnectionError as exception:
+            shell.client.close()
             return self._fail_connect(
                 EventCategory.SSH, f"OOB SSH connection to BMC '{hostname}' failed: {exception}"
             )

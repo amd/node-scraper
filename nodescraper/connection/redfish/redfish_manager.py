@@ -175,9 +175,9 @@ class RedfishConnectionManager(ConnectionManager[RedfishConnection, RedfishConne
 
         lines = "\n".join(f"[{k}] {v}" for k, v in failed_targets.items())
         if not self.target_connections:
-            message = f"Redfish connection failed for every target\n{lines}"
-            self._fail_connect(EventCategory.RUNTIME, message)
-            self.result.message = message
+            summary = "Redfish connection failed for every target"
+            self._fail_connect(EventCategory.RUNTIME, summary)
+            self.result.message = f"{summary}\n{lines}"
             return self.result
 
         if failed_targets:
@@ -205,20 +205,22 @@ class RedfishConnectionManager(ConnectionManager[RedfishConnection, RedfishConne
         password = target.password.get_secret_value() if target.password else None
         base_url = _build_base_url(str(target.host), target.port, target.use_https)
         self.logger.info("Connecting to Redfish at %s (target=%r)", base_url, key)
-        conn = RedfishConnection(
-            base_url=base_url,
-            username=target.username or "",
-            password=password,
-            timeout=target.timeout_seconds,
-            use_session_auth=target.use_session_auth,
-            verify_ssl=target.verify_ssl,
-            api_root=target.api_root,
-        )
+        conn: Optional[RedfishConnection] = None
         try:
+            conn = RedfishConnection(
+                base_url=base_url,
+                username=target.username or "",
+                password=password,
+                timeout=target.timeout_seconds,
+                use_session_auth=target.use_session_auth,
+                verify_ssl=target.verify_ssl,
+                api_root=target.api_root,
+            )
             conn._ensure_session()
             conn.get_service_root()
-        except RedfishConnectionError as exc:
-            conn.close()
+        except Exception as exc:  # noqa: BLE001 - one bad target must not drop the others
+            if conn is not None:
+                conn.close()
             description = f"Redfish connection failed for target {key!r}: {exc}"
             self._log_event(
                 category=EventCategory.RUNTIME,

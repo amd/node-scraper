@@ -23,6 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
+import logging
 import os
 import socket
 from typing import Type, Union
@@ -179,7 +180,8 @@ class RemoteShell(InBandConnection):
             stdout_str = ""
             exit_code = 124
         except Exception as exc:
-            stderr_str = str(exc) or "Command failed"
+            logging.getLogger(__name__).exception("Unexpected error running SSH command")
+            stderr_str = f"{type(exc).__name__}: {exc}"
             stdout_str = ""
             exit_code = 124
 
