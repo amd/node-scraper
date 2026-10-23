@@ -28,6 +28,7 @@ from __future__ import annotations
 import copy
 import inspect
 import logging
+import os
 import uuid
 from collections import deque
 from collections.abc import Callable, Sequence
@@ -40,17 +41,22 @@ from nodescraper.connection.inband import InBandConnectionManager
 from nodescraper.connection.inband.osdetection import discover_and_write_os_family
 from nodescraper.connection.oob_ssh import OobSshConnectionManager
 from nodescraper.constants import DEFAULT_LOGGER
-from nodescraper.enums import ExecutionStatus, OSFamily
+from nodescraper.enums import EventPriority, ExecutionStatus, OSFamily
 from nodescraper.helpers.plugin_execution_target import (
     format_in_band_target_summary,
 )
 from nodescraper.interfaces import ConnectionManager, DataPlugin, PluginInterface
 from nodescraper.interfaces.taskresulthook import TaskResultHook
-from nodescraper.models import PluginConfig, SystemInfo
+from nodescraper.models import PluginConfig, SystemInfo, TaskResult
 from nodescraper.models.pluginresult import PluginResult
+from nodescraper.models.taskresult import STATUS_LOG_LEVEL_MAP
 from nodescraper.pluginregistry import PluginRegistry
 from nodescraper.taskresulthooks import FileSystemLogHook
+from nodescraper.taskresulthooks.filesystemloghook import hooks_for_fixed_directory
 from nodescraper.typeutils import TypeUtils
+
+OS_DISCOVERY_LOG_DIR = "os_discovery"
+OS_DISCOVERY_PARENT = "os_discovery"
 
 
 class PluginExecutor:
@@ -131,6 +137,9 @@ class PluginExecutor:
         )
 
         self.connection_result_hooks: list[TaskResultHook] = []
+        # Connection failures that have no manager result of their own (instantiation or plugin
+        # run failures); persisted by _close_connections().
+        self.connection_failure_results: list[TaskResult] = []
         if log_path:
             self.connection_result_hooks.append(FileSystemLogHook(log_base_path=log_path))
 
@@ -220,20 +229,44 @@ class PluginExecutor:
 
         return merged_config
 
+    def _run_connection_hooks(
+        self, result: TaskResult, hooks: Optional[Sequence[TaskResultHook]] = None
+    ) -> None:
+        """Run result hooks for a connection result; a failing hook never interrupts the run."""
+        for hook in self.connection_result_hooks if hooks is None else hooks:
+            try:
+                hook.process_result(result)
+            except Exception as e:
+                self.logger.error("Failed to save connection result for %s: %s", result.task, e)
+
     def discover_os_info(self) -> None:
-        """If the connection library has an InBandConnectionManager, use it to discover OS info and update system_info
-        self.system_info will be updated with the discovered OS info.
+        """Use a dedicated InBandConnectionManager to discover OS info and update system_info.
+
+        The discovery connection is separate from the connection library and its result is
+        saved under ``<log_path>/os_discovery`` so it does not mix with the results of the
+        connections used by plugins. self.system_info will be updated with the discovered OS info.
         """
-        inband_connection = self.connection_library.get(InBandConnectionManager)
-        if inband_connection is None:
-            # Init use and discard after
+        if self.log_path:
+            hooks = hooks_for_fixed_directory(
+                self.connection_result_hooks, os.path.join(self.log_path, OS_DISCOVERY_LOG_DIR)
+            )
+        else:
+            hooks = list(self.connection_result_hooks)
+        try:
             inband_connection = InBandConnectionManager(
                 system_info=self.system_info,
                 logger=self.logger,
                 connection_args=self.connection_configs.get(InBandConnectionManager.__name__),
-                task_result_hooks=self.connection_result_hooks,
+                task_result_hooks=hooks,
+                parent=OS_DISCOVERY_PARENT,  # Use a dedicated parent identifier for OS discovery tasks
                 session_id=self.session_id,
             )
+        except Exception as e:
+            # Instaniation of this could raise when a required connection argument is missing or invalid or session_id
+            self.logger.error(
+                "Error occurred while initializing InBandConnectionManager: %s", str(e)
+            )
+            return
         try:
             result = inband_connection.connect() if inband_connection else None
             if (not inband_connection) or (not result) or (result.status != ExecutionStatus.OK):
@@ -244,12 +277,21 @@ class PluginExecutor:
             discover_and_write_os_family(inband_connection, self.system_info, self.logger)
         except Exception as e:
             self.logger.error(
-                "Error occurred during OS discovery with InBandConnectionManager: %s",
-                str(e),
+                "Error occurred during OS discovery with InBandConnectionManager: %s", str(e)
+            )
+            self._run_connection_hooks(
+                inband_connection.build_failure_result(
+                    f"Error occurred during OS discovery: {e}",
+                    exception=e,
+                    priority=EventPriority.ERROR,
+                ),
+                hooks,
             )
         finally:
-            if inband_connection is not None:
+            try:
                 inband_connection.disconnect()
+            except Exception as e:
+                self.logger.error("Failed to disconnect OS discovery connection: %s", e)
 
     def _get_connection_manager_for_plugin(
         self,
@@ -293,8 +335,9 @@ class PluginExecutor:
                 mgr_impl = connection_manager_class
             else:
                 self.logger.error(
-                    "Unable to find registered connection manager class for %s that is required by",
-                    connection_manager_class.__name__,
+                    "Unable to find registered connection manager class for %s that is required by %s",
+                    getattr(connection_manager_class, "__name__", connection_manager_class),
+                    plugin_name,
                 )
                 return None
             connection_args = None
@@ -309,7 +352,13 @@ class PluginExecutor:
             }
             if connection_args is not None:
                 init_kwargs["connection_args"] = connection_args
-            self.connection_library[mgr_impl] = mgr_impl(**init_kwargs)
+            try:
+                self.connection_library[mgr_impl] = mgr_impl(**init_kwargs)
+            except Exception as e:
+                self.logger.error(
+                    "Failed to initialize %s for %s: %s", mgr_impl.__name__, plugin_name, e
+                )
+                return None
 
         return self.connection_library[mgr_impl]
 
@@ -350,6 +399,7 @@ class PluginExecutor:
             "session_id": self.session_id,
         }
 
+        conn_mgr: Optional[ConnectionManager] = None
         if plugin_class.CONNECTION_TYPE:
             conn_mgr = self._get_connection_manager_for_plugin(plugin_class, plugin_name)
             if conn_mgr is None:
@@ -386,8 +436,32 @@ class PluginExecutor:
 
         except Exception as e:
             self.logger.exception("Unexpected exception when running plugin %s: %s", plugin_name, e)
+            if conn_mgr is not None:
+                self._close_connection_after_plugin_failure(conn_mgr, plugin_name, e)
 
         return True
+
+    def _close_connection_after_plugin_failure(
+        self, conn_mgr: ConnectionManager, plugin_name: str, exception: Exception
+    ) -> None:
+        """Record the plugin failure against its connection and close the possibly broken connection.
+
+        The manager's own result is left untouched so a later plugin can reconnect.
+        """
+        description = f"Plugin {plugin_name} raised an exception: {exception}"
+        self.logger.critical("%s: %s", type(conn_mgr).__name__, description)
+        self.connection_failure_results.append(
+            conn_mgr.build_failure_result(description, exception)
+        )
+        try:
+            conn_mgr.disconnect()
+        except Exception as e:
+            self.logger.error(
+                "Failed to disconnect %s after plugin %s failed: %s",
+                type(conn_mgr).__name__,
+                plugin_name,
+                e,
+            )
 
     def run_queue(self) -> list[PluginResult]:
         """Run the plugin queue and return results
@@ -413,41 +487,72 @@ class PluginExecutor:
         except Exception as e:
             self.logger.exception("Unexpected exception running plugin queue: %s", str(e))
         finally:
-            # Run post-action plugins before tearing down connections or collating
-            # results so that post-actions still have access to live connections
-            # and their results are included in the collator output.
-            self._run_post_actions(plugin_results)
-
-            if self.plugin_config.result_collators:
-                self.logger.info("Running result collators")
-                for (
-                    collator,
-                    collator_args,
-                ) in self.plugin_config.result_collators.items():
-                    collator_class = self.plugin_registry.result_collators.get(collator)
-                    if collator_class is None:
-                        self.logger.warning(
-                            "No result collator found in registry for name: %s",
-                            collator,
-                        )
-                        continue
-
-                    self.logger.info("Running %s result collator", collator)
-                    collator_inst = collator_class(logger=self.logger, log_path=self.log_path)
-                    collator_inst.collate_results(
-                        plugin_results,
-                        [
-                            connection_manager.result
-                            for connection_manager in self.connection_library.values()
-                        ],
-                        **collator_args,
-                    )
-
-            self.logger.info("Closing connections")
-            for connection_manager in self.connection_library.values():
-                connection_manager.disconnect()
+            try:
+                # Run post-action plugins before tearing down connections or collating
+                # results so that post-actions still have access to live connections
+                # and their results are included in the collator output.
+                self._run_post_actions(plugin_results)
+                self._run_result_collators(plugin_results)
+            finally:
+                self._close_connections()
 
         return plugin_results
+
+    def _run_result_collators(self, plugin_results: list[PluginResult]) -> None:
+        """Run the configured result collators over the plugin and connection results."""
+        if not self.plugin_config.result_collators:
+            return
+
+        self.logger.info("Running result collators")
+        connection_results = [
+            connection_manager.result for connection_manager in self.connection_library.values()
+        ] + self.connection_failure_results
+        for collator, collator_args in self.plugin_config.result_collators.items():
+            collator_class = self.plugin_registry.result_collators.get(collator)
+            if collator_class is None:
+                self.logger.warning("No result collator found in registry for name: %s", collator)
+                continue
+
+            self.logger.info("Running %s result collator", collator)
+            collator_inst = collator_class(logger=self.logger, log_path=self.log_path)
+            collator_inst.collate_results(plugin_results, connection_results, **collator_args)
+
+    def _log_connection_result(self, result: TaskResult) -> None:
+        self.logger.log(
+            STATUS_LOG_LEVEL_MAP.get(result.status, logging.INFO),
+            "Connection result for %s: %s%s",
+            result.task,
+            result.status.name,
+            f" - {result.message}" if result.message else "",
+        )
+
+    def _close_connections(self) -> None:
+        """Log and save the connection results, then close every connection.
+
+        Each manager saves its final result, which only adds what connect() did not already
+        save. Failures recorded without a manager result (instantiation or plugin run failures)
+        are saved here too so they are persisted even if the queue was aborted. Each step is
+        isolated so one failure cannot prevent the remaining connections from being closed.
+        """
+        self.logger.info("Closing connections")
+        for connection_manager in self.connection_library.values():
+            name = type(connection_manager).__name__
+            try:
+                connection_manager.disconnect()
+            except Exception as e:
+                self.logger.error("Failed to disconnect %s: %s", name, e)
+            try:
+                connection_manager.save_result()
+            except Exception as e:
+                self.logger.error("Failed to save connection result for %s: %s", name, e)
+            result = connection_manager.result
+            if result.status != ExecutionStatus.UNSET or result.events:
+                self._log_connection_result(result)
+
+        # Saved last so a failure's result.json is not overwritten by the manager's own result.
+        for failure in self.connection_failure_results:
+            self._log_connection_result(failure)
+            self._run_connection_hooks(failure)
 
     def _run_post_actions(self, plugin_results: list[PluginResult]) -> None:
         """Evaluate post-action conditions and run qualifying plugins.
