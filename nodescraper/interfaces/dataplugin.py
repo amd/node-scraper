@@ -444,9 +444,25 @@ class DataPlugin(
             )
         finally:
             if not preserve_connection and self.connection_manager:
-                self.connection_manager.disconnect()
+                self._close_connection()
 
         return self.collection_result
+
+    def _close_connection(self) -> None:
+        """Disconnect and save the connection result (successful or not).
+
+        Each step is isolated so a failing disconnect still saves the result and a failing
+        save never turns a finished collection into an exception.
+        """
+        plugin_name = self.__class__.__name__
+        try:
+            self.connection_manager.disconnect()
+        except Exception:
+            self.logger.exception("Failed to disconnect connection for plugin %s", plugin_name)
+        try:
+            self.connection_manager.save_result()
+        except Exception:
+            self.logger.exception("Failed to save connection result for plugin %s", plugin_name)
 
     def analyze(
         self,
