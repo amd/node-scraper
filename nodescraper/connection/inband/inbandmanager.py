@@ -102,6 +102,7 @@ class InBandConnectionManager(ConnectionManager[InBandConnection, SSHConnectionP
         try:
             shell.connect_ssh()
         except SSHConnectionError as exception:
+            shell.client.close()
             return self._fail_connect(
                 EventCategory.SSH, f"SSH connection to '{hostname}' failed: {exception}"
             )

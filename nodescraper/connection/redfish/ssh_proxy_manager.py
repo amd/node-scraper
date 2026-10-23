@@ -170,9 +170,9 @@ class RedfishSshProxyConnectionManager(
 
         lines = "\n".join(f"[{k}] {v}" for k, v in failed_targets.items())
         if not self.target_connections:
-            message = f"SSH-proxy Redfish connection failed for every target\n{lines}"
-            self._fail_connect(EventCategory.RUNTIME, message)
-            self.result.message = message
+            summary = "SSH-proxy Redfish connection failed for every target"
+            self._fail_connect(EventCategory.RUNTIME, summary)
+            self.result.message = f"{summary}\n{lines}"
             return self.result
 
         if failed_targets:
