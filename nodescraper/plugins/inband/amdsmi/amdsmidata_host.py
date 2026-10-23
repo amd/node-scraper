@@ -20,6 +20,7 @@ from pydantic import (
 )
 
 from nodescraper.plugins.inband.amdsmi.amdsmidata import (
+    NA_STR,
     AmdSmiBaseModel,
     EccData,
     EccState,
@@ -35,11 +36,11 @@ def _host_na_to_none(value: Any) -> Any:
     ValueUnit coercion does not collapse the dict form inside a ``ValueUnit | None``
     union, so normalize both to None before field validation.
     """
-    if isinstance(value, str) and value.strip().upper() in ("N/A", "NA", ""):
+    if isinstance(value, str) and value.strip().upper() in (NA_STR, "NA", ""):
         return None
     if isinstance(value, dict):
         inner = value.get("value")
-        if isinstance(inner, str) and inner.strip().upper() in ("N/A", "NA", ""):
+        if isinstance(inner, str) and inner.strip().upper() in (NA_STR, "NA", ""):
             return None
     return value
 
@@ -410,7 +411,7 @@ class HostDriverAmdSmiMetric(BaseModel):
     @field_validator("energy", mode="before")
     @classmethod
     def validate_energy(cls, value):
-        if value == "N/A" or value is None:
+        if value == NA_STR or value is None:
             return None
         return value
 

@@ -55,6 +55,13 @@ class RedfishOemDiagCollectorArgs(CollectorArgs):
         le=3600,
         description="Max seconds to wait for each BMC task.",
     )
+    clear_logs_after_collection: bool = Field(
+        default=False,
+        description=(
+            "If True, POST LogService.ClearLog to the configured log_service_path after a "
+            "successful collection. Requires system_interaction_level >= INTERACTIVE."
+        ),
+    )
 
     @model_validator(mode="after")
     def _default_oem_diagnostic_types(self) -> RedfishOemDiagCollectorArgs:
