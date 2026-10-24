@@ -55,8 +55,7 @@ from nodescraper.taskresulthooks import FileSystemLogHook
 from nodescraper.taskresulthooks.filesystemloghook import hooks_for_fixed_directory
 from nodescraper.typeutils import TypeUtils
 
-OS_DISCOVERY_LOG_DIR = "os_discovery"
-OS_DISCOVERY_PARENT = "os_discovery"
+OS_DISCOVERY_DIR = "os_discovery"
 
 
 class PluginExecutor:
@@ -248,7 +247,7 @@ class PluginExecutor:
         """
         if self.log_path:
             hooks = hooks_for_fixed_directory(
-                self.connection_result_hooks, os.path.join(self.log_path, OS_DISCOVERY_LOG_DIR)
+                self.connection_result_hooks, os.path.join(self.log_path, OS_DISCOVERY_DIR)
             )
         else:
             hooks = list(self.connection_result_hooks)
@@ -258,11 +257,11 @@ class PluginExecutor:
                 logger=self.logger,
                 connection_args=self.connection_configs.get(InBandConnectionManager.__name__),
                 task_result_hooks=hooks,
-                parent=OS_DISCOVERY_PARENT,  # Use a dedicated parent identifier for OS discovery tasks
+                parent=OS_DISCOVERY_DIR,
                 session_id=self.session_id,
             )
         except Exception as e:
-            # Instaniation of this could raise when a required connection argument is missing or invalid or session_id
+            # Raised for missing or invalid connection args or an invalid session_id.
             self.logger.error(
                 "Error occurred while initializing InBandConnectionManager: %s", str(e)
             )
@@ -402,20 +401,21 @@ class PluginExecutor:
         conn_mgr: Optional[ConnectionManager] = None
         if plugin_class.CONNECTION_TYPE:
             conn_mgr = self._get_connection_manager_for_plugin(plugin_class, plugin_name)
+            connection_config = self.connection_configs.get(plugin_class.CONNECTION_TYPE.__name__)
+            init_payload["connection_args"] = connection_config
             if conn_mgr is None:
                 return False
             init_payload["connection_manager"] = conn_mgr
-
         try:
             plugin_inst = plugin_class(**init_payload)
 
             plugin_run_args = copy.deepcopy(plugin_args)
-            run_args = TypeUtils.get_func_arg_types(plugin_class.run, plugin_class)
 
             try:
                 global_run_args = self.apply_global_args_to_plugin(
                     plugin_inst, plugin_class, self.plugin_config.global_args
                 )
+
                 run_payload = self.merge_plugin_run_args(plugin_run_args, global_run_args)
             except ValueError as ve:
                 self.logger.error(
@@ -425,10 +425,6 @@ class PluginExecutor:
                 )
                 return False
 
-            for arg in run_args.keys():
-                if arg == "preserve_connection" and issubclass(plugin_class, DataPlugin):
-                    run_payload[arg] = True
-
             plugin_result = plugin_inst.run(**run_payload)
             plugin_results.append(plugin_result)
             for hook in self.plugin_run_result_hooks:
@@ -437,31 +433,9 @@ class PluginExecutor:
         except Exception as e:
             self.logger.exception("Unexpected exception when running plugin %s: %s", plugin_name, e)
             if conn_mgr is not None:
-                self._close_connection_after_plugin_failure(conn_mgr, plugin_name, e)
+                conn_mgr.safe_disconnect()
 
         return True
-
-    def _close_connection_after_plugin_failure(
-        self, conn_mgr: ConnectionManager, plugin_name: str, exception: Exception
-    ) -> None:
-        """Record the plugin failure against its connection and close the possibly broken connection.
-
-        The manager's own result is left untouched so a later plugin can reconnect.
-        """
-        description = f"Plugin {plugin_name} raised an exception: {exception}"
-        self.logger.critical("%s: %s", type(conn_mgr).__name__, description)
-        self.connection_failure_results.append(
-            conn_mgr.build_failure_result(description, exception)
-        )
-        try:
-            conn_mgr.disconnect()
-        except Exception as e:
-            self.logger.error(
-                "Failed to disconnect %s after plugin %s failed: %s",
-                type(conn_mgr).__name__,
-                plugin_name,
-                e,
-            )
 
     def run_queue(self) -> list[PluginResult]:
         """Run the plugin queue and return results
@@ -527,29 +501,18 @@ class PluginExecutor:
         )
 
     def _close_connections(self) -> None:
-        """Log and save the connection results, then close every connection.
+        """Close every connection and log the connection results.
 
-        Each manager saves its final result, which only adds what connect() did not already
-        save. Failures recorded without a manager result (instantiation or plugin run failures)
-        are saved here too so they are persisted even if the queue was aborted. Each step is
-        isolated so one failure cannot prevent the remaining connections from being closed.
+        Each manager's own result was already saved by connect(). A failing disconnect cannot
+        prevent the remaining connections from being closed.
         """
         self.logger.info("Closing connections")
         for connection_manager in self.connection_library.values():
-            name = type(connection_manager).__name__
-            try:
-                connection_manager.disconnect()
-            except Exception as e:
-                self.logger.error("Failed to disconnect %s: %s", name, e)
-            try:
-                connection_manager.save_result()
-            except Exception as e:
-                self.logger.error("Failed to save connection result for %s: %s", name, e)
+            connection_manager.safe_disconnect()
             result = connection_manager.result
             if result.status != ExecutionStatus.UNSET or result.events:
                 self._log_connection_result(result)
 
-        # Saved last so a failure's result.json is not overwritten by the manager's own result.
         for failure in self.connection_failure_results:
             self._log_connection_result(failure)
             self._run_connection_hooks(failure)
@@ -653,24 +616,17 @@ class PluginExecutor:
                     args_cls = plugin_class._collector_args_class(collector_cls)
                     if args_cls is None:
                         continue
-                    plugin_fields = set(args_cls.model_fields.keys())
-                    filtered = {
-                        k: v
-                        for k, v in global_args["collection_args"].items()
-                        if k in plugin_fields
-                    }
+                    filtered = TypeUtils.filter_to_model_fields(
+                        args_cls, global_args["collection_args"]
+                    )
                     if filtered:
                         per_collector_args[collector_cls.__name__] = filtered
                 if per_collector_args:
                     run_args["collection_args"] = per_collector_args
             elif collector_args is not None and not isinstance(collector_args, dict):
-                args_cls = (
-                    collector_args if isinstance(collector_args, type) else type(collector_args)
+                filtered = TypeUtils.filter_to_model_fields(
+                    collector_args, global_args["collection_args"]
                 )
-                plugin_fields = set(args_cls.model_fields.keys())
-                filtered = {
-                    k: v for k, v in global_args["collection_args"].items() if k in plugin_fields
-                }
                 if filtered:
                     run_args["collection_args"] = filtered
 
@@ -679,10 +635,9 @@ class PluginExecutor:
             and hasattr(plugin_class, "ANALYZER_ARGS")
             and plugin_class.ANALYZER_ARGS is not None
         ):
-            analyzer_args = plugin_class.ANALYZER_ARGS
-            args_cls = analyzer_args if isinstance(analyzer_args, type) else type(analyzer_args)
-            plugin_fields = set(args_cls.model_fields.keys())
-            filtered = {k: v for k, v in global_args["analysis_args"].items() if k in plugin_fields}
+            filtered = TypeUtils.filter_to_model_fields(
+                plugin_class.ANALYZER_ARGS, global_args["analysis_args"]
+            )
             if filtered:
                 run_args["analysis_args"] = filtered
 

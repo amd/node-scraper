@@ -39,7 +39,13 @@ from nodescraper.connection.oob_ssh import OobSshConnectionManager
 from nodescraper.enums import ExecutionStatus, OSFamily, SystemLocation
 from nodescraper.enums.eventpriority import EventPriority
 from nodescraper.enums.systeminteraction import SystemInteractionLevel
-from nodescraper.interfaces import PluginInterface, PluginResultCollator, TaskResultHook
+from nodescraper.interfaces import (
+    DataPlugin,
+    PluginInterface,
+    PluginResultCollator,
+    TaskResultHook,
+)
+from nodescraper.interfaces.datacollectortask import DataCollector
 from nodescraper.models import PluginConfig, PluginResult, SystemInfo, TaskResult
 from nodescraper.models.postactioncondition import PostActionCondition
 from nodescraper.models.postactionpluginconfig import PostActionPluginConfig
@@ -61,7 +67,6 @@ class TestPluginA(PluginInterface[MockConnectionManager, None]):
     ANALYZER_ARGS = DummyArgs(foo="initial")
     collection = False
     analysis = False
-    preserve_connection = False
     data = DummyDataModel(some_version="1")
     max_event_priority_level = EventPriority.INFO
     system_interaction_level = SystemInteractionLevel.PASSIVE
@@ -281,7 +286,6 @@ def test_apply_global_args_to_plugin():
     global_args = {
         "collection": True,
         "analysis": True,
-        "preserve_connection": True,
         "data": {"some_version": "1"},
         "max_event_priority_level": 4,
         "system_interaction_level": "INTERACTIVE",
@@ -294,7 +298,6 @@ def test_apply_global_args_to_plugin():
 
     assert run_payload["collection"] is True
     assert run_payload["analysis"] is True
-    assert run_payload["preserve_connection"] is True
     assert run_payload["data"]["some_version"] == "1"
     assert run_payload["max_event_priority_level"] == 4
     assert run_payload["system_interaction_level"] == "INTERACTIVE"
@@ -810,48 +813,6 @@ def _read_events(path) -> list[dict]:
         return json.load(f)
 
 
-def test_plugin_exception_closes_connection_and_saves_connection_result(tmp_path):
-    """A plugin raising must close its connection, keep the queue going and save a connection result."""
-    order: list[str] = []
-
-    class MarkerPlugin(PluginInterface[MockConnectionManager, None]):
-        CONNECTION_TYPE = MockConnectionManager
-
-        def run(self, **kwargs):
-            order.append("next_plugin")
-            return PluginResult(source="marker", status=ExecutionStatus.OK)
-
-    registry = _isolated_registry(
-        {"RaisingPlugin": RaisingPlugin, "MarkerPlugin": MarkerPlugin},
-        {"MockConnectionManager": MockConnectionManager},
-    )
-    executor = PluginExecutor(
-        plugin_configs=[PluginConfig(plugins={"RaisingPlugin": {}, "MarkerPlugin": {}})],
-        plugin_registry=registry,
-        system_info=SystemInfo(os_family=OSFamily.LINUX),
-        log_path=str(tmp_path),
-    )
-
-    with patch.object(
-        MockConnectionManager, "disconnect", side_effect=lambda: order.append("disconnect")
-    ):
-        results = executor.run_queue()
-
-    assert [r.source for r in results] == ["marker"]
-    # closed right after the failure, before the next plugin, and once more during cleanup
-    assert order == ["disconnect", "next_plugin", "disconnect"]
-
-    assert len(executor.connection_failure_results) == 1
-    conn_dir = tmp_path / "connection" / resolve_log_dir_name("MockConnectionManager")
-    events = _read_events(conn_dir / "events.json")
-    assert len(events) == 1
-    assert "RaisingPlugin" in events[0]["description"]
-    assert events[0]["priority"] == "CRITICAL"
-    assert events[0]["data"]["exception_type"] == "RuntimeError"
-    with open(conn_dir / "result.json", encoding="utf-8") as f:
-        assert json.load(f)["status"] == "EXECUTION_FAILURE"
-
-
 def test_connection_manager_instantiation_failure_is_logged_and_queue_continues(tmp_path, caplog):
     """A connection manager that cannot be built is logged and skipped, not fatal for the queue."""
     registry = _isolated_registry(
@@ -967,6 +928,7 @@ class TrackedManager(MockConnectionManager):
         self.result = self._init_result()
 
     def connect(self):
+        TrackedManager.calls.append(("connect", type(self).__name__))
         self.connection = MagicMock()
         self.result.status = ExecutionStatus.OK
         return self.result
@@ -1247,11 +1209,8 @@ def test_post_action_evaluation_exception_still_closes_connections(tmp_path, tra
     assert (_conn_dir(tmp_path, TrackedManager) / "result.json").is_file()
 
 
-@pytest.mark.parametrize("failing_step", ["disconnect", "save_result"])
-def test_cleanup_failure_for_one_connection_does_not_block_the_others(
-    tmp_path, tracked, failing_step
-):
-    """A manager whose disconnect/save raises must not stop the other managers being closed and saved."""
+def test_cleanup_failure_for_one_connection_does_not_block_the_others(tmp_path, tracked):
+    """A manager whose disconnect raises must not stop the other managers being closed."""
     executor = _executor(
         tmp_path,
         {
@@ -1262,7 +1221,7 @@ def test_cleanup_failure_for_one_connection_does_not_block_the_others(
         {"PluginA": {}, "PluginB": {}},
     )
 
-    with patch.object(ManagerA, failing_step, side_effect=OSError("cleanup boom")):
+    with patch.object(ManagerA, "disconnect", side_effect=OSError("cleanup boom")):
         results = executor.run_queue()
 
     assert {r.source for r in results} == {"PluginA", "PluginB"}
@@ -1349,15 +1308,16 @@ def test_discover_os_info_success_saves_result_in_os_discovery_dir(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "spot, expected_priority",
+    "spot, expected_priority, events_file",
     [
-        ("connect_raises", "CRITICAL"),
-        ("no_credentials", "CRITICAL"),
-        ("detection_raises", "ERROR"),
+        ("connect_raises", "CRITICAL", "events.json"),
+        ("no_credentials", "CRITICAL", "events.json"),
+        # the successful connect result is already result.json, so the failure is logged as (1)
+        ("detection_raises", "ERROR", "events(1).json"),
     ],
 )
 def test_discover_os_info_failures_are_saved_in_os_discovery_dir_and_closed(
-    tmp_path, spot, expected_priority
+    tmp_path, spot, expected_priority, events_file
 ):
     system_kwargs = {"location": SystemLocation.REMOTE} if spot == "no_credentials" else {}
     executor = _discovery_executor(tmp_path, **system_kwargs)
@@ -1389,7 +1349,7 @@ def test_discover_os_info_failures_are_saved_in_os_discovery_dir_and_closed(
 
     disconnect.assert_called_once()
     assert executor.system_info.os_family == original_family
-    events = _read_events(tmp_path / "os_discovery" / "events.json")
+    events = _read_events(tmp_path / "os_discovery" / events_file)
     assert events[-1]["priority"] == expected_priority
     assert events[-1]["data"]["parent"] == "os_discovery"
     assert not (tmp_path / "connection").exists()
@@ -1457,3 +1417,181 @@ def test_run_queue_continues_when_discovery_connection_cannot_be_built(tmp_path,
         results = executor.run_queue()
 
     assert [r.source for r in results] == ["Ok"]
+
+
+class _OkCollector(DataCollector):
+    DATA_MODEL = DummyDataModel
+
+    def collect_data(self, args=None):
+        return TaskResult(status=ExecutionStatus.OK), DummyDataModel()
+
+
+def _make_data_plugin(name):
+    class _DataPlugin(DataPlugin):
+        DATA_MODEL = DummyDataModel
+        CONNECTION_TYPE = TrackedManager
+        COLLECTOR = _OkCollector
+
+    _DataPlugin.__name__ = name
+    return _DataPlugin
+
+
+def test_data_plugins_share_one_connection_by_default(tmp_path, tracked):
+    """No argument is needed for plugins to share the executor's connection."""
+    executor = _executor(
+        tmp_path,
+        {"First": _make_data_plugin("First"), "Second": _make_data_plugin("Second")},
+        {"TrackedManager": TrackedManager},
+        {"First": {"analysis": False}, "Second": {"analysis": False}},
+    )
+
+    results = executor.run_queue()
+
+    assert [r.status for r in results] == [ExecutionStatus.OK, ExecutionStatus.OK]
+    assert tracked == [("connect", "TrackedManager"), ("disconnect", "TrackedManager")]
+
+
+def test_plugin_config_preserve_connection_false_is_honored(tmp_path, tracked):
+    """A plugin configured with preserve_connection=False closes the shared connection and the
+    next plugin reconnects; the executor no longer overrides the value."""
+    executor = _executor(
+        tmp_path,
+        {"First": _make_data_plugin("First"), "Second": _make_data_plugin("Second")},
+        {"TrackedManager": TrackedManager},
+        {
+            "First": {"analysis": False, "preserve_connection": False},
+            "Second": {"analysis": False},
+        },
+    )
+
+    results = executor.run_queue()
+
+    assert [r.status for r in results] == [ExecutionStatus.OK, ExecutionStatus.OK]
+    assert tracked == [
+        ("connect", "TrackedManager"),
+        ("disconnect", "TrackedManager"),  # First closed it
+        ("connect", "TrackedManager"),  # Second reconnected
+        ("disconnect", "TrackedManager"),  # executor cleanup
+    ]
+    with open(_conn_dir(tmp_path, TrackedManager) / "result.json", encoding="utf-8") as f:
+        assert json.load(f)["status"] == "OK"
+
+
+def test_global_args_preserve_connection_false_is_honored(tmp_path, tracked):
+    executor = _executor(
+        tmp_path,
+        {"First": _make_data_plugin("First"), "Second": _make_data_plugin("Second")},
+        {"TrackedManager": TrackedManager},
+        {"First": {"analysis": False}, "Second": {"analysis": False}},
+        config_kwargs={"global_args": {"preserve_connection": False}},
+    )
+
+    executor.run_queue()
+
+    # each plugin closes it after collecting, then the executor's cleanup closes it once more
+    assert len(_disconnects(tracked)) == 3
+    assert len([c for c in tracked if c[0] == "connect"]) == 2
+
+
+class _ConnArgs(BaseModel):
+    hostname: str
+    port: int = 22
+
+
+class _ModelledManager(MockConnectionManager):
+    CONNECTION_ARGS_MODEL = _ConnArgs
+
+
+class _ModelledPlugin(PluginInterface[_ModelledManager, None]):
+    __test__ = False
+
+    CONNECTION_TYPE = _ModelledManager
+
+    def run(self, connection_args=None, **kwargs):
+        return PluginResult(source="modelled", status=ExecutionStatus.OK)
+
+
+class _NoConnectionPlugin(PluginInterface[MockConnectionManager, None]):
+    __test__ = False
+
+    CONNECTION_TYPE = None
+
+    def run(self, connection_args=None):
+        return PluginResult(source="none", status=ExecutionStatus.OK)
+
+
+def _apply_connection_config(plugin_class, connection_config):
+    return PluginExecutor(plugin_configs=[]).apply_global_args_to_plugin(
+        plugin_class(), plugin_class, {}, connection_config
+    )
+
+
+def test_global_connection_config_gives_plugin_its_connection_args_without_unknown_keys():
+    config = {
+        "_ModelledManager": {"hostname": "h", "port": 2, "other": "x"},
+        "SomeOtherManager": {"hostname": "other"},
+    }
+
+    run_args = _apply_connection_config(_ModelledPlugin, config)
+
+    assert run_args["connection_args"] == {"hostname": "h", "port": 2}
+
+
+def test_global_connection_config_adds_nothing_without_entry_type_or_config():
+    for plugin_class, config in (
+        (_ModelledPlugin, {"Other": {}}),
+        (_ModelledPlugin, {}),
+        (_ModelledPlugin, None),
+        (_NoConnectionPlugin, {"MockConnectionManager": {"x": 1}}),
+    ):
+        assert "connection_args" not in _apply_connection_config(plugin_class, config)
+
+
+def test_global_connection_config_model_instance_is_passed_unchanged():
+    model = _ConnArgs(hostname="h")
+
+    run_args = _apply_connection_config(_ModelledPlugin, {"_ModelledManager": model})
+
+    assert run_args["connection_args"] is model
+
+
+def test_global_connection_config_without_args_model_is_an_unfiltered_copy():
+    class Plain(PluginInterface[MockConnectionManager, None]):
+        CONNECTION_TYPE = MockConnectionManager
+
+        def run(self, connection_args=None):
+            return PluginResult(source="plain", status=ExecutionStatus.OK)
+
+    config = {"MockConnectionManager": {"anything": 1}}
+
+    args = _apply_connection_config(Plain, config)["connection_args"]
+
+    assert args == {"anything": 1}
+    assert args is not config["MockConnectionManager"]
+
+
+def test_global_connection_config_is_not_added_when_run_does_not_accept_it():
+    # TestPluginB.run(self, test_arg=None) has no connection_args parameter
+    run_args = _apply_connection_config(TestPluginB, {"MockConnectionManager": {"x": 1}})
+
+    assert "connection_args" not in run_args
+
+
+def test_global_connection_config_result_builds_the_real_ssh_model():
+    from nodescraper.connection.inband import InBandConnectionManager as InBand
+    from nodescraper.connection.inband.sshparams import SSHConnectionParams
+
+    class InBandPlugin(PluginInterface[InBand, None]):
+        CONNECTION_TYPE = InBand
+
+        def run(self, connection_args=None):
+            return PluginResult(source="inband", status=ExecutionStatus.OK)
+
+    config = {
+        "InBandConnectionManager": {"hostname": "h", "username": "u", "key_filename": "k", "x": 1}
+    }
+
+    args = _apply_connection_config(InBandPlugin, config)["connection_args"]
+
+    assert SSHConnectionParams(**args).username == "u"
+    assert "x" not in args
