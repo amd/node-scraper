@@ -23,7 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
-from typing import ClassVar, Optional
+from typing import ClassVar, Optional, Union
 
 from pydantic import (
     AliasChoices,
@@ -37,7 +37,7 @@ from pydantic import (
 from typing_extensions import override
 
 from nodescraper.models import DataModel
-from nodescraper.utils import SIZE_UNITS, format_bytes
+from nodescraper.utils import SIZE_UNITS, bytes_to_human_readable
 
 # Field values that mean "nothing here" rather than a real value.
 PLACEHOLDERS = frozenset(
@@ -137,7 +137,7 @@ def parse_value(value: str) -> Optional[tuple[int, str]]:
     return int(number), unit.strip()
 
 
-def parse_size(value: str) -> Optional[int]:
+def parse_size(value: str, si: bool = True) -> Optional[int]:
     """Convert a size field such as "64 GB" into bytes.
 
     Args:
@@ -152,8 +152,7 @@ def parse_size(value: str) -> Optional[int]:
         return None
 
     size, unit = parsed
-    # A size with no unit is already a byte count, which is how
-    # Win32_PhysicalMemory reports capacity.
+
     factor = SIZE_UNITS.get(unit.upper() or "B")
     if not factor:
         return None
@@ -195,9 +194,9 @@ class DimmInfo(BaseModel):
 
     model_config: ClassVar[ConfigDict] = ConfigDict(populate_by_name=True)
 
-    size_bytes: int = Field(
+    size: str = Field(
         validation_alias=AliasChoices("size_bytes", "Size", "Capacity"),
-        description="Module capacity in bytes",
+        description="Module capacity as reported by the system",
     )
     locator: Optional[str] = Field(
         default=None,
@@ -256,12 +255,6 @@ class DimmInfo(BaseModel):
         validation_alias=AliasChoices("total_width_bits", "Total Width", "TotalWidth"),
         description="Data width plus any error correction width",
     )
-
-    @field_validator("size_bytes", mode="before")
-    @classmethod
-    def size_conformer(cls, value: object) -> object:
-        """Convert a "64 GB" style size, or a raw byte count, into bytes."""
-        return parse_size(value) if isinstance(value, str) else value
 
     @field_validator(
         "locator",
@@ -323,9 +316,17 @@ class DimmInfo(BaseModel):
 
     @computed_field  # type: ignore[misc]
     @property
-    def size(self) -> str:
-        """Module capacity as a human readable string, e.g. "64GB"."""
-        return format_bytes(self.size_bytes)
+    def human_size(self) -> str:
+        """Module capacity in bytes."""
+        if not self.size_bytes:
+            return "Unknown Size"
+        return bytes_to_human_readable(self.size_bytes)
+
+    @computed_field  # type: ignore[misc]
+    @property
+    def size_bytes(self) -> Union[int, None]:
+        """Module capacity in bytes."""
+        return parse_size(self.size)
 
     @override
     def __str__(self) -> str:
@@ -333,7 +334,7 @@ class DimmInfo(BaseModel):
         details = [
             detail
             for detail in (
-                self.size,
+                self.human_size or "Unknown Size",
                 self.memory_type,
                 f"{self.speed_mts}MT/s" if self.speed_mts else None,
                 self.manufacturer,
@@ -359,27 +360,29 @@ class DimmDataModel(DataModel):
     @property
     def total_size_bytes(self) -> int:
         """Combined capacity of every populated module, in bytes."""
-        return sum(dimm.size_bytes for dimm in self.dimms)
+        return sum(dimm.size_bytes or 0 for dimm in self.dimms)
 
     @computed_field  # type: ignore[misc]
     @property
-    def total_size(self) -> str:
-        """Combined capacity as a human readable string, e.g. "256GB"."""
-        return format_bytes(self.total_size_bytes)
+    def human_size(self) -> str:
+        """Module capacity in bytes."""
+        return bytes_to_human_readable(self.total_size_bytes)
 
     @computed_field  # type: ignore[misc]
     @property
-    def population(self) -> dict[str, int]:
+    def population(self) -> dict[Union[int, str], int]:
         """Module count keyed by capacity, smallest capacity first."""
-        counts: dict[int, int] = {}
+        counts: dict[Union[int, str], int] = {}
         for dimm in self.dimms:
-            counts[dimm.size_bytes] = counts.get(dimm.size_bytes, 0) + 1
-        return {format_bytes(size): count for size, count in sorted(counts.items())}
+            counts[dimm.human_size or "Unknown Size Bytes"] = (
+                counts.get(dimm.human_size or "Unknown Size Bytes", 0) + 1
+            )
+        return {size: count for size, count in sorted(counts.items())}
 
     @override
     def __str__(self) -> str:
         """Summarise the inventory, e.g. "256GB @ 2 x 64GB 1 x 128GB"."""
         if not self.dimms:
             return "0GB"
-        breakdown = " ".join(f"{count} x {size}" for size, count in self.population.items())
-        return f"{self.total_size} @ {breakdown}"
+        breakdown = ", ".join(f"{count} x {size}" for size, count in self.population.items())
+        return f"{self.human_size} @ {breakdown}"
