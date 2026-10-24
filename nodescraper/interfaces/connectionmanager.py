@@ -71,11 +71,24 @@ def connect_decorator(func: Callable[..., TaskResult]) -> Callable[..., TaskResu
             result = connection_manager.result
 
         connection_manager.result = result
-        connection_manager._ensure_failure_reported(result)
+
+        if result.status == ExecutionStatus.UNSET and connection_manager.connection is None:
+            # Force a fail if conncetion manager failed to give us a connection
+            result.status = ExecutionStatus.EXECUTION_FAILURE
+
+        if result.status >= ExecutionStatus.ERROR and not result.events:
+            result.message = result.message or "Connection could not be established"
+            # Push an event if the connection manager didn't
+            connection_manager._log_event(
+                category=EventCategory.RUNTIME,
+                description=result.message,
+                priority=EventPriority.CRITICAL,
+                console_log=True,
+            )
+
         result.finalize()
 
         connection_manager._run_hooks(result)
-        connection_manager._saved_event_count = len(result.events)
 
         return result
 
@@ -143,7 +156,6 @@ class ConnectionManager(Task, Generic[TConnection, TConnectArg]):
 
         self.connection_args = connection_args
         self.connection: Optional[TConnection] = None
-        self._saved_event_count = 0
 
     def __init_subclass__(cls, **kwargs) -> None:
         super().__init_subclass__(**kwargs)
@@ -198,35 +210,12 @@ class ConnectionManager(Task, Generic[TConnection, TConnectArg]):
         self.result.status = ExecutionStatus.EXECUTION_FAILURE
         return self.result
 
-    def _ensure_failure_reported(self, result: TaskResult) -> None:
-        """Make sure a failed connection attempt has a failure status and at least one event."""
-        if result.status == ExecutionStatus.UNSET and self.connection is None:
-            result.status = ExecutionStatus.EXECUTION_FAILURE
-
-        if result.status >= ExecutionStatus.ERROR and not result.events:
-            description = result.message or "Connection could not be established"
-            self._log_event(
-                category=EventCategory.RUNTIME,
-                description=description,
-                priority=EventPriority.CRITICAL,
-                console_log=True,
-            )
-            if not result.message:
-                result.message = description
-
-    def save_result(self) -> None:
-        """Save the current connection result through the result hooks.
-
-        connect() already saves its result, so only events added since the last save are
-        passed on; the status and message are written again so the saved result reflects the
-        final state. Nothing is saved if no connection was ever attempted.
-        """
-        result = self.result
-        if result.status == ExecutionStatus.UNSET and not result.events:
-            return
-        pending = result.events[self._saved_event_count :]
-        self._run_hooks(result.model_copy(update={"events": pending}))
-        self._saved_event_count = len(result.events)
+    def safe_disconnect(self) -> None:
+        """Disconnect without raising; a failure is logged."""
+        try:
+            self.disconnect()
+        except Exception:
+            self.logger.exception("Failed to disconnect %s", self.__class__.__name__)
 
     def build_failure_result(
         self,
@@ -237,8 +226,8 @@ class ConnectionManager(Task, Generic[TConnection, TConnectArg]):
         """Build a standalone failed result for this manager without touching ``self.result``.
 
         Use this to report a failure that happens after connect() (for example a plugin raising
-        while using the connection). It is separate from ``self.result`` so saving it does not
-        repeat the events that connect() already saved.
+        while using the connection). It is separate from ``self.result`` so it can be saved on
+        its own without re-saving the events connect() already saved.
 
         Args:
             description (str): Human-readable description of the failure.
@@ -254,14 +243,13 @@ class ConnectionManager(Task, Generic[TConnection, TConnectArg]):
             priority=priority,
             data=get_exception_traceback(exception) if exception is not None else None,
         )
-        return TaskResult(
-            task=self.__class__.__name__,
-            parent=self.parent,
-            status=ExecutionStatus.EXECUTION_FAILURE,
-            message=description,
-            events=[event],
-        )
+        result = self._init_result()
+        result.status = ExecutionStatus.EXECUTION_FAILURE
+        result.message = description
+        result.events.append(event)
+        return result
 
     def disconnect(self):
         """disconnect connection (Optional). The result of the connection attempt is kept."""
+        self.logger.info(f"Connection {self.__class__.__name__} disconnected.")
         self.connection = None

@@ -342,7 +342,7 @@ class TestDataPluginCore:
                 analysis=True,
                 max_event_priority_level=EventPriority.ERROR,
                 system_interaction_level=SystemInteractionLevel.PASSIVE,
-                preserve_connection=True,
+                preserve_connection=False,
                 data=data,
                 collection_args=collection_args,
                 analysis_args=analysis_args,
@@ -351,17 +351,16 @@ class TestDataPluginCore:
             mock_collect.assert_called_once_with(
                 max_event_priority_level=EventPriority.ERROR,
                 system_interaction_level=SystemInteractionLevel.PASSIVE,
+                preserve_connection=False,
                 collection_args=collection_args,
-                preserve_connection=True,
             )
 
             mock_analyze.assert_called_once_with(
                 max_event_priority_level=EventPriority.ERROR, analysis_args=analysis_args, data=data
             )
 
-    def test_collect_preserve_connection(self, plugin_with_conn):
-        """Test the behavior of preserve_connection parameter in collect method."""
-        # Test with preserve_connection=True
+    def test_collect_leaves_externally_owned_connection_open(self, plugin_with_conn):
+        """A connection manager passed in by the caller is closed by its owner, not the plugin."""
         with patch.object(BaseDataCollector, "collect_data") as mock_collect:
             with patch.object(MockConnectionManager, "disconnect") as mock_disconnect:
                 mock_collect.return_value = (
@@ -369,17 +368,31 @@ class TestDataPluginCore:
                     StandardDataModel(),
                 )
 
-                # Call collect with preserve_connection=True
-                result = plugin_with_conn.collect(preserve_connection=True)
+                result = plugin_with_conn.collect()
 
-                # Verify collect_data was called and result is OK
                 mock_collect.assert_called_once()
                 assert result.status == ExecutionStatus.OK
-
-                # Verify disconnect was NOT called when preserve_connection=True
                 mock_disconnect.assert_not_called()
 
-        # Test with preserve_connection=False (default)
+    def test_collect_closes_passed_in_connection_when_preserve_connection_false(
+        self, plugin_with_conn
+    ):
+        with patch.object(MockConnectionManager, "disconnect") as mock_disconnect:
+            result = plugin_with_conn.collect(preserve_connection=False)
+
+        assert result.status == ExecutionStatus.OK
+        mock_disconnect.assert_called_once()
+
+    def test_run_forwards_preserve_connection_to_collect(self, plugin_with_conn):
+        with patch.object(MockConnectionManager, "disconnect") as mock_disconnect:
+            plugin_with_conn.run(analysis=False, preserve_connection=False)
+            assert mock_disconnect.call_count == 1
+
+            plugin_with_conn.run(analysis=False)
+            assert mock_disconnect.call_count == 1
+
+    def test_collect_closes_connection_it_created(self, plugin):
+        """A connection manager created by the plugin itself is closed after collection."""
         with patch.object(BaseDataCollector, "collect_data") as mock_collect:
             with patch.object(MockConnectionManager, "disconnect") as mock_disconnect:
                 mock_collect.return_value = (
@@ -387,14 +400,10 @@ class TestDataPluginCore:
                     StandardDataModel(),
                 )
 
-                # Call collect with preserve_connection=False (default)
-                result = plugin_with_conn.collect(preserve_connection=False)
+                result = plugin.collect()
 
-                # Verify collect_data was called and result is OK
                 mock_collect.assert_called_once()
                 assert result.status == ExecutionStatus.OK
-
-                # Verify disconnect WAS called when preserve_connection=False
                 mock_disconnect.assert_called_once()
 
     def test_run_with_data_file_no_collection(self, plugin_with_conn, tmp_path):
@@ -867,7 +876,7 @@ class TestDataPluginLogDirNameOverride:
             log_path=str(run_path),
         )
 
-        assert plugin.collect(preserve_connection=True).status == ExecutionStatus.OK
+        assert plugin.collect().status == ExecutionStatus.OK
 
         # collect() wrote the collector output under the registered override names
         collector_dir = run_path / "override_LOGDIR_plugin" / "override_LOGDIR_collector"
@@ -888,7 +897,7 @@ class TestDataPluginLogDirNameOverride:
             connection_manager=plugin_with_conn.connection_manager,
             log_path=str(run_path),
         )
-        plugin.collect(preserve_connection=True)
+        plugin.collect()
 
         loaded = OverrideLogDirPlugin.load_run_data(str(run_path))
         assert loaded is not None
@@ -960,8 +969,8 @@ class TestDataPluginResultConnection:
         assert connection_result.status == ExecutionStatus.OK
         assert result.status == ExecutionStatus.OK
 
-    def test_connection_result_kept_when_connection_preserved(self, plugin):
-        result = plugin.run(preserve_connection=True)
+    def test_connection_result_reported_for_externally_owned_connection(self, plugin_with_conn):
+        result = plugin_with_conn.run()
 
         assert result.result_data.connection_result.status == ExecutionStatus.OK
 
@@ -1020,12 +1029,6 @@ class TestDataPluginResultConnection:
 
         mock_connect.assert_called_once()
 
-    def test_no_connection_result_when_no_connection_type(self, plugin):
-        with patch.object(CoreDataPlugin, "CONNECTION_TYPE", None):
-            result = plugin.run(analysis=False)
-
-        assert result.result_data.connection_result is None
-
     def test_connection_result_is_a_snapshot(self, plugin_with_conn):
         result = plugin_with_conn.run(analysis=False)
 
@@ -1069,13 +1072,17 @@ class TestDataPluginSavesConnectionResult:
 
     @staticmethod
     def _conn_dir(log_path: Path) -> Path:
+        # manager created by the plugin: <plugin>/<primary collector>/connection
         return (
             log_path
             / utils.resolve_log_dir_name("WarningConnectionPlugin")
-            / utils.resolve_log_dir_name("WarningConnectionManager")
+            / utils.resolve_log_dir_name("BaseDataCollector")
+            / "connection"
         )
 
-    def test_successful_connection_saved_when_not_preserved(self, system_info, logger, tmp_path):
+    def test_successful_connection_saved_when_plugin_owns_connection(
+        self, system_info, logger, tmp_path
+    ):
         plugin = WarningConnectionPlugin(
             system_info=system_info, logger=logger, log_path=str(tmp_path)
         )
@@ -1088,24 +1095,9 @@ class TestDataPluginSavesConnectionResult:
         events = json.loads((conn_dir / "events.json").read_text())
         assert [e["description"] for e in events] == ["Slow handshake"]
 
-    def test_events_added_after_connect_are_saved_once(self, system_info, logger, tmp_path):
-        plugin = WarningConnectionPlugin(
-            system_info=system_info, logger=logger, log_path=str(tmp_path)
-        )
-        plugin.collect(preserve_connection=True)
-        plugin.connection_manager._log_event(
-            category=EventCategory.SSH,
-            description="Dropped keepalive",
-            priority=EventPriority.WARNING,
-        )
-
-        plugin._close_connection()
-        plugin._close_connection()
-
-        events = json.loads((self._conn_dir(tmp_path) / "events.json").read_text())
-        assert [e["description"] for e in events] == ["Slow handshake", "Dropped keepalive"]
-
-    def test_failed_connection_result_saved_when_not_preserved(self, system_info, logger, tmp_path):
+    def test_failed_connection_result_saved_when_plugin_owns_connection(
+        self, system_info, logger, tmp_path
+    ):
         plugin = FailingConnectionPlugin(
             system_info=system_info, logger=logger, log_path=str(tmp_path)
         )
@@ -1115,37 +1107,12 @@ class TestDataPluginSavesConnectionResult:
         conn_dir = (
             tmp_path
             / utils.resolve_log_dir_name("FailingConnectionPlugin")
-            / utils.resolve_log_dir_name("FailingConnectionManager")
+            / utils.resolve_log_dir_name("BaseDataCollector")
+            / "connection"
         )
         assert json.loads((conn_dir / "result.json").read_text())["status"] == "EXECUTION_FAILURE"
         events = json.loads((conn_dir / "events.json").read_text())
         assert [e["description"] for e in events] == ["Unable to reach host"]
-
-    def test_save_failure_does_not_break_collect(self, system_info, logger, tmp_path):
-        plugin = WarningConnectionPlugin(
-            system_info=system_info, logger=logger, log_path=str(tmp_path)
-        )
-
-        with patch.object(WarningConnectionManager, "save_result", side_effect=OSError("disk")):
-            result = plugin.collect()
-
-        assert result.status == ExecutionStatus.OK
-
-    def test_nothing_saved_when_no_connection_attempted(self, system_info, logger, tmp_path):
-        plugin = WarningConnectionPlugin(
-            system_info=system_info, logger=logger, log_path=str(tmp_path)
-        )
-        plugin.connection_manager = WarningConnectionManager(
-            system_info=system_info,
-            logger=logger,
-            parent="WarningConnectionPlugin",
-            task_result_hooks=plugin.task_result_hooks,
-        )
-        plugin.connection_manager.result = TaskResult()
-
-        plugin._close_connection()
-
-        assert not self._conn_dir(tmp_path).exists()
 
 
 class LifecycleConnectionManager(MockConnectionManager):
@@ -1212,11 +1179,21 @@ class TestDataPluginOwnConnection:
     """The DataPlugin creates the connection manager itself and must clean it up."""
 
     @staticmethod
-    def _conn_dir(log_path: Path, manager_cls) -> Path:
+    def _conn_dir(log_path: Path, collector_cls=BaseDataCollector) -> Path:
         return (
             log_path
             / utils.resolve_log_dir_name("OwnConnectionPlugin")
-            / utils.resolve_log_dir_name(manager_cls.__name__)
+            / utils.resolve_log_dir_name(collector_cls.__name__)
+            / "connection"
+        )
+
+    @staticmethod
+    def _external_conn_dir(log_path: Path) -> Path:
+        # a manager supplied by the caller keeps the caller's hooks: <plugin>/<manager>
+        return (
+            log_path
+            / utils.resolve_log_dir_name("OwnConnectionPlugin")
+            / utils.resolve_log_dir_name("LifecycleConnectionManager")
         )
 
     @staticmethod
@@ -1248,7 +1225,7 @@ class TestDataPluginOwnConnection:
         assert isinstance(manager, LifecycleConnectionManager)
         assert manager.disconnect_calls == 1
         assert manager.connection is None
-        conn_dir = self._conn_dir(tmp_path, LifecycleConnectionManager)
+        conn_dir = self._conn_dir(tmp_path)
         saved = self._saved_result(conn_dir)
         assert saved["status"] == "OK"
         assert saved["task"] == "LifecycleConnectionManager"
@@ -1257,19 +1234,120 @@ class TestDataPluginOwnConnection:
         self._assert_only_plugin_folder(tmp_path)
         assert result.result_data.connection_result.status == ExecutionStatus.OK
 
-    def test_preserved_connection_stays_open_with_result_in_plugin_folder(
+    def test_connection_result_is_kept_apart_from_collector_files(
+        self, system_info, logger, tmp_path
+    ):
+        plugin = self._build(system_info, logger, tmp_path, LifecycleConnectionManager)
+
+        plugin.collect()
+
+        collector_dir = (
+            tmp_path
+            / utils.resolve_log_dir_name("OwnConnectionPlugin")
+            / utils.resolve_log_dir_name("BaseDataCollector")
+        )
+        conn_dir = collector_dir / "connection"
+        assert json.loads((conn_dir / "result.json").read_text())["task"] == (
+            "LifecycleConnectionManager"
+        )
+        # the connection's files are not mixed into the collector folder itself
+        assert not (collector_dir / "result.json").exists()
+        assert not (collector_dir / "events.json").exists()
+        # nothing is written under a per-manager folder next to the collector
+        assert not (
+            tmp_path
+            / utils.resolve_log_dir_name("OwnConnectionPlugin")
+            / utils.resolve_log_dir_name("LifecycleConnectionManager")
+        ).exists()
+
+    def test_externally_owned_connection_is_left_open_for_its_owner(
+        self, system_info, logger, tmp_path
+    ):
+        plugin = self._build(system_info, logger, tmp_path, LifecycleConnectionManager)
+        manager = LifecycleConnectionManager(
+            system_info=system_info,
+            logger=logger,
+            parent="OwnConnectionPlugin",
+            task_result_hooks=plugin.task_result_hooks,
+        )
+        plugin.connection_manager = manager
+
+        plugin.collect()
+
+        # the plugin did not create the manager, so it must not close it
+        assert manager.disconnect_calls == 0
+        assert manager.connection is not None
+        conn_dir = self._external_conn_dir(tmp_path)
+        assert self._saved_result(conn_dir)["status"] == "OK"
+
+        # the owner closes its own connection
+        manager.disconnect()
+        assert manager.disconnect_calls == 1
+        assert self._saved_result(conn_dir)["status"] == "OK"
+        self._assert_only_plugin_folder(tmp_path)
+
+    def test_passed_in_connection_closed_and_saved_when_preserve_connection_false(
+        self, system_info, logger, tmp_path
+    ):
+        plugin = self._build(system_info, logger, tmp_path, LifecycleConnectionManager)
+        manager = LifecycleConnectionManager(
+            system_info=system_info,
+            logger=logger,
+            parent="OwnConnectionPlugin",
+            task_result_hooks=plugin.task_result_hooks,
+        )
+        plugin.connection_manager = manager
+
+        plugin.collect(preserve_connection=False)
+
+        assert manager.disconnect_calls == 1
+        assert manager.connection is None
+        saved = self._saved_result(self._external_conn_dir(tmp_path))
+        assert saved["status"] == "OK"
+        self._assert_only_plugin_folder(tmp_path)
+
+    def test_owned_connection_closed_even_when_preserve_connection_true(
         self, system_info, logger, tmp_path
     ):
         plugin = self._build(system_info, logger, tmp_path, LifecycleConnectionManager)
 
         plugin.collect(preserve_connection=True)
 
-        manager = plugin.connection_manager
+        assert plugin.connection_manager.disconnect_calls == 1
+
+    def test_externally_owned_failed_connection_is_not_closed_by_plugin(
+        self, system_info, logger, tmp_path
+    ):
+        plugin = self._build(system_info, logger, tmp_path, RaisingConnectManager)
+        manager = RaisingConnectManager(
+            system_info=system_info,
+            logger=logger,
+            parent="OwnConnectionPlugin",
+            task_result_hooks=plugin.task_result_hooks,
+        )
+        plugin.connection_manager = manager
+
+        plugin.collect()
+
         assert manager.disconnect_calls == 0
-        assert manager.connection is not None
-        saved = self._saved_result(self._conn_dir(tmp_path, LifecycleConnectionManager))
+
+    def test_manager_built_from_connection_args_is_owned_and_closed(
+        self, system_info, logger, tmp_path
+    ):
+        plugin = _own_connection_plugin(LifecycleConnectionManager)(
+            system_info=system_info,
+            logger=logger,
+            log_path=str(tmp_path),
+            connection_args={"host": "example"},
+        )
+        manager = plugin.connection_manager
+        assert isinstance(manager, LifecycleConnectionManager)
+
+        plugin.collect()
+
+        assert manager.disconnect_calls == 1
+        saved = self._saved_result(self._conn_dir(tmp_path))
         assert saved["status"] == "OK"
-        self._assert_only_plugin_folder(tmp_path)
 
     @pytest.mark.parametrize(
         "collector_cls, expected_status",
@@ -1293,7 +1371,7 @@ class TestDataPluginOwnConnection:
         assert manager.disconnect_calls == 1
         assert manager.connection is None
         # the connection itself was fine, so it is saved as OK in the plugin folder
-        saved = self._saved_result(self._conn_dir(tmp_path, LifecycleConnectionManager))
+        saved = self._saved_result(self._conn_dir(tmp_path, collector_cls))
         assert saved["status"] == "OK"
         self._assert_only_plugin_folder(tmp_path)
 
@@ -1307,7 +1385,7 @@ class TestDataPluginOwnConnection:
         assert result.result_data.collection_result.status == ExecutionStatus.NOT_RAN
         manager = plugin.connection_manager
         assert manager.disconnect_calls == 1
-        conn_dir = self._conn_dir(tmp_path, RaisingConnectManager)
+        conn_dir = self._conn_dir(tmp_path)
         assert self._saved_result(conn_dir)["status"] == "EXECUTION_FAILURE"
         events = json.loads((conn_dir / "events.json").read_text())
         # reported once by connect(); closing the connection must not repeat it
@@ -1338,19 +1416,8 @@ class TestDataPluginOwnConnection:
 
         assert result.status == ExecutionStatus.OK
         assert plugin.connection_manager.disconnect_calls == 1
-        saved = self._saved_result(self._conn_dir(tmp_path, RaisingDisconnectManager))
+        saved = self._saved_result(self._conn_dir(tmp_path))
         assert saved["status"] == "OK"
-
-    def test_save_failure_does_not_stop_the_connection_being_closed(
-        self, system_info, logger, tmp_path
-    ):
-        plugin = self._build(system_info, logger, tmp_path, LifecycleConnectionManager)
-
-        with patch.object(LifecycleConnectionManager, "save_result", side_effect=OSError("disk")):
-            result = plugin.collect()
-
-        assert result.status == ExecutionStatus.OK
-        assert plugin.connection_manager.disconnect_calls == 1
 
     def test_without_log_path_connection_is_closed_and_nothing_written(
         self, system_info, logger, tmp_path, monkeypatch
@@ -1373,5 +1440,5 @@ class TestDataPluginOwnConnection:
         plugin.collect()
 
         assert plugin.connection_manager.disconnect_calls == 2
-        saved = self._saved_result(self._conn_dir(tmp_path, LifecycleConnectionManager))
+        saved = self._saved_result(self._conn_dir(tmp_path))
         assert saved["status"] == "OK"

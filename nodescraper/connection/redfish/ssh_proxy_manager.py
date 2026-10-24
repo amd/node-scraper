@@ -199,23 +199,17 @@ class RedfishSshProxyConnectionManager(
         key = _proxy_target_key(target)
         try:
             return key, self._open_proxy(target), None
-        except (SSHConnectionError, RedfishConnectionError) as exc:
-            description = f"SSH-proxy Redfish connection failed for target {key!r}: {exc}"
+        except Exception as exc:
+            if isinstance(exc, (SSHConnectionError, RedfishConnectionError)):
+                description = f"SSH-proxy Redfish connection failed for target {key!r}: {exc}"
+            else:
+                description = f"Unknown SSH-proxy Redfish error for target {key!r}: {exc}"
             self._log_event(
                 category=(
                     EventCategory.SSH
                     if isinstance(exc, SSHConnectionError)
                     else EventCategory.RUNTIME
                 ),
-                description=description,
-                priority=EventPriority.WARNING,
-                console_log=True,
-            )
-            return key, None, description
-        except Exception as exc:
-            description = f"Unkown SSH-proxy Redfish error for target {key!r}: {exc}"
-            self._log_event(
-                category=EventCategory.RUNTIME,
                 description=description,
                 priority=EventPriority.WARNING,
                 console_log=True,

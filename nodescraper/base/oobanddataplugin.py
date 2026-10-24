@@ -67,7 +67,7 @@ class OOBandDataPlugin(
         system_interaction_level: Union[
             SystemInteractionLevel, str
         ] = SystemInteractionLevel.INTERACTIVE,
-        preserve_connection: bool = False,
+        preserve_connection: bool = True,
         data: Optional[Any] = None,
         collection_args: Optional[Any] = None,
         analysis_args: Optional[Any] = None,
