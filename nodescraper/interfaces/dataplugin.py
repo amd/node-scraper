@@ -144,7 +144,6 @@ class DataPlugin(
             parent=self.__class__.__name__,
             task=self.ANALYZER.__name__ if self.ANALYZER is not None else None,
         )
-        self._owns_connection_manager = False
         self._data: Optional[TDataModel] = None
 
     @classmethod
@@ -337,7 +336,7 @@ class DataPlugin(
         system_interaction_level: Optional[
             Union[SystemInteractionLevel, str]
         ] = SystemInteractionLevel.INTERACTIVE,
-        preserve_connection: bool = False,
+        preserve_connection: bool = True,
         collection_args: Optional[TCollectArg] = None,
     ) -> TaskResult:
         """Run data collector task

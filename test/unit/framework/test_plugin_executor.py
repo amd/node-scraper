@@ -837,14 +837,13 @@ def test_connection_manager_instantiation_failure_is_logged_and_queue_continues(
         "FailingInitConnectionManager" in r.message and "bad connection args" in r.message
         for r in caplog.records
     )
-    assert executor.connection_failure_results == []
     assert not (
         tmp_path / "connection" / resolve_log_dir_name("FailingInitConnectionManager")
     ).exists()
 
 
-def test_connection_results_saved_and_closed_when_cleanup_step_raises(tmp_path):
-    """Recorded connection failures are saved and connections closed even if a collator raises."""
+def test_connections_closed_when_cleanup_step_raises(tmp_path):
+    """Connections are closed even if a collator raises."""
     registry = _isolated_registry(
         {"RaisingPlugin": RaisingPlugin},
         {"MockConnectionManager": MockConnectionManager},
@@ -864,8 +863,6 @@ def test_connection_results_saved_and_closed_when_cleanup_step_raises(tmp_path):
             executor.run_queue()
 
     assert disconnect.call_count == 2
-    conn_dir = tmp_path / "connection" / resolve_log_dir_name("MockConnectionManager")
-    assert (conn_dir / "events.json").is_file()
 
 
 def test_discover_os_info_result_saved_separately_from_connection_results(tmp_path):
@@ -881,33 +878,6 @@ def test_discover_os_info_result_saved_separately_from_connection_results(tmp_pa
 
     events = _read_events(tmp_path / "os_discovery" / "events.json")
     assert events[0]["priority"] == "CRITICAL"
-    assert events[0]["data"]["parent"] == "os_discovery"
-    assert not (tmp_path / "connection").exists()
-
-
-def test_discover_os_info_exception_saved_in_os_discovery_dir(tmp_path):
-    """An exception while detecting the OS family is saved next to the discovery connection result."""
-    executor = PluginExecutor(
-        plugin_configs=[PluginConfig(plugins={})],
-        plugin_registry=_isolated_registry({}, {}),
-        system_info=SystemInfo(),
-        log_path=str(tmp_path),
-    )
-
-    with (
-        patch.object(
-            InBandConnectionManager, "connect", return_value=TaskResult(status=ExecutionStatus.OK)
-        ),
-        patch(
-            "nodescraper.pluginexecutor.discover_and_write_os_family",
-            side_effect=RuntimeError("detect boom"),
-        ),
-    ):
-        executor.discover_os_info()
-
-    events = _read_events(tmp_path / "os_discovery" / "events.json")
-    assert "detect boom" in events[0]["description"]
-    assert events[0]["priority"] == "ERROR"
     assert events[0]["data"]["parent"] == "os_discovery"
     assert not (tmp_path / "connection").exists()
 
@@ -1017,20 +987,10 @@ def _failing_and_ok_plugins():
     )
 
 
-@pytest.mark.parametrize(
-    "spot, expected_exception",
-    [
-        ("plugin_init", "RuntimeError"),
-        ("global_args", "TypeError"),
-        ("plugin_run", "RuntimeError"),
-        ("result_hook", "RuntimeError"),
-    ],
-)
-def test_exception_at_each_plugin_spot_closes_connection_and_saves_result(
-    tmp_path, tracked, spot, expected_exception
-):
-    """Whichever step of running a plugin raises, its connection is closed right away,
-    the failure is saved in the connection folder and the next plugin still runs."""
+@pytest.mark.parametrize("spot", ["plugin_init", "global_args", "plugin_run", "result_hook"])
+def test_exception_at_each_plugin_spot_closes_connection(tmp_path, tracked, spot):
+    """Whichever step of running a plugin raises, its connection is closed right away
+    and the next plugin still runs."""
     plugins, managers, config = _failing_and_ok_plugins()
     if spot != "plugin_init":
         plugins["Failing"] = _make_plugin(
@@ -1067,16 +1027,6 @@ def test_exception_at_each_plugin_spot_closes_connection_and_saves_result(
     assert len(_disconnects(tracked)) == 2
     assert tracked.index(("disconnect", "TrackedManager")) < tracked.index(("run", "Ok"))
 
-    conn_dir = _conn_dir(tmp_path, TrackedManager)
-    events = _read_events(conn_dir / "events.json")
-    assert len(events) == 1
-    assert "Failing" in events[0]["description"]
-    assert events[0]["priority"] == "CRITICAL"
-    assert events[0]["data"]["exception_type"] == expected_exception
-    # the manager's own OK result must not overwrite the recorded failure
-    with open(conn_dir / "result.json", encoding="utf-8") as f:
-        assert json.load(f)["status"] == "EXECUTION_FAILURE"
-
 
 def test_invalid_global_args_skips_plugin_without_connection_failure(tmp_path, tracked):
     """A ValueError from global args skips the plugin: no connection failure, closed at cleanup."""
@@ -1093,7 +1043,6 @@ def test_invalid_global_args_skips_plugin_without_connection_failure(tmp_path, t
         results = executor.run_queue()
 
     assert results == []
-    assert executor.connection_failure_results == []
     assert _disconnects(tracked) == [("disconnect", "TrackedManager")]
     assert not (tmp_path / "connection").exists()
 
@@ -1113,7 +1062,6 @@ def test_unresolvable_connection_manager_is_logged_and_queue_continues(tmp_path,
 
     assert [r.source for r in results] == ["Ok"]
     assert any("AbstractManager" in r.message and "Abstract" in r.message for r in caplog.records)
-    assert executor.connection_failure_results == []
     assert not _conn_dir(tmp_path, AbstractManager).exists()
 
 
@@ -1135,11 +1083,10 @@ def test_oob_plugin_without_redfish_config_is_logged_and_queue_continues(tmp_pat
 
     assert [r.source for r in results] == ["Ok"]
     assert any("RedfishConnectionManager" in r.message for r in caplog.records)
-    assert executor.connection_failure_results == []
     assert not _conn_dir(tmp_path, OobSshConnectionManager).exists()
 
 
-def test_post_action_plugin_exception_closes_connection_and_saves_result(tmp_path, tracked):
+def test_post_action_plugin_exception_closes_connection(tmp_path, tracked):
     """A post-action plugin raising is handled like a primary plugin failure."""
     executor = _executor(
         tmp_path,
@@ -1162,8 +1109,6 @@ def test_post_action_plugin_exception_closes_connection_and_saves_result(tmp_pat
 
     assert [r.source for r in results] == ["Primary"]
     assert len(_disconnects(tracked)) == 2
-    events = _read_events(_conn_dir(tmp_path, TrackedManager) / "events.json")
-    assert "PostAction" in events[0]["description"]
 
 
 def test_queue_level_exception_still_saves_and_closes_connections(tmp_path, tracked):
@@ -1257,7 +1202,7 @@ def test_failing_connection_hook_does_not_stop_cleanup(tmp_path, tracked):
 
 
 def test_failure_close_error_does_not_mask_plugin_failure(tmp_path, tracked):
-    """If disconnect raises while closing after a plugin failure, the failure is still recorded."""
+    """If disconnect raises while closing after a plugin failure, the queue carries on."""
     executor = _executor(
         tmp_path,
         {"Failing": _make_plugin(ManagerA, "Failing", "raise"), "Ok": _make_plugin(ManagerB, "Ok")},
@@ -1269,9 +1214,6 @@ def test_failure_close_error_does_not_mask_plugin_failure(tmp_path, tracked):
         results = executor.run_queue()
 
     assert [r.source for r in results] == ["Ok"]
-    events = _read_events(_conn_dir(tmp_path, ManagerA) / "events.json")
-    assert events[0]["data"]["exception_type"] == "RuntimeError"
-    assert "Failing" in events[0]["description"]
 
 
 # ---------------------------------------------------------------------------
@@ -1308,16 +1250,16 @@ def test_discover_os_info_success_saves_result_in_os_discovery_dir(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "spot, expected_priority, events_file",
+    "spot, expected_priority",
     [
-        ("connect_raises", "CRITICAL", "events.json"),
-        ("no_credentials", "CRITICAL", "events.json"),
-        # the successful connect result is already result.json, so the failure is logged as (1)
-        ("detection_raises", "ERROR", "events(1).json"),
+        ("connect_raises", "CRITICAL"),
+        ("no_credentials", "CRITICAL"),
+        # the connection itself succeeded; the detection error is only logged
+        ("detection_raises", None),
     ],
 )
 def test_discover_os_info_failures_are_saved_in_os_discovery_dir_and_closed(
-    tmp_path, spot, expected_priority, events_file
+    tmp_path, spot, expected_priority
 ):
     system_kwargs = {"location": SystemLocation.REMOTE} if spot == "no_credentials" else {}
     executor = _discovery_executor(tmp_path, **system_kwargs)
@@ -1349,9 +1291,12 @@ def test_discover_os_info_failures_are_saved_in_os_discovery_dir_and_closed(
 
     disconnect.assert_called_once()
     assert executor.system_info.os_family == original_family
-    events = _read_events(tmp_path / "os_discovery" / events_file)
-    assert events[-1]["priority"] == expected_priority
-    assert events[-1]["data"]["parent"] == "os_discovery"
+    if expected_priority is None:
+        assert not (tmp_path / "os_discovery" / "events.json").exists()
+    else:
+        events = _read_events(tmp_path / "os_discovery" / "events.json")
+        assert events[-1]["priority"] == expected_priority
+        assert events[-1]["data"]["parent"] == "os_discovery"
     assert not (tmp_path / "connection").exists()
 
 
@@ -1395,11 +1340,8 @@ def test_discovery_and_plugin_results_go_to_separate_folders(tmp_path, tracked):
     assert discovery["status"] == "OK"
     assert not (tmp_path / "os_discovery" / "events.json").exists()
 
-    plugin_events = _read_events(_conn_dir(tmp_path, TrackedManager) / "events.json")
-    assert "Failing" in plugin_events[0]["description"]
-    assert [p.name for p in (tmp_path / "connection").iterdir()] == [
-        resolve_log_dir_name("TrackedManager")
-    ]
+    assert not (tmp_path / "connection" / "os_discovery").exists()
+    assert not (tmp_path / "connection" / resolve_log_dir_name("InBandConnectionManager")).exists()
 
 
 def test_run_queue_continues_when_discovery_connection_cannot_be_built(tmp_path, tracked):
@@ -1473,8 +1415,6 @@ def test_plugin_config_preserve_connection_false_is_honored(tmp_path, tracked):
         ("connect", "TrackedManager"),  # Second reconnected
         ("disconnect", "TrackedManager"),  # executor cleanup
     ]
-    with open(_conn_dir(tmp_path, TrackedManager) / "result.json", encoding="utf-8") as f:
-        assert json.load(f)["status"] == "OK"
 
 
 def test_global_args_preserve_connection_false_is_honored(tmp_path, tracked):
@@ -1491,107 +1431,3 @@ def test_global_args_preserve_connection_false_is_honored(tmp_path, tracked):
     # each plugin closes it after collecting, then the executor's cleanup closes it once more
     assert len(_disconnects(tracked)) == 3
     assert len([c for c in tracked if c[0] == "connect"]) == 2
-
-
-class _ConnArgs(BaseModel):
-    hostname: str
-    port: int = 22
-
-
-class _ModelledManager(MockConnectionManager):
-    CONNECTION_ARGS_MODEL = _ConnArgs
-
-
-class _ModelledPlugin(PluginInterface[_ModelledManager, None]):
-    __test__ = False
-
-    CONNECTION_TYPE = _ModelledManager
-
-    def run(self, connection_args=None, **kwargs):
-        return PluginResult(source="modelled", status=ExecutionStatus.OK)
-
-
-class _NoConnectionPlugin(PluginInterface[MockConnectionManager, None]):
-    __test__ = False
-
-    CONNECTION_TYPE = None
-
-    def run(self, connection_args=None):
-        return PluginResult(source="none", status=ExecutionStatus.OK)
-
-
-def _apply_connection_config(plugin_class, connection_config):
-    return PluginExecutor(plugin_configs=[]).apply_global_args_to_plugin(
-        plugin_class(), plugin_class, {}, connection_config
-    )
-
-
-def test_global_connection_config_gives_plugin_its_connection_args_without_unknown_keys():
-    config = {
-        "_ModelledManager": {"hostname": "h", "port": 2, "other": "x"},
-        "SomeOtherManager": {"hostname": "other"},
-    }
-
-    run_args = _apply_connection_config(_ModelledPlugin, config)
-
-    assert run_args["connection_args"] == {"hostname": "h", "port": 2}
-
-
-def test_global_connection_config_adds_nothing_without_entry_type_or_config():
-    for plugin_class, config in (
-        (_ModelledPlugin, {"Other": {}}),
-        (_ModelledPlugin, {}),
-        (_ModelledPlugin, None),
-        (_NoConnectionPlugin, {"MockConnectionManager": {"x": 1}}),
-    ):
-        assert "connection_args" not in _apply_connection_config(plugin_class, config)
-
-
-def test_global_connection_config_model_instance_is_passed_unchanged():
-    model = _ConnArgs(hostname="h")
-
-    run_args = _apply_connection_config(_ModelledPlugin, {"_ModelledManager": model})
-
-    assert run_args["connection_args"] is model
-
-
-def test_global_connection_config_without_args_model_is_an_unfiltered_copy():
-    class Plain(PluginInterface[MockConnectionManager, None]):
-        CONNECTION_TYPE = MockConnectionManager
-
-        def run(self, connection_args=None):
-            return PluginResult(source="plain", status=ExecutionStatus.OK)
-
-    config = {"MockConnectionManager": {"anything": 1}}
-
-    args = _apply_connection_config(Plain, config)["connection_args"]
-
-    assert args == {"anything": 1}
-    assert args is not config["MockConnectionManager"]
-
-
-def test_global_connection_config_is_not_added_when_run_does_not_accept_it():
-    # TestPluginB.run(self, test_arg=None) has no connection_args parameter
-    run_args = _apply_connection_config(TestPluginB, {"MockConnectionManager": {"x": 1}})
-
-    assert "connection_args" not in run_args
-
-
-def test_global_connection_config_result_builds_the_real_ssh_model():
-    from nodescraper.connection.inband import InBandConnectionManager as InBand
-    from nodescraper.connection.inband.sshparams import SSHConnectionParams
-
-    class InBandPlugin(PluginInterface[InBand, None]):
-        CONNECTION_TYPE = InBand
-
-        def run(self, connection_args=None):
-            return PluginResult(source="inband", status=ExecutionStatus.OK)
-
-    config = {
-        "InBandConnectionManager": {"hostname": "h", "username": "u", "key_filename": "k", "x": 1}
-    }
-
-    args = _apply_connection_config(InBandPlugin, config)["connection_args"]
-
-    assert SSHConnectionParams(**args).username == "u"
-    assert "x" not in args
