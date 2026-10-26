@@ -217,38 +217,6 @@ class ConnectionManager(Task, Generic[TConnection, TConnectArg]):
         except Exception:
             self.logger.exception("Failed to disconnect %s", self.__class__.__name__)
 
-    def build_failure_result(
-        self,
-        description: str,
-        exception: Optional[BaseException] = None,
-        priority: EventPriority = EventPriority.CRITICAL,
-    ) -> TaskResult:
-        """Build a standalone failed result for this manager without touching ``self.result``.
-
-        Use this to report a failure that happens after connect() (for example a plugin raising
-        while using the connection). It is separate from ``self.result`` so it can be saved on
-        its own without re-saving the events connect() already saved.
-
-        Args:
-            description (str): Human-readable description of the failure.
-            exception (Optional[BaseException], optional): Exception to attach to the event. Defaults to None.
-            priority (EventPriority, optional): Priority of the event. Defaults to EventPriority.CRITICAL.
-
-        Returns:
-            TaskResult: Failed result holding a single event describing the failure.
-        """
-        event = self._build_event(
-            category=EventCategory.RUNTIME,
-            description=description,
-            priority=priority,
-            data=get_exception_traceback(exception) if exception is not None else None,
-        )
-        result = self._init_result()
-        result.status = ExecutionStatus.EXECUTION_FAILURE
-        result.message = description
-        result.events.append(event)
-        return result
-
     def disconnect(self):
         """disconnect connection (Optional). The result of the connection attempt is kept."""
         self.logger.info(f"Connection {self.__class__.__name__} disconnected.")

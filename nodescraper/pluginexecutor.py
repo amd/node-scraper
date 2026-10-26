@@ -41,7 +41,7 @@ from nodescraper.connection.inband import InBandConnectionManager
 from nodescraper.connection.inband.osdetection import discover_and_write_os_family
 from nodescraper.connection.oob_ssh import OobSshConnectionManager
 from nodescraper.constants import DEFAULT_LOGGER
-from nodescraper.enums import EventPriority, ExecutionStatus, OSFamily
+from nodescraper.enums import ExecutionStatus, OSFamily
 from nodescraper.helpers.plugin_execution_target import (
     format_in_band_target_summary,
 )
@@ -136,9 +136,6 @@ class PluginExecutor:
         )
 
         self.connection_result_hooks: list[TaskResultHook] = []
-        # Connection failures that have no manager result of their own (instantiation or plugin
-        # run failures); persisted by _close_connections().
-        self.connection_failure_results: list[TaskResult] = []
         if log_path:
             self.connection_result_hooks.append(FileSystemLogHook(log_base_path=log_path))
 
@@ -228,16 +225,6 @@ class PluginExecutor:
 
         return merged_config
 
-    def _run_connection_hooks(
-        self, result: TaskResult, hooks: Optional[Sequence[TaskResultHook]] = None
-    ) -> None:
-        """Run result hooks for a connection result; a failing hook never interrupts the run."""
-        for hook in self.connection_result_hooks if hooks is None else hooks:
-            try:
-                hook.process_result(result)
-            except Exception as e:
-                self.logger.error("Failed to save connection result for %s: %s", result.task, e)
-
     def discover_os_info(self) -> None:
         """Use a dedicated InBandConnectionManager to discover OS info and update system_info.
 
@@ -278,19 +265,8 @@ class PluginExecutor:
             self.logger.error(
                 "Error occurred during OS discovery with InBandConnectionManager: %s", str(e)
             )
-            self._run_connection_hooks(
-                inband_connection.build_failure_result(
-                    f"Error occurred during OS discovery: {e}",
-                    exception=e,
-                    priority=EventPriority.ERROR,
-                ),
-                hooks,
-            )
         finally:
-            try:
-                inband_connection.disconnect()
-            except Exception as e:
-                self.logger.error("Failed to disconnect OS discovery connection: %s", e)
+            inband_connection.safe_disconnect()
 
     def _get_connection_manager_for_plugin(
         self,
@@ -480,7 +456,7 @@ class PluginExecutor:
         self.logger.info("Running result collators")
         connection_results = [
             connection_manager.result for connection_manager in self.connection_library.values()
-        ] + self.connection_failure_results
+        ]
         for collator, collator_args in self.plugin_config.result_collators.items():
             collator_class = self.plugin_registry.result_collators.get(collator)
             if collator_class is None:
@@ -512,10 +488,6 @@ class PluginExecutor:
             result = connection_manager.result
             if result.status != ExecutionStatus.UNSET or result.events:
                 self._log_connection_result(result)
-
-        for failure in self.connection_failure_results:
-            self._log_connection_result(failure)
-            self._run_connection_hooks(failure)
 
     def _run_post_actions(self, plugin_results: list[PluginResult]) -> None:
         """Evaluate post-action conditions and run qualifying plugins.
