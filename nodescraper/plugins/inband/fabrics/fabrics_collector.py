@@ -425,7 +425,10 @@ class FabricsCollector(InBandDataCollector[FabricsDataModel, None]):
             ibstat_ports = []
             for device in ibstat_devices:
                 for port_num, attrs in device.ports.items():
-                    port = {"device": device.ca_name, "port": port_num}
+                    port: Dict[str, Union[int, str, None]] = {
+                        "device": device.ca_name,
+                        "port": port_num,
+                    }
                     if "Link layer" in attrs:
                         port["link_layer"] = attrs["Link layer"]
                     if "Rate" in attrs:

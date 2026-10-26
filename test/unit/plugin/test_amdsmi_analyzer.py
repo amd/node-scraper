@@ -28,7 +28,7 @@ from typing import Optional
 
 import pytest
 
-from nodescraper.enums import EventPriority
+from nodescraper.enums import EventPriority, ExecutionStatus
 from nodescraper.plugins.inband.amdsmi.amdsmi_analyzer import (
     AmdSmiAnalyzer,
     _gpu_mismatch_description,
@@ -1565,3 +1565,76 @@ def test_check_fabric_zero_ppod_id(mock_analyzer):
     mismatches = analyzer.result.events[0].data["mismatches"]
     assert [m["field"] for m in mismatches] == ["ppod_id"]
     assert mismatches[0]["expected"] == "non-zero"
+
+
+def create_unconfigured_fabric(gpu: int) -> Fabric:
+    """Helper building amd-smi fabric output for a GPU whose fabric is not configured."""
+    return Fabric.model_validate(
+        {
+            "gpu": gpu,
+            "bdf": f"0000:{gpu:02x}:00.0",
+            "fabric_info": {
+                "bdf": f"0000:{gpu:02x}:00.1",
+                "version": 4294967295,
+                "accelerator_id": gpu,
+                "fabric_type": "UNKNOWN",
+                "bandwidth": {"value": 0, "unit": "Mb/s"},
+                "latency": {"value": 0, "unit": "ns"},
+                "ppod_id": "00000000-0000-0000-0000-000000000000",
+                "ppod_size": 0,
+                "vpod_id": 0,
+                "vpod_size": 0,
+                "local_accelerators": "0, 0, 0, 0, 0, 0, 0, 0",
+                "local_active_accelerators": ["0, 0, 0, 0, 0, 0, 0, 0"],
+                "addr_mode": "UNKNOWN",
+                "accel_state": "UNCONFIGURED",
+            },
+        }
+    )
+
+
+def test_check_fabric_unconfigured_many_gpus(mock_analyzer):
+    """8 GPUs failing all 7 fabric fields log one bounded ERROR event with full detail in data."""
+    analyzer = mock_analyzer
+
+    analyzer.check_fabric([create_unconfigured_fabric(gpu) for gpu in range(8)])
+
+    assert len(analyzer.result.events) == 1
+    event = analyzer.result.events[0]
+    assert event.priority == EventPriority.ERROR
+    assert event.category == "NETWORK"
+    assert len(event.data["mismatches"]) == 8
+    assert {m["gpu"] for m in event.data["mismatches"]} == set(range(8))
+    assert {m["field"] for m in event.data["mismatches"]} == {"accel_state"}
+    assert len(event.description.encode("utf-8")) < 2048
+    assert event.description.startswith("Fabric data mismatch on 8 GPU(s)")
+
+
+def test_analyze_data_unconfigured_fabric_completes(mock_analyzer):
+    """An oversized fabric mismatch does not abort analyze_data or skip later checks."""
+    analyzer = mock_analyzer
+
+    data = AmdSmiDataModel(
+        version=None,
+        static=None,
+        process=None,
+        firmware=None,
+        partition=None,
+        gpu_list=None,
+        fabric=[create_unconfigured_fabric(gpu) for gpu in range(8)],
+        xgmi_link=[XgmiLinks(gpu=0, bdf="0000:00:00.0", link_status=[LinkStatusTable.UP])],
+    )
+
+    result = analyzer.analyze_data(data, AmdSmiAnalyzerArgs(check_xgmi_or_peer_links_status=True))
+
+    assert result.status != ExecutionStatus.EXECUTION_FAILURE
+    assert not any(e.priority == EventPriority.CRITICAL for e in result.events)
+    assert not any(e.description == "Validation error during analysis" for e in result.events)
+    error_events = [e for e in result.events if e.priority == EventPriority.ERROR]
+    assert len(error_events) == 1
+    assert error_events[0].description.startswith("Fabric data mismatch")
+    assert any(
+        e.priority == EventPriority.INFO
+        and e.description == "All XGMI/peer GPU links are working fine"
+        for e in result.events
+    )
