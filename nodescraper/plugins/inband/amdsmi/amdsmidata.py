@@ -342,11 +342,21 @@ class StaticAsic(BaseModel):
 
 
 class StaticBus(AmdSmiBaseModel):
+    model_config = ConfigDict(
+        str_min_length=1,
+        str_strip_whitespace=True,
+        populate_by_name=True,
+        extra="ignore",
+    )
+
     bdf: str
     max_pcie_width: Optional[ValueUnit] = None
     max_pcie_speed: Optional[ValueUnit] = None
     pcie_interface_version: str = "unknown"
     slot_type: str = "unknown"
+    # amd-smi 27.1.0+ (bare metal reports "N/A"; guest ROCm 7.14+ reports a per-link block)
+    pcie_levels: Optional[Union[dict[str, Any], list[Any], str]] = None
+    na_validator = field_validator("pcie_levels", mode="before")(na_to_none)
 
 
 class StaticVbios(BaseModel):
@@ -543,13 +553,30 @@ class StaticVram(AmdSmiBaseModel):
 
 
 class StaticCacheInfoItem(AmdSmiBaseModel):
+    model_config = ConfigDict(
+        str_min_length=1,
+        str_strip_whitespace=True,
+        populate_by_name=True,
+        extra="ignore",
+    )
+
     cache: ValueUnit
     cache_properties: list[str]
     cache_size: Optional[ValueUnit]
     cache_level: ValueUnit
     max_num_cu_shared: ValueUnit
     num_cache_instance: ValueUnit
-    na_validator = field_validator("cache_size", mode="before")(na_to_none)
+    # amd-smi 27.1.0+
+    cache_acronym: Optional[str] = None
+    total_cache_size: Optional[ValueUnit] = None
+    na_validator = field_validator(
+        "cache_size", "cache_acronym", "total_cache_size", mode="before"
+    )(na_to_none)
+    # AmdSmiBaseModel.__init__ wraps a bare "N/A" as {"value": "N/A"} before na_to_none
+    # sees it; coerce at field level so that maps to None instead of failing ValueUnit.
+    _cache_vu = field_validator("cache_size", "total_cache_size", mode="before")(
+        coerce_value_unit_input
+    )
 
 
 _STATIC_CLOCK_FREQ_LEVEL_VALIDATOR_FIELDS = tuple(f"Level_{i}" for i in range(16))

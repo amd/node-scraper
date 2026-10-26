@@ -8,6 +8,7 @@ from nodescraper.enums.systeminteraction import SystemInteractionLevel
 from nodescraper.plugins.inband.amdsmi.amdsmi_flavor_collector import (
     AmdSmiFlavorCollector,
 )
+from nodescraper.plugins.inband.amdsmi.amdsmidata import AmdSmiStatic
 from nodescraper.plugins.inband.amdsmi.amdsmidata_host import HostDriverAmdSmiVersion
 
 
@@ -26,6 +27,80 @@ def collector(system_info, conn_mock):
 
 def _cmd(exit_code=0, stdout="", stderr=""):
     return MagicMock(exit_code=exit_code, stdout=stdout, stderr=stderr, command="x")
+
+
+def _static_27_1_row(gpu: int) -> dict:
+    """Minimal bare-metal amd-smi 27.1.0 ``static -g all --json`` GPU row (placeholder data)."""
+    return {
+        "gpu": gpu,
+        "asic": {
+            "market_name": "AMD Instinct DUMMY",
+            "vendor_id": "0x1002",
+            "vendor_name": "Advanced Micro Devices Inc. [AMD/ATI]",
+            "subvendor_id": "0x1002",
+            "device_id": "0x0000",
+            "subsystem_id": "0x0000",
+            "rev_id": "0x00",
+            "asic_serial": f"0xDUMMYASIC0000000{gpu}",
+            "oam_id": gpu,
+            "num_compute_units": 256,
+            "target_graphics_version": "gfx000",
+        },
+        "bus": {
+            "bdf": f"0000:{gpu + 5:02x}:00.0",
+            "max_pcie_width": 16,
+            "max_pcie_speed": {"value": 32, "unit": "GT/s"},
+            "pcie_interface_version": "Gen 5",
+            "slot_type": "OAM",
+            "pcie_levels": "N/A",
+        },
+        "driver": {"driver_name": "amdgpu", "driver_version": "0.0.0"},
+        "board": {
+            "model_number": "DUMMY-MODEL",
+            "product_serial": f"DUMMY-SN-00000{gpu}",
+            "fru_id": "DUMMY-FRU",
+            "product_name": "DUMMY-PRODUCT",
+            "manufacturer_name": "AMD",
+        },
+        "ras": {
+            "eeprom_version": "N/A",
+            "parity_schema": "DISABLED",
+            "single_bit_schema": "ENABLED",
+            "double_bit_schema": "ENABLED",
+            "poison_schema": "ENABLED",
+            "ecc_block_state": {},
+        },
+        "process_isolation": "",
+        "numa": {"node": "N/A", "affinity": "N/A"},
+        "vram": {
+            "type": "HBM3",
+            "vendor": "N/A",
+            "size": {"value": 192, "unit": "GB"},
+            "bit_width": {"value": 4096, "unit": "bit"},
+        },
+        "cache_info": [
+            {
+                "cache": 0,
+                "cache_properties": ["DATA_CACHE", "SIMD_CACHE"],
+                "cache_size": {"value": 32, "unit": "KB"},
+                "cache_level": 1,
+                "max_num_cu_shared": 1,
+                "num_cache_instance": 256,
+                "cache_acronym": "L1D",
+                "total_cache_size": {"value": 8192, "unit": "KB"},
+            },
+            {
+                "cache": 1,
+                "cache_properties": ["DATA_CACHE", "SIMD_CACHE"],
+                "cache_size": {"value": 4096, "unit": "KB"},
+                "cache_level": 2,
+                "max_num_cu_shared": 32,
+                "num_cache_instance": 8,
+                "cache_acronym": "L2",
+                "total_cache_size": "N/A",
+            },
+        ],
+    }
 
 
 # ---- driver-flavor detection --------------------------------------------------
@@ -109,6 +184,23 @@ def test_build_flavor_model_skips_unparseable_row(collector):
     out = collector._build_flavor_model(_Tiny, [{"gpu": 0}, {"gpu": "NA"}])
     assert [m.gpu for m in out] == [0]
     assert any(e.priority.name == "WARNING" for e in collector.result.events)
+
+
+def test_build_flavor_model_static_amdsmi_27_1_rows_kept(collector):
+    """amd-smi 27.1.0 static rows (pcie_levels, cache_acronym, total_cache_size) are all kept."""
+    rows = [_static_27_1_row(gpu=0), _static_27_1_row(gpu=1)]
+    out = collector._build_flavor_model(AmdSmiStatic, rows)
+
+    assert [m.gpu for m in out] == [0, 1]
+    assert all(isinstance(m, AmdSmiStatic) for m in out)
+    assert out[1].bus.bdf == "0000:06:00.0"
+    assert out[0].bus.pcie_levels is None
+    assert out[0].cache_info[0].cache_acronym == "L1D"
+    assert out[0].cache_info[1].total_cache_size is None
+    assert out[0].numa.node is None
+    assert not any(e.priority.name == "WARNING" for e in collector.result.events)
+    assert not any("unparseable" in e.description for e in collector.result.events)
+    assert collector.result.events == []
 
 
 def test_build_flavor_model_return_first(collector):

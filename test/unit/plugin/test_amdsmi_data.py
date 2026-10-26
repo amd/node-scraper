@@ -25,6 +25,7 @@
 ###############################################################################
 """Unit tests for amd-smi pydantic models (legacy JSON, ROCm 7.2+ / AMD-SMI 26.2+)."""
 
+import copy
 from typing import Any, Optional
 
 import pytest
@@ -32,6 +33,7 @@ import pytest
 from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     AmdSmiDataModel,
     AmdSmiMetric,
+    AmdSmiStatic,
     Fabric,
     FabricInfo,
     MetricBaseBoardTemperature,
@@ -40,11 +42,14 @@ from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     MetricGpuBoardTemperature,
     MetricPcie,
     MetricPower,
+    StaticBus,
+    StaticCacheInfoItem,
     StaticClockData,
     StaticFrequencyLevels,
     StaticLimit,
     ValueUnit,
 )
+from nodescraper.plugins.inband.amdsmi.amdsmidata_guest import GuestAmdSmiStatic
 
 DUMMY_STATIC_ASIC: dict[str, Any] = {
     "market_name": "AMD Instinct MI350X",
@@ -189,6 +194,38 @@ DUMMY_METRIC_BASEBOARD: dict[str, Any] = {
     }
 }
 
+# amd-smi 27.1.0+ static cache_info entries add cache_acronym and total_cache_size.
+DUMMY_CACHE_INFO_27_1: list[dict[str, Any]] = [
+    {
+        "cache": 0,
+        "cache_properties": ["DATA_CACHE", "SIMD_CACHE"],
+        "cache_size": {"value": 32, "unit": "KB"},
+        "cache_level": 1,
+        "max_num_cu_shared": 1,
+        "num_cache_instance": 256,
+        "cache_acronym": "L1D",
+        "total_cache_size": {"value": 8192, "unit": "KB"},
+    },
+    {
+        "cache": 1,
+        "cache_properties": ["DATA_CACHE", "SIMD_CACHE"],
+        "cache_size": {"value": 4096, "unit": "KB"},
+        "cache_level": 2,
+        "max_num_cu_shared": 32,
+        "num_cache_instance": 8,
+        "cache_acronym": "L2",
+        "total_cache_size": {"value": 32768, "unit": "KB"},
+    },
+]
+
+# Guest amd-smi (ROCm 7.14+) reports a per-link pcie_levels block on the bus section.
+DUMMY_PCIE_LEVELS_BLOCK: dict[str, Any] = {
+    "link_0": {
+        "Level 0": {"speed": {"value": 2.5, "unit": "GT/s"}, "width": 16},
+        "Level 1": {"speed": {"value": 32, "unit": "GT/s"}, "width": 16},
+    }
+}
+
 _PCIE_KEYS = list(DUMMY_METRIC_PCIE.keys())
 
 
@@ -302,6 +339,19 @@ def dummy_amdsmi_data_dict(
         ),
         "metric": metric if metric is not None else [dummy_metric_dict(gpu=0)],
     }
+    return _deep_update(base, overrides)
+
+
+def dummy_static_27_1_gpu_dict(*, gpu: int = 0, **overrides: Any) -> dict[str, Any]:
+    """Static GPU row shaped like bare-metal amd-smi 27.1.0 ``static -g all --json`` output."""
+    base = dummy_static_gpu_dict(
+        gpu=gpu,
+        limit=dict(DUMMY_LIMIT_PPT0),
+        clock=dict(DUMMY_CLOCK_FREQUENCY_LEVELS),
+        bus={"bdf": f"0000:{gpu + 5:02x}:00.0", "pcie_levels": "N/A"},
+        numa={"node": "N/A", "affinity": "N/A"},
+        cache_info=copy.deepcopy(DUMMY_CACHE_INFO_27_1),
+    )
     return _deep_update(base, overrides)
 
 
@@ -424,6 +474,88 @@ def test_static_clock_frequency_levels_json():
     assert clock.frequency_levels.Level_0.value == 500
     assert clock.frequency_levels.Level_1 is not None
     assert clock.frequency_levels.Level_1.value == 900
+
+
+def test_static_amdsmi_27_1_row_validates():
+    """amd-smi 27.1.0 static row (pcie_levels, cache_acronym, total_cache_size, N/A numa)."""
+    static = AmdSmiStatic.model_validate(dummy_static_27_1_gpu_dict())
+
+    assert static.bus.bdf == "0000:05:00.0"
+    assert static.bus.pcie_levels is None
+    assert len(static.cache_info) == 2
+    assert static.cache_info[0].cache_acronym == "L1D"
+    assert static.cache_info[0].total_cache_size == ValueUnit(value=8192, unit="KB")
+    assert static.cache_info[0].cache_size == ValueUnit(value=32, unit="KB")
+    assert static.cache_info[1].cache_acronym == "L2"
+    assert static.cache_info[1].total_cache_size == ValueUnit(value=32768, unit="KB")
+    assert static.numa.node is None
+
+
+def test_static_cache_info_new_fields_optional_and_na():
+    """cache_acronym/total_cache_size default to None when absent and map N/A to None."""
+    legacy = {
+        k: v
+        for k, v in DUMMY_CACHE_INFO_27_1[0].items()
+        if k not in ("cache_acronym", "total_cache_size")
+    }
+    item = StaticCacheInfoItem.model_validate(legacy)
+    assert item.cache_acronym is None
+    assert item.total_cache_size is None
+    assert item.cache_size == ValueUnit(value=32, unit="KB")
+
+    na_item = StaticCacheInfoItem.model_validate(
+        {**legacy, "cache_acronym": "N/A", "total_cache_size": "N/A"}
+    )
+    assert na_item.cache_acronym is None
+    assert na_item.total_cache_size is None
+
+
+def test_static_bus_pcie_levels_block_kept():
+    """A per-link pcie_levels block is preserved as a dict on StaticBus and the guest model."""
+    bus = StaticBus.model_validate({**DUMMY_STATIC_BUS, "pcie_levels": DUMMY_PCIE_LEVELS_BLOCK})
+    assert isinstance(bus.pcie_levels, dict)
+    assert bus.pcie_levels == DUMMY_PCIE_LEVELS_BLOCK
+
+    guest = GuestAmdSmiStatic.model_validate(
+        dummy_static_gpu_dict(
+            bus={"pcie_levels": copy.deepcopy(DUMMY_PCIE_LEVELS_BLOCK)},
+            numa=None,
+        )
+    )
+    assert isinstance(guest.bus.pcie_levels, dict)
+    assert guest.bus.pcie_levels == DUMMY_PCIE_LEVELS_BLOCK
+    assert guest.model_dump()["bus"]["pcie_levels"] == DUMMY_PCIE_LEVELS_BLOCK
+
+
+def test_static_bus_and_cache_ignore_unknown_keys():
+    """Unknown future keys on bus / cache_info items are ignored rather than failing the row."""
+    cache_info = copy.deepcopy(DUMMY_CACHE_INFO_27_1)
+    cache_info[0]["some_future_field"] = "future"
+    static = AmdSmiStatic.model_validate(
+        dummy_static_27_1_gpu_dict(
+            bus={"some_future_field": {"value": 1, "unit": "x"}},
+            cache_info=cache_info,
+        )
+    )
+
+    assert static.bus.bdf == "0000:05:00.0"
+    assert static.cache_info[0].cache_acronym == "L1D"
+    dumped = static.model_dump()
+    assert "some_future_field" not in dumped["bus"]
+    assert "some_future_field" not in dumped["cache_info"][0]
+    assert "some_future_field" not in static.bus.model_dump()
+    assert "some_future_field" not in static.cache_info[0].model_dump()
+
+
+def test_amdsmi_data_model_static_27_1_round_trip():
+    """AmdSmiDataModel keeps an amd-smi 27.1.0 static row."""
+    data = AmdSmiDataModel.model_validate(
+        dummy_amdsmi_data_dict(static=[dummy_static_27_1_gpu_dict()])
+    )
+    assert data.static is not None
+    assert len(data.static) == 1
+    assert data.static[0].cache_info[0].cache_acronym == "L1D"
+    assert data.static[0].bus.pcie_levels is None
 
 
 def test_amdsmi_data_model_dummy_metric_round_trip():
