@@ -1,0 +1,118 @@
+###############################################################################
+#
+# MIT License
+#
+# Copyright (c) 2026 Advanced Micro Devices, Inc.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+#
+###############################################################################
+
+name: Dev release
+
+permissions:
+  contents: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Dev version, such as 1.2.1.dev0"
+        required: true
+        type: string
+
+concurrency:
+  group: dev-release
+  cancel-in-progress: false
+
+jobs:
+  dev-release:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Validate version
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.dev[0-9]+$ ]]; then
+            echo "Version must look like 1.2.3.dev0"
+            exit 1
+          fi
+
+      - name: Checkout development
+        uses: actions/checkout@v5
+        with:
+          ref: development
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Reject an existing dev tag
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/v${VERSION}" >/dev/null; then
+            echo "Tag v${VERSION} already exists"
+            exit 1
+          fi
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+
+      - name: Build package
+        env:
+          SETUPTOOLS_SCM_PRETEND_VERSION: ${{ inputs.version }}
+        run: uv build
+
+      - name: Create GitHub pre-release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          sha=$(git rev-parse HEAD)
+          wheels=(dist/*.whl)
+          if [ "${#wheels[@]}" -ne 1 ]; then
+            echo "Expected one wheel in dist/"
+            exit 1
+          fi
+          wheel=$(basename "${wheels[0]}")
+          case "$wheel" in
+            *"$VERSION"*) ;;
+            *)
+              echo "Wheel ${wheel} does not match version ${VERSION}"
+              exit 1
+              ;;
+          esac
+          cat > release-notes.md <<EOF
+          Development build of the development branch at ${sha}.
+          This package is not published to PyPI.
+
+          pip install "https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION}/${wheel}"
+          EOF
+          gh release create "v${VERSION}" \
+            --target "$sha" \
+            --prerelease \
+            --title "v${VERSION}" \
+            --notes-file release-notes.md \
+            dist/*

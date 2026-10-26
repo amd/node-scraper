@@ -47,8 +47,8 @@ jobs:
         id: next_version
         shell: bash
         run: |
-          # Get the highest semantic version tag (not most recent, but highest version number)
-          LATEST_TAG=$(git tag -l 'v*' | sort -V | tail -n1)
+          # Get the highest final vX.Y.Z tag. Ignore dev tags such as v1.2.1.dev0.
+          LATEST_TAG=$(git tag -l 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1 || true)
           if [ -z "$LATEST_TAG" ]; then
             LATEST_TAG="v0.0.0"
           fi
