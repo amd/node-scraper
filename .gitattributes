@@ -1,0 +1,15 @@
+# node-scraper line ending enforcement
+
+# Default: auto-detect text, normalize to LF on checkout for all text files.
+* text=auto eol=lf
+
+# Explicit binary so git never applies EOL conversion or line-diffing.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.pdf  binary
+*.zip  binary
+*.gz   binary
+*.whl  binary
