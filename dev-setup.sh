@@ -14,7 +14,7 @@ export UV_SYSTEM_CERTS=1
 
 # Create venv if not already present or if Python version is below 3.9
 if [ ! -d "venv" ] || ! venv/bin/python -c 'import sys; exit(0 if sys.version_info >= (3, 9) else 1)' 2>/dev/null; then
-    uv venv venv --python 3.9  --no-python-downloads
+    uv venv venv --python 3.9  --no-python-downloads --seed
 fi
 
 # Activate the desired venv

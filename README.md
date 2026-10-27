@@ -170,9 +170,8 @@ options:
 
 ### Lazy plugin loading
 
-By default node-scraper imports every plugin at startup, which takes a couple of seconds and a
-noticeable amount of memory even if you run a single plugin. Lazy loading imports a plugin only when
-it is first needed, so runs that use a few plugins start faster and use less memory.
+By default node-scraper imports every plugin at startup this can be high consumption to run a single plugin run.
+Lazy loading imports a plugin only when it is first needed, so runs that use a few plugins start faster and use less memory.
 
 ```sh
 # enable with a flag ...
@@ -182,13 +181,11 @@ NODESCRAPER_LAZY_LOAD=1 node-scraper run-plugins OsPlugin
 ```
 
 What to expect in lazy mode:
-- Plugin names are discovered from the plugin source files without importing them. Plugin files must have `plugin` in the file name and the plugin class must inherit from a base class with `Plugin` in its name (all built-in plugins do).
-- Only the plugins you name on the command line (or in a config) are imported. `--help` and `describe plugin` still list every plugin.
+- Plugin names are read from the `nodescraper.plugins` entry points in `pyproject.toml` without importing them. Built-in plugins are listed there, and a plugin must be registered there to be available in lazy mode (see [external plugins](docs/node-scraper-external/README.md) for the format). After adding or renaming a plugin, reinstall the package (`pip install -e .`) to refresh the entry-point metadata.
+- Only the plugins you name on the command line (or in a config) are imported.
+- `describe plugin` lists every plugin from the entry points without importing any; `describe plugin <name>` imports just that plugin to show its description. `--help` still imports every plugin because it documents each one's arguments.
 - A plugin that fails to import is logged and skipped instead of stopping node-scraper.
 - Named configs from `--plugin-configs` are evaluated only when you select them, so recipes such as `AllIbPlugins` (which inspects every plugin) do not import everything at startup.
-
-When embedding node-scraper, use `PluginRegistry(lazy_load=True)` and share one registry via `set_default_registry()` / `default_registry()` instead of constructing `PluginRegistry()` repeatedly.
-`scripts/memray/run_memray.sh` compares memory use of the default and lazy modes.
 
 ### Execution Methods
 

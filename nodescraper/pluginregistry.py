@@ -23,8 +23,6 @@
 # SOFTWARE.
 #
 ###############################################################################
-import ast
-import functools
 import importlib
 import importlib.metadata
 import inspect
@@ -186,8 +184,6 @@ class PluginRegistry:
     _module_cache: dict[str, types.ModuleType] = {}
     # Cache for entry points by group name
     _entry_points_cache: dict[str, EntryPoints] = {}
-    # Cache for the lazy-mode plugin name index (name -> (module, class))
-    _plugin_index_cache: Optional[dict[str, tuple[str, str]]] = None
 
     # Global cache control switch
     _use_cache: bool = True
@@ -255,110 +251,41 @@ class PluginRegistry:
                 self.plugins.update(self.load_plugins_from_entry_points())
 
     def _init_lazy(self, extra_pkgs: list[types.ModuleType], load_internal: bool) -> None:
-        """Lazy setup: index internal plugin names without importing them.
+        """Lazy setup: register internal plugins from entry points without importing them.
 
         Connection managers and result collators are few, so they are still loaded eagerly,
         but only from their own packages (not by walking every plugin module).
         """
         lazy_plugins = LazyPluginMapping(PluginInterface)
+        self.plugins = lazy_plugins
         if load_internal:
-            index = PluginRegistry._internal_plugin_index()
-            if not index:
-                # Sources are not on the filesystem (zipapp/frozen build): lazy indexing is impossible.
-                _logger.warning("No plugin sources found to index; falling back to eager loading")
-                lazy_plugins.update(
-                    PluginRegistry.load_plugins(PluginInterface, [internal_plugins])
-                )
-            for name, (module_name, class_name) in index.items():
-                lazy_plugins.add_loader(
-                    name,
-                    functools.partial(PluginRegistry._import_class, module_name, class_name),
-                )
+            self._add_lazy_entry_point_plugins(package_prefix=internal_plugins.__name__ + ".")
         if extra_pkgs:
             # Caller-supplied packages have no naming convention to index; load them directly
             for name, cls in PluginRegistry.load_plugins(PluginInterface, extra_pkgs).items():
                 lazy_plugins[name] = cls
-        self.plugins = lazy_plugins
 
         non_plugin_pkgs = ([internal_connections] if load_internal else []) + extra_pkgs
         self.connection_managers = PluginRegistry.load_plugins(ConnectionManager, non_plugin_pkgs)
         collator_pkgs = ([internal_collators] if load_internal else []) + extra_pkgs
         self.result_collators = PluginRegistry.load_plugins(PluginResultCollator, collator_pkgs)
 
-    def _add_lazy_entry_point_plugins(self) -> None:
-        """Register entry-point plugins by entry-point name; ``load()`` runs on first access."""
+    def _add_lazy_entry_point_plugins(self, package_prefix: Optional[str] = None) -> None:
+        """Register entry-point plugins; ``load()`` runs on first access.
+
+        If ``package_prefix`` is given, only entry points whose module starts with it are registered.
+        """
         assert isinstance(self.plugins, LazyPluginMapping)
         for entry_point in PluginRegistry.load_entry_points(ENTRY_POINT_PLUGINS):
             # Eager mode keys by class __name__, which is the attribute in ``module:Class``.
             value = getattr(entry_point, "value", "") or ""
+            if package_prefix and not value.startswith(package_prefix):
+                continue
             attr = value.partition(":")[2].strip().split(".")[-1].split("[")[0].strip()
             self.plugins.add_loader(
                 attr or entry_point.name,
                 entry_point.load,  # type: ignore[attr-defined]
             )
-
-    @staticmethod
-    def _import_class(module_name: str, class_name: str) -> type:
-        """Import ``module_name`` (through the shared module cache) and return ``class_name``."""
-        with PluginRegistry._cache_lock:
-            module = PluginRegistry._module_cache.get(module_name)
-        if module is None:
-            module = importlib.import_module(module_name)
-            if PluginRegistry._use_cache:
-                with PluginRegistry._cache_lock:
-                    PluginRegistry._module_cache[module_name] = module
-        return getattr(module, class_name)
-
-    @staticmethod
-    def _base_name(node: ast.expr) -> str:
-        if isinstance(node, ast.Subscript):
-            node = node.value
-        if isinstance(node, ast.Attribute):
-            return node.attr
-        if isinstance(node, ast.Name):
-            return node.id
-        return ""
-
-    @staticmethod
-    def _scan_plugin_index(pkg: types.ModuleType) -> dict[str, tuple[str, str]]:
-        """Map plugin class name to ``(module, class)`` by parsing ``*plugin*.py`` sources.
-
-        Nothing is imported. A class is a candidate if a base class name contains ``Plugin``;
-        validity is checked when the class is resolved.
-        """
-        index: dict[str, tuple[str, str]] = {}
-        for root in list(getattr(pkg, "__path__", [])):
-            for dirpath, dirnames, filenames in os.walk(root):
-                dirnames[:] = sorted(d for d in dirnames if d != "__pycache__")
-                for filename in sorted(filenames):
-                    if "plugin" not in filename or not filename.endswith(".py"):
-                        continue
-                    path = os.path.join(dirpath, filename)
-                    rel = os.path.relpath(path, root)[: -len(".py")]
-                    module_name = ".".join([pkg.__name__, *rel.split(os.sep)])
-                    try:
-                        with open(path, "r", encoding="utf-8") as src:
-                            tree = ast.parse(src.read(), filename=path)
-                    except (OSError, SyntaxError, ValueError) as exc:
-                        _logger.warning("Unable to index plugin module %s: %s", path, exc)
-                        continue
-                    for node in tree.body:
-                        if not isinstance(node, ast.ClassDef):
-                            continue
-                        bases = [PluginRegistry._base_name(b) for b in node.bases]
-                        if any("Plugin" in b for b in bases):
-                            index[node.name] = (module_name, node.name)
-        return index
-
-    @staticmethod
-    def _internal_plugin_index() -> dict[str, tuple[str, str]]:
-        """Cached name index for ``nodescraper.plugins``."""
-        with PluginRegistry._cache_lock:
-            if PluginRegistry._plugin_index_cache is None or not PluginRegistry._use_cache:
-                PluginRegistry._plugin_index_cache = PluginRegistry._scan_plugin_index(
-                    internal_plugins
-                )
-            return PluginRegistry._plugin_index_cache
 
     @staticmethod
     def load_plugins(
@@ -559,7 +486,6 @@ class PluginRegistry:
         with cls._cache_lock:
             cls._entry_point_plugins_cache = None
             cls._entry_point_connection_managers_cache = None
-            cls._plugin_index_cache = None
             cls._module_cache.clear()
             cls._entry_points_cache.clear()
 
