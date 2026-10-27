@@ -32,7 +32,7 @@ import os
 import platform
 import sys
 import uuid
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Collection, Sequence
 from typing import Optional
 
 import nodescraper
@@ -72,7 +72,12 @@ from nodescraper.enums import ExecutionStatus, SystemInteractionLevel, SystemLoc
 from nodescraper.models import SystemInfo
 from nodescraper.models.pluginresult import PluginResult
 from nodescraper.pluginexecutor import PluginExecutor
-from nodescraper.pluginregistry import PluginRegistry
+from nodescraper.pluginrecipe.discovery import PluginDiscovery
+from nodescraper.pluginregistry import (
+    LAZY_LOAD_ENV_VAR,
+    PluginRegistry,
+    set_default_registry,
+)
 
 
 def _parse_plugin_configs_csv(value: str) -> list[str]:
@@ -80,21 +85,21 @@ def _parse_plugin_configs_csv(value: str) -> list[str]:
     return [p.strip() for p in value.split(",") if p.strip()]
 
 
-def _default_config_registry(_plugin_reg: PluginRegistry) -> ConfigRegistry:
+def _default_config_registry(lazy: bool = False) -> ConfigRegistry:
     """Build the config registry from bundled JSON and plugin-config entry points.
 
     Args:
-        _plugin_reg (PluginRegistry): Unused; retained for call-site compatibility.
+        lazy (bool): Evaluate entry-point configs (recipes) only when requested by name, so that
+            recipes which inspect every plugin do not defeat lazy plugin loading.
 
     Returns:
         ConfigRegistry: Registry containing bundled and entry-point plugin configs.
     """
-    return ConfigRegistry()
+    return ConfigRegistry(lazy_entry_point_configs=lazy)
 
 
 def _add_cli_root_globals(
     parser: argparse.ArgumentParser,
-    plugin_reg: PluginRegistry,
     config_reg: ConfigRegistry,
 ) -> None:
     """Register top-level flags before ``subcmd`` subparsers (shared with :func:`build_global_argument_parser`)."""
@@ -204,28 +209,40 @@ def _add_cli_root_globals(
         help="Skip plugins that require sudo permissions",
     )
 
+    parser.add_argument(
+        "--lazy-load",
+        dest="lazy_load",
+        action="store_true",
+        help=f"Import plugin modules only when they are needed instead of at startup "
+        f"(can also be enabled with the {LAZY_LOAD_ENV_VAR}=1 environment variable)",
+    )
+
 
 def build_global_argument_parser(*, add_help: bool = True) -> argparse.ArgumentParser:
     """Globals only (no subcommands), for host CLIs."""
-    plugin_reg = PluginRegistry()
-    config_reg = _default_config_registry(plugin_reg)
+    config_reg = _default_config_registry(lazy=True)
     parser = argparse.ArgumentParser(
         description="node scraper CLI (global options only)",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         add_help=add_help,
     )
-    _add_cli_root_globals(parser, plugin_reg, config_reg)
+    _add_cli_root_globals(parser, config_reg)
     return parser
 
 
 def build_parser(
     plugin_reg: PluginRegistry,
     config_reg: ConfigRegistry,
+    only_plugins: Optional[Collection[str]] = None,
 ) -> tuple[argparse.ArgumentParser, dict[str, tuple[argparse.ArgumentParser, dict]]]:
     """Build an argument parser
 
     Args:
         plugin_reg (PluginRegistry): registry of plugins
+        config_reg (ConfigRegistry): registry of configs
+        only_plugins (Optional[Collection[str]]): if given, per-plugin ``run-plugins`` subparsers are
+            built (which requires importing the plugin class) only for these names. ``None`` builds
+            a subparser for every registered plugin.
 
     Returns:
         tuple[argparse.ArgumentParser, dict[str, tuple[argparse.ArgumentParser, dict]]]: tuple containing main
@@ -236,7 +253,7 @@ def build_parser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
 
-    _add_cli_root_globals(parser, plugin_reg, config_reg)
+    _add_cli_root_globals(parser, config_reg)
 
     subparsers = parser.add_subparsers(dest="subcmd", help="Subcommands")
     subparsers.default = "run-plugins"
@@ -370,7 +387,15 @@ def build_parser(
     )
 
     plugin_subparser_map = {}
-    for plugin_name, plugin_class in plugin_reg.plugins.items():
+    if only_plugins is None:
+        plugin_items = list(plugin_reg.plugins.items())
+    else:
+        plugin_items = [
+            (name, plugin_class)
+            for name, plugin_class in ((n, plugin_reg.plugins.get(n)) for n in only_plugins)
+            if plugin_class is not None
+        ]
+    for plugin_name, plugin_class in plugin_items:
         plugin_subparser = plugin_subparsers.add_parser(
             plugin_name,
             help=f"Run {plugin_name} plugin",
@@ -410,9 +435,9 @@ def get_cli_top_level_subcommands() -> tuple[str, ...]:
     Returns:
         Tuple of ``subcmd`` subparser names; call ``cache_clear()`` if registries change in-process.
     """
-    plugin_reg = PluginRegistry()
-    config_reg = _default_config_registry(plugin_reg)
-    parser, _plugin_subparser_map = build_parser(plugin_reg, config_reg)
+    plugin_reg = PluginRegistry(lazy_load=True)
+    config_reg = _default_config_registry(lazy=True)
+    parser, _plugin_subparser_map = build_parser(plugin_reg, config_reg, only_plugins=())
     return _top_level_subcommand_names(parser)
 
 
@@ -472,6 +497,34 @@ def _handle_keyboard_interrupt(logger: Optional[logging.Logger] = None) -> None:
     sys.exit(KEYBOARD_INTERRUPT_EXIT_CODE)
 
 
+def _lazy_load_flag_present(arg_input: Sequence[str]) -> bool:
+    """True if ``--lazy-load`` appears among the top-level args (before ``run-plugins``).
+
+    The registry must exist before the real parser is built, so this checks for the flag
+    on its own. ``NODESCRAPER_LAZY_LOAD`` is handled by the registry itself.
+    """
+    top_level = list(arg_input)
+    if "run-plugins" in top_level:
+        top_level = top_level[: top_level.index("run-plugins")]
+    pre_parser = argparse.ArgumentParser(add_help=False)
+    pre_parser.add_argument("--lazy-load", dest="lazy_load", action="store_true")
+    known, _ = pre_parser.parse_known_args(top_level)
+    return bool(known.lazy_load)
+
+
+def _plugins_needing_parsers(
+    plugin_reg: PluginRegistry, arg_input: Sequence[str]
+) -> Optional[list[str]]:
+    """Plugin names whose ``run-plugins`` subparser must be built in lazy mode.
+
+    Returns ``None`` (build everything) when help was requested so help output stays complete.
+    """
+    if any(arg in ("-h", "--help") for arg in arg_input):
+        return None
+    _, plugin_arg_map, _ = process_args(list(arg_input), list(plugin_reg.plugins.keys()))
+    return list(plugin_arg_map)
+
+
 def main(
     arg_input: Optional[list[str]] = None,
     *,
@@ -492,9 +545,14 @@ def main(
         if arg_input is None:
             arg_input = sys.argv[1:]
 
-        plugin_reg = PluginRegistry()
-        config_reg = _default_config_registry(plugin_reg)
-        parser, plugin_subparser_map = build_parser(plugin_reg, config_reg)
+        # The one registry for this invocation: shared with recipes/discovery and the executor.
+        plugin_reg = PluginRegistry(lazy_load=True if _lazy_load_flag_present(arg_input) else None)
+        set_default_registry(plugin_reg)
+        PluginDiscovery.clear_cache()
+        lazy = bool(getattr(plugin_reg, "lazy", False))
+        config_reg = _default_config_registry(lazy=lazy)
+        only_plugins = _plugins_needing_parsers(plugin_reg, arg_input) if lazy else None
+        parser, plugin_subparser_map = build_parser(plugin_reg, config_reg, only_plugins)
 
         try:
             top_level_args, plugin_arg_map, invalid_plugins = process_args(
