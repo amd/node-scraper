@@ -13,6 +13,7 @@ system debug. For details on what data is collected and analyzed, see the [plugi
     - [3. Install from Source (Required)](#3-install-from-source-required)
     - [4. Git Hooks (Optional)](#4-git-hooks-optional)
   - [CLI Usage](#cli-usage)
+    - [Lazy plugin loading](#lazy-plugin-loading)
     - [Execution Methods](#execution-methods)
       - [Example: Remote Execution](#example-remote-execution)
         - [Example: connection\_config.json](#example-connection_configjson)
@@ -166,6 +167,28 @@ options:
                         False)
 ```
 <!-- node-scraper -h end -->
+
+### Lazy plugin loading
+
+By default node-scraper imports every plugin at startup, which takes a couple of seconds and a
+noticeable amount of memory even if you run a single plugin. Lazy loading imports a plugin only when
+it is first needed, so runs that use a few plugins start faster and use less memory.
+
+```sh
+# enable with a flag ...
+node-scraper --lazy-load run-plugins OsPlugin
+# ... or with an environment variable (the flag/variable is off by default)
+NODESCRAPER_LAZY_LOAD=1 node-scraper run-plugins OsPlugin
+```
+
+What to expect in lazy mode:
+- Plugin names are discovered from the plugin source files without importing them. Plugin files must have `plugin` in the file name and the plugin class must inherit from a base class with `Plugin` in its name (all built-in plugins do).
+- Only the plugins you name on the command line (or in a config) are imported. `--help` and `describe plugin` still list every plugin.
+- A plugin that fails to import is logged and skipped instead of stopping node-scraper.
+- Named configs from `--plugin-configs` are evaluated only when you select them, so recipes such as `AllIbPlugins` (which inspects every plugin) do not import everything at startup.
+
+When embedding node-scraper, use `PluginRegistry(lazy_load=True)` and share one registry via `set_default_registry()` / `default_registry()` instead of constructing `PluginRegistry()` repeatedly.
+`scripts/memray/run_memray.sh` compares memory use of the default and lazy modes.
 
 ### Execution Methods
 

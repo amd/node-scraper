@@ -66,13 +66,14 @@ def lazy_load_from_env() -> bool:
     return os.environ.get(LAZY_LOAD_ENV_VAR, "").strip().lower() in ("1", "true", "yes", "on")
 
 
-class LazyPluginMapping(MutableMapping):
+class LazyPluginMapping(MutableMapping[str, type]):
     """Mapping of plugin name to plugin class that imports each class on first access.
 
-    Listing names (``keys()``, ``in``, ``len``, iteration) never imports plugin modules.
-    ``mapping[name]`` / ``get(name)`` import just that plugin. A plugin that fails to
-    import or is not valid is logged and treated as missing; other plugins are unaffected.
-    ``items()`` / ``values()`` / ``copy()`` resolve every plugin.
+    - ``keys()``, iteration and ``len()`` list every indexed name without importing anything.
+    - ``mapping[name]``, ``get(name)`` and ``name in mapping`` import just that plugin, so ``in``
+      and ``[]`` always agree. A plugin that fails to import, or is not a valid plugin, is logged
+      once and then behaves as missing; other plugins are unaffected.
+    - ``items()``, ``values()`` and ``copy()`` resolve every plugin.
     """
 
     def __init__(self, base_class: type) -> None:
@@ -80,7 +81,7 @@ class LazyPluginMapping(MutableMapping):
         self._loaders: dict[str, Callable[[], Optional[type]]] = {}
         self._resolved: dict[str, type] = {}
         self._failed: set[str] = set()
-        self._lock = threading.RLock()
+        self._lock = threading.Lock()
 
     def add_loader(self, name: str, loader: Callable[[], Optional[type]]) -> None:
         """Register a callable that returns the class for ``name`` when first needed."""
@@ -90,32 +91,44 @@ class LazyPluginMapping(MutableMapping):
             self._failed.discard(name)
 
     def is_resolved(self, name: str) -> bool:
+        """True if ``name`` has already been imported (does not trigger an import)."""
         return name in self._resolved
 
     def __getitem__(self, name: str) -> type:
-        resolved = self._resolved.get(name)
-        if resolved is not None:
-            return resolved
-        with self._lock:
-            if name in self._resolved:
-                return self._resolved[name]
-            loader = self._loaders.get(name)
-            if loader is None or name in self._failed:
-                raise KeyError(name)
-            try:
-                cls = loader()
-            except Exception as exc:  # a broken plugin must not break the others
-                _logger.warning("Unable to load plugin %s: %s", name, exc)
-                self._failed.add(name)
-                raise KeyError(name) from exc
-            if cls is None or not PluginRegistry._valid_sub_class_check(cls, self._base_class):
-                self._failed.add(name)
-                raise KeyError(name)
-            if hasattr(cls, "is_valid") and not cls.is_valid():
-                self._failed.add(name)
-                raise KeyError(name)
-            self._resolved[name] = cls
+        cls = self._resolved.get(name)
+        if cls is not None:
             return cls
+        loader = self._loaders.get(name)
+        if loader is None or name in self._failed:
+            raise KeyError(name)
+        # The import runs outside the lock; two threads may both import, which is harmless.
+        cls = self._load(name, loader)
+        with self._lock:
+            if self._loaders.get(name) is loader:
+                self._resolved[name] = cls
+        return cls
+
+    def _load(self, name: str, loader: Callable[[], Optional[type]]) -> type:
+        """Run ``loader`` and validate the result, marking ``name`` failed if unusable."""
+        try:
+            cls = loader()
+        except Exception as exc:  # a broken plugin must not break the others
+            _logger.warning("Unable to load plugin %s: %s", name, exc)
+            self._mark_failed(name)
+            raise KeyError(name) from exc
+        if (
+            cls is None
+            or not PluginRegistry._valid_sub_class_check(cls, self._base_class)
+            or (hasattr(cls, "is_valid") and not cls.is_valid())
+        ):
+            _logger.debug("Plugin %s is not a valid %s", name, self._base_class.__name__)
+            self._mark_failed(name)
+            raise KeyError(name)
+        return cls
+
+    def _mark_failed(self, name: str) -> None:
+        with self._lock:
+            self._failed.add(name)
 
     def __setitem__(self, name: str, value: type) -> None:
         with self._lock:
@@ -132,7 +145,11 @@ class LazyPluginMapping(MutableMapping):
             self._failed.discard(name)
 
     def __contains__(self, name: object) -> bool:
-        return name in self._loaders and name not in self._failed
+        try:
+            self[name]  # type: ignore[index]
+        except KeyError:
+            return False
+        return True
 
     def __iter__(self) -> Iterator[str]:
         return iter([n for n in list(self._loaders) if n not in self._failed])
@@ -140,23 +157,18 @@ class LazyPluginMapping(MutableMapping):
     def __len__(self) -> int:
         return len(self._loaders) - len(self._failed)
 
-    def items(self):  # type: ignore[override]
-        """Resolve all plugins and return ``(name, class)`` pairs, skipping unloadable ones."""
-        pairs = [(n, self._try_get(n)) for n in list(self)]
-        return [(n, cls) for n, cls in pairs if cls is not None]
+    def items(self) -> list[tuple[str, type]]:  # type: ignore[override]
+        """Resolve every plugin; names that cannot be loaded are skipped."""
+        pairs = [(name, self.get(name)) for name in list(self)]
+        return [(name, cls) for name, cls in pairs if cls is not None]
 
-    def values(self):  # type: ignore[override]
+    def values(self) -> list[type]:  # type: ignore[override]
+        """Resolve every plugin; see :meth:`items`."""
         return [cls for _, cls in self.items()]
 
     def copy(self) -> dict[str, type]:
         """Return a plain dict of all loadable plugins (resolves every plugin)."""
         return dict(self.items())
-
-    def _try_get(self, name: str) -> Optional[type]:
-        try:
-            return self[name]
-        except KeyError:
-            return None
 
 
 class PluginRegistry:
@@ -251,6 +263,12 @@ class PluginRegistry:
         lazy_plugins = LazyPluginMapping(PluginInterface)
         if load_internal:
             index = PluginRegistry._internal_plugin_index()
+            if not index:
+                # Sources are not on the filesystem (zipapp/frozen build): lazy indexing is impossible.
+                _logger.warning("No plugin sources found to index; falling back to eager loading")
+                lazy_plugins.update(
+                    PluginRegistry.load_plugins(PluginInterface, [internal_plugins])
+                )
             for name, (module_name, class_name) in index.items():
                 lazy_plugins.add_loader(
                     name,
@@ -538,17 +556,16 @@ class PluginRegistry:
 
         Thread-safe: Acquires all locks to ensure no other thread is accessing caches.
         """
-        global _default_registry
         with cls._cache_lock:
             cls._entry_point_plugins_cache = None
             cls._entry_point_connection_managers_cache = None
             cls._plugin_index_cache = None
             cls._module_cache.clear()
             cls._entry_points_cache.clear()
-            _default_registry = None
 
 
 _default_registry: Optional[PluginRegistry] = None
+_default_registry_lock = threading.Lock()
 
 
 def default_registry() -> PluginRegistry:
@@ -558,12 +575,12 @@ def default_registry() -> PluginRegistry:
     library code that are not handed a registry share this one instead of building new ones.
     """
     global _default_registry
-    with PluginRegistry._cache_lock:
+    with _default_registry_lock:
         existing = _default_registry
     if existing is not None:
         return existing
     created = PluginRegistry()
-    with PluginRegistry._cache_lock:
+    with _default_registry_lock:
         if _default_registry is None:
             _default_registry = created
         return _default_registry
@@ -572,5 +589,5 @@ def default_registry() -> PluginRegistry:
 def set_default_registry(registry: Optional[PluginRegistry]) -> None:
     """Install ``registry`` as the shared default (``None`` resets it)."""
     global _default_registry
-    with PluginRegistry._cache_lock:
+    with _default_registry_lock:
         _default_registry = registry
