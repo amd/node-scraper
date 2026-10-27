@@ -48,7 +48,7 @@ from nodescraper.interfaces import ConnectionManager, DataPlugin, PluginInterfac
 from nodescraper.interfaces.taskresulthook import TaskResultHook
 from nodescraper.models import PluginConfig, SystemInfo
 from nodescraper.models.pluginresult import PluginResult
-from nodescraper.pluginregistry import PluginRegistry
+from nodescraper.pluginregistry import PluginRegistry, default_registry
 from nodescraper.taskresulthooks import FileSystemLogHook
 from nodescraper.typeutils import TypeUtils
 
@@ -100,7 +100,7 @@ class PluginExecutor:
             logger = logging.getLogger(DEFAULT_LOGGER)
         self.logger = logger
 
-        self.plugin_registry = plugin_registry or PluginRegistry()
+        self.plugin_registry = plugin_registry or default_registry()
 
         if system_info is None:
             system_info = SystemInfo()
@@ -336,11 +336,11 @@ class PluginExecutor:
             logged), ``False`` if it was skipped due to a registry miss, missing
             connection manager, or invalid global args.
         """
-        if plugin_name not in self.plugin_registry.plugins:
+        # With a lazy registry this is where the plugin module is imported.
+        plugin_class = self.plugin_registry.plugins.get(plugin_name)
+        if plugin_class is None:
             self.logger.error("Unable to find registered plugin for name %s", plugin_name)
             return False
-
-        plugin_class = self.plugin_registry.plugins[plugin_name]
 
         init_payload = {
             "system_info": self.system_info,
