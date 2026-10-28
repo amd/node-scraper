@@ -23,6 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
+import re
 from typing import Any, Optional
 
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
@@ -59,6 +60,19 @@ def _get_by_path(obj: Any, path: str) -> Any:
 def _check_constraint(actual: Any, constraint: RedfishConstraint) -> tuple[bool, str]:
     """Compare actual value to constraint."""
     if isinstance(constraint, dict):
+        if ConstraintKey.EXISTS in constraint:
+            want = bool(constraint[ConstraintKey.EXISTS])
+            ok = (actual is not None) == want
+            return ok, f"expected {'present' if want else 'absent'}, got {actual!r}"
+        if ConstraintKey.REGEX in constraint:
+            pattern = constraint[ConstraintKey.REGEX]
+            if not isinstance(actual, str):
+                return False, f"expected string matching {pattern!r}, got {actual!r}"
+            try:
+                ok = re.search(pattern, actual) is not None
+            except re.error as exc:
+                return False, f"invalid regex {pattern!r}: {exc}"
+            return ok, f"expected match for {pattern!r}, got {actual!r}"
         if ConstraintKey.EQ in constraint:
             ok = actual == constraint[ConstraintKey.EQ]
             return ok, f"expected eq {constraint[ConstraintKey.EQ]}, got {actual!r}"
@@ -91,7 +105,7 @@ class RedfishEndpointAnalyzer(DataAnalyzer[RedfishEndpointDataModel, RedfishEndp
 
     DOCUMENTATION_ANALYSIS_ITEMS: tuple[str, ...] = (
         "For each entry in analysis_args.checks, reads JSON paths in collected responses and "
-        "compares values to constraints (eq, min/max, anyOf, regex, etc.).",
+        "compares values to constraints (eq, min/max, anyOf, regex, exists).",
         "URI key `*` runs checks against every collected response body.",
     )
 

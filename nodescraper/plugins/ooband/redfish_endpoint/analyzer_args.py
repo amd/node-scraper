@@ -42,6 +42,8 @@ class ConstraintKey(str, Enum):
     MIN = "min"
     MAX = "max"
     ANY_OF = "anyOf"
+    REGEX = "regex"
+    EXISTS = "exists"
 
 
 RedfishConstraint = Union[int, float, str, bool, dict[str, Any]]
@@ -62,6 +64,8 @@ class RedfishEndpointAnalyzerArgs(AnalyzerArgs):
             "'min' — value must be numeric and >= the given number. "
             "'max' — value must be numeric and <= the given number. "
             "'anyOf' — value must be in the given list (OR; any match passes). "
+            "'regex' — value must be a string matching the pattern (Python re.search; anchor with ^ and $ for a full match). "
+            "'exists' — true: property must be present and not null; false: property must be absent or null. "
             'Example: { "/redfish/v1/Systems/1": { "Status/Health": { "anyOf": ["OK", "Warning"] }, "PowerState": "On" }, "*": { "Status/Health": { "anyOf": ["OK"] } } }.'
         ),
     )
