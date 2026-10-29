@@ -302,7 +302,8 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
         Returns:
             Optional[Union[dict, list[dict]]]: parsed JSON output or None on error
         """
-        cmd += " --json"
+        if "--json" not in cmd.split():
+            cmd += " --json"
         cmd_ret = self._run_amd_smi(cmd)
         if cmd_ret:
             try:
