@@ -255,29 +255,6 @@ class PluginExecutor:
             if inband_connection is not None:
                 inband_connection.disconnect()
 
-    def _resolve_connection_override(
-        self, plugin_name: str, connection_override: str
-    ) -> Optional[ConnectionManager]:
-        """Return the prebuilt manager named by a plugin's ``connection`` config key.
-
-        Args:
-            plugin_name: Registry key for the plugin (for logging).
-            connection_override: Connection manager name; must also appear in the connection config.
-
-        Returns:
-            The connection manager instance, or None if it is not configured.
-        """
-        mgr_impl = self.plugin_registry.connection_managers.get(connection_override)
-        conn_mgr = self.connection_library.get(mgr_impl) if mgr_impl else None
-        if conn_mgr is None:
-            self.logger.error(
-                "%s: connection %r must be a registered connection manager present in the "
-                "connection config",
-                plugin_name,
-                connection_override,
-            )
-        return conn_mgr
-
     def _resolve_redfish_manager(self, plugin_name: str) -> Optional[ConnectionManager]:
         """Pick the Redfish transport for a plugin declaring ``RedfishConnectionManager``.
 
@@ -294,8 +271,12 @@ class PluginExecutor:
             RedfishConnectionManager.__name__,
             RedfishSshProxyConnectionManager.__name__,
         ):
-            if name in self.connection_configs:
-                return self._resolve_connection_override(plugin_name, name)
+            if name not in self.connection_configs:
+                continue
+            mgr_impl = self.plugin_registry.connection_managers.get(name)
+            conn_mgr = self.connection_library.get(mgr_impl) if mgr_impl else None
+            if conn_mgr is not None:
+                return conn_mgr
         self.logger.error(
             "%s requires RedfishConnectionManager or RedfishSshProxyConnectionManager in the "
             "connection config",
@@ -307,7 +288,6 @@ class PluginExecutor:
         self,
         plugin_class: type,
         plugin_name: str,
-        connection_override: Optional[str] = None,
     ) -> Optional[ConnectionManager]:
         """Resolve and (if needed) initialise the connection manager for *plugin_class*.
 
@@ -320,17 +300,11 @@ class PluginExecutor:
 
         Plugins declaring ``RedfishConnectionManager`` fall back to
         ``RedfishSshProxyConnectionManager`` when only the proxy is configured
-        (see :meth:`_resolve_redfish_manager`).
-
-        *connection_override* (a plugin config ``connection`` key) selects a configured
-        connection manager by name instead, e.g. to force the SSH proxy when both Redfish
-        connections are configured.
+        (see :meth:`_resolve_redfish_manager`). Plugins declaring
+        ``RedfishSshProxyConnectionManager`` always use the proxy.
         """
         if not plugin_class.CONNECTION_TYPE:
             return None
-
-        if connection_override:
-            return self._resolve_connection_override(plugin_name, connection_override)
 
         if issubclass(plugin_class, OOBSSHDataPlugin):
             mgr_impl = OobSshConnectionManager
@@ -408,10 +382,6 @@ class PluginExecutor:
 
         plugin_class = self.plugin_registry.plugins[plugin_name]
 
-        # "connection" selects the connection manager; it is not a run() argument.
-        plugin_args = dict(plugin_args)
-        connection_override = plugin_args.pop("connection", None)
-
         init_payload = {
             "system_info": self.system_info,
             "logger": self.logger,
@@ -421,9 +391,7 @@ class PluginExecutor:
         }
 
         if plugin_class.CONNECTION_TYPE:
-            conn_mgr = self._get_connection_manager_for_plugin(
-                plugin_class, plugin_name, connection_override=connection_override
-            )
+            conn_mgr = self._get_connection_manager_for_plugin(plugin_class, plugin_name)
             if conn_mgr is None:
                 return False
             init_payload["connection_manager"] = conn_mgr

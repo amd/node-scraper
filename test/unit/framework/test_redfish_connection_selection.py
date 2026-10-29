@@ -25,7 +25,6 @@
 ###############################################################################
 import unittest
 from typing import Any, Optional
-from unittest.mock import patch
 
 from nodescraper.connection.redfish import (
     RedfishConnectionManager,
@@ -36,15 +35,14 @@ from nodescraper.interfaces import ConnectionManager
 from nodescraper.models import PluginConfig, SystemInfo
 from nodescraper.pluginexecutor import PluginExecutor
 
-PLUGIN = "RedfishEndpointPlugin"
-DIRECT = "RedfishConnectionManager"
-PROXY = "RedfishSshProxyConnectionManager"
+REDFISH_PLUGIN = "RedfishEndpointPlugin"
+PROXY_PLUGIN = "AmcRedfishDiagPlugin"
 
 DIRECT_CONFIG: dict[str, Any] = {
-    DIRECT: {"host": "bmc.example.com", "username": "root", "password": "x"}
+    "RedfishConnectionManager": {"host": "bmc.example.com", "username": "root", "password": "x"}
 }
 PROXY_CONFIG: dict[str, Any] = {
-    PROXY: {
+    "RedfishSshProxyConnectionManager": {
         "host": "192.0.2.10",
         "ssh": {"hostname": "bmc.example.com", "username": "root", "password": "x"},
     }
@@ -52,9 +50,9 @@ PROXY_CONFIG: dict[str, Any] = {
 BOTH_CONFIG: dict[str, Any] = {**DIRECT_CONFIG, **PROXY_CONFIG}
 
 
-def _executor(connections: dict, plugin_args: Optional[dict] = None) -> PluginExecutor:
+def _executor(connections: dict) -> PluginExecutor:
     return PluginExecutor(
-        plugin_configs=[PluginConfig(plugins={PLUGIN: plugin_args or {}})],
+        plugin_configs=[PluginConfig(plugins={REDFISH_PLUGIN: {}})],
         connections=connections,
         system_info=SystemInfo(
             name="test", location=SystemLocation.REMOTE, os_family=OSFamily.LINUX
@@ -62,15 +60,16 @@ def _executor(connections: dict, plugin_args: Optional[dict] = None) -> PluginEx
     )
 
 
-def _resolve(ex: PluginExecutor, override: Optional[str] = None) -> Optional[ConnectionManager]:
-    plugin_cls = ex.plugin_registry.plugins[PLUGIN]
-    return ex._get_connection_manager_for_plugin(plugin_cls, PLUGIN, connection_override=override)
+def _resolve(ex: PluginExecutor, plugin_name: str = REDFISH_PLUGIN) -> Optional[ConnectionManager]:
+    plugin_cls = ex.plugin_registry.plugins[plugin_name]
+    return ex._get_connection_manager_for_plugin(plugin_cls, plugin_name)
 
 
 class TestRedfishConnectionSelection(unittest.TestCase):
     def test_plugin_declares_direct_redfish(self):
         ex = _executor({})
-        self.assertIs(ex.plugin_registry.plugins[PLUGIN].CONNECTION_TYPE, RedfishConnectionManager)
+        plugin_cls = ex.plugin_registry.plugins[REDFISH_PLUGIN]
+        self.assertIs(plugin_cls.CONNECTION_TYPE, RedfishConnectionManager)
 
     def test_direct_only_uses_direct(self):
         ex = _executor(DIRECT_CONFIG)
@@ -89,34 +88,18 @@ class TestRedfishConnectionSelection(unittest.TestCase):
         self.assertIsNone(_resolve(ex))
         self.assertNotIn(RedfishConnectionManager, ex.connection_library)
         self.assertFalse(
-            ex._run_single_plugin(PLUGIN, ex.plugin_config.plugins[PLUGIN], [], queue_callback=None)
+            ex._run_single_plugin(
+                REDFISH_PLUGIN, ex.plugin_config.plugins[REDFISH_PLUGIN], [], queue_callback=None
+            )
         )
 
-
-class TestPluginConnectionOverride(unittest.TestCase):
-    def test_override_forces_proxy_when_both_configured(self):
+    def test_plugin_declaring_proxy_keeps_proxy_when_both_configured(self):
         ex = _executor(BOTH_CONFIG)
-        self.assertIs(_resolve(ex, PROXY), ex.connection_library[RedfishSshProxyConnectionManager])
-
-    def test_unregistered_name_returns_none(self):
-        ex = _executor(BOTH_CONFIG)
-        self.assertIsNone(_resolve(ex, "NotARealManager"))
-
-    def test_registered_but_unconfigured_returns_none(self):
-        ex = _executor(DIRECT_CONFIG)
-        self.assertIsNone(_resolve(ex, PROXY))
-
-    def test_connection_key_not_passed_to_run(self):
-        ex = _executor(BOTH_CONFIG, {"collection": False, "analysis": False, "connection": PROXY})
-        plugin_cls = ex.plugin_registry.plugins[PLUGIN]
-
-        with patch.object(plugin_cls, "run", autospec=True) as mock_run:
-            ran = ex._run_single_plugin(
-                PLUGIN, ex.plugin_config.plugins[PLUGIN], [], queue_callback=None
-            )
-
-        self.assertTrue(ran)
-        self.assertNotIn("connection", mock_run.call_args.kwargs)
+        plugin_cls = ex.plugin_registry.plugins[PROXY_PLUGIN]
+        self.assertIs(plugin_cls.CONNECTION_TYPE, RedfishSshProxyConnectionManager)
+        self.assertIs(
+            _resolve(ex, PROXY_PLUGIN), ex.connection_library[RedfishSshProxyConnectionManager]
+        )
 
 
 if __name__ == "__main__":

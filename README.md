@@ -291,7 +291,7 @@ Redfish plugins (those based on `OOBandDataPlugin`) pick their connection from t
 | present | present | direct Redfish |
 | absent | absent | plugin is skipped |
 
-To force the proxy for one plugin while both blocks are configured, set `"connection": "RedfishSshProxyConnectionManager"` in that plugin's entry in the plugin config. The proxy also accepts a `targets` list, in the same shape as Redfish multi-target. OOB SSH plugins are unaffected and still require `RedfishConnectionManager`.
+Plugins that declare `RedfishSshProxyConnectionManager` as their connection type (such as `AmcRedfishDiagPlugin`) always use the proxy, even when both blocks are configured. The proxy also accepts a `targets` list, in the same shape as Redfish multi-target. OOB SSH plugins are unaffected and still require `RedfishConnectionManager`.
 
 A sample is in `config/connection-config_redfish_ssh_proxy.example.json`.
 
