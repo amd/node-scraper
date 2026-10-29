@@ -597,6 +597,25 @@ The RedfishEndpointPlugin collects Redfish URIs (GET responses) and optionally r
 
 **`analysis_args`**
 - **`checks`**: Optional. Map of URI to expected values or constraints for analysis. Supports exact match (e.g. `"PowerState": "On"`), `anyOf`, `min`/`max`, etc.
+#### **RedfishEventLogPlugin**
+
+The RedfishEventLogPlugin reads every entry from a Redfish LogService (for example an EventLog) and reports Critical and Warning entries. It requires a Redfish connection config and supports [Redfish multi-target](#redfish-multi-target). Use `AmcRedfishEventLogPlugin` for the AMC EventLog via the SSH proxy.
+
+The collector reads `<log_service_path>/Entries` and pages with `$skip` until `Members@odata.count` is reached. Each page is saved as an artifact, and entries are stored newest first by `Created`. It uses `$skip` instead of `Members@odata.nextLink` because some services return the same `nextLink` on every page.
+
+The analyzer reports Critical entries as errors and Warning entries as warnings. Entries with the same `Severity` and `MessageId` are reported once, with a count and the newest message.
+
+**`collection_args`**
+- **`log_service_path`**: Redfish path to the LogService. Entries are read from `<log_service_path>/Entries`.
+- **`max_entries`**: Optional. Keep only the newest N entries. All pages are still read.
+- **`max_pages`**: Optional (default `100`). Safety cap on the number of `$skip` pages requested.
+- **`clear_logs_after_collection`**: Optional (default `false`). POST `LogService.ClearLog` after a successful collection.
+
+**`analysis_args`**
+- **`since`**: Optional ISO 8601 time. Only entries created at or after it are analyzed.
+- **`message_id_include`**: Optional list of regexes. Only entries whose `MessageId` matches one are analyzed.
+- **`message_id_exclude`**: Optional list of regexes. Entries whose `MessageId` matches any are skipped.
+
 
 #### **'summary' sub command**
 The 'summary' subcommand can be used to combine results from multiple runs of node-scraper to a
