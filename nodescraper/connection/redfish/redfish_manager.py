@@ -123,7 +123,10 @@ class RedfishConnectionManager(ConnectionManager[RedfishConnection, RedfishConne
         """Connect to Redfish (single-target or multi-target)."""
         if not self.connection_args:
             return self._fail_connect(
-                EventCategory.RUNTIME, "No Redfish connection parameters provided"
+                EventCategory.RUNTIME,
+                "Cannot connect to Redfish: no connection details were provided.",
+                "No Redfish connection parameters provided",
+                {"connection_args": None},
             )
 
         raw = self.connection_args
@@ -132,14 +135,20 @@ class RedfishConnectionManager(ConnectionManager[RedfishConnection, RedfishConne
                 params = RedfishConnectionParams.model_validate(raw)
             except ValueError as exc:
                 return self._fail_connect(
-                    EventCategory.RUNTIME, f"Invalid Redfish connection parameters: {exc}"
+                    EventCategory.RUNTIME,
+                    "Cannot connect to Redfish: the connection details are not valid.",
+                    f"Invalid Redfish connection parameters: {exc}",
+                    {"exception": str(exc)},
                 )
         elif isinstance(raw, RedfishConnectionParams):
             params = raw
         else:
             return self._fail_connect(
                 EventCategory.RUNTIME,
-                "Redfish connection_args must be dict or RedfishConnectionParams",
+                "Cannot connect to Redfish: the connection details are not valid.",
+                "Redfish connection_args must be dict or RedfishConnectionParams "
+                f"(got {type(raw).__name__})",
+                {"connection_args_type": type(raw).__name__},
             )
 
         if params.is_multi_target:
@@ -175,9 +184,13 @@ class RedfishConnectionManager(ConnectionManager[RedfishConnection, RedfishConne
 
         lines = "\n".join(f"[{k}] {v}" for k, v in failed_targets.items())
         if not self.target_connections:
-            summary = "Redfish connection failed for every target"
-            self._fail_connect(EventCategory.RUNTIME, summary)
-            self.result.message = f"{summary}\n{lines}"
+            summary = "Could not connect to any of the Redfish targets."
+            self._fail_connect(
+                EventCategory.RUNTIME,
+                summary,
+                f"Redfish connection failed for every target ({len(failed_targets)} tried)\n{lines}",
+                {"failed_targets": dict(failed_targets)},
+            )
             return self.result
 
         if failed_targets:
@@ -251,7 +264,18 @@ class RedfishConnectionManager(ConnectionManager[RedfishConnection, RedfishConne
         except RedfishConnectionError as exc:
             conn.close()
             return self._fail_connect(
-                EventCategory.RUNTIME, f"Redfish connection to {base_url} failed: {exc}"
+                EventCategory.RUNTIME,
+                "Could not connect to Redfish.",
+                f"Redfish connection to {base_url} failed: {exc}",
+                {
+                    "base_url": base_url,
+                    "host": str(params.host),
+                    "port": params.port,
+                    "use_https": params.use_https,
+                    "verify_ssl": params.verify_ssl,
+                    "timeout_seconds": params.timeout_seconds,
+                    "exception": str(exc),
+                },
             )
 
         self.connection = conn

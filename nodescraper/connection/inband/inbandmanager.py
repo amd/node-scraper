@@ -31,6 +31,7 @@ from typing import Any, ClassVar, Optional, Union
 from nodescraper.enums import (
     EventCategory,
     EventPriority,
+    ExecutionStatus,
     SystemLocation,
 )
 from nodescraper.interfaces.connectionmanager import ConnectionManager
@@ -91,10 +92,21 @@ class InBandConnectionManager(ConnectionManager[InBandConnection, SSHConnectionP
             return self.result
 
         if not self.connection_args:
-            return self._fail_connect(EventCategory.RUNTIME, "No SSH credentials provided")
+            return self._fail_connect(
+                EventCategory.RUNTIME,
+                "Cannot connect to the system: no SSH credentials were provided.",
+                "No SSH connection arguments provided to InBandConnectionManager",
+                {"connection_args": None},
+            )
 
         if not isinstance(self.connection_args, SSHConnectionParams):
-            return self._fail_connect(EventCategory.RUNTIME, "Invalid SSH credentials provided")
+            return self._fail_connect(
+                EventCategory.RUNTIME,
+                "Cannot connect to the system: the SSH credentials are not valid.",
+                "SSH connection arguments are not SSHConnectionParams "
+                f"(got {type(self.connection_args).__name__})",
+                {"connection_args_type": type(self.connection_args).__name__},
+            )
 
         hostname = self.connection_args.hostname
         self.logger.info("Initializing SSH connection to system '%s'", hostname)
@@ -103,11 +115,22 @@ class InBandConnectionManager(ConnectionManager[InBandConnection, SSHConnectionP
             shell.connect_ssh()
         except SSHConnectionError as exception:
             shell.client.close()
+            port = self.connection_args.port
             return self._fail_connect(
-                EventCategory.SSH, f"SSH connection to '{hostname}' failed: {exception}"
+                EventCategory.SSH,
+                "Could not connect to the system over SSH.",
+                f"SSH connection to '{hostname}:{port}' failed: {exception}",
+                {
+                    "hostname": str(hostname),
+                    "port": port,
+                    "username": self.connection_args.username,
+                    "exception": str(exception),
+                },
             )
 
         self.connection = shell
+        self.result.message = f"SSH connection to '{hostname}' established successfully"
+        self.result.status = ExecutionStatus.OK
         return self.result
 
     def disconnect(self):

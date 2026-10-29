@@ -183,8 +183,9 @@ class ConnectionManager(Task, Generic[TConnection, TConnectArg]):
     def _fail_connect(
         self,
         category: EventCategory,
-        description: str,
-        data: Optional[dict] = None,
+        message: str,
+        event_description: str | None = None,
+        event_data: Optional[dict[Any, Any]] = None,
     ) -> TaskResult:
         """Record a failed connection attempt: one CRITICAL event, nullifying the connection, and marking the result as failure.
 
@@ -193,20 +194,26 @@ class ConnectionManager(Task, Generic[TConnection, TConnectArg]):
 
         Args:
             category (EventCategory): Event category describing where the failure happened.
-            description (str): Human-readable reason the connection could not be established.
-            data (Optional[dict], optional): Extra event data. Defaults to None.
+            message (str): Short, plain-language summary for the end user (becomes the task result message),
+                e.g. "Could not connect to the BMC over SSH". No exception text or jargon.
+            event_description (str): Event description with a little more debugging detail than the message, e.g. the
+                host and the underlying error string. When None or empty the message is used.
+            event_data (Optional[dict], optional): Full debug information for the event, e.g. host, port, exception type,
+                exception string and traceback. Never include secrets. This data must be JSON-serializable.
+                Defaults to None.
 
         Returns:
             TaskResult: The failed connection result.
         """
         self._log_event(
             category=category,
-            description=description,
-            data=data,
+            description=event_description or message,
+            data=event_data,
             priority=EventPriority.CRITICAL,
             console_log=True,
         )
         self.connection = None
+        self.result.message = message
         self.result.status = ExecutionStatus.EXECUTION_FAILURE
         return self.result
 

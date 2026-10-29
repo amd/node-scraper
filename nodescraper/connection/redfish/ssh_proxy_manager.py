@@ -32,6 +32,7 @@ from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
 from nodescraper.interfaces.connectionmanager import ConnectionManager
 from nodescraper.interfaces.taskresulthook import TaskResultHook
 from nodescraper.models import SystemInfo, TaskResult
+from nodescraper.utils import get_exception_traceback
 
 from ..inband.inbandremote import RemoteShell, SSHConnectionError
 from .redfish_connection import RedfishConnectionError
@@ -90,7 +91,10 @@ class RedfishSshProxyConnectionManager(
         """
         if not self.connection_args:
             self._fail_connect(
-                EventCategory.RUNTIME, "No Redfish SSH-proxy connection parameters provided"
+                EventCategory.RUNTIME,
+                "Cannot connect through the BMC: no connection details were provided.",
+                "No Redfish SSH-proxy connection parameters provided",
+                {"connection_args": None},
             )
             return None
 
@@ -101,14 +105,19 @@ class RedfishSshProxyConnectionManager(
             except Exception as exc:
                 self._fail_connect(
                     EventCategory.RUNTIME,
+                    "Cannot connect through the BMC: the connection details are not valid.",
                     f"Invalid Redfish SSH-proxy connection parameters: {exc}",
+                    {"exception": str(exc)},
                 )
                 return None
         if isinstance(raw, RedfishSshProxyConnectionParams):
             return raw
         self._fail_connect(
             EventCategory.RUNTIME,
-            "Redfish SSH-proxy connection_args must be dict or RedfishSshProxyConnectionParams",
+            "Cannot connect through the BMC: the connection details are not valid.",
+            "Redfish SSH-proxy connection_args must be dict or RedfishSshProxyConnectionParams "
+            f"(got {type(raw).__name__})",
+            {"connection_args_type": type(raw).__name__},
         )
         return None
 
@@ -121,21 +130,44 @@ class RedfishSshProxyConnectionManager(
         Returns:
             TaskResult: Connection result.
         """
+        debug_data = {
+            "ssh_host": str(params.ssh.hostname) if params.ssh else None,
+            "ssh_port": params.ssh.port if params.ssh else None,
+            "ssh_username": params.ssh.username if params.ssh else None,
+            "redfish_host": str(params.host),
+            "redfish_port": params.port,
+            "use_https": params.use_https,
+            "timeout_seconds": params.timeout_seconds,
+        }
         try:
             self.connection = self._open_proxy(params)
         except SSHConnectionError as exc:
-            return self._fail_connect(EventCategory.SSH, f"SSH connection to BMC failed: {exc}")
+            return self._fail_connect(
+                EventCategory.SSH,
+                "Could not connect to the BMC over SSH.",
+                f"SSH connection to BMC '{debug_data['ssh_host']}' failed: {exc}",
+                {**debug_data, "exception": str(exc)},
+            )
         except RedfishConnectionError as exc:
             return self._fail_connect(
-                EventCategory.RUNTIME, f"Redfish check through BMC SSH proxy failed: {exc}"
+                EventCategory.RUNTIME,
+                "Connected to the BMC, but could not reach Redfish through it.",
+                f"Redfish check through BMC SSH proxy failed: {exc}",
+                {**debug_data, "exception": str(exc)},
             )
         except ValueError as exc:
             return self._fail_connect(
-                EventCategory.RUNTIME, f"Invalid Redfish SSH-proxy connection parameters: {exc}"
+                EventCategory.RUNTIME,
+                "Cannot connect through the BMC: the connection details are not valid.",
+                f"Invalid Redfish SSH-proxy connection parameters: {exc}",
+                {**debug_data, "exception": str(exc)},
             )
         except Exception as exc:
             return self._fail_connect(
-                EventCategory.RUNTIME, f"Unexpected error during SSH connection: {exc}"
+                EventCategory.RUNTIME,
+                "Connecting through the BMC failed unexpectedly.",
+                f"Unexpected error during SSH connection: {exc}",
+                {**debug_data, "exception": str(exc), **get_exception_traceback(exc)},
             )
         return self.result
 
@@ -170,9 +202,13 @@ class RedfishSshProxyConnectionManager(
 
         lines = "\n".join(f"[{k}] {v}" for k, v in failed_targets.items())
         if not self.target_connections:
-            summary = "SSH-proxy Redfish connection failed for every target"
-            self._fail_connect(EventCategory.RUNTIME, summary)
-            self.result.message = f"{summary}\n{lines}"
+            summary = "Could not connect to any of the BMC targets."
+            self._fail_connect(
+                EventCategory.RUNTIME,
+                summary,
+                f"SSH-proxy Redfish connection failed for every target ({len(failed_targets)} tried)\n{lines}",
+                {"failed_targets": dict(failed_targets)},
+            )
             return self.result
 
         if failed_targets:

@@ -66,7 +66,10 @@ class OobSshConnectionManager(ConnectionManager[InBandConnection, RedfishConnect
     def connect(self) -> TaskResult:
         if not self.connection_args:
             return self._fail_connect(
-                EventCategory.RUNTIME, "No Redfish connection parameters provided for OOB SSH"
+                EventCategory.RUNTIME,
+                "Cannot connect to the BMC over SSH: no connection details were provided.",
+                "No Redfish connection parameters provided for OOB SSH",
+                {"connection_args": None},
             )
 
         raw = self.connection_args
@@ -75,14 +78,20 @@ class OobSshConnectionManager(ConnectionManager[InBandConnection, RedfishConnect
                 params = RedfishConnectionParams.model_validate(raw)
             except ValueError as exception:
                 return self._fail_connect(
-                    EventCategory.RUNTIME, f"Invalid Redfish connection parameters: {exception}"
+                    EventCategory.RUNTIME,
+                    "Cannot connect to the BMC over SSH: the connection details are not valid.",
+                    f"Invalid Redfish connection parameters for OOB SSH: {exception}",
+                    {"exception": str(exception)},
                 )
         elif isinstance(raw, RedfishConnectionParams):
             params = raw
         else:
             return self._fail_connect(
                 EventCategory.RUNTIME,
-                "Redfish connection_args must be dict or RedfishConnectionParams",
+                "Cannot connect to the BMC over SSH: the connection details are not valid.",
+                "Redfish connection_args must be dict or RedfishConnectionParams "
+                f"(got {type(raw).__name__})",
+                {"connection_args_type": type(raw).__name__},
             )
 
         if params.is_multi_target and params.host is None:
@@ -104,7 +113,13 @@ class OobSshConnectionManager(ConnectionManager[InBandConnection, RedfishConnect
             ssh_params = redfish_params_to_ssh(params)
         except ValueError as exception:
             return self._fail_connect(
-                EventCategory.RUNTIME, f"Invalid OOB SSH connection parameters: {exception}"
+                EventCategory.RUNTIME,
+                "Cannot connect to the BMC over SSH: the connection details are not valid.",
+                f"Could not build OOB SSH parameters from the Redfish parameters: {exception}",
+                {
+                    "host": str(params.host),
+                    "exception": str(exception),
+                },
             )
 
         hostname = ssh_params.hostname
@@ -115,7 +130,15 @@ class OobSshConnectionManager(ConnectionManager[InBandConnection, RedfishConnect
         except SSHConnectionError as exception:
             shell.client.close()
             return self._fail_connect(
-                EventCategory.SSH, f"OOB SSH connection to BMC '{hostname}' failed: {exception}"
+                EventCategory.SSH,
+                "Could not connect to the BMC over SSH.",
+                f"OOB SSH connection to BMC '{hostname}:{ssh_params.port}' failed: {exception}",
+                {
+                    "hostname": str(hostname),
+                    "port": ssh_params.port,
+                    "username": ssh_params.username,
+                    "exception": str(exception),
+                },
             )
 
         self.connection = shell
