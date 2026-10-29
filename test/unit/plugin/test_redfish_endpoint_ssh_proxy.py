@@ -25,8 +25,8 @@
 ###############################################################################
 """RedfishEndpointPlugin run against a host behind a BMC via RedfishSshProxyConnectionManager.
 
-Only the BMC SSH session and the curl call are faked; the connection manager, executor
-connection override, collector and analyzer are the real implementations.
+The plugin config names no connection: the executor falls back to the SSH proxy because it is
+the only Redfish connection configured. Only the BMC SSH session and the curl call are faked.
 """
 import json
 from typing import Any, cast
@@ -63,7 +63,6 @@ CHASSIS = {
 }
 
 PLUGIN_ARGS: dict[str, Any] = {
-    "connection": "RedfishSshProxyConnectionManager",
     "collection_args": {"uris": ["/redfish/v1/Chassis", "/redfish/v1/Chassis/1"]},
     "analysis_args": {
         "checks": {
