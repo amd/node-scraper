@@ -41,6 +41,58 @@ from nodescraper.models.datamodel import DataModel, FileModel
 from nodescraper.utils import find_annotation_in_container
 
 _NUM_UNIT_RE = re.compile(r"^\s*([-+]?\d+(?:\.\d+)?)(?:\s*([A-Za-z%/][A-Za-z0-9%/._-]*))?\s*$")
+_METRIC_CLOCK_FIELDS = {"clk", "min_clk", "max_clk", "clk_locked", "deep_sleep"}
+
+
+def _as_metric_clock(value: object) -> object:
+    """Return one clock as MetricClockData input.
+
+    Args:
+        value: A clock object, a value with a unit, or an absent marker.
+
+    Returns:
+        The original clock object, or a clock object whose clk is value.
+    """
+    if isinstance(value, dict) and _METRIC_CLOCK_FIELDS.intersection(value):
+        return value
+    return {
+        "clk": value,
+        "min_clk": None,
+        "max_clk": None,
+        "clk_locked": None,
+        "deep_sleep": None,
+    }
+
+
+def normalize_amdsmi_metric_dict(data: dict) -> dict:
+    """Accept older metric JSON and per-block clock and PCIe count fields.
+
+    Args:
+        data: One amd-smi metric object.
+
+    Returns:
+        A copy prepared for AmdSmiMetric validation.
+    """
+    out = dict(data)
+    pcie = out.get("pcie")
+    if isinstance(pcie, dict):
+        pcie = dict(pcie)
+        if "lc_perf_other_end_recovery" not in pcie and "lc_perf_other_end_recovery_count" in pcie:
+            pcie["lc_perf_other_end_recovery"] = pcie["lc_perf_other_end_recovery_count"]
+        out["pcie"] = pcie
+    clock = out.get("clock")
+    if isinstance(clock, dict):
+        normalized_clock = {}
+        for name, value in clock.items():
+            if isinstance(value, dict) and value and not _METRIC_CLOCK_FIELDS.intersection(value):
+                normalized_clock[name] = {
+                    block_name: _as_metric_clock(block_value)
+                    for block_name, block_value in value.items()
+                }
+            else:
+                normalized_clock[name] = value
+        out["clock"] = normalized_clock
+    return out
 
 
 def na_to_none(values: Union[int, str]):
@@ -777,7 +829,7 @@ class AmdSmiMetric(BaseModel):
     gpu: int
     usage: MetricUsage
     power: MetricPower
-    clock: dict[str, MetricClockData]
+    clock: dict[str, Union[MetricClockData, dict[str, MetricClockData]]]
     temperature: MetricTemperature
     pcie: MetricPcie
     ecc: MetricEccTotals
@@ -791,6 +843,21 @@ class AmdSmiMetric(BaseModel):
     throttle: MetricThrottle
 
     na_validator = field_validator("xgmi_err", "perf_level", mode="before")(na_to_none)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_metric_input(cls, value: object) -> object:
+        """Normalize one metric object before field validation.
+
+        Args:
+            value: Raw metric input.
+
+        Returns:
+            The input, with per-block clocks and the PCIe count alias normalized.
+        """
+        if isinstance(value, dict):
+            return normalize_amdsmi_metric_dict(value)
+        return value
 
     @field_validator("ecc_blocks", mode="before")
     @classmethod
