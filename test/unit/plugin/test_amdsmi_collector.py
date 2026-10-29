@@ -567,7 +567,7 @@ def test_command_error(conn_mock, system_info, monkeypatch):
     def mock_cmd_error(cmd: str) -> MagicMock:
         if "which amd-smi" in cmd:
             return make_cmd_result("/usr/bin/amd-smi")
-        return make_cmd_result("", "Command failed", 1)
+        return make_cmd_result("Command output", "Command failed", 1)
 
     c = AmdSmiCollector(
         system_info=system_info,
@@ -581,6 +581,11 @@ def test_command_error(conn_mock, system_info, monkeypatch):
     assert data.version is None
     assert data.gpu_list == []
     assert len(result.events) > 0
+    command_error = next(
+        event for event in result.events if event.description == "Error running amd-smi command"
+    )
+    assert command_error.data["stdout"] == "Command output"
+    assert command_error.data["stderr"] == "Command failed"
 
 
 def test_multi_json_parsing(conn_mock, system_info, monkeypatch):
