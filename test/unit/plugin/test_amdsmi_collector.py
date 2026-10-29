@@ -641,6 +641,33 @@ def test_single_json_parsing(conn_mock, system_info, monkeypatch):
     assert result[0]["tool"] == "amdsmi"
 
 
+def test_run_amd_smi_dict_appends_json_once(conn_mock, system_info, monkeypatch):
+    """Every JSON command receives one --json from the runner."""
+    seen = []
+
+    def mock_run_sut_cmd(cmd: str) -> MagicMock:
+        seen.append(cmd)
+        return make_cmd_result(make_json_response({"ok": True}))
+
+    c = AmdSmiCollector(
+        system_info=system_info,
+        system_interaction_level=SystemInteractionLevel.PASSIVE,
+        connection=conn_mock,
+    )
+    monkeypatch.setattr(c, "_run_sut_cmd", mock_run_sut_cmd)
+
+    assert c._run_amd_smi_dict(c.CMD_LIST) == {"ok": True}
+    assert c._run_amd_smi_dict(c.CMD_STATIC) == {"ok": True}
+    assert c._run_amd_smi_dict(c.CMD_TOPOLOGY) == {"ok": True}
+    assert c._run_amd_smi_dict("list --json") == {"ok": True}
+    assert seen == [
+        "amd-smi list --json",
+        "amd-smi static -g all --json",
+        "amd-smi topology --json",
+        "amd-smi list --json",
+    ]
+
+
 def test_get_cper_afid_success(conn_mock, system_info, monkeypatch):
     """Test successful AFID retrieval from CPER file"""
 

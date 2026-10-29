@@ -123,13 +123,13 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
 
     DATA_MODEL = AmdSmiDataModel
 
-    CMD_VERSION = "version --json"
-    CMD_LIST = "list --json"
-    CMD_PROCESS = "process --json"
-    CMD_PARTITION = "partition --json"
-    CMD_FIRMWARE = "firmware --json"
-    CMD_STATIC = "static -g all --json"
-    CMD_STATIC_GPU = "static -g {gpu_id} --json"
+    CMD_VERSION = "version"
+    CMD_LIST = "list"
+    CMD_PROCESS = "process"
+    CMD_PARTITION = "partition"
+    CMD_FIRMWARE = "firmware"
+    CMD_STATIC = "static -g all"
+    CMD_STATIC_GPU = "static -g {gpu_id}"
     CMD_TOPOLOGY = "topology"
     CMD_METRIC = "metric -g all"
     CMD_BAD_PAGES = "bad-pages"
@@ -238,7 +238,8 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
         Returns:
             Optional[Union[dict, list[dict]]]: parsed JSON output or None on error
         """
-        cmd += " --json"
+        if "--json" not in cmd.split():
+            cmd += " --json"
         cmd_ret = self._run_amd_smi(cmd)
         if cmd_ret:
             try:
