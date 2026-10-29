@@ -393,7 +393,7 @@ class StaticXgmiPlpd(BaseModel):
 
 
 class StaticNuma(BaseModel):
-    node: int
+    node: Union[int, str]  # can be N/A
     affinity: Union[int, str]  # can be N/A
 
 

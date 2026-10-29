@@ -77,6 +77,42 @@ from nodescraper.plugins.inband.amdsmi.amdsmidata import (
 from nodescraper.plugins.inband.amdsmi.collector_args import AmdSmiCollectorArgs
 from nodescraper.utils import get_exception_traceback
 
+_AFID_ABSENT = {"-", "n/a", "na"}
+# First integer in the AFID column. The file name can contain digits.
+_AFID_VALUE_RE = re.compile(r"\d+")
+
+
+def _parse_afid_output(output: str) -> Optional[int]:
+    """Return the AFID from amd-smi output, or None when the value is absent.
+
+    Args:
+        output: stdout from ras --afid --cper-file.
+
+    Returns:
+        The AFID integer, or None for a dash or N/A.
+    """
+    lines = [line.strip() for line in output.splitlines() if line.strip()]
+    if not lines:
+        raise ValueError("empty AFID output")
+    header_index = next(
+        (index for index, line in enumerate(lines) if line.lower().startswith("file_name")),
+        None,
+    )
+    if header_index is None:
+        data_line = lines[0]
+    elif header_index + 1 >= len(lines):
+        raise ValueError("AFID table has no data row")
+    else:
+        data_line = lines[header_index + 1]
+    tokens = data_line.split()
+    cell = tokens[0] if len(tokens) == 1 else " ".join(tokens[1:])
+    if cell.lower() in _AFID_ABSENT:
+        return None
+    match = _AFID_VALUE_RE.search(cell)
+    if match is None:
+        raise ValueError(f"no AFID in {cell!r}")
+    return int(match.group(0))
+
 
 class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs]):
     """Class for collection of inband tool amd-smi data."""
@@ -979,7 +1015,13 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
                 )
 
             # NUMA
-            numa_node = int(numa.get("node", 0) or 0)
+            numa_node_raw = numa.get("node")
+            if numa_node_raw in (None, "", "N/A"):
+                numa_node: Union[int, str] = "N/A"
+            elif isinstance(numa_node_raw, str):
+                numa_node = numa_node_raw
+            else:
+                numa_node = int(numa_node_raw) if numa_node_raw is not None else "N/A"
             affinity_raw = numa.get("affinity")
             if affinity_raw in (None, "", "N/A"):
                 affinity_val: Union[int, str] = "N/A"
@@ -1496,15 +1538,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
             return None
 
         try:
-            afid = int(result.strip())
-            self._log_event(
-                category=EventCategory.APPLICATION,
-                description=f"Successfully retrieved AFID from CPER file: {cper_file_path}",
-                data={"afid": afid, "cper_file": cper_file_path},
-                priority=EventPriority.INFO,
-                console_log=True,
-            )
-            return afid
+            afid = _parse_afid_output(result)
         except ValueError:
             self._log_event(
                 category=EventCategory.APPLICATION,
@@ -1514,6 +1548,23 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
                 console_log=True,
             )
             return None
+        if afid is None:
+            self._log_event(
+                category=EventCategory.APPLICATION,
+                description=f"No AFID reported for CPER file: {cper_file_path}",
+                data={"output": result, "cper_file": cper_file_path},
+                priority=EventPriority.INFO,
+                console_log=True,
+            )
+            return None
+        self._log_event(
+            category=EventCategory.APPLICATION,
+            description=f"Successfully retrieved AFID from CPER file: {cper_file_path}",
+            data={"afid": afid, "cper_file": cper_file_path},
+            priority=EventPriority.INFO,
+            console_log=True,
+        )
+        return afid
 
     def collect_data(
         self,

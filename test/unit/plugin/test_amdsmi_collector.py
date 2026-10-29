@@ -31,8 +31,13 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from nodescraper.enums.eventpriority import EventPriority
+from nodescraper.enums.executionstatus import ExecutionStatus
 from nodescraper.enums.systeminteraction import SystemInteractionLevel
-from nodescraper.plugins.inband.amdsmi.amdsmi_collector import AmdSmiCollector
+from nodescraper.plugins.inband.amdsmi.amdsmi_collector import (
+    AmdSmiCollector,
+    _parse_afid_output,
+)
 from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     AmdSmiDataModel,
     AmdSmiTstData,
@@ -493,6 +498,46 @@ def test_static_data_without_vbios_defaults_to_none(conn_mock, system_info, monk
     assert stat[0].vbios is None
 
 
+def test_static_numa_node_na(conn_mock, system_info, monkeypatch):
+    """N/A numa node is kept as a string, the same way affinity is."""
+
+    def mock_run_sut_cmd(cmd: str) -> MagicMock:
+        if "which amd-smi" in cmd:
+            return make_cmd_result("/usr/bin/amd-smi")
+        if "static -g all --json" in cmd:
+            return make_cmd_result(
+                make_json_response(
+                    [
+                        {
+                            "gpu": 0,
+                            "bus": {"bdf": "0000:0b:00.0"},
+                            "numa": {"node": "N/A", "affinity": "N/A"},
+                        },
+                        {
+                            "gpu": 1,
+                            "bus": {"bdf": "0000:0c:00.0"},
+                            "numa": {"node": 3, "affinity": 0},
+                        },
+                    ]
+                )
+            )
+        return make_cmd_result("")
+
+    c = AmdSmiCollector(
+        system_info=system_info,
+        system_interaction_level=SystemInteractionLevel.PASSIVE,
+        connection=conn_mock,
+    )
+    monkeypatch.setattr(c, "_run_sut_cmd", mock_run_sut_cmd)
+
+    stat = c.get_static()
+    assert stat is not None and len(stat) == 2
+    assert stat[0].numa.node == "N/A"
+    assert stat[0].numa.affinity == "N/A"
+    assert stat[1].numa.node == 3
+    assert stat[1].numa.affinity == 0
+
+
 def test_json_parse_error(conn_mock, system_info, monkeypatch):
     """Test handling of malformed JSON"""
 
@@ -639,6 +684,69 @@ def test_get_cper_afid_invalid_output(conn_mock, system_info, monkeypatch):
     afid = c._get_cper_afid("/path/to/test.cper")
 
     assert afid is None
+    assert any(event.priority == EventPriority.ERROR for event in c.result.events)
+
+
+def test_get_cper_afid_table(conn_mock, system_info, monkeypatch):
+    """Test AFID retrieval when amd-smi prints a file_name and list of afids table"""
+
+    def mock_run_sut_cmd(cmd: str) -> MagicMock:
+        if "which amd-smi" in cmd:
+            return make_cmd_result("/usr/bin/amd-smi")
+        if "ras --afid --cper-file" in cmd:
+            return make_cmd_result("file_name         list of afids\ncorrected-1.cper  29\n")
+        return make_cmd_result("")
+
+    c = AmdSmiCollector(
+        system_info=system_info,
+        system_interaction_level=SystemInteractionLevel.PASSIVE,
+        connection=conn_mock,
+    )
+    monkeypatch.setattr(c, "_run_sut_cmd", mock_run_sut_cmd)
+
+    afid = c._get_cper_afid("/path/to/corrected-1.cper")
+    c.result.finalize()
+
+    assert afid == 29
+    assert c.result.status == ExecutionStatus.OK
+    assert not any(event.priority >= EventPriority.ERROR for event in c.result.events)
+
+
+def test_get_cper_afid_absent(conn_mock, system_info, monkeypatch):
+    """Test a dash or N/A AFID is recorded as none and does not fail the task"""
+
+    def mock_run_sut_cmd(cmd: str) -> MagicMock:
+        if "which amd-smi" in cmd:
+            return make_cmd_result("/usr/bin/amd-smi")
+        if "ras --afid --cper-file" in cmd:
+            if "boot.cper" in cmd:
+                return make_cmd_result("file_name         list of afids\nboot.cper  N/A\n")
+            return make_cmd_result("-\n")
+        return make_cmd_result("")
+
+    c = AmdSmiCollector(
+        system_info=system_info,
+        system_interaction_level=SystemInteractionLevel.PASSIVE,
+        connection=conn_mock,
+    )
+    monkeypatch.setattr(c, "_run_sut_cmd", mock_run_sut_cmd)
+
+    assert c._get_cper_afid("/path/to/boot.cper") is None
+    assert c._get_cper_afid("/path/to/other.cper") is None
+    c.result.finalize()
+
+    assert c.result.status == ExecutionStatus.OK
+    assert not any(event.priority >= EventPriority.ERROR for event in c.result.events)
+
+
+def test_parse_afid_output():
+    """Parse a bare AFID, an AFID table, and an absent marker."""
+    assert _parse_afid_output("12345\n") == 12345
+    assert _parse_afid_output("file_name         list of afids\ncorrected-1.cper  29\n") == 29
+    assert _parse_afid_output("file_name         list of afids\nboot.cper  N/A\n") is None
+    assert _parse_afid_output("-\n") is None
+    with pytest.raises(ValueError):
+        _parse_afid_output("not_a_number\n")
 
 
 def test_get_cper_afid_command_failure(conn_mock, system_info, monkeypatch):
