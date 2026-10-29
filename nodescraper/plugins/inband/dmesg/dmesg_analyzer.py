@@ -25,7 +25,7 @@
 ###############################################################################
 import datetime
 import re
-from typing import Optional
+from typing import Optional, Union
 
 from nodescraper.base.match_ignore import parse_ignore_match_rules
 from nodescraper.base.regexanalyzer import ErrorRegex, RegexAnalyzer
@@ -44,6 +44,29 @@ from .mce_utils import (
     parse_uncorrectable_mce_counts,
     trim_mce_status_match_content,
 )
+
+# ACA STATUS UC is bit 61 and PCC is bit 57. Ignore DESTAT, which also ends in STATUS.
+_ACA_STATUS_UC_OR_PCC = (1 << 61) | (1 << 57)
+_ACA_STATUS_RE = re.compile(r"(?<![A-Za-z])STATUS=0x([0-9a-fA-F]+)")
+
+
+def _aca_record_is_correctable(match_content: Union[str, list, tuple]) -> bool:
+    """Return True when every ACA STATUS value has UC and PCC clear.
+
+    Args:
+        match_content: Regex match text or captured lines.
+
+    Returns:
+        True when a STATUS value is present and none set UC or PCC.
+    """
+    if isinstance(match_content, str):
+        text = match_content
+    else:
+        text = "\n".join(str(part) for part in match_content)
+    statuses = [int(value, 16) for value in _ACA_STATUS_RE.findall(text)]
+    if not statuses:
+        return False
+    return all(status & _ACA_STATUS_UC_OR_PCC == 0 for status in statuses)
 
 
 class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
@@ -789,6 +812,12 @@ class DmesgAnalyzer(RegexAnalyzer[DmesgData, DmesgAnalyzerArgs]):
                 event.data["match_content"] = trim_mce_status_match_content(
                     event.data["match_content"]
                 )
+            elif (
+                event.description == "ACA Error"
+                and event.priority == EventPriority.ERROR
+                and _aca_record_is_correctable(event.data.get("match_content", ""))
+            ):
+                event.priority = EventPriority.WARNING
         if args.exclude_category:
             known_err_events = [
                 event for event in known_err_events if event.category not in args.exclude_category
