@@ -1289,6 +1289,11 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
 
         if issues:
             gpus_affected = len({i["gpu"] for i in issues})
+            details = "; ".join(
+                f"GPU {item['gpu']} {item['field']}: expected {item['expected']}, "
+                f"actual {item['actual']}"
+                for item in issues
+            )
             self._log_event(
                 category=EventCategory.NETWORK,
                 description=f"Fabric data mismatch on {gpus_affected} GPU(s)",
@@ -1297,6 +1302,7 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                     "expected_accel_state": expected_state,
                     "expected_fabric_type": expected_type,
                     "mismatches": issues,
+                    "details": details,
                 },
                 console_log=True,
             )
