@@ -6,6 +6,7 @@ from typing import Literal, Optional, Union
 
 from nodescraper.utils import (
     bytes_to_human_readable,
+    convert_to_bytes,
     find_annotation_in_container,
     unit_size_to_bytes,
 )
@@ -38,6 +39,14 @@ def test_find_annotation_in_container_literal_nested_in_generic():
 def test_bytes_to_human_readable_terabytes():
     """Baseline: a terabyte scale value is rendered with the TB unit."""
     assert bytes_to_human_readable(2 << 40) == "2.0 TB"
+
+
+def test_convert_to_bytes_iec_suffix_is_binary():
+    """Gi and Ti are gibibytes and tebibytes, not decimal G and T."""
+    assert convert_to_bytes("2016Gi") == 2016 * 1024**3
+    assert convert_to_bytes("4Ti") == 4 * 1024**4
+    assert convert_to_bytes("2G") == 2 * 10**9
+    assert convert_to_bytes("2G", si=False) == 2 * 1024**3
 
 
 def test_bytes_to_human_readable_petabytes():

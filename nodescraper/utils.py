@@ -190,41 +190,41 @@ def command_result_event_data(
 
 
 def convert_to_bytes(value: str, si=True) -> int:
-    """
-    Convert human-readable memory sizes (like GB, MB) to bytes.
-    If si=False (default), IEC units are used (1KiB=1024 bytes).
-    If si=True, SI units are used (1KB=1000 bytes).
-    Factor of powers of 2, not 10. (e.g. 1KB=1000 bytes and 1KiB=1024 bytes)
-    This can be changed with si=True (1KB=1000 bytes)
+    """Convert a memory size string to bytes.
+
+    An IEC suffix (Ki, Mi, Gi, Ti, and the rest) always uses powers of 1024.
+    Without that suffix, ``si=True`` uses powers of 1000 and ``si=False`` uses
+    powers of 1024. A bare number is already a byte count.
     """
     value = value.strip().upper()
     unit_names = ["K", "M", "G", "T", "P", "E", "Z", "Y"]
-    if si:
-        exponent_base = 10
-        exponent_power = 3
-    else:
-        exponent_base = 2
-        exponent_power = 10
-    # Extract the numeric part and the unit
-    pattern = re.compile(r"(\d+\.?\d*)([YZEPTGMK]?)")
+    # Extract the numeric part and the unit. The optional I marks an IEC suffix.
+    pattern = re.compile(r"(\d+\.?\d*)([YZEPTGMK]?)(I?)")
     match = pattern.match(value)
     if not match:
         raise ValueError(f"Invalid memory value: {value}")
 
     # Handle the numeric value and ensure it's a valid number
     try:
-        value = float(match.group(1))
+        number = float(match.group(1))
     except ValueError as err:
         raise ValueError(f"Invalid numeric value in: {value}") from err
 
     unit = match.group(2)
+    iec = bool(match.group(3))
+    if iec or not si:
+        exponent_base = 2
+        exponent_power = 10
+    else:
+        exponent_base = 10
+        exponent_power = 3
 
     # Convert the value to bytes
     for unit_index, unit_name in enumerate(unit_names):
         if unit == unit_name:
-            return int(float(value) * (exponent_base ** ((unit_index + 1) * exponent_power)))
+            return int(number * (exponent_base ** ((unit_index + 1) * exponent_power)))
     # If the unit is not found, it is bytes
-    return int(value)
+    return int(number)
 
 
 _UNIT_BYTES = {
