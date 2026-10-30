@@ -129,6 +129,66 @@ def test_check_constraint_literal_match():
     assert ok is False
 
 
+def test_check_constraint_regex_pass():
+    ok, _ = _check_constraint("123e4567-e89b-12d3-a456-426614174000", {"regex": r"^[0-9a-f-]{36}$"})
+    assert ok is True
+    ok, _ = _check_constraint("SN1234", {"regex": r"\d"})
+    assert ok is True
+
+
+def test_check_constraint_regex_fail():
+    ok, msg = _check_constraint("000000000000", {"regex": r"^(?!0+$).+$"})
+    assert ok is False
+    assert "expected match" in msg
+
+
+def test_check_constraint_regex_non_string_fails():
+    for actual in (None, 42, {"a": 1}):
+        ok, msg = _check_constraint(actual, {"regex": ".*"})
+        assert ok is False
+        assert "expected string" in msg
+
+
+def test_check_constraint_regex_invalid_pattern_fails():
+    ok, msg = _check_constraint("abc", {"regex": "("})
+    assert ok is False
+    assert "invalid regex" in msg
+
+
+def test_check_constraint_exists():
+    for present in ("x", 0, False, {}, {"@odata.id": "/redfish/v1/Chassis/1/Sensors"}):
+        assert _check_constraint(present, {"exists": True})[0] is True
+        assert _check_constraint(present, {"exists": False})[0] is False
+    assert _check_constraint(None, {"exists": True})[0] is False
+    assert _check_constraint(None, {"exists": False})[0] is True
+
+
+def test_redfish_endpoint_analyzer_regex_and_exists(redfish_endpoint_analyzer):
+    data = RedfishEndpointDataModel(
+        responses={
+            "/redfish/v1/Chassis/1": {
+                "UUID": "123e4567-e89b-12d3-a456-426614174000",
+                "SerialNumber": "000000000000",
+                "Sensors": {"@odata.id": "/redfish/v1/Chassis/1/Sensors"},
+            },
+        }
+    )
+    args = RedfishEndpointAnalyzerArgs(
+        checks={
+            "/redfish/v1/Chassis/1": {
+                "UUID": {"regex": r"^[0-9a-fA-F-]{36}$"},
+                "SerialNumber": {"regex": r"^(?!0+$).+$"},
+                "Sensors": {"exists": True},
+                "Assembly": {"exists": True},
+            },
+        }
+    )
+    result = redfish_endpoint_analyzer.analyze_data(data, args=args)
+    assert result.status == ExecutionStatus.ERROR
+    failures = result.events[-1].data["failures"]
+    assert sorted(f["path"] for f in failures) == ["Assembly", "SerialNumber"]
+
+
 def test_redfish_endpoint_analyzer_no_checks(redfish_endpoint_analyzer):
     data = RedfishEndpointDataModel(responses={"/redfish/v1": {}})
     result = redfish_endpoint_analyzer.analyze_data(data, args=None)

@@ -16,6 +16,8 @@ system debug. For details on what data is collected and analyzed, see the [plugi
     - [Execution Methods](#execution-methods)
       - [Example: Remote Execution](#example-remote-execution)
         - [Example: connection\_config.json](#example-connection_configjson)
+      - [Redfish multi-target](#redfish-multi-target)
+      - [Redfish through a BMC SSH proxy](#redfish-through-a-bmc-ssh-proxy)
     - [Subcommands](#subcommands)
       - [**'describe' subcommand**](#describe-subcommand)
       - [**'run-plugins' sub command**](#run-plugins-sub-command)
@@ -262,6 +264,34 @@ A target that fails to connect or collect does not fail the run when another tar
 Per-target results are written to `<plugin>/<collector>/<target_key>/`. Single-target results stay in `<plugin>/<collector>/`. The same layout is used for the analyzer directory and for the AMC SSH-proxy plugin.
 
 A ready-to-edit sample is in `config/connection-config_redfish_multi_target.example.json`. Replace the example hosts and password, then pass it with `--connection-config`.
+
+#### Redfish through a BMC SSH proxy
+
+When the Redfish service is only reachable from the BMC, use `RedfishSshProxyConnectionManager`. node-scraper opens SSH to the BMC (`ssh`) and runs `curl` from there against `host`.
+
+```json
+{
+    "RedfishSshProxyConnectionManager": {
+        "host": "192.0.2.10",
+        "ssh": {
+            "hostname": "bmc.example.com",
+            "username": "root",
+            "password": "placeholder"
+        }
+    }
+}
+```
+
+Redfish plugins (those based on `OOBandDataPlugin`) pick their connection from the connection config:
+
+| `RedfishConnectionManager` | `RedfishSshProxyConnectionManager` | Connection used |
+|---|---|---|
+| present | absent | direct Redfish |
+| absent | present | SSH proxy |
+| present | present | direct Redfish |
+| absent | absent | plugin is skipped |
+
+Plugins that declare `RedfishSshProxyConnectionManager` as their connection type (such as `AmcRedfishDiagPlugin`) always use the proxy, even when both blocks are configured. The proxy also accepts a `targets` list, in the same shape as Redfish multi-target. OOB SSH plugins are unaffected and still require `RedfishConnectionManager`.
 
 **Notes:**
 - If using SSH keys, specify `key_filename` instead of `password`.
@@ -529,7 +559,7 @@ The RedfishEndpointPlugin collects Redfish URIs (GET responses) and optionally r
 
 **How to run**
 
-1. Create a connection config (e.g. `connection-config.json`) with `RedfishConnectionManager` and your BMC host (single target) or `targets` list (multi-target).
+1. Create a connection config (e.g. `connection-config.json`) with `RedfishConnectionManager` and your BMC host (single target) or `targets` list (multi-target). If Redfish is only reachable through the BMC, use `RedfishSshProxyConnectionManager` instead (see [Redfish through a BMC SSH proxy](#redfish-through-a-bmc-ssh-proxy)).
 2. Create a plugin config with `uris` to collect and optional `checks` for analysis (see example below). For example save as `plugin_config_redfish_endpoint.json`.
 3. Run:
    ```sh
@@ -575,7 +605,7 @@ The RedfishEndpointPlugin collects Redfish URIs (GET responses) and optionally r
 - **`max_pages`**: Optional (default `200`). Safety cap on the number of pages to follow per URI when `follow_next_link` is enabled.
 
 **`analysis_args`**
-- **`checks`**: Optional. Map of URI to expected values or constraints for analysis. Supports exact match (e.g. `"PowerState": "On"`), `anyOf`, `min`/`max`, etc.
+- **`checks`**: Optional. Map of URI to expected values or constraints for analysis. Supports exact match (e.g. `"PowerState": "On"`), `anyOf`, `min`/`max`, `regex` (e.g. `{"regex": "^[0-9a-fA-F-]{36}$"}`), and `exists` (`{"exists": true}` requires the property to be present and non-null).
 
 #### **'summary' sub command**
 The 'summary' subcommand can be used to combine results from multiple runs of node-scraper to a
