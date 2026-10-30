@@ -37,7 +37,7 @@ def test_find_annotation_in_container_literal_nested_in_generic():
 
 def test_bytes_to_human_readable_terabytes():
     """Baseline: a terabyte scale value is rendered with the TB unit."""
-    assert bytes_to_human_readable(2 * 10**12) == "2.0TB"
+    assert bytes_to_human_readable(2 << 40) == "2.0 TB"
 
 
 def test_bytes_to_human_readable_petabytes():

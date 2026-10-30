@@ -23,7 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, TypedDict
 
 from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
@@ -73,6 +73,14 @@ class JournalAnalyzer(DataAnalyzer[JournalData, JournalAnalyzerArgs]):
         Returns:
             list[JournalJsonEntry]: filtered journal log
         """
+
+        def as_utc(value: Optional[datetime]) -> Optional[datetime]:
+            if value is not None and value.tzinfo is None:
+                return value.replace(tzinfo=timezone.utc)
+            return value
+
+        analysis_range_start = as_utc(analysis_range_start)
+        analysis_range_end = as_utc(analysis_range_end)
 
         filtered_journal = []
 
@@ -141,25 +149,20 @@ class JournalAnalyzer(DataAnalyzer[JournalData, JournalAnalyzerArgs]):
                         console_log=False,
                     )
                 else:
-                    # Handle MESSAGE as either string or list
-                    message = entry.MESSAGE
-                    if isinstance(message, list):
-                        message = " ".join(message)
-
-                    # Create a tuple key from message and priority
-                    entry_key = (message, entry.PRIORITY)
+                    entry_key = (entry.MESSAGE, entry.PRIORITY)
+                    missing_timestamp = datetime.fromtimestamp(0, tz=timezone.utc)
                     if journal_event_map.get(entry_key) is None:
                         journal_event_map[entry_key] = {
                             "count": 1,
                             "first_occurrence": (
                                 entry.REALTIME_TIMESTAMP
                                 if entry.REALTIME_TIMESTAMP
-                                else datetime.fromtimestamp(0)
+                                else missing_timestamp
                             ),
                             "last_occurrence": (
                                 entry.REALTIME_TIMESTAMP
                                 if entry.REALTIME_TIMESTAMP
-                                else datetime.fromtimestamp(0)
+                                else missing_timestamp
                             ),
                         }
                     else:

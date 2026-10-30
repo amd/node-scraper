@@ -412,7 +412,11 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                             category=EventCategory.IO,
                             description=f"GPU: {gpu} PCIe link speed is not Gen5 (32 GT/s)",
                             priority=EventPriority.ERROR,
-                            data={"gpu": gpu, "pcie_speed": speed_val, "expected": 32.0},
+                            data={
+                                "gpu": gpu,
+                                "pcie_speed": speed_val,
+                                "expected": 32.0,
+                            },
                             console_log=True,
                         )
                 except (ValueError, TypeError):
@@ -435,7 +439,10 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                     category=EventCategory.IO,
                     description=f"GPU: {gpu} has PCIe replay rollover count: {pcie_data.replay_roll_over_count}",
                     priority=EventPriority.WARNING,
-                    data={"gpu": gpu, "replay_roll_over_count": pcie_data.replay_roll_over_count},
+                    data={
+                        "gpu": gpu,
+                        "replay_roll_over_count": pcie_data.replay_roll_over_count,
+                    },
                     console_log=True,
                 )
 
@@ -479,7 +486,10 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                     category=EventCategory.IO,
                     description=f"GPU: {gpu} has received {pcie_data.nak_received_count} PCIe NAKs",
                     priority=EventPriority.WARNING,
-                    data={"gpu": gpu, "nak_received_count": pcie_data.nak_received_count},
+                    data={
+                        "gpu": gpu,
+                        "nak_received_count": pcie_data.nak_received_count,
+                    },
                     console_log=True,
                 )
 
@@ -906,7 +916,12 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                     and device_id[1].upper() not in dev_actual.upper()
                 ):
                     mismatches.append(
-                        (gpu_data.gpu, "device_id", f"{device_id[0]}|{device_id[1]}", dev_actual)
+                        (
+                            gpu_data.gpu,
+                            "device_id",
+                            f"{device_id[0]}|{device_id[1]}",
+                            dev_actual,
+                        )
                     )
 
             if subsystem_id[0] is not None and subsystem_id[1] is not None:
@@ -1236,16 +1251,23 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
 
         def _add(gpu: int, field: str, expected: object, actual: object) -> None:
             issues.append(
-                {"gpu": gpu, "field": field, "expected": str(expected), "actual": str(actual)}
+                {
+                    "gpu": gpu,
+                    "field": field,
+                    "expected": str(expected),
+                    "actual": str(actual),
+                }
             )
 
         for entry in fabric_data:
             info = entry.fabric_info
             gpu = entry.gpu
-
             accel_state = info.accel_state if info else None
             if accel_state is None or accel_state.strip().upper() != expected_state:
                 _add(gpu, "accel_state", expected_state, accel_state or "N/A")
+                if accel_state == "UNCONFIGURED":
+                    # Skip all other fabric checks for this GPU if it is unconfigured
+                    continue
 
             fabric_type = info.fabric_type if info else None
             if fabric_type is None or fabric_type.strip().upper() != expected_type:
@@ -1266,10 +1288,6 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                     _add(gpu, field, "non-zero", value if value is not None else "N/A")
 
         if issues:
-            details = "; ".join(
-                f"GPU {i['gpu']} {i['field']}: expected {i['expected']}, actual {i['actual']}"
-                for i in issues
-            )
             gpus_affected = len({i["gpu"] for i in issues})
             self._log_event(
                 category=EventCategory.NETWORK,
@@ -1279,7 +1297,6 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                     "expected_accel_state": expected_state,
                     "expected_fabric_type": expected_type,
                     "mismatches": issues,
-                    "details": details,
                 },
                 console_log=True,
             )

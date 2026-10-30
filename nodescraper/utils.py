@@ -189,11 +189,12 @@ def command_result_event_data(
     return data
 
 
-def convert_to_bytes(value: str, si=False) -> int:
+def convert_to_bytes(value: str, si=True) -> int:
     """
     Convert human-readable memory sizes (like GB, MB) to bytes.
-    Default to use IEC units.
-    Factor of powers of 2, not 10. (e.g. 1KB is interpeted as 1KiB=1024 bytes)
+    If si=False (default), IEC units are used (1KiB=1024 bytes).
+    If si=True, SI units are used (1KB=1000 bytes).
+    Factor of powers of 2, not 10. (e.g. 1KB=1000 bytes and 1KiB=1024 bytes)
     This can be changed with si=True (1KB=1000 bytes)
     """
     value = value.strip().upper()
@@ -317,6 +318,25 @@ def pascal_to_snake(input_str: str) -> str:
     return normalized.lower()
 
 
+# Byte multiplier for every size unit that a firmware source may report.
+SIZE_UNITS = {
+    "B": 1,
+    "KB": 1024,
+    "KIB": 1024,
+    "MB": 1024**2,
+    "MIB": 1024**2,
+    "GB": 1024**3,
+    "GIB": 1024**3,
+    "TB": 1024**4,
+    "TIB": 1024**4,
+    "PB": 1024**5,
+    "PIB": 1024**5,
+}
+HUMAN_SIZES = {
+    k: v for k, v in SIZE_UNITS.items() if k.upper() in ["B", "KB", "MB", "GB", "TB", "PB"]
+}
+
+
 def bytes_to_human_readable(input_bytes: int) -> str:
     """Converts a bytes int to a human-readable string in B, KB, MB, GB, TB, or PB (decimal).
 
@@ -330,37 +350,15 @@ def bytes_to_human_readable(input_bytes: int) -> str:
         return "0B"
     if input_bytes == 0:
         return "0B"
-    units = [
-        (10**15, "PB"),
-        (10**12, "TB"),
-        (10**9, "GB"),
-        (10**6, "MB"),
-        (10**3, "KB"),
-        (1, "B"),
-    ]
-    for scale, label in units:
+    sizes_reverse_size = sorted(HUMAN_SIZES.items(), key=lambda x: x[1], reverse=True)
+    for name, scale in sizes_reverse_size:
         if input_bytes >= scale:
-            return f"{round(float(input_bytes) / scale, 2)}{label}"
+            return f"{round(float(input_bytes) / scale, 2)} {name}"
     return "0B"
 
 
-# Byte multiplier for every size unit that a firmware source may report.
-SIZE_UNITS = {
-    "B": 1,
-    "KB": 1024,
-    "MB": 1024**2,
-    "GB": 1024**3,
-    "TB": 1024**4,
-    "PB": 1024**5,
-}
-
-# Units considered when rendering a byte count, largest first so that the
-# shortest exact representation wins.
-DISPLAY_UNITS = ("PB", "TB", "GB", "MB", "KB")
-
-
 def format_bytes(size_bytes: int) -> str:
-    """Render a byte count using the largest binary unit that divides it evenly.
+    """Render a byte count using the largest binary unit that divides it exactly.
 
     Unlike :func:`bytes_to_human_readable`, this never rounds: a count that no
     unit divides exactly is rendered in bytes.
@@ -371,11 +369,12 @@ def format_bytes(size_bytes: int) -> str:
     Returns:
         str: human readable size, e.g. "64GB".
     """
-    for unit in DISPLAY_UNITS:
-        factor = SIZE_UNITS[unit]
+    sizes_reverse_size = sorted(SIZE_UNITS.items(), key=lambda x: x[1], reverse=True)
+    for unit, factor in sizes_reverse_size:
+        if unit == "B":
+            return f"{size_bytes}B"
         if size_bytes >= factor and not size_bytes % factor:
             return f"{size_bytes // factor}{unit}"
-    return f"{size_bytes}B"
 
 
 def find_annotation_in_container(
