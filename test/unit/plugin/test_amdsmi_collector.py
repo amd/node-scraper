@@ -422,6 +422,9 @@ def test_get_static(collector):
     # VRAM
     assert s.vram.type == "HBM3"
     assert s.vram.vendor == "Micron"
+    assert s.vram.size is not None
+    assert s.vram.size.value == 65536 * 1024 * 1024
+    assert s.vram.size.unit == "B"
 
     # Cache
     assert s.cache_info is not None and len(s.cache_info) == 1
@@ -433,6 +436,14 @@ def test_get_static(collector):
         assert isinstance(s.clock, dict)
         if "clk" in s.clock and s.clock["clk"] is not None:
             assert s.clock["clk"].frequency_levels is not None
+
+
+def test_static_vram_size_reads_current_amd_smi_size(collector):
+    """amd-smi 27 reports VRAM as size.value plus a unit, not vram_size_mb."""
+    size = collector._static_vram_size({"size": {"value": 294896, "unit": "MB"}})
+    assert size is not None
+    assert size.value == 294896
+    assert size.unit == "MB"
 
 
 def test_cache_properties_parsing(collector):

@@ -28,7 +28,7 @@ from typing import Union
 from pydantic import Field, field_validator
 
 from nodescraper.models import AnalyzerArgs
-from nodescraper.plugins.inband.os.osdata import OsDataModel
+from nodescraper.plugins.inband.bios.biosdata import BiosDataModel
 
 
 class BiosAnalyzerArgs(AnalyzerArgs):
@@ -36,29 +36,38 @@ class BiosAnalyzerArgs(AnalyzerArgs):
         default_factory=list,
         description="Expected BIOS version(s) to match against collected value (str or list).",
     )
+    exp_server_vendor: list[str] = Field(
+        default_factory=list,
+        description="Expected server vendor(s) from DMI system manufacturer (str or list).",
+    )
+    exp_server_model: list[str] = Field(
+        default_factory=list,
+        description="Expected server model(s) from DMI system product name (str or list).",
+    )
     regex_match: bool = Field(
         default=False,
-        description="If True, match exp_bios_version as regex; otherwise exact match.",
+        description="If True, match expected BIOS, vendor, and model values as regex; otherwise exact match.",
     )
 
-    @field_validator("exp_bios_version", mode="before")
+    @field_validator("exp_bios_version", "exp_server_vendor", "exp_server_model", mode="before")
     @classmethod
-    def validate_exp_bios_version(cls, exp_bios_version: Union[str, list]) -> list:
-        """support str or list input for exp_bios_version
+    def validate_expected_str_list(cls, value: Union[str, list, None]) -> list:
+        """support str or list input for expected string fields
 
         Args:
-            exp_bios_version (Union[str, list]): expected BIOS version(s) to match against
+            value (Union[str, list, None]): expected value(s) to match against
 
         Returns:
-            list: a list of expected BIOS versions
+            list: a list of expected values
         """
-        if isinstance(exp_bios_version, str):
-            exp_bios_version = [exp_bios_version]
-
-        return exp_bios_version
+        if value is None:
+            return []
+        if isinstance(value, str):
+            return [value]
+        return value
 
     @classmethod
-    def build_from_model(cls, datamodel: OsDataModel) -> "BiosAnalyzerArgs":
+    def build_from_model(cls, datamodel: BiosDataModel) -> "BiosAnalyzerArgs":
         """build analyzer args from data model
 
         Args:
@@ -67,4 +76,10 @@ class BiosAnalyzerArgs(AnalyzerArgs):
         Returns:
             BiosAnalyzerArgs: instance of analyzer args class
         """
-        return cls(exp_bios_version=datamodel.bios_version)
+        return cls(
+            exp_bios_version=datamodel.bios_version,
+            exp_server_vendor=(
+                [datamodel.server_vendor] if datamodel.server_vendor is not None else []
+            ),
+            exp_server_model=[datamodel.server_model] if datamodel.server_model is not None else [],
+        )

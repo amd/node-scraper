@@ -1516,7 +1516,8 @@ def test_check_fabric_inactive_output(mock_analyzer):
         "vpod_size",
     }
     assert {m["gpu"] for m in event.data["mismatches"]} == {0, 1, 2, 3}
-    assert "Fabric data mismatch on 4 GPU(s)" in event.description
+    assert event.description == "Fabric data mismatch on 4 GPU(s)"
+    assert "GPU 0 accel_state" in event.data["details"]
 
 
 def test_check_fabric_unexpected_fabric_type(mock_analyzer):
@@ -1565,6 +1566,79 @@ def test_check_fabric_zero_ppod_id(mock_analyzer):
     mismatches = analyzer.result.events[0].data["mismatches"]
     assert [m["field"] for m in mismatches] == ["ppod_id"]
     assert mismatches[0]["expected"] == "non-zero"
+
+
+def test_check_min_hbm_gib_per_gpu_passes(mock_analyzer):
+    analyzer = mock_analyzer
+    gpu = create_static_gpu(0)
+    gpu.vram.size = ValueUnit(value=256, unit="GB")
+
+    analyzer.check_min_hbm_gib_per_gpu([gpu], 256)
+
+    assert len(analyzer.result.events) == 0
+
+
+def test_check_min_hbm_gib_per_gpu_fails(mock_analyzer):
+    analyzer = mock_analyzer
+    gpu = create_static_gpu(0)
+    gpu.vram.size = ValueUnit(value=192, unit="GB")
+
+    analyzer.check_min_hbm_gib_per_gpu([gpu], 256)
+
+    assert len(analyzer.result.events) == 1
+    assert analyzer.result.events[0].priority == EventPriority.ERROR
+    assert "HBM size" in analyzer.result.events[0].description
+
+
+def test_check_umc_ras_enabled_passes(mock_analyzer):
+    analyzer = mock_analyzer
+    gpu = create_static_gpu(0)
+    gpu.ras.ecc_block_state = {"UMC": EccState.ENABLED, "GFX": EccState.DISABLED}
+
+    analyzer.check_umc_ras_enabled([gpu])
+
+    assert len(analyzer.result.events) == 0
+
+
+def test_check_umc_ras_enabled_unavailable_when_umc_missing(mock_analyzer):
+    """Absent per-block data cannot be validated, so it is not an ECC mismatch."""
+    analyzer = mock_analyzer
+    gpu = create_static_gpu(0)
+
+    analyzer.check_umc_ras_enabled([gpu])
+
+    assert len(analyzer.result.events) == 1
+    assert analyzer.result.events[0].priority == EventPriority.ERROR
+    assert analyzer.result.events[0].description == (
+        "UMC RAS state is unavailable for one or more GPUs"
+    )
+    assert analyzer.result.events[0].data["gpus"] == [0]
+
+
+def test_check_umc_ras_enabled_unavailable_when_block_state_is_string(mock_analyzer):
+    """Older amd-smi output reports ecc_block_state as a string, not a UMC map."""
+    analyzer = mock_analyzer
+    gpu = create_static_gpu(0)
+    gpu.ras.ecc_block_state = "N/A"
+
+    analyzer.check_umc_ras_enabled([gpu])
+
+    assert len(analyzer.result.events) == 1
+    assert analyzer.result.events[0].data["gpus"] == [0]
+    assert "umc_ras_by_gpu" not in analyzer.result.events[0].data
+
+
+def test_check_umc_ras_enabled_fails_when_disabled(mock_analyzer):
+    analyzer = mock_analyzer
+    gpu = create_static_gpu(0)
+    gpu.ras.ecc_block_state = {"UMC": EccState.DISABLED}
+
+    analyzer.check_umc_ras_enabled([gpu])
+
+    assert len(analyzer.result.events) == 1
+    assert analyzer.result.events[0].priority == EventPriority.ERROR
+    assert "UMC RAS (HBM ECC)" in analyzer.result.events[0].description
+    assert analyzer.result.events[0].data["umc_ras_by_gpu"] == {0: "DISABLED"}
 
 
 def create_unconfigured_fabric(gpu: int) -> Fabric:
