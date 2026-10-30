@@ -240,10 +240,10 @@ def parse_describe(
         log_cli_text_block(logger, out)
 
     elif parsed_args.type == "plugin":
-        if parsed_args.name not in plugin_reg.plugins:
+        plugin_class = plugin_reg.plugins.get(parsed_args.name)
+        if plugin_class is None:
             logger.error("No plugin found for name: %s", parsed_args.name)
             sys.exit(1)
-        plugin_class = plugin_reg.plugins[parsed_args.name]
         out = [
             f"Plugin Name: {parsed_args.name}",
             f"Description: {getattr(plugin_class, '__doc__', '')}",
