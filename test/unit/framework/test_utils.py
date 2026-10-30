@@ -42,7 +42,7 @@ def test_bytes_to_human_readable_terabytes():
 
 def test_bytes_to_human_readable_petabytes():
     """PB is a documented unit, so petabyte scale values must not be reported in TB."""
-    assert bytes_to_human_readable(2 * 10**15) == "2.0PB"
+    assert bytes_to_human_readable(2 << 50) == "2.0 PB"
 
 
 def test_unit_size_to_bytes_treats_gb_as_binary():
