@@ -27,9 +27,9 @@
 from __future__ import annotations
 
 import threading
-from typing import TYPE_CHECKING, Iterable
+from typing import TYPE_CHECKING, Iterable, Mapping
 
-from nodescraper.pluginregistry import PluginRegistry
+from nodescraper.pluginregistry import default_registry
 
 if TYPE_CHECKING:
     from nodescraper.interfaces import PluginInterface
@@ -43,7 +43,8 @@ class PluginDiscovery:
     If use_cache is False, it will query the PluginRegistry each time.
     """
 
-    _plugin_cache: dict[str, type[PluginInterface]] | None = None
+    _plugin_cache: Mapping[str, type[PluginInterface]] | None = None
+    _cache_registry: object | None = None
     _cache_lock = threading.Lock()
     COLLECTOR_ATTRIBUTE = "COLLECTOR"
     ANALYZER_ATTRIBUTE = "ANALYZER"
@@ -56,14 +57,23 @@ class PluginDiscovery:
         """
         self._use_cache = use_cache
 
-    def load_plugin_class(self, plugin_name: str) -> type | None:
+    def _plugins(self) -> Mapping[str, type[PluginInterface]]:
+        """Plugin mapping from the shared registry (kept as-is, never copied, so lazy loading is preserved)."""
         if not self._use_cache:
-            return PluginRegistry().plugins.get(plugin_name)
+            return default_registry().plugins
 
+        registry = default_registry()
         with PluginDiscovery._cache_lock:
-            if PluginDiscovery._plugin_cache is None:
-                PluginDiscovery._plugin_cache = PluginRegistry().plugins.copy()
-            return PluginDiscovery._plugin_cache.get(plugin_name)
+            if (
+                PluginDiscovery._plugin_cache is None
+                or PluginDiscovery._cache_registry is not registry
+            ):
+                PluginDiscovery._plugin_cache = registry.plugins
+                PluginDiscovery._cache_registry = registry
+            return PluginDiscovery._plugin_cache
+
+    def load_plugin_class(self, plugin_name: str) -> type | None:
+        return self._plugins().get(plugin_name)
 
     def plugin_has_collector(self, plugin_name: str) -> bool:
         """Check if a plugin has a COLLECTOR attribute.
@@ -125,6 +135,7 @@ class PluginDiscovery:
         """
         with PluginDiscovery._cache_lock:
             PluginDiscovery._plugin_cache = None
+            PluginDiscovery._cache_registry = None
 
     def registered_plugin_names(self) -> tuple[str, ...]:
         """Return all plugin names known to :class:`~nodescraper.pluginregistry.PluginRegistry`.
@@ -132,13 +143,7 @@ class PluginDiscovery:
         Returns:
             tuple[str, ...]: Sorted registered plugin names.
         """
-        if not self._use_cache:
-            return tuple(sorted(PluginRegistry().plugins.keys()))
-
-        with PluginDiscovery._cache_lock:
-            if PluginDiscovery._plugin_cache is None:
-                PluginDiscovery._plugin_cache = PluginRegistry().plugins
-            return tuple(sorted(PluginDiscovery._plugin_cache.keys()))
+        return tuple(sorted(self._plugins().keys()))
 
     def plugin_names_matching(self, names: Iterable[str]) -> tuple[str, ...]:
         """Return plugin names from ``names`` that are registered at runtime.

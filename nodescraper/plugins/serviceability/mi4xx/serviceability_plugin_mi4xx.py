@@ -176,7 +176,7 @@ class Mi4xxServiceabilityPlugin(ServiceabilityPluginBase):
             Union[SystemInteractionLevel, str],
             "System interaction level (e.g. PASSIVE, INTERACTIVE, DISRUPTIVE).",
         ] = SystemInteractionLevel.INTERACTIVE,
-        preserve_connection: bool = False,
+        preserve_connection: bool = True,
         data: Annotated[
             Optional[Union[str, dict, ServiceabilityDataModel]],
             Field(
