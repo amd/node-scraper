@@ -667,3 +667,95 @@ def test_mi3xx_analyzer_writes_serviceability_json(tmp_path, system_info):
     data.log_model(str(tmp_path))
     payload = json.loads((tmp_path / "serviceability.json").read_text(encoding="utf-8"))
     assert payload["afid_events"][0]["afid"] == DUMMY_AFID_A
+
+
+class _ValidatingHub:
+    name = "AFSE"
+
+    def __init__(self, response=None, default_path=None):
+        self._response = response if response is not None else {"status": "ok"}
+        self._default_path = default_path
+        self.validated: list[str] = []
+
+    def validate(self, afid_sag_path):
+        self.validated.append(afid_sag_path)
+        return self._response
+
+    def default_sag_path(self):
+        return self._default_path
+
+
+def test_validate_afid_sag_with_hub_accepts_ok_status(tmp_path):
+    from nodescraper.plugins.serviceability.se_runner import validate_afid_sag_with_hub
+
+    hub = _ValidatingHub()
+    assert validate_afid_sag_with_hub(hub, str(tmp_path / "sag.json")) is True
+    assert hub.validated == [str(tmp_path / "sag.json")]
+
+
+def test_validate_afid_sag_with_hub_raises_on_error_status():
+    from nodescraper.plugins.serviceability.se_runner import (
+        HubRunError,
+        validate_afid_sag_with_hub,
+    )
+
+    hub = _ValidatingHub({"status": "error", "error": {"code": "E1", "message": "bad schema"}})
+    with pytest.raises(HubRunError, match="AFSE SAG validation failed: bad schema"):
+        validate_afid_sag_with_hub(hub, "/tmp/sag.json")
+
+
+def test_validate_afid_sag_with_hub_skips_hub_without_validate():
+    from nodescraper.plugins.serviceability.se_runner import validate_afid_sag_with_hub
+
+    assert validate_afid_sag_with_hub(SimpleNamespace(name="Other"), "/tmp/sag.json") is False
+
+
+def test_resolve_runtime_afid_sag_path_prefers_configured_path(tmp_path):
+    from nodescraper.plugins.serviceability.se_runner import (
+        resolve_runtime_afid_sag_path,
+    )
+
+    args = ServiceabilityAnalyzerArgs(
+        hub_entry_point="afse", afid_sag_path=str(tmp_path / "x.json")
+    )
+    assert resolve_runtime_afid_sag_path(args) == str(tmp_path / "x.json")
+
+
+def test_resolve_runtime_afid_sag_path_uses_hub_default(monkeypatch, tmp_path):
+    from nodescraper.plugins.serviceability import se_runner
+
+    hub_default = str(tmp_path / "hub_default.json")
+    monkeypatch.setattr(
+        se_runner,
+        "load_hub_from_entry_point",
+        lambda name: _ValidatingHub(default_path=hub_default),
+    )
+    args = ServiceabilityAnalyzerArgs(hub_entry_point="afse")
+    assert se_runner.resolve_runtime_afid_sag_path(args) == hub_default
+
+
+def test_resolve_runtime_afid_sag_path_falls_back_to_builtin_default(monkeypatch):
+    from nodescraper.plugins.serviceability import se_runner
+    from nodescraper.plugins.serviceability.afid_sag_paths import DEFAULT_AFID_SAG_PATH
+
+    monkeypatch.setattr(
+        se_runner, "load_hub_from_entry_point", lambda name: SimpleNamespace(name="AFSE")
+    )
+    args = ServiceabilityAnalyzerArgs(hub_entry_point="afse")
+    assert se_runner.resolve_runtime_afid_sag_path(args) == DEFAULT_AFID_SAG_PATH
+
+
+def test_run_entry_point_hub_stops_when_afse_rejects_sag(monkeypatch, tmp_path):
+    from nodescraper.plugins.serviceability import se_runner
+
+    sag = tmp_path / "afid_sag.json"
+    sag.write_text("{}", encoding="utf-8")
+    hub = _ValidatingHub({"status": "error", "error": {"message": "schema mismatch"}})
+    monkeypatch.setattr(se_runner, "load_hub_from_entry_point", lambda name: hub)
+    with pytest.raises(se_runner.HubRunError, match="schema mismatch"):
+        se_runner.run_entry_point_hub(
+            hub_entry_point="afse",
+            afid_events=EXAMPLE_EVENTS[:1],
+            afid_sag_path=str(sag),
+        )
+    assert hub.validated == [str(sag.resolve())]

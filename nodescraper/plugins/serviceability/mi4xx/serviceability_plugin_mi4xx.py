@@ -32,6 +32,7 @@ from pydantic import Field
 from nodescraper.enums import EventPriority, ExecutionStatus, SystemInteractionLevel
 from nodescraper.models import DataPluginResult, PluginResult, TaskResult
 from nodescraper.plugins.serviceability.afid_sag_lookup import log_afid_fru_summary
+from nodescraper.plugins.serviceability.se_runner import HubRunError, preflight_afid_sag
 from nodescraper.plugins.serviceability.serviceability_data import (
     ServiceabilityDataLoadError,
     ServiceabilityDataModel,
@@ -197,6 +198,22 @@ class Mi4xxServiceabilityPlugin(ServiceabilityPluginBase):
             collection_args,
             analysis_args,
         )
+
+        if analysis:
+            try:
+                parsed_analysis_args = (
+                    analysis_args
+                    if isinstance(analysis_args, Mi4xxServiceabilityAnalyzerArgs)
+                    else Mi4xxServiceabilityAnalyzerArgs(**(analysis_args or {}))
+                )
+                if not parsed_analysis_args.skip_hub:
+                    collection_args, analysis_args = self._merge_afid_sag_path(
+                        preflight_afid_sag(parsed_analysis_args, self.logger),
+                        collection_args,
+                        analysis_args,
+                    )
+            except (HubRunError, ValueError) as exc:
+                return self._plugin_error_result(f"AFID_SAG preflight failed: {exc}")
 
         if analysis and not collection and data is not None:
             try:

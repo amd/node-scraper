@@ -35,7 +35,12 @@ from .afid_events import build_afid_events_from_data
 from .analyzer_args import ServiceabilityAnalyzerArgs
 from .cper_decode import CperDecodeError, decode_cper_raw_attachments
 from .se_models import AfidEvent, ServiceabilityBlock
-from .se_runner import HubRunError, run_entry_point_hub, run_service_hub
+from .se_runner import (
+    HubRunError,
+    resolve_runtime_afid_sag_path,
+    run_entry_point_hub,
+    run_service_hub,
+)
 from .serviceability_data import ServiceabilityDataModel
 
 
@@ -161,7 +166,11 @@ def analyze_serviceability_window(
             error="empty afid_events",
         )
 
-    sag_path = args.resolved_afid_sag_path()
+    sag_path = (
+        resolve_runtime_afid_sag_path(args, log)
+        if args.uses_entry_point_hub()
+        else args.resolved_afid_sag_path()
+    )
     data.afid_sag_path = sag_path
     log.info(
         "(%s) Using AFID_SAG file: %s",

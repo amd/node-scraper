@@ -411,6 +411,56 @@ def test_mi4xx_plugin_analyzes_offline_data_without_collection(system_info, tmp_
     assert result.result_data.analysis_result.status == ExecutionStatus.OK
 
 
+def test_mi4xx_plugin_missing_sag_stops_before_collection(system_info, tmp_path):
+    fake_ep = SimpleNamespace(name="afse", load=lambda: _FakeHub)
+    plugin = Mi4xxServiceabilityPlugin(system_info=system_info)
+    with (
+        patch(
+            "nodescraper.plugins.serviceability.se_runner._entry_points_for_group",
+            return_value=[fake_ep],
+        ),
+        patch.object(MI4XXCollector, "collect_data") as collect_data,
+    ):
+        result = plugin.run(
+            collection=True,
+            analysis=True,
+            analysis_args=Mi4xxServiceabilityAnalyzerArgs(
+                afid_sag_path=str(tmp_path / "missing_sag.json")
+            ),
+        )
+    collect_data.assert_not_called()
+    assert result.status == ExecutionStatus.ERROR
+    assert "AFID_SAG preflight failed: AFID SAG file not found" in result.message
+    assert result.result_data.collection_result.status == ExecutionStatus.NOT_RAN
+
+
+def test_mi4xx_plugin_sag_rejected_by_afse_stops_before_collection(system_info, tmp_path):
+    sag = tmp_path / "afid_sag.json"
+    sag.write_text("{}", encoding="utf-8")
+
+    class _RejectingHub(_FakeHub):
+        def validate(self, afid_sag_path):
+            return {"status": "error", "error": {"message": "schema mismatch"}}
+
+    fake_ep = SimpleNamespace(name="afse", load=lambda: _RejectingHub)
+    plugin = Mi4xxServiceabilityPlugin(system_info=system_info)
+    with (
+        patch(
+            "nodescraper.plugins.serviceability.se_runner._entry_points_for_group",
+            return_value=[fake_ep],
+        ),
+        patch.object(MI4XXCollector, "collect_data") as collect_data,
+    ):
+        result = plugin.run(
+            collection=True,
+            analysis=True,
+            analysis_args=Mi4xxServiceabilityAnalyzerArgs(afid_sag_path=str(sag)),
+        )
+    collect_data.assert_not_called()
+    assert result.status == ExecutionStatus.ERROR
+    assert "schema mismatch" in result.message
+
+
 def test_load_hub_from_entry_point_missing_raises():
     with patch(
         "nodescraper.plugins.serviceability.se_runner._entry_points_for_group",
