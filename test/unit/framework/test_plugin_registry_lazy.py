@@ -152,10 +152,3 @@ def test_lazy_non_plugin_entry_point_is_treated_as_missing():
         )
         assert "NotAPlugin" not in reg.plugins
         assert len(reg.plugins) == 0
-
-
-def test_lazy_load_env_var(monkeypatch):
-    monkeypatch.setenv("NODESCRAPER_LAZY_LOAD", "1")
-    assert PluginRegistry(load_entry_point_plugins=False).lazy
-    monkeypatch.setenv("NODESCRAPER_LAZY_LOAD", "0")
-    assert not PluginRegistry(load_entry_point_plugins=False).lazy

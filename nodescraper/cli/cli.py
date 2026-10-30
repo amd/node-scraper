@@ -73,11 +73,7 @@ from nodescraper.models import SystemInfo
 from nodescraper.models.pluginresult import PluginResult
 from nodescraper.pluginexecutor import PluginExecutor
 from nodescraper.pluginrecipe.discovery import PluginDiscovery
-from nodescraper.pluginregistry import (
-    LAZY_LOAD_ENV_VAR,
-    PluginRegistry,
-    set_default_registry,
-)
+from nodescraper.pluginregistry import PluginRegistry, set_default_registry
 
 
 def _parse_plugin_configs_csv(value: str) -> list[str]:
@@ -213,8 +209,7 @@ def _add_cli_root_globals(
         "--lazy-load",
         dest="lazy_load",
         action="store_true",
-        help=f"Import plugin modules only when they are needed instead of at startup "
-        f"(can also be enabled with the {LAZY_LOAD_ENV_VAR}=1 environment variable)",
+        help="Import plugin modules only when they are needed instead of at startup",
     )
 
 
@@ -501,7 +496,7 @@ def _lazy_load_flag_present(arg_input: Sequence[str]) -> bool:
     """True if ``--lazy-load`` appears among the top-level args (before ``run-plugins``).
 
     The registry must exist before the real parser is built, so this checks for the flag
-    on its own. ``NODESCRAPER_LAZY_LOAD`` is handled by the registry itself.
+    on its own.
     """
     top_level = list(arg_input)
     if "run-plugins" in top_level:
@@ -546,7 +541,7 @@ def main(
             arg_input = sys.argv[1:]
 
         # The one registry for this invocation: shared with recipes/discovery and the executor.
-        plugin_reg = PluginRegistry(lazy_load=True if _lazy_load_flag_present(arg_input) else None)
+        plugin_reg = PluginRegistry(lazy_load=_lazy_load_flag_present(arg_input))
         set_default_registry(plugin_reg)
         PluginDiscovery.clear_cache()
         lazy = bool(getattr(plugin_reg, "lazy", False))

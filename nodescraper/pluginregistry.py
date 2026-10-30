@@ -27,7 +27,6 @@ import importlib
 import importlib.metadata
 import inspect
 import logging
-import os
 import pkgutil
 import threading
 import types
@@ -53,15 +52,7 @@ from nodescraper.interfaces import (
 ENTRY_POINT_PLUGINS = "nodescraper.plugins"
 ENTRY_POINT_CONNECTION_MANAGERS = "nodescraper.connection_managers"
 
-# Environment variable enabling lazy plugin loading when ``lazy_load`` is not given explicitly
-LAZY_LOAD_ENV_VAR = "NODESCRAPER_LAZY_LOAD"
-
 _logger = logging.getLogger(__name__)
-
-
-def lazy_load_from_env() -> bool:
-    """Return True if ``NODESCRAPER_LAZY_LOAD`` is set to a truthy value (1/true/yes/on)."""
-    return os.environ.get(LAZY_LOAD_ENV_VAR, "").strip().lower() in ("1", "true", "yes", "on")
 
 
 class LazyPluginMapping(MutableMapping[str, type]):
@@ -197,7 +188,7 @@ class PluginRegistry:
         load_internal_plugins: bool = True,
         load_entry_point_plugins: bool = True,
         load_entry_point_connection_managers: bool = True,
-        lazy_load: Optional[bool] = None,
+        lazy_load: bool = False,
     ) -> None:
         """Initialize the PluginRegistry with optional plugin packages.
 
@@ -207,11 +198,10 @@ class PluginRegistry:
             load_entry_point_plugins (bool, optional): Whether to load plugins from entry points. Defaults to True.
             load_entry_point_connection_managers (bool, optional): Whether to load connection managers from the
                 ``nodescraper.connection_managers`` entry-point group. Defaults to True.
-            lazy_load (Optional[bool], optional): If True, ``plugins`` is a :class:`LazyPluginMapping` and plugin
-                modules are imported only when a plugin is first accessed. If None, the
-                ``NODESCRAPER_LAZY_LOAD`` environment variable decides (default: eager).
+            lazy_load (bool, optional): If True, ``plugins`` is a :class:`LazyPluginMapping` and plugin
+                modules are imported only when a plugin is first accessed. Defaults to False.
         """
-        self.lazy: bool = lazy_load_from_env() if lazy_load is None else lazy_load
+        self.lazy: bool = lazy_load
 
         if load_internal_plugins:
             self.plugin_pkg = [

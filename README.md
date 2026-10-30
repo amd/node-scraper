@@ -170,14 +170,11 @@ options:
 
 ### Lazy plugin loading
 
-By default node-scraper imports every plugin at startup this can be high consumption to run a single plugin run.
+By default node-scraper imports every plugin at startup this can be inefficient to run a single plugin run.
 Lazy loading imports a plugin only when it is first needed, so runs that use a few plugins start faster and use less memory.
 
 ```sh
-# enable with a flag ...
 node-scraper --lazy-load run-plugins OsPlugin
-# ... or with an environment variable (the flag/variable is off by default)
-NODESCRAPER_LAZY_LOAD=1 node-scraper run-plugins OsPlugin
 ```
 
 What to expect in lazy mode:
