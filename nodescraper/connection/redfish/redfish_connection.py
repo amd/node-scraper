@@ -188,10 +188,7 @@ class RedfishConnection:
     def _execute_request(self, request_fn: Callable[[], _T]) -> _T:
         try:
             return request_fn()
-        except (
-            requests.exceptions.Timeout,
-            requests.exceptions.ConnectionError,
-        ) as exc:
+        except requests.exceptions.RequestException as exc:
             raise RedfishConnectionError(self._transport_error_message(exc)) from exc
         except socket.gaierror as exc:
             raise RedfishConnectionError(self._transport_error_message(exc)) from exc
@@ -251,7 +248,12 @@ class RedfishConnection:
                 f"GET {path_str} failed: {resp.status_code} {resp.reason}",
                 response=resp,
             )
-        return resp.json()
+        try:
+            return resp.json()
+        except ValueError as exc:
+            raise RedfishConnectionError(
+                f"GET {path_str} returned a body that is not valid JSON", response=resp
+            ) from exc
 
     def get_response(self, path: Union[str, "RedfishPath"]) -> RedfishHttpResponse:
         """GET a Redfish path and return the raw Response. path may be a string or RedfishPath."""

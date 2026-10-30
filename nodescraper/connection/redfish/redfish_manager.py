@@ -122,67 +122,86 @@ class RedfishConnectionManager(ConnectionManager[RedfishConnection, RedfishConne
     def connect(self) -> TaskResult:
         """Connect to Redfish (single-target or multi-target)."""
         if not self.connection_args:
-            self._log_event(
-                category=EventCategory.RUNTIME,
-                description="No Redfish connection parameters provided",
-                priority=EventPriority.CRITICAL,
-                console_log=True,
+            return self._fail_connect(
+                EventCategory.RUNTIME,
+                "Cannot connect to Redfish: no connection details were provided.",
+                "No Redfish connection parameters provided",
+                {"connection_args": None},
             )
-            self.result.status = ExecutionStatus.EXECUTION_FAILURE
-            return self.result
 
         raw = self.connection_args
         if isinstance(raw, dict):
-            params = RedfishConnectionParams.model_validate(raw)
+            try:
+                params = RedfishConnectionParams.model_validate(raw)
+            except ValueError as exc:
+                return self._fail_connect(
+                    EventCategory.RUNTIME,
+                    "Cannot connect to Redfish: the connection details are not valid.",
+                    f"Invalid Redfish connection parameters: {exc}",
+                    {"exception": str(exc)},
+                )
         elif isinstance(raw, RedfishConnectionParams):
             params = raw
         else:
-            self._log_event(
-                category=EventCategory.RUNTIME,
-                description="Redfish connection_args must be dict or RedfishConnectionParams",
-                priority=EventPriority.CRITICAL,
-                console_log=True,
+            return self._fail_connect(
+                EventCategory.RUNTIME,
+                "Cannot connect to Redfish: the connection details are not valid.",
+                "Redfish connection_args must be dict or RedfishConnectionParams "
+                f"(got {type(raw).__name__})",
+                {"connection_args_type": type(raw).__name__},
             )
-            self.result.status = ExecutionStatus.EXECUTION_FAILURE
-            return self.result
 
         if params.is_multi_target:
-            self.target_connections: dict[str, RedfishConnection] = {}
-            failed_targets: dict[str, str] = {}
-            for target in params.targets:  # type: ignore[union-attr]
-                key, conn, error = self._connect_target(target)
-                if conn is None:
-                    failed_targets[key] = error or f"Redfish connection failed for target {key!r}"
-                    continue
-                if key in self.target_connections:
-                    self._log_event(
-                        category=EventCategory.RUNTIME,
-                        description=f"Duplicate Redfish target key {key!r}; keeping the first connection",
-                        priority=EventPriority.WARNING,
-                        console_log=True,
-                    )
-                    conn.close()
-                    continue
-                self.target_connections[key] = conn
-            if not self.target_connections:
-                self.result.status = ExecutionStatus.EXECUTION_FAILURE
-                lines = "\n".join(f"[{k}] {v}" for k, v in failed_targets.items())
-                self.result.message = f"Redfish connection failed for every target\n{lines}"
-                self.result.events.clear()
-                return self.result
-            if failed_targets:
-                lines = "\n".join(f"[{k}] {v}" for k, v in failed_targets.items())
-                self.result.status = ExecutionStatus.WARNING
-                self.result.message = f"Some Redfish targets failed to connect\n{lines}"
-                self.result.events.clear()
-            self.connection = MultiTargetRedfishConnection(  # type: ignore[assignment]
-                self.target_connections,
-                max_workers=params.max_workers,
-                failed_targets=failed_targets,
+            return self._connect_multi(params)
+        return self._connect_single(params)
+
+    def _connect_multi(self, params: RedfishConnectionParams) -> TaskResult:
+        """Connect each Redfish target. One failure does not drop the others.
+
+        Args:
+            params: Parameters whose targets list is set.
+
+        Returns:
+            TaskResult: Warning when some targets connect, execution failure when none do.
+        """
+        self.target_connections: dict[str, RedfishConnection] = {}
+        failed_targets: dict[str, str] = {}
+        for target in params.targets or []:
+            key, conn, error = self._connect_target(target)
+            if conn is None:
+                failed_targets[key] = error or f"Redfish connection failed for target {key!r}"
+                continue
+            if key in self.target_connections:
+                self._log_event(
+                    category=EventCategory.RUNTIME,
+                    description=f"Duplicate Redfish target key {key!r}; keeping the first connection",
+                    priority=EventPriority.WARNING,
+                    console_log=True,
+                )
+                conn.close()
+                continue
+            self.target_connections[key] = conn
+
+        lines = "\n".join(f"[{k}] {v}" for k, v in failed_targets.items())
+        if not self.target_connections:
+            summary = "Could not connect to any of the Redfish targets."
+            self._fail_connect(
+                EventCategory.RUNTIME,
+                summary,
+                f"Redfish connection failed for every target ({len(failed_targets)} tried)\n{lines}",
+                {"failed_targets": dict(failed_targets)},
             )
             return self.result
 
-        return self._connect_single(params)
+        if failed_targets:
+            self.result.status = ExecutionStatus.WARNING
+            self.result.message = f"Some Redfish targets failed to connect\n{lines}"
+        self.connection = MultiTargetRedfishConnection(  # type: ignore[assignment]
+            self.target_connections,
+            max_workers=params.max_workers,
+            failed_targets=failed_targets,
+        )
+        return self.result
 
     def _connect_target(
         self, target: RedfishConnectionParams
@@ -198,8 +217,9 @@ class RedfishConnectionManager(ConnectionManager[RedfishConnection, RedfishConne
         key = target.target_key or str(target.host)
         password = target.password.get_secret_value() if target.password else None
         base_url = _build_base_url(str(target.host), target.port, target.use_https)
+        self.logger.info("Connecting to Redfish at %s (target=%r)", base_url, key)
+        conn: Optional[RedfishConnection] = None
         try:
-            self.logger.info("Connecting to Redfish at %s (target=%r)", base_url, key)
             conn = RedfishConnection(
                 base_url=base_url,
                 username=target.username or "",
@@ -211,8 +231,9 @@ class RedfishConnectionManager(ConnectionManager[RedfishConnection, RedfishConne
             )
             conn._ensure_session()
             conn.get_service_root()
-            return key, conn, None
-        except (RedfishConnectionError, Exception) as exc:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001 - one bad target must not drop the others
+            if conn is not None:
+                conn.close()
             description = f"Redfish connection failed for target {key!r}: {exc}"
             self._log_event(
                 category=EventCategory.RUNTIME,
@@ -221,42 +242,43 @@ class RedfishConnectionManager(ConnectionManager[RedfishConnection, RedfishConne
                 console_log=True,
             )
             return key, None, description
+        return key, conn, None
 
     def _connect_single(self, params: RedfishConnectionParams) -> TaskResult:
-        """Connect in single-target mode (original connect logic)."""
+        """Connect in single-target mode."""
         password = params.password.get_secret_value() if params.password else None
         base_url = _build_base_url(str(params.host), params.port, params.use_https)
+        self.logger.info("Connecting to Redfish at %s", base_url)
+        conn = RedfishConnection(
+            base_url=base_url,
+            username=params.username or "",
+            password=password,
+            timeout=params.timeout_seconds,
+            use_session_auth=params.use_session_auth,
+            verify_ssl=params.verify_ssl,
+            api_root=params.api_root,
+        )
         try:
-            self.logger.info("Connecting to Redfish at %s", base_url)
-            self.connection = RedfishConnection(
-                base_url=base_url,
-                username=params.username or "",
-                password=password,
-                timeout=params.timeout_seconds,
-                use_session_auth=params.use_session_auth,
-                verify_ssl=params.verify_ssl,
-                api_root=params.api_root,
-            )
-            self.connection._ensure_session()
-            self.connection.get_service_root()
+            conn._ensure_session()
+            conn.get_service_root()
         except RedfishConnectionError as exc:
-            self._log_event(
-                category=EventCategory.RUNTIME,
-                description=str(exc),
-                priority=EventPriority.CRITICAL,
-                console_log=True,
+            conn.close()
+            return self._fail_connect(
+                EventCategory.RUNTIME,
+                "Could not connect to Redfish.",
+                f"Redfish connection to {base_url} failed: {exc}",
+                {
+                    "base_url": base_url,
+                    "host": str(params.host),
+                    "port": params.port,
+                    "use_https": params.use_https,
+                    "verify_ssl": params.verify_ssl,
+                    "timeout_seconds": params.timeout_seconds,
+                    "exception": str(exc),
+                },
             )
-            self.result.status = ExecutionStatus.EXECUTION_FAILURE
-            self.connection = None
-        except Exception as exc:
-            self._log_event(
-                category=EventCategory.RUNTIME,
-                description=f"Redfish connection failed: {exc}",
-                priority=EventPriority.CRITICAL,
-                console_log=True,
-            )
-            self.result.status = ExecutionStatus.EXECUTION_FAILURE
-            self.connection = None
+
+        self.connection = conn
         return self.result
 
     def disconnect(self) -> None:

@@ -46,6 +46,7 @@ from nodescraper.models import (
     SystemInfo,
     TaskResult,
 )
+from nodescraper.taskresulthooks.filesystemloghook import hooks_for_fixed_directory
 from nodescraper.utils import resolve_log_dir_name
 
 from .connectionmanager import TConnectArg, TConnectionManager
@@ -154,6 +155,23 @@ class DataPlugin(
         if isinstance(collector, (tuple, list)):
             return tuple(collector)
         return (collector,)
+
+    def _connection_manager_hooks(self) -> list[TaskResultHook]:
+        """Hooks for a connection manager created by this plugin.
+
+        Its result is saved in ``<log_path>/<plugin>/<primary collector>/connection`` so it is kept
+        apart from the collector's own result and events files.
+        """
+        if not self.log_path:
+            return self.task_result_hooks
+        parts = [resolve_log_dir_name(self.__class__.__name__)]
+        collectors = self.get_collector_classes()
+        if collectors:
+            parts.append(resolve_log_dir_name(collectors[0].__name__))
+        parts.append("connection")
+        return hooks_for_fixed_directory(
+            self.task_result_hooks, str(Path(self.log_path).joinpath(*parts))
+        )
 
     @classmethod
     def _collector_args_class(
@@ -318,15 +336,22 @@ class DataPlugin(
         system_interaction_level: Optional[
             Union[SystemInteractionLevel, str]
         ] = SystemInteractionLevel.INTERACTIVE,
-        preserve_connection: bool = False,
+        preserve_connection: bool = True,
         collection_args: Optional[TCollectArg] = None,
     ) -> TaskResult:
         """Run data collector task
 
+        A connection manager created by this plugin is always closed (and its result saved) when
+        collection finishes. A connection manager passed in by the caller is left open by default
+        so the caller, who owns it, can reuse it across plugins and close it when done; pass
+        ``preserve_connection=False`` to have the plugin close it after this collection.
+
         Args:
             max_event_priority_level (Union[EventPriority, str], optional): priority limit for events. Defaults to EventPriority.CRITICAL.
             system_interaction_level (Union[SystemInteractionLevel, str], optional): system interaction level. Defaults to SystemInteractionLevel.INTERACTIVE.
-            preserve_connection (bool, optional): whether we should close the connection after data collection. Defaults to False.
+            preserve_connection (bool, optional): keep a connection manager passed in by the caller open after
+                collection. Set False to close it. Has no effect on a manager the plugin created itself,
+                which is always closed. Defaults to True.
             collection_args (Optional[TCollectArg], optional): args for data collection (validated model). Defaults to None.
 
         Returns:
@@ -346,27 +371,37 @@ class DataPlugin(
         try:
             if not self.connection_manager:
                 if not self.CONNECTION_TYPE:
-                    self.collection_result = TaskResult(
+                    return TaskResult(
                         task=primary_collector.__name__,
                         parent=self.__class__.__name__,
                         status=ExecutionStatus.NOT_RAN,
                         message=f"No connection manager type provided for {self.__class__.__name__}",
                     )
-                    return self.collection_result
                 self.logger.info("No connection manager provide, initializing connection manager")
+                self._owns_connection_manager = True
                 self.connection_manager = self.CONNECTION_TYPE(
                     system_info=self.system_info.model_copy(),
                     logger=self.logger,
                     parent=self.__class__.__name__,
-                    task_result_hooks=self.task_result_hooks,
+                    task_result_hooks=self._connection_manager_hooks(),
                     event_reporter=self.event_reporter,
                     session_id=self.session_id,
                 )
 
+            # Connect if never attempted or previously connected then disconnected;
+            # If the connection instance has previously been known to be in a failed Status
+            # then it should not attempt to reconnect automatically.
             if (
                 not self.connection_manager.connection
-                and self.connection_manager.result.status == ExecutionStatus.UNSET
+                and self.connection_manager.result.status
+                in (
+                    ExecutionStatus.UNSET,
+                    ExecutionStatus.OK,
+                    ExecutionStatus.WARNING,
+                )
             ):
+                # Set the parent to us
+                self.connection_manager.parent = self.__class__.__name__
                 self.connection_manager.connect()
 
             # Proceed as long as a connection was established.
@@ -388,6 +423,7 @@ class DataPlugin(
                     collector_args = self._resolve_collector_args(collector_cls, collection_args)
                     collector_log_path = None
                     if self.log_path:
+                        # Place the log path of the connection in the collector's directory
                         _log_path = (
                             Path(self.log_path)
                             / resolve_log_dir_name(self.__class__.__name__)
@@ -436,8 +472,10 @@ class DataPlugin(
                 message=f"Unhandled exception running data collector: {str(e)}",
             )
         finally:
-            if not preserve_connection and self.connection_manager:
-                self.connection_manager.disconnect()
+            if self.connection_manager and (
+                self._owns_connection_manager or not preserve_connection
+            ):
+                self.connection_manager.safe_disconnect()
 
         return self.collection_result
 
@@ -498,6 +536,15 @@ class DataPlugin(
         self.analysis_result = analyzer_task.analyze_data(self.data, analysis_args)
         return self.analysis_result
 
+    def _get_connection_result(self) -> Optional[TaskResult]:
+        """Snapshot of the connection result, or None if no connection was initiated."""
+        if self.connection_manager is None:
+            return None
+        result = self.connection_manager.result
+        if result is None or result.status == ExecutionStatus.UNSET:
+            return None
+        return result.model_copy(deep=True)
+
     def run(
         self,
         collection: Annotated[
@@ -513,7 +560,7 @@ class DataPlugin(
             Union[SystemInteractionLevel, str],
             "System interaction level (e.g. PASSIVE, INTERACTIVE, DISRUPTIVE).",
         ] = SystemInteractionLevel.INTERACTIVE,
-        preserve_connection: bool = False,
+        preserve_connection: bool = True,
         data: Annotated[
             Optional[Union[str, dict, TDataModel]],
             Field(
@@ -533,7 +580,8 @@ class DataPlugin(
             analysis (bool, optional): Enable data analysis. Defaults to True.
             max_event_priority_level (Union[EventPriority, str], optional): Max priority level to assign to events. Defaults to EventPriority.CRITICAL.
             system_interaction_level (Union[SystemInteractionLevel, str], optional): System interaction level. Defaults to SystemInteractionLevel.INTERACTIVE.
-            preserve_connection (bool, optional): Whether to close the connection when data collection is complete. Defaults to False.
+            preserve_connection (bool, optional): Keep a connection manager passed in by the caller open after collection.
+                Set False to close it. A manager the plugin created itself is always closed. Defaults to True.
             data (Optional[Union[str, dict, TDataModel]], optional): Input data. Defaults to None.
             collection_args (Optional[Union[TCollectArg  , dict]], optional): Arguments for data collection. Defaults to None.
             analysis_args (Optional[Union[TAnalyzeArg  , dict]], optional): Arguments for data analysis. Defaults to None.
@@ -546,8 +594,8 @@ class DataPlugin(
             self.collect(
                 max_event_priority_level=max_event_priority_level,
                 system_interaction_level=system_interaction_level,
-                collection_args=collection_args,
                 preserve_connection=preserve_connection,
+                collection_args=collection_args,
             )
 
         if analysis:
@@ -591,6 +639,7 @@ class DataPlugin(
                 system_data=self.data,
                 collection_result=self.collection_result,
                 analysis_result=self.analysis_result,
+                connection_result=self._get_connection_result(),
             ),
         )
 
