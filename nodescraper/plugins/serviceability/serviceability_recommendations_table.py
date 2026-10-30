@@ -45,10 +45,6 @@ RECOMMENDATION_TABLE_HEADERS: tuple[str, ...] = (
 )
 
 PRIMARY_RECOMMENDATION_TITLE = "Top Hub service action"
-ADDITIONAL_RECOMMENDATIONS_TITLE = "Additional Hub service actions"
-ADDITIONAL_RECOMMENDATIONS_NOTE = (
-    "Lower-priority follow-on actions if the top service action does not resolve the issue."
-)
 
 RECOMMENDATION_TABLE_MAX_WIDTHS: dict[str, int] = {
     "Rank": 4,
@@ -197,25 +193,16 @@ def render_serviceability_recommendation_tables_for_plugin_results(
 
 
 def render_serviceability_recommendation_tables(block: ServiceabilityBlock) -> str:
-    """Render primary and additional Hub recommendation tables."""
-    primary, additional = split_recommendation_actions(block)
-    sections: list[str] = []
-    primary_section = render_recommendations_section(
+    """Render the top Hub recommendation table.
+
+    Lower-ranked actions are not printed; they remain in the serviceability block
+    saved with the plugin result.
+    """
+    primary, _ = split_recommendation_actions(block)
+    return render_recommendations_section(
         _recommendation_section_title(PRIMARY_RECOMMENDATION_TITLE, primary),
         primary,
     )
-    if primary_section:
-        sections.append(primary_section)
-    additional_section = render_recommendations_section(
-        _recommendation_section_title(ADDITIONAL_RECOMMENDATIONS_TITLE, additional),
-        additional,
-        note=ADDITIONAL_RECOMMENDATIONS_NOTE,
-    )
-    if additional_section:
-        sections.append(additional_section)
-    if not sections:
-        return ""
-    return "\n\n".join(sections)
 
 
 def emit_serviceability_recommendation_tables(block: ServiceabilityBlock) -> None:

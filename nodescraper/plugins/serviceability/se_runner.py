@@ -31,15 +31,21 @@ import dataclasses
 import importlib
 import importlib.metadata
 import inspect
+import logging
 from pathlib import Path
-from typing import Any, Callable, Optional, Protocol, Type, Union, cast
+from typing import TYPE_CHECKING, Any, Callable, Optional, Protocol, Type, Union, cast
 
-from .afid_sag_paths import validate_afid_sag_path
+from nodescraper.constants import DEFAULT_LOGGER
+
+from .afid_sag_paths import default_afid_sag_path, validate_afid_sag_path
 from .se_adapter import (
     serviceability_block_from_entry_point_hub,
     serviceability_block_from_service_result,
 )
 from .se_models import AfidEvent, ServiceabilityBlock
+
+if TYPE_CHECKING:
+    from .analyzer_args import ServiceabilityAnalyzerArgs
 
 HUB_ENTRY_POINT_GROUP = "amd.serviceability_engines"
 
@@ -292,15 +298,71 @@ def events_payload_for_hub_analyze(
     raise HubRunError("rf_events or afid_events is required")
 
 
+def _usable_serviceable_units(units: Any) -> list[Any]:
+    """Return ServiceableUnits entries that carry an '@odata.id' string."""
+    if not isinstance(units, list):
+        return []
+    return [
+        unit for unit in units if isinstance(unit, dict) and isinstance(unit.get("@odata.id"), str)
+    ]
+
+
+def drop_afids_without_serviceable_units(
+    rf_events: list[Any],
+    logger: Optional[logging.Logger] = None,
+) -> list[Any]:
+    """Waive AMDFieldIdentifiers entries the hub would reject for lacking ServiceableUnits.
+
+    The entry-point hub rejects the whole event list when any Oem.AMD.AMDFieldIdentifiers
+    entry has no ServiceableUnits, so drop those entries (with a warning) before analysis.
+
+    Args:
+        rf_events: Raw Redfish log members.
+        logger: Logger for the per-entry warning. Defaults to the nodescraper logger.
+
+    Returns:
+        Members with unusable AFID entries removed. Members left with no AFID entries are dropped.
+    """
+    log = logger or logging.getLogger(DEFAULT_LOGGER)
+    kept: list[Any] = []
+    for member in rf_events:
+        oem = member.get("Oem") if isinstance(member, dict) else None
+        amd = oem.get("AMD") if isinstance(oem, dict) else None
+        identifiers = amd.get("AMDFieldIdentifiers") if isinstance(amd, dict) else None
+        if not isinstance(identifiers, list):
+            kept.append(member)
+            continue
+        usable = []
+        for entry in identifiers:
+            if isinstance(entry, dict) and _usable_serviceable_units(entry.get("ServiceableUnits")):
+                usable.append(entry)
+                continue
+            afid = entry.get("AFID") if isinstance(entry, dict) else None
+            log.warning(
+                "Waiving AFID %s from %s: AMDFieldIdentifiers entry has no ServiceableUnits",
+                afid,
+                member.get("@odata.id") or member.get("Id") or "<unknown event>",
+            )
+        if len(usable) == len(identifiers):
+            kept.append(member)
+        elif usable:
+            amd_copy = {**cast(dict, amd), "AMDFieldIdentifiers": usable}
+            kept.append({**member, "Oem": {**cast(dict, oem), "AMD": amd_copy}})
+    return kept
+
+
 def resolve_hub_events_payload(
     *,
     afid_events: list[AfidEvent],
     rf_events: Optional[list[Any]] = None,
     prefer_rf_events: bool = True,
+    logger: Optional[logging.Logger] = None,
 ) -> list[Any]:
     """Choose rf_events or aggregated afid_events for hub analyze()."""
     if prefer_rf_events and rf_events:
-        return events_payload_for_hub_analyze(rf_events=rf_events)
+        usable_rf_events = drop_afids_without_serviceable_units(rf_events, logger)
+        if usable_rf_events:
+            return events_payload_for_hub_analyze(rf_events=usable_rf_events)
     return events_payload_for_hub_analyze(
         afid_events_payload=afid_events_to_entry_point_payload(afid_events)
     )
@@ -444,6 +506,107 @@ def _hub_analyze_response_from_raw(raw_result: Any) -> dict[str, Any]:
     return dataclasses.asdict(raw_result)
 
 
+def _response_field(result: Any, name: str) -> Any:
+    """Read a field from an AFSE TriageResponse dataclass or a dict payload."""
+    if isinstance(result, dict):
+        return result.get(name)
+    return getattr(result, name, None)
+
+
+def validate_afid_sag_with_hub(hub: Any, sag_path: str) -> bool:
+    """Ask the loaded hub to validate the AFID SAG file via its validate() API.
+
+    Args:
+        hub: Loaded entry-point hub (AFSE).
+        sag_path: AFID SAG file to validate.
+
+    Returns:
+        True when the hub validated the file, False when the hub has no validate().
+
+    Raises:
+        HubRunError: When validate() raises or reports a status other than ok.
+    """
+    validate = getattr(hub, "validate", None)
+    if not callable(validate):
+        return False
+    try:
+        result = validate(sag_path)
+    except Exception as exc:  # noqa: BLE001
+        raise HubRunError(f"AFSE SAG validation failed: {exc}") from exc
+    status = str(_response_field(result, "status") or "").strip().lower()
+    if status == "ok":
+        return True
+    error = _response_field(result, "error")
+    code = _response_field(error, "code") if error is not None else None
+    message = _response_field(error, "message") if error is not None else None
+    detail = str(message or code or status or "unknown error")
+    raise HubRunError(f"AFSE SAG validation failed: {detail}")
+
+
+def resolve_runtime_afid_sag_path(
+    args: ServiceabilityAnalyzerArgs,
+    logger: Optional[logging.Logger] = None,
+) -> str:
+    """Return the AFID SAG file analysis should open.
+
+    A configured afid_sag_path wins. Otherwise the loaded entry-point hub is asked for its
+    default_sag_path(), falling back to the built-in /opt/amd/afid/AFID_SAG.json.
+
+    Args:
+        args: Analyzer args for this run.
+        logger: Logger for the "path omitted" line. Defaults to the nodescraper logger.
+
+    Returns:
+        SAG path to use for analysis.
+    """
+    if args.afid_sag_path and str(args.afid_sag_path).strip():
+        return str(args.afid_sag_path).strip()
+    hub: Any = None
+    if args.uses_entry_point_hub():
+        try:
+            hub = load_hub_from_entry_point(args.resolved_hub_entry_point())
+        except (HubRunError, ValueError):
+            hub = None
+    path = default_afid_sag_path()
+    lookup = getattr(hub, "default_sag_path", None)
+    if callable(lookup):
+        found = lookup()
+        if found is not None and str(found).strip():
+            path = str(found).strip()
+    (logger or logging.getLogger(DEFAULT_LOGGER)).info(
+        "AFID_SAG path omitted; using default: %s", path
+    )
+    return path
+
+
+def preflight_afid_sag(
+    args: ServiceabilityAnalyzerArgs,
+    logger: Optional[logging.Logger] = None,
+) -> str:
+    """Resolve the AFID SAG file and check it with AFSE before any collection runs.
+
+    Args:
+        args: Analyzer args for this run (entry-point hub).
+        logger: Logger for the OK lines. Defaults to the nodescraper logger.
+
+    Returns:
+        Resolved absolute SAG path.
+
+    Raises:
+        HubRunError: When the file is missing, the hub cannot load, or AFSE rejects the file.
+    """
+    log = logger or logging.getLogger(DEFAULT_LOGGER)
+    sag_path = resolve_runtime_afid_sag_path(args, log)
+    validate_afid_sag_path(sag_path)
+    resolved = str(Path(sag_path).expanduser().resolve())
+    log.info("AFID_SAG file OK: %s", resolved)
+    hub_name = args.resolved_hub_entry_point()
+    hub = load_hub_from_entry_point(hub_name)
+    if validate_afid_sag_with_hub(hub, resolved):
+        log.info("AFID_SAG validated by %s: %s", getattr(hub, "name", hub_name), resolved)
+    return resolved
+
+
 def run_entry_point_hub(
     *,
     hub_entry_point: str,
@@ -454,20 +617,27 @@ def run_entry_point_hub(
     rf_event_count: int = 0,
     raise_on_error: bool = False,
     prefer_rf_events: bool = True,
+    logger: Optional[logging.Logger] = None,
 ) -> ServiceabilityBlock:
     """Run a registered entry-point service hub and return a :class:`ServiceabilityBlock`."""
     if not afid_events and not (prefer_rf_events and rf_events):
         raise HubRunError("No AFID events to analyze")
 
+    log = logger or logging.getLogger(DEFAULT_LOGGER)
     validate_afid_sag_path(afid_sag_path)
+    resolved_sag = Path(afid_sag_path).expanduser().resolve()
+    log.debug("AFID_SAG file OK: %s", resolved_sag)
     label = hub_display_name or normalize_hub_entry_point(hub_entry_point)
     hub = load_hub_from_entry_point(hub_entry_point)
+    if validate_afid_sag_with_hub(hub, str(resolved_sag)):
+        log.debug("AFID_SAG validated by %s: %s", getattr(hub, "name", label), resolved_sag)
     hub_label = getattr(hub, "name", label)
     engine_version = _hub_engine_version(hub)
     events = resolve_hub_events_payload(
         afid_events=afid_events,
         rf_events=rf_events,
         prefer_rf_events=prefer_rf_events,
+        logger=logger,
     )
     try:
         raw_result = hub.analyze(events, afid_sag_path)
