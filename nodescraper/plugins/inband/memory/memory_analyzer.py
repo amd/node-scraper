@@ -63,13 +63,15 @@ class MemoryAnalyzer(DataAnalyzer[MemoryDataModel, MemoryAnalyzerArgs]):
         total_memory = convert_to_bytes(data.mem_total)
         used_memory = total_memory - available_memory
 
+        # Recorded here and applied once at the end so a later passing check
+        # cannot replace this error with ExecutionStatus.OK.
+        installed_memory_error = False
         if args.minimum_system_memory_gib is not None:
             minimum_bytes = args.minimum_system_memory_gib * (1024**3)
             required_bytes = minimum_bytes * self._INSTALLED_MEMORY_TOLERANCE
             if total_memory < required_bytes:
                 total_gib = _bytes_to_gb(total_memory)
-                self.result.status = ExecutionStatus.ERROR
-                self.result.message = "Installed system memory is below the minimum"
+                installed_memory_error = True
                 self._log_event(
                     category=EventCategory.OS,
                     description=(
@@ -84,13 +86,10 @@ class MemoryAnalyzer(DataAnalyzer[MemoryDataModel, MemoryAnalyzerArgs]):
                     },
                     console_log=True,
                 )
-                return self.result
 
         available_percent = None
         if args.minimum_free_memory_percent is not None:
             if total_memory <= 0:
-                self.result.status = ExecutionStatus.WARNING
-                self.result.message = "Total memory is unavailable"
                 self._log_event(
                     category=EventCategory.OS,
                     description="Cannot validate minimum free memory percentage",
@@ -98,28 +97,32 @@ class MemoryAnalyzer(DataAnalyzer[MemoryDataModel, MemoryAnalyzerArgs]):
                     data={"total_memory": total_memory, "available_memory": available_memory},
                     console_log=True,
                 )
-                return self.result
-
-            available_percent = available_memory / total_memory * 100
-            if available_percent < args.minimum_free_memory_percent:
-                self.result.status = ExecutionStatus.ERROR
-                self.result.message = "Minimum free memory percentage not met"
-                self._log_event(
-                    category=EventCategory.OS,
-                    description=(
-                        f"Available memory is {available_percent:.2f}% "
-                        f"(minimum {args.minimum_free_memory_percent:.2f}%)"
-                    ),
-                    priority=EventPriority.CRITICAL,
-                    data={
-                        "available_memory": available_memory,
-                        "total_memory": total_memory,
-                        "available_percent": available_percent,
-                        "minimum_free_memory_percent": args.minimum_free_memory_percent,
-                    },
-                    console_log=True,
-                )
-                return self.result
+                if not installed_memory_error:
+                    self.result.status = ExecutionStatus.WARNING
+                    self.result.message = "Total memory is unavailable"
+                    return self.result
+            else:
+                available_percent = available_memory / total_memory * 100
+                if available_percent < args.minimum_free_memory_percent:
+                    self._log_event(
+                        category=EventCategory.OS,
+                        description=(
+                            f"Available memory is {available_percent:.2f}% "
+                            f"(minimum {args.minimum_free_memory_percent:.2f}%)"
+                        ),
+                        priority=EventPriority.CRITICAL,
+                        data={
+                            "available_memory": available_memory,
+                            "total_memory": total_memory,
+                            "available_percent": available_percent,
+                            "minimum_free_memory_percent": args.minimum_free_memory_percent,
+                        },
+                        console_log=True,
+                    )
+                    if not installed_memory_error:
+                        self.result.status = ExecutionStatus.ERROR
+                        self.result.message = "Minimum free memory percentage not met"
+                        return self.result
 
         threshold_bytes = convert_to_bytes(args.memory_threshold)
 
@@ -136,20 +139,19 @@ class MemoryAnalyzer(DataAnalyzer[MemoryDataModel, MemoryAnalyzerArgs]):
         allowed_gb = _bytes_to_gb(max_allowed_used_mem)
         base_gb = _bytes_to_gb(base_bytes)
 
-        if used_memory < max_allowed_used_mem:
-            self.result.message = (
+        usage_within_limit = used_memory < max_allowed_used_mem
+        if usage_within_limit:
+            usage_message = (
                 f"Memory usage is within limit: Used {used_gb:.2f} GB "
                 f"(allowed {allowed_gb:.2f} GB; base={base_source} {base_gb:.2f} GB × ratio={args.ratio:.2f})"
             )
             if available_percent is not None:
-                self.result.message += (
+                usage_message += (
                     f"; available memory is {available_percent:.2f}% "
                     f"(minimum {args.minimum_free_memory_percent:.2f}%)"
                 )
-            self.result.status = ExecutionStatus.OK
         else:
-            self.result.message = "Memory usage exceeded max allowed!"
-            self.result.status = ExecutionStatus.ERROR
+            usage_message = "Memory usage exceeded max allowed!"
             self._log_event(
                 category=EventCategory.OS,
                 description=f"Memory usage exceeded max allowed! Used {used_gb:.2f} GB, max allowed {allowed_gb:.2f} GB (base={base_source} {base_gb:.2f} GB × ratio={args.ratio:.2f})",
@@ -162,5 +164,15 @@ class MemoryAnalyzer(DataAnalyzer[MemoryDataModel, MemoryAnalyzerArgs]):
                     "mem_free": convert_to_bytes(data.mem_free),
                 },
             )
+
+        if installed_memory_error:
+            self.result.status = ExecutionStatus.ERROR
+            self.result.message = "Installed system memory is below the minimum"
+        elif usage_within_limit:
+            self.result.status = ExecutionStatus.OK
+            self.result.message = usage_message
+        else:
+            self.result.status = ExecutionStatus.ERROR
+            self.result.message = usage_message
 
         return self.result

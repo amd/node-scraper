@@ -56,14 +56,17 @@ class DeviceEnumerationCollector(
     )
     # Architecture codes are Win32_Processor.Architecture. Names match lscpu
     # (9 -> x86_64) so the same analyzer value works on Linux and Windows.
+    # -Command is single-quoted so $vars are not expanded by a PowerShell parent
+    # and so OpenSSH's cmd /c "..." wrapper does not split the script. Inner
+    # quotes are doubled ('') because they sit inside that single-quoted script.
     CMD_CPU_INFO_WINDOWS = (
         "powershell -NoProfile -Command "
-        '"$p = @(Get-CimInstance -ClassName Win32_Processor); '
+        "'$p = @(Get-CimInstance -ClassName Win32_Processor); "
         "$cores = ($p | Measure-Object -Property NumberOfCores -Sum).Sum; "
-        "$map = @{0='i686'; 5='arm'; 6='ia64'; 9='x86_64'; 12='aarch64'}; "
+        "$map = @{0=''i686''; 5=''arm''; 6=''ia64''; 9=''x86_64''; 12=''aarch64''}; "
         "$arch = $map[[int]$p[0].Architecture]; "
-        "Write-Output ('Architecture=' + $arch); "
-        "Write-Output ('Cores=' + $cores)\""
+        "Write-Output (''Architecture='' + $arch); "
+        "Write-Output (''Cores='' + $cores)'"
     )
     CMD_GPU_COUNT_WINDOWS = 'powershell -Command "(wmic path win32_VideoController get name | findstr AMD | Measure-Object).Count"'
     CMD_VF_COUNT_WINDOWS = (

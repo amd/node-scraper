@@ -1600,7 +1600,8 @@ def test_check_umc_ras_enabled_passes(mock_analyzer):
     assert len(analyzer.result.events) == 0
 
 
-def test_check_umc_ras_enabled_fails_when_umc_missing(mock_analyzer):
+def test_check_umc_ras_enabled_unavailable_when_umc_missing(mock_analyzer):
+    """Absent per-block data cannot be validated, so it is not an ECC mismatch."""
     analyzer = mock_analyzer
     gpu = create_static_gpu(0)
 
@@ -1608,4 +1609,33 @@ def test_check_umc_ras_enabled_fails_when_umc_missing(mock_analyzer):
 
     assert len(analyzer.result.events) == 1
     assert analyzer.result.events[0].priority == EventPriority.ERROR
-    assert "UMC RAS" in analyzer.result.events[0].description
+    assert analyzer.result.events[0].description == (
+        "UMC RAS state is unavailable for one or more GPUs"
+    )
+    assert analyzer.result.events[0].data["gpus"] == [0]
+
+
+def test_check_umc_ras_enabled_unavailable_when_block_state_is_string(mock_analyzer):
+    """Older amd-smi output reports ecc_block_state as a string, not a UMC map."""
+    analyzer = mock_analyzer
+    gpu = create_static_gpu(0)
+    gpu.ras.ecc_block_state = "N/A"
+
+    analyzer.check_umc_ras_enabled([gpu])
+
+    assert len(analyzer.result.events) == 1
+    assert analyzer.result.events[0].data["gpus"] == [0]
+    assert "umc_ras_by_gpu" not in analyzer.result.events[0].data
+
+
+def test_check_umc_ras_enabled_fails_when_disabled(mock_analyzer):
+    analyzer = mock_analyzer
+    gpu = create_static_gpu(0)
+    gpu.ras.ecc_block_state = {"UMC": EccState.DISABLED}
+
+    analyzer.check_umc_ras_enabled([gpu])
+
+    assert len(analyzer.result.events) == 1
+    assert analyzer.result.events[0].priority == EventPriority.ERROR
+    assert "UMC RAS (HBM ECC)" in analyzer.result.events[0].description
+    assert analyzer.result.events[0].data["umc_ras_by_gpu"] == {0: "DISABLED"}

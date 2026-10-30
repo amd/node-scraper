@@ -673,23 +673,48 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
             )
 
     def check_umc_ras_enabled(self, amdsmi_static_data: list[AmdSmiStatic]) -> None:
-        """Require UMC RAS ENABLED. That is the in-band proxy for HBM ECC being on."""
-        actual_by_gpu: dict[int, str] = {}
+        """Require UMC RAS to be enabled when per-block data is available.
+
+        Args:
+            amdsmi_static_data: Static amd-smi data for each GPU.
+
+        Returns:
+            None.
+        """
+        unavailable: list[int] = []
+        not_enabled: dict[int, str] = {}
         for gpu_data in amdsmi_static_data:
-            umc_state = _umc_ecc_state(gpu_data.ras.ecc_block_state)
-            if umc_state != EccState.ENABLED:
-                shown = umc_state.value if isinstance(umc_state, EccState) else "missing"
-                actual_by_gpu[gpu_data.gpu] = shown
-        if not actual_by_gpu:
-            return
-        desc, details = _gpu_mismatch_description("UMC RAS (HBM ECC)", "ENABLED", actual_by_gpu)
-        self._log_event(
-            category=EventCategory.RAS,
-            description=desc,
-            priority=EventPriority.ERROR,
-            data={"umc_ras_by_gpu": actual_by_gpu, "details": details},
-            console_log=True,
-        )
+            block_states = gpu_data.ras.ecc_block_state
+            if not isinstance(block_states, dict):
+                unavailable.append(gpu_data.gpu)
+                continue
+            umc_state = _umc_ecc_state(block_states)
+            if umc_state is None:
+                unavailable.append(gpu_data.gpu)
+            elif umc_state != EccState.ENABLED:
+                not_enabled[gpu_data.gpu] = umc_state.value
+
+        if unavailable:
+            self._log_event(
+                category=EventCategory.RAS,
+                description="UMC RAS state is unavailable for one or more GPUs",
+                priority=EventPriority.ERROR,
+                data={"gpus": unavailable},
+                console_log=True,
+            )
+        if not_enabled:
+            desc, details = _gpu_mismatch_description(
+                "UMC RAS (HBM ECC)",
+                "ENABLED",
+                not_enabled,
+            )
+            self._log_event(
+                category=EventCategory.RAS,
+                description=desc,
+                priority=EventPriority.ERROR,
+                data={"umc_ras_by_gpu": not_enabled, "details": details},
+                console_log=True,
+            )
 
     def check_amdsmi_metric_ecc(self, amdsmi_metric_data: list[AmdSmiMetric]):
         """Check ECC counts in all blocks for all GPUs
