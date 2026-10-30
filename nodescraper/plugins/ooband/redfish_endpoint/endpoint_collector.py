@@ -23,6 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
+import re
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Optional
@@ -31,6 +32,7 @@ from urllib.parse import urlparse
 from nodescraper.base import RedfishDataCollector
 from nodescraper.connection.redfish import (
     RF_MEMBERS,
+    RF_MEMBERS_NEXT_LINK,
     RF_ODATA_ID,
     RedfishConnection,
     RedfishGetResult,
@@ -51,6 +53,19 @@ from nodescraper.models import TaskResult
 from .collector_args import RedfishEndpointCollectorArgs
 from .endpoint_data import RedfishEndpointDataModel
 
+_REFERENCE_KEYS = frozenset(
+    {
+        RF_ODATA_ID,
+        "Uri",
+        "@Redfish.ActionInfo",
+        "DataSourceUri",
+        "TargetComponentURI",
+    }
+)
+_SKIPPED_REFERENCE_SUBTREES = frozenset({"Oem", "OriginOfCondition"})
+# Individual LogServices entry resources, not the Entries collection.
+_LOG_ENTRY_URI_RE = re.compile(r"LogServices/.*/Entries/[^/]+$")
+
 
 def _normalize_path(odata_id: str, api_root: str) -> str:
     """Convert @odata.id value (URL or path) to a normalized path under api_root."""
@@ -60,6 +75,8 @@ def _normalize_path(odata_id: str, api_root: str) -> str:
     if s.startswith(("http://", "https://")):
         parsed = urlparse(s)
         s = parsed.path or "/"
+        if parsed.query:
+            s = f"{s}?{parsed.query}"
     if not s.startswith("/"):
         s = "/" + s
     s = s.rstrip("/") or "/"
@@ -69,28 +86,121 @@ def _normalize_path(odata_id: str, api_root: str) -> str:
     return s
 
 
+def _is_fetchable_reference(value: Any) -> bool:
+    """Return whether a value points at a separate Redfish resource.
+
+    Args:
+        value: A candidate Redfish reference.
+
+    Returns:
+        True when value is an absolute resource path without a fragment.
+    """
+    return isinstance(value, str) and value.startswith("/") and "#" not in value
+
+
 def _extract_odata_ids(obj: Any) -> list[str]:
-    """Recursively extract all @odata.id values from a Redfish JSON body."""
+    """Extract Redfish resource references from a JSON body.
+
+    Args:
+        obj: A Redfish JSON value.
+
+    Returns:
+        Resource paths and resource ids referenced by the body.
+    """
     out: list[str] = []
-    if isinstance(obj, dict):
-        if RF_ODATA_ID in obj and isinstance(obj[RF_ODATA_ID], str):
-            out.append(obj[RF_ODATA_ID])
-        for k, v in obj.items():
-            if k == RF_MEMBERS and isinstance(v, list):
-                for item in v:
-                    if (
-                        isinstance(item, dict)
-                        and RF_ODATA_ID in item
-                        and isinstance(item[RF_ODATA_ID], str)
-                    ):
-                        out.append(item[RF_ODATA_ID])
-            elif isinstance(v, dict):
-                out.extend(_extract_odata_ids(v))
-            elif isinstance(v, list):
-                for item in v:
-                    if isinstance(item, dict):
-                        out.extend(_extract_odata_ids(item))
+    if not isinstance(obj, dict):
+        return out
+    for key, value in obj.items():
+        if key in _SKIPPED_REFERENCE_SUBTREES:
+            continue
+        if key == RF_ODATA_ID and isinstance(value, str):
+            out.append(value)
+        elif key in _REFERENCE_KEYS and _is_fetchable_reference(value):
+            out.append(value)
+    for key, value in obj.items():
+        if key in _SKIPPED_REFERENCE_SUBTREES:
+            continue
+        if key == RF_MEMBERS and isinstance(value, list):
+            for item in value:
+                if isinstance(item, dict) and isinstance(item.get(RF_ODATA_ID), str):
+                    out.append(item[RF_ODATA_ID])
+        elif isinstance(value, dict):
+            out.extend(_extract_odata_ids(value))
+        elif isinstance(value, list):
+            for item in value:
+                if isinstance(item, dict):
+                    out.extend(_extract_odata_ids(item))
     return out
+
+
+def _normalize_next_link(odata_id: Any, api_root: str) -> str:
+    """Normalize a collection next link and keep its query string.
+
+    Args:
+        odata_id: A Members nextLink value.
+        api_root: Redfish service root.
+
+    Returns:
+        The path and query under the service root, or an empty string.
+    """
+    if not isinstance(odata_id, str) or not odata_id.strip():
+        return ""
+    source = odata_id.strip()
+    query = ""
+    if source.startswith(("http://", "https://")):
+        parsed = urlparse(source)
+        source = parsed.path or "/"
+        query = f"?{parsed.query}" if parsed.query else ""
+    elif "?" in source:
+        source, raw_query = source.split("?", 1)
+        query = "?" + raw_query
+    path = _normalize_path(source, api_root)
+    if not path:
+        return ""
+    return path + query
+
+
+def _enqueue_tree_links(
+    payload: Any,
+    depth: int,
+    api_root: str,
+    max_depth: int,
+    seen: set[str],
+    to_visit: deque[tuple[str, int]],
+    queued: set[str],
+    max_log_entry_members: int,
+) -> None:
+    """Queue child resources linked from one Redfish payload.
+
+    Args:
+        payload: Redfish JSON body.
+        depth: Depth of the payload that contains the links.
+        api_root: Redfish service root.
+        max_depth: Maximum resource depth.
+        seen: Paths already fetched.
+        to_visit: Paths waiting to be fetched.
+        queued: Paths already queued in this crawl.
+        max_log_entry_members: Maximum log entries from this payload. Zero means no limit.
+
+    Returns:
+        None
+    """
+    candidates: list[str] = []
+    for odata_id in _extract_odata_ids(payload):
+        if isinstance(odata_id, str) and "#" in odata_id:
+            continue
+        link_path = _normalize_path(odata_id, api_root)
+        if not link_path or link_path in seen or link_path in queued or depth + 1 >= max_depth:
+            continue
+        candidates.append(link_path)
+    unique = list(dict.fromkeys(candidates))
+    log_entries = sorted(path for path in unique if _LOG_ENTRY_URI_RE.search(path))
+    others = [path for path in unique if not _LOG_ENTRY_URI_RE.search(path)]
+    if max_log_entry_members:
+        log_entries = log_entries[:max_log_entry_members]
+    for link_path in others + log_entries:
+        queued.add(link_path)
+        to_visit.append((link_path, depth + 1))
 
 
 def _discover_tree(
@@ -98,15 +208,25 @@ def _discover_tree(
     api_root: str,
     max_depth: int,
     max_endpoints: int,
+    max_collection_pages: int = 1,
+    max_log_entry_members: int = 0,
 ) -> tuple[list[str], dict[str, dict], list[RedfishGetResult]]:
-    """
-    Traverse the Redfish resource tree from the service root.
+    """Traverse the Redfish resource tree from the service root.
 
-    max_depth matches collection_args.tree_max_depth: 1 = service root only; 2 = root + one link
-    level; child links are only enqueued when depth + 1 < max_depth (root is depth 0).
+    Args:
+        connection: Connection used to fetch resources.
+        api_root: Redfish service-root path.
+        max_depth: Maximum resource depth, where one is only the service root.
+        max_endpoints: Maximum resource count, where zero means unlimited.
+        max_collection_pages: Maximum pages to retain for each paginated collection.
+        max_log_entry_members: Maximum individual log entries taken from each payload.
+
+    Returns:
+        Visited paths, successful response bodies, and every GET result.
     """
     root_path = _normalize_path(api_root, api_root) or ("/" + api_root.strip("/"))
     seen: set[str] = set()
+    queued: set[str] = {root_path}
     to_visit: deque[tuple[str, int]] = deque([(root_path, 0)])
     responses: dict[str, dict] = {}
     results: list[RedfishGetResult] = []
@@ -119,13 +239,45 @@ def _discover_tree(
         seen.add(path)
         res = connection.run_get(path)
         results.append(res)
-        if res.success and res.data is not None:
-            responses[path] = res.data
-            for odata_id in _extract_odata_ids(res.data):
-                link_path = _normalize_path(odata_id, api_root)
-                # Follow only if the child depth stays strictly below max_depth (1 = root only).
-                if link_path and link_path not in seen and depth + 1 < max_depth:
-                    to_visit.append((link_path, depth + 1))
+        if not res.success or not isinstance(res.data, dict):
+            continue
+        responses[path] = res.data
+        _enqueue_tree_links(
+            res.data,
+            depth,
+            api_root,
+            max_depth,
+            seen,
+            to_visit,
+            queued,
+            max_log_entry_members,
+        )
+        if max_collection_pages <= 1:
+            continue
+        next_path = _normalize_next_link(res.data.get(RF_MEMBERS_NEXT_LINK), api_root)
+        pages = 1
+        while next_path and pages < max_collection_pages:
+            if next_path in seen or (max_endpoints and len(seen) >= max_endpoints):
+                break
+            seen.add(next_path)
+            queued.add(next_path)
+            page_res = connection.run_get(next_path)
+            results.append(page_res)
+            pages += 1
+            if not page_res.success or not isinstance(page_res.data, dict):
+                break
+            responses[next_path] = page_res.data
+            _enqueue_tree_links(
+                page_res.data,
+                depth,
+                api_root,
+                max_depth,
+                seen,
+                to_visit,
+                queued,
+                max_log_entry_members,
+            )
+            next_path = _normalize_next_link(page_res.data.get(RF_MEMBERS_NEXT_LINK), api_root)
     return sorted(seen), responses, results
 
 
@@ -165,8 +317,9 @@ class RedfishEndpointCollector(
     DOCUMENTATION_COLLECTION_ITEMS: tuple[str, ...] = (
         "Redfish GET: explicit paths from collection_args.uris (parallel when max_workers>1).",
         "Optional paged GET following the Members collection OData nextLink field when follow_next_link is true.",
-        "Redfish GET tree: when discover_tree is true, walks from api_root using OData resource id links and "
-        "Members navigation (depth and endpoint caps from collection_args).",
+        "Redfish GET tree: when discover_tree is true, walks from api_root using Redfish resource links. "
+        "Oem and OriginOfCondition subtrees are not followed. Collection pages and individual log entries "
+        "are capped by collection_args.",
     )
 
     def collect_data(
@@ -181,11 +334,15 @@ class RedfishEndpointCollector(
             api_root = getattr(self.connection, "api_root", "redfish/v1")
             max_depth = getattr(args, "tree_max_depth", 2) if args else 2
             max_endpoints = (getattr(args, "tree_max_endpoints", 0) or 0) if args else 0
+            max_collection_pages = getattr(args, "tree_max_collection_pages", 1) if args else 1
+            max_log_entry_members = getattr(args, "tree_max_log_entry_members", 0) if args else 0
             _paths, responses, results = _discover_tree(
                 self.connection,
                 api_root,
                 max_depth=max_depth,
                 max_endpoints=max_endpoints,
+                max_collection_pages=max_collection_pages,
+                max_log_entry_members=max_log_entry_members,
             )
             for res in results:
                 self._append_redfish_artifact(res)

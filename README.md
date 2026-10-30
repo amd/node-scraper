@@ -291,7 +291,7 @@ Redfish plugins (those based on `OOBandDataPlugin`) pick their connection from t
 | present | present | direct Redfish |
 | absent | absent | plugin is skipped |
 
-Plugins that declare `RedfishSshProxyConnectionManager` as their connection type (such as `AmcRedfishDiagPlugin`) always use the proxy, even when both blocks are configured. The proxy also accepts a `targets` list, in the same shape as Redfish multi-target. OOB SSH plugins are unaffected and still require `RedfishConnectionManager`.
+Plugins that declare `RedfishSshProxyConnectionManager` as their connection type (such as `AmcRedfishDiagPlugin` and `AmcRedfishInventoryPlugin`) always use the proxy, even when both blocks are configured. `RedfishInventoryPlugin` and `AmcRedfishInventoryPlugin` share one collector, so a single plugin config can read the BMC on the direct connection and the AMC on the proxy. The proxy also accepts a `targets` list, in the same shape as Redfish multi-target. OOB SSH plugins are unaffected and still require `RedfishConnectionManager`.
 
 **Notes:**
 - If using SSH keys, specify `key_filename` instead of `password`.

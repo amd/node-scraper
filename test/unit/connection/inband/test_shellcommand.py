@@ -81,6 +81,7 @@ def test_remoteshell_sudo_password_is_newline_terminated(mock_client_cls):
     shell.run_command("cat /etc/shadow", sudo=True)
 
     stdin.write.assert_called_once_with("hunter2\n")
+    stdout.channel.close.assert_called_once()
 
 
 @patch("nodescraper.connection.inband.inbandremote.paramiko.SSHClient")
@@ -92,3 +93,50 @@ def test_remoteshell_ssh_exception_is_a_failed_command(mock_client_cls):
     artifact = shell.run_command("mktemp")
     assert artifact.exit_code == 124
     assert artifact.stderr == "Timeout opening channel."
+
+
+def _sftp_file(data: bytes) -> MagicMock:
+    handle = MagicMock()
+    handle.read.return_value = data
+    handle.__enter__.return_value = handle
+    handle.__exit__.return_value = False
+    return handle
+
+
+@patch("nodescraper.connection.inband.inbandremote.paramiko.SSHClient")
+def test_reconnect_ssh_opens_a_new_client(mock_client_cls):
+    clients = []
+
+    def factory():
+        client = MagicMock()
+        client.get_transport.return_value.channel_timeout = None
+        clients.append(client)
+        return client
+
+    mock_client_cls.side_effect = factory
+    shell = RemoteShell(
+        SSHConnectionParams(hostname="127.0.0.1", username="user", password="secret")
+    )
+    shell.reconnect_ssh()
+    assert len(clients) == 2
+    clients[0].close.assert_called_once()
+    clients[1].connect.assert_called_once()
+    assert shell.client is clients[1]
+    assert clients[1].get_transport.return_value.channel_timeout == 60
+
+
+@patch("nodescraper.connection.inband.inbandremote.paramiko.SSHClient")
+def test_read_files_uses_one_sftp_session(mock_client_cls):
+    sftp = MagicMock()
+    sftp.open.side_effect = [
+        _sftp_file(b"HTTP/1.1 200 OK\n\n"),
+        _sftp_file(b"{}"),
+    ]
+    mock_client_cls.return_value.open_sftp.return_value = sftp
+    shell = RemoteShell(
+        SSHConnectionParams(hostname="127.0.0.1", username="user", password="secret")
+    )
+    contents = shell.read_files(["/tmp/headers", "/tmp/body"])
+    assert contents == [b"HTTP/1.1 200 OK\n\n", b"{}"]
+    mock_client_cls.return_value.open_sftp.assert_called_once()
+    sftp.close.assert_called_once()

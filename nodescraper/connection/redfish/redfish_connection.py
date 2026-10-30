@@ -242,6 +242,21 @@ class RedfishConnection:
         else:
             session.auth = HTTPBasicAuth(self.username, self.password)
 
+    def _drop_session(self) -> None:
+        """Discard the HTTP session without logging out of Redfish.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
+        if self._session is not None:
+            self._session.close()
+        self._session = None
+        self._session_token = None
+        self._session_uri = None
+
     def get(self, path: RedfishPath) -> dict[str, Any]:
         """GET a Redfish path and return the JSON body. path must be a RedfishPath."""
         path_str = str(path)
@@ -254,10 +269,22 @@ class RedfishConnection:
         return resp.json()
 
     def get_response(self, path: Union[str, "RedfishPath"]) -> RedfishHttpResponse:
-        """GET a Redfish path and return the raw Response. path may be a string or RedfishPath."""
+        """GET a Redfish path and refresh the session once after HTTP 401.
+
+        Args:
+            path: Redfish path or absolute URL.
+
+        Returns:
+            The HTTP response, including a second 401 when reauthentication fails.
+        """
         path = str(path)
         session = self._ensure_session()
         url = path if path.startswith("http") else urljoin(self.base_url + "/", path.lstrip("/"))
+        response = self._execute_request(lambda: session.get(url, timeout=self.timeout))
+        if response.status_code != 401 or not self.use_session_auth or not self.password:
+            return response
+        self._drop_session()
+        session = self._ensure_session()
         return self._execute_request(lambda: session.get(url, timeout=self.timeout))
 
     def post(

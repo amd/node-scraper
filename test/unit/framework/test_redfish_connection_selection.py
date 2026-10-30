@@ -101,6 +101,17 @@ class TestRedfishConnectionSelection(unittest.TestCase):
             _resolve(ex, PROXY_PLUGIN), ex.connection_library[RedfishSshProxyConnectionManager]
         )
 
+    def test_inventory_plugins_split_bmc_and_amc_when_both_configured(self):
+        ex = _executor(BOTH_CONFIG)
+        self.assertIs(
+            _resolve(ex, "RedfishInventoryPlugin"),
+            ex.connection_library[RedfishConnectionManager],
+        )
+        self.assertIs(
+            _resolve(ex, "AmcRedfishInventoryPlugin"),
+            ex.connection_library[RedfishSshProxyConnectionManager],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
