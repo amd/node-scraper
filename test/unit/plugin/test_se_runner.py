@@ -24,6 +24,7 @@
 #
 ###############################################################################
 import json
+import logging
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -193,6 +194,63 @@ def test_resolve_hub_events_payload_honors_prefer_rf_events_false():
     )
     assert payload[0]["afid"] == EXAMPLE_EVENTS[0].afid
     assert payload[0]["location"] == EXAMPLE_EVENTS[0].serviceable_unit
+
+
+def _rf_member(odata_id, *identifiers):
+    return {"@odata.id": odata_id, "Oem": {"AMD": {"AMDFieldIdentifiers": list(identifiers)}}}
+
+
+_UNIT = {"@odata.id": "/redfish/v1/Chassis/Instinct_EAM_0"}
+
+
+def test_resolve_hub_events_payload_waives_afid_without_serviceable_units(caplog):
+    from nodescraper.plugins.serviceability.se_runner import (
+        resolve_hub_events_payload,
+    )
+
+    good = _rf_member("/entries/1", {"AFID": 11101, "ServiceableUnits": [_UNIT]})
+    bad = _rf_member("/entries/2", {"AFID": 11045, "ServiceableUnits": []})
+    with caplog.at_level(logging.WARNING):
+        payload = resolve_hub_events_payload(
+            afid_events=EXAMPLE_EVENTS, rf_events=[good, bad], prefer_rf_events=True
+        )
+    assert payload == [good]
+    assert "Waiving AFID 11045 from /entries/2" in caplog.text
+
+
+def test_resolve_hub_events_payload_keeps_valid_entries_on_mixed_member(caplog):
+    from nodescraper.plugins.serviceability.se_runner import (
+        resolve_hub_events_payload,
+    )
+
+    member = _rf_member(
+        "/entries/3",
+        {"AFID": 11101, "ServiceableUnits": [_UNIT]},
+        {"AFID": 11045},
+        {"AFID": 11046, "ServiceableUnits": [{"Name": "no odata id"}]},
+    )
+    with caplog.at_level(logging.WARNING):
+        payload = resolve_hub_events_payload(
+            afid_events=EXAMPLE_EVENTS, rf_events=[member], prefer_rf_events=True
+        )
+    identifiers = payload[0]["Oem"]["AMD"]["AMDFieldIdentifiers"]
+    assert [entry["AFID"] for entry in identifiers] == [11101]
+    assert len(member["Oem"]["AMD"]["AMDFieldIdentifiers"]) == 3
+    assert "Waiving AFID 11045" in caplog.text
+    assert "Waiving AFID 11046" in caplog.text
+
+
+def test_resolve_hub_events_payload_falls_back_to_afid_events_when_all_waived():
+    from nodescraper.plugins.serviceability.se_runner import (
+        resolve_hub_events_payload,
+    )
+
+    payload = resolve_hub_events_payload(
+        afid_events=EXAMPLE_EVENTS[:1],
+        rf_events=[_rf_member("/entries/4", {"AFID": 11045})],
+        prefer_rf_events=True,
+    )
+    assert payload[0]["afid"] == EXAMPLE_EVENTS[0].afid
 
 
 def test_resolved_hub_options_explicit_fields_override_options_bag():

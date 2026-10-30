@@ -191,6 +191,7 @@ def analyze_serviceability_window(
                 rf_event_count=len(data.rf_events),
                 raise_on_error=args.hub_raise_on_error,
                 prefer_rf_events=args.hub_prefer_rf_events and not bool(cper_data),
+                logger=log,
             )
     except (HubRunError, ValueError) as exc:
         return ServiceabilityWindowResult(

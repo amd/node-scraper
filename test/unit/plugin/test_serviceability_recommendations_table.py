@@ -110,7 +110,7 @@ def test_split_recommendation_rows_uses_hub_top():
     assert additional[0].afid == DUMMY_AFID_B
 
 
-def test_render_serviceability_recommendation_tables_splits_sections():
+def test_render_serviceability_recommendation_tables_prints_only_top_action():
     block = ServiceabilityBlock(
         hub_top_results=[
             _row(
@@ -142,10 +142,9 @@ def test_render_serviceability_recommendation_tables_splits_sections():
     output = render_serviceability_recommendation_tables(block)
 
     assert "Top Hub service action (rank 1)" in output
-    assert "Additional Hub service actions (rank 2)" in output
     assert f"{DUMMY_AFID_A}: Contact Support" in output
-    assert f"{DUMMY_AFID_B}: Update FW" in output
-    assert output.index("Top Hub service action") < output.index("Additional Hub service actions")
+    assert "Additional Hub service actions" not in output
+    assert f"{DUMMY_AFID_B}: Update FW" not in output
 
 
 def test_build_top_service_actions_includes_tied_entries():

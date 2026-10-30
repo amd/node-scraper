@@ -31,8 +31,11 @@ import dataclasses
 import importlib
 import importlib.metadata
 import inspect
+import logging
 from pathlib import Path
 from typing import Any, Callable, Optional, Protocol, Type, Union, cast
+
+from nodescraper.constants import DEFAULT_LOGGER
 
 from .afid_sag_paths import validate_afid_sag_path
 from .se_adapter import (
@@ -292,15 +295,71 @@ def events_payload_for_hub_analyze(
     raise HubRunError("rf_events or afid_events is required")
 
 
+def _usable_serviceable_units(units: Any) -> list[Any]:
+    """Return ServiceableUnits entries that carry an '@odata.id' string."""
+    if not isinstance(units, list):
+        return []
+    return [
+        unit for unit in units if isinstance(unit, dict) and isinstance(unit.get("@odata.id"), str)
+    ]
+
+
+def drop_afids_without_serviceable_units(
+    rf_events: list[Any],
+    logger: Optional[logging.Logger] = None,
+) -> list[Any]:
+    """Waive AMDFieldIdentifiers entries the hub would reject for lacking ServiceableUnits.
+
+    The entry-point hub rejects the whole event list when any Oem.AMD.AMDFieldIdentifiers
+    entry has no ServiceableUnits, so drop those entries (with a warning) before analysis.
+
+    Args:
+        rf_events: Raw Redfish log members.
+        logger: Logger for the per-entry warning. Defaults to the nodescraper logger.
+
+    Returns:
+        Members with unusable AFID entries removed. Members left with no AFID entries are dropped.
+    """
+    log = logger or logging.getLogger(DEFAULT_LOGGER)
+    kept: list[Any] = []
+    for member in rf_events:
+        oem = member.get("Oem") if isinstance(member, dict) else None
+        amd = oem.get("AMD") if isinstance(oem, dict) else None
+        identifiers = amd.get("AMDFieldIdentifiers") if isinstance(amd, dict) else None
+        if not isinstance(identifiers, list):
+            kept.append(member)
+            continue
+        usable = []
+        for entry in identifiers:
+            if isinstance(entry, dict) and _usable_serviceable_units(entry.get("ServiceableUnits")):
+                usable.append(entry)
+                continue
+            afid = entry.get("AFID") if isinstance(entry, dict) else None
+            log.warning(
+                "Waiving AFID %s from %s: AMDFieldIdentifiers entry has no ServiceableUnits",
+                afid,
+                member.get("@odata.id") or member.get("Id") or "<unknown event>",
+            )
+        if len(usable) == len(identifiers):
+            kept.append(member)
+        elif usable:
+            amd_copy = {**cast(dict, amd), "AMDFieldIdentifiers": usable}
+            kept.append({**member, "Oem": {**cast(dict, oem), "AMD": amd_copy}})
+    return kept
+
+
 def resolve_hub_events_payload(
     *,
     afid_events: list[AfidEvent],
     rf_events: Optional[list[Any]] = None,
     prefer_rf_events: bool = True,
+    logger: Optional[logging.Logger] = None,
 ) -> list[Any]:
     """Choose rf_events or aggregated afid_events for hub analyze()."""
     if prefer_rf_events and rf_events:
-        return events_payload_for_hub_analyze(rf_events=rf_events)
+        usable_rf_events = drop_afids_without_serviceable_units(rf_events, logger)
+        if usable_rf_events:
+            return events_payload_for_hub_analyze(rf_events=usable_rf_events)
     return events_payload_for_hub_analyze(
         afid_events_payload=afid_events_to_entry_point_payload(afid_events)
     )
@@ -454,6 +513,7 @@ def run_entry_point_hub(
     rf_event_count: int = 0,
     raise_on_error: bool = False,
     prefer_rf_events: bool = True,
+    logger: Optional[logging.Logger] = None,
 ) -> ServiceabilityBlock:
     """Run a registered entry-point service hub and return a :class:`ServiceabilityBlock`."""
     if not afid_events and not (prefer_rf_events and rf_events):
@@ -468,6 +528,7 @@ def run_entry_point_hub(
         afid_events=afid_events,
         rf_events=rf_events,
         prefer_rf_events=prefer_rf_events,
+        logger=logger,
     )
     try:
         raw_result = hub.analyze(events, afid_sag_path)
