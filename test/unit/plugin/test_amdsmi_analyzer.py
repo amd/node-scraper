@@ -1639,6 +1639,8 @@ def test_check_umc_ras_enabled_fails_when_disabled(mock_analyzer):
     assert analyzer.result.events[0].priority == EventPriority.ERROR
     assert "UMC RAS (HBM ECC)" in analyzer.result.events[0].description
     assert analyzer.result.events[0].data["umc_ras_by_gpu"] == {0: "DISABLED"}
+
+
 def create_unconfigured_fabric(gpu: int) -> Fabric:
     """Helper building amd-smi fabric output for a GPU whose fabric is not configured."""
     return Fabric.model_validate(
