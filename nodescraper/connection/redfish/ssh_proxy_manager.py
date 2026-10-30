@@ -84,36 +84,41 @@ class RedfishSshProxyConnectionManager(
         return self._connect_single(params)
 
     def _validated_params(self) -> Optional[RedfishSshProxyConnectionParams]:
-        """Return connection params or record a failure when they are missing.
+        """Return connection params or record a failure when they are missing or invalid.
 
         Returns:
             Optional[RedfishSshProxyConnectionParams]: Parsed params, or None when invalid.
         """
         if not self.connection_args:
-            self._log_event(
-                category=EventCategory.RUNTIME,
-                description="No Redfish SSH-proxy connection parameters provided",
-                priority=EventPriority.CRITICAL,
-                console_log=True,
+            self._fail_connect(
+                EventCategory.RUNTIME,
+                "Cannot connect through the BMC: no connection details were provided.",
+                "No Redfish SSH-proxy connection parameters provided",
+                {"connection_args": None},
             )
-            self.result.status = ExecutionStatus.EXECUTION_FAILURE
             return None
 
         raw = self.connection_args
         if isinstance(raw, dict):
-            return RedfishSshProxyConnectionParams.model_validate(raw)
+            try:
+                return RedfishSshProxyConnectionParams.model_validate(raw)
+            except Exception as exc:
+                self._fail_connect(
+                    EventCategory.RUNTIME,
+                    "Cannot connect through the BMC: the connection details are not valid.",
+                    f"Invalid Redfish SSH-proxy connection parameters: {exc}",
+                    {"exception": str(exc)},
+                )
+                return None
         if isinstance(raw, RedfishSshProxyConnectionParams):
             return raw
-        self._log_event(
-            category=EventCategory.RUNTIME,
-            description=(
-                "Redfish SSH-proxy connection_args must be dict or "
-                "RedfishSshProxyConnectionParams"
-            ),
-            priority=EventPriority.CRITICAL,
-            console_log=True,
+        self._fail_connect(
+            EventCategory.RUNTIME,
+            "Cannot connect through the BMC: the connection details are not valid.",
+            "Redfish SSH-proxy connection_args must be dict or RedfishSshProxyConnectionParams "
+            f"(got {type(raw).__name__})",
+            {"connection_args_type": type(raw).__name__},
         )
-        self.result.status = ExecutionStatus.EXECUTION_FAILURE
         return None
 
     def _connect_single(self, params: RedfishSshProxyConnectionParams) -> TaskResult:
@@ -125,36 +130,45 @@ class RedfishSshProxyConnectionManager(
         Returns:
             TaskResult: Connection result.
         """
+        debug_data = {
+            "ssh_host": str(params.ssh.hostname) if params.ssh else None,
+            "ssh_port": params.ssh.port if params.ssh else None,
+            "ssh_username": params.ssh.username if params.ssh else None,
+            "redfish_host": str(params.host),
+            "redfish_port": params.port,
+            "use_https": params.use_https,
+            "timeout_seconds": params.timeout_seconds,
+        }
         try:
             self.connection = self._open_proxy(params)
         except SSHConnectionError as exc:
-            self._log_event(
-                category=EventCategory.SSH,
-                description=str(exc),
-                priority=EventPriority.CRITICAL,
-                console_log=True,
+            return self._fail_connect(
+                EventCategory.SSH,
+                "Could not connect to the BMC over SSH.",
+                f"SSH connection to BMC '{debug_data['ssh_host']}' failed: {exc}",
+                {**debug_data, "exception": str(exc)},
             )
-            self.result.status = ExecutionStatus.EXECUTION_FAILURE
-            self.connection = None
         except RedfishConnectionError as exc:
-            self._log_event(
-                category=EventCategory.RUNTIME,
-                description=str(exc),
-                priority=EventPriority.CRITICAL,
-                console_log=True,
+            return self._fail_connect(
+                EventCategory.RUNTIME,
+                "Connected to the BMC, but could not reach Redfish through it.",
+                f"Redfish check through BMC SSH proxy failed: {exc}",
+                {**debug_data, "exception": str(exc)},
             )
-            self.result.status = ExecutionStatus.EXECUTION_FAILURE
-            self.connection = None
+        except ValueError as exc:
+            return self._fail_connect(
+                EventCategory.RUNTIME,
+                "Cannot connect through the BMC: the connection details are not valid.",
+                f"Invalid Redfish SSH-proxy connection parameters: {exc}",
+                {**debug_data, "exception": str(exc)},
+            )
         except Exception as exc:
-            self._log_event(
-                category=EventCategory.RUNTIME,
-                description=f"Redfish SSH-proxy connection failed: {exc}",
-                data=get_exception_traceback(exc),
-                priority=EventPriority.CRITICAL,
-                console_log=True,
+            return self._fail_connect(
+                EventCategory.RUNTIME,
+                "Connecting through the BMC failed unexpectedly.",
+                f"Unexpected error during SSH connection: {exc}",
+                {**debug_data, "exception": str(exc), **get_exception_traceback(exc)},
             )
-            self.result.status = ExecutionStatus.EXECUTION_FAILURE
-            self.connection = None
         return self.result
 
     def _connect_multi(self, params: RedfishSshProxyConnectionParams) -> TaskResult:
@@ -185,19 +199,21 @@ class RedfishSshProxyConnectionManager(
                 self._close_proxy(conn)
                 continue
             self.target_connections[key] = conn
+
+        lines = "\n".join(f"[{k}] {v}" for k, v in failed_targets.items())
         if not self.target_connections:
-            self.result.status = ExecutionStatus.EXECUTION_FAILURE
-            lines = "\n".join(f"[{k}] {v}" for k, v in failed_targets.items())
-            self.result.message = f"SSH-proxy Redfish connection failed for every target\n{lines}"
-            self.result.events.clear()
+            summary = "Could not connect to any of the BMC targets."
+            self._fail_connect(
+                EventCategory.RUNTIME,
+                summary,
+                f"SSH-proxy Redfish connection failed for every target ({len(failed_targets)} tried)\n{lines}",
+                {"failed_targets": dict(failed_targets)},
+            )
             return self.result
+
         if failed_targets:
-            lines = "\n".join(f"[{k}] {v}" for k, v in failed_targets.items())
             self.result.status = ExecutionStatus.WARNING
             self.result.message = f"Some SSH-proxy Redfish targets failed to connect\n{lines}"
-            # Clear events so TaskResult.finalize() does not re-append them as
-            # "(N warnings: ...)" on the same line — the info is already in result.message.
-            self.result.events.clear()
         self.connection = MultiTargetRedfishConnection(  # type: ignore[assignment]
             self.target_connections,
             max_workers=params.max_workers,
@@ -219,10 +235,17 @@ class RedfishSshProxyConnectionManager(
         key = _proxy_target_key(target)
         try:
             return key, self._open_proxy(target), None
-        except Exception as exc:  # noqa: BLE001
-            description = f"SSH-proxy Redfish connection failed for target {key!r}: {exc}"
+        except Exception as exc:
+            if isinstance(exc, (SSHConnectionError, RedfishConnectionError)):
+                description = f"SSH-proxy Redfish connection failed for target {key!r}: {exc}"
+            else:
+                description = f"Unknown SSH-proxy Redfish error for target {key!r}: {exc}"
             self._log_event(
-                category=EventCategory.RUNTIME,
+                category=(
+                    EventCategory.SSH
+                    if isinstance(exc, SSHConnectionError)
+                    else EventCategory.RUNTIME
+                ),
                 description=description,
                 priority=EventPriority.WARNING,
                 console_log=True,

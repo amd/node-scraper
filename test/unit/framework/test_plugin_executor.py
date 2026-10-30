@@ -23,22 +23,35 @@
 # SOFTWARE.
 #
 ###############################################################################
+import abc
+import json
 import logging
 from typing import Optional
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 from framework.common.shared_utils import DummyDataModel, MockConnectionManager
 from pydantic import BaseModel
 
-from nodescraper.enums import ExecutionStatus
+from nodescraper.base.oobsshdataplugin import OOBSSHDataPlugin
+from nodescraper.connection.inband.inbandmanager import InBandConnectionManager
+from nodescraper.connection.oob_ssh import OobSshConnectionManager
+from nodescraper.enums import ExecutionStatus, OSFamily, SystemLocation
 from nodescraper.enums.eventpriority import EventPriority
 from nodescraper.enums.systeminteraction import SystemInteractionLevel
-from nodescraper.interfaces import PluginInterface
-from nodescraper.models import PluginConfig, PluginResult
+from nodescraper.interfaces import (
+    DataPlugin,
+    PluginInterface,
+    PluginResultCollator,
+    TaskResultHook,
+)
+from nodescraper.interfaces.datacollectortask import DataCollector
+from nodescraper.models import PluginConfig, PluginResult, SystemInfo, TaskResult
 from nodescraper.models.postactioncondition import PostActionCondition
 from nodescraper.models.postactionpluginconfig import PostActionPluginConfig
 from nodescraper.pluginexecutor import PluginExecutor
 from nodescraper.pluginregistry import PluginRegistry
+from nodescraper.utils import resolve_log_dir_name
 
 
 class DummyArgs(BaseModel):
@@ -54,7 +67,6 @@ class TestPluginA(PluginInterface[MockConnectionManager, None]):
     ANALYZER_ARGS = DummyArgs(foo="initial")
     collection = False
     analysis = False
-    preserve_connection = False
     data = DummyDataModel(some_version="1")
     max_event_priority_level = EventPriority.INFO
     system_interaction_level = SystemInteractionLevel.PASSIVE
@@ -274,7 +286,6 @@ def test_apply_global_args_to_plugin():
     global_args = {
         "collection": True,
         "analysis": True,
-        "preserve_connection": True,
         "data": {"some_version": "1"},
         "max_event_priority_level": 4,
         "system_interaction_level": "INTERACTIVE",
@@ -287,7 +298,6 @@ def test_apply_global_args_to_plugin():
 
     assert run_payload["collection"] is True
     assert run_payload["analysis"] is True
-    assert run_payload["preserve_connection"] is True
     assert run_payload["data"]["some_version"] == "1"
     assert run_payload["max_event_priority_level"] == 4
     assert run_payload["system_interaction_level"] == "INTERACTIVE"
@@ -601,7 +611,7 @@ def test_closing_connections_logged_after_post_actions(plugin_registry, caplog):
 
 def test_discover_os_info_detects_linux(system_info):
     """discover_os_info() should detect Linux OS when uname succeeds."""
-    from unittest.mock import MagicMock, Mock
+    from unittest.mock import MagicMock
 
     from nodescraper.connection.inband import CommandArtifact
     from nodescraper.connection.inband.inbandmanager import InBandConnectionManager
@@ -654,7 +664,7 @@ def test_discover_os_info_detects_linux(system_info):
 def test_discover_os_info_detects_arista_eos(system_info):
     """discover_os_info() should detect Arista EOS when uname fails but Arista command succeeds."""
     import json
-    from unittest.mock import MagicMock, Mock
+    from unittest.mock import MagicMock
 
     from nodescraper.connection.inband import CommandArtifact
     from nodescraper.connection.inband.inbandmanager import InBandConnectionManager
@@ -717,7 +727,7 @@ def test_discover_os_info_detects_arista_eos(system_info):
 
 def test_discover_os_info_skips_when_connection_fails(system_info, caplog):
     """discover_os_info() should skip detection and log when InBandConnectionManager fails to connect."""
-    from unittest.mock import MagicMock, Mock
+    from unittest.mock import MagicMock
 
     from nodescraper.connection.inband.inbandmanager import InBandConnectionManager
     from nodescraper.enums import OSFamily
@@ -757,3 +767,667 @@ def test_discover_os_info_skips_when_connection_fails(system_info, caplog):
     # Verify OS detection was skipped
     assert system_info.os_family == OSFamily.LINUX  # Default from fixture
     assert any("Skipping OS discovery" in record.message for record in caplog.records)
+
+
+class RaisingPlugin(PluginInterface[MockConnectionManager, None]):
+    __test__ = False  # Tells pytest to ignore this class
+
+    CONNECTION_TYPE = MockConnectionManager
+
+    def run(self, **kwargs):
+        raise RuntimeError("plugin boom")
+
+
+class FailingInitConnectionManager(MockConnectionManager):
+    def __init__(self, *args, **kwargs):
+        raise ValueError("bad connection args")
+
+
+class FailingInitPlugin(PluginInterface[FailingInitConnectionManager, None]):
+    __test__ = False  # Tells pytest to ignore this class
+
+    CONNECTION_TYPE = FailingInitConnectionManager
+
+    def run(self, **kwargs):
+        return PluginResult(source="FailingInitPlugin", status=ExecutionStatus.OK)
+
+
+class RaisingCollator(PluginResultCollator):
+    def collate_results(self, plugin_results, connection_results, **kwargs):
+        raise RuntimeError("collator boom")
+
+
+def _isolated_registry(plugins: dict, managers: dict) -> PluginRegistry:
+    registry = PluginRegistry(
+        load_internal_plugins=False,
+        load_entry_point_plugins=False,
+        load_entry_point_connection_managers=False,
+    )
+    registry.plugins = plugins
+    registry.connection_managers = managers
+    return registry
+
+
+def _read_events(path) -> list[dict]:
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def test_connection_manager_instantiation_failure_is_logged_and_queue_continues(tmp_path, caplog):
+    """A connection manager that cannot be built is logged and skipped, not fatal for the queue."""
+    registry = _isolated_registry(
+        {"FailingInitPlugin": FailingInitPlugin, "TestPluginB": TestPluginB},
+        {
+            "FailingInitConnectionManager": FailingInitConnectionManager,
+            "MockConnectionManager": MockConnectionManager,
+        },
+    )
+    executor = PluginExecutor(
+        plugin_configs=[PluginConfig(plugins={"FailingInitPlugin": {}, "TestPluginB": {}})],
+        plugin_registry=registry,
+        system_info=SystemInfo(os_family=OSFamily.LINUX),
+        log_path=str(tmp_path),
+    )
+
+    with caplog.at_level(logging.ERROR):
+        results = executor.run_queue()
+
+    assert [r.source for r in results] == ["testB"]
+    assert any(
+        "FailingInitConnectionManager" in r.message and "bad connection args" in r.message
+        for r in caplog.records
+    )
+    assert not (
+        tmp_path / "connection" / resolve_log_dir_name("FailingInitConnectionManager")
+    ).exists()
+
+
+def test_connections_closed_when_cleanup_step_raises(tmp_path):
+    """Connections are closed even if a collator raises."""
+    registry = _isolated_registry(
+        {"RaisingPlugin": RaisingPlugin},
+        {"MockConnectionManager": MockConnectionManager},
+    )
+    registry.result_collators = {"RaisingCollator": RaisingCollator}
+    executor = PluginExecutor(
+        plugin_configs=[
+            PluginConfig(plugins={"RaisingPlugin": {}}, result_collators={"RaisingCollator": {}})
+        ],
+        plugin_registry=registry,
+        system_info=SystemInfo(os_family=OSFamily.LINUX),
+        log_path=str(tmp_path),
+    )
+
+    with patch.object(MockConnectionManager, "disconnect") as disconnect:
+        with pytest.raises(RuntimeError, match="collator boom"):
+            executor.run_queue()
+
+    assert disconnect.call_count == 2
+
+
+def test_discover_os_info_result_saved_separately_from_connection_results(tmp_path):
+    """The OS discovery connection result goes to os_discovery/, not to connection/."""
+    executor = PluginExecutor(
+        plugin_configs=[PluginConfig(plugins={})],
+        plugin_registry=_isolated_registry({}, {}),
+        system_info=SystemInfo(location=SystemLocation.REMOTE),
+        log_path=str(tmp_path),
+    )
+
+    executor.discover_os_info()
+
+    events = _read_events(tmp_path / "os_discovery" / "events.json")
+    assert events[0]["priority"] == "CRITICAL"
+    assert events[0]["data"]["parent"] == "os_discovery"
+    assert not (tmp_path / "connection").exists()
+
+
+# ---------------------------------------------------------------------------
+# Connection cleanup when exceptions are raised at different points of a run
+# ---------------------------------------------------------------------------
+
+
+class TrackedManager(MockConnectionManager):
+    """Starts disconnected, connects on demand and records every disconnect."""
+
+    calls: list = []
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.connection = None
+        self.result = self._init_result()
+
+    def connect(self):
+        TrackedManager.calls.append(("connect", type(self).__name__))
+        self.connection = MagicMock()
+        self.result.status = ExecutionStatus.OK
+        return self.result
+
+    def disconnect(self):
+        TrackedManager.calls.append(("disconnect", type(self).__name__))
+        self.connection = None
+
+
+class ManagerA(TrackedManager):
+    pass
+
+
+class ManagerB(TrackedManager):
+    pass
+
+
+class AbstractManager(TrackedManager):
+    @abc.abstractmethod
+    def extra(self): ...
+
+
+def _make_plugin(manager_cls, name, outcome="ok"):
+    """Plugin that connects, then returns OK / ERROR or raises."""
+
+    class _Plugin(PluginInterface[manager_cls, None]):
+        CONNECTION_TYPE = manager_cls
+
+        def run(self, **kwargs):
+            TrackedManager.calls.append(("run", name))
+            self.connection_manager.connect()
+            if outcome == "raise":
+                raise RuntimeError(f"{name} boom")
+            status = ExecutionStatus.ERROR if outcome == "error" else ExecutionStatus.OK
+            return PluginResult(source=name, status=status)
+
+    _Plugin.__name__ = name
+    return _Plugin
+
+
+class InitFailsPlugin(PluginInterface[TrackedManager, None]):
+    __test__ = False
+
+    CONNECTION_TYPE = TrackedManager
+
+    def __init__(self, *args, **kwargs):
+        raise RuntimeError("init boom")
+
+    def run(self, **kwargs):
+        return PluginResult(source="init_fails", status=ExecutionStatus.OK)
+
+
+@pytest.fixture
+def tracked():
+    TrackedManager.calls = []
+    yield TrackedManager.calls
+    TrackedManager.calls = []
+
+
+def _executor(tmp_path, plugins, managers, config_plugins, **kwargs):
+    config_kwargs = kwargs.pop("config_kwargs", {})
+    registry = _isolated_registry(plugins, managers)
+    registry.result_collators = kwargs.pop("collators", {})
+    return PluginExecutor(
+        plugin_configs=[PluginConfig(plugins=config_plugins, **config_kwargs)],
+        plugin_registry=registry,
+        system_info=kwargs.pop("system_info", SystemInfo(os_family=OSFamily.LINUX)),
+        log_path=str(tmp_path),
+        **kwargs,
+    )
+
+
+def _conn_dir(tmp_path, manager_cls):
+    return tmp_path / "connection" / resolve_log_dir_name(manager_cls.__name__)
+
+
+def _disconnects(calls, name="TrackedManager"):
+    return [c for c in calls if c == ("disconnect", name)]
+
+
+def _failing_and_ok_plugins():
+    return (
+        {"Failing": InitFailsPlugin, "Ok": _make_plugin(TrackedManager, "Ok")},
+        {"TrackedManager": TrackedManager},
+        {"Failing": {}, "Ok": {}},
+    )
+
+
+@pytest.mark.parametrize("spot", ["plugin_init", "global_args", "plugin_run", "result_hook"])
+def test_exception_at_each_plugin_spot_closes_connection(tmp_path, tracked, spot):
+    """Whichever step of running a plugin raises, its connection is closed right away
+    and the next plugin still runs."""
+    plugins, managers, config = _failing_and_ok_plugins()
+    if spot != "plugin_init":
+        plugins["Failing"] = _make_plugin(
+            TrackedManager, "Failing", "raise" if spot == "plugin_run" else "ok"
+        )
+
+    def hook(result):
+        if result.source == "Failing":
+            raise RuntimeError("hook boom")
+
+    executor = _executor(
+        tmp_path,
+        plugins,
+        managers,
+        config,
+        plugin_run_result_hooks=[hook] if spot == "result_hook" else None,
+    )
+
+    if spot == "global_args":
+        real = PluginExecutor.apply_global_args_to_plugin
+
+        def flaky(self, plugin_inst, plugin_class, global_args):
+            if plugin_class.__name__ == "Failing":
+                raise TypeError("bad global args")
+            return real(self, plugin_inst, plugin_class, global_args)
+
+        with patch.object(PluginExecutor, "apply_global_args_to_plugin", flaky):
+            results = executor.run_queue()
+    else:
+        results = executor.run_queue()
+
+    assert "Ok" in [r.source for r in results]
+    # closed straight after the failure (before the next plugin ran) and again during cleanup
+    assert len(_disconnects(tracked)) == 2
+    assert tracked.index(("disconnect", "TrackedManager")) < tracked.index(("run", "Ok"))
+
+
+def test_invalid_global_args_skips_plugin_without_connection_failure(tmp_path, tracked):
+    """A ValueError from global args skips the plugin: no connection failure, closed at cleanup."""
+    executor = _executor(
+        tmp_path,
+        {"Ok": _make_plugin(TrackedManager, "Ok")},
+        {"TrackedManager": TrackedManager},
+        {"Ok": {}},
+    )
+
+    with patch.object(
+        PluginExecutor, "apply_global_args_to_plugin", side_effect=ValueError("bad value")
+    ):
+        results = executor.run_queue()
+
+    assert results == []
+    assert _disconnects(tracked) == [("disconnect", "TrackedManager")]
+    assert not (tmp_path / "connection").exists()
+
+
+def test_unresolvable_connection_manager_is_logged_and_queue_continues(tmp_path, tracked, caplog):
+    """An abstract / unregistered CONNECTION_TYPE is logged as an error and the plugin skipped."""
+    abstract_plugin = _make_plugin(AbstractManager, "Abstract")
+    executor = _executor(
+        tmp_path,
+        {"Abstract": abstract_plugin, "Ok": _make_plugin(TrackedManager, "Ok")},
+        {"TrackedManager": TrackedManager},
+        {"Abstract": {}, "Ok": {}},
+    )
+
+    with caplog.at_level(logging.ERROR):
+        results = executor.run_queue()
+
+    assert [r.source for r in results] == ["Ok"]
+    assert any("AbstractManager" in r.message and "Abstract" in r.message for r in caplog.records)
+    assert not _conn_dir(tmp_path, AbstractManager).exists()
+
+
+def test_oob_plugin_without_redfish_config_is_logged_and_queue_continues(tmp_path, tracked, caplog):
+    """An OOB plugin without a RedfishConnectionManager config logs an error and is skipped."""
+
+    class NoConfigOobPlugin(OOBSSHDataPlugin):
+        DATA_MODEL = DummyDataModel
+
+    executor = _executor(
+        tmp_path,
+        {"NoConfigOobPlugin": NoConfigOobPlugin, "Ok": _make_plugin(TrackedManager, "Ok")},
+        {"TrackedManager": TrackedManager},
+        {"NoConfigOobPlugin": {}, "Ok": {}},
+    )
+
+    with caplog.at_level(logging.ERROR):
+        results = executor.run_queue()
+
+    assert [r.source for r in results] == ["Ok"]
+    assert any("RedfishConnectionManager" in r.message for r in caplog.records)
+    assert not _conn_dir(tmp_path, OobSshConnectionManager).exists()
+
+
+def test_post_action_plugin_exception_closes_connection(tmp_path, tracked):
+    """A post-action plugin raising is handled like a primary plugin failure."""
+    executor = _executor(
+        tmp_path,
+        {
+            "Primary": _make_plugin(TrackedManager, "Primary", "error"),
+            "PostAction": _make_plugin(TrackedManager, "PostAction", "raise"),
+        },
+        {"TrackedManager": TrackedManager},
+        {"Primary": {}},
+        config_kwargs={
+            "post_action_plugins": [
+                PostActionPluginConfig(
+                    plugin="PostAction", conditions=[PostActionCondition(status="ERROR")]
+                )
+            ]
+        },
+    )
+
+    results = executor.run_queue()
+
+    assert [r.source for r in results] == ["Primary"]
+    assert len(_disconnects(tracked)) == 2
+
+
+def test_queue_level_exception_still_saves_and_closes_connections(tmp_path, tracked):
+    """An exception escaping _run_single_plugin aborts the queue but connections are cleaned up."""
+    plugins = {
+        "First": _make_plugin(TrackedManager, "First"),
+        "Second": _make_plugin(TrackedManager, "Second"),
+    }
+    executor = _executor(
+        tmp_path, plugins, {"TrackedManager": TrackedManager}, {"First": {}, "Second": {}}
+    )
+    real = PluginExecutor._run_single_plugin
+
+    def flaky(self, plugin_name, *args, **kwargs):
+        if plugin_name == "Second":
+            raise RuntimeError("queue boom")
+        return real(self, plugin_name, *args, **kwargs)
+
+    with patch.object(PluginExecutor, "_run_single_plugin", flaky):
+        results = executor.run_queue()
+
+    assert [r.source for r in results] == ["First"]
+    assert ("run", "Second") not in tracked
+    assert _disconnects(tracked) == [("disconnect", "TrackedManager")]
+    with open(_conn_dir(tmp_path, TrackedManager) / "result.json", encoding="utf-8") as f:
+        assert json.load(f)["status"] == "OK"
+
+
+def test_post_action_evaluation_exception_still_closes_connections(tmp_path, tracked):
+    """If post-action handling itself raises, connections are still saved and closed."""
+    executor = _executor(
+        tmp_path,
+        {"First": _make_plugin(TrackedManager, "First")},
+        {"TrackedManager": TrackedManager},
+        {"First": {}},
+    )
+
+    with patch.object(PluginExecutor, "_run_post_actions", side_effect=RuntimeError("post boom")):
+        with pytest.raises(RuntimeError, match="post boom"):
+            executor.run_queue()
+
+    assert _disconnects(tracked) == [("disconnect", "TrackedManager")]
+    assert (_conn_dir(tmp_path, TrackedManager) / "result.json").is_file()
+
+
+def test_cleanup_failure_for_one_connection_does_not_block_the_others(tmp_path, tracked):
+    """A manager whose disconnect raises must not stop the other managers being closed."""
+    executor = _executor(
+        tmp_path,
+        {
+            "PluginA": _make_plugin(ManagerA, "PluginA"),
+            "PluginB": _make_plugin(ManagerB, "PluginB"),
+        },
+        {"ManagerA": ManagerA, "ManagerB": ManagerB},
+        {"PluginA": {}, "PluginB": {}},
+    )
+
+    with patch.object(ManagerA, "disconnect", side_effect=OSError("cleanup boom")):
+        results = executor.run_queue()
+
+    assert {r.source for r in results} == {"PluginA", "PluginB"}
+    assert _disconnects(tracked, "ManagerB") == [("disconnect", "ManagerB")]
+    with open(_conn_dir(tmp_path, ManagerB) / "result.json", encoding="utf-8") as f:
+        assert json.load(f)["status"] == "OK"
+
+
+def test_failing_connection_hook_does_not_stop_cleanup(tmp_path, tracked):
+    """A hook that raises while saving a recorded failure must not abort cleanup."""
+
+    class RaisingOnFailureHook(TaskResultHook):
+        def process_result(self, task_result, data=None, **kwargs):
+            if task_result.status == ExecutionStatus.EXECUTION_FAILURE:
+                raise OSError("disk full")
+
+    executor = _executor(
+        tmp_path,
+        {
+            "Failing": _make_plugin(ManagerA, "Failing", "raise"),
+            "Ok": _make_plugin(ManagerB, "Ok"),
+        },
+        {"ManagerA": ManagerA, "ManagerB": ManagerB},
+        {"Failing": {}, "Ok": {}},
+    )
+    executor.connection_result_hooks.append(RaisingOnFailureHook())
+
+    results = executor.run_queue()
+
+    assert [r.source for r in results] == ["Ok"]
+    assert len(_disconnects(tracked, "ManagerA")) == 2
+    assert len(_disconnects(tracked, "ManagerB")) == 1
+
+
+def test_failure_close_error_does_not_mask_plugin_failure(tmp_path, tracked):
+    """If disconnect raises while closing after a plugin failure, the queue carries on."""
+    executor = _executor(
+        tmp_path,
+        {"Failing": _make_plugin(ManagerA, "Failing", "raise"), "Ok": _make_plugin(ManagerB, "Ok")},
+        {"ManagerA": ManagerA, "ManagerB": ManagerB},
+        {"Failing": {}, "Ok": {}},
+    )
+
+    with patch.object(ManagerA, "disconnect", side_effect=OSError("close boom")):
+        results = executor.run_queue()
+
+    assert [r.source for r in results] == ["Ok"]
+
+
+# ---------------------------------------------------------------------------
+# OS discovery
+# ---------------------------------------------------------------------------
+
+
+def _discovery_executor(tmp_path, **system_kwargs):
+    return PluginExecutor(
+        plugin_configs=[PluginConfig(plugins={})],
+        plugin_registry=_isolated_registry({}, {}),
+        system_info=SystemInfo(**system_kwargs),
+        log_path=str(tmp_path),
+    )
+
+
+def test_discover_os_info_success_saves_result_in_os_discovery_dir(tmp_path):
+    executor = _discovery_executor(tmp_path)
+
+    with (
+        patch("nodescraper.pluginexecutor.discover_and_write_os_family") as detect,
+        patch.object(InBandConnectionManager, "disconnect", autospec=True) as disconnect,
+    ):
+        executor.discover_os_info()
+
+    detect.assert_called_once()
+    disconnect.assert_called_once()
+    with open(tmp_path / "os_discovery" / "result.json", encoding="utf-8") as f:
+        saved = json.load(f)
+    assert saved["status"] == "OK"
+    assert saved["parent"] == "os_discovery"
+    assert not (tmp_path / "os_discovery" / "events.json").exists()
+    assert not (tmp_path / "connection").exists()
+
+
+@pytest.mark.parametrize(
+    "spot, expected_priority",
+    [
+        ("connect_raises", "CRITICAL"),
+        ("no_credentials", "CRITICAL"),
+        # the connection itself succeeded; the detection error is only logged
+        ("detection_raises", None),
+    ],
+)
+def test_discover_os_info_failures_are_saved_in_os_discovery_dir_and_closed(
+    tmp_path, spot, expected_priority
+):
+    system_kwargs = {"location": SystemLocation.REMOTE} if spot == "no_credentials" else {}
+    executor = _discovery_executor(tmp_path, **system_kwargs)
+    original_family = executor.system_info.os_family
+
+    patches = [patch.object(InBandConnectionManager, "disconnect", autospec=True)]
+    if spot == "connect_raises":
+        patches.append(
+            patch(
+                "nodescraper.connection.inband.inbandmanager.LocalShell",
+                side_effect=OSError("no shell"),
+            )
+        )
+    elif spot == "detection_raises":
+        patches.append(
+            patch(
+                "nodescraper.pluginexecutor.discover_and_write_os_family",
+                side_effect=RuntimeError("detect boom"),
+            )
+        )
+    with patches[0] as disconnect:
+        for extra in patches[1:]:
+            extra.start()
+        try:
+            executor.discover_os_info()
+        finally:
+            for extra in patches[1:]:
+                extra.stop()
+
+    disconnect.assert_called_once()
+    assert executor.system_info.os_family == original_family
+    if expected_priority is None:
+        assert not (tmp_path / "os_discovery" / "events.json").exists()
+    else:
+        events = _read_events(tmp_path / "os_discovery" / "events.json")
+        assert events[-1]["priority"] == expected_priority
+        assert events[-1]["data"]["parent"] == "os_discovery"
+    assert not (tmp_path / "connection").exists()
+
+
+def test_discover_os_info_disconnect_error_does_not_propagate(tmp_path):
+    executor = _discovery_executor(tmp_path)
+
+    with (
+        patch("nodescraper.pluginexecutor.discover_and_write_os_family"),
+        patch.object(InBandConnectionManager, "disconnect", side_effect=OSError("close boom")),
+    ):
+        executor.discover_os_info()
+
+
+def test_discover_os_info_constructor_failure_does_not_raise(tmp_path):
+    executor = _discovery_executor(tmp_path)
+
+    with patch(
+        "nodescraper.pluginexecutor.InBandConnectionManager",
+        side_effect=ValueError("bad connection args"),
+    ):
+        executor.discover_os_info()
+
+    assert not (tmp_path / "connection").exists()
+
+
+def test_discovery_and_plugin_results_go_to_separate_folders(tmp_path, tracked):
+    """OS discovery output and plugin connection output never share a folder."""
+    executor = _executor(
+        tmp_path,
+        {"Failing": _make_plugin(TrackedManager, "Failing", "raise")},
+        {"TrackedManager": TrackedManager},
+        {"Failing": {}},
+        system_info=SystemInfo(os_family=OSFamily.UNKNOWN),
+    )
+
+    with patch("nodescraper.pluginexecutor.discover_and_write_os_family"):
+        executor.run_queue()
+
+    discovery = json.loads((tmp_path / "os_discovery" / "result.json").read_text())
+    assert discovery["task"] == "InBandConnectionManager"
+    assert discovery["status"] == "OK"
+    assert not (tmp_path / "os_discovery" / "events.json").exists()
+
+    assert not (tmp_path / "connection" / "os_discovery").exists()
+    assert not (tmp_path / "connection" / resolve_log_dir_name("InBandConnectionManager")).exists()
+
+
+def test_run_queue_continues_when_discovery_connection_cannot_be_built(tmp_path, tracked):
+    executor = _executor(
+        tmp_path,
+        {"Ok": _make_plugin(TrackedManager, "Ok")},
+        {"TrackedManager": TrackedManager},
+        {"Ok": {}},
+        system_info=SystemInfo(os_family=OSFamily.UNKNOWN),
+    )
+
+    with patch(
+        "nodescraper.pluginexecutor.InBandConnectionManager", side_effect=ValueError("bad args")
+    ):
+        results = executor.run_queue()
+
+    assert [r.source for r in results] == ["Ok"]
+
+
+class _OkCollector(DataCollector):
+    DATA_MODEL = DummyDataModel
+
+    def collect_data(self, args=None):
+        return TaskResult(status=ExecutionStatus.OK), DummyDataModel()
+
+
+def _make_data_plugin(name):
+    class _DataPlugin(DataPlugin):
+        DATA_MODEL = DummyDataModel
+        CONNECTION_TYPE = TrackedManager
+        COLLECTOR = _OkCollector
+
+    _DataPlugin.__name__ = name
+    return _DataPlugin
+
+
+def test_data_plugins_share_one_connection_by_default(tmp_path, tracked):
+    """No argument is needed for plugins to share the executor's connection."""
+    executor = _executor(
+        tmp_path,
+        {"First": _make_data_plugin("First"), "Second": _make_data_plugin("Second")},
+        {"TrackedManager": TrackedManager},
+        {"First": {"analysis": False}, "Second": {"analysis": False}},
+    )
+
+    results = executor.run_queue()
+
+    assert [r.status for r in results] == [ExecutionStatus.OK, ExecutionStatus.OK]
+    assert tracked == [("connect", "TrackedManager"), ("disconnect", "TrackedManager")]
+
+
+def test_plugin_config_preserve_connection_false_is_honored(tmp_path, tracked):
+    """A plugin configured with preserve_connection=False closes the shared connection and the
+    next plugin reconnects; the executor no longer overrides the value."""
+    executor = _executor(
+        tmp_path,
+        {"First": _make_data_plugin("First"), "Second": _make_data_plugin("Second")},
+        {"TrackedManager": TrackedManager},
+        {
+            "First": {"analysis": False, "preserve_connection": False},
+            "Second": {"analysis": False},
+        },
+    )
+
+    results = executor.run_queue()
+
+    assert [r.status for r in results] == [ExecutionStatus.OK, ExecutionStatus.OK]
+    assert tracked == [
+        ("connect", "TrackedManager"),
+        ("disconnect", "TrackedManager"),  # First closed it
+        ("connect", "TrackedManager"),  # Second reconnected
+        ("disconnect", "TrackedManager"),  # executor cleanup
+    ]
+
+
+def test_global_args_preserve_connection_false_is_honored(tmp_path, tracked):
+    executor = _executor(
+        tmp_path,
+        {"First": _make_data_plugin("First"), "Second": _make_data_plugin("Second")},
+        {"TrackedManager": TrackedManager},
+        {"First": {"analysis": False}, "Second": {"analysis": False}},
+        config_kwargs={"global_args": {"preserve_connection": False}},
+    )
+
+    executor.run_queue()
+
+    # each plugin closes it after collecting, then the executor's cleanup closes it once more
+    assert len(_disconnects(tracked)) == 3
+    assert len([c for c in tracked if c[0] == "connect"]) == 2
