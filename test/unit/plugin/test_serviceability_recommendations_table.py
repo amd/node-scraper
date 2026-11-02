@@ -23,6 +23,8 @@
 # SOFTWARE.
 #
 ###############################################################################
+import logging
+
 from serviceability_dummy_data import (
     DUMMY_AFID_A,
     DUMMY_AFID_B,
@@ -145,6 +147,120 @@ def test_render_serviceability_recommendation_tables_prints_only_top_action():
     assert f"{DUMMY_AFID_A}: Contact Support" in output
     assert "Additional Hub service actions" not in output
     assert f"{DUMMY_AFID_B}: Update FW" not in output
+
+
+def test_table_prints_afse_triage_top_service_action():
+    block = ServiceabilityBlock(
+        hub_analyze_response={
+            "status": "ok",
+            "triage": {
+                "top": [
+                    {
+                        "afid": DUMMY_AFID_A,
+                        "location": DUMMY_UNIT_A,
+                        "service_action_num": DUMMY_SERVICE_ACTION_NUM,
+                        "priority": 20,
+                        "sa_severity": 2,
+                        "tier_label": "Secondary",
+                        "service_action": {
+                            "title": "Contact AMD",
+                            "severity": 2,
+                            "steps": [
+                                {"description": "Contact your AMD service provider."},
+                            ],
+                        },
+                    }
+                ],
+                "results": [
+                    {
+                        "afid": DUMMY_AFID_B,
+                        "location": DUMMY_UNIT_B,
+                        "service_action_num": 1,
+                    }
+                ],
+            },
+        },
+        hub_top_results=[
+            _row(
+                afid=DUMMY_AFID_B,
+                location=DUMMY_UNIT_B,
+                sort_priority=9000,
+                priority=1,
+                title="Update FW",
+            )
+        ],
+        hub_triage_results=[
+            _row(
+                afid=DUMMY_AFID_B,
+                location=DUMMY_UNIT_B,
+                sort_priority=9000,
+                priority=1,
+                title="Update FW",
+            )
+        ],
+    )
+
+    output = render_serviceability_recommendation_tables(block)
+
+    assert "Top Hub service action (rank 1)" in output
+    assert f"{DUMMY_AFID_A}: Contact AMD" in output
+    assert "Contact your AMD service provider." in output
+    assert f"{DUMMY_AFID_B}: Update FW" not in output
+
+
+def test_missing_afse_top_skips_table_and_logs_warning(caplog):
+    block = ServiceabilityBlock(
+        hub_analyze_response={
+            "status": "ok",
+            "triage": {
+                "top": [],
+                "results": [
+                    {
+                        "afid": DUMMY_AFID_B,
+                        "location": DUMMY_UNIT_B,
+                        "service_action_num": 1,
+                    }
+                ],
+            },
+        },
+        hub_top_results=[
+            _row(
+                afid=DUMMY_AFID_B,
+                location=DUMMY_UNIT_B,
+                sort_priority=9000,
+                priority=1,
+                title="Update FW",
+            )
+        ],
+        hub_triage_results=[
+            _row(
+                afid=DUMMY_AFID_B,
+                location=DUMMY_UNIT_B,
+                sort_priority=9000,
+                priority=1,
+                title="Update FW",
+            )
+        ],
+    )
+    plugin_results = [
+        PluginResult(
+            status=ExecutionStatus.OK,
+            source="Mi4xxServiceabilityPlugin",
+            message="ok",
+            result_data=DataPluginResult(
+                system_data=ServiceabilityDataModel(serviceability=block),
+            ),
+        )
+    ]
+
+    with caplog.at_level(logging.WARNING, logger="nodescraper"):
+        output = render_serviceability_recommendation_tables_for_plugin_results(plugin_results)
+
+    assert output == ""
+    assert "Rank" not in output
+    assert "Update FW" not in output
+    assert "AFSE did not return a top action item" in caplog.text
+    assert render_serviceability_recommendation_tables(block) == ""
 
 
 def test_build_top_service_actions_includes_tied_entries():

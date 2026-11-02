@@ -657,16 +657,24 @@ def test_mi3xx_analyzer_runs_python_hub(system_info):
 
 
 def test_mi3xx_analyzer_writes_serviceability_json(tmp_path, system_info):
+    hub_response = {
+        "schema_version": "1.0",
+        "status": "ok",
+        "triage": {"top": [], "results": [], "multi_afid_summary": []},
+    }
     data = ServiceabilityDataModel(
         afid_events=EXAMPLE_EVENTS[:1],
         serviceability=ServiceabilityBlock(
             afid_events=EXAMPLE_EVENTS[:1],
             solution=[],
+            solution_reasoning="node-scraper summary",
+            hub_analyze_response=hub_response,
         ),
     )
     data.log_model(str(tmp_path))
     payload = json.loads((tmp_path / "serviceability.json").read_text(encoding="utf-8"))
-    assert payload["afid_events"][0]["afid"] == DUMMY_AFID_A
+    assert payload == hub_response
+    assert "afid_events" not in payload
 
 
 class _ValidatingHub:

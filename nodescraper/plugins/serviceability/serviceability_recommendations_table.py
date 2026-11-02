@@ -25,14 +25,16 @@
 ###############################################################################
 from __future__ import annotations
 
+import logging
 import sys
 from textwrap import wrap
 from typing import Any, Optional
 
+from nodescraper.constants import DEFAULT_LOGGER
 from nodescraper.models import PluginResult
 
 from .se_models import PrioritizedServiceAction, ServiceabilityBlock
-from .serviceability_api import split_recommendation_actions
+from .serviceability_api import afse_top_action_missing, split_recommendation_actions
 
 RECOMMENDATION_TABLE_HEADERS: tuple[str, ...] = (
     "Rank",
@@ -172,19 +174,36 @@ def _serviceability_block_from_plugin_result(
 
     if isinstance(serviceability, dict):
         serviceability = ServiceabilityBlock.model_validate(serviceability)
-    if not (serviceability.hub_triage_results or serviceability.hub_top_results):
+    if not (
+        serviceability.hub_triage_results
+        or serviceability.hub_top_results
+        or isinstance(serviceability.hub_analyze_response, dict)
+    ):
         return None
     return serviceability
 
 
 def render_serviceability_recommendation_tables_for_plugin_results(
     plugin_results: list[PluginResult],
+    logger: Optional[logging.Logger] = None,
 ) -> str:
-    """Render Hub recommendation tables for all plugins that produced serviceability output."""
+    """Render Hub recommendation tables for plugins that produced serviceability output.
+
+    Args:
+        plugin_results: Plugin results from the run.
+        logger: Logger for the missing-top warning. Defaults to the nodescraper logger.
+
+    Returns:
+        Joined top-action tables. Empty when AFSE returned no triage.top action.
+    """
+    log = logger or logging.getLogger(DEFAULT_LOGGER)
     sections: list[str] = []
     for plugin_result in plugin_results:
         block = _serviceability_block_from_plugin_result(plugin_result)
         if block is None:
+            continue
+        if afse_top_action_missing(block):
+            log.warning("AFSE did not return a top action item")
             continue
         rendered = render_serviceability_recommendation_tables(block)
         if rendered:
@@ -193,10 +212,13 @@ def render_serviceability_recommendation_tables_for_plugin_results(
 
 
 def render_serviceability_recommendation_tables(block: ServiceabilityBlock) -> str:
-    """Render the top Hub recommendation table.
+    """Render the AFSE triage.top service action table.
 
-    Lower-ranked actions are not printed; they remain in the serviceability block
-    saved with the plugin result.
+    Args:
+        block: Serviceability block populated by hub analysis.
+
+    Returns:
+        The top service action table. Lower-ranked triage.results rows are omitted.
     """
     primary, _ = split_recommendation_actions(block)
     return render_recommendations_section(
@@ -206,7 +228,17 @@ def render_serviceability_recommendation_tables(block: ServiceabilityBlock) -> s
 
 
 def emit_serviceability_recommendation_tables(block: ServiceabilityBlock) -> None:
-    """Print Hub recommendation tables to stdout."""
+    """Print the AFSE top service action table to stdout.
+
+    Args:
+        block: Serviceability block populated by hub analysis.
+
+    Returns:
+        None. Logs a warning and prints nothing when AFSE returned no top action.
+    """
+    if afse_top_action_missing(block):
+        logging.getLogger(DEFAULT_LOGGER).warning("AFSE did not return a top action item")
+        return
     output = render_serviceability_recommendation_tables(block)
     if not output:
         return
