@@ -112,6 +112,17 @@ class TestRedfishConnectionSelection(unittest.TestCase):
             ex.connection_library[RedfishSshProxyConnectionManager],
         )
 
+    def test_endpoint_plugins_split_bmc_and_amc_when_both_configured(self):
+        ex = _executor(BOTH_CONFIG)
+        self.assertIs(
+            _resolve(ex, "RedfishEndpointPlugin"),
+            ex.connection_library[RedfishConnectionManager],
+        )
+        self.assertIs(
+            _resolve(ex, "AmcRedfishEndpointPlugin"),
+            ex.connection_library[RedfishSshProxyConnectionManager],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

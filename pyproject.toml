@@ -54,6 +54,7 @@ node-scraper = "nodescraper.cli:cli_entry"
 
 [project.entry-points."nodescraper.plugins"]
 AmcRedfishDiagPlugin = "nodescraper.plugins.ooband.amc_redfish_diag.amc_diag_plugin:AmcRedfishDiagPlugin"
+AmcRedfishEndpointPlugin = "nodescraper.plugins.ooband.redfish_endpoint.endpoint_plugin:AmcRedfishEndpointPlugin"
 AmcRedfishInventoryPlugin = "nodescraper.plugins.ooband.redfish_inventory.inventory_plugin:AmcRedfishInventoryPlugin"
 AmdSmiFlavorPlugin = "nodescraper.plugins.inband.amdsmi.amdsmi_flavor_plugin:AmdSmiFlavorPlugin"
 AmdSmiPlugin = "nodescraper.plugins.inband.amdsmi.amdsmi_plugin:AmdSmiPlugin"
