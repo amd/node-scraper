@@ -85,7 +85,7 @@ class RemoteShell(InBandConnection):
             None.
         """
         transport = self.client.get_transport()
-        if transport is not None and transport.channel_timeout is None:
+        if transport is not None and getattr(transport, "channel_timeout", None) is None:
             transport.channel_timeout = CHANNEL_OPEN_TIMEOUT
 
     def connect_ssh(self):
