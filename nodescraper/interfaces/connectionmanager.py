@@ -67,7 +67,24 @@ def connect_decorator(func: Callable[..., TaskResult]) -> Callable[..., TaskResu
                 "Exception connecting with %s", connection_manager.__class__.__name__
             )
             connection_manager.result.status = ExecutionStatus.EXECUTION_FAILURE
+            connection_manager.result.message = f"Connection failed: {str(exception)}"
             result = connection_manager.result
+
+        connection_manager.result = result
+
+        if result.status == ExecutionStatus.UNSET and connection_manager.connection is None:
+            # Force a fail if conncetion manager failed to give us a connection
+            result.status = ExecutionStatus.EXECUTION_FAILURE
+
+        if result.status >= ExecutionStatus.ERROR and not result.events:
+            result.message = result.message or "Connection could not be established"
+            # Push an event if the connection manager didn't
+            connection_manager._log_event(
+                category=EventCategory.RUNTIME,
+                description=result.message,
+                priority=EventPriority.CRITICAL,
+                console_log=True,
+            )
 
         result.finalize()
 
@@ -163,7 +180,51 @@ class ConnectionManager(Task, Generic[TConnection, TConnectArg]):
     def connect(self) -> TaskResult:
         """initialize connection"""
 
-    def disconnect(self):
-        """disconnect connection (Optional)"""
+    def _fail_connect(
+        self,
+        category: EventCategory,
+        message: str,
+        event_description: str | None = None,
+        event_data: Optional[dict[Any, Any]] = None,
+    ) -> TaskResult:
+        """Record a failed connection attempt: one CRITICAL event, nullifying the connection, and marking the result as failure.
+
+        Call this for every expected failure inside connect() and return its result. Exceptions
+        that connect() does not expect are not caught there; connect_decorator reports them.
+
+        Args:
+            category (EventCategory): Event category describing where the failure happened.
+            message (str): Short, plain-language summary for the end user (becomes the task result message),
+                e.g. "Could not connect to the BMC over SSH". No exception text or jargon.
+            event_description (str): Event description with a little more debugging detail than the message, e.g. the
+                host and the underlying error string. When None or empty the message is used.
+            event_data (Optional[dict], optional): Full debug information for the event, e.g. host, port, exception type,
+                exception string and traceback. Never include secrets. This data must be JSON-serializable.
+                Defaults to None.
+
+        Returns:
+            TaskResult: The failed connection result.
+        """
+        self._log_event(
+            category=category,
+            description=event_description or message,
+            data=event_data,
+            priority=EventPriority.CRITICAL,
+            console_log=True,
+        )
         self.connection = None
-        self.result.status = ExecutionStatus.UNSET
+        self.result.message = message
+        self.result.status = ExecutionStatus.EXECUTION_FAILURE
+        return self.result
+
+    def safe_disconnect(self) -> None:
+        """Disconnect without raising; a failure is logged."""
+        try:
+            self.disconnect()
+        except Exception:
+            self.logger.exception("Failed to disconnect %s", self.__class__.__name__)
+
+    def disconnect(self):
+        """disconnect connection (Optional). The result of the connection attempt is kept."""
+        self.logger.info(f"Connection {self.__class__.__name__} disconnected.")
+        self.connection = None

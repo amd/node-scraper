@@ -37,3 +37,4 @@ class DataPluginResult(BaseModel):
     system_data: Optional[DataModel] = None
     collection_result: Optional[TaskResult] = None
     analysis_result: Optional[TaskResult] = None
+    connection_result: Optional[TaskResult] = None

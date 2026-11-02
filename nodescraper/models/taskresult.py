@@ -162,13 +162,22 @@ class TaskResult(BaseModel):
         """Message string for display."""
         return self.message or ""
 
-    def log_result(self, log_path: str) -> None:
-        """Write result, artifacts, and events to log_path. Events are merged into a single events.json."""
+    def log_result(self, log_path: str, file_suffix: str = "") -> None:
+        """Write result, artifacts, and events to log_path.
+
+        Args:
+            log_path (str): Directory to write to.
+            file_suffix (str, optional): Appended to the ``result`` and ``events`` file names, e.g.
+                ``"(1)"`` writes ``result(1).json`` and ``events(1).json``. Events are merged into an
+                existing events file of the same name. Defaults to "".
+        """
         from nodescraper.connection.inband import BaseFileArtifact
 
         os.makedirs(log_path, exist_ok=True)
 
-        with open(os.path.join(log_path, "result.json"), "w", encoding="utf-8") as log_file:
+        with open(
+            os.path.join(log_path, f"result{file_suffix}.json"), "w", encoding="utf-8"
+        ) as log_file:
             log_file.write(self.model_dump_json(exclude={"artifacts", "events"}, indent=2))
 
         artifact_map: dict[str, list[dict[str, Any]]] = {}
@@ -208,7 +217,7 @@ class TaskResult(BaseModel):
                     html_file.write(render_command_artifacts_html(html_entries, title))
 
         if self.events:
-            event_log = os.path.join(log_path, "events.json")
+            event_log = os.path.join(log_path, f"events{file_suffix}.json")
             new_events = [e.model_dump(mode="json", exclude_none=True) for e in self.events]
             existing_events = []
             if os.path.isfile(event_log):

@@ -29,6 +29,7 @@ import importlib.metadata
 import inspect
 import json
 import os
+from collections.abc import Callable, Iterator, MutableMapping
 from pathlib import Path
 from typing import Any, Optional
 
@@ -43,6 +44,50 @@ class PluginConfigEntryPointError(RuntimeError):
     """Raised when a ``nodescraper.plugin_configs`` entry point cannot be loaded."""
 
 
+class LazyConfigMapping(MutableMapping):
+    """Config name to :class:`PluginConfig` mapping that builds each config on first access.
+
+    Listing names never runs a loader, so recipes that inspect every plugin are not
+    evaluated until their config is actually requested.
+    """
+
+    def __init__(self) -> None:
+        self._values: dict[str, PluginConfig] = {}
+        self._loaders: dict[str, Callable[[], PluginConfig]] = {}
+
+    def add_loader(self, name: str, loader: Callable[[], PluginConfig]) -> None:
+        self._values.pop(name, None)
+        self._loaders[name] = loader
+
+    def __getitem__(self, name: str) -> PluginConfig:
+        if name in self._values:
+            return self._values[name]
+        loader = self._loaders.get(name)
+        if loader is None:
+            raise KeyError(name)
+        self._values[name] = loader()
+        return self._values[name]
+
+    def __setitem__(self, name: str, value: PluginConfig) -> None:
+        self._loaders.pop(name, None)
+        self._values[name] = value
+
+    def __delitem__(self, name: str) -> None:
+        if name not in self._values and name not in self._loaders:
+            raise KeyError(name)
+        self._values.pop(name, None)
+        self._loaders.pop(name, None)
+
+    def __contains__(self, name: object) -> bool:
+        return name in self._values or name in self._loaders
+
+    def __iter__(self) -> Iterator[str]:
+        return iter([*self._values, *(n for n in self._loaders if n not in self._values)])
+
+    def __len__(self) -> int:
+        return len(self._values) + sum(1 for n in self._loaders if n not in self._values)
+
+
 class ConfigRegistry:
     """Class to load json plugin configs into models"""
 
@@ -52,6 +97,7 @@ class ConfigRegistry:
         self,
         config_path: Optional[str] = None,
         load_entry_point_configs: bool = True,
+        lazy_entry_point_configs: bool = False,
     ) -> None:
         """Initialize the config registry.
 
@@ -60,11 +106,28 @@ class ConfigRegistry:
                 Defaults to None.
             load_entry_point_configs (bool, optional): Whether to load ``nodescraper.plugin_configs``
                 entry points. Defaults to True.
+            lazy_entry_point_configs (bool, optional): If True, entry-point configs are loaded (and
+                their recipes evaluated) only when first accessed by name. Load errors then surface
+                at access time instead of construction. Defaults to False.
         """
-        self.configs: dict[str, PluginConfig] = {}
+        self.configs: MutableMapping[str, PluginConfig]
+        if lazy_entry_point_configs:
+            self.configs = LazyConfigMapping()
+        else:
+            self.configs = {}
         self.load_configs(config_path)
         if load_entry_point_configs:
-            self.configs.update(self.load_plugin_configs_from_entry_points())
+            if lazy_entry_point_configs:
+                assert isinstance(self.configs, LazyConfigMapping)
+                for entry_point in self._entry_points_for_group(PLUGIN_CONFIG_ENTRY_POINT_GROUP):
+                    name = getattr(entry_point, "name", None)
+                    if name:
+                        self.configs.add_loader(
+                            name,
+                            lambda ep=entry_point: self._load_entry_point_config(ep)[1],
+                        )
+            else:
+                self.configs.update(self.load_plugin_configs_from_entry_points())
 
     def load_configs(self, config_path: Optional[str] = None):
         """Load plugin config JSON files into pydantic models.
@@ -137,6 +200,50 @@ class ConfigRegistry:
         return None
 
     @classmethod
+    def _load_entry_point_config(cls, entry_point: Any) -> tuple[Optional[str], PluginConfig]:
+        """Load one ``nodescraper.plugin_configs`` entry point.
+
+        Returns:
+            tuple[Optional[str], PluginConfig]: Config key (entry-point name, else config name) and model.
+
+        Raises:
+            PluginConfigEntryPointError: If the entry point target is missing, invalid, or unsupported.
+        """
+        entry_point_name = getattr(entry_point, "name", None)
+        entry_point_label = entry_point_name or "<unknown>"
+        try:
+            loaded = entry_point.load()
+            config_data = cls._resolve_entry_point_config(loaded)
+            if config_data is None:
+                raise PluginConfigEntryPointError(
+                    f"Failed to load plugin config entry point {entry_point_label!r}: "
+                    f"unsupported target {loaded!r}"
+                )
+
+            config_model = (
+                config_data
+                if isinstance(config_data, PluginConfig)
+                else PluginConfig(**config_data)
+            )
+            return entry_point_name or config_model.name, config_model
+        except ModuleNotFoundError as exc:
+            raise PluginConfigEntryPointError(
+                f"Failed to load plugin config entry point {entry_point_label!r}: "
+                f"module not found ({exc}). Check the entry point target in pyproject.toml."
+            ) from exc
+        except ValidationError as exc:
+            raise PluginConfigEntryPointError(
+                f"Failed to load plugin config entry point {entry_point_label!r}: "
+                "invalid plugin config"
+            ) from exc
+        except PluginConfigEntryPointError:
+            raise
+        except Exception as exc:
+            raise PluginConfigEntryPointError(
+                f"Failed to load plugin config entry point {entry_point_label!r}: {exc}"
+            ) from exc
+
+    @classmethod
     def load_plugin_configs_from_entry_points(cls) -> dict[str, PluginConfig]:
         """Load plugin configs registered under ``nodescraper.plugin_configs`` entry points.
 
@@ -149,40 +256,8 @@ class ConfigRegistry:
         configs: dict[str, PluginConfig] = {}
 
         for entry_point in cls._entry_points_for_group(PLUGIN_CONFIG_ENTRY_POINT_GROUP):
-            entry_point_name = getattr(entry_point, "name", None)
-            entry_point_label = entry_point_name or "<unknown>"
-            try:
-                loaded = entry_point.load()  # type: ignore[attr-defined]
-                config_data = cls._resolve_entry_point_config(loaded)
-                if config_data is None:
-                    raise PluginConfigEntryPointError(
-                        f"Failed to load plugin config entry point {entry_point_label!r}: "
-                        f"unsupported target {loaded!r}"
-                    )
-
-                config_model = (
-                    config_data
-                    if isinstance(config_data, PluginConfig)
-                    else PluginConfig(**config_data)
-                )
-                config_key = entry_point_name or config_model.name
-                if config_key:
-                    configs[config_key] = config_model
-            except ModuleNotFoundError as exc:
-                raise PluginConfigEntryPointError(
-                    f"Failed to load plugin config entry point {entry_point_label!r}: "
-                    f"module not found ({exc}). Check the entry point target in pyproject.toml."
-                ) from exc
-            except ValidationError as exc:
-                raise PluginConfigEntryPointError(
-                    f"Failed to load plugin config entry point {entry_point_label!r}: "
-                    "invalid plugin config"
-                ) from exc
-            except PluginConfigEntryPointError:
-                raise
-            except Exception as exc:
-                raise PluginConfigEntryPointError(
-                    f"Failed to load plugin config entry point {entry_point_label!r}: {exc}"
-                ) from exc
+            config_key, config_model = cls._load_entry_point_config(entry_point)
+            if config_key:
+                configs[config_key] = config_model
 
         return configs

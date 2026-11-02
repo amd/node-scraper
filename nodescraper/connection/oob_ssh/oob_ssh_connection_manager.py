@@ -32,7 +32,6 @@ from nodescraper.enums import EventCategory, EventPriority, ExecutionStatus
 from nodescraper.interfaces.connectionmanager import ConnectionManager
 from nodescraper.interfaces.taskresulthook import TaskResultHook
 from nodescraper.models import SystemInfo, TaskResult
-from nodescraper.utils import get_exception_traceback
 
 from ..inband.inband import InBandConnection
 from ..inband.inbandremote import RemoteShell, SSHConnectionError
@@ -66,62 +65,83 @@ class OobSshConnectionManager(ConnectionManager[InBandConnection, RedfishConnect
 
     def connect(self) -> TaskResult:
         if not self.connection_args:
-            self._log_event(
-                category=EventCategory.RUNTIME,
-                description="No Redfish connection parameters provided for OOB SSH",
-                priority=EventPriority.CRITICAL,
-                console_log=True,
+            return self._fail_connect(
+                EventCategory.RUNTIME,
+                "Cannot connect to the BMC over SSH: no connection details were provided.",
+                "No Redfish connection parameters provided for OOB SSH",
+                {"connection_args": None},
             )
-            self.result.status = ExecutionStatus.EXECUTION_FAILURE
-            return self.result
 
         raw = self.connection_args
         if isinstance(raw, dict):
-            params = RedfishConnectionParams.model_validate(raw)
+            try:
+                params = RedfishConnectionParams.model_validate(raw)
+            except ValueError as exception:
+                return self._fail_connect(
+                    EventCategory.RUNTIME,
+                    "Cannot connect to the BMC over SSH: the connection details are not valid.",
+                    f"Invalid Redfish connection parameters for OOB SSH: {exception}",
+                    {"exception": str(exception)},
+                )
         elif isinstance(raw, RedfishConnectionParams):
             params = raw
         else:
-            self._log_event(
-                category=EventCategory.RUNTIME,
-                description="Redfish connection_args must be dict or RedfishConnectionParams",
-                priority=EventPriority.CRITICAL,
-                console_log=True,
+            return self._fail_connect(
+                EventCategory.RUNTIME,
+                "Cannot connect to the BMC over SSH: the connection details are not valid.",
+                "Redfish connection_args must be dict or RedfishConnectionParams "
+                f"(got {type(raw).__name__})",
+                {"connection_args_type": type(raw).__name__},
             )
-            self.result.status = ExecutionStatus.EXECUTION_FAILURE
-            return self.result
 
         if params.is_multi_target and params.host is None:
-            self.result.status = ExecutionStatus.NOT_RAN
-            self.result.message = (
+            message = (
                 "OOB SSH plugins use a single BMC host. "
                 "A targets list applies only to Redfish plugins."
             )
+            self._log_event(
+                category=EventCategory.RUNTIME,
+                description=message,
+                priority=EventPriority.WARNING,
+                console_log=True,
+            )
+            self.result.status = ExecutionStatus.NOT_RAN
+            self.result.message = message
             return self.result
 
         try:
             ssh_params = redfish_params_to_ssh(params)
-            self.logger.info("Initializing OOB SSH to BMC host %s", ssh_params.hostname)
-            self.connection = RemoteShell(ssh_params)
-            self.connection.connect_ssh()
+        except ValueError as exception:
+            return self._fail_connect(
+                EventCategory.RUNTIME,
+                "Cannot connect to the BMC over SSH: the connection details are not valid.",
+                f"Could not build OOB SSH parameters from the Redfish parameters: {exception}",
+                {
+                    "host": str(params.host),
+                    "exception": str(exception),
+                },
+            )
+
+        hostname = ssh_params.hostname
+        self.logger.info("Initializing OOB SSH to BMC host %s", hostname)
+        shell = RemoteShell(ssh_params)
+        try:
+            shell.connect_ssh()
         except SSHConnectionError as exception:
-            self._log_event(
-                category=EventCategory.SSH,
-                description=str(exception),
-                priority=EventPriority.CRITICAL,
-                console_log=True,
+            shell.client.close()
+            return self._fail_connect(
+                EventCategory.SSH,
+                "Could not connect to the BMC over SSH.",
+                f"OOB SSH connection to BMC '{hostname}:{ssh_params.port}' failed: {exception}",
+                {
+                    "hostname": str(hostname),
+                    "port": ssh_params.port,
+                    "username": ssh_params.username,
+                    "exception": str(exception),
+                },
             )
-            self.result.status = ExecutionStatus.EXECUTION_FAILURE
-            self.connection = None
-        except Exception as exception:
-            self._log_event(
-                category=EventCategory.SSH,
-                description=f"Exception during OOB SSH: {exception!s}",
-                data=get_exception_traceback(exception),
-                priority=EventPriority.CRITICAL,
-                console_log=True,
-            )
-            self.result.status = ExecutionStatus.EXECUTION_FAILURE
-            self.connection = None
+
+        self.connection = shell
         return self.result
 
     def disconnect(self) -> None:
