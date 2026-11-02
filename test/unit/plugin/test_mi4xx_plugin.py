@@ -88,6 +88,7 @@ def test_mi4xx_analyzer_analyze_data_wrapped_once():
 
 class _FakeHub:
     name = "ExampleHub"
+    version = "0.2.0"
 
     def analyze(self, events, afid_sag_path):
         assert afid_sag_path

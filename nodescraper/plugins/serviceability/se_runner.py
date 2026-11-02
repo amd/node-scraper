@@ -32,11 +32,13 @@ import importlib
 import importlib.metadata
 import inspect
 import logging
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Optional, Protocol, Type, Union, cast
 
 from nodescraper.constants import DEFAULT_LOGGER
 
+from .afid_events import promote_serviceable_unit_odata_ids, split_afid_location_entries
 from .afid_sag_paths import default_afid_sag_path, validate_afid_sag_path
 from .se_adapter import (
     serviceability_block_from_entry_point_hub,
@@ -48,6 +50,11 @@ if TYPE_CHECKING:
     from .analyzer_args import ServiceabilityAnalyzerArgs
 
 HUB_ENTRY_POINT_GROUP = "amd.serviceability_engines"
+_MIN_AFSE_VERSION = (0, 2)
+# Leading major.minor. A patch, pre-release, or local .dev suffix is ignored.
+_AFSE_VERSION_RE = re.compile(r"^v?(?P<major>\d+)\.(?P<minor>\d+)")
+# setuptools_scm no-guess-dev with no ancestor tag: 0.0.post1.devN+gHASH
+_UNTAGGED_AFSE_RE = re.compile(r"^v?0\.0(?:\.post\d+)?\.dev\d+(?:\+[0-9A-Za-z.]+)?$")
 
 
 def normalize_hub_entry_point(hub_name: str) -> str:
@@ -298,13 +305,17 @@ def events_payload_for_hub_analyze(
     raise HubRunError("rf_events or afid_events is required")
 
 
-def _usable_serviceable_units(units: Any) -> list[Any]:
-    """Return ServiceableUnits entries that carry an '@odata.id' string."""
-    if not isinstance(units, list):
-        return []
-    return [
-        unit for unit in units if isinstance(unit, dict) and isinstance(unit.get("@odata.id"), str)
-    ]
+def _redfish_severity_is_ok(member: dict[str, Any]) -> bool:
+    """Return whether a Redfish log member is an OK event.
+
+    Args:
+        member: Redfish log member.
+
+    Returns:
+        True when Severity is OK.
+    """
+    severity = member.get("Severity")
+    return isinstance(severity, str) and severity.strip().upper() == "OK"
 
 
 def drop_afids_without_serviceable_units(
@@ -314,7 +325,8 @@ def drop_afids_without_serviceable_units(
     """Waive AMDFieldIdentifiers entries the hub would reject for lacking ServiceableUnits.
 
     The entry-point hub rejects the whole event list when any Oem.AMD.AMDFieldIdentifiers
-    entry has no ServiceableUnits, so drop those entries (with a warning) before analysis.
+    entry has no ServiceableUnits, so drop those entries before analysis. OK events are
+    dropped quietly. Any other severity is logged.
 
     Args:
         rf_events: Raw Redfish log members.
@@ -327,27 +339,29 @@ def drop_afids_without_serviceable_units(
     kept: list[Any] = []
     for member in rf_events:
         oem = member.get("Oem") if isinstance(member, dict) else None
-        amd = oem.get("AMD") if isinstance(oem, dict) else None
-        identifiers = amd.get("AMDFieldIdentifiers") if isinstance(amd, dict) else None
-        if not isinstance(identifiers, list):
+        split = split_afid_location_entries(oem)
+        if split is None:
             kept.append(member)
             continue
-        usable = []
-        for entry in identifiers:
-            if isinstance(entry, dict) and _usable_serviceable_units(entry.get("ServiceableUnits")):
-                usable.append(entry)
-                continue
-            afid = entry.get("AFID") if isinstance(entry, dict) else None
-            log.warning(
-                "Waiving AFID %s from %s: AMDFieldIdentifiers entry has no ServiceableUnits",
-                afid,
-                member.get("@odata.id") or member.get("Id") or "<unknown event>",
-            )
-        if len(usable) == len(identifiers):
-            kept.append(member)
+        usable, unusable = split
+        if not _redfish_severity_is_ok(member):
+            for entry in unusable:
+                afid = entry.get("AFID") if isinstance(entry, dict) else None
+                log.warning(
+                    "Waiving AFID %s from %s: AMDFieldIdentifiers entry has no ServiceableUnits",
+                    afid,
+                    member.get("@odata.id") or member.get("Id") or "<unknown event>",
+                )
+        if not unusable:
+            kept.append(promote_serviceable_unit_odata_ids(member))
         elif usable:
+            amd = cast(dict, oem).get("AMD")
             amd_copy = {**cast(dict, amd), "AMDFieldIdentifiers": usable}
-            kept.append({**member, "Oem": {**cast(dict, oem), "AMD": amd_copy}})
+            kept.append(
+                promote_serviceable_unit_odata_ids(
+                    {**member, "Oem": {**cast(dict, oem), "AMD": amd_copy}}
+                )
+            )
     return kept
 
 
@@ -579,6 +593,134 @@ def resolve_runtime_afid_sag_path(
     return path
 
 
+def _untagged_afse_has_redfish_and_switch(version: str) -> bool:
+    """Return whether an untagged AFSE build can parse Redfish and switch events.
+
+    Args:
+        version: Version reported by the AFSE package or module hub.
+
+    Returns:
+        True when version has no release tag and both parsers import.
+    """
+    if _UNTAGGED_AFSE_RE.match(version.strip()) is None:
+        return False
+    try:
+        redfish = importlib.import_module("serviceability_engine.transformers.redfish")
+        switch = importlib.import_module("serviceability_engine.transformers.switch")
+    except ImportError:
+        return False
+    return callable(getattr(redfish, "parse", None)) and callable(getattr(switch, "parse", None))
+
+
+def _afse_version_error(
+    version: str,
+    logger: Optional[logging.Logger] = None,
+) -> Optional[str]:
+    """Return an error when AFSE is older than 0.2.
+
+    Args:
+        version: Version reported by the AFSE package or module hub.
+        logger: Logger used when an untagged build is accepted.
+
+    Returns:
+        Error text when the major.minor is below 0.2 or missing, otherwise None.
+    """
+    if _untagged_afse_has_redfish_and_switch(version):
+        (logger or logging.getLogger(DEFAULT_LOGGER)).info(
+            "AFSE %s is an untagged build with Redfish and switch event support",
+            version,
+        )
+        return None
+    match = _AFSE_VERSION_RE.match(version.strip())
+    found = (int(match.group("major")), int(match.group("minor"))) if match else None
+    if found is None or found < _MIN_AFSE_VERSION:
+        return (
+            f"AFSE {_MIN_AFSE_VERSION[0]}.{_MIN_AFSE_VERSION[1]} or newer is required "
+            f"(Redfish log entries and switch events); found {version}"
+        )
+    return None
+
+
+def _entry_point_distribution_version(hub_name: str) -> Optional[str]:
+    """Return the installed package version for a registered AFSE entry point.
+
+    Args:
+        hub_name: Entry point name such as afse.
+
+    Returns:
+        Distribution version string, or None when it cannot be resolved.
+    """
+    wanted = normalize_hub_entry_point(hub_name)
+    for ep in _entry_points_for_group(HUB_ENTRY_POINT_GROUP):
+        if getattr(ep, "name", None) != wanted:
+            continue
+        dist = getattr(ep, "dist", None)
+        version = getattr(dist, "version", None) if dist is not None else None
+        if version:
+            return str(version)
+        value = str(getattr(ep, "value", "") or getattr(ep, "module", "") or "")
+        top = value.split(":")[0].split(".")[0].strip()
+        if not top:
+            continue
+        try:
+            return importlib.metadata.version(top)
+        except importlib.metadata.PackageNotFoundError:
+            continue
+    return None
+
+
+def _probe_entry_point_hub(
+    args: ServiceabilityAnalyzerArgs,
+) -> tuple[Any, str, str]:
+    """Load the configured AFSE entry point and return the hub, label, and version.
+
+    Args:
+        args: Analyzer args for this run.
+
+    Returns:
+        Loaded hub instance, display label, and version string.
+    """
+    name = args.resolved_hub_entry_point()
+    hub = load_hub_from_entry_point(name)
+    label = args.hub_display_name or getattr(hub, "name", None) or name
+    version = _entry_point_distribution_version(name) or _hub_engine_version(hub)
+    return hub, str(label), version
+
+
+def preflight_module_hub(
+    args: ServiceabilityAnalyzerArgs,
+    logger: Optional[logging.Logger] = None,
+) -> None:
+    """Check that a Python-module hub is installed and new enough.
+
+    Args:
+        args: Analyzer args that select hub_python_module.
+        logger: Logger for the install line. Defaults to the nodescraper logger.
+
+    Returns:
+        None.
+
+    Raises:
+        HubRunError: When the module cannot be imported or AFSE is older than 0.2.
+    """
+    log = logger or logging.getLogger(DEFAULT_LOGGER)
+    module_name = str(args.hub_python_module)
+    try:
+        mod = importlib.import_module(module_name)
+    except ImportError as exc:
+        raise HubRunError(f"AFSE hub module {module_name!r} is not installed: {exc}") from exc
+    hub_cls = _resolve_hub_class(mod, args.hub_analyze_method)
+    label = args.hub_display_name or getattr(hub_cls, "name", None) or module_name
+    version = getattr(mod, "__version__", None) or _hub_engine_version(hub_cls)
+    if callable(version):
+        version = version()
+    version_text = version.strip() if isinstance(version, str) and version.strip() else "unknown"
+    log.info("AFSE install found: %s version %s", label, version_text)
+    version_error = _afse_version_error(version_text, log)
+    if version_error:
+        raise HubRunError(version_error)
+
+
 def preflight_afid_sag(
     args: ServiceabilityAnalyzerArgs,
     logger: Optional[logging.Logger] = None,
@@ -593,17 +735,34 @@ def preflight_afid_sag(
         Resolved absolute SAG path.
 
     Raises:
-        HubRunError: When the file is missing, the hub cannot load, or AFSE rejects the file.
+        HubRunError: When the file is missing, the hub cannot load, AFSE is too old, or AFSE rejects the file.
     """
     log = logger or logging.getLogger(DEFAULT_LOGGER)
-    sag_path = resolve_runtime_afid_sag_path(args, log)
-    validate_afid_sag_path(sag_path)
-    resolved = str(Path(sag_path).expanduser().resolve())
-    log.info("AFID_SAG file OK: %s", resolved)
-    hub_name = args.resolved_hub_entry_point()
-    hub = load_hub_from_entry_point(hub_name)
-    if validate_afid_sag_with_hub(hub, resolved):
-        log.info("AFID_SAG validated by %s: %s", getattr(hub, "name", hub_name), resolved)
+    errors: list[str] = []
+    hub: Any = None
+    hub_label = ""
+    try:
+        hub, hub_label, hub_version = _probe_entry_point_hub(args)
+        log.info("AFSE install found: %s version %s", hub_label, hub_version)
+        version_error = _afse_version_error(hub_version, log)
+        if version_error:
+            errors.append(version_error)
+    except (HubRunError, ValueError) as exc:
+        errors.append(str(exc))
+
+    resolved = ""
+    try:
+        sag_path = resolve_runtime_afid_sag_path(args, log)
+        validate_afid_sag_path(sag_path)
+        resolved = str(Path(sag_path).expanduser().resolve())
+        log.info("AFID_SAG file OK: %s", resolved)
+        if hub is not None and validate_afid_sag_with_hub(hub, resolved):
+            log.info("AFID_SAG validated by %s: %s", getattr(hub, "name", hub_label), resolved)
+    except HubRunError as exc:
+        errors.append(str(exc))
+
+    if errors:
+        raise HubRunError("; ".join(errors))
     return resolved
 
 

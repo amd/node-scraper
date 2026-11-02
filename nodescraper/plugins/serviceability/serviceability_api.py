@@ -149,6 +149,35 @@ def split_recommendation_actions(
     return top, additional
 
 
+def top_action_summary(
+    block: ServiceabilityBlock,
+    system_name: str,
+    analyzed_at: str,
+) -> dict[str, Any]:
+    """Build a top-service-action summary payload from a hub result.
+
+    Args:
+        block: Serviceability block returned by the hub.
+        system_name: Name of the analyzed system.
+        analyzed_at: ISO timestamp for when analysis ran.
+
+    Returns:
+        System name, analysis time, hub and SAG versions, AFID event count, and the
+        top service action(s). Ties for the top rank are all included.
+    """
+    top, _ = split_recommendation_actions(block)
+    return {
+        "system_name": system_name,
+        "analyzed_at": analyzed_at,
+        "hub_version": block.hub_version,
+        "afid_sag_file_version": block.afid_sag_file_version,
+        "afid_event_count": len(block.afid_events),
+        "top_service_actions": [
+            action.model_dump(mode="json", exclude_none=True) for action in top
+        ],
+    }
+
+
 def prepare_serviceability_block_for_export(
     block: ServiceabilityBlock,
 ) -> ServiceabilityBlock:
