@@ -31,6 +31,19 @@ from nodescraper.models import DataModel, TaskResult
 from nodescraper.utils import resolve_log_dir_name
 
 
+def _next_log_suffix(log_path: str) -> str:
+    """First suffix ("", "(1)", "(2)", ...) for which neither result nor events file exists in log_path."""
+    count = 0
+    while True:
+        suffix = f"({count})" if count else ""
+        if not any(
+            os.path.exists(os.path.join(log_path, f"{name}{suffix}.json"))
+            for name in ("result", "events")
+        ):
+            return suffix
+        count += 1
+
+
 class FileSystemLogHook(TaskResultHook):
     def __init__(self, log_base_path=None, include_task_path: bool = True, **kwargs) -> None:
         """Create a FileSystemLogHook Instance
@@ -47,7 +60,12 @@ class FileSystemLogHook(TaskResultHook):
         self.include_task_path = include_task_path
 
     def process_result(self, task_result: TaskResult, data: Optional[DataModel] = None, **kwargs):
-        """Log task result to the filesystem (single events.json per directory)."""
+        """Log task result to the filesystem.
+
+        The first result written to a directory uses ``result.json`` / ``events.json``. Later results
+        sent to the same directory get an integer appended (``result(1).json`` / ``events(1).json``)
+        so earlier logs are never overwritten.
+        """
         log_path = self.log_base_path
         if self.include_task_path:
             if task_result.parent:
@@ -55,7 +73,7 @@ class FileSystemLogHook(TaskResultHook):
             if task_result.task:
                 log_path = os.path.join(log_path, resolve_log_dir_name(task_result.task))
 
-        task_result.log_result(log_path)
+        task_result.log_result(log_path, _next_log_suffix(log_path))
 
         if data:
             data.log_model(log_path)

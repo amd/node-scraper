@@ -95,17 +95,25 @@ class PluginInterface(abc.ABC, Generic[TConnectionManager, TConnectArg]):
         self.session_id = session_id
 
         self.connection_manager = connection_manager
+        # True only when this plugin built its connection manager itself; a manager passed in
+        # belongs to the caller, who is responsible for closing it.
+        self._owns_connection_manager = False
 
         if connection_args and self.CONNECTION_TYPE and not self.connection_manager:
+            self._owns_connection_manager = True
             self.connection_manager = self.CONNECTION_TYPE(
                 system_info=self.system_info.model_copy(),
                 logger=logger,
                 connection_args=connection_args,
                 parent=self.__class__.__name__,
-                task_result_hooks=self.task_result_hooks,
+                task_result_hooks=self._connection_manager_hooks(),
                 event_reporter=event_reporter,
                 session_id=self.session_id,
             )
+
+    def _connection_manager_hooks(self) -> list:
+        """Result hooks for a connection manager this plugin creates itself."""
+        return self.task_result_hooks
 
     @classmethod
     def is_valid(cls) -> bool:

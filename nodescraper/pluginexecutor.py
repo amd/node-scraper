@@ -28,6 +28,7 @@ from __future__ import annotations
 import copy
 import inspect
 import logging
+import os
 import uuid
 from collections import deque
 from collections.abc import Callable, Sequence
@@ -46,11 +47,15 @@ from nodescraper.helpers.plugin_execution_target import (
 )
 from nodescraper.interfaces import ConnectionManager, DataPlugin, PluginInterface
 from nodescraper.interfaces.taskresulthook import TaskResultHook
-from nodescraper.models import PluginConfig, SystemInfo
+from nodescraper.models import PluginConfig, SystemInfo, TaskResult
 from nodescraper.models.pluginresult import PluginResult
-from nodescraper.pluginregistry import PluginRegistry
+from nodescraper.models.taskresult import STATUS_LOG_LEVEL_MAP
+from nodescraper.pluginregistry import PluginRegistry, default_registry
 from nodescraper.taskresulthooks import FileSystemLogHook
+from nodescraper.taskresulthooks.filesystemloghook import hooks_for_fixed_directory
 from nodescraper.typeutils import TypeUtils
+
+OS_DISCOVERY_DIR = "os_discovery"
 
 
 class PluginExecutor:
@@ -100,7 +105,7 @@ class PluginExecutor:
             logger = logging.getLogger(DEFAULT_LOGGER)
         self.logger = logger
 
-        self.plugin_registry = plugin_registry or PluginRegistry()
+        self.plugin_registry = plugin_registry or default_registry()
 
         if system_info is None:
             system_info = SystemInfo()
@@ -221,19 +226,33 @@ class PluginExecutor:
         return merged_config
 
     def discover_os_info(self) -> None:
-        """If the connection library has an InBandConnectionManager, use it to discover OS info and update system_info
-        self.system_info will be updated with the discovered OS info.
+        """Use a dedicated InBandConnectionManager to discover OS info and update system_info.
+
+        The discovery connection is separate from the connection library and its result is
+        saved under ``<log_path>/os_discovery`` so it does not mix with the results of the
+        connections used by plugins. self.system_info will be updated with the discovered OS info.
         """
-        inband_connection = self.connection_library.get(InBandConnectionManager)
-        if inband_connection is None:
-            # Init use and discard after
+        if self.log_path:
+            hooks = hooks_for_fixed_directory(
+                self.connection_result_hooks, os.path.join(self.log_path, OS_DISCOVERY_DIR)
+            )
+        else:
+            hooks = list(self.connection_result_hooks)
+        try:
             inband_connection = InBandConnectionManager(
                 system_info=self.system_info,
                 logger=self.logger,
                 connection_args=self.connection_configs.get(InBandConnectionManager.__name__),
-                task_result_hooks=self.connection_result_hooks,
+                task_result_hooks=hooks,
+                parent=OS_DISCOVERY_DIR,
                 session_id=self.session_id,
             )
+        except Exception as e:
+            # Raised for missing or invalid connection args or an invalid session_id.
+            self.logger.error(
+                "Error occurred while initializing InBandConnectionManager: %s", str(e)
+            )
+            return
         try:
             result = inband_connection.connect() if inband_connection else None
             if (not inband_connection) or (not result) or (result.status != ExecutionStatus.OK):
@@ -244,12 +263,10 @@ class PluginExecutor:
             discover_and_write_os_family(inband_connection, self.system_info, self.logger)
         except Exception as e:
             self.logger.error(
-                "Error occurred during OS discovery with InBandConnectionManager: %s",
-                str(e),
+                "Error occurred during OS discovery with InBandConnectionManager: %s", str(e)
             )
         finally:
-            if inband_connection is not None:
-                inband_connection.disconnect()
+            inband_connection.safe_disconnect()
 
     def _get_connection_manager_for_plugin(
         self,
@@ -293,8 +310,9 @@ class PluginExecutor:
                 mgr_impl = connection_manager_class
             else:
                 self.logger.error(
-                    "Unable to find registered connection manager class for %s that is required by",
-                    connection_manager_class.__name__,
+                    "Unable to find registered connection manager class for %s that is required by %s",
+                    getattr(connection_manager_class, "__name__", connection_manager_class),
+                    plugin_name,
                 )
                 return None
             connection_args = None
@@ -309,7 +327,13 @@ class PluginExecutor:
             }
             if connection_args is not None:
                 init_kwargs["connection_args"] = connection_args
-            self.connection_library[mgr_impl] = mgr_impl(**init_kwargs)
+            try:
+                self.connection_library[mgr_impl] = mgr_impl(**init_kwargs)
+            except Exception as e:
+                self.logger.error(
+                    "Failed to initialize %s for %s: %s", mgr_impl.__name__, plugin_name, e
+                )
+                return None
 
         return self.connection_library[mgr_impl]
 
@@ -336,11 +360,11 @@ class PluginExecutor:
             logged), ``False`` if it was skipped due to a registry miss, missing
             connection manager, or invalid global args.
         """
-        if plugin_name not in self.plugin_registry.plugins:
+        # With a lazy registry this is where the plugin module is imported.
+        plugin_class = self.plugin_registry.plugins.get(plugin_name)
+        if plugin_class is None:
             self.logger.error("Unable to find registered plugin for name %s", plugin_name)
             return False
-
-        plugin_class = self.plugin_registry.plugins[plugin_name]
 
         init_payload = {
             "system_info": self.system_info,
@@ -350,22 +374,24 @@ class PluginExecutor:
             "session_id": self.session_id,
         }
 
+        conn_mgr: Optional[ConnectionManager] = None
         if plugin_class.CONNECTION_TYPE:
             conn_mgr = self._get_connection_manager_for_plugin(plugin_class, plugin_name)
+            connection_config = self.connection_configs.get(plugin_class.CONNECTION_TYPE.__name__)
+            init_payload["connection_args"] = connection_config
             if conn_mgr is None:
                 return False
             init_payload["connection_manager"] = conn_mgr
-
         try:
             plugin_inst = plugin_class(**init_payload)
 
             plugin_run_args = copy.deepcopy(plugin_args)
-            run_args = TypeUtils.get_func_arg_types(plugin_class.run, plugin_class)
 
             try:
                 global_run_args = self.apply_global_args_to_plugin(
                     plugin_inst, plugin_class, self.plugin_config.global_args
                 )
+
                 run_payload = self.merge_plugin_run_args(plugin_run_args, global_run_args)
             except ValueError as ve:
                 self.logger.error(
@@ -375,10 +401,6 @@ class PluginExecutor:
                 )
                 return False
 
-            for arg in run_args.keys():
-                if arg == "preserve_connection" and issubclass(plugin_class, DataPlugin):
-                    run_payload[arg] = True
-
             plugin_result = plugin_inst.run(**run_payload)
             plugin_results.append(plugin_result)
             for hook in self.plugin_run_result_hooks:
@@ -386,6 +408,8 @@ class PluginExecutor:
 
         except Exception as e:
             self.logger.exception("Unexpected exception when running plugin %s: %s", plugin_name, e)
+            if conn_mgr is not None:
+                conn_mgr.safe_disconnect()
 
         return True
 
@@ -413,41 +437,57 @@ class PluginExecutor:
         except Exception as e:
             self.logger.exception("Unexpected exception running plugin queue: %s", str(e))
         finally:
-            # Run post-action plugins before tearing down connections or collating
-            # results so that post-actions still have access to live connections
-            # and their results are included in the collator output.
-            self._run_post_actions(plugin_results)
-
-            if self.plugin_config.result_collators:
-                self.logger.info("Running result collators")
-                for (
-                    collator,
-                    collator_args,
-                ) in self.plugin_config.result_collators.items():
-                    collator_class = self.plugin_registry.result_collators.get(collator)
-                    if collator_class is None:
-                        self.logger.warning(
-                            "No result collator found in registry for name: %s",
-                            collator,
-                        )
-                        continue
-
-                    self.logger.info("Running %s result collator", collator)
-                    collator_inst = collator_class(logger=self.logger, log_path=self.log_path)
-                    collator_inst.collate_results(
-                        plugin_results,
-                        [
-                            connection_manager.result
-                            for connection_manager in self.connection_library.values()
-                        ],
-                        **collator_args,
-                    )
-
-            self.logger.info("Closing connections")
-            for connection_manager in self.connection_library.values():
-                connection_manager.disconnect()
+            try:
+                # Run post-action plugins before tearing down connections or collating
+                # results so that post-actions still have access to live connections
+                # and their results are included in the collator output.
+                self._run_post_actions(plugin_results)
+                self._run_result_collators(plugin_results)
+            finally:
+                self._close_connections()
 
         return plugin_results
+
+    def _run_result_collators(self, plugin_results: list[PluginResult]) -> None:
+        """Run the configured result collators over the plugin and connection results."""
+        if not self.plugin_config.result_collators:
+            return
+
+        self.logger.info("Running result collators")
+        connection_results = [
+            connection_manager.result for connection_manager in self.connection_library.values()
+        ]
+        for collator, collator_args in self.plugin_config.result_collators.items():
+            collator_class = self.plugin_registry.result_collators.get(collator)
+            if collator_class is None:
+                self.logger.warning("No result collator found in registry for name: %s", collator)
+                continue
+
+            self.logger.info("Running %s result collator", collator)
+            collator_inst = collator_class(logger=self.logger, log_path=self.log_path)
+            collator_inst.collate_results(plugin_results, connection_results, **collator_args)
+
+    def _log_connection_result(self, result: TaskResult) -> None:
+        self.logger.log(
+            STATUS_LOG_LEVEL_MAP.get(result.status, logging.INFO),
+            "Connection result for %s: %s%s",
+            result.task,
+            result.status.name,
+            f" - {result.message}" if result.message else "",
+        )
+
+    def _close_connections(self) -> None:
+        """Close every connection and log the connection results.
+
+        Each manager's own result was already saved by connect(). A failing disconnect cannot
+        prevent the remaining connections from being closed.
+        """
+        self.logger.info("Closing connections")
+        for connection_manager in self.connection_library.values():
+            connection_manager.safe_disconnect()
+            result = connection_manager.result
+            if result.status != ExecutionStatus.UNSET or result.events:
+                self._log_connection_result(result)
 
     def _run_post_actions(self, plugin_results: list[PluginResult]) -> None:
         """Evaluate post-action conditions and run qualifying plugins.
@@ -548,24 +588,17 @@ class PluginExecutor:
                     args_cls = plugin_class._collector_args_class(collector_cls)
                     if args_cls is None:
                         continue
-                    plugin_fields = set(args_cls.model_fields.keys())
-                    filtered = {
-                        k: v
-                        for k, v in global_args["collection_args"].items()
-                        if k in plugin_fields
-                    }
+                    filtered = TypeUtils.filter_to_model_fields(
+                        args_cls, global_args["collection_args"]
+                    )
                     if filtered:
                         per_collector_args[collector_cls.__name__] = filtered
                 if per_collector_args:
                     run_args["collection_args"] = per_collector_args
             elif collector_args is not None and not isinstance(collector_args, dict):
-                args_cls = (
-                    collector_args if isinstance(collector_args, type) else type(collector_args)
+                filtered = TypeUtils.filter_to_model_fields(
+                    collector_args, global_args["collection_args"]
                 )
-                plugin_fields = set(args_cls.model_fields.keys())
-                filtered = {
-                    k: v for k, v in global_args["collection_args"].items() if k in plugin_fields
-                }
                 if filtered:
                     run_args["collection_args"] = filtered
 
@@ -574,10 +607,9 @@ class PluginExecutor:
             and hasattr(plugin_class, "ANALYZER_ARGS")
             and plugin_class.ANALYZER_ARGS is not None
         ):
-            analyzer_args = plugin_class.ANALYZER_ARGS
-            args_cls = analyzer_args if isinstance(analyzer_args, type) else type(analyzer_args)
-            plugin_fields = set(args_cls.model_fields.keys())
-            filtered = {k: v for k, v in global_args["analysis_args"].items() if k in plugin_fields}
+            filtered = TypeUtils.filter_to_model_fields(
+                plugin_class.ANALYZER_ARGS, global_args["analysis_args"]
+            )
             if filtered:
                 run_args["analysis_args"] = filtered
 

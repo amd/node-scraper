@@ -130,3 +130,37 @@ def test_process_type_strips_annotated_inside_optional():
     assert TypeUtils.process_type(Optional[Annotated[int, "meta"]]) == [
         TypeClass(type_class=int, inner_type=None)
     ]
+
+
+class _FilterModel(BaseModel):
+    host: str = "h"
+    port: int = 22
+
+
+def test_filter_to_model_fields_drops_keys_that_are_not_model_fields():
+    data = {"host": "a", "port": 2, "other": "x"}
+
+    assert TypeUtils.filter_to_model_fields(_FilterModel, data) == {"host": "a", "port": 2}
+
+
+def test_filter_to_model_fields_accepts_a_model_instance():
+    assert TypeUtils.filter_to_model_fields(_FilterModel(), {"port": 1, "nope": 2}) == {"port": 1}
+
+
+def test_filter_to_model_fields_does_not_modify_its_input_and_handles_empty():
+    data = {"host": "a", "other": "x"}
+
+    TypeUtils.filter_to_model_fields(_FilterModel, data)
+
+    assert data == {"host": "a", "other": "x"}
+    assert TypeUtils.filter_to_model_fields(_FilterModel, {}) == {}
+
+
+def test_filter_to_model_fields_result_validates_against_a_model_that_forbids_extra():
+    from pydantic import ConfigDict
+
+    class Strict(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+        host: str
+
+    Strict.model_validate(TypeUtils.filter_to_model_fields(Strict, {"host": "a", "other": 1}))

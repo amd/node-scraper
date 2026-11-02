@@ -23,6 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
+import logging
 import os
 import socket
 from typing import Type, Union
@@ -98,8 +99,10 @@ class RemoteShell(InBandConnection):
             raise SSHConnectionError(f"Unable to establish SSH connection: {str(e)}") from e
         except EOFError as e:
             raise SSHConnectionError("EOFError during SSH connection") from e
+        except OSError as e:
+            raise SSHConnectionError(f"SSH network error: {e}") from e
         except Exception as e:
-            raise e
+            raise SSHConnectionError(f"Unexpected error during SSH connection: {str(e)}") from e
 
     def read_file(
         self,
@@ -174,6 +177,11 @@ class RemoteShell(InBandConnection):
             exit_code = 124
         except SSHException as exc:
             stderr_str = str(exc) or "SSH channel failed"
+            stdout_str = ""
+            exit_code = 124
+        except Exception as exc:
+            logging.getLogger(__name__).exception("Unexpected error running SSH command")
+            stderr_str = f"{type(exc).__name__}: {exc}"
             stdout_str = ""
             exit_code = 124
 

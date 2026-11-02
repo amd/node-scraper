@@ -45,6 +45,7 @@ from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     Fw,
     FwListItem,
     LinkStatusTable,
+    MetricClockData,
     MetricEccTotals,
     MetricPcie,
     Partition,
@@ -1106,6 +1107,44 @@ def _minimal_amdsmi_metric(
             "throttle": {},
         }
     )
+
+
+def test_metric_accepts_legacy_and_per_block_clocks():
+    """Older clock objects and per-block clocks validate together."""
+    raw = _minimal_amdsmi_metric().model_dump()
+    raw["clock"] = {
+        "GFX_0": {
+            "clk": {"value": 132, "unit": "MHz"},
+            "min_clk": {"value": 500, "unit": "MHz"},
+            "max_clk": {"value": 2100, "unit": "MHz"},
+            "clk_locked": 0,
+            "deep_sleep": 0,
+        },
+        "uclk_aid": {
+            "aid_0": {"value": 1900, "unit": "MHz"},
+            "aid_1": {"value": 1900, "unit": "MHz"},
+        },
+        "socclks_mid": {
+            "mid_0": {"value": 1350, "unit": "MHz"},
+            "mid_1": "N/A",
+        },
+    }
+    raw["pcie"].pop("lc_perf_other_end_recovery", None)
+    raw["pcie"]["lc_perf_other_end_recovery_count"] = 4
+
+    metric = AmdSmiMetric.model_validate(raw)
+
+    assert isinstance(metric.clock["GFX_0"], MetricClockData)
+    assert metric.clock["GFX_0"].min_clk.value == 500
+    assert metric.clock["uclk_aid"]["aid_0"]["value"] == 1900
+    assert metric.clock["socclks_mid"]["mid_1"] == "N/A"
+    assert metric.pcie.lc_perf_other_end_recovery == 4
+
+    legacy = _minimal_amdsmi_metric()
+    legacy_raw = legacy.model_dump()
+    legacy_raw["pcie"]["lc_perf_other_end_recovery"] = 2
+    legacy_raw["pcie"]["lc_perf_other_end_recovery_count"] = 9
+    assert AmdSmiMetric.model_validate(legacy_raw).pcie.lc_perf_other_end_recovery == 2
 
 
 def test_gpu_mismatch_description_helpers():

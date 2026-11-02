@@ -13,6 +13,7 @@ system debug. For details on what data is collected and analyzed, see the [plugi
     - [3. Install from Source (Required)](#3-install-from-source-required)
     - [4. Git Hooks (Optional)](#4-git-hooks-optional)
   - [CLI Usage](#cli-usage)
+    - [Lazy plugin loading](#lazy-plugin-loading)
     - [Execution Methods](#execution-methods)
       - [Example: Remote Execution](#example-remote-execution)
         - [Example: connection\_config.json](#example-connection_configjson)
@@ -166,6 +167,22 @@ options:
                         False)
 ```
 <!-- node-scraper -h end -->
+
+### Lazy plugin loading
+
+By default node-scraper imports every plugin at startup this can be inefficient to run a single plugin run.
+Lazy loading imports a plugin only when it is first needed, so runs that use a few plugins start faster and use less memory.
+
+```sh
+node-scraper --lazy-load run-plugins OsPlugin
+```
+
+What to expect in lazy mode:
+- Plugin names are read from the `nodescraper.plugins` entry points in `pyproject.toml` without importing them. Built-in plugins are listed there, and a plugin must be registered there to be available in lazy mode (see [external plugins](docs/node-scraper-external/README.md) for the format). After adding or renaming a plugin, reinstall the package (`pip install -e .`) to refresh the entry-point metadata.
+- Only the plugins you name on the command line (or in a config) are imported.
+- `describe plugin` lists every plugin from the entry points without importing any; `describe plugin <name>` imports just that plugin to show its description. `--help` still imports every plugin because it documents each one's arguments.
+- A plugin that fails to import is logged and skipped instead of stopping node-scraper.
+- Named configs from `--plugin-configs` are evaluated only when you select them, so recipes such as `AllIbPlugins` (which inspects every plugin) do not import everything at startup.
 
 ### Execution Methods
 

@@ -54,10 +54,9 @@ class ConfigBuilder:
         """
         config = PluginConfig()
         for plugin in plugin_names:
-            if plugin in self.plugin_registry.plugins:
-                config.plugins[plugin] = self._build_plugin_config(
-                    self.plugin_registry.plugins[plugin]
-                )
+            plugin_class = self.plugin_registry.plugins.get(plugin)
+            if plugin_class is not None:
+                config.plugins[plugin] = self._build_plugin_config(plugin_class)
             else:
                 self.logger.warning("No plugin found with name: %s", plugin)
         return config

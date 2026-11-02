@@ -195,3 +195,22 @@ class TypeUtils:
             )
 
         return type_map
+
+    @staticmethod
+    def filter_to_model_fields(
+        model: Union[BaseModel, Type[BaseModel]], data: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Keep only the entries of ``data`` whose keys are fields of a pydantic model
+
+        Use this to apply shared (global) arguments to a model that forbids extra keys, so keys
+        meant for other models are dropped instead of raising a validation error.
+
+        Args:
+            model (Union[BaseModel, Type[BaseModel]]): model class or instance whose fields are allowed
+            data (dict[str, Any]): arguments to filter; not modified
+
+        Returns:
+            dict[str, Any]: new dict with only the keys that are fields of the model
+        """
+        model_cls = model if isinstance(model, type) else type(model)
+        return {key: value for key, value in data.items() if key in model_cls.model_fields}
