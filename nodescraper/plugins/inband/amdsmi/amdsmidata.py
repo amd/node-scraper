@@ -523,12 +523,10 @@ class StaticXgmiPlpd(BaseModel):
 
 
 class StaticNuma(BaseModel):
-
     model_config = ConfigDict(extra="allow")
 
-    node: Optional[int]
+    node: Union[int, str]  # can be N/A
     affinity: Union[int, str]  # can be N/A
-    na_validator = field_validator("node", mode="before")(na_to_none)
 
 
 class StaticVram(AmdSmiBaseModel):
@@ -1285,6 +1283,21 @@ class AmdSmiMetric(BaseModel):
     def clock_rails(self) -> MetricClockRails:
         """Enumerated view of clock catching a dropped/renamed known rail."""
         return MetricClockRails.model_validate(self.clock or {})
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_metric_input(cls, value: object) -> object:
+        """Normalize one metric object before field validation.
+
+        Args:
+            value: Raw metric input.
+
+        Returns:
+            The input, with per-block clocks and the PCIe count alias normalized.
+        """
+        if isinstance(value, dict):
+            return normalize_amdsmi_metric_dict(value)
+        return value
 
     @field_validator("ecc_blocks", mode="before")
     @classmethod
