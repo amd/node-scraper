@@ -23,7 +23,10 @@
 # SOFTWARE.
 #
 ###############################################################################
+from nodescraper.connection.redfish import RedfishSshProxyConnectionManager
+from nodescraper.pluginregistry import PluginRegistry
 from nodescraper.plugins.ooband.redfish_endpoint import (
+    AmcRedfishEndpointPlugin,
     RedfishEndpointAnalyzer,
     RedfishEndpointAnalyzerArgs,
     RedfishEndpointCollector,
@@ -64,3 +67,13 @@ def test_redfish_endpoint_plugin_class_attributes():
     assert RedfishEndpointPlugin.ANALYZER is RedfishEndpointAnalyzer
     assert RedfishEndpointPlugin.COLLECTOR_ARGS is RedfishEndpointCollectorArgs
     assert RedfishEndpointPlugin.ANALYZER_ARGS is RedfishEndpointAnalyzerArgs
+
+
+def test_amc_endpoint_plugin_uses_the_ssh_proxy():
+    assert AmcRedfishEndpointPlugin.CONNECTION_TYPE is RedfishSshProxyConnectionManager
+    assert AmcRedfishEndpointPlugin.COLLECTOR is RedfishEndpointCollector
+    assert AmcRedfishEndpointPlugin.ANALYZER is RedfishEndpointAnalyzer
+    assert AmcRedfishEndpointPlugin.DATA_MODEL is RedfishEndpointPlugin.DATA_MODEL
+    assert AmcRedfishEndpointPlugin.COLLECTOR_ARGS is RedfishEndpointCollectorArgs
+    assert AmcRedfishEndpointPlugin.ANALYZER_ARGS is RedfishEndpointPlugin.ANALYZER_ARGS
+    assert "AmcRedfishEndpointPlugin" in PluginRegistry().plugins

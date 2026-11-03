@@ -40,7 +40,7 @@ from nodescraper.connection.redfish import (
 )
 from nodescraper.enums import ExecutionStatus
 from nodescraper.interfaces import DataAnalyzer
-from nodescraper.models import DataModel, SystemInfo
+from nodescraper.models import DataModel, SystemInfo, TaskResult
 from nodescraper.taskresulthooks.filesystemloghook import FileSystemLogHook
 
 
@@ -155,7 +155,7 @@ def test_every_target_down_fails_connect(mock_conn_cls, system_info: SystemInfo)
 
 
 def test_one_bmc_collection_failure_stays_warning(system_info: SystemInfo) -> None:
-    """A collect failure and a missed connect stay a warning when another target succeeds."""
+    """A collect failure stays a warning when another target succeeds."""
     good = MagicMock()
     good.marker = "good"
     bad = MagicMock()
@@ -179,7 +179,37 @@ def test_one_bmc_collection_failure_stays_warning(system_info: SystemInfo) -> No
     assert result.status <= ExecutionStatus.WARNING
     assert multi.multi_target_data["good"].label == "good"
     assert "bad" not in multi.multi_target_data
-    assert "offline" in result.message
+    assert "offline" not in result.message
+    assert "[good] good" in result.message
+    assert "bad" in result.message
+
+
+def test_missed_connect_stays_off_the_plugin_result(system_info: SystemInfo) -> None:
+    """A target that never connected is omitted from the plugin result."""
+    good = MagicMock()
+    good.marker = "good"
+    multi = MultiTargetRedfishConnection(
+        {"good": good},
+        failed_targets={"offline": "Redfish connection failed for target 'offline'"},
+    )
+    connection_manager = MagicMock()
+    connection_manager.connection = multi
+    connection_manager.result = TaskResult(
+        status=ExecutionStatus.WARNING,
+        message="Some Redfish targets failed to connect\n[offline] Redfish connection failed",
+    )
+    plugin = SamplePlugin(
+        system_info=system_info,
+        logger=logging.getLogger("multi-target-test"),
+        connection_manager=connection_manager,
+    )
+
+    result = plugin.run()
+
+    assert result.status == ExecutionStatus.OK
+    assert "offline" not in result.message
+    assert "failed to connect" not in result.message
+    assert result.message == "[good] good"
 
 
 def test_multi_target_logs_under_collector_directory(system_info: SystemInfo, tmp_path) -> None:

@@ -30,7 +30,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydantic import ValidationError
 
-from nodescraper.connection.inband.inband import BaseFileArtifact, CommandArtifact
+from nodescraper.connection.inband.inband import CommandArtifact
+from nodescraper.connection.inband.inbandremote import SSHConnectionError
 from nodescraper.connection.inband.sshparams import SSHConnectionParams
 from nodescraper.connection.redfish.redfish_connection import RedfishConnectionError
 from nodescraper.connection.redfish.redfish_manager import MultiTargetRedfishConnection
@@ -38,6 +39,7 @@ from nodescraper.connection.redfish.ssh_proxy_connection import (
     CurlResponse,
     SshProxyRedfishConnection,
     parse_curl_headers,
+    split_curl_stdout,
 )
 from nodescraper.connection.redfish.ssh_proxy_manager import (
     RedfishSshProxyConnectionManager,
@@ -49,40 +51,39 @@ from nodescraper.enums import ExecutionStatus
 
 
 class FakeRemoteShell:
-    def __init__(self, status=200, headers="", body=b"{}"):
+    def __init__(self, status=200, headers="", body=b"{}", fail_times=0, reconnect_error=None):
         self.status = status
         self.headers = headers
         self.body = body
-        self.files = {}
         self.commands = []
-        self._n = 0
         self.client = MagicMock()
+        self.fail_times = fail_times
+        self.reconnect_error = reconnect_error
+        self.reconnects = 0
+        self._curls = 0
+        self._proxy_ssh_down = False
 
     def run_command(self, command, sudo=False, timeout=30, strip=True):
         self.commands.append(command)
-        if command == "mktemp":
-            self._n += 1
-            path = f"/tmp/ns-proxy-{self._n}"
-            self.files[path] = b""
-            return CommandArtifact(command=command, stdout=path, stderr="", exit_code=0)
         if command.startswith("curl"):
+            self._curls += 1
+            if self._curls <= self.fail_times:
+                return CommandArtifact(
+                    command=command,
+                    stdout="",
+                    stderr="Server connection dropped:",
+                    exit_code=124,
+                )
             parts = shlex.split(command)
-            hdr = parts[parts.index("-D") + 1]
-            body_path = parts[parts.index("-o") + 1]
-            self.files[hdr] = self.headers.encode("utf-8")
-            self.files[body_path] = self.body
-            return CommandArtifact(command=command, stdout=str(self.status), stderr="", exit_code=0)
-        if command.startswith("rm -f"):
-            return CommandArtifact(command=command, stdout="", stderr="", exit_code=0)
+            trailer = parts[parts.index("-w") + 1].replace("%{http_code}", str(self.status))
+            stdout = f"{self.headers}{self.body.decode('utf-8')}{trailer}"
+            return CommandArtifact(command=command, stdout=stdout, stderr="", exit_code=0)
         return CommandArtifact(command=command, stdout="", stderr="unexpected", exit_code=1)
 
-    def read_file(self, filename, encoding="utf-8", strip=True):
-        return BaseFileArtifact.from_bytes(
-            filename=filename,
-            raw_contents=self.files[filename],
-            encoding=encoding,
-            strip=strip,
-        )
+    def reconnect_ssh(self):
+        self.reconnects += 1
+        if self.reconnect_error is not None:
+            raise self.reconnect_error
 
 
 def test_parse_curl_headers_last_hop_wins():
@@ -118,6 +119,72 @@ def test_ssh_proxy_get_uses_quoted_internal_url():
     curl_cmds = [c for c in shell.commands if c.startswith("curl")]
     assert len(curl_cmds) == 1
     assert "http://192.0.2.10:80/redfish/v1" in curl_cmds[0]
+    assert "-D -" in curl_cmds[0]
+    assert "-o -" in curl_cmds[0]
+    assert all(not command.startswith("mktemp") for command in shell.commands)
+    assert shell.reconnects == 0
+
+
+def test_split_curl_stdout_keeps_crlf_body():
+    marker = "NODESCRAPERdeadbeef"
+    raw = (
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n"
+        '{"Id": "card"}\n'
+        f"{marker}200\n"
+    )
+    status, headers, body = split_curl_stdout(raw, marker)
+    assert status == 200
+    assert "Content-Type: application/json" in headers
+    assert body == b'{"Id": "card"}'
+
+
+def test_ssh_proxy_reconnects_once_after_dropped_session():
+    shell = FakeRemoteShell(
+        headers="HTTP/1.1 200 OK\nContent-Type: application/json\n\n",
+        body=b'{"RedfishVersion": "1.15.0"}',
+        fail_times=1,
+    )
+    conn = SshProxyRedfishConnection(shell, "http://192.0.2.10:80", api_root="redfish/v1")
+    data = conn.get_service_root()
+    assert data["RedfishVersion"] == "1.15.0"
+    assert shell.reconnects == 1
+    assert shell._curls == 2
+
+
+def test_ssh_proxy_does_not_retry_after_the_second_drop():
+    shell = FakeRemoteShell(fail_times=5)
+    conn = SshProxyRedfishConnection(shell, "http://192.0.2.10:80", api_root="redfish/v1")
+    with pytest.raises(RedfishConnectionError, match="Server connection dropped"):
+        conn.get_service_root()
+    with pytest.raises(RedfishConnectionError, match="SSH session not active"):
+        conn.get_service_root()
+    assert shell.reconnects == 1
+    assert shell._curls == 2
+
+
+def test_ssh_proxy_reports_reconnect_failure():
+    shell = FakeRemoteShell(fail_times=1, reconnect_error=SSHConnectionError("SSH Request timeout"))
+    conn = SshProxyRedfishConnection(shell, "http://192.0.2.10:80", api_root="redfish/v1")
+    with pytest.raises(RedfishConnectionError, match="SSH proxy reconnect failed"):
+        conn.get_service_root()
+    assert shell.reconnects == 1
+    assert shell._curls == 1
+
+
+def test_ssh_proxy_curl_timeout_does_not_reconnect():
+    shell = FakeRemoteShell()
+
+    def timed_out(command, sudo=False, timeout=30, strip=True):
+        shell.commands.append(command)
+        return CommandArtifact(
+            command=command, stdout="", stderr="Command timed out", exit_code=124
+        )
+
+    shell.run_command = timed_out
+    conn = SshProxyRedfishConnection(shell, "http://192.0.2.10:80", api_root="redfish/v1")
+    with pytest.raises(RedfishConnectionError, match="Command timed out"):
+        conn.get_service_root()
+    assert shell.reconnects == 0
 
 
 def test_ssh_proxy_post_includes_json_body():

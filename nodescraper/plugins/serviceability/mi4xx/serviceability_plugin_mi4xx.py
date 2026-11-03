@@ -25,12 +25,12 @@
 ###############################################################################
 from __future__ import annotations
 
-from typing import Annotated, Any, Optional, Union
+from typing import Annotated, Any, Optional, Union, cast
 
 from pydantic import Field
 
-from nodescraper.enums import EventPriority, ExecutionStatus, SystemInteractionLevel
-from nodescraper.models import DataPluginResult, PluginResult, TaskResult
+from nodescraper.enums import EventPriority, SystemInteractionLevel
+from nodescraper.models import PluginResult
 from nodescraper.plugins.serviceability.afid_sag_lookup import log_afid_fru_summary
 from nodescraper.plugins.serviceability.serviceability_data import (
     ServiceabilityDataLoadError,
@@ -140,25 +140,22 @@ class Mi4xxServiceabilityPlugin(ServiceabilityPluginBase):
             return collection_args.model_copy(update={"rf_event_log_uri": uri_text})
         return collection_args
 
-    def _plugin_error_result(self, message: str) -> PluginResult:
-        self.logger.error("(%s) %s", self.__class__.__name__, message)
-        return PluginResult(
-            status=ExecutionStatus.ERROR,
-            source=self.__class__.__name__,
-            message=message,
-            result_data=DataPluginResult(
-                collection_result=TaskResult(
-                    status=ExecutionStatus.NOT_RAN,
-                    parent=self.__class__.__name__,
-                    message="Data collection skipped",
-                ),
-                analysis_result=TaskResult(
-                    status=ExecutionStatus.ERROR,
-                    parent=self.__class__.__name__,
-                    message=message,
-                ),
-            ),
-        )
+    def _apply_afid_sag_path_to_collection_args(
+        self,
+        afid_sag_path: str,
+        collection_args: Any,
+    ) -> Any:
+        """Copy a resolved AFID_SAG path onto MI4xx collector args.
+
+        Args:
+            afid_sag_path: Absolute path returned by preflight.
+            collection_args: MI4xx collector args for this run, or None.
+
+        Returns:
+            Collector args with afid_sag_path set.
+        """
+        merged_collection, _ = self._merge_afid_sag_path(afid_sag_path, collection_args, None)
+        return merged_collection
 
     def run(  # type: ignore[override]
         self,
@@ -197,6 +194,16 @@ class Mi4xxServiceabilityPlugin(ServiceabilityPluginBase):
             collection_args,
             analysis_args,
         )
+
+        if analysis:
+            preflight = self._preflight_hub_sag(collection_args, analysis_args)
+            if isinstance(preflight, PluginResult):
+                return preflight
+            collection_args, updated_analysis = preflight
+            analysis_args = cast(
+                Optional[Union[Mi4xxServiceabilityAnalyzerArgs, dict[str, Any]]],
+                updated_analysis,
+            )
 
         if analysis and not collection and data is not None:
             try:

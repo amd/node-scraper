@@ -35,26 +35,27 @@ from nodescraper.plugins.serviceability.serviceability_api import (
 )
 
 
-def test_export_serviceability_json_keeps_raw_hub_and_drops_duplicate_rows():
+def test_export_serviceability_json_is_only_the_afse_response():
+    hub_response = {
+        "schema_version": "1.0",
+        "status": "ok",
+        "triage": {
+            "top": [{"afid": DUMMY_AFID_A, "location": DUMMY_UNIT_A, "se_sort_priority": 1000}],
+            "results": [{"afid": DUMMY_AFID_A, "location": DUMMY_UNIT_A, "se_sort_priority": 1000}],
+            "multi_afid_summary": [],
+        },
+        "pid": "SAG-00000",
+        "revision": "1.0.0",
+    }
     block = ServiceabilityBlock(
         afid_events=[
             AfidEvent(
                 afid=DUMMY_AFID_A, serviceable_unit="Instinct_EAM_0", time="2025-01-01T00:00:00Z"
             )
         ],
-        hub_analyze_response={
-            "schema_version": "1.0",
-            "status": "ok",
-            "triage": {
-                "top": [{"afid": DUMMY_AFID_A, "location": DUMMY_UNIT_A, "se_sort_priority": 1000}],
-                "results": [
-                    {"afid": DUMMY_AFID_A, "location": DUMMY_UNIT_A, "se_sort_priority": 1000}
-                ],
-                "multi_afid_summary": [],
-            },
-            "pid": "SAG-00000",
-            "revision": "1.0.0",
-        },
+        solution_reasoning="node-scraper summary",
+        hub_version="0.2.0",
+        hub_analyze_response=hub_response,
         hub_top_results=[
             HubTriageResult(
                 afid=DUMMY_AFID_A,
@@ -75,6 +76,19 @@ def test_export_serviceability_json_keeps_raw_hub_and_drops_duplicate_rows():
 
     payload = export_serviceability_json(block)
 
-    assert payload["hub_analyze_response"]["triage"]["top"][0]["se_sort_priority"] == 1000
-    assert "hub_top_results" not in payload
+    assert payload == hub_response
+    assert "afid_events" not in payload
+    assert "solution" not in payload
     assert "hub_triage_results" not in payload
+
+
+def test_export_serviceability_json_omits_file_without_afse_response():
+    block = ServiceabilityBlock(
+        afid_events=[
+            AfidEvent(
+                afid=DUMMY_AFID_A, serviceable_unit="Instinct_EAM_0", time="2025-01-01T00:00:00Z"
+            )
+        ]
+    )
+
+    assert export_serviceability_json(block) is None
