@@ -167,7 +167,7 @@ def test_missing_service_root_is_an_error(system_info, redfish_conn_mock):
 def test_plugin_registers_collector():
     assert RedfishInventoryPlugin.COLLECTOR is RedfishInventoryCollector
     assert RedfishInventoryPlugin.DATA_MODEL.__name__ == "RedfishInventoryDataModel"
-    assert RedfishInventoryPlugin.ANALYZER is None
+    assert RedfishInventoryPlugin.ANALYZER.__name__ == "RedfishInventoryAnalyzer"
 
 
 def test_amc_inventory_plugin_uses_the_ssh_proxy():
@@ -175,7 +175,7 @@ def test_amc_inventory_plugin_uses_the_ssh_proxy():
     assert AmcRedfishInventoryPlugin.COLLECTOR is RedfishInventoryCollector
     assert AmcRedfishInventoryPlugin.DATA_MODEL is RedfishInventoryPlugin.DATA_MODEL
     assert AmcRedfishInventoryPlugin.COLLECTOR_ARGS is RedfishInventoryCollectorArgs
-    assert AmcRedfishInventoryPlugin.ANALYZER is None
+    assert AmcRedfishInventoryPlugin.ANALYZER is RedfishInventoryPlugin.ANALYZER
     assert "AmcRedfishInventoryPlugin" in PluginRegistry().plugins
 
 

@@ -25,9 +25,17 @@
 ###############################################################################
 from __future__ import annotations
 
+import json
+from datetime import datetime, timezone
+
+from nodescraper.connection.inband import TextFileArtifact
+from nodescraper.plugins.serviceability.se_models import ServiceabilityBlock
+from nodescraper.plugins.serviceability.serviceability_api import top_action_summary
 from nodescraper.plugins.serviceability.serviceability_hub_analyzer import (
     ServiceabilityHubAnalyzer,
 )
+
+SUMMARY_FILENAME = "summary.json"
 
 
 class MI4XXAnalyzer(ServiceabilityHubAnalyzer):
@@ -38,4 +46,21 @@ class MI4XXAnalyzer(ServiceabilityHubAnalyzer):
         "Runs the configured entry-point service hub (hub_entry_point in analysis_args) to produce service recommendations.",
         "When analysis_args.skip_hub is true, only builds AFID events without running the hub.",
         "Supports offline analysis from a prior collection via --data with --collection False.",
+        f"Writes the top service action to {SUMMARY_FILENAME} in the analyzer log directory.",
     )
+
+    def _append_hub_artifacts(self, block: ServiceabilityBlock) -> None:
+        super()._append_hub_artifacts(block)
+        self.result.artifacts.append(
+            TextFileArtifact(
+                filename=SUMMARY_FILENAME,
+                contents=json.dumps(
+                    top_action_summary(
+                        block,
+                        system_name=self.system_info.name,
+                        analyzed_at=datetime.now(timezone.utc).isoformat(),
+                    ),
+                    indent=2,
+                ),
+            )
+        )

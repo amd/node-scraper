@@ -23,13 +23,17 @@
 # SOFTWARE.
 #
 ###############################################################################
+from .analyzer_args import RedfishInventoryAnalyzerArgs
 from .collector_args import RedfishInventoryCollectorArgs
+from .inventory_analyzer import RedfishInventoryAnalyzer
 from .inventory_collector import RedfishInventoryCollector
 from .inventory_data import RedfishInventoryDataModel
 from .inventory_plugin import AmcRedfishInventoryPlugin, RedfishInventoryPlugin
 
 __all__ = [
     "AmcRedfishInventoryPlugin",
+    "RedfishInventoryAnalyzer",
+    "RedfishInventoryAnalyzerArgs",
     "RedfishInventoryCollector",
     "RedfishInventoryCollectorArgs",
     "RedfishInventoryDataModel",

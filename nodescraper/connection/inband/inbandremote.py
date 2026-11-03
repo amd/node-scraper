@@ -26,7 +26,7 @@
 import logging
 import os
 import socket
-from typing import Type, Union
+from typing import Any, Type, Union
 
 import paramiko
 from paramiko.ssh_exception import (
@@ -85,8 +85,11 @@ class RemoteShell(InBandConnection):
             None.
         """
         transport = self.client.get_transport()
-        if transport is not None and getattr(transport, "channel_timeout", None) is None:
-            transport.channel_timeout = CHANNEL_OPEN_TIMEOUT
+        if transport is None:
+            return
+        runtime_transport: Any = transport
+        if runtime_transport.channel_timeout is None:
+            runtime_transport.channel_timeout = CHANNEL_OPEN_TIMEOUT
 
     def connect_ssh(self):
         """Connect to the remote host via SSH"""
