@@ -24,6 +24,7 @@
 #
 ###############################################################################
 """AFID / serviceable unit extraction for OpenBMC-style LogEntry payloads."""
+
 from __future__ import annotations
 
 from serviceability_dummy_data import (
@@ -41,7 +42,11 @@ from serviceability_dummy_data import (
 
 from nodescraper.plugins.serviceability.afid_events import (
     _afid_event_from_rf_member,
+    amd_field_identifiers_with_units,
     build_afid_events_from_data,
+)
+from nodescraper.plugins.serviceability.se_runner import (
+    drop_afids_without_serviceable_units,
 )
 from nodescraper.plugins.serviceability.serviceability_data import (
     ServiceabilityDataModel,
@@ -80,3 +85,102 @@ def test_build_afid_events_from_data_includes_openbmc_entries():
     by_afid_oam = {(e.afid, e.serviceable_unit) for e in events}
     assert (DUMMY_AFID_BELOW_RF, DUMMY_UNIT_A) in by_afid_oam
     assert (DUMMY_AFID_FATAL_HBM, DUMMY_UNIT_C) in by_afid_oam
+
+
+def test_amd_field_identifiers_split_and_drop_members_without_a_location():
+    located = {
+        "Id": "located",
+        "Oem": {
+            "AMD": {
+                "AMDFieldIdentifiers": [
+                    {
+                        "AFID": DUMMY_AFID_A,
+                        "ServiceableUnits": [{"@odata.id": f"/redfish/v1/Chassis/{DUMMY_UNIT_B}"}],
+                    }
+                ]
+            }
+        },
+    }
+    missing = {
+        "@odata.id": "/redfish/v1/Systems/dummy/LogServices/EventLog/Entries/9",
+        "Id": "missing",
+        "Oem": {"AMD": {"AMDFieldIdentifiers": [{"AFID": 11045, "Description": "update"}]}},
+    }
+    mixed = {
+        "Id": "mixed",
+        "Oem": {
+            "AMD": {
+                "AMDFieldIdentifiers": [
+                    {"AFID": 11045},
+                    {
+                        "AFID": DUMMY_AFID_A,
+                        "ServiceableUnits": [{"@odata.id": f"/redfish/v1/Chassis/{DUMMY_UNIT_A}"}],
+                    },
+                ]
+            }
+        },
+    }
+    plain = {"Id": "plain", "Message": "no oem"}
+    usable, unusable = amd_field_identifiers_with_units(missing["Oem"])
+    assert usable == []
+    assert unusable == [{"AFID": 11045, "Description": "update"}]
+    assert amd_field_identifiers_with_units(plain) is None
+    kept = drop_afids_without_serviceable_units([located, missing, mixed, plain])
+    kept_ids = [member["Id"] for member in kept]
+    assert kept_ids == ["located", "mixed", "plain"]
+    mixed_kept = next(member for member in kept if member["Id"] == "mixed")
+    assert mixed_kept["Oem"]["AMD"]["AMDFieldIdentifiers"] == [
+        {
+            "AFID": DUMMY_AFID_A,
+            "ServiceableUnits": [{"@odata.id": f"/redfish/v1/Chassis/{DUMMY_UNIT_A}"}],
+        }
+    ]
+
+
+def test_ok_severity_without_serviceable_units_is_silent(caplog):
+    member = {
+        "Id": "ok-update",
+        "@odata.id": "/redfish/v1/Systems/dummy/LogServices/EventLog/Entries/1",
+        "Severity": "OK",
+        "Oem": {"AMD": {"AMDFieldIdentifiers": [{"AFID": 11045}]}},
+    }
+    with caplog.at_level("WARNING"):
+        kept = drop_afids_without_serviceable_units([member])
+    assert kept == []
+    assert "11045" not in caplog.text
+
+
+def test_non_ok_severity_without_serviceable_units_warns(caplog):
+    member = {
+        "Id": "fault",
+        "@odata.id": "/redfish/v1/Systems/dummy/LogServices/EventLog/Entries/2",
+        "Severity": "Critical",
+        "Oem": {"AMD": {"AMDFieldIdentifiers": [{"AFID": 11045}]}},
+    }
+    with caplog.at_level("WARNING"):
+        kept = drop_afids_without_serviceable_units([member])
+    assert kept == []
+    assert "Waiving AFID 11045" in caplog.text
+
+
+def test_serviceable_unit_from_oem_amd_field_identifiers():
+    ev = _afid_event_from_rf_member(
+        {
+            "Created": DUMMY_TIMESTAMP,
+            "Oem": {
+                "AMD": {
+                    "AMDFieldIdentifiers": [
+                        {
+                            "AFID": DUMMY_AFID_A,
+                            "ServiceableUnits": [
+                                {"@odata.id": f"/redfish/v1/Chassis/{DUMMY_UNIT_B}"}
+                            ],
+                        }
+                    ]
+                }
+            },
+        }
+    )
+    assert ev is not None
+    assert ev.afid == DUMMY_AFID_A
+    assert ev.serviceable_unit == DUMMY_UNIT_B

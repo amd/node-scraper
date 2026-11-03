@@ -26,16 +26,17 @@
 from __future__ import annotations
 
 import json as json_lib
+import logging
+import secrets
 import shlex
 from http import HTTPStatus
 from typing import Any, Optional, Union
 from urllib.parse import urljoin, urlparse
 
-from paramiko.ssh_exception import SSHException
 from requests.structures import CaseInsensitiveDict
 
-from nodescraper.connection.inband.inband import BinaryFileArtifact, CommandArtifact
-from nodescraper.connection.inband.inbandremote import RemoteShell
+from nodescraper.connection.inband.inband import CommandArtifact
+from nodescraper.connection.inband.inbandremote import RemoteShell, SSHConnectionError
 
 from .redfish_connection import RedfishConnection, RedfishConnectionError
 from .redfish_path import RedfishPath
@@ -60,6 +61,70 @@ def parse_curl_headers(header_text: str) -> CaseInsensitiveDict:
             name, value = line.split(":", 1)
             headers[name.strip()] = value.strip()
     return headers
+
+
+_DEAD_SESSION_MARKERS = (
+    "server connection dropped",
+    "ssh session not active",
+    "session not active",
+    "timeout opening channel",
+    "socket is closed",
+    "connection reset",
+    "not connected",
+    "ssh channel failed",
+)
+
+
+def _is_dead_session(detail: str) -> bool:
+    """Return whether an SSH error means the BMC session is gone.
+
+    Args:
+        detail: Error text from the SSH client.
+
+    Returns:
+        True when the session should be opened again.
+    """
+    text = detail.lower()
+    return any(marker in text for marker in _DEAD_SESSION_MARKERS)
+
+
+def split_curl_stdout(raw: str, marker: str) -> tuple[int, str, bytes]:
+    """Split curl stdout into an HTTP status, headers, and body.
+
+    Args:
+        raw: Combined curl stdout.
+        marker: Trailer token written by curl -w.
+
+    Returns:
+        Status code, header text, and body bytes.
+    """
+    payload, found, tail = raw.rpartition(marker)
+    if not found:
+        raise RedfishConnectionError("curl stdout is missing the status trailer")
+    if payload.endswith("\n"):
+        payload = payload[:-1]
+    try:
+        status_code = int(tail.strip())
+    except (TypeError, ValueError) as exc:
+        raise RedfishConnectionError(f"curl status is not numeric: {tail.strip()}") from exc
+    header_text, body_text = _split_header_and_body(payload)
+    return status_code, header_text, body_text.encode("utf-8")
+
+
+def _split_header_and_body(payload: str) -> tuple[str, str]:
+    """Split a curl -D - payload into header text and body text.
+
+    Args:
+        payload: Headers and body with the status trailer removed.
+
+    Returns:
+        Header text and body text. Header text is empty when no header block is present.
+    """
+    for separator in ("\r\n\r\n", "\n\n"):
+        index = payload.find(separator)
+        if index != -1:
+            return payload[:index], payload[index + len(separator) :]
+    return "", payload
 
 
 def _url_path(url: str) -> str:
@@ -137,63 +202,78 @@ class SshProxyRedfishConnection(RedfishConnection):
     def _cmd_timeout(self) -> int:
         return max(int(self.timeout) + 15, 30)
 
-    def _mktemp(self) -> str:
-        artifact = self._shell.run_command("mktemp", timeout=self._cmd_timeout())
-        path = (artifact.stdout or "").strip()
-        if artifact.exit_code != 0 or not path:
-            detail = (artifact.stderr or "").strip()
-            raise RedfishConnectionError(detail or "Failed to create remote temp file via mktemp")
-        return path
-
-    def _rm(self, *paths: str) -> None:
-        quoted = " ".join(shlex.quote(p) for p in paths if p)
-        if quoted:
-            self._shell.run_command(f"rm -f {quoted}", timeout=self._cmd_timeout())
-
     def _curl(self, url: str, extra_flags: str = "") -> CurlResponse:
-        header_path = ""
-        body_path = ""
+        """Run curl over SSH, and open the session again once if it has dropped.
+
+        Args:
+            url: Absolute URL to request.
+            extra_flags: Extra curl arguments, including a trailing space when set.
+
+        Returns:
+            CurlResponse with status, headers, and body.
+        """
+        if self._shell._proxy_ssh_down:
+            raise RedfishConnectionError("SSH session not active")
         try:
-            header_path = self._mktemp()
-            body_path = self._mktemp()
-            max_time = max(int(self.timeout), 1)
-            cmd = (
-                f"curl -sS --max-time {max_time} -D {shlex.quote(header_path)} "
-                f"-o {shlex.quote(body_path)} -w '%{{http_code}}' {extra_flags}"
-                f"{shlex.quote(url)}"
+            return self._curl_once(url, extra_flags)
+        except RedfishConnectionError as exc:
+            if not _is_dead_session(str(exc)):
+                raise
+            logging.getLogger("nodescraper").info(
+                "SSH proxy session dropped; reconnecting and retrying %s",
+                _url_path(url),
             )
-            result: CommandArtifact = self._shell.run_command(
-                cmd, timeout=self._cmd_timeout(), strip=True
-            )
-            status_str = (result.stdout or "").strip()
             try:
-                status_code = int(status_str)
-            except (TypeError, ValueError) as exc:
-                detail = result.stderr or result.stdout or str(exc)
-                raise RedfishConnectionError(f"curl to {_url_path(url)} failed: {detail}") from exc
-            if result.exit_code != 0 and status_code == 0:
+                self._shell.reconnect_ssh()
+            except (SSHConnectionError, OSError) as reconnect_exc:
+                self._shell._proxy_ssh_down = True
                 raise RedfishConnectionError(
-                    f"curl to {_url_path(url)} failed: {result.stderr or result.stdout}"
-                )
-            header_art = self._shell.read_file(header_path, encoding="utf-8", strip=False)
-            body_art = self._shell.read_file(body_path, encoding=None)
-            if isinstance(header_art, BinaryFileArtifact):
-                header_text = header_art.contents.decode("utf-8", errors="replace")
-            else:
-                header_text = header_art.contents_str()
-            if isinstance(body_art, BinaryFileArtifact):
-                body = body_art.contents
-            else:
-                body = body_art.contents_str().encode("utf-8")
-            return CurlResponse(
-                status_code=status_code,
-                content=body,
-                headers=parse_curl_headers(header_text),
-            )
-        except SSHException as exc:
-            raise RedfishConnectionError(f"SSH channel failed: {exc}") from exc
-        finally:
-            self._rm(header_path, body_path)
+                    f"SSH proxy reconnect failed: {reconnect_exc}"
+                ) from reconnect_exc
+            try:
+                return self._curl_once(url, extra_flags)
+            except RedfishConnectionError as retry_exc:
+                if _is_dead_session(str(retry_exc)):
+                    self._shell._proxy_ssh_down = True
+                raise
+
+    def _curl_once(self, url: str, extra_flags: str = "") -> CurlResponse:
+        """Run one curl on the BMC and read the response from that command.
+
+        Args:
+            url: Absolute URL to request.
+            extra_flags: Extra curl arguments, including a trailing space when set.
+
+        Returns:
+            CurlResponse with status, headers, and body.
+        """
+        marker = f"NODESCRAPER{secrets.token_hex(16)}"
+        max_time = max(int(self.timeout), 1)
+        trailer = f"\n{marker}%{{http_code}}\n"
+        cmd = (
+            f"curl -sS --max-time {max_time} -D - -o - "
+            f"-w {shlex.quote(trailer)} {extra_flags}{shlex.quote(url)}"
+        )
+        result: CommandArtifact = self._shell.run_command(
+            cmd, timeout=self._cmd_timeout(), strip=False
+        )
+        if _is_dead_session(result.stderr or ""):
+            raise RedfishConnectionError((result.stderr or "").strip() or "SSH session not active")
+        raw = result.stdout or ""
+        detail = (result.stderr or result.stdout or "").strip()
+        if marker not in raw:
+            raise RedfishConnectionError(f"curl to {_url_path(url)} failed: {detail}")
+        try:
+            status_code, header_text, body = split_curl_stdout(raw, marker)
+        except RedfishConnectionError as exc:
+            raise RedfishConnectionError(f"curl to {_url_path(url)} failed: {exc}") from exc
+        if result.exit_code != 0 and status_code == 0:
+            raise RedfishConnectionError(f"curl to {_url_path(url)} failed: {detail}")
+        return CurlResponse(
+            status_code=status_code,
+            content=body,
+            headers=parse_curl_headers(header_text),
+        )
 
     def _ensure_session(self):
         return None

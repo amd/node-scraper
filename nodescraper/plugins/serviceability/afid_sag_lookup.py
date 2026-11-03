@@ -48,19 +48,46 @@ def load_afid_sag_data(path: Optional[str]) -> Optional[dict[str, Any]]:
 
 
 def normalize_fru_name(name: str) -> str:
-    """Normalize FRU labels for comparison (SAG serviceable_fru vs afid.fru)."""
+    """Normalize a FRU or action subject for comparison.
+
+    Args:
+        name: SAG fru or action_subject label.
+
+    Returns:
+        Uppercase label with hyphens replaced by underscores.
+    """
     return str(name).strip().upper().replace("-", "_")
 
 
-def known_fru_names_from_sag(sag: Optional[dict[str, Any]]) -> list[str]:
-    """Return normalized FRU names declared under serviceable_fru in the SAG."""
+def _serviceable_catalog(sag: Optional[dict[str, Any]]) -> list[Any]:
+    """Return the SAG list of serviceable groups.
+
+    Args:
+        sag: Loaded AFID SAG object.
+
+    Returns:
+        serviceable_fru when that list is present, otherwise serviceable_action_subject.
+    """
     if not sag:
         return []
-    raw = sag.get("serviceable_fru")
-    if not isinstance(raw, list):
-        return []
+    for key in ("serviceable_fru", "serviceable_action_subject"):
+        raw = sag.get(key)
+        if isinstance(raw, list) and raw:
+            return raw
+    return []
+
+
+def known_fru_names_from_sag(sag: Optional[dict[str, Any]]) -> list[str]:
+    """Return normalized serviceable group names from the SAG catalog.
+
+    Args:
+        sag: Loaded AFID SAG object.
+
+    Returns:
+        Normalized fru or action_subject names declared in the SAG catalog.
+    """
     names: list[str] = []
-    for item in raw:
+    for item in _serviceable_catalog(sag):
         if not isinstance(item, dict):
             continue
         for key in item:
@@ -71,14 +98,16 @@ def known_fru_names_from_sag(sag: Optional[dict[str, Any]]) -> list[str]:
 
 
 def sag_fru_display_names(sag: Optional[dict[str, Any]]) -> list[str]:
-    """Return sorted FRU labels from SAG serviceable_fru using the original key text."""
-    if not sag:
-        return []
-    raw = sag.get("serviceable_fru")
-    if not isinstance(raw, list):
-        return []
+    """Return serviceable group labels from the SAG catalog.
+
+    Args:
+        sag: Loaded AFID SAG object.
+
+    Returns:
+        Original fru or action_subject key text from the SAG catalog.
+    """
     names: list[str] = []
-    for item in raw:
+    for item in _serviceable_catalog(sag):
         if not isinstance(item, dict):
             continue
         for key in item:
@@ -100,14 +129,23 @@ def afid_entry_from_sag(afid: int, sag: Optional[dict[str, Any]]) -> Optional[di
 
 
 def afid_fru_from_sag(afid: int, sag: Optional[dict[str, Any]]) -> Optional[str]:
-    """Return the FRU string for an AFID from the SAG afid table."""
+    """Return the FRU or action subject for an AFID from the SAG afid table.
+
+    Args:
+        afid: AMD Fault ID.
+        sag: Loaded AFID SAG object.
+
+    Returns:
+        afid.fru when set, otherwise afid.action_subject. None when neither is set.
+    """
     entry = afid_entry_from_sag(afid, sag)
     if not entry:
         return None
-    fru = entry.get("fru")
-    if fru is None or not str(fru).strip():
-        return None
-    return str(fru).strip()
+    for key in ("fru", "action_subject"):
+        value = entry.get(key)
+        if value is not None and str(value).strip():
+            return str(value).strip()
+    return None
 
 
 def afid_summary_from_sag(afid: int, sag: Optional[dict[str, Any]]) -> Optional[str]:
@@ -182,7 +220,15 @@ def group_afid_events_by_fru(
     events: list[AfidEvent],
     sag: Optional[dict[str, Any]],
 ) -> dict[str, list[AfidEvent]]:
-    """Group parsed AFID events by SAG FRU (unknown FRU bucket when lookup fails)."""
+    """Group parsed AFID events by SAG fru or action subject.
+
+    Args:
+        events: Parsed AFID events.
+        sag: Loaded AFID SAG object.
+
+    Returns:
+        Events keyed by normalized fru or action subject. Missing labels use UNKNOWN_FRU.
+    """
     grouped: dict[str, list[AfidEvent]] = defaultdict(list)
     for event in events:
         fru = afid_fru_from_sag(event.afid, sag) or "UNKNOWN_FRU"
@@ -215,13 +261,6 @@ def format_collected_afid_fru_summary_lines(
         unit_bits = ", ".join(f"{unit} x{count}" for unit, count in sorted(unit_counts.items()))
         lines.append(f"  {fru}: AFIDs [{afid_bits}]")
         lines.append(f"    units: {unit_bits}")
-    known = known_fru_names_from_sag(sag)
-    if known:
-        missing = sorted(set(known) - set(grouped.keys()))
-        if missing:
-            lines.append(f"  FRUs in SAG with no collected AFID events: {', '.join(missing)}")
-        else:
-            lines.append("  All SAG serviceable FRUs have at least one collected AFID event.")
     return lines
 
 
