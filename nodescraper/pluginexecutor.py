@@ -40,6 +40,10 @@ from nodescraper.base.oobsshdataplugin import OOBSSHDataPlugin
 from nodescraper.connection.inband import InBandConnectionManager
 from nodescraper.connection.inband.osdetection import discover_and_write_os_family
 from nodescraper.connection.oob_ssh import OobSshConnectionManager
+from nodescraper.connection.redfish import (
+    RedfishConnectionManager,
+    RedfishSshProxyConnectionManager,
+)
 from nodescraper.constants import DEFAULT_LOGGER
 from nodescraper.enums import ExecutionStatus, OSFamily
 from nodescraper.helpers.plugin_execution_target import (
@@ -268,6 +272,35 @@ class PluginExecutor:
         finally:
             inband_connection.safe_disconnect()
 
+    def _resolve_redfish_manager(self, plugin_name: str) -> Optional[ConnectionManager]:
+        """Pick the Redfish transport for a plugin declaring ``RedfishConnectionManager``.
+
+        The direct ``RedfishConnectionManager`` wins when configured; otherwise
+        ``RedfishSshProxyConnectionManager`` is used. With neither configured the plugin is skipped.
+
+        Args:
+            plugin_name: Registry key for the plugin (for logging).
+
+        Returns:
+            The connection manager instance, or None if no Redfish connection is configured.
+        """
+        for name in (
+            RedfishConnectionManager.__name__,
+            RedfishSshProxyConnectionManager.__name__,
+        ):
+            if name not in self.connection_configs:
+                continue
+            mgr_impl = self.plugin_registry.connection_managers.get(name)
+            conn_mgr = self.connection_library.get(mgr_impl) if mgr_impl else None
+            if conn_mgr is not None:
+                return conn_mgr
+        self.logger.error(
+            "%s requires RedfishConnectionManager or RedfishSshProxyConnectionManager in the "
+            "connection config",
+            plugin_name,
+        )
+        return None
+
     def _get_connection_manager_for_plugin(
         self,
         plugin_class: type,
@@ -281,6 +314,11 @@ class PluginExecutor:
 
         The resolved manager is stored in ``self.connection_library`` so that it can
         be shared across plugins that require the same type.
+
+        Plugins declaring ``RedfishConnectionManager`` fall back to
+        ``RedfishSshProxyConnectionManager`` when only the proxy is configured
+        (see :meth:`_resolve_redfish_manager`). Plugins declaring
+        ``RedfishSshProxyConnectionManager`` always use the proxy.
         """
         if not plugin_class.CONNECTION_TYPE:
             return None
@@ -296,6 +334,8 @@ class PluginExecutor:
                 return None
         else:
             connection_manager_class: Type[ConnectionManager] = plugin_class.CONNECTION_TYPE
+            if connection_manager_class is RedfishConnectionManager:
+                return self._resolve_redfish_manager(plugin_name)
             if connection_manager_class.__name__ in self.plugin_registry.connection_managers:
                 mgr_impl = self.plugin_registry.connection_managers[
                     connection_manager_class.__name__

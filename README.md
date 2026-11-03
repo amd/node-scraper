@@ -269,16 +269,20 @@ Redfish plugins can collect from multiple BMCs concurrently. In-band plugins and
 }
 ```
 
-Multi-target mode applies to Redfish plugins (`RedfishEndpointPlugin`, `RedfishOemDiagPlugin`, and other plugins based on `OOBandDataPlugin`). Targets are collected concurrently. Wall-clock time follows the slowest target.
+List each Redfish plugin once. Put the hosts on that plugin's connection manager `targets` list. `RedfishConnectionManager` is the direct BMC session used by `RedfishEndpointPlugin`, `RedfishInventoryPlugin`, and `RedfishOemDiagPlugin`. `RedfishSshProxyConnectionManager` is the SSH proxy used by `AmcRedfishInventoryPlugin`, `AmcRedfishEndpointPlugin`, and `AmcRedfishDiagPlugin`. Those two managers are separate lists, so a plugin compares and collects only the targets it connected.
 
-A target that fails to connect or collect does not fail the run when another target succeeds. That plugin result is a warning, and analysis still runs for the targets that returned data. The run fails when every target fails, or when analysis of collected data reports an error.
+Targets are collected concurrently. Connect failures stay on the connection result. The plugin result shows collection and analysis for the targets that connected, and the run fails when every target fails to connect or analysis reports an error.
 
 - `targets`: list of per-target connection parameters. Each entry accepts the same fields as the single-target config plus an optional `target_key` (used as the result key; defaults to the host string).
 - `max_workers` (optional): maximum concurrent collection threads. Defaults to `min(len(targets), 32)` and is capped at 32.
 
-Per-target results are written to `<plugin>/<collector>/<target_key>/`. Single-target results stay in `<plugin>/<collector>/`. The same layout is used for the analyzer directory and for the AMC SSH-proxy plugin.
+Per-target results are written to `<plugin>/<collector>/<target_key>/`. Single-target results stay in `<plugin>/<collector>/`. The same layout is used for the analyzer directory and for the AMC SSH-proxy plugin. Inventory collection writes `redfishinventorydatamodel.json` in the collector directory.
 
 A ready-to-edit sample is in `config/connection-config_redfish_multi_target.example.json`. Replace the example hosts and password, then pass it with `--connection-config`.
+
+**Firmware comparison:** `RedfishInventoryPlugin` and `AmcRedfishInventoryPlugin` compare `FirmwareInventory` across the targets that plugin connected. `analysis_args.compare_firmware` defaults to `true`. Each member is compared by its published `Id`. A missing or empty `Version` is recorded as `N/A`. The warning also records `Status.Health`, `Status.State`, `SoftwareId`, `Updateable`, and `Oem.SVN`. A different version, or a member present on one connected target and absent on another, logs one `FW` warning per component. BMC firmware is not compared with AMC firmware. A target that failed to connect is excluded. One connected target does not warn. Set `compare_firmware` to `false` to skip the check.
+
+The console summary reports the warning count. Each component is in the analyzer `events.json`, and `result.json` has the summary. Collection profiles and the other inventory switches are in the [plugin reference](docs/PLUGIN_DOC.md).
 
 **Notes:**
 - If using SSH keys, specify `key_filename` instead of `password`.
