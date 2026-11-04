@@ -101,19 +101,17 @@ options are available:
 
 <!-- node-scraper -h start -->
 ```sh
-usage: python -m nodescraper.cli.cli [-h] [--version] [--sys-name STRING]
-                                     [--sys-location {LOCAL,REMOTE}]
-                                     [--sys-interaction-level {PASSIVE,INTERACTIVE,DISRUPTIVE}]
-                                     [--sys-sku STRING]
-                                     [--sys-platform STRING]
-                                     [--plugin-configs LIST]
-                                     [--system-config STRING]
-                                     [--connection-config STRING]
-                                     [--log-path STRING]
-                                     [--log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}]
-                                     [--no-console-log]
-                                     [--gen-reference-config] [--skip-sudo]
-                                     {summary,run-plugins,describe,gen-plugin-config,compare-runs,show-redfish-oem-allowable} ...
+usage: cli.py [-h] [--version] [--sys-name STRING]
+              [--sys-location {LOCAL,REMOTE}]
+              [--sys-interaction-level {PASSIVE,INTERACTIVE,DISRUPTIVE}]
+              [--sys-sku STRING] [--sys-platform STRING]
+              [--plugin-configs LIST] [--system-config STRING]
+              [--connection-config STRING] [--log-path STRING]
+              [--log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}]
+              [--no-console-log] [--gen-reference-config] [--skip-sudo]
+              [--lazy-load]
+              {summary,run-plugins,describe,gen-plugin-config,compare-runs,show-redfish-oem-allowable}
+              ...
 
 node scraper CLI
 
@@ -165,6 +163,8 @@ options:
                         ./reference_config.json. (default: False)
   --skip-sudo           Skip plugins that require sudo permissions (default:
                         False)
+  --lazy-load           Import plugin modules only when they are needed
+                        instead of at startup (default: False)
 ```
 <!-- node-scraper -h end -->
 
