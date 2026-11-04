@@ -37,6 +37,7 @@ from nodescraper.models import DataModel
 
 from .event_log_utils import rf_events_from_json_payload
 from .se_models import AfidEvent, ServiceabilityBlock
+from .serviceability_api import export_serviceability_json
 
 
 class ServiceabilityDataLoadError(ValueError):
@@ -151,15 +152,11 @@ class ServiceabilityDataModel(DataModel):
             with open(cper_path, "w", encoding="utf-8") as f:
                 json.dump(self.cper_data, f, indent=2)
         if self.serviceability is not None:
-            serviceability_path = os.path.join(log_path, "serviceability.json")
-            from .serviceability_api import export_serviceability_json
-
-            with open(serviceability_path, "w", encoding="utf-8") as f:
-                json.dump(
-                    export_serviceability_json(self.serviceability),
-                    f,
-                    indent=2,
-                )
+            payload = export_serviceability_json(self.serviceability)
+            if payload is not None:
+                serviceability_path = os.path.join(log_path, "serviceability.json")
+                with open(serviceability_path, "w", encoding="utf-8") as f:
+                    json.dump(payload, f, indent=2)
         from .afid_fru_csv import write_afid_fru_summary_csv
 
         write_afid_fru_summary_csv(
