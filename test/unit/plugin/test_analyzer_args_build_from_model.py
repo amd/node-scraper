@@ -73,11 +73,15 @@ def test_package_analyzer_args_build_from_model():
 
 def test_device_enumeration_analyzer_args_build_from_model():
     """Test DeviceEnumerationAnalyzerArgs.build_from_model includes all fields"""
-    datamodel = DeviceEnumerationDataModel(cpu_count=2, gpu_count=8, vf_count=0)
+    datamodel = DeviceEnumerationDataModel(
+        cpu_count=2, cpu_architecture="x86_64", cpu_cores=128, gpu_count=8, vf_count=0
+    )
     args = DeviceEnumerationAnalyzerArgs.build_from_model(datamodel)
 
     assert isinstance(args, DeviceEnumerationAnalyzerArgs)
     assert args.cpu_count == [2]
+    assert args.cpu_architecture == ["x86_64"]
+    assert args.min_cpu_cores == 128
     assert args.gpu_count == [8]
     assert args.vf_count == [0]
 
@@ -126,11 +130,17 @@ def test_os_analyzer_args_build_from_model():
 
 def test_bios_analyzer_args_build_from_model():
     """Test BiosAnalyzerArgs.build_from_model includes all fields"""
-    datamodel = BiosDataModel(bios_version="1.2.3")
+    datamodel = BiosDataModel(
+        bios_version="1.2.3",
+        server_vendor="SuperXYZ",
+        server_model="AS -1234GS-ABCD",
+    )
     args = BiosAnalyzerArgs.build_from_model(datamodel)
 
     assert isinstance(args, BiosAnalyzerArgs)
     assert args.exp_bios_version == ["1.2.3"]
+    assert args.exp_server_vendor == ["SuperXYZ"]
+    assert args.exp_server_model == ["AS -1234GS-ABCD"]
 
 
 def test_cmdline_analyzer_args_build_from_model():

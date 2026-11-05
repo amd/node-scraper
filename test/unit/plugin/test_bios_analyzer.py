@@ -78,6 +78,7 @@ def test_unexpected_bios(system_info):
     args = BiosAnalyzerArgs(exp_bios_version=["some_other_bios"])
     res = analyzer.analyze_data(model, args)
     assert res.status == ExecutionStatus.ERROR
+    assert res.message.startswith("Bios data mismatch!")
     assert len(res.events) == 1
     assert res.events[0].category == EventCategory.BIOS.value
     assert res.events[0].priority == EventPriority.ERROR
@@ -101,6 +102,51 @@ def test_bios_regex_no_match(system_info):
     assert len(res.events) == 1
     assert res.events[0].category == EventCategory.BIOS.value
     assert res.events[0].priority == EventPriority.ERROR
+
+
+def test_server_vendor_and_model_match(system_info):
+    model = BiosDataModel(
+        bios_version="TESTBIOS",
+        server_vendor="Supermicro",
+        server_model="AS -4125GS-TNHR",
+    )
+    analyzer = BiosAnalyzer(system_info=system_info)
+    args = BiosAnalyzerArgs(
+        exp_server_vendor="Supermicro",
+        exp_server_model=["AS -4125GS-TNHR"],
+    )
+    res = analyzer.analyze_data(model, args)
+    assert res.status == ExecutionStatus.OK
+    assert len(res.events) == 0
+
+
+def test_server_vendor_mismatch(system_info):
+    model = BiosDataModel(
+        bios_version="TESTBIOS",
+        server_vendor="Dell",
+        server_model="AS -4125GS-TNHR",
+    )
+    analyzer = BiosAnalyzer(system_info=system_info)
+    args = BiosAnalyzerArgs(exp_bios_version=["TESTBIOS"], exp_server_vendor=["Supermicro"])
+    res = analyzer.analyze_data(model, args)
+    assert res.status == ExecutionStatus.ERROR
+    assert res.message.startswith("Server vendor mismatch!")
+    assert "Bios data mismatch!" not in res.message
+    assert any("Server vendor mismatch" in event.description for event in res.events)
+
+
+def test_server_model_mismatch(system_info):
+    model = BiosDataModel(
+        bios_version="TESTBIOS",
+        server_vendor="Supermicro",
+        server_model="Other",
+    )
+    analyzer = BiosAnalyzer(system_info=system_info)
+    args = BiosAnalyzerArgs(exp_server_model=["AS -4125GS-TNHR"])
+    res = analyzer.analyze_data(model, args)
+    assert res.status == ExecutionStatus.ERROR
+    assert res.message.startswith("Server model mismatch!")
+    assert "Bios data mismatch!" not in res.message
 
 
 def test_invalid_regex(system_info):

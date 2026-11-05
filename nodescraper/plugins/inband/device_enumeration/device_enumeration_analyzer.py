@@ -73,8 +73,46 @@ class DeviceEnumerationAnalyzer(
                     priority=EventPriority.CRITICAL,
                     console_log=True,
                 )
+
+        if args.cpu_architecture:
+            accepted = [arch.lower() for arch in args.cpu_architecture]
+            actual_arch = (data.cpu_architecture or "").strip().lower()
+            if actual_arch not in accepted:
+                self.result.message = "Device Enumeration mismatch"
+                self.result.status = ExecutionStatus.ERROR
+                self._log_event(
+                    category=EventCategory.PLATFORM,
+                    description=(
+                        f"Expected cpu_architecture in {args.cpu_architecture}, "
+                        f"but got {data.cpu_architecture}"
+                    ),
+                    data={"cpu_architecture": data.cpu_architecture},
+                    priority=EventPriority.CRITICAL,
+                    console_log=True,
+                )
+
+        if args.min_cpu_cores is not None and (
+            data.cpu_cores is None or data.cpu_cores < args.min_cpu_cores
+        ):
+            self.result.message = "Device Enumeration mismatch"
+            self.result.status = ExecutionStatus.ERROR
+            self._log_event(
+                category=EventCategory.PLATFORM,
+                description=(
+                    f"Expected cpu_cores >= {args.min_cpu_cores}, but got {data.cpu_cores}"
+                ),
+                data={"cpu_cores": data.cpu_cores, "min_cpu_cores": args.min_cpu_cores},
+                priority=EventPriority.CRITICAL,
+                console_log=True,
+            )
+
         if self.result.message == "":
+            validated = list(checks)
+            if args.cpu_architecture:
+                validated.append("cpu_architecture")
+            if args.min_cpu_cores is not None:
+                validated.append("cpu_cores")
             self.result.status = ExecutionStatus.OK
-            self.result.message = f"Device Enumeration validated on {checks.keys()}."
+            self.result.message = f"Device Enumeration validated on {validated}."
 
         return self.result
