@@ -606,6 +606,10 @@ class DataPlugin(
             )
 
         status = max(self.collection_result.status, self.analysis_result.status)
+        collection_message = self.collection_result.message or ""
+        show_targets = bool(
+            self.collection_result.details.get("per_target_messages") and collection_message
+        )
 
         message = ""
         if status == ExecutionStatus.NOT_RAN:
@@ -616,11 +620,19 @@ class DataPlugin(
             ExecutionStatus.WARNING,
         ]:
             failure_parts: list[str] = []
+            if show_targets and self.collection_result.status == ExecutionStatus.OK:
+                failure_parts.append(collection_message)
             for label, task_result in (
                 ("Collection", self.collection_result),
                 ("Analysis", self.analysis_result),
             ):
-                if task_result.status == ExecutionStatus.WARNING:
+                if (
+                    show_targets
+                    and label == "Collection"
+                    and task_result.status == ExecutionStatus.WARNING
+                ):
+                    failure_parts.append(collection_message)
+                elif task_result.status == ExecutionStatus.WARNING:
                     failure_parts.append(f"{label} warning: {task_result.message}")
                 elif task_result.status in (
                     ExecutionStatus.ERROR,
@@ -628,6 +640,8 @@ class DataPlugin(
                 ):
                     failure_parts.append(f"{label} error: {task_result.message}")
             message = "; ".join(failure_parts)
+        elif show_targets:
+            message = collection_message
         else:
             message = "Plugin tasks completed successfully"
 

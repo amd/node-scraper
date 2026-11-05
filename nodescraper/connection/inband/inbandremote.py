@@ -26,7 +26,7 @@
 import logging
 import os
 import socket
-from typing import Type, Union
+from typing import Any, Type, Union
 
 import paramiko
 from paramiko.ssh_exception import (
@@ -47,10 +47,14 @@ class SSHConnectionError(Exception):
     """A general exception for ssh connection failures"""
 
 
+CHANNEL_OPEN_TIMEOUT = 60
+
+
 class RemoteShell(InBandConnection):
     """Utility class for running shell commands"""
 
     host_key_policy: Type[paramiko.MissingHostKeyPolicy] = paramiko.RejectPolicy
+    _proxy_ssh_down: bool = False
 
     def __init__(
         self,
@@ -62,9 +66,30 @@ class RemoteShell(InBandConnection):
             ssh_params (SSHConnectionParams): The parameters used to initiate the SSH connection username/password/ect.
         """
         self.ssh_params = ssh_params
+        self._new_client()
+
+    def _new_client(self) -> None:
+        """Replace the SSH client with a new unconnected client.
+
+        Returns:
+            None.
+        """
         self.client = paramiko.SSHClient()
         self.client.load_system_host_keys()
         self.client.set_missing_host_key_policy(self.host_key_policy())
+
+    def _arm_channel_timeout(self) -> None:
+        """Bound channel opens that do not pass their own timeout.
+
+        Returns:
+            None.
+        """
+        transport = self.client.get_transport()
+        if transport is None:
+            return
+        runtime_transport: Any = transport
+        if runtime_transport.channel_timeout is None:
+            runtime_transport.channel_timeout = CHANNEL_OPEN_TIMEOUT
 
     def connect_ssh(self):
         """Connect to the remote host via SSH"""
@@ -85,6 +110,7 @@ class RemoteShell(InBandConnection):
                 auth_timeout=60,
                 banner_timeout=200,
             )
+            self._arm_channel_timeout()
         except socket.timeout:
             raise SSHConnectionError("SSH Request timeout") from socket.timeout
         except socket.gaierror as e:
@@ -104,6 +130,19 @@ class RemoteShell(InBandConnection):
         except Exception as e:
             raise SSHConnectionError(f"Unexpected error during SSH connection: {str(e)}") from e
 
+    def reconnect_ssh(self) -> None:
+        """Close the current SSH session and open a new one.
+
+        Returns:
+            None.
+        """
+        try:
+            self.client.close()
+        except (OSError, SSHException):
+            pass
+        self._new_client()
+        self.connect_ssh()
+
     def read_file(
         self,
         filename: str,
@@ -120,14 +159,33 @@ class RemoteShell(InBandConnection):
         Returns:
             BaseFileArtifact: Object representing file contents
         """
-        with self.client.open_sftp().open(filename, "rb") as remote_file:
-            raw_contents = remote_file.read()
+        raw_contents = self.read_files([filename])[0]
         return BaseFileArtifact.from_bytes(
             filename=os.path.basename(filename),
             raw_contents=raw_contents,
             encoding=encoding,
             strip=strip,
         )
+
+    def read_files(self, filenames: list[str]) -> list[bytes]:
+        """Read remote files through one SFTP session.
+
+        Args:
+            filenames: Remote paths to read.
+
+        Returns:
+            File contents in the same order as filenames.
+        """
+        self._arm_channel_timeout()
+        sftp = self.client.open_sftp()
+        try:
+            contents: list[bytes] = []
+            for filename in filenames:
+                with sftp.open(filename, "rb") as remote_file:
+                    contents.append(remote_file.read())
+            return contents
+        finally:
+            sftp.close()
 
     def run_command(
         self,
@@ -155,8 +213,10 @@ class RemoteShell(InBandConnection):
         elif sudo:
             cmd_str = f"sudo {cmd_str}"
 
+        channel = None
         try:
             stdin, stdout, stderr = self.client.exec_command(cmd_str, timeout=timeout)
+            channel = stdout.channel
             if write_password:
                 stdin.write(
                     (
@@ -184,6 +244,12 @@ class RemoteShell(InBandConnection):
             stderr_str = f"{type(exc).__name__}: {exc}"
             stdout_str = ""
             exit_code = 124
+        finally:
+            if channel is not None:
+                try:
+                    channel.close()
+                except (OSError, SSHException):
+                    pass
 
         return CommandArtifact(
             command=cmd_str,

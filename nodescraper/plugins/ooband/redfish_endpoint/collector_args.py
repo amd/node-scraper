@@ -42,7 +42,7 @@ class RedfishEndpointCollectorArgs(CollectorArgs):
     tree_max_depth: int = Field(
         default=2,
         ge=1,
-        le=10,
+        le=20,
         description="When discover_tree is True: max traversal depth (1=service root only, 2=root + collections, 3=+ members).",
     )
     tree_max_endpoints: int = Field(
@@ -50,6 +50,21 @@ class RedfishEndpointCollectorArgs(CollectorArgs):
         ge=0,
         le=10_000,
         description="When discover_tree is True: max endpoints to discover (0=no limit).",
+    )
+    tree_max_collection_pages: int = Field(
+        default=1,
+        ge=1,
+        le=10_000,
+        description="When discover_tree is True: max pages to collect for each paginated collection.",
+    )
+    tree_max_log_entry_members: int = Field(
+        default=0,
+        ge=0,
+        le=10_000,
+        description=(
+            "When discover_tree is True: max individual LogService entries to collect per collection. "
+            "Zero keeps every referenced entry within the depth limit."
+        ),
     )
     max_workers: int = Field(
         default=1,

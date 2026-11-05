@@ -28,9 +28,10 @@ from .collector_args import RedfishEndpointCollectorArgs
 from .endpoint_analyzer import RedfishEndpointAnalyzer
 from .endpoint_collector import RedfishEndpointCollector
 from .endpoint_data import RedfishEndpointDataModel
-from .endpoint_plugin import RedfishEndpointPlugin
+from .endpoint_plugin import AmcRedfishEndpointPlugin, RedfishEndpointPlugin
 
 __all__ = [
+    "AmcRedfishEndpointPlugin",
     "RedfishEndpointAnalyzer",
     "RedfishEndpointAnalyzerArgs",
     "RedfishEndpointCollector",

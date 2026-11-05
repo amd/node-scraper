@@ -633,3 +633,89 @@ def test_clear_log_uris_multiple_uris_all_posted(redfish_endpoint_collector, red
     posted_paths = {call.args[0] for call in redfish_conn_mock.post.call_args_list}
     assert "/clear/a" in posted_paths
     assert "/clear/b" in posted_paths
+
+
+def test_discover_tree_skips_oem_origin_and_fragments():
+    conn = MagicMock()
+    root = {
+        "@odata.id": "/redfish/v1",
+        "Systems": {"@odata.id": "/redfish/v1/Systems"},
+        "Oem": {"Secret": {"@odata.id": "/redfish/v1/Oem/Secret"}},
+        "OriginOfCondition": {"@odata.id": "/redfish/v1/Chassis/other"},
+        "Assembly": {"@odata.id": "/redfish/v1/Chassis/1/Assembly#/Assemblies/0"},
+    }
+    systems = {"@odata.id": "/redfish/v1/Systems", "Members": []}
+
+    def run_get(path):
+        body = root if path == "/redfish/v1" else systems
+        return RedfishGetResult(path=path, success=True, data=body, status_code=200)
+
+    conn.run_get.side_effect = run_get
+    paths, responses, _results = ec._discover_tree(
+        conn, api_root="redfish/v1", max_depth=3, max_endpoints=0
+    )
+    assert "/redfish/v1/Systems" in paths
+    assert "/redfish/v1/Oem/Secret" not in responses
+    assert "/redfish/v1/Chassis/other" not in responses
+    assert "/redfish/v1/Chassis/1/Assembly" not in responses
+
+
+def test_discover_tree_keeps_collection_pages_separate():
+    conn = MagicMock()
+    first = "/redfish/v1/Managers/bmc/LogServices/EventLog/Entries"
+    second = first + "?$skip=2"
+    pages = {
+        "/redfish/v1": {
+            "@odata.id": "/redfish/v1",
+            "Managers": {"@odata.id": "/redfish/v1/Managers"},
+        },
+        "/redfish/v1/Managers": {
+            "@odata.id": "/redfish/v1/Managers",
+            "Members": [{"@odata.id": "/redfish/v1/Managers/bmc"}],
+        },
+        "/redfish/v1/Managers/bmc": {
+            "@odata.id": "/redfish/v1/Managers/bmc",
+            "LogServices": {"@odata.id": "/redfish/v1/Managers/bmc/LogServices"},
+        },
+        "/redfish/v1/Managers/bmc/LogServices": {
+            "@odata.id": "/redfish/v1/Managers/bmc/LogServices",
+            "Members": [{"@odata.id": "/redfish/v1/Managers/bmc/LogServices/EventLog"}],
+        },
+        "/redfish/v1/Managers/bmc/LogServices/EventLog": {
+            "@odata.id": "/redfish/v1/Managers/bmc/LogServices/EventLog",
+            "Entries": {"@odata.id": first},
+        },
+        first: {
+            "@odata.id": first,
+            "Members": [{"@odata.id": first + "/1"}, {"@odata.id": first + "/2"}],
+            "Members@odata.nextLink": second,
+        },
+        second: {
+            "@odata.id": second,
+            "Members": [{"@odata.id": first + "/3"}],
+        },
+        first + "/1": {"@odata.id": first + "/1", "Id": "1"},
+        first + "/3": {"@odata.id": first + "/3", "Id": "3"},
+    }
+
+    def run_get(path):
+        body = pages.get(path)
+        if body is None:
+            return RedfishGetResult(path=path, success=False, error="missing", status_code=404)
+        return RedfishGetResult(path=path, success=True, data=body, status_code=200)
+
+    conn.run_get.side_effect = run_get
+    _paths, responses, _results = ec._discover_tree(
+        conn,
+        api_root="redfish/v1",
+        max_depth=8,
+        max_endpoints=0,
+        max_collection_pages=2,
+        max_log_entry_members=1,
+    )
+    assert responses[first]["Members@odata.nextLink"] == second
+    assert second in responses
+    assert responses[second]["Members"][0]["@odata.id"] == first + "/3"
+    assert first + "/1" in responses
+    assert first + "/2" not in responses
+    assert first + "/3" in responses

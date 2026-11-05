@@ -24,6 +24,7 @@
 #
 ###############################################################################
 from nodescraper.base import OOBandDataPlugin
+from nodescraper.connection.redfish import RedfishSshProxyConnectionManager
 
 from .analyzer_args import RedfishEndpointAnalyzerArgs
 from .collector_args import RedfishEndpointCollectorArgs
@@ -46,3 +47,14 @@ class RedfishEndpointPlugin(
     ANALYZER = RedfishEndpointAnalyzer
     COLLECTOR_ARGS = RedfishEndpointCollectorArgs
     ANALYZER_ARGS = RedfishEndpointAnalyzerArgs
+
+
+class AmcRedfishEndpointPlugin(RedfishEndpointPlugin):
+    """Collect the same Redfish endpoint checks through the BMC SSH proxy.
+
+    Pair this with RedfishEndpointPlugin so one run reads the BMC on the direct
+    Redfish connection and the AMC on RedfishSshProxyConnectionManager. collection_args
+    and analysis_args are the same for both plugins.
+    """
+
+    CONNECTION_TYPE = RedfishSshProxyConnectionManager  # type: ignore[assignment]
