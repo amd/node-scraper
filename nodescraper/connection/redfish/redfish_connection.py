@@ -188,10 +188,7 @@ class RedfishConnection:
     def _execute_request(self, request_fn: Callable[[], _T]) -> _T:
         try:
             return request_fn()
-        except (
-            requests.exceptions.Timeout,
-            requests.exceptions.ConnectionError,
-        ) as exc:
+        except requests.exceptions.RequestException as exc:
             raise RedfishConnectionError(self._transport_error_message(exc)) from exc
         except socket.gaierror as exc:
             raise RedfishConnectionError(self._transport_error_message(exc)) from exc
@@ -242,6 +239,21 @@ class RedfishConnection:
         else:
             session.auth = HTTPBasicAuth(self.username, self.password)
 
+    def _drop_session(self) -> None:
+        """Discard the HTTP session without logging out of Redfish.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
+        if self._session is not None:
+            self._session.close()
+        self._session = None
+        self._session_token = None
+        self._session_uri = None
+
     def get(self, path: RedfishPath) -> dict[str, Any]:
         """GET a Redfish path and return the JSON body. path must be a RedfishPath."""
         path_str = str(path)
@@ -251,13 +263,30 @@ class RedfishConnection:
                 f"GET {path_str} failed: {resp.status_code} {resp.reason}",
                 response=resp,
             )
-        return resp.json()
+        try:
+            return resp.json()
+        except ValueError as exc:
+            raise RedfishConnectionError(
+                f"GET {path_str} returned a body that is not valid JSON", response=resp
+            ) from exc
 
     def get_response(self, path: Union[str, "RedfishPath"]) -> RedfishHttpResponse:
-        """GET a Redfish path and return the raw Response. path may be a string or RedfishPath."""
+        """GET a Redfish path and refresh the session once after HTTP 401.
+
+        Args:
+            path: Redfish path or absolute URL.
+
+        Returns:
+            The HTTP response, including a second 401 when reauthentication fails.
+        """
         path = str(path)
         session = self._ensure_session()
         url = path if path.startswith("http") else urljoin(self.base_url + "/", path.lstrip("/"))
+        response = self._execute_request(lambda: session.get(url, timeout=self.timeout))
+        if response.status_code != 401 or not self.use_session_auth or not self.password:
+            return response
+        self._drop_session()
+        session = self._ensure_session()
         return self._execute_request(lambda: session.get(url, timeout=self.timeout))
 
     def post(

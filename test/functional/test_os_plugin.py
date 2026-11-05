@@ -184,3 +184,78 @@ def test_os_plugin_with_executor_programmatic(plugin_executor, tmp_path):
     assert hasattr(executor, "system_info")
     # OS family should be discovered and set
     assert executor.system_info.os_family is not None
+
+
+def _run_os_plugin(plugin_executor, tmp_path, system_info=None, connections=None):
+    from nodescraper.models.pluginconfig import PluginConfig
+
+    config = PluginConfig(
+        global_args={},
+        plugins={"OsPlugin": {"analysis": False, "collection": True}},
+        name="Connection result run",
+        desc="Check connection result is saved with the plugin result",
+    )
+    executor = plugin_executor(
+        plugin_configs=[config],
+        log_path=str(tmp_path / "logs"),
+        system_info=system_info,
+        connections=connections,
+    )
+    results = executor.run_queue()
+    os_results = [r for r in results if r.source == "OsPlugin"]
+    assert len(os_results) == 1, "OsPlugin did not produce a result"
+    return executor, os_results[0]
+
+
+def test_connection_result_saved_on_successful_connection(plugin_executor, tmp_path):
+    """A successful connection is recorded as OK in result_data and survives disconnect."""
+    from nodescraper.enums import ExecutionStatus
+
+    executor, os_result = _run_os_plugin(plugin_executor, tmp_path)
+
+    connection_result = os_result.result_data.connection_result
+    assert connection_result is not None, "connection_result was not saved"
+    assert connection_result.status == ExecutionStatus.OK
+    assert connection_result.task == "InBandConnectionManager"
+
+    # run_queue disconnects every manager on exit; the result must not be reset to UNSET.
+    for manager in executor.connection_library.values():
+        assert manager.connection is None
+        assert manager.result.status == ExecutionStatus.OK
+
+
+def test_connection_result_saved_on_failed_connection(plugin_executor, tmp_path):
+    """A remote connection without credentials fails, reports an event and is saved."""
+    from nodescraper.enums import ExecutionStatus, SystemLocation
+    from nodescraper.models.systeminfo import SystemInfo
+
+    system_info = SystemInfo(name="unreachable_host", location=SystemLocation.REMOTE)
+    executor, os_result = _run_os_plugin(plugin_executor, tmp_path, system_info=system_info)
+
+    connection_result = os_result.result_data.connection_result
+    assert connection_result is not None, "connection_result was not saved"
+    assert connection_result.status in (
+        ExecutionStatus.ERROR,
+        ExecutionStatus.EXECUTION_FAILURE,
+    )
+    assert len(connection_result.events) >= 1
+    assert os_result.result_data.collection_result.status == ExecutionStatus.NOT_RAN
+    assert os_result.status != ExecutionStatus.OK
+
+    for manager in executor.connection_library.values():
+        assert manager.result.status in (ExecutionStatus.ERROR, ExecutionStatus.EXECUTION_FAILURE)
+
+
+def test_connection_result_written_to_log_path(plugin_executor, tmp_path):
+    """The connection result is logged to disk by the connection result hook."""
+    import json
+
+    _run_os_plugin(plugin_executor, tmp_path)
+
+    result_files = [
+        p
+        for p in (tmp_path / "logs").rglob("result.json")
+        if json.loads(p.read_text()).get("task") == "InBandConnectionManager"
+    ]
+    assert result_files, "No connection result.json found under the log path"
+    assert json.loads(result_files[0].read_text())["status"] == "OK"

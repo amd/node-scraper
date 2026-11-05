@@ -13,6 +13,7 @@ system debug. For details on what data is collected and analyzed, see the [plugi
     - [3. Install from Source (Required)](#3-install-from-source-required)
     - [4. Git Hooks (Optional)](#4-git-hooks-optional)
   - [CLI Usage](#cli-usage)
+    - [Lazy plugin loading](#lazy-plugin-loading)
     - [Execution Methods](#execution-methods)
       - [Example: Remote Execution](#example-remote-execution)
         - [Example: connection\_config.json](#example-connection_configjson)
@@ -100,19 +101,17 @@ options are available:
 
 <!-- node-scraper -h start -->
 ```sh
-usage: python -m nodescraper.cli.cli [-h] [--version] [--sys-name STRING]
-                                     [--sys-location {LOCAL,REMOTE}]
-                                     [--sys-interaction-level {PASSIVE,INTERACTIVE,DISRUPTIVE}]
-                                     [--sys-sku STRING]
-                                     [--sys-platform STRING]
-                                     [--plugin-configs LIST]
-                                     [--system-config STRING]
-                                     [--connection-config STRING]
-                                     [--log-path STRING]
-                                     [--log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}]
-                                     [--no-console-log]
-                                     [--gen-reference-config] [--skip-sudo]
-                                     {summary,run-plugins,describe,gen-plugin-config,compare-runs,show-redfish-oem-allowable} ...
+usage: cli.py [-h] [--version] [--sys-name STRING]
+              [--sys-location {LOCAL,REMOTE}]
+              [--sys-interaction-level {PASSIVE,INTERACTIVE,DISRUPTIVE}]
+              [--sys-sku STRING] [--sys-platform STRING]
+              [--plugin-configs LIST] [--system-config STRING]
+              [--connection-config STRING] [--log-path STRING]
+              [--log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}]
+              [--no-console-log] [--gen-reference-config] [--skip-sudo]
+              [--lazy-load]
+              {summary,run-plugins,describe,gen-plugin-config,compare-runs,show-redfish-oem-allowable}
+              ...
 
 node scraper CLI
 
@@ -164,8 +163,26 @@ options:
                         ./reference_config.json. (default: False)
   --skip-sudo           Skip plugins that require sudo permissions (default:
                         False)
+  --lazy-load           Import plugin modules only when they are needed
+                        instead of at startup (default: False)
 ```
 <!-- node-scraper -h end -->
+
+### Lazy plugin loading
+
+By default node-scraper imports every plugin at startup this can be inefficient to run a single plugin run.
+Lazy loading imports a plugin only when it is first needed, so runs that use a few plugins start faster and use less memory.
+
+```sh
+node-scraper --lazy-load run-plugins OsPlugin
+```
+
+What to expect in lazy mode:
+- Plugin names are read from the `nodescraper.plugins` entry points in `pyproject.toml` without importing them. Built-in plugins are listed there, and a plugin must be registered there to be available in lazy mode (see [external plugins](docs/node-scraper-external/README.md) for the format). After adding or renaming a plugin, reinstall the package (`pip install -e .`) to refresh the entry-point metadata.
+- Only the plugins you name on the command line (or in a config) are imported.
+- `describe plugin` lists every plugin from the entry points without importing any; `describe plugin <name>` imports just that plugin to show its description. `--help` still imports every plugin because it documents each one's arguments.
+- A plugin that fails to import is logged and skipped instead of stopping node-scraper.
+- Named configs from `--plugin-configs` are evaluated only when you select them, so recipes such as `AllIbPlugins` (which inspects every plugin) do not import everything at startup.
 
 ### Execution Methods
 
@@ -252,16 +269,20 @@ Redfish plugins can collect from multiple BMCs concurrently. In-band plugins and
 }
 ```
 
-Multi-target mode applies to Redfish plugins (`RedfishEndpointPlugin`, `RedfishOemDiagPlugin`, and other plugins based on `OOBandDataPlugin`). Targets are collected concurrently. Wall-clock time follows the slowest target.
+List each Redfish plugin once. Put the hosts on that plugin's connection manager `targets` list. `RedfishConnectionManager` is the direct BMC session used by `RedfishEndpointPlugin`, `RedfishInventoryPlugin`, and `RedfishOemDiagPlugin`. `RedfishSshProxyConnectionManager` is the SSH proxy used by `AmcRedfishInventoryPlugin`, `AmcRedfishEndpointPlugin`, and `AmcRedfishDiagPlugin`. Those two managers are separate lists, so a plugin compares and collects only the targets it connected.
 
-A target that fails to connect or collect does not fail the run when another target succeeds. That plugin result is a warning, and analysis still runs for the targets that returned data. The run fails when every target fails, or when analysis of collected data reports an error.
+Targets are collected concurrently. Connect failures stay on the connection result. The plugin result shows collection and analysis for the targets that connected, and the run fails when every target fails to connect or analysis reports an error.
 
 - `targets`: list of per-target connection parameters. Each entry accepts the same fields as the single-target config plus an optional `target_key` (used as the result key; defaults to the host string).
 - `max_workers` (optional): maximum concurrent collection threads. Defaults to `min(len(targets), 32)` and is capped at 32.
 
-Per-target results are written to `<plugin>/<collector>/<target_key>/`. Single-target results stay in `<plugin>/<collector>/`. The same layout is used for the analyzer directory and for the AMC SSH-proxy plugin.
+Per-target results are written to `<plugin>/<collector>/<target_key>/`. Single-target results stay in `<plugin>/<collector>/`. The same layout is used for the analyzer directory and for the AMC SSH-proxy plugin. Inventory collection writes `redfishinventorydatamodel.json` in the collector directory.
 
 A ready-to-edit sample is in `config/connection-config_redfish_multi_target.example.json`. Replace the example hosts and password, then pass it with `--connection-config`.
+
+**Firmware comparison:** `RedfishInventoryPlugin` and `AmcRedfishInventoryPlugin` compare `FirmwareInventory` across the targets that plugin connected. `analysis_args.compare_firmware` defaults to `true`. Each member is compared by its published `Id`. A missing or empty `Version` is recorded as `N/A`. The warning also records `Status.Health`, `Status.State`, `SoftwareId`, `Updateable`, and `Oem.SVN`. A different version, or a member present on one connected target and absent on another, logs one `FW` warning per component. BMC firmware is not compared with AMC firmware. A target that failed to connect is excluded. One connected target does not warn. Set `compare_firmware` to `false` to skip the check.
+
+The console summary reports the warning count. Each component is in the analyzer `events.json`, and `result.json` has the summary. Collection profiles and the other inventory switches are in the [plugin reference](docs/PLUGIN_DOC.md).
 
 **Notes:**
 - If using SSH keys, specify `key_filename` instead of `password`.
@@ -576,6 +597,25 @@ The RedfishEndpointPlugin collects Redfish URIs (GET responses) and optionally r
 
 **`analysis_args`**
 - **`checks`**: Optional. Map of URI to expected values or constraints for analysis. Supports exact match (e.g. `"PowerState": "On"`), `anyOf`, `min`/`max`, etc.
+#### **RedfishEventLogPlugin**
+
+The RedfishEventLogPlugin reads every entry from a Redfish LogService (for example an EventLog) and reports Critical and Warning entries. It requires a Redfish connection config and supports [Redfish multi-target](#redfish-multi-target). Use `AmcRedfishEventLogPlugin` for the AMC EventLog via the SSH proxy.
+
+The collector reads `<log_service_path>/Entries` and pages with `$skip` until `Members@odata.count` is reached. Each page is saved as an artifact, and entries are stored newest first by `Created`. It uses `$skip` instead of `Members@odata.nextLink` because some services return the same `nextLink` on every page.
+
+The analyzer reports Critical entries as errors and Warning entries as warnings. Entries with the same `Severity` and `MessageId` are reported once, with a count and the newest message.
+
+**`collection_args`**
+- **`log_service_path`**: Redfish path to the LogService. Entries are read from `<log_service_path>/Entries`.
+- **`max_entries`**: Optional. Keep only the newest N entries. All pages are still read.
+- **`max_pages`**: Optional (default `100`). Safety cap on the number of `$skip` pages requested.
+- **`clear_logs_after_collection`**: Optional (default `false`). POST `LogService.ClearLog` after a successful collection.
+
+**`analysis_args`**
+- **`since`**: Optional ISO 8601 time. Only entries created at or after it are analyzed.
+- **`message_id_include`**: Optional list of regexes. Only entries whose `MessageId` matches one are analyzed.
+- **`message_id_exclude`**: Optional list of regexes. Entries whose `MessageId` matches any are skipped.
+
 
 #### **'summary' sub command**
 The 'summary' subcommand can be used to combine results from multiple runs of node-scraper to a

@@ -143,7 +143,8 @@ class TableSummary(PluginResultCollator):
             table_sections.append(table)
 
         serviceability_tables = render_serviceability_recommendation_tables_for_plugin_results(
-            plugin_results
+            plugin_results,
+            logger=self.logger,
         )
         if serviceability_tables:
             table_sections.append(serviceability_tables)

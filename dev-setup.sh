@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -euo pipefail
 
 if ! which uv >/dev/null 2>&1; then
     if ! which curl >/dev/null 2>&1; then
@@ -14,7 +15,7 @@ export UV_SYSTEM_CERTS=1
 
 # Create venv if not already present or if Python version is below 3.9
 if [ ! -d "venv" ] || ! venv/bin/python -c 'import sys; exit(0 if sys.version_info >= (3, 9) else 1)' 2>/dev/null; then
-    uv venv venv --python 3.9  --no-python-downloads
+    uv venv --python python3 --no-python-downloads --seed venv
 fi
 
 # Activate the desired venv

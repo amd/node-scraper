@@ -41,6 +41,6 @@ class SystemInfo(BaseModel):
     platform: Optional[str] = None
     gpu_count: Optional[int] = None
     cpu_count: Optional[int] = None
-    metadata: Optional[dict] = Field(default_factory=dict)
+    metadata: dict = Field(default_factory=dict)
     location: Optional[SystemLocation] = SystemLocation.LOCAL
     vendorid_ep: int = 0x1002

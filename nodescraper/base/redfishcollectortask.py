@@ -98,6 +98,7 @@ def combine_target_results(parent: str, results: list[TaskResult]) -> TaskResult
         aggregated.message = prefix + "\n".join(messages)
         if hard_fail and succeeded:
             aggregated.status = ExecutionStatus.WARNING
+    aggregated.details["per_target_messages"] = True
 
     return aggregated
 
@@ -172,14 +173,7 @@ class RedfishDataCollector(
 
             multi_conn: MultiTargetRedfishConnection = collector.connection  # type: ignore[assignment]
             parent_name = collector.parent or type(collector).__name__
-            all_results: list[TaskResult] = [
-                TaskResult(
-                    status=ExecutionStatus.WARNING,
-                    parent=f"{parent_name}[{target_key}]",
-                    message=message,
-                )
-                for target_key, message in multi_conn.failed_targets.items()
-            ]
+            all_results: list[TaskResult] = []
             target_count = len(multi_conn.target_connections)
             configured_workers = multi_conn.max_workers or target_count
             max_workers = min(configured_workers, target_count, 32) if target_count else 1
