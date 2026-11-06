@@ -2008,7 +2008,7 @@ class PcieDataModel(DataModel):
 
     - pcie_cfg_space: A dictionary of PCIe cfg space for the GPUs obtained with setpci command
     - vf_pcie_cfg_space: A dictionary of PCIe cfg space for AMD SR-IOV Virtual Functions
-    - other_pcie_cfg_space: A dictionary of PCIe cfg space for non-AMD PCI devices
+    - other_pcie_cfg_space: A dictionary of PCIe cfg space for PCI devices not on the GPU path
       (e.g. NICs, NVMe/storage, management controllers). None unless the
       collector is run with collect_all_devices=True.
     - lspci_verbose: Verbose collection of PCIe data

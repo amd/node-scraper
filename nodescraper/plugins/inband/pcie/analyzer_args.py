@@ -41,7 +41,7 @@ class PcieAnalyzerArgs(AnalyzerArgs):
         exp_max_payload_size: Expected max payload size (int for all devices, dict for specific device IDs)
         exp_max_rd_req_size: Expected max read request size (int for all devices, dict for specific device IDs)
         exp_ten_bit_tag_req_en: Expected 10-bit tag request enable (int for all devices, dict for specific device IDs)
-        analyze_other_devices: Also run error checks on non-AMD PCI Express devices
+        analyze_other_devices: Also run error checks on the other PCI Express devices
         exp_nic_count: Expected number of physical network controllers (NICs) enumerated via lspci
         exp_nic_speed: Expected NIC PCIe link speed (generation 1-6)
         exp_nic_width: Expected NIC PCIe link width in lanes (1-16)
@@ -68,7 +68,7 @@ class PcieAnalyzerArgs(AnalyzerArgs):
     analyze_other_devices: bool = Field(
         default=False,
         description=(
-            "When True, also check non-AMD PCI Express devices in "
+            "When True, also check the PCI Express devices in "
             "other_pcie_cfg_space for AER, status, lane and device errors."
         ),
     )

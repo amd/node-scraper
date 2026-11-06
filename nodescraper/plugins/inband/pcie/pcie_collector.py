@@ -78,7 +78,7 @@ class PcieCollector(InBandDataCollector[PcieDataModel, PcieCollectorArgs]):
         - The sudo lspci -xxxx command is used to collect the PCIe configuration space for the GPUs in the system
     - otherwise the following commands will be run without sudo:
         - The lspci -x command is used to collect the PCIe configuration space for the GPUs in the system
-    - If collect_all_devices is set, non-AMD devices are also collected:
+    - If collect_all_devices is set, all other PCI devices are also collected:
         - `lspci -D -nn`: Enumerate every PCI device
         - `find -L /sys/bus/pci/devices -maxdepth 2 -name physfn`: Identify SR-IOV VFs so they are excluded
         - Config space is parsed from the `lspci -x`/`lspci -xxxx` dump above
@@ -169,21 +169,19 @@ class PcieCollector(InBandDataCollector[PcieDataModel, PcieCollectorArgs]):
         return vf_bdfs
 
     def _detect_other_devices(self) -> Optional[List[str]]:
-        """Detect non-AMD PCI devices in the system using lspci.
+        """Detect all PCI devices in the system using lspci.
 
-        Enumerates every PCI device with ``lspci -D -nn`` and returns the
-        domain-qualified BDFs of devices whose vendor ID is NOT the AMD
-        endpoint vendor (``self.system_info.vendorid_ep``). AMD devices are
-        skipped because ``_get_pcie_data`` already collects them, and SR-IOV
-        Virtual Functions are skipped so they aren't counted as devices.
+        Enumerates every PCI device with ``lspci -D -nn`` and returns their
+        domain-qualified BDFs. SR-IOV Virtual Functions are skipped so they
+        aren't counted as devices. Devices already collected on the GPU path
+        are filtered out later, in ``_get_other_cfg_space``.
 
         Returns
         -------
         Optional[List[str]]
-            A list of domain-qualified BDFs for non-AMD PCI devices, or None if
-            the devices could not be enumerated.
+            A list of domain-qualified BDFs, or None if the devices could not
+            be enumerated.
         """
-        vendor_id_hex = format(self.system_info.vendorid_ep, "x")
         other_bdfs: List[str] = []
 
         res = self._run_sut_cmd(
@@ -212,9 +210,6 @@ class PcieCollector(InBandDataCollector[PcieDataModel, PcieCollectorArgs]):
                 continue
             # Format: "0000:02:00.0 Ethernet controller [0200]: Intel ... [8086:1572]"
             bdf = line.split()[0]
-            # Skip AMD endpoints (already handled by the AMD-specific path)
-            if f"[{vendor_id_hex}:" in line.lower():
-                continue
             if bdf in vf_bdfs or "virtual function" in line.lower():
                 skipped_vfs.append(bdf)
                 continue
@@ -222,7 +217,7 @@ class PcieCollector(InBandDataCollector[PcieDataModel, PcieCollectorArgs]):
 
         self._log_event(
             category=EventCategory.IO,
-            description="Detected non-AMD PCI devices from system",
+            description="Detected PCI devices from system",
             data={
                 "other_device_count": len(other_bdfs),
                 "bdfs": other_bdfs,
@@ -734,7 +729,7 @@ class PcieCollector(InBandDataCollector[PcieDataModel, PcieCollectorArgs]):
         lspci_hex: Optional[str],
         sudo: bool,
     ) -> Dict[str, PcieCfgSpace]:
-        """Collect config space for non-AMD devices.
+        """Collect config space for devices not already collected on the GPU path.
 
         Config space is parsed from the full lspci hex dump when the device is
         in it, so no extra command is run per device. A per-device lspci call
@@ -784,7 +779,7 @@ class PcieCollector(InBandDataCollector[PcieDataModel, PcieCollectorArgs]):
         upstream_steps_to_collect : Optional[int]
             Number of upstream devices to collect config space for, by default None
         collect_all_devices : bool
-            When True, also collect config space for non-AMD PCI devices into
+            When True, also collect config space for all other PCI devices into
             ``other_pcie_cfg_space``, by default False
 
         Returns
@@ -844,7 +839,7 @@ class PcieCollector(InBandDataCollector[PcieDataModel, PcieCollectorArgs]):
 
             lspci_hex = self.show_lspci_hex(sudo=use_sudo)
 
-            # Optionally collect config space for non-AMD PCI devices.
+            # Optionally collect config space for all other PCI devices.
             # Stays None when not requested or when enumeration fails, so the
             # analyzer can tell "not collected" apart from "none found".
             other_pcie_cfg_data: Optional[Dict[str, PcieCfgSpace]] = None
