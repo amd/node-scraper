@@ -144,16 +144,17 @@ def _fake_run(outputs: dict):
     return run
 
 
-def test_detect_other_devices_excludes_amd_and_returns_non_amd_bdfs(collector):
-    """_detect_other_devices returns non-AMD BDFs and excludes AMD (vendorid_ep) devices."""
+def test_detect_other_devices_returns_all_bdfs(collector):
+    """_detect_other_devices returns every BDF, AMD included. Devices already
+    collected on the GPU path are filtered out later by _get_other_cfg_space."""
     collector._run_sut_cmd = MagicMock(
         side_effect=_fake_run({collector.CMD_LSPCI_ALL_DEVICES: LSPCI_D_NN_MIXED_VENDOR_OUTPUT})
     )
 
     other_bdfs = collector._detect_other_devices()
 
-    # AMD BDF (0000:01:00.0) must be excluded; the three non-AMD BDFs included.
     assert other_bdfs == [
+        "0000:01:00.0",
         "0000:02:00.0",
         "0000:03:00.0",
         "0000:04:00.0",
@@ -163,14 +164,6 @@ def test_detect_other_devices_excludes_amd_and_returns_non_amd_bdfs(collector):
         sudo=False,
         log_artifact=False,
     )
-
-
-def test_detect_other_devices_empty_when_only_amd(collector):
-    """When all devices are AMD, _detect_other_devices returns an empty list."""
-    amd_only = "0000:01:00.0 Processing accelerators [1200]: AMD [1002:74a1]"
-    collector._run_sut_cmd = MagicMock(return_value=_mock_run_sut_cmd_result(amd_only))
-
-    assert collector._detect_other_devices() == []
 
 
 def test_detect_other_devices_handles_command_failure(collector):
@@ -218,6 +211,8 @@ def _hex_rows(vendor_id: int, device_id: int, base_class: int) -> str:
 # Full `lspci -x` dump. lspci omits the domain on single-domain systems.
 LSPCI_X_FULL_DUMP = "\n\n".join(
     [
+        "01:00.0 Processing accelerators: Advanced Micro Devices, Inc. Device 74a1\n"
+        + _hex_rows(0x1002, 0x74A1, 0x12),
         "02:00.0 Ethernet controller: Intel Corporation Device 1572\n"
         + _hex_rows(0x8086, 0x1572, 0x02),
         "03:00.0 Non-Volatile memory controller: Samsung Electronics Device a80a\n"
@@ -227,30 +222,44 @@ LSPCI_X_FULL_DUMP = "\n\n".join(
     ]
 )
 
+_GPU_BDF = "0000:01:00.0"
 _ALL_OTHER_BDFS = {"0000:02:00.0", "0000:03:00.0", "0000:04:00.0"}
 
 
+def _system_outputs(collector, **overrides) -> dict:
+    """Command outputs for a system with one AMD GPU (found on the GPU path)
+    and three other devices."""
+    outputs = {
+        collector.CMD_LSPCI_AMD_DEVICES.format(vendor_id="1002"): (
+            "0000:01:00.0 Processing accelerators [1200]: AMD [1002:74a1]"
+        ),
+        collector.CMD_LSPCI_PATH_DEVICE_DOMAIN.format(vendor_id="1002", dev_id="74a1"): (
+            "0000:01:00.0 Processing accelerators: Advanced Micro Devices, Inc."
+        ),
+        f"lspci -x -s {_GPU_BDF}": "01:00.0 Processing accelerators\n"
+        + _hex_rows(0x1002, 0x74A1, 0x12),
+        collector.CMD_LSPCI_ALL_DEVICES: LSPCI_D_NN_MIXED_VENDOR_OUTPUT,
+        collector.CMD_LSPCI_HEX: LSPCI_X_FULL_DUMP,
+    }
+    outputs.update(overrides)
+    return outputs
+
+
 def test_collect_all_devices_true_parses_full_dump(collector):
-    """With collect_all_devices=True, non-AMD config space comes from the single
-    full lspci dump, with no per-device lspci calls."""
-    collector._run_sut_cmd = MagicMock(
-        side_effect=_fake_run(
-            {
-                collector.CMD_LSPCI_ALL_DEVICES: LSPCI_D_NN_MIXED_VENDOR_OUTPUT,
-                collector.CMD_LSPCI_HEX: LSPCI_X_FULL_DUMP,
-            }
-        )
-    )
+    """With collect_all_devices=True, other devices' config space comes from the
+    single full lspci dump, and the GPU (already on the GPU path) isn't collected twice."""
+    collector._run_sut_cmd = MagicMock(side_effect=_fake_run(_system_outputs(collector)))
 
     _, pcie_data = collector.collect_data(PcieCollectorArgs(collect_all_devices=True))
 
     assert pcie_data is not None
+    assert set(pcie_data.pcie_cfg_space) == {_GPU_BDF}
     assert set(pcie_data.other_pcie_cfg_space) == _ALL_OTHER_BDFS
     nic = pcie_data.other_pcie_cfg_space["0000:02:00.0"].type_0_configuration
     assert nic.vendor_id.val == 0x8086
     assert nic.class_code.val == 0x02
     issued = [call.args[0] for call in collector._run_sut_cmd.call_args_list]
-    assert not [cmd for cmd in issued if " -s " in cmd]
+    assert not [cmd for cmd in issued if " -s " in cmd and _GPU_BDF not in cmd]
 
 
 def test_other_device_missing_from_dump_is_read_individually(collector):
@@ -259,11 +268,13 @@ def test_other_device_missing_from_dump_is_read_individually(collector):
     per_device_cmd = "lspci -x -s 0000:04:00.0"
     collector._run_sut_cmd = MagicMock(
         side_effect=_fake_run(
-            {
-                collector.CMD_LSPCI_ALL_DEVICES: LSPCI_D_NN_MIXED_VENDOR_OUTPUT,
-                collector.CMD_LSPCI_HEX: partial_dump,
-                per_device_cmd: "04:00.0 VGA\n" + _hex_rows(0x1A03, 0x2000, 0x03),
-            }
+            _system_outputs(
+                collector,
+                **{
+                    collector.CMD_LSPCI_HEX: partial_dump,
+                    per_device_cmd: "04:00.0 VGA\n" + _hex_rows(0x1A03, 0x2000, 0x03),
+                },
+            )
         )
     )
 
@@ -279,12 +290,7 @@ def test_unreadable_other_device_is_omitted(collector):
     empty PcieCfgSpace whose None registers would look like errors."""
     partial_dump = LSPCI_X_FULL_DUMP.split("\n\n04:00.0")[0]
     collector._run_sut_cmd = MagicMock(
-        side_effect=_fake_run(
-            {
-                collector.CMD_LSPCI_ALL_DEVICES: LSPCI_D_NN_MIXED_VENDOR_OUTPUT,
-                collector.CMD_LSPCI_HEX: partial_dump,
-            }
-        )
+        side_effect=_fake_run(_system_outputs(collector, **{collector.CMD_LSPCI_HEX: partial_dump}))
     )
 
     _, pcie_data = collector.collect_data(PcieCollectorArgs(collect_all_devices=True))

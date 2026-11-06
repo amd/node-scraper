@@ -50,7 +50,7 @@ class PcieCollectorArgs(CollectorArgs):
     collect_all_devices: bool = Field(
         default=False,
         description=(
-            "When True, collect config space for non-AMD PCI devices into "
+            "When True, collect config space for all other PCI devices into "
             "other_pcie_cfg_space (NICs, NVMe, etc.). Required for the NIC checks. "
             "Not supported on ESXi."
         ),

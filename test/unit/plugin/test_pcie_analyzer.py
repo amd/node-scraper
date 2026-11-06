@@ -41,7 +41,7 @@ _STATUS_DET_PARITY_ERR = 1 << 15
 
 _OTHER_DEVICE_BDF = "0000:02:00.0"  # e.g. a non-AMD NIC
 
-_ANALYZE_OTHER_DESC = "Analyzing non-AMD PCI devices"
+_ANALYZE_OTHER_DESC = "Analyzing other PCI devices"
 _STATUS_ERR_DESC = "PCI Express Status register errors were detected"
 
 
@@ -283,7 +283,7 @@ _LNK_STAT_LINK_DOWN = 0
 # 0b111111 << 1 = gens 1-6.
 _LNK_CAP2_GENS_1_6 = 0b111111 << 1
 
-_NIC_CHECKS_SKIPPED = "NIC checks skipped: non-AMD PCI devices were not collected"
+_NIC_CHECKS_SKIPPED = "NIC checks skipped: other PCI devices were not collected"
 _NO_AMD_CFG = "No AMD PCIe config space found"
 _NO_CFG = "No PCIe config space found"
 _LINK_SPEED_ZERO = "Link speed vector is 0"
@@ -428,3 +428,51 @@ def test_other_devices_without_pcie_cap_are_skipped(analyzer):
     marker = [e for e in result.events if e.description == _ANALYZE_OTHER_DESC]
     assert marker[0].data["other_device_count"] == 1
     assert marker[0].data["skipped_non_pcie_device_count"] == 1
+
+
+def test_nic_link_check_warns_when_no_nics(analyzer):
+    """An expected NIC speed/width with no NICs found warns instead of passing silently."""
+    data = PcieDataModel(
+        pcie_cfg_space={},
+        other_pcie_cfg_space={"0000:03:00.0": _cfg_with_class(_CLASS_STORAGE)},
+    )
+
+    result = analyzer.analyze_data(data, PcieAnalyzerArgs(exp_nic_speed=5))
+
+    assert "NIC link check skipped: no NIC devices were collected" in _descriptions(result)
+
+
+def test_nic_link_check_warns_on_nic_without_pcie_cap(analyzer):
+    """NICs with no readable PCI Express capability (e.g. a 64-byte read without
+    sudo) are reported instead of being skipped silently."""
+    data = PcieDataModel(
+        pcie_cfg_space={},
+        other_pcie_cfg_space={
+            _NIC_BDF: _cfg_with_class(_CLASS_NETWORK),
+            "0000:03:00.0": _nic_cfg_with_link(_LNK_STAT_GEN5_X16, _LNK_CAP2_GENS_1_5),
+        },
+    )
+
+    result = analyzer.analyze_data(data, PcieAnalyzerArgs(exp_nic_width=16))
+
+    skipped = [
+        e
+        for e in result.events
+        if e.description == "NIC link check skipped devices with no PCI Express capability"
+    ]
+    assert skipped and skipped[0].data["bdfs"] == [_NIC_BDF]
+    assert _LINK_WIDTH_ERR not in _descriptions(result)
+
+
+def test_amd_gpu_in_other_cfg_space_bucketed_as_gpu(analyzer):
+    """An AMD GPU that was collected with the other devices (e.g. its GPU-path
+    lookup failed) is still bucketed as a GPU, not as a NIC or OTHER."""
+    gpu = _cfg_with_class(
+        _CLASS_PROCESSING_ACCEL, vendor_id=analyzer.system_info.vendorid_ep, device_id=0x74A1
+    )
+    data = PcieDataModel(pcie_cfg_space={}, other_pcie_cfg_space={"0000:01:00.0": gpu})
+
+    buckets = analyzer.bucket_devices(data)
+
+    assert buckets["GPU"] == ["0000:01:00.0"]
+    assert buckets["NIC"] == []

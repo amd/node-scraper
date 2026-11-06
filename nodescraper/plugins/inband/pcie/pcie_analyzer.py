@@ -983,7 +983,7 @@ class PcieAnalyzer(DataAnalyzer):
 
     @staticmethod
     def _all_cfg_space(pcie_data: PcieDataModel) -> Dict[BdfStr, PcieCfgSpace]:
-        """Merge AMD (``pcie_cfg_space``) and non-AMD (``other_pcie_cfg_space``)
+        """Merge the GPU (``pcie_cfg_space``) and other (``other_pcie_cfg_space``)
         config spaces into one dict. VFs are not included."""
         combined: Dict[BdfStr, PcieCfgSpace] = dict(pcie_data.pcie_cfg_space)
         if pcie_data.other_pcie_cfg_space:
@@ -993,10 +993,10 @@ class PcieAnalyzer(DataAnalyzer):
     def bucket_devices(self, pcie_data: PcieDataModel) -> Dict[str, List[BdfStr]]:
         """Bucket every collected PCI device into named categories.
 
-        Considers both AMD endpoints (``pcie_cfg_space``) and non-AMD devices
+        Considers both AMD endpoints (``pcie_cfg_space``) and all other devices
         (``other_pcie_cfg_space``, populated only when the collector runs with
         collect_all_devices=True). VFs are excluded: AMD VFs are kept in
-        ``vf_pcie_cfg_space`` and non-AMD VFs are not collected.
+        ``vf_pcie_cfg_space`` and other VFs are not collected.
 
         Parameters
         ----------
@@ -1074,7 +1074,9 @@ class PcieAnalyzer(DataAnalyzer):
 
         Only the dimensions supplied (speed and/or width) are checked, so a
         NIC that legitimately negotiates a lower value on the unchecked
-        dimension does not produce a false positive.
+        dimension does not produce a false positive. A warning is logged when
+        there are no NICs, or a NIC has no readable PCI Express capability,
+        so an expected speed or width never passes without being checked.
 
         Parameters
         ----------
@@ -1092,12 +1094,26 @@ class PcieAnalyzer(DataAnalyzer):
 
         nic_bdfs = buckets.get(DEVICE_CATEGORY_NIC, [])
         if not nic_bdfs:
+            self._log_event(
+                category=EventCategory.IO,
+                description="NIC link check skipped: no NIC devices were collected",
+                priority=EventPriority.WARNING,
+                data={"exp_nic_speed": exp_nic_speed, "exp_nic_width": exp_nic_width},
+            )
             return
 
         all_cfg_space = self._all_cfg_space(pcie_data)
         nic_cfg_space = {bdf: all_cfg_space[bdf] for bdf in nic_bdfs}
 
         nic_pcie_express_dict = self.get_valid_cap_dict(nic_cfg_space, PcieExp, log_event=False)
+        missing = [bdf for bdf in nic_bdfs if bdf not in nic_pcie_express_dict]
+        if missing:
+            self._log_event(
+                category=EventCategory.IO,
+                description="NIC link check skipped devices with no PCI Express capability",
+                priority=EventPriority.WARNING,
+                data={"bdfs": missing},
+            )
         self.check_link_status(
             bdf_pcie_express_dict=nic_pcie_express_dict,
             exp_speed=exp_nic_speed,
@@ -1193,7 +1209,7 @@ class PcieAnalyzer(DataAnalyzer):
                     priority=EventPriority.WARNING,
                 )
                 return self.result
-            # Non-AMD devices were collected, so keep going: the AMD checks below
+            # Other devices were collected, so keep going: the AMD checks below
             # are no-ops on empty data, and the NIC / other-device checks still run.
             self._log_event(
                 category=EventCategory.IO,
@@ -1303,7 +1319,7 @@ class PcieAnalyzer(DataAnalyzer):
             # device enumeration failed. Counting here would report 0 NICs.
             self._log_event(
                 category=EventCategory.RUNTIME,
-                description="NIC checks skipped: non-AMD PCI devices were not collected",
+                description="NIC checks skipped: other PCI devices were not collected",
                 priority=EventPriority.WARNING,
                 data={
                     "hint": "Run the PcieCollector with collect_all_devices=True",
@@ -1322,7 +1338,7 @@ class PcieAnalyzer(DataAnalyzer):
                 exp_nic_width=pcie_input_data.exp_nic_width,
             )
 
-        # Error checks for non-AMD devices. Link speed/width isn't checked here
+        # Error checks for the other devices. Link speed/width isn't checked here
         # because many of these devices run at a lower speed or width by design.
         if args.analyze_other_devices and pcie_data.other_pcie_cfg_space:
             # Only PCI Express functions are analyzed. Host bridges, ISA/SMBus
@@ -1336,7 +1352,7 @@ class PcieAnalyzer(DataAnalyzer):
             }
             self._log_event(
                 category=EventCategory.IO,
-                description="Analyzing non-AMD PCI devices",
+                description="Analyzing other PCI devices",
                 priority=EventPriority.INFO,
                 data={
                     "other_device_count": len(other_cfg_space),
@@ -1346,7 +1362,7 @@ class PcieAnalyzer(DataAnalyzer):
             )
             self.check_pcie_status_errors(bdf_cfg_space_dict=other_cfg_space)
             self.check_pcie_exp_capability_structure_errors(bdf_cfg_space_dict=other_cfg_space)
-            # Many non-AMD devices legitimately lack AER / Secondary PCIe
+            # Many of these devices legitimately lack AER / Secondary PCIe
             # capabilities, so don't warn about missing ones.
             self.check_ecap_aer_errors(bdf_cfg_space_dict=other_cfg_space, log_missing_cap=False)
             self.check_ecap_sec_pci_regs(bdf_cfg_space_dict=other_cfg_space, log_missing_cap=False)
