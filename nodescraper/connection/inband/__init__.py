@@ -35,12 +35,12 @@ from .inbandmanager import InBandConnectionManager
 from .sshparams import SSHConnectionParams
 
 __all__ = [
-    "SSHConnectionParams",
-    "LocalShell",
-    "InBandConnectionManager",
-    "InBandConnection",
     "BaseFileArtifact",
-    "TextFileArtifact",
     "BinaryFileArtifact",
     "CommandArtifact",
+    "InBandConnection",
+    "InBandConnectionManager",
+    "LocalShell",
+    "SSHConnectionParams",
+    "TextFileArtifact",
 ]

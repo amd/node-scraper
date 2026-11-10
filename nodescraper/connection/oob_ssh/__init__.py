@@ -23,6 +23,16 @@
 # SOFTWARE.
 #
 ###############################################################################
+from .amc_manager import AmcInBandConnectionManager
+from .amc_params import AmcInBandConnectionParams
+from .amc_shell_hop import AmcShellHopConnectionManager
+from .bmc_relay import ChannelMode
 from .oob_ssh_connection_manager import OobSshConnectionManager
 
-__all__ = ["OobSshConnectionManager"]
+__all__ = [
+    "AmcInBandConnectionManager",
+    "AmcInBandConnectionParams",
+    "AmcShellHopConnectionManager",
+    "ChannelMode",
+    "OobSshConnectionManager",
+]
