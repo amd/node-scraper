@@ -31,6 +31,7 @@ import pytest
 
 from nodescraper.models import PluginConfig
 from nodescraper.plugins.inband.pcie.analyzer_args import PcieAnalyzerArgs
+from nodescraper.plugins.inband.pcie.collector_args import PcieCollectorArgs
 from nodescraper.plugins.inband.pcie.pcie_analyzer import PcieAnalyzer
 from nodescraper.plugins.inband.pcie.pcie_collector import PcieCollector
 from nodescraper.plugins.inband.pcie.pcie_data import PcieDataModel
@@ -65,6 +66,21 @@ def test_pcie_plugin_class_attributes():
     assert PciePlugin.COLLECTOR is PcieCollector
     assert PciePlugin.ANALYZER is PcieAnalyzer
     assert PciePlugin.ANALYZER_ARGS is PcieAnalyzerArgs
+    assert PciePlugin.COLLECTOR_ARGS is PcieCollectorArgs
+
+
+def test_pcie_collector_args_collect_all_devices_default_false():
+    """collect_all_devices defaults to False, so only AMD devices are collected."""
+    assert PcieCollectorArgs().collect_all_devices is False
+
+
+def test_pcie_collector_args_validate_from_dict():
+    """A plugin config collection_args dict validates into PcieCollectorArgs."""
+    args = PcieCollectorArgs.model_validate(
+        {"collect_all_devices": True, "upstream_steps_to_collect": 2}
+    )
+    assert args.collect_all_devices is True
+    assert args.upstream_steps_to_collect == 2
 
 
 def test_pcie_plugin_basic_config_fixture_exists(pcie_config_file):
