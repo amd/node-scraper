@@ -59,13 +59,16 @@ class RemoteShell(InBandConnection):
     def __init__(
         self,
         ssh_params: SSHConnectionParams,
+        sock: Any = None,
     ) -> None:
         """Creates a RemoteShell Instance.
 
         Args:
-            ssh_params (SSHConnectionParams): The parameters used to initiate the SSH connection username/password/ect.
+            ssh_params (SSHConnectionParams): The parameters used to initiate the SSH connection.
+            sock: Optional pre-connected socket or channel for tunnelled connections (e.g. BMC → AMC).
         """
         self.ssh_params = ssh_params
+        self.sock = sock
         self._new_client()
 
     def _new_client(self) -> None:
@@ -94,7 +97,7 @@ class RemoteShell(InBandConnection):
     def connect_ssh(self):
         """Connect to the remote host via SSH"""
         try:
-            self.client.connect(
+            connect_kwargs: dict[str, Any] = dict(
                 hostname=str(self.ssh_params.hostname),
                 port=self.ssh_params.port,
                 username=self.ssh_params.username,
@@ -110,6 +113,9 @@ class RemoteShell(InBandConnection):
                 auth_timeout=60,
                 banner_timeout=200,
             )
+            if self.sock is not None:
+                connect_kwargs["sock"] = self.sock
+            self.client.connect(**connect_kwargs)
             self._arm_channel_timeout()
         except socket.timeout:
             raise SSHConnectionError("SSH Request timeout") from socket.timeout

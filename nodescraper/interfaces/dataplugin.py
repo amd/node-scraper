@@ -49,7 +49,7 @@ from nodescraper.models import (
 from nodescraper.taskresulthooks.filesystemloghook import hooks_for_fixed_directory
 from nodescraper.utils import resolve_log_dir_name
 
-from .connectionmanager import TConnectArg, TConnectionManager
+from .connectionmanager import ConnectionManager, TConnectArg, TConnectionManager
 from .task import SystemCompatibilityError
 from .taskresulthook import TaskResultHook
 
@@ -77,6 +77,8 @@ class DataPlugin(
     DATA_MODEL: Type[TDataModel]
 
     CONNECTION_TYPE: Optional[Type[TConnectionManager]]
+
+    FALLBACK_CONNECTION_TYPE: Optional[Type[ConnectionManager]] = None
 
     COLLECTOR: Optional[CollectorClasses] = None
 
@@ -367,6 +369,7 @@ class DataPlugin(
             return self.collection_result
 
         primary_collector = collector_classes[0]
+        fallback_manager: Optional[ConnectionManager] = None
 
         try:
             if not self.connection_manager:
@@ -404,10 +407,15 @@ class DataPlugin(
                 self.connection_manager.parent = self.__class__.__name__
                 self.connection_manager.connect()
 
+            active_manager: ConnectionManager = self.connection_manager
+            fallback_manager = self._open_fallback_connection(active_manager)
+            if fallback_manager is not None:
+                active_manager = fallback_manager
+
             # Proceed as long as a connection was established.
             if (
-                self.connection_manager.connection is None
-                or self.connection_manager.result.status >= ExecutionStatus.ERROR
+                active_manager.connection is None
+                or active_manager.result.status >= ExecutionStatus.ERROR
             ):
                 self.collection_result = TaskResult(
                     task=primary_collector.__name__,
@@ -435,7 +443,7 @@ class DataPlugin(
                         system_info=self.system_info.model_copy(),
                         logger=self.logger,
                         system_interaction_level=system_interaction_level,
-                        connection=self.connection_manager.connection,
+                        connection=active_manager.connection,
                         max_event_priority_level=max_event_priority_level,
                         parent=self.__class__.__name__,
                         task_result_hooks=self.task_result_hooks,
@@ -472,12 +480,54 @@ class DataPlugin(
                 message=f"Unhandled exception running data collector: {str(e)}",
             )
         finally:
+            if fallback_manager is not None:
+                fallback_manager.safe_disconnect()
             if self.connection_manager and (
                 self._owns_connection_manager or not preserve_connection
             ):
                 self.connection_manager.safe_disconnect()
 
         return self.collection_result
+
+    def _open_fallback_connection(self, primary: ConnectionManager) -> Optional[ConnectionManager]:
+        """Open FALLBACK_CONNECTION_TYPE when the primary connection did not come up.
+
+        Args:
+            primary (ConnectionManager): connection manager that was tried first
+
+        Returns:
+            Optional[ConnectionManager]: connected fallback manager, or None when there is
+            no fallback or the fallback also failed
+        """
+        fallback_cls = self.FALLBACK_CONNECTION_TYPE
+        if fallback_cls is None or primary.connection_args is None:
+            return None
+        if primary.connection is not None and primary.result.status < ExecutionStatus.ERROR:
+            return None
+
+        self.logger.warning(
+            "%s did not connect; trying %s",
+            type(primary).__name__,
+            fallback_cls.__name__,
+        )
+        fallback = fallback_cls(
+            system_info=self.system_info.model_copy(),
+            logger=self.logger,
+            connection_args=primary.connection_args,
+            parent=self.__class__.__name__,
+            task_result_hooks=self._connection_manager_hooks(),
+            event_reporter=self.event_reporter,
+            session_id=self.session_id,
+        )
+        fallback.connect()
+        if fallback.connection is None or fallback.result.status >= ExecutionStatus.ERROR:
+            fallback.safe_disconnect()
+            return None
+        primary.result.message = (
+            f"{primary.result.message or 'Connection failed'}"
+            f" (fell back to {fallback_cls.__name__}: OK)"
+        )
+        return fallback
 
     def analyze(
         self,
