@@ -78,6 +78,10 @@ class PcieCollector(InBandDataCollector[PcieDataModel, PcieCollectorArgs]):
         - The sudo lspci -xxxx command is used to collect the PCIe configuration space for the GPUs in the system
     - otherwise the following commands will be run without sudo:
         - The lspci -x command is used to collect the PCIe configuration space for the GPUs in the system
+    - If collect_all_devices is set, all other PCI devices are also collected:
+        - `lspci -D -nn`: Enumerate every PCI device
+        - `find -L /sys/bus/pci/devices -maxdepth 2 -name physfn`: Identify SR-IOV VFs so they are excluded
+        - Config space is parsed from the `lspci -x`/`lspci -xxxx` dump above
 
     """
 
@@ -95,6 +99,10 @@ class PcieCollector(InBandDataCollector[PcieDataModel, PcieCollectorArgs]):
     CMD_LSPCI_HEX_SUDO = "lspci -xxxx"
     CMD_LSPCI_HEX = "lspci -x"
     CMD_LSPCI_AMD_DEVICES = "lspci -d {vendor_id}: -nn"
+    CMD_LSPCI_ALL_DEVICES = "lspci -D -nn"
+    # Every SR-IOV VF has a physfn link back to its PF. -L follows the
+    # /sys/bus/pci/devices symlinks.
+    CMD_LIST_VFS = "find -L /sys/bus/pci/devices -maxdepth 2 -name physfn"
     CMD_LSPCI_PATH_DEVICE = "lspci -PP -d {vendor_id}:{dev_id}"
     CMD_LSPCI_PATH_DEVICE_DOMAIN = "lspci -PP -D -d {vendor_id}:{dev_id}"
 
@@ -144,6 +152,84 @@ class PcieCollector(InBandDataCollector[PcieDataModel, PcieCollectorArgs]):
         )
 
         return result
+
+    def _detect_vf_bdfs(self) -> Set[str]:
+        """Return the domain-qualified BDFs of all SR-IOV Virtual Functions.
+
+        Returns
+        -------
+        Set[str]
+            BDFs of VFs. Empty if there are none or sysfs could not be read.
+        """
+        res = self._run_sut_cmd(self.CMD_LIST_VFS, sudo=False, log_artifact=False)
+        vf_bdfs: Set[str] = set()
+        # find can exit non-zero for unrelated unreadable entries, so parse stdout regardless.
+        for line in (res.stdout or "").splitlines():
+            # Format: "/sys/bus/pci/devices/0000:03:00.2/physfn"
+            parts = line.strip().split("/")
+            if len(parts) >= 2 and parts[-1] == "physfn":
+                vf_bdfs.add(parts[-2])
+        return vf_bdfs
+
+    def _detect_other_devices(self) -> Optional[List[str]]:
+        """Detect all PCI devices in the system using lspci.
+
+        Enumerates every PCI device with ``lspci -D -nn`` and returns their
+        domain-qualified BDFs. SR-IOV Virtual Functions are skipped so they
+        aren't counted as devices. Devices already collected on the GPU path
+        are filtered out later, in ``_get_other_cfg_space``.
+
+        Returns
+        -------
+        Optional[List[str]]
+            A list of domain-qualified BDFs, or None if the devices could not
+            be enumerated.
+        """
+        other_bdfs: List[str] = []
+
+        res = self._run_sut_cmd(
+            self.CMD_LSPCI_ALL_DEVICES,
+            sudo=False,
+            log_artifact=False,
+        )
+        if res.exit_code != 0 or not res.stdout:
+            self._log_event(
+                category=EventCategory.IO,
+                description="Failed to enumerate PCI devices",
+                data={
+                    "command": self.CMD_LSPCI_ALL_DEVICES,
+                    "exit_code": res.exit_code,
+                    "stderr": res.stderr,
+                },
+                priority=EventPriority.ERROR,
+            )
+            return None
+
+        vf_bdfs = self._detect_vf_bdfs()
+        skipped_vfs: List[str] = []
+        for line in res.stdout.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            # Format: "0000:02:00.0 Ethernet controller [0200]: Intel ... [8086:1572]"
+            bdf = line.split()[0]
+            if bdf in vf_bdfs or "virtual function" in line.lower():
+                skipped_vfs.append(bdf)
+                continue
+            other_bdfs.append(bdf)
+
+        self._log_event(
+            category=EventCategory.IO,
+            description="Detected PCI devices from system",
+            data={
+                "other_device_count": len(other_bdfs),
+                "bdfs": other_bdfs,
+                "skipped_vf_count": len(skipped_vfs),
+            },
+            priority=EventPriority.INFO,
+        )
+
+        return other_bdfs
 
     def show_lspci_verbose(self, sudo=True) -> Optional[str]:
         """Show lspci with -vvv."""
@@ -522,8 +608,11 @@ class PcieCollector(InBandDataCollector[PcieDataModel, PcieCollectorArgs]):
 
         return cap_structure  # type: ignore[return-value]
 
-    def _cfg_space_from_hex(self, hex_data_raw: str, bdf: str) -> PcieCfgSpace:
-        """Parse a raw lspci hex dump (Linux ``-xxxx`` or ESXi ``-e``) into a PcieCfgSpace."""
+    def _cfg_space_from_hex(self, hex_data_raw: str, bdf: str) -> Optional[PcieCfgSpace]:
+        """Parse a raw lspci hex dump (Linux ``-xxxx`` or ESXi ``-e``) into a PcieCfgSpace.
+
+        Returns None, after logging an event, when the dump is too short.
+        """
         hex_data: List[int] = self.parse_hex_dump(hex_data_raw)
         if len(hex_data) < 64:
             # Expect at least 256 bytes of data, for the first 256 bytes of the PCIe config space
@@ -533,7 +622,7 @@ class PcieCollector(InBandDataCollector[PcieDataModel, PcieCollectorArgs]):
                 data={"bdf": bdf, "length": len(hex_data)},
                 priority=EventPriority.ERROR,
             )
-            return PcieCfgSpace()
+            return None
         cap_data, ecap_data = self.discover_capability_structure(hex_data)
         return self.get_pcie_cfg(hex_data, cap_data, ecap_data)
 
@@ -548,7 +637,8 @@ class PcieCollector(InBandDataCollector[PcieDataModel, PcieCollectorArgs]):
                 priority=EventPriority.ERROR,
             )
             return PcieCfgSpace()
-        return self._cfg_space_from_hex(hex_data_raw, bdf)
+        cfg_space = self._cfg_space_from_hex(hex_data_raw, bdf)
+        return cfg_space if cfg_space is not None else PcieCfgSpace()
 
     def get_pcie_cfg(
         self,
@@ -602,6 +692,92 @@ class PcieCollector(InBandDataCollector[PcieDataModel, PcieCollectorArgs]):
         for name, data in name_log_map.items():
             if data is not None:
                 self.result.artifacts.append(TextFileArtifact(filename=name, contents=data))
+
+    # Header line of one device in a full lspci hex dump, e.g. "02:00.0 Ethernet ..."
+    # or "0000:02:00.0 Ethernet ...". Hex rows ("00: 86 80 ...") don't match.
+    _LSPCI_HEX_HEADER_RE = re.compile(
+        r"^((?:[0-9a-fA-F]{4}:)?[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-7])\s"
+    )
+
+    def _split_lspci_hex_dump(self, lspci_hex: str) -> Dict[str, str]:
+        """Split a full ``lspci -x``/``lspci -xxxx`` dump into one dump per device.
+
+        Parameters
+        ----------
+        lspci_hex : str
+            Output of ``lspci -x`` or ``lspci -xxxx`` for all devices.
+
+        Returns
+        -------
+        Dict[str, str]
+            Mapping of domain-qualified BDF to that device's hex dump.
+        """
+        dumps: Dict[str, List[str]] = {}
+        current: Optional[List[str]] = None
+        for line in lspci_hex.splitlines():
+            header = self._LSPCI_HEX_HEADER_RE.match(line)
+            if header:
+                bdf = header.group(1)
+                # lspci omits the domain on systems that only have domain 0000.
+                if bdf.count(":") == 1:
+                    bdf = f"0000:{bdf}"
+                current = dumps.setdefault(bdf.lower(), [])
+            elif current is not None:
+                current.append(line)
+        return {bdf: "\n".join(lines) for bdf, lines in dumps.items()}
+
+    def _get_other_cfg_space(
+        self,
+        bdfs: List[str],
+        already_collected: Set[str],
+        lspci_hex: Optional[str],
+        sudo: bool,
+    ) -> Dict[str, PcieCfgSpace]:
+        """Collect config space for devices not already collected on the GPU path.
+
+        Config space is parsed from the full lspci hex dump when the device is
+        in it, so no extra command is run per device. A per-device lspci call
+        is only made for devices missing from the dump.
+
+        Parameters
+        ----------
+        bdfs : List[str]
+            Domain-qualified BDFs to collect.
+        already_collected : Set[str]
+            BDFs already collected on the AMD path (e.g. root ports and
+            switches upstream of the GPUs). These are skipped so they are not
+            collected or reported twice.
+        lspci_hex : Optional[str]
+            Full ``lspci -x``/``lspci -xxxx`` dump, or None if it failed.
+        sudo : bool
+            Whether per-device fallback reads use sudo.
+
+        Returns
+        -------
+        Dict[str, PcieCfgSpace]
+            Config space per BDF. Devices whose config space could not be read
+            are left out.
+        """
+        dump_by_bdf = self._split_lspci_hex_dump(lspci_hex) if lspci_hex else {}
+        cfg_spaces: Dict[str, PcieCfgSpace] = {}
+        for bdf in bdfs:
+            if bdf in already_collected:
+                continue
+            hex_data_raw = dump_by_bdf.get(bdf.lower())
+            if hex_data_raw is None:
+                hex_data_raw = self.show_lspci_hex(bdf, sudo=sudo)
+            if hex_data_raw is None:
+                self._log_event(
+                    category=EventCategory.IO,
+                    description="Failed to get hex data for BDF.",
+                    data={"bdf": bdf},
+                    priority=EventPriority.ERROR,
+                )
+                continue
+            cfg_space = self._cfg_space_from_hex(hex_data_raw, bdf)
+            if cfg_space is not None:
+                cfg_spaces[bdf] = cfg_space
+        return cfg_spaces
 
     def _get_gpu_vf_bdfs_esxi(
         self, pf_devid: Optional[int], vf_devid: Optional[int]
@@ -704,11 +880,15 @@ class PcieCollector(InBandDataCollector[PcieDataModel, PcieCollectorArgs]):
             pcie_cfg_dict: Dict[str, PcieCfgSpace] = {}
             for bdf in pf_bdfs:
                 if bdf in cfg_by_bdf:
-                    pcie_cfg_dict[bdf] = self._cfg_space_from_hex(cfg_by_bdf[bdf], bdf)
+                    cfg_space = self._cfg_space_from_hex(cfg_by_bdf[bdf], bdf)
+                    if cfg_space is not None:
+                        pcie_cfg_dict[bdf] = cfg_space
             vf_pcie_cfg_data: Dict[str, PcieCfgSpace] = {}
             for bdf in vf_bdfs:
                 if bdf in cfg_by_bdf:
-                    vf_pcie_cfg_data[bdf] = self._cfg_space_from_hex(cfg_by_bdf[bdf], bdf)
+                    cfg_space = self._cfg_space_from_hex(cfg_by_bdf[bdf], bdf)
+                    if cfg_space is not None:
+                        vf_pcie_cfg_data[bdf] = cfg_space
             pcie_data = PcieDataModel(
                 pcie_cfg_space=pcie_cfg_dict,
                 vf_pcie_cfg_space=vf_pcie_cfg_data,
@@ -729,8 +909,21 @@ class PcieCollector(InBandDataCollector[PcieDataModel, PcieCollectorArgs]):
         upstream_steps_to_collect: Optional[int] = None,
         pf_devid: Optional[int] = None,
         vf_devid: Optional[int] = None,
+        collect_all_devices: bool = False,
     ) -> Optional[PcieDataModel]:
         """Will return all PCIe data in a PcieDataModel object.
+
+        Parameters
+        ----------
+        upstream_steps_to_collect : Optional[int]
+            Number of upstream devices to collect config space for, by default None
+        pf_devid : Optional[int]
+            Expected GPU PF device ID, used for ESXi BDF resolution, by default None
+        vf_devid : Optional[int]
+            Expected GPU VF device ID, used for ESXi BDF resolution, by default None
+        collect_all_devices : bool
+            When True, also collect config space for all other PCI devices into
+            ``other_pcie_cfg_space``, by default False. Not supported on ESXi.
 
         Returns
         -------
@@ -738,6 +931,12 @@ class PcieCollector(InBandDataCollector[PcieDataModel, PcieCollectorArgs]):
             The data in a PcieDataModel object or None on failure
         """
         if self.system_info.os_family == OSFamily.ESXI:
+            if collect_all_devices:
+                self._log_event(
+                    category=EventCategory.RUNTIME,
+                    description="collect_all_devices is not supported on ESXi, collecting GPU + VF only",
+                    priority=EventPriority.WARNING,
+                )
             return self._get_pcie_data_esxi(pf_devid, vf_devid)
 
         minimum_system_interaction_level_required_for_sudo = SystemInteractionLevel.INTERACTIVE
@@ -791,6 +990,21 @@ class PcieCollector(InBandDataCollector[PcieDataModel, PcieCollectorArgs]):
                     vf_pcie_cfg_data.update(vf_cfg_space)
 
             lspci_hex = self.show_lspci_hex(sudo=use_sudo)
+
+            # Optionally collect config space for all other PCI devices.
+            # Stays None when not requested or when enumeration fails, so the
+            # analyzer can tell "not collected" apart from "none found".
+            other_pcie_cfg_data: Optional[Dict[str, PcieCfgSpace]] = None
+            if collect_all_devices:
+                other_bdfs = self._detect_other_devices()
+                if other_bdfs is not None:
+                    other_pcie_cfg_data = self._get_other_cfg_space(
+                        other_bdfs,
+                        already_collected=set(pcie_cfg_dict) | set(vf_pcie_cfg_data),
+                        lspci_hex=lspci_hex,
+                        sudo=use_sudo,
+                    )
+
             lspci_verbose = self.show_lspci_verbose(sudo=use_sudo)
             lspci_verbose_tree = self.show_lspci_verbose_tree(sudo=use_sudo)
             lspci_path = self.show_lspci_path(sudo=use_sudo)
@@ -805,6 +1019,7 @@ class PcieCollector(InBandDataCollector[PcieDataModel, PcieCollectorArgs]):
             pcie_data = PcieDataModel(
                 pcie_cfg_space=pcie_cfg_dict,
                 vf_pcie_cfg_space=vf_pcie_cfg_data,
+                other_pcie_cfg_space=other_pcie_cfg_data,
             )
         except ValidationError as e:
             self._log_event(
@@ -839,27 +1054,36 @@ class PcieCollector(InBandDataCollector[PcieDataModel, PcieCollectorArgs]):
     def collect_data(
         self,
         args: Optional[PcieCollectorArgs] = None,
-        upstream_steps_to_collect: Optional[int] = None,
-        **kwargs,
     ) -> Tuple[TaskResult, Optional[PcieDataModel]]:
         """Read PCIe data.
 
         Args:
-            args: Optional collector arguments (devid_ep / devid_ep_vf for ESXi GPU BDF resolution)
-            upstream_steps_to_collect: Number of upstream devices to collect
-            **kwargs: Additional keyword arguments
+            args: Optional collector arguments. Defaults to PcieCollectorArgs(),
+                which collects the full upstream path of AMD devices only.
+                devid_ep / devid_ep_vf are used for ESXi GPU BDF resolution.
 
         Returns:
             Tuple[TaskResult, Optional[PcieDataModel]]: tuple containing the result of the task and the PCIe data if available
         """
         if args is None:
             args = PcieCollectorArgs()
-        pcie_data = self._get_pcie_data(upstream_steps_to_collect, args.devid_ep, args.devid_ep_vf)
+
+        pcie_data = self._get_pcie_data(
+            args.upstream_steps_to_collect,
+            args.devid_ep,
+            args.devid_ep_vf,
+            collect_all_devices=args.collect_all_devices,
+        )
         if pcie_data:
             self._log_event(
                 category=EventCategory.IO,
                 description="PCIe Data read from GPUs",
-                data={"bdf_count": len(pcie_data.pcie_cfg_space.keys())},
+                data={
+                    "bdf_count": len(pcie_data.pcie_cfg_space.keys()),
+                    "other_bdf_count": (
+                        len(pcie_data.other_pcie_cfg_space) if pcie_data.other_pcie_cfg_space else 0
+                    ),
+                },
                 priority=EventPriority.INFO,
             )
         return self.result, pcie_data

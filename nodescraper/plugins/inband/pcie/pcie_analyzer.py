@@ -55,6 +55,13 @@ T_CAP = TypeVar("T_CAP", bound=PcieCapStructure)
 
 _AMD_PCIE_BRIDGE_DEVICE_IDS = frozenset({0x1500, 0x1501})
 _PCI_BASE_CLASS_BRIDGE = 0x06
+# PCI base class codes (byte at config space offset 0x0B) used to bucket devices.
+_PCI_BASE_CLASS_NETWORK = 0x02  # Network controller (NIC), e.g. Ethernet
+
+# Device category (bucket) names.
+DEVICE_CATEGORY_GPU = "GPU"
+DEVICE_CATEGORY_NIC = "NIC"
+DEVICE_CATEGORY_OTHER = "OTHER"
 
 
 class PcieAnalyzerInputModel(BaseModel):
@@ -62,16 +69,22 @@ class PcieAnalyzerInputModel(BaseModel):
     PCIeAnalyzerInputModel is a data model for validating and storing input parameters
     related to PCIe (Peripheral Component Interconnect Express) analysis.
     Attributes:
-        exp_speed (int): Expected PCIe speed, Speed is the PCIe Generation, constrained to values between 1 and 5 (inclusive).
+        exp_speed (int): Expected PCIe speed, Speed is the PCIe Generation, constrained to values between 1 and 6 (inclusive).
         exp_width (int): Expected PCIe width, constrained to values between 1 and 16 (inclusive).
         exp_sriov_count (Optional[int]): Optional expected count of SR-IOV (Single Root I/O Virtualization) instances.
         exp_gpu_count_override (Optional[int]): Optional override for the expected GPU count.
+        exp_nic_count (Optional[int]): Optional expected count of physical NIC devices.
+        exp_nic_speed (Optional[int]): Optional expected NIC PCIe generation, between 1 and 6 (inclusive).
+        exp_nic_width (Optional[int]): Optional expected NIC PCIe width, between 1 and 16 (inclusive).
     """
 
-    exp_speed: int = Field(ge=1, le=5)
+    exp_speed: int = Field(ge=1, le=6)
     exp_width: int = Field(ge=1, le=16)
     exp_sriov_count: Optional[int] = None
     exp_gpu_count_override: Optional[int] = None
+    exp_nic_count: Optional[int] = Field(default=None, ge=0)
+    exp_nic_speed: Optional[int] = Field(default=None, ge=1, le=6)
+    exp_nic_width: Optional[int] = Field(default=None, ge=1, le=16)
     exp_max_payload_size: Dict[int, int] = Field(default_factory=dict)
     exp_max_rd_req_size: Dict[int, int] = Field(default_factory=dict)
     exp_ten_bit_tag_req_en: Dict[int, int] = Field(default_factory=dict)
@@ -287,16 +300,17 @@ class PcieAnalyzer(DataAnalyzer):
     def check_link_status(
         self,
         bdf_pcie_express_dict: Dict[str, PcieExp],
-        exp_speed: int = 5,
-        exp_width: int = 16,
+        exp_speed: Optional[int] = 5,
+        exp_width: Optional[int] = 16,
     ):
         """Checks PCIe link status for each bdf in the bdf_list and compares with the expected rate/width
 
         Args:
             all_bdf_cfg_space (dict[BdfStr, PcieCfgSpace]):
                 dict of key bdf and value PcieCfgSpace object which contains register data
-            exp_speed (int): expected link speed
-            exp_width (int): expected link width
+            exp_speed (Optional[int]): expected link speed; when None the speed checks, including
+                the link-down (speed 0) check, are skipped
+            exp_width (Optional[int]): expected link width; when None the width comparison is skipped
 
         Returns:
             None
@@ -309,43 +323,45 @@ class PcieAnalyzer(DataAnalyzer):
             0b000100: 3,
             0b001000: 4,
             0b010000: 5,
+            0b100000: 6,
         }
         for bdf, pcie_exp in bdf_pcie_express_dict.items():
             lnk_stat_reg = pcie_exp.lnk_stat_reg
             lnk_cap_2_reg = pcie_exp.lnk_cap_2_reg
             try:
-                if lnk_stat_reg.curr_lnk_speed.val == 0:
-                    self._log_event(
-                        category=EventCategory.IO,
-                        description="Link speed vector is 0",
-                        data={
-                            "bdf": bdf,
-                            "curr_lnk_speed": lnk_stat_reg.curr_lnk_speed.val,
-                            "supported_lnk_speed_vec": lnk_cap_2_reg.supported_lnk_speed_vec.val,
-                        },
-                        priority=EventPriority.ERROR,
-                    )
-                    continue
+                if exp_speed is not None:
+                    if lnk_stat_reg.curr_lnk_speed.val == 0:
+                        self._log_event(
+                            category=EventCategory.IO,
+                            description="Link speed vector is 0",
+                            data={
+                                "bdf": bdf,
+                                "curr_lnk_speed": lnk_stat_reg.curr_lnk_speed.val,
+                                "supported_lnk_speed_vec": lnk_cap_2_reg.supported_lnk_speed_vec.val,
+                            },
+                            priority=EventPriority.ERROR,
+                        )
+                        continue
 
-                curr_speed = lnk_stat_reg.curr_lnk_speed.get_val()
-                supported_vec = lnk_cap_2_reg.supported_lnk_speed_vec.get_val()
-                if curr_speed is None or supported_vec is None:
-                    continue
-                sv_mask = 0b1 << (curr_speed - 1)
-                link_speed = sv_gen_speed[sv_mask & supported_vec]
+                    curr_speed = lnk_stat_reg.curr_lnk_speed.get_val()
+                    supported_vec = lnk_cap_2_reg.supported_lnk_speed_vec.get_val()
+                    if curr_speed is None or supported_vec is None:
+                        continue
+                    sv_mask = 0b1 << (curr_speed - 1)
+                    link_speed = sv_gen_speed[sv_mask & supported_vec]
 
-                if link_speed != exp_speed:
-                    self._log_event(
-                        category=EventCategory.IO,
-                        description="Unexpected link speed detected",
-                        priority=EventPriority.ERROR,
-                        data={
-                            "bdf": bdf,
-                            "current_speed": link_speed,
-                            "expected_speed": exp_speed,
-                        },
-                    )
-                if lnk_stat_reg.neg_lnk_width.get_val() != exp_width:
+                    if link_speed != exp_speed:
+                        self._log_event(
+                            category=EventCategory.IO,
+                            description="Unexpected link speed detected",
+                            priority=EventPriority.ERROR,
+                            data={
+                                "bdf": bdf,
+                                "current_speed": link_speed,
+                                "expected_speed": exp_speed,
+                            },
+                        )
+                if exp_width is not None and lnk_stat_reg.neg_lnk_width.get_val() != exp_width:
                     self._log_event(
                         category=EventCategory.IO,
                         description="Unexpected link width detected",
@@ -361,7 +377,7 @@ class PcieAnalyzer(DataAnalyzer):
                     category=EventCategory.IO,
                     description="Exception occurred while checking link status",
                     priority=EventPriority.ERROR,
-                    data={"exception": get_exception_traceback(e)},
+                    data={"bdf": bdf, "exception": get_exception_traceback(e)},
                 )
 
     def check_uncorr_aer_errors(
@@ -792,22 +808,24 @@ class PcieAnalyzer(DataAnalyzer):
     def check_ecap_sec_pci_regs(
         self,
         bdf_cfg_space_dict: dict[BdfStr, PcieCfgSpace],
+        log_missing_cap: bool = True,
     ):
         """Acquires ECapSecpci capability structure and checks for lane errors"""
         CAP_STRUCTURE = ECapSecpci
         bdf_ecap_secondary_pci = self.get_valid_cap_dict(
-            bdf_cfg_space_dict, CAP_STRUCTURE, log_event=True
+            bdf_cfg_space_dict, CAP_STRUCTURE, log_event=log_missing_cap
         )
         self.lane_error_status_chk(ecap_sec_pci_dict=bdf_ecap_secondary_pci)
 
     def check_ecap_aer_errors(
         self,
         bdf_cfg_space_dict: dict[BdfStr, PcieCfgSpace],
+        log_missing_cap: bool = True,
     ):
         """Acquires ECapAer capability structure and checks for AER errors"""
         CAP_STRUCTURE = ECapAer
         bdf_ecap_aer_error = self.get_valid_cap_dict(
-            bdf_cfg_space_dict, CAP_STRUCTURE, log_event=True
+            bdf_cfg_space_dict, CAP_STRUCTURE, log_event=log_missing_cap
         )
         self.check_uncorr_aer_errors(bdf_ecap_aer=bdf_ecap_aer_error)
         self.check_corr_aer_errors(bdf_ecap_aer=bdf_ecap_aer_error)
@@ -937,6 +955,171 @@ class PcieAnalyzer(DataAnalyzer):
                 },
             )
 
+    def classify_device(self, cfg_space: PcieCfgSpace) -> str:
+        """Bucket a single PCI device into a category based on its class code.
+
+        Devices are classified by PCI base class (config space offset 0x0B):
+        - Network controllers (base class 0x02) -> NIC, regardless of vendor.
+        - AMD GPU/accelerator endpoints -> GPU (reuses the existing endpoint
+          heuristic that excludes AMD bridges/retimers).
+        - Everything else -> OTHER.
+
+        Parameters
+        ----------
+        cfg_space : PcieCfgSpace
+            The collected configuration space for a single device.
+
+        Returns
+        -------
+        str
+            One of DEVICE_CATEGORY_GPU, DEVICE_CATEGORY_NIC, DEVICE_CATEGORY_OTHER.
+        """
+        base_class = cfg_space.type_0_configuration.class_code.val
+        if base_class == _PCI_BASE_CLASS_NETWORK:
+            return DEVICE_CATEGORY_NIC
+        if self._is_amd_gpu_pcie_endpoint(cfg_space, self.system_info.vendorid_ep):
+            return DEVICE_CATEGORY_GPU
+        return DEVICE_CATEGORY_OTHER
+
+    @staticmethod
+    def _all_cfg_space(pcie_data: PcieDataModel) -> Dict[BdfStr, PcieCfgSpace]:
+        """Merge the GPU (``pcie_cfg_space``) and other (``other_pcie_cfg_space``)
+        config spaces into one dict. VFs are not included."""
+        combined: Dict[BdfStr, PcieCfgSpace] = dict(pcie_data.pcie_cfg_space)
+        if pcie_data.other_pcie_cfg_space:
+            combined.update(pcie_data.other_pcie_cfg_space)
+        return combined
+
+    def bucket_devices(self, pcie_data: PcieDataModel) -> Dict[str, List[BdfStr]]:
+        """Bucket every collected PCI device into named categories.
+
+        Considers both AMD endpoints (``pcie_cfg_space``) and all other devices
+        (``other_pcie_cfg_space``, populated only when the collector runs with
+        collect_all_devices=True). VFs are excluded: AMD VFs are kept in
+        ``vf_pcie_cfg_space`` and other VFs are not collected.
+
+        Parameters
+        ----------
+        pcie_data : PcieDataModel
+            The collected PCIe data.
+
+        Returns
+        -------
+        Dict[str, List[BdfStr]]
+            Mapping of category name to the list of BDFs in that category.
+        """
+        buckets: Dict[str, List[BdfStr]] = {
+            DEVICE_CATEGORY_GPU: [],
+            DEVICE_CATEGORY_NIC: [],
+            DEVICE_CATEGORY_OTHER: [],
+        }
+        for bdf, cfg_space in self._all_cfg_space(pcie_data).items():
+            category = self.classify_device(cfg_space)
+            buckets[category].append(bdf)
+        return buckets
+
+    def check_nic_count(
+        self,
+        buckets: Dict[str, List[BdfStr]],
+        expected_nic_count: Optional[int] = None,
+    ):
+        """Check that the number of physical NICs matches the expected count.
+
+        NICs are counted per physical device (unique domain:bus:device), not per
+        PCI function, so a multi-port NIC that exposes one function per port is
+        counted once.
+
+        Parameters
+        ----------
+        buckets : Dict[str, List[BdfStr]]
+            Output of ``bucket_devices``.
+        expected_nic_count : Optional[int]
+            Expected NIC count. No check is performed when None.
+        """
+        if expected_nic_count is None:
+            return
+
+        nic_bdfs = buckets.get(DEVICE_CATEGORY_NIC, [])
+        # "0000:02:00.1" -> "0000:02:00": drop the function number.
+        nic_devices = sorted({bdf.rsplit(".", 1)[0] for bdf in nic_bdfs})
+        nic_count = len(nic_devices)
+        if nic_count != expected_nic_count:
+            self._log_event(
+                category=EventCategory.IO,
+                description="NIC count mismatch",
+                priority=EventPriority.ERROR,
+                data={
+                    "nic_count": nic_count,
+                    "expected_nic_count": expected_nic_count,
+                    "nic_devices": nic_devices,
+                    "nic_bdfs": nic_bdfs,
+                },
+            )
+        else:
+            self._log_event(
+                category=EventCategory.IO,
+                description="NIC count matches expected",
+                priority=EventPriority.INFO,
+                data={"nic_count": nic_count, "nic_devices": nic_devices, "nic_bdfs": nic_bdfs},
+            )
+
+    def check_nic_link_status(
+        self,
+        pcie_data: PcieDataModel,
+        buckets: Dict[str, List[BdfStr]],
+        exp_nic_speed: Optional[int] = None,
+        exp_nic_width: Optional[int] = None,
+    ):
+        """Check PCIe link speed/width for bucketed NIC devices.
+
+        Only the dimensions supplied (speed and/or width) are checked, so a
+        NIC that legitimately negotiates a lower value on the unchecked
+        dimension does not produce a false positive. A warning is logged when
+        there are no NICs, or a NIC has no readable PCI Express capability,
+        so an expected speed or width never passes without being checked.
+
+        Parameters
+        ----------
+        pcie_data : PcieDataModel
+            The collected PCIe data (used to look up NIC config spaces).
+        buckets : Dict[str, List[BdfStr]]
+            Output of ``bucket_devices``.
+        exp_nic_speed : Optional[int]
+            Expected NIC link speed (generation). Skipped when None.
+        exp_nic_width : Optional[int]
+            Expected NIC link width in lanes. Skipped when None.
+        """
+        if exp_nic_speed is None and exp_nic_width is None:
+            return
+
+        nic_bdfs = buckets.get(DEVICE_CATEGORY_NIC, [])
+        if not nic_bdfs:
+            self._log_event(
+                category=EventCategory.IO,
+                description="NIC link check skipped: no NIC devices were collected",
+                priority=EventPriority.WARNING,
+                data={"exp_nic_speed": exp_nic_speed, "exp_nic_width": exp_nic_width},
+            )
+            return
+
+        all_cfg_space = self._all_cfg_space(pcie_data)
+        nic_cfg_space = {bdf: all_cfg_space[bdf] for bdf in nic_bdfs}
+
+        nic_pcie_express_dict = self.get_valid_cap_dict(nic_cfg_space, PcieExp, log_event=False)
+        missing = [bdf for bdf in nic_bdfs if bdf not in nic_pcie_express_dict]
+        if missing:
+            self._log_event(
+                category=EventCategory.IO,
+                description="NIC link check skipped devices with no PCI Express capability",
+                priority=EventPriority.WARNING,
+                data={"bdfs": missing},
+            )
+        self.check_link_status(
+            bdf_pcie_express_dict=nic_pcie_express_dict,
+            exp_speed=exp_nic_speed,
+            exp_width=exp_nic_width,
+        )
+
     def analyze_data(
         self, data: PcieDataModel, args: Optional[PcieAnalyzerArgs] = None
     ) -> TaskResult:
@@ -962,6 +1145,9 @@ class PcieAnalyzer(DataAnalyzer):
         exp_width = args.exp_width
         exp_sriov_count = args.exp_sriov_count
         exp_gpu_count_override = args.exp_gpu_count_override
+        exp_nic_count = args.exp_nic_count
+        exp_nic_speed = args.exp_nic_speed
+        exp_nic_width = args.exp_nic_width
         exp_max_payload_size = normalize_to_dict(
             args.exp_max_payload_size, self.system_info.vendorid_ep
         )
@@ -977,6 +1163,9 @@ class PcieAnalyzer(DataAnalyzer):
                 exp_width=exp_width,
                 exp_sriov_count=exp_sriov_count,
                 exp_gpu_count_override=exp_gpu_count_override,
+                exp_nic_count=exp_nic_count,
+                exp_nic_speed=exp_nic_speed,
+                exp_nic_width=exp_nic_width,
                 exp_ten_bit_tag_req_en=exp_ten_bit_tag_req_en,
                 exp_max_payload_size=exp_max_payload_size,
                 exp_max_rd_req_size=exp_max_rd_req_size,
@@ -989,16 +1178,22 @@ class PcieAnalyzer(DataAnalyzer):
                 data={
                     "validation_error": get_exception_traceback(val_error),
                     "valid_input": {
-                        "exp_speed": "int, 1-5",
+                        "exp_speed": "int, 1-6",
                         "exp_width": "int, 1-16",
                         "exp_sriov_count": "Optional[int]",
                         "exp_gpu_count_override": "Optional[int]",
+                        "exp_nic_count": "Optional[int], >= 0",
+                        "exp_nic_speed": "Optional[int], 1-6",
+                        "exp_nic_width": "Optional[int], 1-16",
                     },
                     "actual_input": {
                         "exp_speed": exp_speed,
                         "exp_width": exp_width,
                         "exp_sriov_count": exp_sriov_count,
                         "exp_gpu_count_override": exp_gpu_count_override,
+                        "exp_nic_count": exp_nic_count,
+                        "exp_nic_speed": exp_nic_speed,
+                        "exp_nic_width": exp_nic_width,
                     },
                 },
             )
@@ -1006,14 +1201,21 @@ class PcieAnalyzer(DataAnalyzer):
 
         pcie_data: PcieDataModel = data
 
-        if pcie_data.pcie_cfg_space == {} and pcie_data.vf_pcie_cfg_space == {}:
-            # If both of the PCIe Configuration spaces are
+        if not pcie_data.pcie_cfg_space and not pcie_data.vf_pcie_cfg_space:
+            if not pcie_data.other_pcie_cfg_space:
+                self._log_event(
+                    category=EventCategory.IO,
+                    description="No PCIe config space found",
+                    priority=EventPriority.WARNING,
+                )
+                return self.result
+            # Other devices were collected, so keep going: the AMD checks below
+            # are no-ops on empty data, and the NIC / other-device checks still run.
             self._log_event(
                 category=EventCategory.IO,
-                description="No PCIe config space found",
+                description="No AMD PCIe config space found",
                 priority=EventPriority.WARNING,
             )
-            return self.result
 
         # Check every link in the PCIe configuration space for the expected capability structure,
         # but don't check VF since those will be 0
@@ -1101,5 +1303,68 @@ class PcieAnalyzer(DataAnalyzer):
             )
 
         self.check_gpu_count(pcie_data, exp_gpu_count_override)
+
+        # NIC count and link checks. NICs are only collected when the collector
+        # runs with collect_all_devices=True.
+        nic_checks_requested = any(
+            value is not None
+            for value in (
+                pcie_input_data.exp_nic_count,
+                pcie_input_data.exp_nic_speed,
+                pcie_input_data.exp_nic_width,
+            )
+        )
+        if nic_checks_requested and pcie_data.other_pcie_cfg_space is None:
+            # other_pcie_cfg_space is None when collect_all_devices was off or
+            # device enumeration failed. Counting here would report 0 NICs.
+            self._log_event(
+                category=EventCategory.RUNTIME,
+                description="NIC checks skipped: other PCI devices were not collected",
+                priority=EventPriority.WARNING,
+                data={
+                    "hint": "Run the PcieCollector with collect_all_devices=True",
+                    "exp_nic_count": pcie_input_data.exp_nic_count,
+                    "exp_nic_speed": pcie_input_data.exp_nic_speed,
+                    "exp_nic_width": pcie_input_data.exp_nic_width,
+                },
+            )
+        elif nic_checks_requested:
+            buckets = self.bucket_devices(pcie_data)
+            self.check_nic_count(buckets, expected_nic_count=pcie_input_data.exp_nic_count)
+            self.check_nic_link_status(
+                pcie_data,
+                buckets,
+                exp_nic_speed=pcie_input_data.exp_nic_speed,
+                exp_nic_width=pcie_input_data.exp_nic_width,
+            )
+
+        # Error checks for the other devices. Link speed/width isn't checked here
+        # because many of these devices run at a lower speed or width by design.
+        if args.analyze_other_devices and pcie_data.other_pcie_cfg_space:
+            # Only PCI Express functions are analyzed. Host bridges, ISA/SMBus
+            # functions and other conventional PCI functions have no PCIe
+            # capability and would only add noise.
+            pcie_bdfs = self.get_valid_cap_dict(
+                pcie_data.other_pcie_cfg_space, PcieExp, log_event=False
+            ).keys()
+            other_cfg_space = {
+                bdf: cfg for bdf, cfg in pcie_data.other_pcie_cfg_space.items() if bdf in pcie_bdfs
+            }
+            self._log_event(
+                category=EventCategory.IO,
+                description="Analyzing other PCI devices",
+                priority=EventPriority.INFO,
+                data={
+                    "other_device_count": len(other_cfg_space),
+                    "skipped_non_pcie_device_count": len(pcie_data.other_pcie_cfg_space)
+                    - len(other_cfg_space),
+                },
+            )
+            self.check_pcie_status_errors(bdf_cfg_space_dict=other_cfg_space)
+            self.check_pcie_exp_capability_structure_errors(bdf_cfg_space_dict=other_cfg_space)
+            # Many of these devices legitimately lack AER / Secondary PCIe
+            # capabilities, so don't warn about missing ones.
+            self.check_ecap_aer_errors(bdf_cfg_space_dict=other_cfg_space, log_missing_cap=False)
+            self.check_ecap_sec_pci_regs(bdf_cfg_space_dict=other_cfg_space, log_missing_cap=False)
 
         return self.result
