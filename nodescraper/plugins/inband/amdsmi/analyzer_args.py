@@ -90,6 +90,21 @@ class AmdSmiAnalyzerArgs(AnalyzerArgs):
         default=None,
         description="Minimum free VRAM threshold to validate for each GPU.",
     )
+    min_hbm_gib_per_gpu: Optional[float] = Field(
+        default=None,
+        gt=0,
+        description=(
+            "Minimum HBM capacity in GiB required on each GPU. "
+            "Compared to amd-smi static vram size."
+        ),
+    )
+    ecc_required: bool = Field(
+        default=False,
+        description=(
+            "When true, require UMC RAS ENABLED on each GPU. "
+            "That block state is the in-band proxy for HBM ECC being on."
+        ),
+    )
     check_xgmi_or_peer_links_status: bool = Field(
         default=False,
         description="Check XGMI or peer-link status for each GPU.",

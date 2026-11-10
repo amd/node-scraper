@@ -31,17 +31,20 @@ from typing import Any, Mapping, Optional, Union
 from nodescraper.enums import EventCategory, EventPriority
 from nodescraper.interfaces import DataAnalyzer
 from nodescraper.models import TaskResult
+from nodescraper.utils import unit_size_to_bytes
 
 from .amdsmidata import (
     AmdSmiDataModel,
     AmdSmiMetric,
     AmdSmiStatic,
     EccData,
+    EccState,
     Fabric,
     Fw,
     LinkStatusTable,
     Partition,
     Processes,
+    ValueUnit,
     XgmiLinks,
     XgmiMetrics,
 )
@@ -81,6 +84,24 @@ def _gpu_unavailable_description(
     else:
         description = f"{check_name} not available on {gpu_text}"
     return description, description
+
+
+def _umc_ecc_state(ecc_block_state: Union[dict, str]) -> Optional[EccState]:
+    """Return the UMC block state from amd-smi static RAS data."""
+    if not isinstance(ecc_block_state, dict):
+        return None
+    for name, state in ecc_block_state.items():
+        if str(name).strip().upper() == "UMC":
+            return state if isinstance(state, EccState) else None
+    return None
+
+
+def _vram_size_gib(size: ValueUnit) -> Optional[float]:
+    """Convert an amd-smi VRAM size to GiB."""
+    nbytes = unit_size_to_bytes(size.value, size.unit)
+    if nbytes is None:
+        return None
+    return nbytes / (1024**3)
 
 
 def _is_all_zeros(value: Union[str, list[str]]) -> bool:
@@ -614,6 +635,96 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                     },
                     console_log=True,
                 )
+
+    def check_min_hbm_gib_per_gpu(
+        self, amdsmi_static_data: list[AmdSmiStatic], minimum_gib: float
+    ) -> None:
+        """Require each GPU's static VRAM size to be at least minimum_gib."""
+        short: dict[int, float] = {}
+        unavailable: list[int] = []
+        for gpu_data in amdsmi_static_data:
+            size = gpu_data.vram.size if gpu_data.vram is not None else None
+            gib = _vram_size_gib(size) if size is not None else None
+            if gib is None:
+                unavailable.append(gpu_data.gpu)
+            elif gib < minimum_gib:
+                short[gpu_data.gpu] = round(gib, 2)
+
+        if unavailable:
+            desc, details = _gpu_unavailable_description(
+                "HBM size",
+                unavailable,
+                expected=f"{minimum_gib} GiB",
+            )
+            self._log_event(
+                category=EventCategory.PLATFORM,
+                description=desc,
+                priority=EventPriority.ERROR,
+                data={"gpus": unavailable, "min_hbm_gib_per_gpu": minimum_gib, "details": details},
+                console_log=True,
+            )
+        if short:
+            desc, details = _gpu_mismatch_description(
+                "HBM size",
+                minimum_gib,
+                short,
+                unit=" GiB",
+            )
+            self._log_event(
+                category=EventCategory.PLATFORM,
+                description=desc,
+                priority=EventPriority.ERROR,
+                data={
+                    "hbm_gib_by_gpu": short,
+                    "min_hbm_gib_per_gpu": minimum_gib,
+                    "details": details,
+                },
+                console_log=True,
+            )
+
+    def check_umc_ras_enabled(self, amdsmi_static_data: list[AmdSmiStatic]) -> None:
+        """Require UMC RAS to be enabled when per-block data is available.
+
+        Args:
+            amdsmi_static_data: Static amd-smi data for each GPU.
+
+        Returns:
+            None.
+        """
+        unavailable: list[int] = []
+        not_enabled: dict[int, str] = {}
+        for gpu_data in amdsmi_static_data:
+            block_states = gpu_data.ras.ecc_block_state
+            if not isinstance(block_states, dict):
+                unavailable.append(gpu_data.gpu)
+                continue
+            umc_state = _umc_ecc_state(block_states)
+            if umc_state is None:
+                unavailable.append(gpu_data.gpu)
+            elif umc_state != EccState.ENABLED:
+                not_enabled[gpu_data.gpu] = umc_state.value
+
+        if unavailable:
+            self._log_event(
+                category=EventCategory.RAS,
+                description="UMC RAS state is unavailable for one or more GPUs",
+                priority=EventPriority.ERROR,
+                data={"gpus": unavailable},
+                console_log=True,
+            )
+        if not_enabled:
+            desc, details = _gpu_mismatch_description(
+                "UMC RAS (HBM ECC)",
+                "ENABLED",
+                not_enabled,
+            )
+            self._log_event(
+                category=EventCategory.RAS,
+                description=desc,
+                priority=EventPriority.ERROR,
+                data={"umc_ras_by_gpu": not_enabled, "details": details},
+                console_log=True,
+            )
 
     def check_amdsmi_metric_ecc(self, amdsmi_metric_data: list[AmdSmiMetric]):
         """Check ECC counts in all blocks for all GPUs
@@ -1178,6 +1289,11 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
 
         if issues:
             gpus_affected = len({i["gpu"] for i in issues})
+            details = "; ".join(
+                f"GPU {item['gpu']} {item['field']}: expected {item['expected']}, "
+                f"actual {item['actual']}"
+                for item in issues
+            )
             self._log_event(
                 category=EventCategory.NETWORK,
                 description=f"Fabric data mismatch on {gpus_affected} GPU(s)",
@@ -1186,6 +1302,7 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                     "expected_accel_state": expected_state,
                     "expected_fabric_type": expected_type,
                     "mismatches": issues,
+                    "details": details,
                 },
                 console_log=True,
             )
@@ -1300,6 +1417,13 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                 priority=EventPriority.WARNING,
                 data={"amdsmi_static_data": data.static},
             )
+            if args.min_hbm_gib_per_gpu is not None or args.ecc_required:
+                self._log_event(
+                    category=EventCategory.PLATFORM,
+                    description="AMD SMI static data is required for HBM size and ECC gates",
+                    priority=EventPriority.ERROR,
+                    console_log=True,
+                )
         else:
             if args.expected_max_power:
                 self.check_expected_max_power(data.static, args.expected_max_power)
@@ -1324,6 +1448,10 @@ class AmdSmiAnalyzer(CperAnalysisTaskMixin, DataAnalyzer[AmdSmiDataModel, None])
                     (args.devid_ep, args.devid_ep),
                     sku_name=args.sku_name,
                 )
+            if args.min_hbm_gib_per_gpu is not None:
+                self.check_min_hbm_gib_per_gpu(data.static, args.min_hbm_gib_per_gpu)
+            if args.ecc_required:
+                self.check_umc_ras_enabled(data.static)
 
         if args.expected_memory_partition_mode or args.expected_compute_partition_mode:
             self.check_expected_memory_partition_mode(

@@ -49,13 +49,24 @@ def test_task_body_windows(system_info, bios_collector):
     system_info.os_family = OSFamily.WINDOWS
 
     bios_collector._run_sut_cmd = MagicMock(
-        return_value=MagicMock(
-            exit_code=0,
-            stdout="\n\nSMBIOSBIOSVersion=TESTBIOS (1.40 )\n\n\n\n",
-        )
+        side_effect=[
+            MagicMock(
+                exit_code=0,
+                stdout="\n\nSMBIOSBIOSVersion=TESTBIOS (1.40 )\n\n\n\n",
+            ),
+            MagicMock(
+                exit_code=0,
+                stdout="Manufacturer=Supermicro\nModel=AS -4125GS-TNHR\n",
+                command="wmic computersystem get Manufacturer,Model /Value",
+            ),
+        ]
     )
 
-    exp_data = BiosDataModel(bios_version="TESTBIOS (1.40 )")
+    exp_data = BiosDataModel(
+        bios_version="TESTBIOS (1.40 )",
+        server_vendor="Supermicro",
+        server_model="AS -4125GS-TNHR",
+    )
 
     res, data = bios_collector.collect_data()
     assert data == exp_data
@@ -66,13 +77,18 @@ def test_task_body_linux(system_info, bios_collector):
     system_info.os_family = OSFamily.LINUX
 
     bios_collector._run_sut_cmd = MagicMock(
-        return_value=MagicMock(
-            exit_code=0,
-            stdout="2.0.1",
-        )
+        side_effect=[
+            MagicMock(exit_code=0, stdout="2.0.1", command="bios_version"),
+            MagicMock(exit_code=0, stdout="Supermicro\n", command="sys_vendor"),
+            MagicMock(exit_code=0, stdout="AS -4125GS-TNHR\n", command="product_name"),
+        ]
     )
 
-    exp_data = BiosDataModel(bios_version="2.0.1")
+    exp_data = BiosDataModel(
+        bios_version="2.0.1",
+        server_vendor="Supermicro",
+        server_model="AS -4125GS-TNHR",
+    )
 
     res, data = bios_collector.collect_data()
     assert data == exp_data
@@ -83,15 +99,27 @@ def test_task_body_esxi(system_info, bios_collector):
     system_info.os_family = OSFamily.ESXI
 
     bios_collector._run_sut_cmd = MagicMock(
-        return_value=MagicMock(
-            exit_code=0,
-            stdout='        Version: "1.8"',
-        )
+        side_effect=[
+            MagicMock(exit_code=0, stdout='        Version: "1.8"', command="bios"),
+            MagicMock(
+                exit_code=0,
+                stdout=(
+                    "  System Info (Type 1):\n"
+                    '    Manufacturer: "Supermicro"\n'
+                    '    Product: "AS -4125GS-TNHR"\n'
+                ),
+                command="system",
+            ),
+        ]
     )
 
     res, data = bios_collector.collect_data()
     assert res.status == ExecutionStatus.OK
-    assert data == BiosDataModel(bios_version="1.8")
+    assert data == BiosDataModel(
+        bios_version="1.8",
+        server_vendor="Supermicro",
+        server_model="AS -4125GS-TNHR",
+    )
 
 
 def test_task_body_error(system_info, bios_collector):

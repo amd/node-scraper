@@ -30,6 +30,8 @@ from nodescraper.models import DataModel
 
 class DeviceEnumerationDataModel(DataModel):
     cpu_count: Optional[int] = None
+    cpu_architecture: Optional[str] = None
+    cpu_cores: Optional[int] = None
     gpu_count: Optional[int] = None
     vf_count: Optional[int] = None
     lscpu_output: Optional[str] = None

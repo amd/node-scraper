@@ -33,6 +33,15 @@ from .memorydata import MemoryDataModel
 
 
 class MemoryAnalyzerArgs(AnalyzerArgs):
+    minimum_system_memory_gib: Optional[float] = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Minimum installed system memory in GiB. Compared to MemTotal. "
+            "Passes when reported memory is at least 98 percent of this value, because "
+            "the OS reports slightly less than nominal DIMM capacity."
+        ),
+    )
     minimum_free_memory_percent: Optional[float] = Field(
         default=None,
         ge=0,

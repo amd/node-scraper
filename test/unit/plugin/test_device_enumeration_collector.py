@@ -55,7 +55,12 @@ def test_collect_linux(system_info, device_enumeration_collector):
     """Test linux typical output"""
     system_info.os_family = OSFamily.LINUX
 
-    lscpu_output = "Architecture:        x86_64\nCPU(s):              64\nSocket(s):           2"
+    lscpu_output = (
+        "Architecture:        x86_64\n"
+        "CPU(s):              256\n"
+        "Core(s) per socket:  64\n"
+        "Socket(s):           2"
+    )
     lshw_output = "*-cpu\n  product: AMD EPYC 1234 64-Core Processor"
 
     device_enumeration_collector._run_sut_cmd = MagicMock(
@@ -94,7 +99,13 @@ def test_collect_linux(system_info, device_enumeration_collector):
     result, data = device_enumeration_collector.collect_data()
     assert result.status == ExecutionStatus.OK
     assert data == DeviceEnumerationDataModel(
-        cpu_count=2, gpu_count=8, vf_count=0, lscpu_output=lscpu_output, lshw_output=lshw_output
+        cpu_count=2,
+        cpu_architecture="x86_64",
+        cpu_cores=128,
+        gpu_count=8,
+        vf_count=0,
+        lscpu_output=lscpu_output,
+        lshw_output=lshw_output,
     )
     assert (
         len([a for a in result.artifacts if hasattr(a, "filename") and a.filename == "lshw.txt"])
@@ -126,12 +137,24 @@ def test_collect_windows(system_info, device_enumeration_collector):
                 stderr="",
                 command='powershell -Command "(Get-VMHostPartitionableGpu | Measure-Object).Count"',
             ),
+            MagicMock(
+                exit_code=0,
+                stdout="Architecture=x86_64\nCores=128\n",
+                stderr="",
+                command="Win32_Processor",
+            ),
         ]
     )
 
     result, data = device_enumeration_collector.collect_data()
     assert result.status == ExecutionStatus.OK
-    assert data == DeviceEnumerationDataModel(cpu_count=2, gpu_count=8, vf_count=8)
+    assert data == DeviceEnumerationDataModel(
+        cpu_count=2,
+        cpu_architecture="x86_64",
+        cpu_cores=128,
+        gpu_count=8,
+        vf_count=8,
+    )
 
 
 def test_collect_error(system_info, device_enumeration_collector):
