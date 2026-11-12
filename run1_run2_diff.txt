@@ -1,0 +1,26 @@
+Compare-runs full diff report
+Run 1: /home/graepaul/jib_working/node-scraper/DCERR-1106/test/unit/framework/fixtures/compare_runs_sysctl/run1
+Run 2: /home/graepaul/jib_working/node-scraper/DCERR-1106/test/unit/framework/fixtures/compare_runs_sysctl/run2
+
+================================================================================
+Plugin: SysctlPlugin
+================================================================================
+  3 difference(s):
+  --- path: vm_dirty_background_ratio ---
+  run1:
+10
+  run2:
+5
+
+  --- path: vm_dirty_ratio ---
+  run1:
+20
+  run2:
+15
+
+  --- path: vm_swappiness ---
+  run1:
+60
+  run2:
+10
+

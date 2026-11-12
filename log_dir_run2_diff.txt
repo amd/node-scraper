@@ -1,0 +1,8 @@
+Compare-runs full diff report
+Run 1: /home/graepaul/jib_working/node-scraper/DCERR-1106/test/unit/framework/fixtures/log_dir
+Run 2: /tmp/pytest-of-graepaul/pytest-138/test_run_compare_runs_one_run_0/run2
+
+================================================================================
+Plugin: BiosPlugin
+================================================================================
+  Not present in run 2.

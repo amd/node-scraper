@@ -679,7 +679,7 @@ class PcieAnalyzer(DataAnalyzer):
 
     def instantaneous_par_err_chk(self, bdf_cfg_space_dict: Dict[str, ECap16Gt]):
         """Instantaneous parity error check for ECap16Gt registers, will
-        log an event if any lanes have parity errors.
+        log a warning event if any lanes have parity errors.
 
         Parameters
         ----------
@@ -703,7 +703,7 @@ class PcieAnalyzer(DataAnalyzer):
                     self._log_event(
                         category=EventCategory.IO,
                         description="Lanes have parity errors",
-                        priority=EventPriority.ERROR,
+                        priority=EventPriority.WARNING,
                         data={
                             "bdf": bdf,
                             "reg_name": parity_register.__class__.__name__,

@@ -27,10 +27,12 @@
 
 import pytest
 
+from nodescraper.enums import EventPriority
 from nodescraper.plugins.inband.pcie.analyzer_args import PcieAnalyzerArgs
 from nodescraper.plugins.inband.pcie.pcie_analyzer import PcieAnalyzer
 from nodescraper.plugins.inband.pcie.pcie_data import (
     CapabilityEnum,
+    ECap16Gt,
     PcieCfgSpace,
     PcieDataModel,
     PcieExp,
@@ -476,3 +478,54 @@ def test_amd_gpu_in_other_cfg_space_bucketed_as_gpu(analyzer):
 
     assert buckets["GPU"] == ["0000:01:00.0"]
     assert buckets["NIC"] == []
+
+
+_LANE_PARITY_DESC = "Lanes have parity errors"
+
+_GPU_BDF = "0000:01:00.0"
+
+
+def _ecap_16gt(local_val: int = 0, retimer_fst_val: int = 0) -> ECap16Gt:
+    """Build a 16.0 GT/s Physical Layer capability with the given parity mismatch bitmasks
+    (one bit per lane) in the Local and First Retimer Data Parity Mismatch registers."""
+    ecap = ECap16Gt()
+    ecap.parity_mismatch_stat.val = local_val
+    ecap.retimer_fst_parity_mismatch_stat.val = retimer_fst_val
+    return ecap
+
+
+def _lane_parity_events(result):
+    return [e for e in result.events if e.description == _LANE_PARITY_DESC]
+
+
+def test_lane_parity_error_reported_as_warning(analyzer):
+    """Local data parity mismatches are reported as a warning, not an error."""
+    analyzer.instantaneous_par_err_chk({_GPU_BDF: _ecap_16gt(local_val=0b101)})
+
+    parity_events = _lane_parity_events(analyzer.result)
+    assert len(parity_events) == 1
+    event = parity_events[0]
+    assert event.priority == EventPriority.WARNING
+    assert event.data["bdf"] == _GPU_BDF
+    assert event.data["number_of_bad_lanes"] == 2
+    assert not [e for e in analyzer.result.events if e.priority >= EventPriority.ERROR]
+
+
+def test_retimer_parity_error_reported_as_warning(analyzer):
+    """First Retimer data parity mismatches are reported as a warning, not an error."""
+    analyzer.instantaneous_par_err_chk({_GPU_BDF: _ecap_16gt(retimer_fst_val=0b1)})
+
+    parity_events = _lane_parity_events(analyzer.result)
+    assert len(parity_events) == 1
+    event = parity_events[0]
+    assert event.priority == EventPriority.WARNING
+    assert event.data["reg_name"] == "RetimerFstPartiyRetimerMismatchStat16gt"
+    assert event.data["number_of_bad_lanes"] == 1
+    assert not [e for e in analyzer.result.events if e.priority >= EventPriority.ERROR]
+
+
+def test_no_lane_parity_event_when_clean(analyzer):
+    """Clean parity mismatch registers produce no lane parity event."""
+    analyzer.instantaneous_par_err_chk({_GPU_BDF: _ecap_16gt()})
+
+    assert _lane_parity_events(analyzer.result) == []

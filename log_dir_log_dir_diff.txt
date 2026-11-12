@@ -1,0 +1,8 @@
+Compare-runs full diff report
+Run 1: /home/graepaul/jib_working/node-scraper/DCERR-1106/test/unit/framework/fixtures/log_dir
+Run 2: /home/graepaul/jib_working/node-scraper/DCERR-1106/test/unit/framework/fixtures/log_dir
+
+================================================================================
+Plugin: BiosPlugin
+================================================================================
+  No differences.
