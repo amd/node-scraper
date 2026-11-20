@@ -342,11 +342,20 @@ class StaticAsic(BaseModel):
 
 
 class StaticBus(AmdSmiBaseModel):
+    """PCIe bus block from ``amd-smi static``.
+
+    ``pcie_levels`` arrived in ROCm 7.2 (``static --bus``) and is still emitted by
+    amd-smi 27.2. Older tools omit it. It is ``"N/A"`` when the device has no
+    settable levels, or a mapping/list of ``(speed, bandwidth)`` pairs.
+    """
+
     bdf: str
     max_pcie_width: Optional[ValueUnit] = None
     max_pcie_speed: Optional[ValueUnit] = None
     pcie_interface_version: str = "unknown"
     slot_type: str = "unknown"
+    pcie_levels: Optional[Any] = None
+    _pcie_levels_na = field_validator("pcie_levels", mode="before")(na_to_none)
 
 
 class StaticVbios(BaseModel):
@@ -541,13 +550,25 @@ class StaticVram(AmdSmiBaseModel):
 
 
 class StaticCacheInfoItem(AmdSmiBaseModel):
+    """One cache entry from ``amd-smi static``.
+
+    ``cache_acronym`` (``L1D``, ``L1I``, ``L2``, ``L3``) and ``total_cache_size``
+    were added in ROCm 10.1 (amd-smi library 27.1) and are present in 27.2 static
+    JSON. Older tools omit both; they stay ``None``.
+    """
+
     cache: ValueUnit
     cache_properties: list[str]
     cache_size: Optional[ValueUnit]
     cache_level: ValueUnit
     max_num_cu_shared: ValueUnit
     num_cache_instance: ValueUnit
-    na_validator = field_validator("cache_size", mode="before")(na_to_none)
+    cache_acronym: Optional[str] = None
+    total_cache_size: Optional[ValueUnit] = None
+    na_validator = field_validator(
+        "cache_size", "cache_acronym", "total_cache_size", mode="before"
+    )(na_to_none)
+    _total_cache_size = field_validator("total_cache_size", mode="before")(coerce_value_unit_input)
 
 
 _STATIC_CLOCK_FREQ_LEVEL_VALIDATOR_FIELDS = tuple(f"Level_{i}" for i in range(16))

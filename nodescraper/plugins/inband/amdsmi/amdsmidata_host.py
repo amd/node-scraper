@@ -117,6 +117,9 @@ class HostDriverStaticBus(AmdSmiBaseModel):
     pcie_interface_version: str
     slot_type: str
     max_pcie_interface_version: Optional[str] = None
+    # Same optional field as bare-metal StaticBus: present on amd-smi 27.x, absent before.
+    pcie_levels: Optional[Any] = None
+    _pcie_levels_na = field_validator("pcie_levels", mode="before")(_host_na_to_none)
 
 
 class HostDriverStaticPpt(AmdSmiBaseModel):

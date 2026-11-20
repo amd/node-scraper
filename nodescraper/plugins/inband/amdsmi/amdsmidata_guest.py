@@ -36,10 +36,9 @@ from nodescraper.plugins.inband.amdsmi.amdsmidata import (
 
 
 class GuestStaticBus(StaticBus):
-    """Guest amd-smi (ROCm 7.14+) adds a per-link ``pcie_levels`` block to the bus
-    section that the base ``StaticBus`` (``extra="forbid"``) rejects. Ignore unknown
-    bus fields so a new field doesn't drop the whole static payload, matching the
-    host models' schema-drift resilience."""
+    """Guest bus block. ``pcie_levels`` is a first-class optional field on
+    ``StaticBus``. Ignore any further unknown bus keys so a newer amd-smi field
+    does not drop the whole static payload."""
 
     model_config = ConfigDict(extra="ignore")
 
@@ -47,7 +46,6 @@ class GuestStaticBus(StaticBus):
 class GuestAmdSmiStatic(AmdSmiStatic):
     """Bare-metal static schema minus the physical fields a guest VF omits."""
 
-    # Base bus (StaticBus) forbids extras; the guest build adds pcie_levels.
     bus: GuestStaticBus  # type: ignore[assignment]
     soc_pstate: Optional[StaticSocPstate] = None
     xgmi_plpd: Optional[StaticXgmiPlpd] = None

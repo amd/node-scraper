@@ -32,6 +32,7 @@ import pytest
 from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     AmdSmiDataModel,
     AmdSmiMetric,
+    AmdSmiStatic,
     Fabric,
     FabricInfo,
     MetricBaseBoardTemperature,
@@ -40,11 +41,14 @@ from nodescraper.plugins.inband.amdsmi.amdsmidata import (
     MetricGpuBoardTemperature,
     MetricPcie,
     MetricPower,
+    StaticBus,
+    StaticCacheInfoItem,
     StaticClockData,
     StaticFrequencyLevels,
     StaticLimit,
     ValueUnit,
 )
+from nodescraper.plugins.inband.amdsmi.amdsmidata_host import HostDriverStaticBus
 
 DUMMY_STATIC_ASIC: dict[str, Any] = {
     "market_name": "AMD Instinct MI350X",
@@ -374,6 +378,85 @@ def test_static_frequency_levels_legacy_amd_smi_three_levels_only():
     assert levels.Level_2 is not None and levels.Level_2.value == 1300
     assert levels.Level_3 is None
     assert levels.Level_15 is None
+
+
+_LEGACY_CACHE = {
+    "cache": 0,
+    "cache_properties": ["DATA_CACHE", "SIMD_CACHE"],
+    "cache_size": {"value": 32, "unit": "KB"},
+    "cache_level": 1,
+    "max_num_cu_shared": 1,
+    "num_cache_instance": 256,
+}
+
+_AMDSMI_27_CACHE = {
+    **_LEGACY_CACHE,
+    "cache_acronym": "L1D",
+    "total_cache_size": {"value": 8192, "unit": "KB"},
+}
+
+
+def test_static_bus_legacy_omits_pcie_levels():
+    """amd-smi before ROCm 7.2 has no pcie_levels key."""
+    bus = StaticBus.model_validate(DUMMY_STATIC_BUS)
+    assert bus.pcie_levels is None
+    assert bus.bdf == "0000:05:00.0"
+
+
+def test_static_bus_amdsmi_27_pcie_levels_na_and_pairs():
+    """27.2 emits pcie_levels as N/A or as speed/bandwidth pairs."""
+    na_bus = StaticBus.model_validate({**DUMMY_STATIC_BUS, "pcie_levels": "N/A"})
+    assert na_bus.pcie_levels is None
+
+    levels = {"0": ["2.5 GT/s", 1], "1": ["32.0 GT/s", 16]}
+    pair_bus = StaticBus.model_validate({**DUMMY_STATIC_BUS, "pcie_levels": levels})
+    assert pair_bus.pcie_levels == levels
+
+
+def test_static_cache_legacy_omits_acronym_and_total():
+    item = StaticCacheInfoItem.model_validate(_LEGACY_CACHE)
+    assert item.cache_acronym is None
+    assert item.total_cache_size is None
+    assert item.cache_level.value == 1
+
+
+def test_static_cache_amdsmi_27_keeps_acronym_and_total():
+    item = StaticCacheInfoItem.model_validate(_AMDSMI_27_CACHE)
+    assert item.cache_acronym == "L1D"
+    assert item.total_cache_size is not None
+    assert item.total_cache_size.value == 8192
+    assert item.total_cache_size.unit == "KB"
+
+
+def test_amdsmi_static_accepts_legacy_and_27_rows():
+    """A full static GPU row validates both without and with the 27.x keys."""
+    legacy = AmdSmiStatic.model_validate(dummy_static_gpu_dict(cache_info=[dict(_LEGACY_CACHE)]))
+    assert legacy.bus.pcie_levels is None
+    assert legacy.cache_info[0].cache_acronym is None
+
+    current = AmdSmiStatic.model_validate(
+        dummy_static_gpu_dict(
+            bus={**DUMMY_STATIC_BUS, "pcie_levels": "N/A"},
+            cache_info=[dict(_AMDSMI_27_CACHE)],
+        )
+    )
+    assert current.bus.pcie_levels is None
+    assert current.cache_info[0].cache_acronym == "L1D"
+    assert current.cache_info[0].total_cache_size is not None
+    assert current.cache_info[0].total_cache_size.value == 8192
+
+
+def test_host_static_bus_pcie_levels_optional():
+    payload = {
+        "bdf": "0000:03:00.0",
+        "max_pcie_width": 16,
+        "max_pcie_speed": {"value": 32, "unit": "GT/s"},
+        "pcie_interface_version": "Gen 5",
+        "slot_type": "OAM",
+    }
+    assert HostDriverStaticBus.model_validate(payload).pcie_levels is None
+    with_na = HostDriverStaticBus.model_validate({**payload, "pcie_levels": "N/A"})
+    assert with_na.pcie_levels is None
 
 
 def test_static_limit_legacy_max_power():
