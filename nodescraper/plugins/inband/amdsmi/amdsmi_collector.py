@@ -1300,6 +1300,7 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
                 max_pcie_speed=self._valueunit(bus.get("max_pcie_speed"), "GT/s"),
                 pcie_interface_version=self._normalize(bus.get("pcie_interface_version")),
                 slot_type=self._normalize(bus.get("slot_type"), slot_type=True),
+                pcie_levels=bus.get("pcie_levels"),
             )
 
             # ASIC
@@ -1691,6 +1692,10 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
             )
             cache_label = ValueUnit(value=cache_label_val, unit="")
 
+            acronym = e.get("cache_acronym")
+            if not isinstance(acronym, str) or acronym.strip().upper() in {"N/A", "NA", ""}:
+                acronym = None
+
             try:
                 out.append(
                     StaticCacheInfoItem(
@@ -1700,6 +1705,8 @@ class AmdSmiCollector(InBandDataCollector[AmdSmiDataModel, AmdSmiCollectorArgs])
                         cache_level=cache_level,
                         max_num_cu_shared=max_num_cu_shared,
                         num_cache_instance=num_cache_instance,
+                        cache_acronym=acronym,
+                        total_cache_size=e.get("total_cache_size"),
                     )
                 )
             except ValidationError as err:
