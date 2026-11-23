@@ -33,6 +33,7 @@ from nodescraper.plugins.inband.network.ethtool_vendor import (
 )
 from nodescraper.plugins.inband.network.network_analyzer import NetworkAnalyzer
 from nodescraper.plugins.inband.network.networkdata import (
+    EthtoolFecStatistics,
     EthtoolInfo,
     NetworkDataModel,
 )
@@ -409,5 +410,60 @@ def test_queue_counter_both_lists_empty_skips_all_checks(network_analyzer, monke
     )
     model = NetworkDataModel(ethtool_info={}, ethtool_statistics=[stat])
     result = network_analyzer.analyze_data(model)
+    assert result.status == ExecutionStatus.OK
+    assert len(result.events) == 0
+
+
+def _fec_model(**counters):
+    return NetworkDataModel(
+        ethtool_info={
+            "eth0": EthtoolInfo(
+                interface="eth0",
+                raw_output="",
+                driver="ionic",
+                active_fec_encoding="RS",
+                fec_statistics=EthtoolFecStatistics(**counters),
+            )
+        }
+    )
+
+
+def test_fec_uncorrectable_blocks_is_error(network_analyzer):
+    """Non-zero uncorrectable FEC blocks are reported as an error for the interface."""
+    result = network_analyzer.analyze_data(_fec_model(corrected_blocks=10, uncorrectable_blocks=3))
+
+    assert result.status == ExecutionStatus.ERROR
+    assert len(result.events) == 1
+    event = result.events[0]
+    assert event.description == "Ethtool FEC error detected"
+    assert event.priority == EventPriority.ERROR
+    assert event.data["netdev"] == "eth0"
+    assert event.data["error_field"] == "uncorrectable_blocks"
+    assert event.data["error_count"] == 3
+
+
+def test_fec_high_symbol_error_bin_is_warning(network_analyzer):
+    """Codewords in the upper symbol-error bins are reported as a warning."""
+    result = network_analyzer.analyze_data(_fec_model(uncorrectable_blocks=0, fec_symbols_err_9=1))
+
+    assert result.status == ExecutionStatus.WARNING
+    assert len(result.events) == 1
+    assert result.events[0].description == "Ethtool FEC warning detected"
+    assert result.events[0].priority == EventPriority.WARNING
+    assert result.events[0].data["error_field"] == "fec_symbols_err_9"
+
+
+def test_fec_corrected_counters_are_not_flagged(network_analyzer):
+    """Corrected blocks and low symbol-error bins are normal on a healthy FEC link."""
+    result = network_analyzer.analyze_data(
+        _fec_model(
+            corrected_blocks=786675,
+            uncorrectable_blocks=0,
+            corrected_bits=840154,
+            fec_symbols_err_0=63529538,
+            fec_symbols_err_5=1,
+        )
+    )
+
     assert result.status == ExecutionStatus.OK
     assert len(result.events) == 0

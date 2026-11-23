@@ -43,10 +43,10 @@ class NetworkAnalyzer(RegexAnalyzer[NetworkDataModel, NetworkAnalyzerArgs]):
     def analyze_data(
         self, data: NetworkDataModel, args: Optional[NetworkAnalyzerArgs] = None
     ) -> TaskResult:
-        """Analyze ethtool -S statistics via RDMA-scoped vendor models.
+        """Analyze ethtool -S statistics via RDMA-scoped vendor models and ethtool FEC counters.
 
         Args:
-            data: Network data model with ethtool_statistics.
+            data: Network data model with ethtool_statistics and per-interface FEC statistics.
             args: Unused; retained for analyzer interface compatibility.
 
         Returns:
@@ -181,6 +181,10 @@ class NetworkAnalyzer(RegexAnalyzer[NetworkDataModel, NetworkAnalyzerArgs]):
                             console_log=False,
                         )
 
+        fec_error_fields, fec_warning_fields = self._analyze_fec_statistics(data)
+        vendor_error = vendor_error or bool(fec_error_fields)
+        vendor_warning = vendor_warning or bool(fec_warning_fields)
+
         if vendor_error_fields:
             self.logger.error("Ethtool error detected: %s", ", ".join(sorted(vendor_error_fields)))
         if vendor_queue_error_fields:
@@ -188,6 +192,8 @@ class NetworkAnalyzer(RegexAnalyzer[NetworkDataModel, NetworkAnalyzerArgs]):
                 "Ethtool queue error detected: %s",
                 ", ".join(sorted(vendor_queue_error_fields)),
             )
+        if fec_error_fields:
+            self.logger.error("Ethtool FEC error detected: %s", ", ".join(sorted(fec_error_fields)))
         if vendor_warning_fields:
             self.logger.warning(
                 "Ethtool warning detected: %s", ", ".join(sorted(vendor_warning_fields))
@@ -196,6 +202,10 @@ class NetworkAnalyzer(RegexAnalyzer[NetworkDataModel, NetworkAnalyzerArgs]):
             self.logger.warning(
                 "Ethtool queue warning detected: %s",
                 ", ".join(sorted(vendor_queue_warning_fields)),
+            )
+        if fec_warning_fields:
+            self.logger.warning(
+                "Ethtool FEC warning detected: %s", ", ".join(sorted(fec_warning_fields))
             )
 
         if vendor_error:
@@ -212,6 +222,49 @@ class NetworkAnalyzer(RegexAnalyzer[NetworkDataModel, NetworkAnalyzerArgs]):
             self.result.status = ExecutionStatus.OK
 
         return self.result
+
+    def _analyze_fec_statistics(self, data: NetworkDataModel) -> tuple[set[str], set[str]]:
+        """Log an event for each non-zero FEC error or warning counter.
+
+        Args:
+            data: Network data model with per-interface ethtool FEC statistics.
+
+        Returns:
+            Tuple of (error, warning) "<interface> <counter>" labels that were non-zero.
+        """
+        fec_error_fields: set[str] = set()
+        fec_warning_fields: set[str] = set()
+        for interface, info in data.ethtool_info.items():
+            fec = info.fec_statistics
+            if fec is None:
+                continue
+            for field_name in fec.error_fields + fec.warning_fields:
+                value = getattr(fec, field_name, None)
+                if value is None or value <= 0:
+                    continue
+                is_warning_tier = field_name in fec.warning_fields
+                if is_warning_tier:
+                    fec_warning_fields.add(f"{interface} {field_name}")
+                else:
+                    fec_error_fields.add(f"{interface} {field_name}")
+                self._log_event(
+                    category=EventCategory.NETWORK,
+                    description=(
+                        "Ethtool FEC warning detected"
+                        if is_warning_tier
+                        else "Ethtool FEC error detected"
+                    ),
+                    data={
+                        "netdev": interface,
+                        "driver": info.driver,
+                        "active_fec_encoding": info.active_fec_encoding,
+                        "error_field": field_name,
+                        "error_count": value,
+                    },
+                    priority=EventPriority.WARNING if is_warning_tier else EventPriority.ERROR,
+                    console_log=False,
+                )
+        return fec_error_fields, fec_warning_fields
 
 
 def _vendor_for_driver(driver: Optional[str]) -> Optional[str]:

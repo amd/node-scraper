@@ -41,6 +41,7 @@ from .ethtool_vendor import (
     extract_queue_counters,
 )
 from .networkdata import (
+    EthtoolFecStatistics,
     EthtoolInfo,
     IpAddress,
     Neighbor,
@@ -470,8 +471,9 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
                 info.firmware_version = firmware_match.group(0) if firmware_match else value
 
     def _parse_ethtool_fec(self, info: EthtoolInfo, output: str) -> None:
-        """Merge ``ethtool -I --show-fec`` FEC encodings into an interface model."""
-        for line in output.splitlines():
+        """Merge ``ethtool -I --show-fec`` encodings and statistics into an interface model."""
+        header, _, statistics = output.partition("Statistics:")
+        for line in header.splitlines():
             if ":" not in line:
                 continue
             key, value = (part.strip() for part in line.split(":", 1))
@@ -482,6 +484,16 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
                 info.supported_fec_encoding = value
             elif key == "Active FEC encoding":
                 info.active_fec_encoding = value
+
+        # Counters may share a line ("corrected_blocks: 0  uncorrectable_blocks: 0"),
+        # so match every "name: value" pair rather than splitting line by line.
+        counters = {
+            name: int(value)
+            for name, value in re.findall(r"(\w+):\s*(\d+)", statistics)
+            if name in EthtoolFecStatistics.model_fields
+        }
+        if counters:
+            info.fec_statistics = EthtoolFecStatistics.model_validate(counters)
 
     def _parse_ethtool_statistics(self, output: str, interface: str) -> Dict[str, str]:
         """Parse 'ethtool -S <interface>' output into a key-value dictionary.

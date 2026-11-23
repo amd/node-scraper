@@ -514,21 +514,52 @@ def test_parse_ethtool_driver_info_normalizes_package_firmware(collector):
 
 
 def test_parse_ethtool_fec(collector):
-    """FEC encodings are parsed from ethtool -I --show-fec, ignoring the statistics block."""
-    info = EthtoolInfo(interface="enP1p71s0f3", raw_output="")
+    """FEC encodings and counters are parsed, including several counters on one line."""
+    info = EthtoolInfo(interface="enP1p73s0", raw_output="")
 
     collector._parse_ethtool_fec(
         info,
-        "FEC parameters for enP1p71s0f3:\n"
+        "FEC parameters for enP1p73s0:\n"
+        "Supported/Configured FEC encodings: RS\n"
+        "Active FEC encoding: RS\n"
+        "Statistics:\n"
+        "  corrected_blocks: 786675  uncorrectable_blocks: 2  corrected_bits: 840154"
+        "  fec_symbols_err_0: 63529538\n"
+        "  fec_symbols_err_1: 511207\n"
+        "  fec_symbols_err_15: 0\n",
+    )
+
+    assert info.supported_fec_encoding == "RS"
+    assert info.active_fec_encoding == "RS"
+    assert info.fec_statistics is not None
+    assert info.fec_statistics.corrected_blocks == 786675
+    assert info.fec_statistics.uncorrectable_blocks == 2
+    assert info.fec_statistics.corrected_bits == 840154
+    assert info.fec_statistics.fec_symbols_err_0 == 63529538
+    assert info.fec_statistics.fec_symbols_err_1 == 511207
+    assert info.fec_statistics.fec_symbols_err_15 == 0
+    assert info.fec_statistics.fec_symbols_err_2 is None
+
+
+def test_parse_ethtool_fec_per_lane_layout(collector):
+    """One counter per line with per-lane values keeps only the total."""
+    info = EthtoolInfo(interface="eth0", raw_output="")
+
+    collector._parse_ethtool_fec(
+        info,
+        "FEC parameters for eth0:\n"
         "Supported/Configured FEC encodings: Auto Off RS\n"
-        "Active FEC encoding: Off\n"
+        "Active FEC encoding: RS\n"
         "Statistics:\n"
         "  corrected_blocks: 12\n"
+        "    Lanes: 5 7\n"
         "  uncorrectable_blocks: 0\n",
     )
 
     assert info.supported_fec_encoding == "Auto Off RS"
-    assert info.active_fec_encoding == "Off"
+    assert info.fec_statistics is not None
+    assert info.fec_statistics.corrected_blocks == 12
+    assert info.fec_statistics.uncorrectable_blocks == 0
 
 
 def test_collect_ethtool_info_collects_fec(collector):
@@ -555,6 +586,7 @@ def test_collect_ethtool_info_collects_fec(collector):
 
     assert data["eth0"].supported_fec_encoding == "Off"
     assert data["eth0"].active_fec_encoding == "Off"
+    assert data["eth0"].fec_statistics is None
     assert data["eth0"].speed == "1000mockMb/s"
 
 

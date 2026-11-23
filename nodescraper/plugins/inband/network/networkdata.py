@@ -23,7 +23,7 @@
 # SOFTWARE.
 #
 ###############################################################################
-from typing import Dict, List, Optional
+from typing import ClassVar, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -92,6 +92,48 @@ class Neighbor(BaseModel):
     flags: List[str] = Field(default_factory=list)  # Additional flags like "router", "proxy"
 
 
+class EthtoolFecStatistics(BaseModel):
+    """FEC counters from the ``ethtool -I --show-fec`` statistics block."""
+
+    corrected_blocks: Optional[int] = None
+    uncorrectable_blocks: Optional[int] = None
+    corrected_bits: Optional[int] = None
+    # Histogram of FEC codewords by number of symbol errors (bin 0 = error-free)
+    fec_symbols_err_0: Optional[int] = None
+    fec_symbols_err_1: Optional[int] = None
+    fec_symbols_err_2: Optional[int] = None
+    fec_symbols_err_3: Optional[int] = None
+    fec_symbols_err_4: Optional[int] = None
+    fec_symbols_err_5: Optional[int] = None
+    fec_symbols_err_6: Optional[int] = None
+    fec_symbols_err_7: Optional[int] = None
+    fec_symbols_err_8: Optional[int] = None
+    fec_symbols_err_9: Optional[int] = None
+    fec_symbols_err_10: Optional[int] = None
+    fec_symbols_err_11: Optional[int] = None
+    fec_symbols_err_12: Optional[int] = None
+    fec_symbols_err_13: Optional[int] = None
+    fec_symbols_err_14: Optional[int] = None
+    fec_symbols_err_15: Optional[int] = None
+
+    # Uncorrectable blocks are lost data. Corrected counters are routinely non-zero
+    # on a healthy FEC link, so they are collected but not flagged.
+    error_fields: ClassVar[list[str]] = ["uncorrectable_blocks"]
+
+    # Codewords that needed more than half of the 15-symbol correction capacity
+    # indicate a link running with little margin.
+    warning_fields: ClassVar[list[str]] = [
+        "fec_symbols_err_8",
+        "fec_symbols_err_9",
+        "fec_symbols_err_10",
+        "fec_symbols_err_11",
+        "fec_symbols_err_12",
+        "fec_symbols_err_13",
+        "fec_symbols_err_14",
+        "fec_symbols_err_15",
+    ]
+
+
 class EthtoolInfo(BaseModel):
     """Ethtool information for a network interface"""
 
@@ -111,6 +153,8 @@ class EthtoolInfo(BaseModel):
     # Supported/configured FEC encodings from ethtool --show-fec (e.g., "Auto Off RS")
     supported_fec_encoding: Optional[str] = None
     active_fec_encoding: Optional[str] = None  # Active FEC encoding from ethtool --show-fec
+    # Counters from the ethtool -I --show-fec statistics block (absent when FEC is off)
+    fec_statistics: Optional[EthtoolFecStatistics] = None
 
 
 class NetworkDataModel(DataModel):
