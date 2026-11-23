@@ -108,6 +108,9 @@ class EthtoolInfo(BaseModel):
     port: Optional[str] = None  # Port type (e.g., "Twisted Pair")
     auto_negotiation: Optional[str] = None  # Auto-negotiation status (e.g., "on", "off")
     link_detected: Optional[str] = None  # Link detection status (e.g., "yes", "no")
+    # Supported/configured FEC encodings from ethtool --show-fec (e.g., "Auto Off RS")
+    supported_fec_encoding: Optional[str] = None
+    active_fec_encoding: Optional[str] = None  # Active FEC encoding from ethtool --show-fec
 
 
 class NetworkDataModel(DataModel):

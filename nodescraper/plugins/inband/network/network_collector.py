@@ -62,6 +62,7 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
     CMD_ETHTOOL_TEMPLATE = "ethtool {interface}"
     CMD_ETHTOOL_S_TEMPLATE = "ethtool -S {interface}"
     CMD_ETHTOOL_I_TEMPLATE = "ethtool -i {interface}"
+    CMD_ETHTOOL_FEC_TEMPLATE = "ethtool -I --show-fec {interface}"
     CMD_PING = "ping"
     CMD_WGET = "wget"
     CMD_CURL = "curl"
@@ -468,6 +469,20 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
                 firmware_match = re.search(r"\d+(?:\.\d+){2,}", value)
                 info.firmware_version = firmware_match.group(0) if firmware_match else value
 
+    def _parse_ethtool_fec(self, info: EthtoolInfo, output: str) -> None:
+        """Merge ``ethtool -I --show-fec`` FEC encodings into an interface model."""
+        for line in output.splitlines():
+            if ":" not in line:
+                continue
+            key, value = (part.strip() for part in line.split(":", 1))
+            if not value:
+                continue
+            # Older ethtool releases label the first field "Configured FEC encodings".
+            if key in {"Supported/Configured FEC encodings", "Configured FEC encodings"}:
+                info.supported_fec_encoding = value
+            elif key == "Active FEC encoding":
+                info.active_fec_encoding = value
+
     def _parse_ethtool_statistics(self, output: str, interface: str) -> Dict[str, str]:
         """Parse 'ethtool -S <interface>' output into a key-value dictionary.
 
@@ -574,6 +589,39 @@ class NetworkCollector(InBandDataCollector[NetworkDataModel, NetworkCollectorArg
                         "stderr": res_driver.stderr,
                     },
                     priority=EventPriority.WARNING,
+                )
+
+            res_fec = self._run_sut_cmd(
+                self.CMD_ETHTOOL_FEC_TEMPLATE.format(interface=iface.name), sudo=True
+            )
+            if res_fec.exit_code == 0:
+                ethtool_info = ethtool_data.get(
+                    iface.name, EthtoolInfo(interface=iface.name, raw_output="")
+                )
+                self._parse_ethtool_fec(ethtool_info, res_fec.stdout)
+                ethtool_data[iface.name] = ethtool_info
+                self._log_event(
+                    category=EventCategory.NETWORK,
+                    description=f"Collected ethtool FEC info for interface: {iface.name}",
+                    data={
+                        "interface": iface.name,
+                        "supported_fec_encoding": ethtool_info.supported_fec_encoding,
+                        "active_fec_encoding": ethtool_info.active_fec_encoding,
+                    },
+                    priority=EventPriority.INFO,
+                )
+            else:
+                # FEC reporting is unsupported on many interfaces (virtual devices,
+                # bridges, older ethtool), so a failure here is not a warning.
+                self._log_event(
+                    category=EventCategory.NETWORK,
+                    description=f"ethtool FEC info not available for interface: {iface.name}",
+                    data={
+                        "command": res_fec.command,
+                        "exit_code": res_fec.exit_code,
+                        "stderr": res_fec.stderr,
+                    },
+                    priority=EventPriority.INFO,
                 )
 
         return ethtool_data, skipped

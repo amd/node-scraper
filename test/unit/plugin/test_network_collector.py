@@ -513,6 +513,74 @@ def test_parse_ethtool_driver_info_normalizes_package_firmware(collector):
     assert info.bus_info == "0000:01:00.0"
 
 
+def test_parse_ethtool_fec(collector):
+    """FEC encodings are parsed from ethtool -I --show-fec, ignoring the statistics block."""
+    info = EthtoolInfo(interface="enP1p71s0f3", raw_output="")
+
+    collector._parse_ethtool_fec(
+        info,
+        "FEC parameters for enP1p71s0f3:\n"
+        "Supported/Configured FEC encodings: Auto Off RS\n"
+        "Active FEC encoding: Off\n"
+        "Statistics:\n"
+        "  corrected_blocks: 12\n"
+        "  uncorrectable_blocks: 0\n",
+    )
+
+    assert info.supported_fec_encoding == "Auto Off RS"
+    assert info.active_fec_encoding == "Off"
+
+
+def test_collect_ethtool_info_collects_fec(collector):
+    """ethtool -I --show-fec output is merged into the interface's EthtoolInfo."""
+
+    def run_sut_cmd_side_effect(cmd, **kwargs):
+        if cmd == "ethtool eth0":
+            return MagicMock(exit_code=0, stdout=ETHTOOL_OUTPUT, command=cmd)
+        if cmd == "ethtool -I --show-fec eth0":
+            return MagicMock(
+                exit_code=0,
+                stdout=(
+                    "FEC parameters for eth0:\n"
+                    "Supported/Configured FEC encodings: Off\n"
+                    "Active FEC encoding: Off\n"
+                ),
+                command=cmd,
+            )
+        return MagicMock(exit_code=1, stdout="", stderr="", command=cmd)
+
+    collector._run_sut_cmd = MagicMock(side_effect=run_sut_cmd_side_effect)
+
+    data, _ = collector._collect_ethtool_info([NetworkInterface(name="eth0")])
+
+    assert data["eth0"].supported_fec_encoding == "Off"
+    assert data["eth0"].active_fec_encoding == "Off"
+    assert data["eth0"].speed == "1000mockMb/s"
+
+
+def test_collect_ethtool_info_fec_failure_is_not_a_warning(collector):
+    """An interface without FEC support leaves the fields unset and logs only INFO."""
+
+    def run_sut_cmd_side_effect(cmd, **kwargs):
+        if cmd == "ethtool eth0":
+            return MagicMock(exit_code=0, stdout=ETHTOOL_OUTPUT, command=cmd)
+        if cmd == "ethtool -i eth0":
+            return MagicMock(exit_code=0, stdout="driver: e1000e\n", command=cmd)
+        return MagicMock(
+            exit_code=95, stdout="", stderr="netlink error: Operation not supported", command=cmd
+        )
+
+    collector._run_sut_cmd = MagicMock(side_effect=run_sut_cmd_side_effect)
+
+    data, _ = collector._collect_ethtool_info([NetworkInterface(name="eth0")])
+
+    assert data["eth0"].supported_fec_encoding is None
+    assert data["eth0"].active_fec_encoding is None
+    assert all(event.priority == EventPriority.INFO for event in collector.result.events)
+    fec_event = next(event for event in collector.result.events if "FEC" in event.description)
+    assert fec_event.data["exit_code"] == 95
+
+
 def test_parse_ethtool_supported_link_modes(collector):
     """Test parsing supported link modes from ethtool output"""
     ethtool_info = collector._parse_ethtool("ethmock123", ETHTOOL_OUTPUT)
@@ -786,7 +854,7 @@ def test_collect_data_includes_ethtool_statistics(collector, conn_mock):
 
 
 def test_collect_ethtool_info_skips_loopback_driver_command(collector):
-    """Loopback interfaces skip only the ethtool -i driver command."""
+    """Loopback interfaces skip the ethtool -i driver and FEC commands."""
     loopback = NetworkInterface(name="lo", flags=["LOOPBACK"])
     collector._run_sut_cmd = MagicMock(
         return_value=MagicMock(exit_code=0, stdout="", command="ethtool lo")
